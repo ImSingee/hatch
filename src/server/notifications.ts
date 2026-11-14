@@ -7,16 +7,18 @@
  */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { authMiddleware } from './auth';
+import { authMiddleware, requireSession } from './auth';
 import {
   apnsStatus,
   createChannel,
   createGroup,
+  createResponseRoute,
   createRoute,
   createWebhook,
   deleteChannel,
   deleteDestination,
   deleteGroup,
+  deleteResponseRoute,
   deleteRoute,
   getNotification,
   listChannels,
@@ -24,6 +26,7 @@ import {
   listGroups,
   listNotificationSources,
   listNotifications,
+  listResponseRoutes,
   listRoutes,
   retryDelivery,
   rotateChannelToken,
@@ -32,8 +35,10 @@ import {
   updateChannel,
   updateDestination,
   updateGroup,
+  updateResponseRoute,
   updateRoute,
 } from './notifications/service';
+import { respondToNotification } from './notifications/responses';
 import { idSchema } from './validation';
 import type { JsonObject } from '~/db/schema';
 import type { NotificationDetailView } from './notifications/service';
@@ -52,9 +57,12 @@ export type {
   NotificationDetailView,
   NotificationSourcesView,
   NotificationStatus,
+  NotificationReplyState,
   NotificationSummaryView,
+  ResponseRouteView,
   RouteView,
 } from './notifications/service';
+export type { NotificationResponseView } from './notifications/responses';
 
 const shortText = z.string().max(200);
 const kindsSchema = z
@@ -74,6 +82,7 @@ const listInputSchema = z.object({
   status: z
     .enum(['unrouted', 'pending', 'delivered', 'partial', 'failed'])
     .optional(),
+  replyState: z.enum(['awaiting', 'answered']).optional(),
   cursor: z.string().max(64).optional(),
   limit: z.number().int().min(1).max(100).optional(),
 });
@@ -100,6 +109,27 @@ export const retryDeliveryFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await retryDelivery(data);
     return { ok: true as const };
+  });
+
+const answerSchema = z.object({
+  id: idSchema,
+  // Checked against the notification's form by the domain service.
+  answers: z.record(
+    z.string().max(64),
+    z.union([z.string().max(8000), z.array(z.string().max(64)).max(100)]),
+  ),
+});
+
+/** Answer a notification's reply form as the signed-in user. */
+export const respondToNotificationFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: z.input<typeof answerSchema>) => answerSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { user } = await requireSession();
+    return respondToNotification(data.id, data.answers, {
+      userId: user.id,
+      via: 'web',
+    });
   });
 
 export const sendTestNotificationFn = createServerFn({ method: 'POST' })
@@ -232,6 +262,47 @@ export const deleteRouteFn = createServerFn({ method: 'POST' })
   .validator((id: string) => idSchema.parse(id))
   .handler(async ({ data }) => {
     await deleteRoute(data);
+    return { ok: true as const };
+  });
+
+/** ================== response routes ================== */
+
+export const listResponseRoutesFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(() => listResponseRoutes());
+
+const responseRouteSchema = z.object({
+  name: shortText.nullable().optional(),
+  sourceType: z.enum(['app', 'channel', 'any']),
+  sourceId: idSchema.nullable().optional(),
+  kind: z.string().max(64).nullable().optional(),
+  destinationId: idSchema,
+  enabled: z.boolean().optional(),
+});
+
+export const createResponseRouteFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: z.input<typeof responseRouteSchema>) =>
+    responseRouteSchema.parse(input),
+  )
+  .handler(({ data }) => createResponseRoute(data));
+
+const updateResponseRouteSchema = responseRouteSchema
+  .partial()
+  .extend({ id: idSchema });
+
+export const updateResponseRouteFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: z.input<typeof updateResponseRouteSchema>) =>
+    updateResponseRouteSchema.parse(input),
+  )
+  .handler(({ data }) => updateResponseRoute(data));
+
+export const deleteResponseRouteFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((id: string) => idSchema.parse(id))
+  .handler(async ({ data }) => {
+    await deleteResponseRoute(data);
     return { ok: true as const };
   });
 

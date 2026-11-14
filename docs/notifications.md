@@ -28,11 +28,20 @@ signed-in user can see and change it.
   every route that selected it. An App never receives its own notifications.
   Platform and user notifications are never routed: they name their
   recipient, and their deliveries record no routes.
+- **Reply form**: an optional form a notification asks people to answer
+  (`buttons`, `single`, `multiple` and `text` fields). It takes one answer,
+  from whoever answers first, and the answer never changes.
+- **Response route**: `(sourceType, sourceId?, kind?) → destination`, where the
+  destination is a webhook or an App that accepts responses. Every matching
+  response route receives the answer once. An App may receive answers to its
+  own notifications.
 
 Code: `src/server/notifications/` (`ingest.ts`, `dispatcher.ts`, `service.ts`,
 `adapters/*`, `apns/*`). Tables: `notifications`, `notification_deliveries`,
 `notification_destinations`, `notification_groups`,
-`notification_group_members`, `notification_routes`, `notification_channels`.
+`notification_group_members`, `notification_routes`, `notification_channels`,
+`notification_responses`, `notification_response_routes`,
+`notification_response_deliveries` (replies: `responses.ts`).
 
 ## Ingress
 
@@ -182,6 +191,107 @@ Apps take them when the live manifest sets
 that setting onto the destination. History keeps the latest content plus
 `editedAt` and `recalledAt`. The Web, mobile and CLI history mark notifications
 as edited or recalled.
+
+### Replies
+
+A push may carry `reply`, a form people answer once:
+
+```json
+{
+  "kind": "deploy",
+  "title": "Deploy v2.4 to production?",
+  "reply": {
+    "fields": [
+      {
+        "id": "decision",
+        "type": "buttons",
+        "label": "Approve the deploy?",
+        "options": [
+          { "id": "approve", "label": "Approve" },
+          { "id": "reject", "label": "Reject", "destructive": true }
+        ]
+      }
+    ],
+    "submitLabel": "Send"
+  }
+}
+```
+
+The form has 1-10 fields with unique ids. Every field has `id`, `type` and
+`label`, plus optional `description` and `required` (default `true`).
+
+| Type       | Answer         | Rules                                                                                                    |
+| ---------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+| `buttons`  | one option id  | A single choice shown as buttons: 1-4 options, labels up to 32 characters; options may be `destructive`. |
+| `single`   | one option id  | 2-50 options.                                                                                            |
+| `multiple` | option id list | 2-50 options, `minSelected` (default 1) to `maxSelected` (default all).                                  |
+| `text`     | text           | `placeholder`, `multiline`, `maxLength` (default 1000, at most 4000).                                    |
+
+The rules live in `packages/hatch-platform-api/notification-reply*.ts`, shared
+by ingress, the CLI and the mobile app. Empty values (`null`, `""`, `[]`, `0`)
+mean "omitted"; settings that do not apply to a field type are rejected. The
+stored form is normalized with every default filled in, and a `400` names the
+field to fix (`reply.fields.0.options: …`). The form is fixed once sent: edits
+cannot change it, and recalling the notification closes it. With a form,
+`autoOpenUrl` defaults to `false`, so a phone tap opens the form.
+
+Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or
+`single` field takes an option id, a `multiple` field a list of option ids, and
+a `text` field the trimmed text. Unanswered optional fields are left out.
+`respondToNotification` (`responses.ts`) runs in one transaction:
+
+1. It locks the notification. A notification without a form answers `400`, a
+   recalled one `409`, and one already answered `409` with the existing answer
+   (`ALREADY_RESPONDED`). Concurrent answers serialize on the row lock, and
+   `notification_responses` has the notification id as primary key.
+2. It stores the answer with the user, a name snapshot, where it was given
+   (`via`: `push`, `mobile`, `web`, `cli`) and, from a push, the device. It
+   sets `responded_at` and increments the revision.
+3. It re-queues only device deliveries, so phones replace the notification
+   with its answered state (see the phone section). Webhooks and Apps learn of
+   the answer only through response routes.
+4. It queues one `notification_response_deliveries` row per destination that
+   matching, enabled response routes select. Like routing, this applies to
+   App and Channel notifications only: a member's direct notification (to a
+   group or destination) keeps its answer in history.
+
+Answers come from:
+
+- The Web detail page (`respondToNotificationFn`, `via: web`).
+- `NotificationService.RespondToNotification` for the mobile app and the CLI
+  (`hatch notification respond`). The request names `via` (`mobile` or `cli`,
+  default `cli`); it is history only and changes no permission.
+- `POST /api/notifications/device-response`, a button or text reply on the
+  notification itself. It is described in the phone section.
+
+The dispatcher claims response deliveries from their own table with the same
+lease, retry and backoff, and posts `hatch.notification.responded`. These
+deliveries are one-shot: they never take revisions. An App destination
+receives them only while its live manifest sets
+`notifications.destination.responses: true`; the deploy cutover copies the
+setting onto `accepts_responses`, and only such Apps (and webhooks) can be
+response route targets. When an App later drops the setting, its deliveries
+fail with "App no longer accepts responses." Every envelope's `notification`
+carries `reply` and `response`:
+
+```json
+{
+  "type": "hatch.notification.responded",
+  "notification": {
+    "id": "…",
+    "reply": { "fields": ["…"], "submitLabel": "Submit" },
+    "response": {
+      "answers": { "decision": "approve" },
+      "respondedBy": { "userId": "…", "name": "Ada" },
+      "via": "push",
+      "respondedAt": "2026-11-15T09:30:00.000Z"
+    }
+  }
+}
+```
+
+`notification.data` passes through unchanged, so the sender can correlate the
+answer with its own records.
 
 ## Delivery
 
@@ -365,6 +475,50 @@ The extension tags its content with `hatchRevision` and `hatchEvent`.
   longer shown, or when the shown copy is already the same or a newer
   revision.
 
+### Replies on the phone
+
+The encrypted content carries `q`, how the phone offers the form:
+
+- `b`: the form is one required `buttons` field `f`, with options `a`.
+- `t`: the form is one required `text` field `f`, with button title `l` and
+  placeholder `p`.
+- `f`: any other form; it is answered in the app.
+- `x`: already answered; `s` says by whom and what.
+
+The extension registers a category `hatch.reply.<notification id>` for every
+`b`, `t` and `f` push before it shows the notification, because action titles
+come from the decrypted content. It keeps the newest 64 such categories; ids
+are time-ordered. The actions are:
+
+- `b`: one action per option, with `authenticationRequired` (answers are
+  final, so nobody answers from a locked phone) and `destructive` where set.
+- `t`: a system text reply.
+- `f`: "Answer…", which opens the app.
+
+For `x` it adds the summary to the body and sets no category.
+
+Buttons and text replies are sent natively by `HatchReplyDelegate`
+(`modules/hatch-push-keys`). That delegate joins expo-notifications'
+`NotificationCenterManager`, so it works when iOS wakes only the background,
+without the JavaScript runtime or the user's session. Two signatures protect
+this path:
+
+- The shared APNs key lets anyone who knows a device token send it a push
+  that skips the extension. So the extension signs
+  `(origin, notification id, field)` with a key derived from the device key
+  (`hatch-reply-tap-v1`), and the delegate sends nothing without that
+  signature and a matching category.
+- The request carries `x-hatch-kid`, `x-hatch-timestamp` and
+  `x-hatch-signature`: an HMAC with another derived key (`hatch-response-v1`)
+  over `hatch-response-v1|<timestamp>|<body>`. The platform accepts it within
+  five minutes from an enabled device that received the notification, and
+  records the answer as the device owner's (`via: push`).
+
+When the request fails or someone answered first, the phone shows a local
+notification saying so. The JavaScript tap handler ignores these actions and
+opens the notification for "Answer…". Once answered, the next device delivery
+replaces the shown notification passively, without its actions.
+
 ## Management API
 
 Web UI: Server Functions in `src/server/notifications.ts`. Native clients and
@@ -374,6 +528,8 @@ credentials are rejected (`SESSION_REQUIRED`), so Agents cannot reconfigure
 delivery or push through `SendNotification`, and there is intentionally no
 Agent tool. `RegisterDevice`,
 `UnregisterDevice` and `GetCurrentDevice` require a user session.
+`RespondToNotification` answers as the calling user, and response routes have
+their own CRUD (`ListResponseRoutes`, `CreateResponseRoute`, …).
 
 ## Compatibility
 
@@ -382,7 +538,10 @@ compatibility version or Runner protocol change is needed. Edits and recalls
 are additive as well: `destination.lifecycleEvents` is optional. Deployed Apps
 that do not set it never receive the new event types, which older SDKs'
 `verifyNotificationRequest` would reject. The original envelope only gains
-fields. Historical
+fields. Replies are additive in the same way: Apps receive
+`hatch.notification.responded` only with `destination.responses`, webhooks
+only through a response route someone creates, and phones without reply
+support ignore `q`. Historical
 deployments lack the field and neither push nor accept notifications. The
 manifest schema is strict, so Platform and Runner must ship the same build.
 The `user` source type is an additive envelope value: App destinations built

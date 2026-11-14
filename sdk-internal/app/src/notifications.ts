@@ -13,6 +13,78 @@ export type NotificationJson =
   | NotificationJson[]
   | { [key: string]: NotificationJson };
 
+/** One choice of a `buttons`, `single` or `multiple` field. */
+export type NotificationReplyOption = {
+  /** 1-40 lowercase letters, digits, `_`, `-` or `.`; unique in the field. */
+  id: string;
+  label: string;
+  /** `buttons` only: shown as a destructive action. */
+  destructive?: boolean;
+};
+
+/**
+ * One question of a reply form. `buttons` is a single choice shown as
+ * buttons (1-4 options, labels up to 32 characters); `single` and `multiple`
+ * take 2-50 options; `text` takes free text.
+ */
+export type NotificationReplyField = {
+  /** Starts with a lowercase letter; lowercase letters, digits and `_`. */
+  id: string;
+  type: 'buttons' | 'single' | 'multiple' | 'text';
+  label: string;
+  description?: string;
+  /** Defaults to `true`. */
+  required?: boolean;
+  /** Choice fields only. */
+  options?: NotificationReplyOption[];
+  /** `multiple` only; defaults to 1. */
+  minSelected?: number;
+  /** `multiple` only; defaults to the number of options. */
+  maxSelected?: number;
+  /** `text` only. */
+  placeholder?: string;
+  /** `text` only. */
+  multiline?: boolean;
+  /** `text` only; defaults to 1000, at most 4000. */
+  maxLength?: number;
+};
+
+/**
+ * A form people answer once, on the phone (from the push itself when the
+ * form is one required `buttons` or `text` field) or on the web. The answer
+ * goes to the destinations of matching response routes.
+ */
+export type NotificationReplyInput = {
+  /** 1-10 fields. */
+  fields: NotificationReplyField[];
+  /** Defaults to "Submit". */
+  submitLabel?: string;
+};
+
+/** A reply form as delivered: every default is filled in. */
+export type NotificationReply = {
+  fields: (Required<
+    Pick<NotificationReplyField, 'id' | 'type' | 'label' | 'required'>
+  > &
+    Omit<NotificationReplyField, 'id' | 'type' | 'label' | 'required'>)[];
+  submitLabel: string;
+};
+
+/**
+ * Answers keyed by field id: the option id of a `buttons` or `single`
+ * field, the option ids of a `multiple` field, the text of a `text` field.
+ * Unanswered optional fields are absent.
+ */
+export type NotificationAnswers = { [fieldId: string]: string | string[] };
+
+export type NotificationResponse = {
+  answers: NotificationAnswers;
+  respondedBy: { userId: string | null; name: string };
+  /** Where it was answered. */
+  via: 'push' | 'mobile' | 'web' | 'cli';
+  respondedAt: string;
+};
+
 /** A notification of a kind declared in `notifications.kinds`. */
 export type NotificationInput = {
   kind: string;
@@ -30,12 +102,17 @@ export type NotificationInput = {
   /**
    * Whether tapping the notification on a phone opens `url` directly instead
    * of the notification's page in the Hatch app. Defaults to `true` when `url`
-   * is set; pass `false` when the link is only a reference. `true` requires
-   * `url`.
+   * is set and there is no `reply` form; pass `false` when the link is only a
+   * reference. `true` requires `url`.
    */
   autoOpenUrl?: boolean;
   /** Extra structured data delivered to webhook and App destinations. */
   data?: { [key: string]: NotificationJson };
+  /**
+   * Ask people to answer: one answer per notification, from whoever answers
+   * first. It cannot be edited after sending.
+   */
+  reply?: NotificationReplyInput;
   /** Repeated pushes with the same key are stored once. */
   dedupeKey?: string;
   /** When the event happened; defaults to the time the platform accepts it. */
@@ -173,17 +250,22 @@ export async function recallNotification(
 /**
  * Event types posted to `/__notification`. Edits and recalls arrive only when
  * the manifest sets `notifications.destination.lifecycleEvents`, and only for
- * notifications this App already received.
+ * notifications this App already received. Answers to reply forms
+ * (`hatch.notification.responded`) arrive only when the manifest sets
+ * `notifications.destination.responses` and a response route selects the
+ * App; `notification.response` then holds the answer.
  */
 export type HatchNotificationEventType =
   | 'hatch.notification'
   | 'hatch.notification.updated'
-  | 'hatch.notification.recalled';
+  | 'hatch.notification.recalled'
+  | 'hatch.notification.responded';
 
 const EVENT_TYPES: readonly string[] = [
   'hatch.notification',
   'hatch.notification.updated',
   'hatch.notification.recalled',
+  'hatch.notification.responded',
 ];
 
 /**
@@ -213,6 +295,10 @@ export type HatchNotificationEnvelope = {
     revision: number;
     editedAt: string | null;
     recalledAt: string | null;
+    /** The form to answer, or null. */
+    reply: NotificationReply | null;
+    /** The answer, once someone gave it. */
+    response: NotificationResponse | null;
     createdAt: string;
     source: {
       /** `user`: sent straight to this App by a person; id is the user id. */

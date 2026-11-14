@@ -1,13 +1,15 @@
 /** Normalize Protobuf presence for the existing UI without importing server code. */
 import { toJson } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
-import type {
-  Resource,
-  AgentSession,
-  AgentSessionSummary,
-  GetModelCatalogResponse,
-  NotificationDetail as RpcNotificationDetail,
-  NotificationSummary as RpcNotificationSummary,
+import {
+  answersFromMessages,
+  replyFromMessage,
+  type Resource,
+  type AgentSession,
+  type AgentSessionSummary,
+  type GetModelCatalogResponse,
+  type NotificationDetail as RpcNotificationDetail,
+  type NotificationSummary as RpcNotificationSummary,
 } from '@hatch/platform-api';
 import { MobileError } from './security';
 import type {
@@ -158,6 +160,8 @@ export function notificationSummaryProjection(
     status: value.status,
     editedAt: value.editedAt ?? null,
     recalledAt: value.recalledAt ?? null,
+    reply: value.reply ? replyFromMessage(value.reply) : null,
+    respondedAt: value.respondedAt ?? null,
   };
 }
 export function notificationDetailProjection(
@@ -180,5 +184,13 @@ export function notificationDetailProjection(
       result: delivery.result ?? null,
       completedAt: delivery.completedAt ?? null,
     })),
+    response: value.response
+      ? {
+          answers: answersFromMessages(value.response.answers),
+          respondedByName: value.response.respondedByName,
+          via: value.response.via,
+          respondedAt: value.response.respondedAt,
+        }
+      : null,
   };
 }

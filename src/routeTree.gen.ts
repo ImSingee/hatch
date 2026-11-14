@@ -40,6 +40,7 @@ import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings/use
 import { Route as AppWorkflowsIndexRouteImport } from './routes/_app/workflows/index'
 import { Route as ApiAgentRunsRouteImport } from './routes/api/agent/runs'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiNotificationsDeviceResponseRouteImport } from './routes/api/notifications/device-response'
 import { Route as ApiRpcSplatRouteImport } from './routes/api/rpc/$'
 import { Route as MobileDashboardDashboardIdRouteImport } from './routes/mobile/dashboard/$dashboardId'
 import { Route as AppAppAppSlugIndexRouteImport } from './routes/_app/app/$appSlug/index'
@@ -228,6 +229,12 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiNotificationsDeviceResponseRoute =
+  ApiNotificationsDeviceResponseRouteImport.update({
+    id: '/api/notifications/device-response',
+    path: '/api/notifications/device-response',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
   id: '/api/rpc/$',
   path: '/api/rpc/$',
@@ -424,6 +431,7 @@ export interface FileRoutesByFullPath {
   '/settings/users': typeof AppSettingsUsersRoute
   '/api/agent/runs': typeof ApiAgentRunsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
   '/agent/': typeof AppAgentIndexRoute
@@ -485,6 +493,7 @@ export interface FileRoutesByTo {
   '/settings/users': typeof AppSettingsUsersRoute
   '/api/agent/runs': typeof ApiAgentRunsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
   '/agent': typeof AppAgentIndexRoute
@@ -550,6 +559,7 @@ export interface FileRoutesById {
   '/_app/settings/users': typeof AppSettingsUsersRoute
   '/api/agent/runs': typeof ApiAgentRunsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
   '/_app/agent/': typeof AppAgentIndexRoute
@@ -615,6 +625,7 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/api/agent/runs'
     | '/api/auth/$'
+    | '/api/notifications/device-response'
     | '/api/rpc/$'
     | '/mobile/dashboard/$dashboardId'
     | '/agent/'
@@ -676,6 +687,7 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/api/agent/runs'
     | '/api/auth/$'
+    | '/api/notifications/device-response'
     | '/api/rpc/$'
     | '/mobile/dashboard/$dashboardId'
     | '/agent'
@@ -740,6 +752,7 @@ export interface FileRouteTypes {
     | '/_app/settings/users'
     | '/api/agent/runs'
     | '/api/auth/$'
+    | '/api/notifications/device-response'
     | '/api/rpc/$'
     | '/mobile/dashboard/$dashboardId'
     | '/_app/agent/'
@@ -790,6 +803,7 @@ export interface RootRouteChildren {
   CliAuthorizeRoute: typeof CliAuthorizeRoute
   ApiAgentRunsRoute: typeof ApiAgentRunsRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiNotificationsDeviceResponseRoute: typeof ApiNotificationsDeviceResponseRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
   MobileDashboardDashboardIdRoute: typeof MobileDashboardDashboardIdRoute
   ApiAgentAttachmentsAttachmentIdRoute: typeof ApiAgentAttachmentsAttachmentIdRoute
@@ -1028,6 +1042,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/notifications/device-response': {
+      id: '/api/notifications/device-response'
+      path: '/api/notifications/device-response'
+      fullPath: '/api/notifications/device-response'
+      preLoaderRoute: typeof ApiNotificationsDeviceResponseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/rpc/$': {
@@ -1392,6 +1413,7 @@ const rootRouteChildren: RootRouteChildren = {
   CliAuthorizeRoute: CliAuthorizeRoute,
   ApiAgentRunsRoute: ApiAgentRunsRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiNotificationsDeviceResponseRoute: ApiNotificationsDeviceResponseRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
   MobileDashboardDashboardIdRoute: MobileDashboardDashboardIdRoute,
   ApiAgentAttachmentsAttachmentIdRoute: ApiAgentAttachmentsAttachmentIdRoute,

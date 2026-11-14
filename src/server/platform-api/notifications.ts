@@ -1,6 +1,12 @@
 /** Connect adapter for the notification center management API. */
 import type { ConnectRouter, HandlerContext } from '@connectrpc/connect';
 import { NotificationService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
+import {
+  answersFromMessages,
+  answersToMessages,
+  replyInputFromMessage,
+  replyToMessage,
+} from '../../../packages/hatch-platform-api/notification-reply-proto';
 import type {
   NotificationKindDeclaration,
   NotificationRouteSourceType,
@@ -10,12 +16,14 @@ import {
   apnsStatus,
   createChannel,
   createGroup,
+  createResponseRoute,
   createRoute,
   createWebhook,
   currentDevice,
   deleteChannel,
   deleteDestination,
   deleteGroup,
+  deleteResponseRoute,
   deleteRoute,
   getNotification,
   listChannels,
@@ -23,6 +31,7 @@ import {
   listGroups,
   listNotificationSources,
   listNotifications,
+  listResponseRoutes,
   listRoutes,
   registerDevice,
   retryDelivery,
@@ -36,12 +45,20 @@ import {
   updateChannel,
   updateDestination,
   updateGroup,
+  updateResponseRoute,
   updateRoute,
   type ChannelView,
+  type DeliveryView,
   type DestinationView,
+  type NotificationReplyState,
   type NotificationStatus,
   type NotificationSummaryView,
+  type ResponseRouteView,
 } from '~server/notifications/service';
+import {
+  respondToNotification,
+  type NotificationResponseView,
+} from '~server/notifications/responses';
 import { MAX_NOTIFICATION_BODY_BYTES } from '~server/notifications/contract';
 import { sessionOriginError } from '~server/session-http-auth';
 import { authenticatePublicApi } from './auth';
@@ -86,6 +103,41 @@ function summary(view: NotificationSummaryView) {
     url: none(view.url),
     editedAt: none(view.editedAt),
     recalledAt: none(view.recalledAt),
+    reply: view.reply ? replyToMessage(view.reply) : undefined,
+    respondedAt: none(view.respondedAt),
+  };
+}
+
+function delivery(view: DeliveryView) {
+  return {
+    ...view,
+    destinationId: none(view.destinationId),
+    nextAttemptAt: none(view.nextAttemptAt),
+    lastError: none(view.lastError),
+    httpStatus: none(view.httpStatus),
+    result: none(view.result),
+    deliveredRevision: none(view.deliveredRevision),
+    completedAt: none(view.completedAt),
+  };
+}
+
+function response(view: NotificationResponseView) {
+  return {
+    answers: answersToMessages(view.answers),
+    respondedByUserId: none(view.respondedBy.userId),
+    respondedByName: view.respondedBy.name,
+    via: view.via,
+    destinationId: none(view.destinationId),
+    respondedAt: view.respondedAt,
+  };
+}
+
+function responseRoute(view: ResponseRouteView) {
+  return {
+    ...view,
+    name: none(view.name),
+    sourceId: none(view.sourceId),
+    kind: none(view.kind),
   };
 }
 
@@ -175,6 +227,7 @@ export function registerNotificationApi(router: ConnectRouter) {
           sourceId: input.sourceId,
           kind: input.kind || undefined,
           status: input.status as NotificationStatus | undefined,
+          replyState: input.replyState as NotificationReplyState | undefined,
           cursor: input.cursor || undefined,
           limit: input.limit || undefined,
         });
@@ -190,16 +243,9 @@ export function registerNotificationApi(router: ConnectRouter) {
             summary: summary(detail),
             dataJson: detail.data ? JSON.stringify(detail.data) : undefined,
             dedupeKey: none(detail.dedupeKey),
-            deliveries: detail.deliveryList.map((delivery) => ({
-              ...delivery,
-              destinationId: none(delivery.destinationId),
-              nextAttemptAt: none(delivery.nextAttemptAt),
-              lastError: none(delivery.lastError),
-              httpStatus: none(delivery.httpStatus),
-              result: none(delivery.result),
-              deliveredRevision: none(delivery.deliveredRevision),
-              completedAt: none(delivery.completedAt),
-            })),
+            deliveries: detail.deliveryList.map(delivery),
+            response: detail.response ? response(detail.response) : undefined,
+            responseDeliveries: detail.responseDeliveryList.map(delivery),
           },
         };
       },
@@ -230,6 +276,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             data: dataObject(input.dataJson),
             dedupeKey: input.dedupeKey,
             occurredAt: input.occurredAt,
+            reply: input.reply ? replyInputFromMessage(input.reply) : undefined,
           },
         });
         return {
@@ -258,6 +305,24 @@ export function registerNotificationApi(router: ConnectRouter) {
       recallNotification: async (input) => {
         const result = await recallNotificationAsMember(input.id);
         return { revision: result.revision, changed: result.changed };
+      },
+      respondToNotification: async (input, context) => {
+        const status = context.values.get(publicApiContext).status;
+        if (
+          status?.credentialType !== 'session' &&
+          status?.credentialType !== 'api-key'
+        ) {
+          throw publicApiError('SESSION_REQUIRED');
+        }
+        const answered = await respondToNotification(
+          input.id,
+          answersFromMessages(input.answers),
+          {
+            userId: status.user.id,
+            via: input.via === 'mobile' ? 'mobile' : 'cli',
+          },
+        );
+        return { response: response(answered) };
       },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();
@@ -420,6 +485,41 @@ export function registerNotificationApi(router: ConnectRouter) {
       },
       deleteRoute: async (input) => {
         await deleteRoute(input.id);
+        return {};
+      },
+
+      listResponseRoutes: async () => ({
+        routes: (await listResponseRoutes()).map(responseRoute),
+      }),
+      createResponseRoute: async (input) => ({
+        route: responseRoute(
+          await createResponseRoute({
+            name: input.name,
+            sourceType: input.sourceType as NotificationRouteSourceType,
+            sourceId: input.sourceId,
+            kind: input.kind,
+            destinationId: input.destinationId,
+            enabled: input.enabled,
+          }),
+        ),
+      }),
+      updateResponseRoute: async (input) => ({
+        route: responseRoute(
+          await updateResponseRoute({
+            id: input.id,
+            name: input.name,
+            sourceType: input.sourceType as
+              | NotificationRouteSourceType
+              | undefined,
+            sourceId: input.sourceId,
+            kind: input.kind,
+            destinationId: input.destinationId,
+            enabled: input.enabled,
+          }),
+        ),
+      }),
+      deleteResponseRoute: async (input) => {
+        await deleteResponseRoute(input.id);
         return {};
       },
 

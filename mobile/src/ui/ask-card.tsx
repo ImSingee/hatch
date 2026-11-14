@@ -9,7 +9,7 @@ import { Card, Tag } from './primitives';
 import { Text, type } from './text';
 import { palette as c } from './theme';
 
-function OptionRow({
+export function OptionRow({
   label,
   multiple,
   selected,

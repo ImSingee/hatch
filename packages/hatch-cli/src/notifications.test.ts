@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   NotificationService,
   type CreateChannelRequest,
+  type CreateResponseRouteRequest,
   type CreateRouteRequest,
   type RecallNotificationRequest,
+  type RespondToNotificationRequest,
   type SendNotificationRequest,
   type UpdateGroupRequest,
   type UpdateNotificationRequest,
+  type UpdateResponseRouteRequest,
   type UpdateRouteRequest,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
@@ -470,5 +473,222 @@ describe('notification group commands', () => {
       parse('group', 'update', 'group-1', '--name', 'Phones'),
     );
     expect(received.updateGroup?.autoAddDevices).toBeUndefined();
+  });
+});
+
+describe('notification reply commands', () => {
+  function replyTransport() {
+    const received: {
+      sendNotification?: SendNotificationRequest;
+      respondToNotification?: RespondToNotificationRequest;
+      createResponseRoute?: CreateResponseRouteRequest;
+      updateResponseRoute?: UpdateResponseRouteRequest;
+    } = {};
+    const transport = createRouterTransport(({ service }) => {
+      service(NotificationService, {
+        sendNotification: (request) => {
+          received.sendNotification = request;
+          return { notificationId: 'notification-1', deliveryCount: 1 };
+        },
+        respondToNotification: (request) => {
+          received.respondToNotification = request;
+          return {
+            response: {
+              answers: request.answers,
+              respondedByName: 'Ada',
+              via: request.via ?? 'cli',
+              respondedAt: 'now',
+            },
+          };
+        },
+        createResponseRoute: (request) => {
+          received.createResponseRoute = request;
+          return {
+            route: {
+              id: 'response-route-1',
+              sourceType: request.sourceType,
+              sourceId: request.sourceId,
+              kind: request.kind,
+              destinationId: request.destinationId,
+              enabled: request.enabled ?? true,
+              createdAt: 'now',
+              updatedAt: 'now',
+            },
+          };
+        },
+        updateResponseRoute: (request) => {
+          received.updateResponseRoute = request;
+          return {};
+        },
+      });
+    });
+    return { transport, received };
+  }
+
+  it('validates --reply locally and sends the normalized form', async () => {
+    const { transport, received } = replyTransport();
+    await executeNotificationCall(
+      transport,
+      parse(
+        'send',
+        '--channel',
+        'channel-1',
+        '--kind',
+        'deploy',
+        '--title',
+        'Deploy?',
+        '--reply',
+        JSON.stringify({
+          fields: [
+            {
+              id: 'decision',
+              type: 'buttons',
+              label: 'Approve?',
+              options: [{ id: 'yes', label: 'Yes' }],
+            },
+          ],
+        }),
+      ),
+    );
+    expect(received.sendNotification?.reply).toMatchObject({
+      submitLabel: 'Submit',
+      fields: [
+        {
+          id: 'decision',
+          type: 'buttons',
+          required: true,
+          options: [{ id: 'yes', label: 'Yes', destructive: false }],
+        },
+      ],
+    });
+
+    const bad = parse(
+      'send',
+      '--channel',
+      'channel-1',
+      '--kind',
+      'deploy',
+      '--title',
+      'Deploy?',
+      '--reply',
+      '{"fields":[{"id":"Bad","type":"text","label":"x"}]}',
+    );
+    await expect(executeNotificationCall(transport, bad)).rejects.toThrow(
+      /^--reply: fields\.0\.id: field id must start/,
+    );
+    expect(() =>
+      parse(
+        'send',
+        '--channel',
+        'channel-1',
+        '--kind',
+        'deploy',
+        '--title',
+        'x',
+        '--reply',
+        '{}',
+        '--reply-file',
+        'form.json',
+      ),
+    ).toThrow(/only one of --reply, --reply-file/);
+    expect(() =>
+      parse(
+        'send',
+        '--channel',
+        'channel-1',
+        '--kind',
+        'deploy',
+        '--title',
+        'x',
+        '--reply',
+        '{',
+      ),
+    ).toThrow('--reply must be valid JSON.');
+  });
+
+  it('maps --answer pairs, repeating a field into a list', async () => {
+    const { transport, received } = replyTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse(
+        'respond',
+        'notification-1',
+        '--answer',
+        'when=am',
+        '--answer',
+        'who=ada',
+        '--answer',
+        'who=bob',
+        '--answer',
+        'note=a=b',
+      ),
+    );
+    const answers = received.respondToNotification?.answers ?? {};
+    expect(received.respondToNotification?.via).toBe('cli');
+    expect(answers.when?.answer).toEqual({ case: 'value', value: 'am' });
+    expect(answers.note?.answer).toEqual({ case: 'value', value: 'a=b' });
+    expect(answers.who?.answer).toMatchObject({
+      case: 'optionIds',
+      value: { ids: ['ada', 'bob'] },
+    });
+    expect(result.text).toContain('Answered notification notification-1');
+  });
+
+  it('rejects missing, mixed and malformed answers before any request', async () => {
+    expect(() => parse('respond', 'n')).toThrow(/Supply --answer/);
+    expect(() =>
+      parse('respond', 'n', '--answer', 'a=b', '--answers', '{}'),
+    ).toThrow(/either --answer or --answers/);
+    expect(() => parse('respond', 'n', '--answer', 'novalue')).toThrow(
+      /must be <field-id>=<value>/,
+    );
+    const { transport, received } = replyTransport();
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse('respond', 'n', '--answers', '{"a":1}'),
+      ),
+    ).rejects.toThrow(/answer "a" must be a string or a list/);
+    expect(received.respondToNotification).toBeUndefined();
+  });
+
+  it('maps response-route flags, clearing filters with --any-*', async () => {
+    const { transport, received } = replyTransport();
+    await executeNotificationCall(
+      transport,
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'channel',
+        '--source',
+        'channel-1',
+        '--kind',
+        'deploy',
+        '--destination',
+        'webhook-1',
+      ),
+    );
+    expect(received.createResponseRoute).toMatchObject({
+      sourceType: 'channel',
+      sourceId: 'channel-1',
+      kind: 'deploy',
+      destinationId: 'webhook-1',
+    });
+    await executeNotificationCall(
+      transport,
+      parse('response-route', 'update', 'route-1', '--any-kind', '--disable'),
+    );
+    expect(received.updateResponseRoute).toMatchObject({
+      id: 'route-1',
+      kind: '',
+      enabled: false,
+    });
+    expect(() =>
+      parse('response-route', 'create', '--source-type', 'any'),
+    ).toThrow('Supply --destination <id>.');
+    expect(() => parse('response-route', 'update', 'route-1')).toThrow(
+      'Supply at least one response route change.',
+    );
   });
 });

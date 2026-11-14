@@ -36,7 +36,7 @@ import { useNotificationMutation } from './use-notification-mutation';
 type SourceType = 'any' | 'app' | 'channel';
 const ANY = '__any__';
 
-function kindsFor(
+export function kindsFor(
   sources: NotificationSourcesView,
   sourceType: SourceType,
   sourceId: string | null,

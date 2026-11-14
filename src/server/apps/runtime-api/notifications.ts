@@ -7,6 +7,7 @@ import {
   MAX_NOTIFICATION_BODY_BYTES,
   findKind,
   notificationPushSchema,
+  pushIssueMessage,
 } from '~server/notifications/contract';
 import { ingestNotification } from '~server/notifications/ingest';
 import { applyLifecycleRequest } from '~server/notifications/lifecycle-http';
@@ -104,7 +105,7 @@ export async function handleNotificationRequest({
   }
   const push = notificationPushSchema.safeParse(json);
   if (!push.success) {
-    return new Response(push.error.issues[0]?.message ?? 'Invalid request', {
+    return new Response(pushIssueMessage(push.error), {
       status: 400,
     });
   }

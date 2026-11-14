@@ -37,6 +37,84 @@ struct HatchPushPlaintext: Decodable {
   let r: Int?
   /// "u": edit of a shown notification; "r": recall (carries no content).
   let e: String?
+  /// Reply form, as the phone offers it (absent when it asks nothing).
+  let q: HatchPushReply?
+}
+
+/// "b": buttons of field \`f\`; "t": system text reply for field \`f\`; "f": open
+/// the form in the app; "x": already answered (\`s\` says by whom and what).
+struct HatchPushReply: Decodable {
+  struct Option: Decodable {
+    let i: String
+    let l: String
+    let d: Int?
+  }
+  let m: String
+  let f: String?
+  let a: [Option]?
+  let l: String?
+  let p: String?
+  let s: String?
+}
+
+/// Reply actions on notifications. Keep the identifiers in sync with
+/// \`HatchReplyDelegate\` in modules/hatch-push-keys and mobile/src/core/push.ts.
+enum HatchReplyActions {
+  static let categoryPrefix = "hatch.reply."
+  static let optionPrefix = "hatch.reply.option."
+  static let text = "hatch.reply.text"
+  static let form = "hatch.reply.form"
+  /// Categories kept for older notifications that may still be answered.
+  static let keep = 64
+
+  static func category(for message: HatchPushPlaintext) -> UNNotificationCategory? {
+    guard let reply = message.q else { return nil }
+    let identifier = categoryPrefix + message.id
+    switch reply.m {
+    case "b":
+      let actions = (reply.a ?? []).prefix(4).map { option in
+        UNNotificationAction(
+          identifier: optionPrefix + option.i,
+          title: option.l,
+          // Answers are final: unlock first, so nobody answers from a
+          // locked phone.
+          options: option.d == 1 ? [.destructive, .authenticationRequired] : [.authenticationRequired])
+      }
+      return actions.isEmpty ? nil : UNNotificationCategory(
+        identifier: identifier, actions: Array(actions), intentIdentifiers: [], options: [])
+    case "t":
+      return UNNotificationCategory(
+        identifier: identifier,
+        actions: [
+          UNTextInputNotificationAction(
+            identifier: text, title: "Reply", options: [.authenticationRequired],
+            textInputButtonTitle: reply.l ?? "Send", textInputPlaceholder: reply.p ?? "")
+        ],
+        intentIdentifiers: [], options: [])
+    case "f":
+      return UNNotificationCategory(
+        identifier: identifier,
+        actions: [UNNotificationAction(identifier: form, title: "Answer…", options: [.foreground])],
+        intentIdentifiers: [], options: [])
+    default:
+      return nil
+    }
+  }
+
+  /// Registers the notification's own category (its buttons come from the
+  /// decrypted push), keeping the newest ones; ids are time-ordered.
+  static func register(_ category: UNNotificationCategory, then done: @escaping () -> Void) {
+    let center = UNUserNotificationCenter.current()
+    center.getNotificationCategories { existing in
+      let others = existing.filter { !$0.identifier.hasPrefix(categoryPrefix) }
+      let replies = existing
+        .filter { $0.identifier.hasPrefix(categoryPrefix) && $0.identifier != category.identifier }
+        .sorted { $0.identifier > $1.identifier }
+        .prefix(keep - 1)
+      center.setNotificationCategories(others.union(replies).union([category]))
+      done()
+    }
+  }
 }
 
 final class NotificationService: UNNotificationServiceExtension {
@@ -62,6 +140,16 @@ final class NotificationService: UNNotificationServiceExtension {
     lock.lock()
     fallback = content
     lock.unlock()
+    if message.e != "r", let category = HatchReplyActions.category(for: message) {
+      HatchReplyActions.register(category) {
+        self.present(message, content)
+      }
+    } else {
+      present(message, content)
+    }
+  }
+
+  private func present(_ message: HatchPushPlaintext, _ content: UNNotificationContent) {
     guard message.e == "u" || message.e == "r" else {
       finish(content)
       return
@@ -153,6 +241,15 @@ final class NotificationService: UNNotificationServiceExtension {
     return Data(HMAC<SHA256>.authenticationCode(for: Data(message.utf8), using: tapKey)).base64EncodedString()
   }
 
+  /// Keep in sync with \`HatchReplyTap\` in modules/hatch-push-keys, which
+  /// verifies it before sending an answer to \`origin\`.
+  static func replySignature(origin: String, id: String, field: String, key: SymmetricKey) -> String {
+    let replyKey = HKDF<SHA256>.deriveKey(
+      inputKeyMaterial: key, info: Data("hatch-reply-tap-v1".utf8), outputByteCount: 32)
+    let message = "hatch-reply-tap-v1|\\(origin.utf8.count)|\\(origin)|\\(id.utf8.count)|\\(id)|\\(field.utf8.count)|\\(field)"
+    return Data(HMAC<SHA256>.authenticationCode(for: Data(message.utf8), using: replyKey)).base64EncodedString()
+  }
+
   /// Returns nil unless the payload authenticates with this phone's key.
   static func open(
     _ original: UNNotificationContent, key lookup: (String) -> SymmetricKey?
@@ -192,6 +289,21 @@ final class NotificationService: UNNotificationServiceExtension {
         data["hatchAutoOpenUrl"] = true
         data["hatchKid"] = kid
         data["hatchTapMac"] = tapSignature(origin: message.o, id: message.id, url: url, key: key)
+      }
+    }
+    if let reply = message.q {
+      if reply.m == "x", let summary = reply.s, !summary.isEmpty {
+        content.body = content.body.isEmpty ? summary : "\\(content.body)\\n\\(summary)"
+      } else if message.e != "r", HatchReplyActions.category(for: message) != nil {
+        content.categoryIdentifier = HatchReplyActions.categoryPrefix + message.id
+        data["hatchReply"] = reply.m
+        if let field = reply.f, reply.m == "b" || reply.m == "t" {
+          // Answering from the notification posts to \`hatchOrigin\`; the app
+          // does so only with this phone's signature over these fields.
+          data["hatchReplyField"] = field
+          data["hatchKid"] = kid
+          data["hatchReplyMac"] = replySignature(origin: message.o, id: message.id, field: field, key: key)
+        }
       }
     }
     content.userInfo = ["body": data]

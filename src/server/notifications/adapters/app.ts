@@ -64,6 +64,7 @@ export const deliverToApp: DeliveryAdapter = async ({
   attempt,
   event,
   notification,
+  response: answer,
   destination,
   sourceSlug,
 }) => {
@@ -92,6 +93,13 @@ export const deliverToApp: DeliveryAdapter = async ({
   if (!manifest?.notifications?.destination || !manifest.backend) {
     return { kind: 'fail', error: 'App no longer accepts notifications.' };
   }
+  // Older App SDKs reject event types they do not know.
+  if (
+    event === 'responded' &&
+    manifest.notifications.destination.responses !== true
+  ) {
+    return { kind: 'fail', error: 'App no longer accepts responses.' };
+  }
   if (!appCompatibility(deployment?.compatibilityVersion ?? null).isSupported) {
     return {
       kind: 'fail',
@@ -105,6 +113,7 @@ export const deliverToApp: DeliveryAdapter = async ({
   const envelope = buildEnvelope({
     event,
     notification,
+    response: answer,
     deliveryId,
     attempt,
     sourceSlug,

@@ -3,9 +3,19 @@ import { parseArgs } from 'node:util';
 import { toJson, type JsonValue } from '@bufbuild/protobuf';
 import { createClient, type Transport } from '@connectrpc/connect';
 import { NotificationService } from '../../hatch-platform-api/gen/hatch/platform/v1/notification_pb';
+import type { ReplyAnswers } from '../../hatch-platform-api/notification-reply';
+import {
+  answersToMessages,
+  replyToMessage,
+} from '../../hatch-platform-api/notification-reply-proto';
+import {
+  describeIssue,
+  notificationReplySchema,
+} from '../../hatch-platform-api/notification-reply-schema';
 import { configPath, resolveCredential } from './config';
 import { platformTransport } from './client';
 import { CliError } from './error';
+import { readTextInput } from './input';
 
 type Method = keyof typeof NotificationService.method;
 type Values = Record<string, string | boolean | string[] | undefined>;
@@ -14,6 +24,11 @@ type Values = Record<string, string | boolean | string[] | undefined>;
 export type NotificationCall = {
   method: Method;
   request: Record<string, unknown>;
+  /**
+   * Read `--*-file` inputs and validate them before any RPC; returns the
+   * request fields they supply.
+   */
+  prepare?: (signal: AbortSignal) => Promise<Record<string, unknown>>;
   text: (response: Record<string, unknown>) => string;
 };
 
@@ -124,6 +139,158 @@ function jsonObjectFlag(values: Values, flag: string): string | undefined {
   return text;
 }
 
+const JSON_INPUT_MAX_BYTES = 64 * 1024;
+
+/**
+ * JSON from `--<flag> <json>` or `--<flag>-file <path|->`. Returns a loader,
+ * or undefined when neither flag is given.
+ */
+function jsonInput(
+  values: Values,
+  flag: string,
+): ((signal: AbortSignal) => Promise<unknown>) | undefined {
+  exclusive(values, flag, `${flag}-file`);
+  const parse = (text: string, source: string) => {
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      invalid(`${source} must be valid JSON.`);
+    }
+  };
+  const inline = str(values, flag);
+  if (inline !== undefined) {
+    const value = parse(inline, `--${flag}`);
+    return async () => value;
+  }
+  const path = str(values, `${flag}-file`);
+  if (path === undefined) return undefined;
+  if (!path) invalid(`--${flag}-file needs a path or -.`);
+  return async (signal) =>
+    parse(
+      await readTextInput(path, signal, JSON_INPUT_MAX_BYTES),
+      `--${flag}-file`,
+    );
+}
+
+/** Validate a reply form exactly as the platform does. */
+export function parseReplyForm(value: unknown, flag = 'reply') {
+  const parsed = notificationReplySchema.safeParse(value);
+  if (!parsed.success) invalid(`--${flag}: ${describeIssue(parsed.error)}`);
+  return parsed.data;
+}
+
+/**
+ * Answers from `--answers <json>`/`--answers-file`, or from repeated
+ * `--answer <field>=<value>`; repeating a field makes a list (a multiple
+ * field). The platform checks them against the notification's form.
+ */
+export function parseAnswerFlags(values: readonly string[]): ReplyAnswers {
+  const answers: ReplyAnswers = {};
+  for (const entry of values) {
+    const separator = entry.indexOf('=');
+    if (separator <= 0)
+      invalid(`--answer "${entry}" must be <field-id>=<value>.`);
+    const fieldId = entry.slice(0, separator);
+    const value = entry.slice(separator + 1);
+    const current = answers[fieldId];
+    answers[fieldId] =
+      current === undefined
+        ? value
+        : Array.isArray(current)
+          ? [...current, value]
+          : [current, value];
+  }
+  return answers;
+}
+
+export function checkAnswersObject(value: unknown, flag: string): ReplyAnswers {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    invalid(`--${flag} must be a JSON object keyed by field id.`);
+  for (const [fieldId, answer] of Object.entries(value)) {
+    const ok =
+      typeof answer === 'string' ||
+      (Array.isArray(answer) &&
+        answer.every((entry) => typeof entry === 'string'));
+    if (!ok)
+      invalid(
+        `--${flag}: answer "${fieldId}" must be a string or a list of option ids.`,
+      );
+  }
+  return value as ReplyAnswers;
+}
+
+type ReplyRow = {
+  fields?: {
+    id?: string;
+    type?: string;
+    label?: string;
+    required?: boolean;
+    options?: { id?: string; label?: string }[];
+  }[];
+};
+
+/** Answers in proto JSON (`{value}` / `{optionIds: {ids}}`) as labels. */
+function answerLines(reply: ReplyRow | undefined, answers: unknown): string[] {
+  const map =
+    answers && typeof answers === 'object'
+      ? (answers as Record<
+          string,
+          { value?: string; optionIds?: { ids?: string[] } }
+        >)
+      : {};
+  return (reply?.fields ?? []).flatMap((replyField) => {
+    const answer = map[replyField.id ?? ''];
+    if (!answer) return [];
+    const labels = new Map(
+      (replyField.options ?? []).map((option) => [option.id, option.label]),
+    );
+    const ids =
+      answer.optionIds?.ids ??
+      (answer.value !== undefined ? [answer.value] : []);
+    const value =
+      replyField.type === 'text'
+        ? (answer.value ?? '')
+        : ids
+            .map(
+              (optionId) => `${labels.get(optionId) ?? optionId} [${optionId}]`,
+            )
+            .join(', ');
+    return [`  ${replyField.label} [${replyField.id}]: ${value}`];
+  });
+}
+
+function replyLines(reply: ReplyRow | undefined): string[] {
+  return (reply?.fields ?? []).map((replyField) => {
+    const options = (replyField.options ?? [])
+      .map((option) => `${option.id}=${option.label}`)
+      .join(', ');
+    return `  ${replyField.id} (${replyField.type}${
+      replyField.required === false ? ', optional' : ''
+    }): ${replyField.label}${options ? ` — ${options}` : ''}`;
+  });
+}
+
+/** Reply state shown next to the delivery status. */
+function replyLabel(row: Row | undefined): string {
+  if (!row?.reply) return '';
+  if (field(row, 'respondedAt')) return 'answered';
+  return field(row, 'recalledAt') ? '' : 'awaiting answer';
+}
+
+function responseRouteLine(row: Row) {
+  const source =
+    field(row, 'sourceType') === 'any'
+      ? 'any source'
+      : `${field(row, 'sourceType')}:${field(row, 'sourceId') || '*'}`;
+  return [
+    field(row, 'id'),
+    row.enabled === false ? 'disabled' : 'enabled',
+    `${source} / ${field(row, 'kind') || '*'}`,
+    `→ destination:${field(row, 'destinationId')}`,
+    field(row, 'name'),
+  ];
+}
+
 /** A value, its `--clear-` flag (sent as ""), or undefined to keep it. */
 function clearable(values: Values, flag: string): string | undefined {
   exclusive(values, flag, `clear-${flag}`);
@@ -204,10 +371,14 @@ function destinationLines(response: Record<string, unknown>, key: string) {
           .filter(Boolean)
           .join(' · ');
       // Devices always take edits and recalls; say so only where it varies.
-      const changes =
+      const changes = [
         row.type !== 'device' && row.lifecycleEvents === true
           ? 'edits+recalls'
-          : '';
+          : '',
+        row.type === 'app' && row.acceptsResponses === true ? 'responses' : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
       return [
         field(row, 'id'),
         field(row, 'type'),
@@ -259,10 +430,17 @@ const specs: Record<string, Spec> = {
       source: { type: 'string' },
       kind: { type: 'string' },
       status: { type: 'string' },
+      'reply-state': { type: 'string' },
       limit: { type: 'string' },
       cursor: { type: 'string' },
     },
     build: (_positionals, values) => {
+      const replyState = str(values, 'reply-state');
+      if (
+        replyState !== undefined &&
+        !['awaiting', 'answered'].includes(replyState)
+      )
+        invalid('--reply-state must be awaiting or answered.');
       const status = str(values, 'status');
       if (
         status !== undefined &&
@@ -292,6 +470,7 @@ const specs: Record<string, Spec> = {
           sourceId: str(values, 'source'),
           kind: str(values, 'kind'),
           status,
+          replyState,
           cursor: str(values, 'cursor'),
           limit: parsedLimit ?? 0,
         },
@@ -300,7 +479,7 @@ const specs: Record<string, Spec> = {
             rows(response.notifications).map((row) => [
               field(row, 'id'),
               field(row, 'createdAt'),
-              revisionLabel(row),
+              [revisionLabel(row), replyLabel(row)].filter(Boolean).join(', '),
               `${field(row, 'sourceName')} / ${field(row, 'kind')}`,
               field(row, 'title'),
             ]),
@@ -320,6 +499,40 @@ const specs: Record<string, Spec> = {
         const detail = response.notification as Row | undefined;
         const summary = detail?.summary as Row | undefined;
         const revision = Number(summary?.revision ?? 1);
+        const answerDeliveries = rows(detail?.responseDeliveries).map((row) => [
+          field(row, 'id'),
+          field(row, 'status'),
+          `${field(row, 'destinationType')}:${field(row, 'destinationName')}`,
+          `attempts ${field(row, 'attempts')}`,
+          [
+            field(row, 'result') && `result: ${field(row, 'result')}`,
+            field(row, 'lastError') && `error: ${field(row, 'lastError')}`,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        ]);
+        const reply = summary?.reply as ReplyRow | undefined;
+        const answered = detail?.response as Row | undefined;
+        const replySection = reply
+          ? [
+              '',
+              'Reply form:',
+              ...replyLines(reply),
+              ...(answered
+                ? [
+                    `Answered by ${field(answered, 'respondedByName')} via ${field(answered, 'via')} at ${field(answered, 'respondedAt')}:`,
+                    ...answerLines(reply, answered.answers),
+                    '',
+                    'Answer deliveries:',
+                    table(answerDeliveries),
+                  ]
+                : field(summary, 'recalledAt')
+                  ? ['Not answered; recalled.']
+                  : [
+                      `Not answered yet. Answer with: hatch notification respond ${field(summary, 'id')} --answer <field-id>=<value>`,
+                    ]),
+            ]
+          : [];
         const deliveries = rows(detail?.deliveries).map((row) => {
           const received = Number(row.deliveredRevision ?? 0);
           // Destinations that take edits and recalls are re-queued for each
@@ -365,6 +578,7 @@ const specs: Record<string, Spec> = {
                 }`,
               ]
             : []),
+          ...replySection,
           '',
           'Deliveries:',
           table(deliveries),
@@ -395,10 +609,13 @@ const specs: Record<string, Spec> = {
       data: { type: 'string' },
       'dedupe-key': { type: 'string' },
       'occurred-at': { type: 'string' },
+      reply: { type: 'string' },
+      'reply-file': { type: 'string' },
     },
     build: (_positionals, values) => {
       const to = oneOf(values, ['channel', 'group', 'destination']);
       if (!to) invalid('Supply one of --channel, --group or --destination.');
+      const reply = jsonInput(values, 'reply');
       const kind = str(values, 'kind');
       const title = str(values, 'title');
       if (!title?.trim()) invalid('Supply --title.');
@@ -424,6 +641,18 @@ const specs: Record<string, Spec> = {
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
         },
+        ...(reply
+          ? {
+              prepare: async (signal: AbortSignal) => ({
+                reply: replyToMessage(
+                  parseReplyForm(
+                    await reply(signal),
+                    values.reply === undefined ? 'reply-file' : 'reply',
+                  ),
+                ),
+              }),
+            }
+          : {}),
         text: (response) => {
           const notificationId = field(response, 'notificationId');
           if (response.deduplicated === true)
@@ -500,6 +729,39 @@ const specs: Record<string, Spec> = {
           ? `Recalled notification ${id} (revision ${field(response, 'revision')}). Phones remove it, destinations that have not received it never will, and those that take recalls are told.`
           : `Notification ${id} was already recalled; nothing was sent.`,
     }),
+  },
+  respond: {
+    positionals: ['notification-id'],
+    options: {
+      answer: { type: 'string', multiple: true },
+      answers: { type: 'string' },
+      'answers-file': { type: 'string' },
+    },
+    build: ([notificationId], values) => {
+      const shorthand = list(values, 'answer');
+      const loader = jsonInput(values, 'answers');
+      if (shorthand && loader)
+        invalid('Use either --answer or --answers/--answers-file, not both.');
+      if (!shorthand && !loader)
+        invalid(
+          'Supply --answer <field-id>=<value>... or --answers <json> / --answers-file <path|->.',
+        );
+      const flag = values.answers !== undefined ? 'answers' : 'answers-file';
+      const pairs = shorthand ? parseAnswerFlags(shorthand) : undefined;
+      return {
+        method: 'respondToNotification',
+        request: { id: notificationId, via: 'cli' },
+        prepare: async (signal) => ({
+          answers: answersToMessages(
+            pairs ?? checkAnswersObject(await loader!(signal), flag),
+          ),
+        }),
+        text: (response) => {
+          const answered = response.response as Row | undefined;
+          return `Answered notification ${notificationId} as ${field(answered, 'respondedByName')}. Response routes deliver the answer; see hatch notification get ${notificationId}.`;
+        },
+      };
+    },
   },
   retry: {
     positionals: ['delivery-id'],
@@ -874,6 +1136,100 @@ const specs: Record<string, Spec> = {
       text: done('Route deleted.'),
     }),
   },
+  'response-route list': {
+    positionals: [],
+    build: () => ({
+      method: 'listResponseRoutes',
+      request: {},
+      text: (response) => table(rows(response.routes).map(responseRouteLine)),
+    }),
+  },
+  'response-route create': {
+    positionals: [],
+    options: {
+      'source-type': { type: 'string' },
+      source: { type: 'string' },
+      kind: { type: 'string' },
+      destination: { type: 'string' },
+      name: { type: 'string' },
+      disabled: { type: 'boolean' },
+    },
+    build: (_positionals, values) => {
+      const type = sourceType(str(values, 'source-type'), [
+        'app',
+        'channel',
+        'any',
+      ]);
+      if (!type) invalid('Supply --source-type app, channel or any.');
+      if (type === 'any' && values.source !== undefined)
+        invalid('--source cannot be combined with --source-type any.');
+      const destinationId = str(values, 'destination');
+      if (!destinationId) invalid('Supply --destination <id>.');
+      return {
+        method: 'createResponseRoute',
+        request: {
+          name: str(values, 'name'),
+          sourceType: type,
+          sourceId: str(values, 'source'),
+          kind: str(values, 'kind'),
+          destinationId,
+          enabled: values.disabled ? false : undefined,
+        },
+        text: (response) =>
+          table([responseRouteLine((response.route as Row | undefined) ?? {})]),
+      };
+    },
+  },
+  'response-route update': {
+    ...id,
+    options: {
+      'source-type': { type: 'string' },
+      source: { type: 'string' },
+      'any-source': { type: 'boolean' },
+      kind: { type: 'string' },
+      'any-kind': { type: 'boolean' },
+      destination: { type: 'string' },
+      name: { type: 'string' },
+      enable: { type: 'boolean' },
+      disable: { type: 'boolean' },
+    },
+    build: ([routeId], values) => {
+      exclusive(values, 'source', 'any-source');
+      exclusive(values, 'kind', 'any-kind');
+      const request = {
+        id: routeId,
+        name: str(values, 'name'),
+        sourceType: sourceType(str(values, 'source-type'), [
+          'app',
+          'channel',
+          'any',
+        ]),
+        // Empty strings clear the filter server-side ("any").
+        sourceId: values['any-source'] ? '' : str(values, 'source'),
+        kind: values['any-kind'] ? '' : str(values, 'kind'),
+        destinationId: str(values, 'destination'),
+        enabled: enabledFlag(values),
+      };
+      if (
+        Object.values(request).filter((value) => value !== undefined).length < 2
+      )
+        invalid('Supply at least one response route change.');
+      return {
+        method: 'updateResponseRoute',
+        request,
+        text: (response) =>
+          table([responseRouteLine((response.route as Row | undefined) ?? {})]),
+      };
+    },
+  },
+  'response-route delete': {
+    ...id,
+    build: ([routeId]) => ({
+      method: 'deleteResponseRoute',
+      request: { id: routeId },
+      text: done('Response route deleted.'),
+    }),
+  },
   'channel list': {
     positionals: [],
     build: () => ({
@@ -975,7 +1331,14 @@ const specs: Record<string, Spec> = {
 };
 
 /** Subcommand groups with their own verbs (`notification route create`). */
-const GROUPS = ['destination', 'webhook', 'group', 'route', 'channel'];
+const GROUPS = [
+  'destination',
+  'webhook',
+  'group',
+  'route',
+  'response-route',
+  'channel',
+];
 
 const globalFlags = {
   json: { type: 'boolean' },
@@ -1033,6 +1396,7 @@ export function parseNotificationCommand(
 export async function executeNotificationCall(
   transport: Transport,
   call: NotificationCall,
+  signal: AbortSignal = new AbortController().signal,
 ): Promise<{ json: JsonValue; text: string }> {
   const client = createClient(
     NotificationService,
@@ -1042,7 +1406,10 @@ export async function executeNotificationCall(
     (request: Record<string, unknown>) => Promise<unknown>
   >;
   const request = Object.fromEntries(
-    Object.entries(call.request).filter(([, value]) => value !== undefined),
+    Object.entries({
+      ...call.request,
+      ...(call.prepare ? await call.prepare(signal) : {}),
+    }).filter(([, value]) => value !== undefined),
   );
   const response = await client[call.method](request);
   const json = toJson(
@@ -1084,6 +1451,7 @@ export async function runNotification(
   const result = await executeNotificationCall(
     platformTransport(credential, Math.ceil(seconds * 1000), signal),
     call,
+    signal,
   );
   process.stdout.write(
     values.json ? `${JSON.stringify(result.json)}\n` : `${result.text}\n`,

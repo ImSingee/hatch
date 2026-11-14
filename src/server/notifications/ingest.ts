@@ -216,6 +216,7 @@ export async function ingestNotification(args: {
         url: push.url,
         autoOpenUrl: push.autoOpenUrl,
         data: push.data,
+        reply: push.reply,
         dedupeKey: push.dedupeKey,
         occurredAt: push.occurredAt ? new Date(push.occurredAt) : now,
         createdAt: now,
@@ -280,6 +281,38 @@ export async function requeueDelivery(deliveryId: string): Promise<boolean> {
     .returning({
       id: schema.notificationDeliveries.id,
       notificationId: schema.notificationDeliveries.notificationId,
+    });
+  const row = updated[0];
+  if (!row) return false;
+  publishPlatformEvent({
+    type: 'notification.delivery.updated',
+    notificationId: row.notificationId,
+    deliveryId: row.id,
+  });
+  wakeNotificationDispatcher();
+  return true;
+}
+
+/** Re-queue a failed delivery of an answer for a fresh attempt series. */
+export async function requeueResponseDelivery(
+  deliveryId: string,
+): Promise<boolean> {
+  const deliveries = schema.notificationResponseDeliveries;
+  const updated = await db
+    .update(deliveries)
+    .set({
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      leaseExpiresAt: null,
+      completedAt: null,
+      lastError: null,
+      httpStatus: null,
+    })
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, 'failed')))
+    .returning({
+      id: deliveries.id,
+      notificationId: deliveries.notificationId,
     });
   const row = updated[0];
   if (!row) return false;

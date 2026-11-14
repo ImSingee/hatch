@@ -13,8 +13,17 @@ import {
   notificationKindSchema,
 } from '../../../packages/hatch-manifest/src/app-schema.js';
 import type {
+  ReplyAnswers,
+  ReplyForm,
+} from '../../../packages/hatch-platform-api/notification-reply';
+import {
+  describeIssue,
+  optionalReplySchema,
+} from '../../../packages/hatch-platform-api/notification-reply-schema';
+import type {
   JsonObject,
   NotificationKindDeclaration,
+  NotificationResponseVia,
   NotificationSourceType,
 } from '~/db/schema';
 
@@ -77,10 +86,13 @@ export const notificationPushSchema = z
     url: urlField,
     /**
      * Tapping the phone push opens `url` instead of the notification. Defaults
-     * to whether there is a `url`; `false` keeps the notification page.
+     * to whether there is a `url` and no `reply` form to answer; `false` keeps
+     * the notification page.
      */
     autoOpenUrl: z.boolean().nullish(),
     data: dataField,
+    /** Form people answer once; the answer goes to response routes. */
+    reply: optionalReplySchema.optional().transform((value) => value ?? null),
     dedupeKey: optionalText(MAX_NOTIFICATION_DEDUPE_KEY),
     occurredAt: z
       .string()
@@ -102,10 +114,20 @@ export const notificationPushSchema = z
   })
   .transform((push) => ({
     ...push,
-    autoOpenUrl: push.autoOpenUrl ?? push.url !== null,
+    autoOpenUrl: push.autoOpenUrl ?? (push.url !== null && push.reply === null),
   }));
 
 export type NotificationPush = z.output<typeof notificationPushSchema>;
+
+/**
+ * One-line reason a push body was rejected. Reply form issues name the
+ * field to fix (`reply.fields.0.options: …`).
+ */
+export function pushIssueMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return 'Invalid request';
+  return issue.path[0] === 'reply' ? describeIssue(error) : issue.message;
+}
 
 /**
  * Edit of a notification the caller sent. An omitted field keeps its value;
@@ -229,19 +251,36 @@ export type NotificationRecord = {
   revision: number;
   editedAt: Date | null;
   recalledAt: Date | null;
+  reply: ReplyForm | null;
+  respondedAt: Date | null;
+  createdAt: Date;
+};
+
+/** The answer to a notification's reply form. */
+export type NotificationResponseRecord = {
+  answers: ReplyAnswers;
+  respondedByUserId: string | null;
+  respondedByName: string;
+  via: NotificationResponseVia;
   createdAt: Date;
 };
 
 /**
- * What one delivery attempt tells a destination: the notification itself, or
- * a later edit or recall of a notification the destination already received.
+ * What one delivery attempt tells a destination: the notification itself, a
+ * later edit or recall of a notification the destination already received,
+ * or (on response routes) the answer to its reply form.
  */
-export type NotificationEvent = 'created' | 'updated' | 'recalled';
+export type NotificationEvent =
+  | 'created'
+  | 'updated'
+  | 'recalled'
+  | 'responded';
 
 export const NOTIFICATION_EVENT_TYPES = {
   created: 'hatch.notification',
   updated: 'hatch.notification.updated',
   recalled: 'hatch.notification.recalled',
+  responded: 'hatch.notification.responded',
 } as const satisfies Record<NotificationEvent, string>;
 
 export type NotificationEventType =
@@ -273,6 +312,10 @@ export type NotificationEnvelope = {
     revision: number;
     editedAt: string | null;
     recalledAt: string | null;
+    /** The form to answer, or null. */
+    reply: ReplyForm | null;
+    /** The answer, once someone gave it. */
+    response: NotificationResponseEnvelope | null;
     createdAt: string;
     source: {
       type: NotificationSourceType;
@@ -290,9 +333,32 @@ export function notificationSourceId(
   return notification.appId ?? notification.channelId ?? notification.userId;
 }
 
+export type NotificationResponseEnvelope = {
+  answers: ReplyAnswers;
+  respondedBy: { userId: string | null; name: string };
+  /** Where it was answered: `push`, `mobile`, `web` or `cli`. */
+  via: NotificationResponseVia;
+  respondedAt: string;
+};
+
+export function responseEnvelope(
+  response: NotificationResponseRecord,
+): NotificationResponseEnvelope {
+  return {
+    answers: response.answers,
+    respondedBy: {
+      userId: response.respondedByUserId,
+      name: response.respondedByName,
+    },
+    via: response.via,
+    respondedAt: response.createdAt.toISOString(),
+  };
+}
+
 export function buildEnvelope(args: {
   event: NotificationEvent;
   notification: NotificationRecord;
+  response: NotificationResponseRecord | null;
   deliveryId: string;
   attempt: number;
   sourceSlug: string | null;
@@ -318,6 +384,8 @@ export function buildEnvelope(args: {
       revision: notification.revision,
       editedAt: notification.editedAt?.toISOString() ?? null,
       recalledAt: notification.recalledAt?.toISOString() ?? null,
+      reply: notification.reply,
+      response: args.response ? responseEnvelope(args.response) : null,
       createdAt: notification.createdAt.toISOString(),
       source: {
         type: notification.sourceType,

@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ReplyAnswers } from '@hatch/platform-api';
 import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
-import { notificationUrlAction } from '../../src/core';
+import { MobileError, notificationUrlAction } from '../../src/core';
 import { openSurfaceLink } from '../../src/state/deep-links';
 import { allowDevelopmentLoopback, useSession } from '../../src/state/session';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
@@ -11,9 +12,11 @@ import { Busy, Card, Notice, errorText } from '../../src/ui/primitives';
 import {
   DeliveryStatusTag,
   NotificationChangeTag,
+  NotificationReplyTag,
   NotificationStatusTag,
   notificationTime,
 } from '../../src/ui/notification-status';
+import { AnswerCard, ReplyFormCard } from '../../src/ui/reply-card';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
 import { palette as c } from '../../src/ui/theme';
@@ -33,6 +36,25 @@ export default function NotificationScreen() {
     enabled: Boolean(api),
   });
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
+  const queryClient = useQueryClient();
+  const respond = useMutation({
+    mutationFn: (answers: ReplyAnswers) =>
+      api!.respondToNotification(id, answers),
+    onError: (error) =>
+      Alert.alert(
+        'Answer not sent',
+        error instanceof MobileError && error.status === 409
+          ? 'Someone already answered, or the sender recalled it.'
+          : errorText(error),
+      ),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [origin, 'notification', id],
+        }),
+        queryClient.invalidateQueries({ queryKey: [origin, 'notifications'] }),
+      ]),
+  });
   const data = query.data;
   if (query.error && !data)
     return (
@@ -66,6 +88,11 @@ export default function NotificationScreen() {
             editedAt={data.editedAt}
             recalledAt={data.recalledAt}
           />
+          <NotificationReplyTag
+            hasReply={data.reply !== null}
+            respondedAt={data.respondedAt}
+            recalledAt={data.recalledAt}
+          />
           <Text style={type.meta}>{notificationTime(data.occurredAt)}</Text>
         </View>
         {data.recalledAt ? (
@@ -86,6 +113,15 @@ export default function NotificationScreen() {
               {data.body}
             </Text>
           </Card>
+        ) : null}
+        {data.reply && data.response ? (
+          <AnswerCard reply={data.reply} answer={data.response} />
+        ) : data.reply && !data.recalledAt ? (
+          <ReplyFormCard
+            reply={data.reply}
+            busy={respond.isPending}
+            onSubmit={(answers) => respond.mutate(answers)}
+          />
         ) : null}
         {data.url ? (
           <Button

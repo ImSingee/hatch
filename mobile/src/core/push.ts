@@ -254,6 +254,24 @@ export type PushTapFields = { origin: string; id: string; url: string };
 
 const NO_HANDOFF = { ticket: '', completionUrl: '' };
 
+/**
+ * Reply actions on a notification (identifiers set by the Notification
+ * Service Extension). Buttons and the text reply are answered natively by
+ * `HatchReplyDelegate`, even when only the background is woken; "Answer…"
+ * opens the form in the app.
+ */
+export type PushReplyAction = 'native' | 'form' | null;
+
+export function pushReplyAction(actionIdentifier: string): PushReplyAction {
+  if (
+    actionIdentifier.startsWith('hatch.reply.option.') ||
+    actionIdentifier === 'hatch.reply.text'
+  ) {
+    return 'native';
+  }
+  return actionIdentifier === 'hatch.reply.form' ? 'form' : null;
+}
+
 const text = (value: unknown) => (typeof value === 'string' ? value : null);
 
 /**

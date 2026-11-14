@@ -15,6 +15,10 @@ import {
 import { monotonicFactory } from 'ulid';
 import { session, user } from './auth-schema';
 import type { HomepageTarget } from '../homepage';
+import type {
+  ReplyAnswers,
+  ReplyForm,
+} from '../../packages/hatch-platform-api/notification-reply';
 
 export * from './auth-schema';
 
@@ -915,6 +919,10 @@ export const notifications = snakeCase.table(
     editedAt: timestamp('edited_at'),
     /** Set once when the source recalls the notification. */
     recalledAt: timestamp('recalled_at'),
+    /** Form the notification asks people to answer; fixed once sent. */
+    reply: jsonb().$type<ReplyForm>(),
+    /** Set once when someone answers `reply` (one answer per notification). */
+    respondedAt: timestamp('responded_at'),
     createdAt,
   },
   (table) => [
@@ -983,6 +991,11 @@ export const notificationDestinations = snakeCase.table(
      * Devices always receive them.
      */
     lifecycleEvents: boolean().notNull().default(false),
+    /**
+     * An App destination whose manifest accepts reply events, so response
+     * routes may target it. Webhooks always may; devices never.
+     */
+    acceptsResponses: boolean().notNull().default(false),
     createdAt,
     updatedAt,
   },
@@ -1134,6 +1147,103 @@ export const notificationDeliveries = snakeCase.table(
       .on(table.status, table.nextAttemptAt)
       .where(
         sql`"notification_deliveries"."status" in ('pending', 'in_progress')`,
+      ),
+  ],
+);
+
+export type NotificationResponseVia = 'push' | 'mobile' | 'web' | 'cli';
+
+/** The one answer to a notification's reply form. Never changes. */
+export const notificationResponses = snakeCase.table('notification_responses', {
+  notificationId: ulid()
+    .primaryKey()
+    .references(() => notifications.id, { onDelete: 'cascade' }),
+  answers: jsonb().$type<ReplyAnswers>().notNull(),
+  respondedByUserId: text().references(() => user.id, {
+    onDelete: 'set null',
+  }),
+  /** Snapshot so the answer stays attributed after the user is removed. */
+  respondedByName: text().notNull(),
+  via: text().$type<NotificationResponseVia>().notNull(),
+  /** Device that answered from the push itself. */
+  destinationId: ulid().references(() => notificationDestinations.id, {
+    onDelete: 'set null',
+  }),
+  createdAt,
+});
+
+/**
+ * Where answers go: answers to notifications matching (source, kind) are
+ * sent to one webhook or App destination. A null sourceId/kind matches any
+ * value.
+ */
+export const notificationResponseRoutes = snakeCase.table(
+  'notification_response_routes',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    name: text(),
+    sourceType: text().$type<NotificationRouteSourceType>().notNull(),
+    appId: text().references(() => apps.id, { onDelete: 'cascade' }),
+    channelId: ulid().references(() => notificationChannels.id, {
+      onDelete: 'cascade',
+    }),
+    kind: text(),
+    targetDestinationId: ulid()
+      .notNull()
+      .references(() => notificationDestinations.id, { onDelete: 'cascade' }),
+    enabled: boolean().notNull().default(true),
+    createdAt,
+    updatedAt,
+  },
+  () => [
+    check(
+      'notification_response_routes_source_check',
+      sql`(
+        ("notification_response_routes"."source_type" = 'app' and "notification_response_routes"."channel_id" is null)
+        or ("notification_response_routes"."source_type" = 'channel' and "notification_response_routes"."app_id" is null)
+        or ("notification_response_routes"."source_type" = 'any' and "notification_response_routes"."app_id" is null and "notification_response_routes"."channel_id" is null)
+      )`,
+    ),
+  ],
+);
+
+/** One answer delivery per (notification, destination), retried like any. */
+export const notificationResponseDeliveries = snakeCase.table(
+  'notification_response_deliveries',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    notificationId: ulid()
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    destinationId: ulid().references(() => notificationDestinations.id, {
+      onDelete: 'set null',
+    }),
+    destinationType: text().$type<NotificationDestinationType>().notNull(),
+    destinationName: text().notNull(),
+    status: text()
+      .$type<NotificationDeliveryStatus>()
+      .notNull()
+      .default('pending'),
+    attempts: integer().notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at').notNull().defaultNow(),
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    lastError: text(),
+    httpStatus: integer(),
+    /** Free-form string returned by an App destination; never interpreted. */
+    result: text(),
+    routeIds: jsonb().$type<string[]>().notNull(),
+    completedAt: timestamp('completed_at'),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [
+    uniqueIndex(
+      'notification_response_deliveries_notification_destination_idx',
+    ).on(table.notificationId, table.destinationId),
+    index('notification_response_deliveries_due_idx')
+      .on(table.status, table.nextAttemptAt)
+      .where(
+        sql`"notification_response_deliveries"."status" in ('pending', 'in_progress')`,
       ),
   ],
 );

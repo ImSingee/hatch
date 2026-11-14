@@ -13,6 +13,8 @@ import {
   WorkspaceService,
   NotificationService,
   PublicErrorSchema,
+  answersToMessages,
+  type ReplyAnswers,
 } from '@hatch/platform-api';
 import {
   appProjection,
@@ -394,6 +396,24 @@ export class HatchApiClient {
         'The instance returned no notification.',
       );
     return notificationDetailProjection(result.notification);
+  }
+  /**
+   * Answer a notification's reply form as the signed-in user. A notification
+   * takes one answer; a later one fails with a conflict (409).
+   */
+  respondToNotification(
+    id: string,
+    answers: ReplyAnswers,
+    signal?: AbortSignal,
+  ) {
+    return this.rpcRequest(
+      (signal) =>
+        this.notificationRpc.respondToNotification(
+          { id, answers: answersToMessages(answers), via: 'mobile' },
+          { signal },
+        ),
+      signal,
+    ).then(() => undefined);
   }
   /** Bind this phone's APNs token and end-to-end key to the current session. */
   registerPushDevice(input: PushRegistration, signal?: AbortSignal) {

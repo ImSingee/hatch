@@ -331,6 +331,11 @@ export const notificationsConfigSchema = z
          * notification this App already received.
          */
         lifecycleEvents: z.boolean().optional(),
+        /**
+         * Response routes may send this App `hatch.notification.responded`
+         * with the answer to a notification's reply form.
+         */
+        responses: z.boolean().optional(),
       })
       .strict()
       .optional(),

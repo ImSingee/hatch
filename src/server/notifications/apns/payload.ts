@@ -14,6 +14,22 @@ export const PLACEHOLDER_TITLE = 'Hatch';
 export const PLACEHOLDER_BODY = 'New notification';
 /** Shown where a recalled notification was, when the phone cannot hide it. */
 export const RECALLED_TITLE = 'Notification recalled';
+/** Longest answer summary shown on an answered notification. */
+export const MAX_ANSWERED_SUMMARY = 200;
+
+/**
+ * The reply form as the phone shows it on the notification:
+ * - `b`: answer by tapping one of the buttons of field `f`.
+ * - `t`: answer field `f` in the system text reply box (`l` is the button
+ *   title, `p` the placeholder).
+ * - `f`: open the form in the app.
+ * - `x`: already answered; `s` says by whom and what.
+ */
+export type PushReply =
+  | { m: 'b'; f: string; a: { i: string; l: string; d?: 1 }[] }
+  | { m: 't'; f: string; l: string; p?: string }
+  | { m: 'f' }
+  | { m: 'x'; s: string };
 
 /** Decrypted content the extension renders and the app opens on tap. */
 export type PushPlaintext = {
@@ -41,6 +57,8 @@ export type PushPlaintext = {
    * content is never sent). Absent for the original notification.
    */
   e?: 'u' | 'r';
+  /** Reply form; absent when the notification asks nothing. */
+  q?: PushReply;
 };
 
 export function pushAssociatedData(keyId: string): Buffer {

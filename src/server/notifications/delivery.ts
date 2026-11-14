@@ -1,6 +1,10 @@
 /** Shared types for delivery adapters (device, webhook, App). */
 import type { schema } from '~/db';
-import type { NotificationEvent, NotificationRecord } from './contract';
+import type {
+  NotificationEvent,
+  NotificationRecord,
+  NotificationResponseRecord,
+} from './contract';
 
 export type DestinationRow =
   typeof schema.notificationDestinations.$inferSelect;
@@ -12,6 +16,8 @@ export type DeliveryContext = {
   /** Derived from what this destination already received. */
   event: NotificationEvent;
   notification: NotificationRecord;
+  /** The answer to the notification's reply form, once given. */
+  response: NotificationResponseRecord | null;
   destination: DestinationRow;
   /** Current slug of the source App, when the source is an App. */
   sourceSlug: string | null;

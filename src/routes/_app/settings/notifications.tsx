@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { ChannelsSection } from '~components/notifications/channels-section';
 import { DestinationsSection } from '~components/notifications/destinations-section';
 import { GroupsSection } from '~components/notifications/groups-section';
+import { ResponseRoutesSection } from '~components/notifications/response-routes-section';
 import { RoutesSection } from '~components/notifications/routes-section';
 import { SectionHead } from '~components/settings/section-head';
 import {
@@ -11,6 +12,7 @@ import {
   notificationChannelsQueryOptions,
   notificationDestinationsQueryOptions,
   notificationGroupsQueryOptions,
+  notificationResponseRoutesQueryOptions,
   notificationRoutesQueryOptions,
   notificationSourcesQueryOptions,
 } from '~queries/notifications';
@@ -21,6 +23,7 @@ export const Route = createFileRoute('/_app/settings/notifications')({
       queryClient.ensureQueryData(notificationDestinationsQueryOptions),
       queryClient.ensureQueryData(notificationGroupsQueryOptions),
       queryClient.ensureQueryData(notificationRoutesQueryOptions),
+      queryClient.ensureQueryData(notificationResponseRoutesQueryOptions),
       queryClient.ensureQueryData(notificationChannelsQueryOptions),
       queryClient.ensureQueryData(notificationSourcesQueryOptions),
       queryClient.ensureQueryData(apnsStatusQueryOptions),
@@ -48,6 +51,8 @@ function NotificationSettingsRoute() {
           <GroupsSection />
           <Divider />
           <RoutesSection />
+          <Divider />
+          <ResponseRoutesSection />
           <Divider />
           <ChannelsSection />
         </Stack>
