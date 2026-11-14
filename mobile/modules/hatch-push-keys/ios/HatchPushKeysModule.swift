@@ -86,6 +86,11 @@ final class HatchReplyDelegate: NotificationDelegate {
   static let textAction = "hatch.reply.text"
   static let categoryPrefix = "hatch.reply."
 
+  /// `completionHandler` is deliberately not called here: expo-notifications'
+  /// `NotificationCenterManager` calls the system's handler itself, right
+  /// after every delegate returns (and its JS emitter calls it too), so a call
+  /// here would complete the response twice, and it cannot be held until the
+  /// request ends. A background task keeps the app alive for the request.
   func didReceive(_ response: UNNotificationResponse, completionHandler: @escaping () -> Void) -> Bool {
     let action = response.actionIdentifier
     let isOption = action.hasPrefix(Self.optionPrefix)
@@ -134,7 +139,8 @@ final class HatchReplyDelegate: NotificationDelegate {
       forHTTPHeaderField: "x-hatch-signature")
     request.httpBody = body
 
-    // The system may suspend the app once the action is handled; finish the
+    // expo-notifications has already completed the response, so the system
+    // may suspend the app at any moment; a background task finishes the
     // request first.
     var task = UIBackgroundTaskIdentifier.invalid
     let end = {
