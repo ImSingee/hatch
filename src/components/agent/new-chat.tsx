@@ -131,7 +131,7 @@ export function NewChat({
               </Text>
               <Button
                 component={Link}
-                to="/settings"
+                to="/settings/providers"
                 mt="xs"
                 leftSection={<IconPlugConnected size={16} stroke={1.7} />}
               >
