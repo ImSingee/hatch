@@ -2,6 +2,7 @@ import {
   RESERVED_LINK_ROOTS,
   formatHatchLink,
   isDeepLink,
+  isDocumentUrl,
   linkFragment,
   linkPathSegments,
   parseHatchLink,
@@ -179,14 +180,18 @@ export type NotificationUrlAction =
   | { open: 'page'; link: DeepLink & { instance: string } }
   /** Any other page or scheme, through the system. */
   | { open: 'outside'; url: string }
-  /** A `hatch:` link this app cannot read. */
+  /**
+   * A `hatch:` link this app cannot read, or a scheme that only runs inside a
+   * document (`javascript:`, `data:`, …) and so opens nothing.
+   */
   | { open: 'none' };
 
 /**
  * A notification URL from `origin`: its own address or a `hatch:` link opens
  * the page in the app (on `origin` unless the link names an instance), and a
  * `hatch:` link never leaves for the system, not even for a page the app has
- * no screen for (that page opens in the in-app browser on its instance).
+ * no screen for (that page opens in the in-app browser on its instance). Any
+ * other web page or scheme (`mailto:`, `someapp://…`) goes to the system.
  */
 export function notificationUrlAction(
   url: string,
@@ -200,7 +205,9 @@ export function notificationUrlAction(
       open: 'page',
       link: { instance: link.instance ?? origin, target: link.target },
     };
-  return deep ? { open: 'none' } : { open: 'outside', url };
+  return deep || isDocumentUrl(url)
+    ? { open: 'none' }
+    : { open: 'outside', url };
 }
 
 function segmentsOf(target: LinkTarget): string[] {

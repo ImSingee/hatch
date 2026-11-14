@@ -515,7 +515,9 @@ export type SendNotificationRequest =
     body?: string | undefined;
 
     /**
-     * Absolute http(s) URL.
+     * Absolute URL a device can open: a web page, another app's scheme
+     * (mailto:, slack://...) or a hatch:// deep link. javascript:, data:, blob:,
+     * file: and about: are rejected.
      *
      * @generated from field: optional string url = 5;
      */

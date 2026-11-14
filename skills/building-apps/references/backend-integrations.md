@@ -306,9 +306,11 @@ await notify({
 `notify` POSTs to `HATCH_NOTIFICATIONS_URL`, signed with
 `HATCH_SIGNING_SECRET`; both are injected only when the capability and backend
 are enabled. Title is required (≤200 characters); body ≤4000; `url` must be
-absolute http(s) or a Hatch deep link such as `hatch://app/<slug>#/orders/42`
-(the instance web path after `hatch://`), which phones open natively and the
-web opens on the instance. Prefer a deep link for Hatch pages: the backend
+an absolute URL a device can open: a web page, another app by its own scheme
+(`mailto:`, `tel:`, `slack://…`), or a Hatch deep link such as
+`hatch://app/<slug>#/orders/42` (the instance web path after `hatch://`),
+which phones open natively and the web opens on the instance (`javascript:`,
+`data:`, `blob:`, `file:` and `about:` are rejected). Prefer a deep link for Hatch pages: the backend
 does not need the instance origin. Tapping a notification with a `url` on a
 phone opens that URL (a deep link opens the page in the Hatch app) instead of
 the notification; pass `autoOpenUrl: false` when the link is only a reference
