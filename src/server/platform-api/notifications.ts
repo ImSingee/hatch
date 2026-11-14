@@ -28,7 +28,9 @@ import {
   retryDelivery,
   rotateChannelToken,
   rotateWebhookSecret,
+  recallChannelNotification,
   sendNotification,
+  updateChannelNotification,
   sendTestNotification,
   unregisterDevice,
   updateChannel,
@@ -82,6 +84,8 @@ function summary(view: NotificationSummaryView) {
     sourceId: none(view.sourceId),
     body: none(view.body),
     url: none(view.url),
+    editedAt: none(view.editedAt),
+    recalledAt: none(view.recalledAt),
   };
 }
 
@@ -193,6 +197,7 @@ export function registerNotificationApi(router: ConnectRouter) {
               lastError: none(delivery.lastError),
               httpStatus: none(delivery.httpStatus),
               result: none(delivery.result),
+              deliveredRevision: none(delivery.deliveredRevision),
               completedAt: none(delivery.completedAt),
             })),
           },
@@ -233,6 +238,30 @@ export function registerNotificationApi(router: ConnectRouter) {
           deliveryCount: result.deliveries,
         };
       },
+      updateNotification: async (input) => {
+        const result = await updateChannelNotification(input.channelId, {
+          id: input.id,
+          title: input.title,
+          body: input.body,
+          url: input.url,
+          autoOpenUrl: input.autoOpenUrl,
+          // An empty string clears the data; unset keeps it.
+          data:
+            input.dataJson === undefined
+              ? undefined
+              : input.dataJson === ''
+                ? null
+                : dataObject(input.dataJson),
+        });
+        return { revision: result.revision, changed: result.changed };
+      },
+      recallNotification: async (input) => {
+        const result = await recallChannelNotification(
+          input.channelId,
+          input.id,
+        );
+        return { revision: result.revision, changed: result.changed };
+      },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();
         return {
@@ -272,6 +301,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             name: input.name,
             enabled: input.enabled,
             url: input.url,
+            lifecycleEvents: input.lifecycleEvents,
           }),
         ),
       }),

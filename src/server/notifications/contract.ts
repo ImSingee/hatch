@@ -38,41 +38,49 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((value) => (value ? value : null));
 
+const urlField = z
+  .string()
+  .max(MAX_NOTIFICATION_URL)
+  .nullish()
+  .transform((value) => (value ? value : null))
+  .refine((value) => value === null || isNotificationUrl(value), {
+    message:
+      'url must be an absolute URL that opens a page or app, such as https://, mailto: or a hatch:// link',
+  });
+
+const dataField = z
+  .record(z.string(), z.json())
+  .nullish()
+  .transform((value) =>
+    value && Object.keys(value).length > 0 ? (value as JsonObject) : null,
+  )
+  .refine(
+    (value) =>
+      value === null ||
+      Buffer.byteLength(JSON.stringify(value)) <= MAX_NOTIFICATION_DATA_BYTES,
+    {
+      message: `data must serialize to at most ${MAX_NOTIFICATION_DATA_BYTES} bytes`,
+    },
+  );
+
+/** Notification ids are lowercase ULIDs. */
+const notificationIdField = z.string().regex(/^[0-9a-z]{26}$/, {
+  message: 'id must be a notification id',
+});
+
 /** Body accepted from App backends and external Channel callers. */
 export const notificationPushSchema = z
   .object({
     kind: z.string().regex(NOTIFICATION_KIND_RE, 'invalid notification kind'),
     title: z.string().trim().min(1).max(MAX_NOTIFICATION_TITLE),
     body: optionalText(MAX_NOTIFICATION_TEXT),
-    url: z
-      .string()
-      .max(MAX_NOTIFICATION_URL)
-      .nullish()
-      .transform((value) => (value ? value : null))
-      .refine((value) => value === null || isNotificationUrl(value), {
-        message:
-          'url must be an absolute URL that opens a page or app, such as https://, mailto: or a hatch:// link',
-      }),
+    url: urlField,
     /**
      * Tapping the phone push opens `url` instead of the notification. Defaults
      * to whether there is a `url`; `false` keeps the notification page.
      */
     autoOpenUrl: z.boolean().nullish(),
-    data: z
-      .record(z.string(), z.json())
-      .nullish()
-      .transform((value) =>
-        value && Object.keys(value).length > 0 ? (value as JsonObject) : null,
-      )
-      .refine(
-        (value) =>
-          value === null ||
-          Buffer.byteLength(JSON.stringify(value)) <=
-            MAX_NOTIFICATION_DATA_BYTES,
-        {
-          message: `data must serialize to at most ${MAX_NOTIFICATION_DATA_BYTES} bytes`,
-        },
-      ),
+    data: dataField,
     dedupeKey: optionalText(MAX_NOTIFICATION_DEDUPE_KEY),
     occurredAt: z
       .string()
@@ -98,6 +106,50 @@ export const notificationPushSchema = z
   }));
 
 export type NotificationPush = z.output<typeof notificationPushSchema>;
+
+/**
+ * Edit of a notification the caller sent. An omitted field keeps its value;
+ * `null` (or an empty value) clears `body`, `url` and `data`. Without
+ * `autoOpenUrl`, a new `url` opens on tap like a push, a cleared one stops and
+ * a replaced one keeps the setting. `kind`,
+ * `dedupeKey` and `occurredAt` never change. The id is part of the signed
+ * body, so a replayed request can only repeat the same edit.
+ */
+export const notificationUpdateSchema = z
+  .object({
+    id: notificationIdField,
+    title: z.string().trim().min(1).max(MAX_NOTIFICATION_TITLE).optional(),
+    body: z
+      .string()
+      .max(MAX_NOTIFICATION_TEXT)
+      .nullable()
+      .transform((value) => value || null)
+      .optional(),
+    url: urlField.optional(),
+    autoOpenUrl: z
+      .boolean()
+      .nullable()
+      .transform((value) => value === true)
+      .optional(),
+    data: dataField.optional(),
+  })
+  .strict()
+  .refine(
+    (update) =>
+      update.title !== undefined ||
+      update.body !== undefined ||
+      update.url !== undefined ||
+      update.autoOpenUrl !== undefined ||
+      update.data !== undefined,
+    { message: 'update must change at least one field' },
+  );
+
+export type NotificationUpdate = z.output<typeof notificationUpdateSchema>;
+
+/** Recall of a notification the caller sent. */
+export const notificationRecallSchema = z
+  .object({ id: notificationIdField })
+  .strict();
 
 /** Channel kind declarations: same shape and rules as App manifest kinds. */
 export const channelKindsSchema = z
@@ -174,15 +226,38 @@ export type NotificationRecord = {
   data: JsonObject | null;
   dedupeKey: string | null;
   occurredAt: Date;
+  revision: number;
+  editedAt: Date | null;
+  recalledAt: Date | null;
   createdAt: Date;
 };
 
-/** JSON body POSTed to webhook and App destinations. */
+/**
+ * What one delivery attempt tells a destination: the notification itself, or
+ * a later edit or recall of a notification the destination already received.
+ */
+export type NotificationEvent = 'created' | 'updated' | 'recalled';
+
+export const NOTIFICATION_EVENT_TYPES = {
+  created: 'hatch.notification',
+  updated: 'hatch.notification.updated',
+  recalled: 'hatch.notification.recalled',
+} as const satisfies Record<NotificationEvent, string>;
+
+export type NotificationEventType =
+  (typeof NOTIFICATION_EVENT_TYPES)[NotificationEvent];
+
+/**
+ * JSON body POSTed to webhook and App destinations. Edits and recalls carry
+ * the notification's current state; `revision` orders them, and
+ * `(notification.id, revision)` identifies one event.
+ */
 export type NotificationEnvelope = {
-  type: 'hatch.notification';
+  type: NotificationEventType;
   version: 1;
   deliveryId: string;
   attempt: number;
+  revision: number;
   notification: {
     id: string;
     kind: string;
@@ -195,6 +270,9 @@ export type NotificationEnvelope = {
     data: JsonObject | null;
     dedupeKey: string | null;
     occurredAt: string;
+    revision: number;
+    editedAt: string | null;
+    recalledAt: string | null;
     createdAt: string;
     source: {
       type: NotificationSourceType;
@@ -213,6 +291,7 @@ export function notificationSourceId(
 }
 
 export function buildEnvelope(args: {
+  event: NotificationEvent;
   notification: NotificationRecord;
   deliveryId: string;
   attempt: number;
@@ -220,10 +299,11 @@ export function buildEnvelope(args: {
 }): NotificationEnvelope {
   const { notification } = args;
   return {
-    type: 'hatch.notification',
+    type: NOTIFICATION_EVENT_TYPES[args.event],
     version: 1,
     deliveryId: args.deliveryId,
     attempt: args.attempt,
+    revision: notification.revision,
     notification: {
       id: notification.id,
       kind: notification.kind,
@@ -235,6 +315,9 @@ export function buildEnvelope(args: {
       data: notification.data,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),
+      revision: notification.revision,
+      editedAt: notification.editedAt?.toISOString() ?? null,
+      recalledAt: notification.recalledAt?.toISOString() ?? null,
       createdAt: notification.createdAt.toISOString(),
       source: {
         type: notification.sourceType,
@@ -249,3 +332,5 @@ export function buildEnvelope(args: {
 /** Request headers carried by every outbound notification delivery. */
 export const NOTIFICATION_ID_HEADER = 'x-hatch-notification-id';
 export const NOTIFICATION_DELIVERY_HEADER = 'x-hatch-delivery-id';
+/** The envelope `type`, so receivers can route before parsing the body. */
+export const NOTIFICATION_EVENT_HEADER = 'x-hatch-event';

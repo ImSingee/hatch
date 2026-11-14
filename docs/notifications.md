@@ -106,6 +106,76 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   up to 128 KiB (twice the Channel push cap) because `data_json` is escaped
   inside the request.
 
+### Edits and recalls
+
+The source of a notification can edit or recall it, under the same
+authentication as pushing:
+
+- App: `POST /api/app/<id>/notifications/update` and `…/recall` (SDK
+  `updateNotification(id, patch)` and `recallNotification(id)`).
+- Channel: `POST /api/notifications/channel/<channelId>/update` and `…/recall`.
+
+```json
+{
+  "id": "<notification id>",
+  "title": "…",
+  "body": null,
+  "url": null,
+  "autoOpenUrl": false,
+  "data": null
+}
+```
+
+An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
+Omitted fields keep their value and `null` clears `body`, `url` or `data`.
+Without `autoOpenUrl`, a newly added `url` opens on tap (the push default), a
+cleared one stops and a replaced one keeps the setting. `kind`, `dedupeKey` and
+`occurredAt` never change. A recall takes only `id`. The id is in the body
+because the HMAC covers only the body: a replay can only repeat the same
+change. Both respond `200 { id, revision, recalled, changed }`. `400` means an invalid
+body or an empty edit. `404` means the notification does not exist or belongs
+to another source (the two cases are indistinguishable). `409` means an edit
+of a recalled notification. Repeating a recall, or an edit that changes
+nothing, leaves the revision as it is, answers `changed: false` and sends
+nothing.
+
+Users act as a Channel through `NotificationService.UpdateNotification` and
+`RecallNotification` (CLI `hatch notification update|recall <channel-id>
+<id>`), the counterparts of `SendNotification`. They take the Channel id and
+change only that Channel's notifications, with the same rules; in the RPC an
+empty `body`, `url` or `data_json` clears the field.
+
+Every edit and the recall increment `notifications.revision`, which starts at
+
+1. Each delivery records `delivered_revision`, the revision its destination
+   last received (`lifecycle.ts`, `dispatcher.ts`):
+
+- In the same transaction, a change re-queues every delivery that already
+  delivered something, as long as its destination is enabled and takes
+  lifecycle events. Each such delivery gets a fresh attempt series.
+- Deliveries that never delivered behave differently. A recall cancels them
+  (`canceled`, shown as "Not sent"), so recalled content never goes out. After
+  an edit, a pending delivery simply sends the newest content as the original
+  notification.
+- `planDelivery` picks the event from `delivered_revision`:
+  `hatch.notification` when nothing was delivered yet, otherwise
+  `hatch.notification.updated` or `hatch.notification.recalled`. Edits made
+  before the dispatcher runs collapse into one event for the latest state.
+- `recordOutcome` share-locks the notification row before it writes. An
+  attempt that sent an older revision than the current one goes back to
+  `pending` instead of finishing, so a change that lands while a delivery is
+  in flight is sent right after it. Events to one destination never overtake
+  each other, because they share one delivery row and its lease.
+
+Devices always take lifecycle events. Webhooks take them when "Also send edits
+and recalls" is on (`lifecycle_events`, off by default, because a receiver
+written for the original envelope would treat an edit as a new notification).
+Apps take them when the live manifest sets
+`notifications.destination.lifecycleEvents: true`; the deploy cutover copies
+that setting onto the destination. History keeps the latest content plus
+`editedAt` and `recalledAt`. The Web, mobile and CLI history mark notifications
+as edited or recalled.
+
 ## Delivery
 
 Ingest writes the notification and its deliveries in one transaction and
@@ -130,6 +200,7 @@ Webhook and App destinations receive the same envelope:
   "version": 1,
   "deliveryId": "…",
   "attempt": 1,
+  "revision": 1,
   "notification": {
     "id": "…",
     "kind": "…",
@@ -141,6 +212,9 @@ Webhook and App destinations receive the same envelope:
     "data": null,
     "dedupeKey": null,
     "occurredAt": "…",
+    "revision": 1,
+    "editedAt": null,
+    "recalledAt": null,
     "createdAt": "…",
     "source": { "type": "app", "id": "…", "slug": "…", "name": "…" }
   }
@@ -151,7 +225,11 @@ Webhook and App destinations receive the same envelope:
 App, Channel or sending user id (null for platform and deleted users) and
 `slug` is set only for Apps.
 
-Headers: `x-hatch-notification-id`, `x-hatch-delivery-id`,
+`type` is `hatch.notification.updated` or `hatch.notification.recalled` for an
+edit or a recall. Those envelopes carry the notification's current state.
+`(notification.id, revision)` identifies one event.
+
+Headers: `x-hatch-event` (the envelope `type`), `x-hatch-notification-id`, `x-hatch-delivery-id`,
 `x-hatch-timestamp`, `x-hatch-signature` (`sha256=<hex HMAC(timestamp + "." + body)>`).
 
 - **Webhook**: signed with the webhook's own secret (envelope-encrypted at
@@ -253,6 +331,33 @@ turn it back on:
   a different token. The rejection only disables the device if it still holds
   the token that was rejected.
 
+### Edits and recalls on the phone
+
+An edit or recall push reuses the notification id as `apns-collapse-id`,
+which iOS uses as the request identifier, so it replaces the notification
+already shown. The `aps` of these pushes has no `sound` and sets
+`interruption-level: passive`, so they never alert again. The encrypted
+content carries `r` (revision) and `e` (`u` for an edit, `r` for a recall). A
+recall's content is only "Notification recalled", without the original title,
+body or link. App builds that predate edits ignore the new fields and still
+replace the notification quietly.
+
+The extension tags its content with `hatchRevision` and `hatchEvent`.
+
+- **Builds without the filtering entitlement (default):** a recall leaves a
+  silent "Notification recalled" placeholder. The app removes those
+  placeholders when it opens, and removes the recalled notification directly
+  when the recall arrives while the app is in the foreground. An edit appears
+  in Notification Center without a banner.
+- **Builds with the entitlement:** set `HATCH_NOTIFICATION_FILTERING=1`. The
+  build then adds `com.apple.developer.usernotifications.filtering` to the
+  extension and sets `HatchNotificationFiltering` in its Info.plist. Apple must
+  approve that entitlement for the team, otherwise signing fails. In these
+  builds the extension removes the recalled notification and suppresses the
+  recall push itself. It also suppresses an edit when the original is no
+  longer shown, or when the shown copy is already the same or a newer
+  revision.
+
 ## Management API
 
 Web UI: Server Functions in `src/server/notifications.ts`. Native clients and
@@ -266,7 +371,11 @@ Agent tool. `RegisterDevice`,
 ## Compatibility
 
 `notifications` is an optional manifest field and capability, so no App
-compatibility version or Runner protocol change is needed. Historical
+compatibility version or Runner protocol change is needed. Edits and recalls
+are additive as well: `destination.lifecycleEvents` is optional. Deployed Apps
+that do not set it never receive the new event types, which older SDKs'
+`verifyNotificationRequest` would reject. The original envelope only gains
+fields. Historical
 deployments lack the field and neither push nor accept notifications. The
 manifest schema is strict, so Platform and Runner must ship the same build.
 The `user` source type is an additive envelope value: App destinations built

@@ -323,7 +323,15 @@ export const notificationsConfigSchema = z
   .object({
     kinds: z.array(notificationKindSchema).max(100).default([]),
     destination: z
-      .object({ description: z.string().max(500).optional() })
+      .object({
+        description: z.string().max(500).optional(),
+        /**
+         * Also receive `hatch.notification.updated` and
+         * `hatch.notification.recalled` when a source edits or recalls a
+         * notification this App already received.
+         */
+        lifecycleEvents: z.boolean().optional(),
+      })
       .strict()
       .optional(),
   })

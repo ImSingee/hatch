@@ -156,6 +156,8 @@ export function notificationSummaryProjection(
     url: value.url ?? null,
     occurredAt: value.occurredAt,
     status: value.status,
+    editedAt: value.editedAt ?? null,
+    recalledAt: value.recalledAt ?? null,
   };
 }
 export function notificationDetailProjection(

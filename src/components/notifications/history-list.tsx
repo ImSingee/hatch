@@ -24,6 +24,7 @@ import {
 import type { NotificationStatus } from '~server/notifications';
 import {
   NOTIFICATION_STATUS_OPTIONS,
+  NotificationRevisionBadge,
   NotificationStatusBadge,
   SourceTypeIcon,
 } from './status';
@@ -231,7 +232,13 @@ export function NotificationHistory() {
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <NotificationStatusBadge status={item.status} />
+                    <Group gap={6} wrap="wrap">
+                      <NotificationStatusBadge status={item.status} />
+                      <NotificationRevisionBadge
+                        editedAt={item.editedAt}
+                        recalledAt={item.recalledAt}
+                      />
+                    </Group>
                   </Table.Td>
                   <Table.Td>
                     <Tooltip label={formatExact(item.createdAt)} withArrow>

@@ -6,6 +6,8 @@ export type PlatformEvent =
       deploymentRevision: string;
     }
   | { type: 'notification.created'; notificationId: string }
+  /** The source edited or recalled the notification. */
+  | { type: 'notification.updated'; notificationId: string }
   | {
       type: 'notification.delivery.updated';
       notificationId: string;

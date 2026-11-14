@@ -495,7 +495,8 @@ Read only the reference relevant to the requested capability:
 - [Data and storage](references/data-storage.md): Postgres, Storage, KV, runtime
   assets, and Data Table query/mutation details.
 - [Notifications](references/backend-integrations.md#notifications): declare
-  notification kinds, push with `notify()` from `@hatch/app/notifications`, and
+  notification kinds, push with `notify()` from `@hatch/app/notifications`
+  (edit or recall later with `updateNotification` / `recallNotification`), and
   receive routed notifications on `/__notification` when the App declares
   `notifications.destination`. Users configure routing; Apps never pick
   recipients. Verify the signature on every `/__notification` request.

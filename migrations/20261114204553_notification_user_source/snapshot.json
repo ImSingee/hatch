@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "3fa72c97-dcbb-4ada-b3b4-4fc1e69cd920",
-  "prevIds": ["e412948f-9e9d-4fd8-b531-409d6a31c815"],
+  "id": "3b72eec2-7398-4e94-af39-aa13d7be2995",
+  "prevIds": ["2dc5f93f-551f-4d36-ad39-69020e34e333"],
   "ddl": [
     {
       "values": ["desktop", "tablet", "mobile"],
@@ -2378,6 +2378,19 @@
       "table": "notification_deliveries"
     },
     {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "delivered_revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notification_deliveries"
+    },
+    {
       "type": "jsonb",
       "typeSchema": null,
       "notNull": true,
@@ -2633,6 +2646,19 @@
       "generated": null,
       "identity": null,
       "name": "last_error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notification_destinations"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "lifecycle_events",
       "entityType": "columns",
       "schema": "public",
       "table": "notification_destinations"
@@ -3114,6 +3140,45 @@
       "generated": null,
       "identity": null,
       "name": "occurred_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "edited_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "recalled_at",
       "entityType": "columns",
       "schema": "public",
       "table": "notifications"

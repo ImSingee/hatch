@@ -848,11 +848,16 @@ export type NotificationApnsEnvironment = 'sandbox' | 'production';
  * `unregistered` by APNs (a new token revives it).
  */
 export type NotificationDisabledReason = 'user' | 'device' | 'unregistered';
+/**
+ * `canceled`: the notification was recalled before this destination ever
+ * received it, so its content is never sent there.
+ */
 export type NotificationDeliveryStatus =
   | 'pending'
   | 'in_progress'
   | 'succeeded'
-  | 'failed';
+  | 'failed'
+  | 'canceled';
 
 /**
  * External notification sources. Callers authenticate with a channel token
@@ -901,6 +906,15 @@ export const notifications = snakeCase.table(
     data: jsonb().$type<JsonObject>(),
     dedupeKey: text(),
     occurredAt: timestamp('occurred_at').notNull(),
+    /**
+     * Starts at 1; every edit and the recall increment it. Deliveries record
+     * the revision they last delivered, so destinations catch up in order.
+     */
+    revision: integer().notNull().default(1),
+    /** Last time the source edited the content. */
+    editedAt: timestamp('edited_at'),
+    /** Set once when the source recalls the notification. */
+    recalledAt: timestamp('recalled_at'),
     createdAt,
   },
   (table) => [
@@ -963,6 +977,12 @@ export const notificationDestinations = snakeCase.table(
     disabledReason: text().$type<NotificationDisabledReason>(),
     /** Last provider/configuration error, kept for the settings UI. */
     lastError: text(),
+    /**
+     * Webhook and App destinations also receive edit and recall events. A
+     * person sets it for a webhook; an App declares it in its manifest.
+     * Devices always receive them.
+     */
+    lifecycleEvents: boolean().notNull().default(false),
     createdAt,
     updatedAt,
   },
@@ -1098,6 +1118,8 @@ export const notificationDeliveries = snakeCase.table(
     httpStatus: integer(),
     /** Free-form string returned by an App destination; never interpreted. */
     result: text(),
+    /** Notification revision this destination last received; null = never. */
+    deliveredRevision: integer(),
     routeIds: jsonb().$type<string[]>().notNull(),
     completedAt: timestamp('completed_at'),
     createdAt,

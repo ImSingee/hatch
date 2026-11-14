@@ -6,6 +6,7 @@ import {
 } from '~server/secrets';
 import {
   NOTIFICATION_DELIVERY_HEADER,
+  NOTIFICATION_EVENT_HEADER,
   NOTIFICATION_ID_HEADER,
   buildEnvelope,
 } from '../contract';
@@ -47,6 +48,7 @@ function describeUrl(raw: string): string {
 export const deliverToWebhook: DeliveryAdapter = async ({
   deliveryId,
   attempt,
+  event,
   notification,
   destination,
   sourceSlug,
@@ -58,9 +60,14 @@ export const deliverToWebhook: DeliveryAdapter = async ({
     destination.id,
     destination.secretCiphertext,
   );
-  const body = JSON.stringify(
-    buildEnvelope({ notification, deliveryId, attempt, sourceSlug }),
-  );
+  const envelope = buildEnvelope({
+    event,
+    notification,
+    deliveryId,
+    attempt,
+    sourceSlug,
+  });
+  const body = JSON.stringify(envelope);
   const timestamp = String(Date.now());
 
   let response: Response;
@@ -73,6 +80,7 @@ export const deliverToWebhook: DeliveryAdapter = async ({
         'user-agent': 'Hatch-Notifications/1',
         [NOTIFICATION_ID_HEADER]: notification.id,
         [NOTIFICATION_DELIVERY_HEADER]: deliveryId,
+        [NOTIFICATION_EVENT_HEADER]: envelope.type,
         [HATCH_TIMESTAMP_HEADER]: timestamp,
         [HATCH_SIGNATURE_HEADER]: hatchSignature(secret, timestamp, body),
       },

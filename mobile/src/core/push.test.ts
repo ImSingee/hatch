@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   PushRegistrar,
   base64url,
+  foregroundPresentation,
   pushTap,
   verifiedTapUrl,
   type PushPlatform,
@@ -244,5 +245,29 @@ describe('push taps', () => {
       pushTap({ hatchOrigin: origin, hatchNotificationId: '../settings' }),
     ).toBeNull();
     expect(signed({ hatchOrigin: 'javascript:alert(1)' })).toBeNull();
+  });
+});
+
+describe('foreground presentation', () => {
+  it('alerts for new notifications, quietly lists edits and hides recalls', () => {
+    const base = { hatchNotificationId: 'n1', hatchOrigin: origin };
+    expect(foregroundPresentation(base)).toMatchObject({
+      shouldShowBanner: true,
+      shouldPlaySound: true,
+    });
+    expect(
+      foregroundPresentation({ ...base, hatchEvent: 'updated' }),
+    ).toMatchObject({
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: false,
+    });
+    expect(
+      foregroundPresentation({ ...base, hatchEvent: 'recalled' }),
+    ).toMatchObject({
+      shouldShowBanner: false,
+      shouldShowList: false,
+      shouldPlaySound: false,
+    });
   });
 });

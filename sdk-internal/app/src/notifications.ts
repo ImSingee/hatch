@@ -54,30 +54,27 @@ export class NotificationError extends Error {
   }
 }
 
-/**
- * Push a notification to the platform. Uses the platform-injected
- * `HATCH_NOTIFICATIONS_URL` and `HATCH_SIGNING_SECRET` unless overridden.
- */
-export async function notify(
-  input: NotificationInput,
-  options: { url?: string; signingSecret?: string; signal?: AbortSignal } = {},
-): Promise<NotifyResult> {
-  const url = options.url ?? runtimeEnv('HATCH_NOTIFICATIONS_URL');
+type RequestOptions = {
+  url?: string;
+  signingSecret?: string;
+  signal?: AbortSignal;
+};
+
+async function postSigned<T>(
+  path: '' | '/update' | '/recall',
+  payload: unknown,
+  options: RequestOptions,
+): Promise<T> {
+  const base = options.url ?? runtimeEnv('HATCH_NOTIFICATIONS_URL');
   const secret = options.signingSecret ?? runtimeEnv('HATCH_SIGNING_SECRET');
-  if (!url || !secret) {
+  if (!base || !secret) {
     throw new NotificationError(
       'Notifications are unavailable: enable capabilities.notifications and backend.',
       0,
     );
   }
-  const body = JSON.stringify({
-    ...input,
-    occurredAt:
-      input.occurredAt instanceof Date
-        ? input.occurredAt.toISOString()
-        : input.occurredAt,
-  });
-  const response = await fetch(url, {
+  const body = JSON.stringify(payload);
+  const response = await fetch(`${base.replace(/\/+$/, '')}${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -89,20 +86,118 @@ export async function notify(
   if (!response.ok) {
     throw new NotificationError(
       (await response.text()) ||
-        `Notification push failed (${response.status})`,
+        `Notification request failed (${response.status})`,
       response.status,
     );
   }
-  return (await response.json()) as NotifyResult;
+  return (await response.json()) as T;
 }
 
-/** Envelope the platform POSTs to `/__notification` on App destinations. */
+/**
+ * Push a notification to the platform. Uses the platform-injected
+ * `HATCH_NOTIFICATIONS_URL` and `HATCH_SIGNING_SECRET` unless overridden.
+ */
+export async function notify(
+  input: NotificationInput,
+  options: RequestOptions = {},
+): Promise<NotifyResult> {
+  return postSigned<NotifyResult>(
+    '',
+    {
+      ...input,
+      occurredAt:
+        input.occurredAt instanceof Date
+          ? input.occurredAt.toISOString()
+          : input.occurredAt,
+    },
+    options,
+  );
+}
+
+/**
+ * New content for a notification this App sent. Omitted fields keep their
+ * value; `null` clears `body`, `url` or `data`. Without `autoOpenUrl`, adding
+ * a `url` opens it on tap (as when pushing), clearing it turns that off, and
+ * replacing it keeps the current setting.
+ */
+export type NotificationUpdateInput = {
+  title?: string;
+  body?: string | null;
+  url?: string | null;
+  autoOpenUrl?: boolean;
+  data?: { [key: string]: NotificationJson } | null;
+};
+
+/**
+ * `revision` increases with every edit and with the recall. `changed` is
+ * false when the edit changed nothing or the notification was already
+ * recalled; nothing is sent then.
+ */
+export type NotificationChangeResult = {
+  id: string;
+  revision: number;
+  recalled: boolean;
+  changed: boolean;
+};
+
+/**
+ * Edit a notification this App sent (by the `id` from `notify`). Phones
+ * replace it in place without alerting again; destinations that take edit
+ * events receive `hatch.notification.updated`. A recalled notification
+ * cannot be edited (409).
+ */
+export async function updateNotification(
+  id: string,
+  update: NotificationUpdateInput,
+  options: RequestOptions = {},
+): Promise<NotificationChangeResult> {
+  return postSigned<NotificationChangeResult>(
+    '/update',
+    { ...update, id },
+    options,
+  );
+}
+
+/**
+ * Recall a notification this App sent. Phones remove it, destinations that
+ * never received it never will, and destinations that take recall events
+ * receive `hatch.notification.recalled`. Recalling again changes nothing.
+ */
+export async function recallNotification(
+  id: string,
+  options: RequestOptions = {},
+): Promise<NotificationChangeResult> {
+  return postSigned<NotificationChangeResult>('/recall', { id }, options);
+}
+
+/**
+ * Event types posted to `/__notification`. Edits and recalls arrive only when
+ * the manifest sets `notifications.destination.lifecycleEvents`, and only for
+ * notifications this App already received.
+ */
+export type HatchNotificationEventType =
+  | 'hatch.notification'
+  | 'hatch.notification.updated'
+  | 'hatch.notification.recalled';
+
+const EVENT_TYPES: readonly string[] = [
+  'hatch.notification',
+  'hatch.notification.updated',
+  'hatch.notification.recalled',
+];
+
+/**
+ * Envelope the platform POSTs to `/__notification` on App destinations.
+ * Edits and recalls carry the notification's current state; `revision`
+ * orders them and `(notification.id, revision)` identifies one event.
+ */
 export type HatchNotificationEnvelope = {
-  type: 'hatch.notification';
+  type: HatchNotificationEventType;
   version: 1;
   deliveryId: string;
   /** 1-based; the same deliveryId may arrive again after a failed attempt. */
   attempt: number;
+  revision: number;
   notification: {
     id: string;
     kind: string;
@@ -115,6 +210,9 @@ export type HatchNotificationEnvelope = {
     data: { [key: string]: NotificationJson } | null;
     dedupeKey: string | null;
     occurredAt: string;
+    revision: number;
+    editedAt: string | null;
+    recalledAt: string | null;
     createdAt: string;
     source: {
       /** `user`: sent straight to this App by a person; id is the user id. */
@@ -155,7 +253,7 @@ export async function verifyNotificationRequest(
   });
   if (!valid) throw new NotificationVerificationError();
   const envelope = JSON.parse(body) as HatchNotificationEnvelope;
-  if (envelope?.type !== 'hatch.notification') {
+  if (!EVENT_TYPES.includes(envelope?.type)) {
     throw new NotificationVerificationError('Unexpected notification payload.');
   }
   return envelope;

@@ -9,6 +9,7 @@ import {
   notificationPushSchema,
 } from '~server/notifications/contract';
 import { ingestNotification } from '~server/notifications/ingest';
+import { applyLifecycleRequest } from '~server/notifications/lifecycle-http';
 import {
   HATCH_SIGNATURE_HEADER,
   HATCH_TIMESTAMP_HEADER,
@@ -16,15 +17,23 @@ import {
 } from '~server/secrets';
 import { parseAppApiPath } from './path';
 
+const ACTIONS = {
+  '/notifications': 'push',
+  '/notifications/update': 'update',
+  '/notifications/recall': 'recall',
+} as const;
+
 /**
- * App-facing notification push endpoint:
+ * App-facing notification endpoints:
  *
- *   POST /api/app/<id>/notifications  → 202 { id, deduplicated }
+ *   POST /api/app/<id>/notifications         → 202 { id, deduplicated }
+ *   POST /api/app/<id>/notifications/update  → 200 { id, revision, recalled, changed }
+ *   POST /api/app/<id>/notifications/recall  → 200 { id, revision, recalled, changed }
  *
  * Called by the App's own backend and authenticated like KV: an HMAC over
  * `<timestamp>.<rawBody>` with the per-app signing secret. The App id in the
- * path plus that secret means an App can only push as itself, and only kinds
- * its live deployment declares.
+ * path plus that secret means an App can only push as itself, only kinds its
+ * live deployment declares, and only edit or recall its own notifications.
  */
 export async function handleNotificationRequest({
   request,
@@ -32,7 +41,10 @@ export async function handleNotificationRequest({
   request: Request;
 }): Promise<Response> {
   const parsed = parseAppApiPath(new URL(request.url).pathname);
-  if (!parsed || parsed.rest !== '/notifications') {
+  const action = parsed
+    ? ACTIONS[parsed.rest as keyof typeof ACTIONS]
+    : undefined;
+  if (!parsed || !action) {
     return new Response('Not found', { status: 404 });
   }
   if (request.method !== 'POST') {
@@ -86,6 +98,9 @@ export async function handleNotificationRequest({
     json = JSON.parse(rawBody);
   } catch {
     return new Response('Body must be JSON', { status: 400 });
+  }
+  if (action !== 'push') {
+    return applyLifecycleRequest({ type: 'app', appId: app.id }, action, json);
   }
   const push = notificationPushSchema.safeParse(json);
   if (!push.success) {

@@ -153,6 +153,10 @@ export type NotificationSummary = {
   url: string | null;
   occurredAt: string;
   status: string;
+  /** Set when the source edited the notification. */
+  editedAt: string | null;
+  /** Set when the source recalled it; phones no longer show it. */
+  recalledAt: string | null;
 };
 export type NotificationDelivery = {
   id: string;

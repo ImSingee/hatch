@@ -66,8 +66,10 @@ import { Route as ApiAppAppIdAppSplatRouteImport } from './routes/api/app/$appId
 import { Route as ApiAppAppIdDataSplatRouteImport } from './routes/api/app/$appId/data/$'
 import { Route as ApiAppAppIdHookSplatRouteImport } from './routes/api/app/$appId/hook/$'
 import { Route as ApiAppAppIdKvSplatRouteImport } from './routes/api/app/$appId/kv/$'
+import { Route as ApiAppAppIdNotificationsActionRouteImport } from './routes/api/app/$appId/notifications/$action'
 import { Route as ApiAppAppIdRpcSplatRouteImport } from './routes/api/app/$appId/rpc/$'
 import { Route as ApiAppAppIdWidgetWidgetIdRouteImport } from './routes/api/app/$appId/widget/$widgetId'
+import { Route as ApiNotificationsChannelChannelIdActionRouteImport } from './routes/api/notifications/channel/$channelId/$action'
 import { Route as ApiAgentSessionsSessionIdAttachmentsAttachmentIdRouteImport } from './routes/api/agent/sessions/$sessionId/attachments/$attachmentId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -367,6 +369,12 @@ const ApiAppAppIdKvSplatRoute = ApiAppAppIdKvSplatRouteImport.update({
   path: '/api/app/$appId/kv/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAppAppIdNotificationsActionRoute =
+  ApiAppAppIdNotificationsActionRouteImport.update({
+    id: '/$action',
+    path: '/$action',
+    getParentRoute: () => ApiAppAppIdNotificationsRoute,
+  } as any)
 const ApiAppAppIdRpcSplatRoute = ApiAppAppIdRpcSplatRouteImport.update({
   id: '/api/app/$appId/rpc/$',
   path: '/api/app/$appId/rpc/$',
@@ -377,6 +385,12 @@ const ApiAppAppIdWidgetWidgetIdRoute =
     id: '/api/app/$appId/widget/$widgetId',
     path: '/api/app/$appId/widget/$widgetId',
     getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiNotificationsChannelChannelIdActionRoute =
+  ApiNotificationsChannelChannelIdActionRouteImport.update({
+    id: '/$action',
+    path: '/$action',
+    getParentRoute: () => ApiNotificationsChannelChannelIdRoute,
   } as any)
 const ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute =
   ApiAgentSessionsSessionIdAttachmentsAttachmentIdRouteImport.update({
@@ -422,10 +436,10 @@ export interface FileRoutesByFullPath {
   '/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
-  '/api/app/$appId/notifications': typeof ApiAppAppIdNotificationsRoute
+  '/api/app/$appId/notifications': typeof ApiAppAppIdNotificationsRouteWithChildren
   '/api/auth/handoffs/complete': typeof ApiAuthHandoffsCompleteRoute
   '/api/auth/handoffs/consume': typeof ApiAuthHandoffsConsumeRoute
-  '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRoute
+  '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
   '/api/workflow/$workflowId/download': typeof ApiWorkflowWorkflowIdDownloadRoute
   '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
@@ -441,8 +455,10 @@ export interface FileRoutesByFullPath {
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
   '/api/app/$appId/kv/$': typeof ApiAppAppIdKvSplatRoute
+  '/api/app/$appId/notifications/$action': typeof ApiAppAppIdNotificationsActionRoute
   '/api/app/$appId/rpc/$': typeof ApiAppAppIdRpcSplatRoute
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
+  '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
 }
@@ -481,10 +497,10 @@ export interface FileRoutesByTo {
   '/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
-  '/api/app/$appId/notifications': typeof ApiAppAppIdNotificationsRoute
+  '/api/app/$appId/notifications': typeof ApiAppAppIdNotificationsRouteWithChildren
   '/api/auth/handoffs/complete': typeof ApiAuthHandoffsCompleteRoute
   '/api/auth/handoffs/consume': typeof ApiAuthHandoffsConsumeRoute
-  '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRoute
+  '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
   '/api/workflow/$workflowId/download': typeof ApiWorkflowWorkflowIdDownloadRoute
   '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
@@ -500,8 +516,10 @@ export interface FileRoutesByTo {
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
   '/api/app/$appId/kv/$': typeof ApiAppAppIdKvSplatRoute
+  '/api/app/$appId/notifications/$action': typeof ApiAppAppIdNotificationsActionRoute
   '/api/app/$appId/rpc/$': typeof ApiAppAppIdRpcSplatRoute
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
+  '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/workflow/$workflowSlug/executions': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
 }
@@ -544,10 +562,10 @@ export interface FileRoutesById {
   '/_app/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
-  '/api/app/$appId/notifications': typeof ApiAppAppIdNotificationsRoute
+  '/api/app/$appId/notifications': typeof ApiAppAppIdNotificationsRouteWithChildren
   '/api/auth/handoffs/complete': typeof ApiAuthHandoffsCompleteRoute
   '/api/auth/handoffs/consume': typeof ApiAuthHandoffsConsumeRoute
-  '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRoute
+  '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
   '/api/workflow/$workflowId/download': typeof ApiWorkflowWorkflowIdDownloadRoute
   '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
@@ -563,8 +581,10 @@ export interface FileRoutesById {
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
   '/api/app/$appId/kv/$': typeof ApiAppAppIdKvSplatRoute
+  '/api/app/$appId/notifications/$action': typeof ApiAppAppIdNotificationsActionRoute
   '/api/app/$appId/rpc/$': typeof ApiAppAppIdRpcSplatRoute
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
+  '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/_app/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
 }
@@ -626,8 +646,10 @@ export interface FileRouteTypes {
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
     | '/api/app/$appId/kv/$'
+    | '/api/app/$appId/notifications/$action'
     | '/api/app/$appId/rpc/$'
     | '/api/app/$appId/widget/$widgetId'
+    | '/api/notifications/channel/$channelId/$action'
     | '/workflow/$workflowSlug/executions/'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
   fileRoutesByTo: FileRoutesByTo
@@ -685,8 +707,10 @@ export interface FileRouteTypes {
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
     | '/api/app/$appId/kv/$'
+    | '/api/app/$appId/notifications/$action'
     | '/api/app/$appId/rpc/$'
     | '/api/app/$appId/widget/$widgetId'
+    | '/api/notifications/channel/$channelId/$action'
     | '/workflow/$workflowSlug/executions'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
   id:
@@ -747,8 +771,10 @@ export interface FileRouteTypes {
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
     | '/api/app/$appId/kv/$'
+    | '/api/app/$appId/notifications/$action'
     | '/api/app/$appId/rpc/$'
     | '/api/app/$appId/widget/$widgetId'
+    | '/api/notifications/channel/$channelId/$action'
     | '/_app/workflow/$workflowSlug/executions/'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
   fileRoutesById: FileRoutesById
@@ -768,10 +794,10 @@ export interface RootRouteChildren {
   MobileDashboardDashboardIdRoute: typeof MobileDashboardDashboardIdRoute
   ApiAgentAttachmentsAttachmentIdRoute: typeof ApiAgentAttachmentsAttachmentIdRoute
   ApiAppAppIdDownloadRoute: typeof ApiAppAppIdDownloadRoute
-  ApiAppAppIdNotificationsRoute: typeof ApiAppAppIdNotificationsRoute
+  ApiAppAppIdNotificationsRoute: typeof ApiAppAppIdNotificationsRouteWithChildren
   ApiAuthHandoffsCompleteRoute: typeof ApiAuthHandoffsCompleteRoute
   ApiAuthHandoffsConsumeRoute: typeof ApiAuthHandoffsConsumeRoute
-  ApiNotificationsChannelChannelIdRoute: typeof ApiNotificationsChannelChannelIdRoute
+  ApiNotificationsChannelChannelIdRoute: typeof ApiNotificationsChannelChannelIdRouteWithChildren
   ApiWorkflowWorkflowIdDownloadRoute: typeof ApiWorkflowWorkflowIdDownloadRoute
   ApiWorkflowWorkflowIdRunRoute: typeof ApiWorkflowWorkflowIdRunRoute
   AppAppSlugEmbedSplatRoute: typeof AppAppSlugEmbedSplatRoute
@@ -1186,6 +1212,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAppAppIdKvSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/app/$appId/notifications/$action': {
+      id: '/api/app/$appId/notifications/$action'
+      path: '/$action'
+      fullPath: '/api/app/$appId/notifications/$action'
+      preLoaderRoute: typeof ApiAppAppIdNotificationsActionRouteImport
+      parentRoute: typeof ApiAppAppIdNotificationsRoute
+    }
     '/api/app/$appId/rpc/$': {
       id: '/api/app/$appId/rpc/$'
       path: '/api/app/$appId/rpc/$'
@@ -1199,6 +1232,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/app/$appId/widget/$widgetId'
       preLoaderRoute: typeof ApiAppAppIdWidgetWidgetIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/notifications/channel/$channelId/$action': {
+      id: '/api/notifications/channel/$channelId/$action'
+      path: '/$action'
+      fullPath: '/api/notifications/channel/$channelId/$action'
+      preLoaderRoute: typeof ApiNotificationsChannelChannelIdActionRouteImport
+      parentRoute: typeof ApiNotificationsChannelChannelIdRoute
     }
     '/api/agent/sessions/$sessionId/attachments/$attachmentId': {
       id: '/api/agent/sessions/$sessionId/attachments/$attachmentId'
@@ -1312,6 +1352,35 @@ const ApiAgentRunsRouteWithChildren = ApiAgentRunsRoute._addFileChildren(
   ApiAgentRunsRouteChildren,
 )
 
+interface ApiAppAppIdNotificationsRouteChildren {
+  ApiAppAppIdNotificationsActionRoute: typeof ApiAppAppIdNotificationsActionRoute
+}
+
+const ApiAppAppIdNotificationsRouteChildren: ApiAppAppIdNotificationsRouteChildren =
+  {
+    ApiAppAppIdNotificationsActionRoute: ApiAppAppIdNotificationsActionRoute,
+  }
+
+const ApiAppAppIdNotificationsRouteWithChildren =
+  ApiAppAppIdNotificationsRoute._addFileChildren(
+    ApiAppAppIdNotificationsRouteChildren,
+  )
+
+interface ApiNotificationsChannelChannelIdRouteChildren {
+  ApiNotificationsChannelChannelIdActionRoute: typeof ApiNotificationsChannelChannelIdActionRoute
+}
+
+const ApiNotificationsChannelChannelIdRouteChildren: ApiNotificationsChannelChannelIdRouteChildren =
+  {
+    ApiNotificationsChannelChannelIdActionRoute:
+      ApiNotificationsChannelChannelIdActionRoute,
+  }
+
+const ApiNotificationsChannelChannelIdRouteWithChildren =
+  ApiNotificationsChannelChannelIdRoute._addFileChildren(
+    ApiNotificationsChannelChannelIdRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   R404Route: R404Route,
@@ -1327,10 +1396,11 @@ const rootRouteChildren: RootRouteChildren = {
   MobileDashboardDashboardIdRoute: MobileDashboardDashboardIdRoute,
   ApiAgentAttachmentsAttachmentIdRoute: ApiAgentAttachmentsAttachmentIdRoute,
   ApiAppAppIdDownloadRoute: ApiAppAppIdDownloadRoute,
-  ApiAppAppIdNotificationsRoute: ApiAppAppIdNotificationsRoute,
+  ApiAppAppIdNotificationsRoute: ApiAppAppIdNotificationsRouteWithChildren,
   ApiAuthHandoffsCompleteRoute: ApiAuthHandoffsCompleteRoute,
   ApiAuthHandoffsConsumeRoute: ApiAuthHandoffsConsumeRoute,
-  ApiNotificationsChannelChannelIdRoute: ApiNotificationsChannelChannelIdRoute,
+  ApiNotificationsChannelChannelIdRoute:
+    ApiNotificationsChannelChannelIdRouteWithChildren,
   ApiWorkflowWorkflowIdDownloadRoute: ApiWorkflowWorkflowIdDownloadRoute,
   ApiWorkflowWorkflowIdRunRoute: ApiWorkflowWorkflowIdRunRoute,
   AppAppSlugEmbedSplatRoute: AppAppSlugEmbedSplatRoute,

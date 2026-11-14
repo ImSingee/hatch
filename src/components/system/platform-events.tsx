@@ -35,7 +35,7 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       if (!appId || !deploymentRevision) return null;
       return { type, appId, deploymentRevision } satisfies PlatformEvent;
     }
-    if (type === 'notification.created') {
+    if (type === 'notification.created' || type === 'notification.updated') {
       const notificationId = stringField(value, 'notificationId');
       if (!notificationId) return null;
       return { type, notificationId } satisfies PlatformEvent;

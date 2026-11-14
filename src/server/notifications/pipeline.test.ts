@@ -906,3 +906,494 @@ describe('App destinations', () => {
     expect(await service.listRoutes()).toHaveLength(1);
   });
 });
+
+describe('edits and recalls', () => {
+  function signedApp(
+    action: 'update' | 'recall',
+    payload: Record<string, unknown>,
+    app = SOURCE_APP,
+    secret = SIGNING_SECRET,
+  ) {
+    const body = JSON.stringify(payload);
+    const timestamp = String(Date.now());
+    return handleNotificationRequest({
+      request: new Request(
+        `https://hatch.example.test/api/app/${app}/notifications/${action}`,
+        {
+          method: 'POST',
+          headers: {
+            'x-hatch-timestamp': timestamp,
+            'x-hatch-signature': hatchSignature(secret, timestamp, body),
+          },
+          body,
+        },
+      ),
+    });
+  }
+
+  async function routeAll(...destinationIds: string[]) {
+    const group = await service.createGroup({ name: 'All', destinationIds });
+    await service.createRoute({
+      sourceType: 'any',
+      targetType: 'group',
+      targetId: group.id,
+    });
+  }
+
+  const envelopes = () =>
+    received.map((entry) => ({
+      event: entry.headers['x-hatch-event'],
+      ...(JSON.parse(entry.body) as {
+        type: string;
+        revision: number;
+        notification: { title: string; body: string | null };
+      }),
+    }));
+
+  it('sends subscribers one event for the latest state and leaves others alone', async () => {
+    const { destination: subscribed } = await service.createWebhook({
+      name: 'Subscribed',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    const { destination: plain } = await service.createWebhook({
+      name: 'Plain',
+      url: webhookUrl,
+    });
+    await db.transaction((tx) =>
+      syncAppNotificationDestination(tx, DEST_APP, 'Destination App', {
+        notifications: { kinds: [], destination: { lifecycleEvents: true } },
+      } as never),
+    );
+    vi.mocked(callAppBackend).mockResolvedValue({
+      status: 200,
+      body: '{}',
+      contentType: 'application/json',
+    });
+    await routeAll(subscribed.id, plain.id, 'dest-app-destination');
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    await runAllDue();
+    expect(received).toHaveLength(2);
+    expect(callAppBackend).toHaveBeenCalledTimes(1);
+
+    // Two edits before the dispatcher runs collapse into one event.
+    expect((await signedApp('update', { id, title: 'First' })).status).toBe(
+      200,
+    );
+    const second = await signedApp('update', { id, body: 'Now with body' });
+    expect(await second.json()).toEqual({
+      id,
+      revision: 3,
+      recalled: false,
+      changed: true,
+    });
+    received.length = 0;
+    await runAllDue();
+    expect(envelopes()).toEqual([
+      expect.objectContaining({
+        event: 'hatch.notification.updated',
+        type: 'hatch.notification.updated',
+        revision: 3,
+        notification: expect.objectContaining({
+          title: 'First',
+          body: 'Now with body',
+          revision: 3,
+        }),
+      }),
+    ]);
+    const appCall = vi.mocked(callAppBackend).mock.calls.at(-1)!;
+    expect(JSON.parse(String(appCall[2]!.body))).toMatchObject({
+      type: 'hatch.notification.updated',
+      revision: 3,
+    });
+
+    // Unchanged content is not an edit.
+    const same = await signedApp('update', { id, title: 'First' });
+    expect(await same.json()).toMatchObject({ revision: 3, changed: false });
+
+    const recalled = await signedApp('recall', { id });
+    expect(await recalled.json()).toEqual({
+      id,
+      revision: 4,
+      recalled: true,
+      changed: true,
+    });
+    received.length = 0;
+    await runAllDue();
+    expect(envelopes()).toEqual([
+      expect.objectContaining({
+        type: 'hatch.notification.recalled',
+        revision: 4,
+      }),
+    ]);
+    expect(callAppBackend).toHaveBeenCalledTimes(3);
+
+    const detail = await service.getNotification(id);
+    expect(detail).toMatchObject({ revision: 4, title: 'First' });
+    expect(detail.recalledAt).not.toBeNull();
+    expect(
+      Object.fromEntries(
+        detail.deliveryList.map((d) => [
+          d.destinationName,
+          [d.status, d.deliveredRevision],
+        ]),
+      ),
+    ).toEqual({
+      Subscribed: ['succeeded', 4],
+      Plain: ['succeeded', 1],
+      'Destination App': ['succeeded', 4],
+    });
+  });
+
+  it('never sends a recalled notification where it had not arrived yet', async () => {
+    const { destination } = await service.createWebhook({
+      name: 'Flaky',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    await routeAll(destination.id);
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    webhookStatus = 503;
+    await runAllDue();
+    expect(received).toHaveLength(1);
+
+    expect((await signedApp('recall', { id })).status).toBe(200);
+    const [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({
+      status: 'canceled',
+      deliveredRevision: null,
+    });
+    expect((await service.getNotification(id)).status).toBe('delivered');
+    webhookStatus = 200;
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ nextAttemptAt: new Date(Date.now() - 1000) });
+    expect(await runAllDue()).toBe(0);
+    expect(received).toHaveLength(1);
+  });
+
+  it('catches up a delivery that was in flight when the edit landed', async () => {
+    const { destination } = await service.createWebhook({
+      name: 'Hook',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    await routeAll(destination.id);
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    let editStatus = 0;
+    const racing = {
+      ...adapters,
+      webhook: async (context: Parameters<typeof deliverToWebhook>[0]) => {
+        const outcome = await deliverToWebhook(context);
+        editStatus ||= (await signedApp('update', { id, title: 'Edited' }))
+          .status;
+        return outcome;
+      },
+    };
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, racing);
+    }
+    expect(editStatus).toBe(200);
+    let [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({
+      status: 'pending',
+      deliveredRevision: 1,
+    });
+
+    await runAllDue();
+    [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({
+      status: 'succeeded',
+      deliveredRevision: 2,
+    });
+    expect(envelopes().map((entry) => [entry.type, entry.revision])).toEqual([
+      ['hatch.notification', 1],
+      ['hatch.notification.updated', 2],
+    ]);
+  });
+
+  it('gives a change that lands during a failing attempt a fresh series', async () => {
+    const { destination } = await service.createWebhook({
+      name: 'Hook',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    await routeAll(destination.id);
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    webhookStatus = 503;
+    let editStatus = 0;
+    const racing = {
+      ...adapters,
+      webhook: async (context: Parameters<typeof deliverToWebhook>[0]) => {
+        const outcome = await deliverToWebhook(context);
+        editStatus ||= (await signedApp('update', { id, title: 'Edited' }))
+          .status;
+        return outcome;
+      },
+    };
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, racing);
+    }
+    expect(editStatus).toBe(200);
+    // Not the 30 s backoff of the outdated attempt: due now, full budget.
+    const [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({ status: 'pending', attempts: 0 });
+    expect(Date.parse(delivery.nextAttemptAt!)).toBeLessThanOrEqual(Date.now());
+
+    webhookStatus = 200;
+    await runAllDue();
+    expect(envelopes().at(-1)).toMatchObject({
+      type: 'hatch.notification',
+      revision: 2,
+      notification: { title: 'Edited' },
+    });
+  });
+
+  it('keeps an App result when an edit lands during its delivery', async () => {
+    await routeAll('dest-app-destination');
+    vi.mocked(callAppBackend).mockResolvedValue({
+      status: 200,
+      body: JSON.stringify({ result: 'forwarded to #ops' }),
+      contentType: 'application/json',
+    });
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    const racing = {
+      ...adapters,
+      app: async (context: Parameters<typeof deliverToApp>[0]) => {
+        const outcome = await deliverToApp(context);
+        await signedApp('update', { id, title: 'Edited' });
+        return outcome;
+      },
+    };
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, racing);
+    }
+    // The App takes no lifecycle events: the follow-up is skipped.
+    await runAllDue();
+    const [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({
+      status: 'succeeded',
+      result: 'forwarded to #ops',
+      deliveredRevision: 2,
+    });
+    expect(callAppBackend).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats the same data in another key order as unchanged', async () => {
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push('order.shipped', {
+        data: { order: { id: 7, items: [1, 2] }, carrier: 'ups' },
+      }),
+    });
+    const same = await signedApp('update', {
+      id,
+      data: { carrier: 'ups', order: { items: [1, 2], id: 7 } },
+    });
+    expect(await same.json()).toMatchObject({ revision: 1, changed: false });
+    const reordered = await signedApp('update', {
+      id,
+      data: { carrier: 'ups', order: { items: [2, 1], id: 7 } },
+    });
+    expect(await reordered.json()).toMatchObject({
+      revision: 2,
+      changed: true,
+    });
+  });
+
+  it('lets a source change only its own notifications', async () => {
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    const forged = await signedApp(
+      'update',
+      { id, title: 'x' },
+      SOURCE_APP,
+      'dest-secret',
+    );
+    expect(forged.status).toBe(403);
+    const otherApp = await signedApp('recall', { id }, DEST_APP, 'dest-secret');
+    expect(otherApp.status).toBe(404);
+
+    const { channel, token } = await service.createChannel({
+      name: 'Monitoring',
+      kinds: [{ kind: 'alert', name: 'Alert' }],
+    });
+    const channelRecall = (notificationId: string, secret = token) =>
+      handleChannelPush(
+        new Request(
+          `https://hatch.example.test${new URL(channel.pushUrl).pathname}/recall`,
+          {
+            method: 'POST',
+            headers: { 'x-hatch-secret': secret },
+            body: JSON.stringify({ id: notificationId }),
+          },
+        ),
+        channel.id,
+        'recall',
+      );
+    expect((await channelRecall(id)).status).toBe(404);
+    expect((await service.getNotification(id)).recalledAt).toBeNull();
+
+    const own = await ingestNotification({
+      source: { type: 'channel', channelId: channel.id, name: 'Monitoring' },
+      kind: { kind: 'alert', name: 'Alert' },
+      push: push('alert'),
+    });
+    expect((await channelRecall(own.id, `${token}x`)).status).toBe(401);
+    expect((await channelRecall(own.id)).status).toBe(200);
+    expect((await channelRecall(own.id)).status).toBe(200);
+    expect((await service.getNotification(own.id)).revision).toBe(2);
+  });
+
+  it('edits and recalls through the App SDK, which accepts the events', async () => {
+    const sdk = await import('../../../sdk-internal/app/src/notifications');
+    const options = {
+      url: `https://hatch.example.test/api/app/${SOURCE_APP}/notifications`,
+      signingSecret: SIGNING_SECRET,
+    };
+    await db.transaction((tx) =>
+      syncAppNotificationDestination(tx, DEST_APP, 'Destination App', {
+        notifications: { kinds: [], destination: { lifecycleEvents: true } },
+      } as never),
+    );
+    await routeAll('dest-app-destination');
+    vi.mocked(callAppBackend).mockResolvedValue({
+      status: 200,
+      body: '{}',
+      contentType: 'application/json',
+    });
+    vi.stubGlobal('fetch', (input: string, init: RequestInit) =>
+      handleNotificationRequest({ request: new Request(input, init) }),
+    );
+    try {
+      const { id } = await sdk.notify(
+        { kind: 'order.shipped', title: 'Shipped' },
+        options,
+      );
+      await runAllDue();
+      expect(
+        await sdk.updateNotification(id, { title: 'Delivered' }, options),
+      ).toEqual({ id, revision: 2, recalled: false, changed: true });
+      await runAllDue();
+      const [, , init] = vi.mocked(callAppBackend).mock.calls.at(-1)!;
+      const envelope = await sdk.verifyNotificationRequest(
+        new Request('https://dest.example.test/__notification', {
+          method: 'POST',
+          headers: init!.headers,
+          body: init!.body,
+        }),
+        { signingSecret: 'dest-secret' },
+      );
+      expect(envelope).toMatchObject({
+        type: 'hatch.notification.updated',
+        revision: 2,
+        notification: { id, title: 'Delivered' },
+      });
+      expect(await sdk.recallNotification(id, options)).toEqual({
+        id,
+        revision: 3,
+        recalled: true,
+        changed: true,
+      });
+      await expect(
+        sdk.updateNotification(id, { title: 'Again' }, options),
+      ).rejects.toMatchObject({ status: 409 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('lets users act as a Channel on that Channel’s notifications only', async () => {
+    const { channel } = await service.createChannel({
+      name: 'Monitoring',
+      kinds: [{ kind: 'alert', name: 'Alert' }],
+    });
+    const own = await service.sendNotification({
+      to: { type: 'channel', id: channel.id },
+      sender: { userId: 'user-1', name: 'Owner' },
+      body: {
+        kind: 'alert',
+        title: 'Disk full',
+        body: 'db-1',
+        data: { host: 'db-1' },
+      },
+    });
+    const app = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+
+    await expect(
+      service.updateChannelNotification(channel.id, {
+        id: app.id,
+        title: 'x',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    const edited = await service.updateChannelNotification(channel.id, {
+      id: own.id,
+      body: '',
+      data: null,
+    });
+    expect(edited).toMatchObject({ revision: 2, changed: true });
+    expect(await service.getNotification(own.id)).toMatchObject({
+      title: 'Disk full',
+      body: null,
+      data: null,
+    });
+
+    await service.updateChannel({ id: channel.id, enabled: false });
+    await expect(
+      service.recallChannelNotification(channel.id, own.id),
+    ).rejects.toMatchObject({ status: 409 });
+    await service.updateChannel({ id: channel.id, enabled: true });
+    expect(
+      await service.recallChannelNotification(channel.id, own.id),
+    ).toMatchObject({ revision: 3, changed: true });
+    expect(
+      await service.recallChannelNotification(channel.id, own.id),
+    ).toMatchObject({ revision: 3, changed: false });
+    await expect(
+      service.updateChannelNotification(channel.id, { id: own.id, title: 'x' }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('rejects edits of recalled notifications and empty edits', async () => {
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    expect((await signedApp('update', { id })).status).toBe(400);
+    expect((await signedApp('update', { id, autoOpenUrl: true })).status).toBe(
+      400,
+    );
+    expect((await signedApp('recall', { id })).status).toBe(200);
+    const late = await signedApp('update', { id, title: 'Too late' });
+    expect(late.status).toBe(409);
+  });
+});
