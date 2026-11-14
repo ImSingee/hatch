@@ -15,7 +15,12 @@ signed-in user can see and change it.
   deploy or rollback cutover that first declares it and is kept when the
   declaration is later dropped, so groups and routes survive; delivery then
   fails with "App no longer accepts notifications".
-- **Group**: a set of destinations.
+- **Group**: a set of destinations. A group with `autoAddDevices` gains every
+  device destination created afterwards (a phone that turns on push, or signs
+  in again and registers a new session). Turning it on does not add existing
+  devices, re-registering an existing device never re-adds it after it was
+  removed, and webhooks and Apps never join automatically. A full group
+  (200 members) is skipped instead of failing the registration.
 - **Route**: `(sourceType app|channel|any, sourceId?, kind?) → group | destination`.
   Null source/kind match anything. All matching routes are expanded, then
   deduplicated per destination; each destination gets one delivery recording
@@ -36,16 +41,25 @@ Both endpoints accept the same JSON body (≤64 KiB):
   "title": "Order 42 shipped",
   "body": "optional, ≤4000",
   "url": "https://optional.example/absolute",
-  "autoOpenUrl": false,
+  "autoOpenUrl": "optional boolean; defaults to whether url is set",
   "data": { "optional": "JSON object ≤32 KiB" },
   "dedupeKey": "optional; repeats return the first notification",
   "occurredAt": "optional ISO-8601"
 }
 ```
 
-`autoOpenUrl` (optional, default `false`, requires `url`) makes tapping the
-notification on a phone open `url` instead of the notification's page in the
-app. Other destinations receive the flag in their envelope; the web UI shows
+`url` is an absolute http(s) URL or a Hatch deep link: the page's path on the
+instance after `hatch://`, such as `hatch://app/<slug>#/orders/42` or
+`hatch://agent/<id>`, optionally `?instance=<origin>` for a page on another
+instance. Phones open deep links natively; the web opens them on the instance.
+Deep links to `/api`, `/cli` or `/login`, with dot segments, or with an
+instance that is not a bare HTTPS origin are rejected with `400`. Destinations
+receive `url` as written.
+
+`autoOpenUrl` makes tapping the notification on a phone open `url` instead of
+the notification's page in the app. It defaults to `true` when `url` is set and
+`false` otherwise; `false` keeps the notification page, and `true` without
+`url` is rejected. Other destinations receive the flag in their envelope; the web UI shows
 it on the notification detail.
 
 Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
@@ -60,6 +74,17 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   token in `x-hatch-secret` (header presence wins, even empty) or `?secret=`.
   Only the token's sha256 is stored; create and rotate return it once.
   Disabled channels answer 403.
+- **Channel, as a user**: `SendNotification` (`hatch notification send
+  <channel-id> --kind … --title …`) pushes the same body as that Channel
+  without its token, authenticated by a user session or API key. An unset
+  `auto_open_url` takes the same default as `autoOpenUrl`; the CLI sends
+  `false` only for `--no-auto-open-url`. It shares
+  the kind check, dedupe scope and routing with token pushes
+  (`ingestChannelPush`), answers `CONFLICT` for a disabled channel and
+  `BAD_REQUEST` for an invalid body or undeclared kind, and returns the
+  queued delivery count so callers can spot sends that reached no enabled
+  destination. `NotificationService` reads requests up to 128 KiB (twice the
+  Channel push cap) because `data_json` is escaped inside the request.
 
 ### Edits and recalls
 
@@ -82,8 +107,9 @@ authentication as pushing:
 ```
 
 An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
-Omitted fields keep their value, `null` clears `body`, `url` or `data`, and
-clearing `url` also turns `autoOpenUrl` off. `kind`, `dedupeKey` and
+Omitted fields keep their value and `null` clears `body`, `url` or `data`.
+Without `autoOpenUrl`, a newly added `url` opens on tap (the push default), a
+cleared one stops and a replaced one keeps the setting. `kind`, `dedupeKey` and
 `occurredAt` never change. A recall takes only `id`. The id is in the body
 because the HMAC covers only the body: a replay can only repeat the same
 change. Both respond `200 { id, revision, recalled }`. `400` means an invalid
@@ -239,8 +265,11 @@ extension signs the fields it decrypted, `HMAC-SHA256` over
 HKDF-SHA256 (`info = hatch-tap-v1`) from the device key. The app opens the URL
 only when its native key module verifies that signature with this phone's key
 for that instance; otherwise the tap opens the notification, which still shows
-its link. Only the URL leaves the app, through the same external-link policy as
-web surfaces, so it needs no session on that instance.
+its link. A Hatch page (the instance's own web address or a `hatch://` deep
+link) opens in the app, on the sending instance unless the link names another
+one, which the app asks before switching to; a deep link never leaves the app.
+Any other URL leaves the app through the same external-link policy as web
+surfaces, so it needs no session on that instance.
 Device rows reference their sign-in session with `ON DELETE CASCADE`, so
 signing out or revoking the session removes the device. Better Auth deletes an
 expired session only when it is presented again, which a replaced or wiped
@@ -304,7 +333,8 @@ Web UI: Server Functions in `src/server/notifications.ts`. Native clients and
 the CLI: `NotificationService` (`notification.proto`) at `/api/rpc`. Both call
 `service.ts`. Session and API-key credentials may manage everything; Run
 credentials are rejected (`SESSION_REQUIRED`), so Agents cannot reconfigure
-delivery and there is intentionally no Agent tool. `RegisterDevice`,
+delivery or push through `SendNotification`, and there is intentionally no
+Agent tool. `RegisterDevice`,
 `UnregisterDevice` and `GetCurrentDevice` require a user session.
 
 ## Compatibility

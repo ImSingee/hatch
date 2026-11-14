@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { Alert, AppState, Linking } from 'react-native';
+import { useEffect } from 'react';
+import { AppState, Linking } from 'react-native';
+import { notificationUrlAction } from '../core/deep-link';
 import {
   foregroundPresentation,
   pushChange,
@@ -10,12 +10,13 @@ import {
   verifiedTapUrl,
   type PushTap,
 } from '../core/push';
+import { linkInbox } from './link-inbox';
 import {
   nativePushPlatform,
   pushRegistrar,
   pushSupported,
 } from './push-registrar';
-import { allowDevelopmentLoopback, useSession, vault } from './session';
+import { allowDevelopmentLoopback, useSession } from './session';
 
 // Show new Hatch notifications as banners while the app is open too. A recall
 // arriving now removes the notification it recalls (same identifier).
@@ -46,25 +47,61 @@ async function clearRecalledPlaceholders() {
   );
 }
 
-let pending: PushTap | null = null;
-
-/** Open a notification on the root stack, above any sheet left open. */
-function openNotification(id: string) {
-  if (router.canDismiss()) router.dismissAll();
-  router.push(`/notifications/${id}`);
+/**
+ * Opens the notification itself on the instance that sent it. Only the
+ * extension writes this payload after decrypting it with the instance's key,
+ * so it may switch to that instance without asking.
+ */
+function openNotification(target: PushTap) {
+  linkInbox.put({
+    link: {
+      instance: target.origin,
+      target: { kind: 'notification', id: target.notificationId },
+    },
+    trusted: true,
+    from: 'system',
+  });
 }
 
 /**
- * Keeps the active instance's push registration fresh and routes notification
- * taps to the instance that sent them. Mounted once inside the session.
+ * Opens a verified tap URL. A Hatch page (the instance's own address or a
+ * `hatch:` deep link) opens in the app, on the instance that sent the push
+ * unless the link names another one, which then asks before switching;
+ * anything else leaves for the system. Returns false when nothing could open
+ * it.
+ */
+async function openTapUrl(target: PushTap, url: string) {
+  const action = notificationUrlAction(url, target.origin, {
+    allowDevelopmentLoopback,
+  });
+  switch (action.open) {
+    case 'page':
+      linkInbox.put({
+        link: action.link,
+        trusted: action.link.instance === target.origin,
+        from: 'system',
+      });
+      return true;
+    case 'outside':
+      try {
+        await Linking.openURL(action.url);
+        return true;
+      } catch {
+        return false;
+      }
+    case 'none':
+      return false;
+  }
+}
+
+/**
+ * Keeps the active instance's push registration fresh and hands notification
+ * taps to the link inbox, which opens them on the instance that sent them.
+ * Mounted once inside the session.
  */
 export function usePushLifecycle() {
-  const { ready, origin, api, epoch, connect } = useSession();
+  const { ready, origin, api } = useSession();
   const queryClient = useQueryClient();
-  const current = useRef({ origin, connect });
-  useEffect(() => {
-    current.current = { origin, connect };
-  });
 
   useEffect(() => {
     if (!pushSupported || !origin || !api) return;
@@ -107,53 +144,19 @@ export function usePushLifecycle() {
   }, [queryClient]);
 
   useEffect(() => {
-    if (pending && origin && pending.origin === origin) {
-      const id = pending.notificationId;
-      pending = null;
-      // Let the re-keyed stack mount before pushing onto it.
-      setTimeout(() => openNotification(id), 0);
-    }
-  }, [origin, epoch]);
-
-  useEffect(() => {
-    // Wait for the saved instance to be restored before routing a cold-start tap.
+    // Wait for the saved instance to be restored before taking a cold-start tap.
     if (!pushSupported || !ready) return;
-    const openInApp = async (target: PushTap) => {
-      if (target.origin === current.current.origin) {
-        openNotification(target.notificationId);
-        return;
-      }
-      if (!(await vault.get(target.origin))) {
-        Alert.alert(
-          'Sign in to open this notification',
-          `It came from ${target.origin.replace(/^https?:\/\//, '')}, which this phone is not signed in to.`,
-        );
-        return;
-      }
-      pending = target;
-      await current.current.connect(target.origin).catch(() => {
-        pending = null;
-      });
-    };
     const open = async (response: Notifications.NotificationResponse) => {
       const target = pushTap(response.notification.request.content.data, {
         allowDevelopmentLoopback,
       });
       if (!target) return;
-      // The sender asked for the link instead of the notification. Only the
-      // URL leaves the app, so this needs no session on that instance; if it
-      // is not verified or nothing can open it, the notification opens and
+      // The sender asked for the link instead of the notification. If it is
+      // not verified or nothing can open it, the notification opens and
       // still shows its link.
       const url = await verifiedTapUrl(target, nativePushPlatform);
-      if (url) {
-        try {
-          await Linking.openURL(url);
-          return;
-        } catch {
-          // Fall through to the notification.
-        }
-      }
-      await openInApp(target);
+      if (url && (await openTapUrl(target, url))) return;
+      openNotification(target);
     };
     const last = Notifications.getLastNotificationResponse();
     if (last) {

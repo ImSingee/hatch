@@ -4,6 +4,7 @@ import {
   NotificationService,
   type CreateChannelRequest,
   type CreateRouteRequest,
+  type SendNotificationRequest,
   type UpdateGroupRequest,
   type UpdateRouteRequest,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/notification_pb';
@@ -22,6 +23,7 @@ function recordingTransport() {
     updateRoute?: UpdateRouteRequest;
     createChannel?: CreateChannelRequest;
     updateGroup?: UpdateGroupRequest;
+    sendNotification?: SendNotificationRequest;
   } = {};
   const transport = createRouterTransport(({ service }) => {
     service(NotificationService, {
@@ -64,6 +66,10 @@ function recordingTransport() {
       updateGroup: (request) => {
         received.updateGroup = request;
         return {};
+      },
+      sendNotification: (request) => {
+        received.sendNotification = request;
+        return { notificationId: 'notification-1', deliveryCount: 0 };
       },
     });
   });
@@ -181,6 +187,91 @@ describe('notification channel commands', () => {
   });
 });
 
+describe('notification send', () => {
+  it('maps flags onto SendNotification and flags an unrouted result', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse(
+        'send',
+        'channel-1',
+        '--kind',
+        'build.failed',
+        '--title',
+        'master is red',
+        '--body',
+        'Build 42 failed',
+        '--url',
+        'https://ci.example/42',
+        '--data',
+        '{"build":42}',
+        '--dedupe-key',
+        'build-42',
+      ),
+    );
+    expect(received.sendNotification).toMatchObject({
+      channelId: 'channel-1',
+      kind: 'build.failed',
+      title: 'master is red',
+      body: 'Build 42 failed',
+      url: 'https://ci.example/42',
+      dataJson: '{"build":42}',
+      dedupeKey: 'build-42',
+    });
+    // Unset lets the platform default to opening the URL on phone tap.
+    expect(received.sendNotification?.autoOpenUrl).toBeUndefined();
+    expect(result.json).toMatchObject({
+      notificationId: 'notification-1',
+      deduplicated: false,
+      deliveryCount: 0,
+    });
+    expect(result.text).toMatch(/nothing was delivered/);
+  });
+
+  it('sends an explicit false to keep the notification page', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse(
+        'send',
+        'channel-1',
+        '--kind',
+        'a',
+        '--title',
+        'Hi',
+        '--url',
+        'https://example.com',
+        '--no-auto-open-url',
+      ),
+    );
+    expect(received.sendNotification?.autoOpenUrl).toBe(false);
+  });
+
+  it('rejects incomplete or malformed input before calling the platform', () => {
+    expect(() => parse('send', 'channel-1', '--title', 'Hi')).toThrow(
+      /--kind and --title/,
+    );
+    expect(() =>
+      parse('send', 'channel-1', '--kind', 'Bad Kind', '--title', 'Hi'),
+    ).toThrow(/Invalid kind/);
+    expect(() =>
+      parse(
+        'send',
+        'channel-1',
+        '--kind',
+        'a',
+        '--title',
+        'Hi',
+        '--data',
+        '[]',
+      ),
+    ).toThrow(/JSON object/);
+    expect(() => parse('send', '--kind', 'a', '--title', 'Hi')).toThrow(
+      /<channel-id>/,
+    );
+  });
+});
+
 describe('notification group commands', () => {
   it('distinguishes clearing members from leaving them unchanged', async () => {
     const { transport, received } = recordingTransport();
@@ -205,5 +296,20 @@ describe('notification group commands', () => {
         '--clear-destinations',
       ),
     ).toThrow(/only one of/);
+  });
+
+  it('sends an explicit false to stop auto-adding devices', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse('group', 'update', 'group-1', '--no-auto-add-devices'),
+    );
+    expect(received.updateGroup?.autoAddDevices).toBe(false);
+
+    await executeNotificationCall(
+      transport,
+      parse('group', 'update', 'group-1', '--name', 'Phones'),
+    );
+    expect(received.updateGroup?.autoAddDevices).toBeUndefined();
   });
 });

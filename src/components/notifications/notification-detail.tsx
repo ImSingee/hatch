@@ -18,6 +18,7 @@ import {
 } from '@tanstack/react-query';
 import { IconRefresh } from '@tabler/icons-react';
 import { toast } from 'sonner';
+import { hatchLinkWebUrl } from '../../../packages/hatch-platform-api/deep-link';
 import { Field } from '~components/system/field';
 import { formatExact, formatRelative } from '~lib/format';
 import {
@@ -85,15 +86,7 @@ export function NotificationDetail({ id }: { id: string }) {
               <Text size="sm" c="dimmed" style={{ width: 96, flex: 'none' }}>
                 Link
               </Text>
-              <Anchor
-                href={data.url}
-                target="_blank"
-                rel="noreferrer"
-                size="sm"
-                truncate
-              >
-                {data.url}
-              </Anchor>
+              <NotificationLink url={data.url} />
               {data.autoOpenUrl ? (
                 <Tooltip label="Tapping the phone notification opens this link instead of the notification.">
                   <Badge variant="light" color="gray" style={{ flex: 'none' }}>
@@ -310,5 +303,27 @@ function DeliveryOutcome({
         </Tooltip>
       ) : null}
     </Stack>
+  );
+}
+
+/**
+ * A notification links to a web page or, by `hatch://` deep link, to a Hatch
+ * page: that opens on the instance it names, here in this tab when that is
+ * this instance.
+ */
+function NotificationLink({ url }: { url: string }) {
+  const page = hatchLinkWebUrl(url, window.location.origin, {
+    allowLoopbackHttp: true,
+  });
+  const here = page !== null && new URL(page).origin === window.location.origin;
+  return (
+    <Anchor
+      href={page ?? url}
+      {...(here ? {} : { target: '_blank', rel: 'noreferrer' })}
+      size="sm"
+      truncate
+    >
+      {url}
+    </Anchor>
   );
 }

@@ -138,9 +138,11 @@ export async function updateNotification(
           : update.autoOpenUrl,
       data: update.data === undefined ? current.data : update.data,
     };
-    // Clearing the URL also stops opening it on tap.
-    if (update.url === null && update.autoOpenUrl === undefined) {
-      next.autoOpenUrl = false;
+    // Without an explicit choice, a link follows the push default: a new
+    // link opens on tap, a cleared one stops, a replaced one keeps the setting.
+    if (update.url !== undefined && update.autoOpenUrl === undefined) {
+      next.autoOpenUrl =
+        next.url !== null && (current.url === null || current.autoOpenUrl);
     }
     if (next.autoOpenUrl && !next.url) {
       throw new NotificationLifecycleError('autoOpenUrl requires url', 400);

@@ -18,11 +18,17 @@ export type NotificationInput = {
   kind: string;
   title: string;
   body?: string;
-  /** Absolute http(s) URL opened from the notification. */
+  /**
+   * Opened from the notification: an absolute http(s) URL, or a Hatch page by
+   * deep link (`hatch://app/<slug>#/route`, the instance web path after
+   * `hatch://`), which phones open natively and the web opens on the instance.
+   */
   url?: string;
   /**
-   * Tapping the notification on a phone opens `url` directly instead of the
-   * notification's page in the Hatch app. Requires `url`.
+   * Whether tapping the notification on a phone opens `url` directly instead
+   * of the notification's page in the Hatch app. Defaults to `true` when `url`
+   * is set; pass `false` when the link is only a reference. `true` requires
+   * `url`.
    */
   autoOpenUrl?: boolean;
   /** Extra structured data delivered to webhook and App destinations. */
@@ -107,8 +113,9 @@ export async function notify(
 
 /**
  * New content for a notification this App sent. Omitted fields keep their
- * value; `null` clears `body`, `url` or `data`. Clearing `url` also turns
- * `autoOpenUrl` off.
+ * value; `null` clears `body`, `url` or `data`. Without `autoOpenUrl`, adding
+ * a `url` opens it on tap (as when pushing), clearing it turns that off, and
+ * replacing it keeps the current setting.
  */
 export type NotificationUpdateInput = {
   title?: string;

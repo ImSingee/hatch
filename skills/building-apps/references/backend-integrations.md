@@ -298,7 +298,6 @@ await notify({
   title: `Order ${order.id} shipped`,
   body: 'Arrives Thursday',
   url: 'https://tracking.example.com/123',
-  autoOpenUrl: true,
   data: { orderId: order.id },
   dedupeKey: `shipped:${order.id}`,
 });
@@ -307,10 +306,14 @@ await notify({
 `notify` POSTs to `HATCH_NOTIFICATIONS_URL`, signed with
 `HATCH_SIGNING_SECRET`; both are injected only when the capability and backend
 are enabled. Title is required (≤200 characters); body ≤4000; `url` must be
-absolute http(s); `autoOpenUrl: true` (requires `url`) makes tapping the
-notification on a phone open `url` directly instead of the notification in the
-Hatch app, so set it only when the link is the whole point of the
-notification; `data` is a JSON object ≤32 KiB; the request body is capped at
+absolute http(s) or a Hatch deep link such as `hatch://app/<slug>#/orders/42`
+(the instance web path after `hatch://`), which phones open natively and the
+web opens on the instance. Prefer a deep link for Hatch pages: the backend
+does not need the instance origin. Tapping a notification with a `url` on a
+phone opens that URL (a deep link opens the page in the Hatch app) instead of
+the notification; pass `autoOpenUrl: false` when the link is only a reference
+and the notification itself should open (`autoOpenUrl: true` without `url` is
+rejected); `data` is a JSON object ≤32 KiB; the request body is capped at
 64 KiB. A repeated `dedupeKey` returns the first notification with
 `deduplicated: true`. Errors throw `NotificationError` with the HTTP status.
 Pushing returns once the notification is stored; delivery happens afterwards

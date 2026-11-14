@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "aeeef15e-15e9-44f5-976b-b975f89c2de0",
+  "id": "e412948f-9e9d-4fd8-b531-409d6a31c815",
   "prevIds": ["aca4cf9b-7a38-4be7-8d64-536bbcb7825f"],
   "ddl": [
     {
@@ -2378,19 +2378,6 @@
       "table": "notification_deliveries"
     },
     {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "delivered_revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_deliveries"
-    },
-    {
       "type": "jsonb",
       "typeSchema": null,
       "notNull": true,
@@ -2651,19 +2638,6 @@
       "table": "notification_destinations"
     },
     {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "lifecycle_events",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notification_destinations"
-    },
-    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -2763,6 +2737,19 @@
       "generated": null,
       "identity": null,
       "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notification_groups"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "auto_add_devices",
       "entityType": "columns",
       "schema": "public",
       "table": "notification_groups"
@@ -3114,45 +3101,6 @@
       "generated": null,
       "identity": null,
       "name": "occurred_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notifications"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "1",
-      "generated": null,
-      "identity": null,
-      "name": "revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notifications"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "edited_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "notifications"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "recalled_at",
       "entityType": "columns",
       "schema": "public",
       "table": "notifications"
