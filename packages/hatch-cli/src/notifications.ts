@@ -43,6 +43,44 @@ export function parseKindSpec(value: string) {
   return { kind, name };
 }
 
+const KIND_DESCRIPTION_MAX = 500;
+
+/**
+ * Resolve `--kind` specs plus `--kind-description <kind>=<text>` into the full
+ * kind list. Every described kind must be declared in the same command,
+ * because the list always replaces the channel's kinds as a whole.
+ */
+export function parseKindList(
+  specs: readonly string[],
+  descriptions: readonly string[],
+) {
+  const kinds = specs.map(parseKindSpec);
+  const declared = new Set(kinds.map((entry) => entry.kind));
+  const described = new Map<string, string>();
+  for (const value of descriptions) {
+    const separator = value.indexOf('=');
+    if (separator === -1)
+      invalid(`--kind-description "${value}" must be <kind>=<text>.`);
+    const kind = value.slice(0, separator);
+    const text = value.slice(separator + 1).trim();
+    if (!declared.has(kind))
+      invalid(
+        `--kind-description names "${kind}", which is not in the --kind list.`,
+      );
+    if (described.has(kind))
+      invalid(`Kind "${kind}" has more than one --kind-description.`);
+    if (!text || text.length > KIND_DESCRIPTION_MAX)
+      invalid(
+        `Kind "${kind}" needs a description of 1-${KIND_DESCRIPTION_MAX} characters.`,
+      );
+    described.set(kind, text);
+  }
+  return kinds.map((entry) => {
+    const description = described.get(entry.kind);
+    return description === undefined ? entry : { ...entry, description };
+  });
+}
+
 function exclusive(values: Values, ...flags: string[]) {
   const present = flags.filter((flag) => values[flag] !== undefined);
   if (present.length > 1)
@@ -393,6 +431,33 @@ const specs: Record<string, Spec> = {
       },
     }),
   },
+  'apns-status': {
+    positionals: [],
+    build: () => ({
+      method: 'getApnsStatus',
+      request: {},
+      text: (response) => {
+        if (field(response, 'error'))
+          return `iOS push is misconfigured: ${field(response, 'error')}`;
+        const environments = [
+          response.production === true ? 'production' : '',
+          response.sandbox === true ? 'sandbox' : '',
+        ].filter(Boolean);
+        if (environments.length === 0)
+          return 'iOS push: no APNs key is configured yet, so device deliveries will fail.';
+        return [
+          `iOS push: ${
+            field(response, 'source') === 'builtin'
+              ? 'built-in shared key'
+              : 'this instance’s own key'
+          } (${environments.join(', ')}).`,
+          ...(field(response, 'topic')
+            ? [`Topic: ${field(response, 'topic')}`]
+            : []),
+        ].join('\n');
+      },
+    }),
+  },
   'destination list': {
     positionals: [],
     build: () => ({
@@ -700,6 +765,7 @@ const specs: Record<string, Spec> = {
       name: { type: 'string' },
       description: { type: 'string' },
       kind: { type: 'string', multiple: true },
+      'kind-description': { type: 'string', multiple: true },
     },
     build: (_positionals, values) => {
       const name = str(values, 'name');
@@ -711,7 +777,9 @@ const specs: Record<string, Spec> = {
         request: {
           name,
           description: str(values, 'description'),
-          kinds: { kinds: kinds.map(parseKindSpec) },
+          kinds: {
+            kinds: parseKindList(kinds, list(values, 'kind-description') ?? []),
+          },
         },
         text: (response) => channelSecret(response, 'Token'),
       };
@@ -723,16 +791,24 @@ const specs: Record<string, Spec> = {
       name: { type: 'string' },
       description: { type: 'string' },
       kind: { type: 'string', multiple: true },
+      'kind-description': { type: 'string', multiple: true },
       enable: { type: 'boolean' },
       disable: { type: 'boolean' },
     },
     build: ([channelId], values) => {
       const kinds = list(values, 'kind');
+      const descriptions = list(values, 'kind-description');
+      if (descriptions && !kinds)
+        invalid(
+          '--kind-description needs the full --kind list; --kind replaces every kind.',
+        );
       const request = {
         id: channelId,
         name: str(values, 'name'),
         description: str(values, 'description'),
-        kinds: kinds ? { kinds: kinds.map(parseKindSpec) } : undefined,
+        kinds: kinds
+          ? { kinds: parseKindList(kinds, descriptions ?? []) }
+          : undefined,
         enabled: enabledFlag(values),
       };
       if (

@@ -18,7 +18,7 @@ Keep plans concise and proportional to the task. Consider these sections in orde
 2. Current behavior and preparation: relevant code, constraints, dependencies, and configuration.
 3. Implementation approach: intended behavior, main call paths, and component responsibilities.
 4. Database changes: schema, indexes, and constraints.
-5. Platform API and Platform/Runner protocol changes.
+5. Platform API, CLI commands, and Platform/Runner protocol changes.
 6. App/Workflow package contracts and compatibility.
 7. Historical platform data migration.
 8. Existing App/Workflow migration: source, deployments, and application data.
@@ -112,6 +112,49 @@ Before declaring any Agent task complete, re-run `pnpm check:types` and `pnpm fo
   Commit generated descriptors and the locked Buf dependencies.
 - Keep native Better Auth login/device/logout HTTP endpoints. Do not add REST
   aliases, oRPC contracts or an OpenAPI endpoint for public business RPCs.
+
+## CLI Coverage for Platform Capabilities
+
+Every new or changed platform capability that a user can view, configure or
+operate (Web UI pages, settings, history, data inspection, operations) must
+ship an AI-friendly `hatch` CLI command in `packages/hatch-cli` in the same
+change. AI agents drive the platform through the CLI, so the CLI must never be
+weaker than the Web UI.
+
+- Back the command with a public Connect RPC (see Public Platform API) that
+  calls the same domain service as the Web UI Server Functions. Cover every
+  read and every mutation the UI offers, including each field the UI can set.
+- The only exceptions are capabilities bound to a device or browser, such as
+  push device registration, passkeys or OAuth consent. Name each exception and
+  its reason in the plan, the PR and `docs/cli-tool-parity.md`.
+- Deciding whether to also expose an Agent Tool, and whether Run credentials
+  may call the command, is separate. Record it in `docs/cli-tool-parity.md`.
+
+Design commands for an agent that cannot see the screen or answer prompts:
+
+- Non-interactive: take all input from arguments, flags or `--file <path|->`.
+  Never prompt or wait for confirmation; require an explicit flag for
+  destructive or irreversible choices.
+- Machine-readable: `--json` prints one complete public DTO to stdout, and
+  failures print `{ok:false,error:{code,message}}`. Text mode keeps every
+  identifier a follow-up command needs. Progress goes to stderr.
+- Predictable failures: map errors to the documented exit codes and stable
+  error codes in `packages/hatch-cli/README.md`. Validate locally before any
+  RPC; reject contradictory, ambiguous or unusable input instead of guessing or
+  dropping it. Error messages name the flag to fix.
+- Explicit update semantics: distinguish leaving a field unchanged, clearing
+  it and replacing it (for example `--clear-destinations`,
+  `--no-auto-add-devices`). State in the help when a flag replaces a whole
+  list, and let one command restate every element of that list.
+- Discoverable: register the command in `packages/hatch-cli/src/commands.ts`
+  with its full usage and a description of side effects (replaces data, prints
+  a secret once, deletes dependent records). `hatch help` must work offline.
+- Bounded and complete: lists support `--limit` and `--cursor` and print the
+  next cursor; requests honor `--timeout` and cancellation. Secrets are
+  printed only by the create or rotate command that mints them.
+
+Add durable tests for argument mapping and input rejection, and run each new
+command against a local instance before declaring the work complete.
 
 ## App Compatibility Versions
 

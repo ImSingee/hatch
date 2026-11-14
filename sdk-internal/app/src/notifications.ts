@@ -19,9 +19,12 @@ export type NotificationInput = {
   title: string;
   body?: string;
   /**
-   * Opened from the notification: an absolute http(s) URL, or a Hatch page by
-   * deep link (`hatch://app/<slug>#/route`, the instance web path after
-   * `hatch://`), which phones open natively and the web opens on the instance.
+   * Opened from the notification: any absolute URL a device can open, such as
+   * a web page, another app by its scheme (`mailto:`, `slack://…`), or a Hatch
+   * page by deep link (`hatch://app/<slug>#/route`, the instance web path
+   * after `hatch://`), which phones open natively and the web opens on the
+   * instance. `javascript:`, `data:`, `blob:`, `file:` and `about:` URLs are
+   * rejected.
    */
   url?: string;
   /**

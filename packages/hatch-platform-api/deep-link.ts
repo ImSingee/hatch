@@ -65,6 +65,27 @@ export function decodeUrlAscii(value: string): string | null {
   return /%[0-7][0-9a-f]/i.test(text) ? null : text;
 }
 
+/**
+ * Schemes a browser or web view resolves inside the current document. They
+ * name no page and no other app, so a link never opens one.
+ */
+export const DOCUMENT_URL_SCHEMES: ReadonlySet<string> = new Set([
+  'about:',
+  'blob:',
+  'data:',
+  'file:',
+  'javascript:',
+]);
+
+/** Whether `value` parses as a URL in one of `DOCUMENT_URL_SCHEMES`. */
+export function isDocumentUrl(value: string): boolean {
+  try {
+    return DOCUMENT_URL_SCHEMES.has(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
 export function isDeepLink(value: string): boolean {
   return /^hatch:/i.test(value);
 }

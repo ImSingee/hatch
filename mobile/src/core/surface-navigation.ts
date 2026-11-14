@@ -5,7 +5,7 @@ import {
   type DeepLink,
 } from './deep-link';
 import { HANDOFF_CONSUME_PATH } from './security';
-import { decodeUrlAscii } from '@hatch/platform-api';
+import { DOCUMENT_URL_SCHEMES, decodeUrlAscii } from '@hatch/platform-api';
 
 /** What an authenticated web surface does with a navigation request. */
 export type SurfaceDecision =
@@ -74,16 +74,6 @@ function inTarget(url: URL, target: string) {
   );
 }
 
-// Schemes a web view resolves inside its own document. They name no page and
-// no other app, so there is nothing outside the app to hand them to.
-const DOCUMENT_SCHEMES = new Set([
-  'about:',
-  'blob:',
-  'data:',
-  'file:',
-  'javascript:',
-]);
-
 /**
  * The only thing that leaves the app is a URL for the system to open: a web
  * page in the browser, or a link in any other scheme (`mailto:`, `tel:`,
@@ -96,7 +86,7 @@ export function externalUrl(
   context: Pick<SurfaceContext, 'origin' | 'handoff'>,
 ) {
   const url = parse(value);
-  if (!url || DOCUMENT_SCHEMES.has(url.protocol)) return null;
+  if (!url || DOCUMENT_URL_SCHEMES.has(url.protocol)) return null;
   const web = url.protocol === 'https:' || url.protocol === 'http:';
   if (web && (url.username || url.password)) return null;
   const text = decodeUrlAscii(url.href);

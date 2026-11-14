@@ -177,6 +177,62 @@ describe('notification channel commands', () => {
     expect(result.json).toMatchObject({ token: 'hnc_secret-token' });
   });
 
+  it('attaches kind descriptions to the declared kinds', () => {
+    const call = parse(
+      'channel',
+      'update',
+      'channel-1',
+      '--kind',
+      'host.down:Host down',
+      '--kind',
+      'backup.done',
+      '--kind-description',
+      'host.down=A monitored host stopped answering = alert',
+    );
+    expect(call.request.kinds).toEqual({
+      kinds: [
+        {
+          kind: 'host.down',
+          name: 'Host down',
+          description: 'A monitored host stopped answering = alert',
+        },
+        { kind: 'backup.done', name: 'backup.done' },
+      ],
+    });
+  });
+
+  it('rejects descriptions that cannot apply to the replaced kind list', () => {
+    // Without --kind the update would not touch kinds, so a description alone
+    // must fail instead of being silently dropped.
+    expect(() =>
+      parse('channel', 'update', 'channel-1', '--kind-description', 'a=Text'),
+    ).toThrow(/needs the full --kind list/);
+    expect(() =>
+      parse(
+        'channel',
+        'create',
+        '--name',
+        'X',
+        '--kind',
+        'a',
+        '--kind-description',
+        'b=Text',
+      ),
+    ).toThrow(/not in the --kind list/);
+    expect(() =>
+      parse(
+        'channel',
+        'create',
+        '--name',
+        'X',
+        '--kind',
+        'a',
+        '--kind-description',
+        'a',
+      ),
+    ).toThrow(/<kind>=<text>/);
+  });
+
   it('rejects malformed kinds before calling the platform', () => {
     expect(() =>
       parse('channel', 'create', '--name', 'X', '--kind', 'Bad Kind'),
