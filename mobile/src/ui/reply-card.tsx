@@ -235,8 +235,11 @@ export function ReplyFormCard({
             // Native text fields can run ahead of their change events.
             const latest = { ...answers };
             for (const field of reply.fields) {
-              const text = fields.current[field.id]?.getText();
-              if (field.type === 'text' && text !== undefined) {
+              // Only text fields have refs; ids like `constructor` must not
+              // resolve through the prototype.
+              if (field.type !== 'text') continue;
+              const text = answerOf(fields.current, field.id)?.getText();
+              if (text !== undefined) {
                 if (text) latest[field.id] = text;
                 else delete latest[field.id];
               }
