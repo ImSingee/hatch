@@ -51,6 +51,8 @@ message NotificationDeliveryCounts {
   uint32 pending = 1;
   uint32 succeeded = 2;
   uint32 failed = 3;
+  // Recalled before reaching the destination; counts as finished.
+  uint32 canceled = 4;
 }
 
 message NotificationSummary {
@@ -72,6 +74,12 @@ message NotificationSummary {
   NotificationDeliveryCounts deliveries = 13;
   // Tapping the phone push opens url instead of the notification.
   bool auto_open_url = 14;
+  // 1 for the original; every edit and the recall increment it.
+  uint32 revision = 15;
+  // ISO-8601; set when the source last edited the notification.
+  optional string edited_at = 16;
+  // ISO-8601; set when the source recalled the notification.
+  optional string recalled_at = 17;
 }
 
 message NotificationDelivery {
@@ -80,7 +88,7 @@ message NotificationDelivery {
   // device | webhook | app
   string destination_type = 3;
   string destination_name = 4;
-  // pending | in_progress | succeeded | failed
+  // pending | in_progress | succeeded | failed | canceled
   string status = 5;
   uint32 attempts = 6;
   optional string next_attempt_at = 7;
@@ -92,6 +100,8 @@ message NotificationDelivery {
   optional string completed_at = 12;
   string created_at = 13;
   string updated_at = 14;
+  // Notification revision this destination last received; unset when never.
+  optional uint32 delivered_revision = 15;
 }
 
 message NotificationDetail {
@@ -233,6 +243,9 @@ message NotificationDestination {
   NotificationDeviceInfo device = 9;
   NotificationWebhookInfo webhook = 10;
   NotificationAppInfo app = 11;
+  // Receives edit and recall events. Always true for devices; set by the
+  // manifest for Apps and by settings for webhooks.
+  bool lifecycle_events = 12;
 }
 
 message ListDestinationsRequest {}
@@ -249,6 +262,8 @@ message CreateWebhookRequest {
     uri: true
     max_len: 2048
   }];
+  // Also POST hatch.notification.updated and hatch.notification.recalled.
+  bool lifecycle_events = 3;
 }
 message CreateWebhookResponse {
   NotificationDestination destination = 1;
@@ -270,6 +285,8 @@ message UpdateDestinationRequest {
     uri: true
     max_len: 2048
   }];
+  // Webhooks only.
+  optional bool lifecycle_events = 5;
 }
 message UpdateDestinationResponse {
   NotificationDestination destination = 1;

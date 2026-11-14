@@ -80,6 +80,8 @@ function summary(view: NotificationSummaryView) {
     sourceId: none(view.sourceId),
     body: none(view.body),
     url: none(view.url),
+    editedAt: none(view.editedAt),
+    recalledAt: none(view.recalledAt),
   };
 }
 
@@ -155,6 +157,7 @@ export function registerNotificationApi(router: ConnectRouter) {
               lastError: none(delivery.lastError),
               httpStatus: none(delivery.httpStatus),
               result: none(delivery.result),
+              deliveredRevision: none(delivery.deliveredRevision),
               completedAt: none(delivery.completedAt),
             })),
           },
@@ -206,6 +209,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             name: input.name,
             enabled: input.enabled,
             url: input.url,
+            lifecycleEvents: input.lifecycleEvents,
           }),
         ),
       }),

@@ -93,10 +93,12 @@ export type NotificationStatus =
   | 'partial'
   | 'failed';
 
+/** `canceled` deliveries (recalled before arriving) count as finished. */
 export type DeliveryCounts = {
   pending: number;
   succeeded: number;
   failed: number;
+  canceled: number;
 };
 
 export type NotificationSummaryView = {
@@ -112,6 +114,10 @@ export type NotificationSummaryView = {
   autoOpenUrl: boolean;
   occurredAt: string;
   createdAt: string;
+  /** 1 for the original; every edit and the recall increment it. */
+  revision: number;
+  editedAt: string | null;
+  recalledAt: string | null;
   status: NotificationStatus;
   deliveries: DeliveryCounts;
 };
@@ -127,6 +133,8 @@ export type DeliveryView = {
   lastError: string | null;
   httpStatus: number | null;
   result: string | null;
+  /** Revision this destination last received; null when it never did. */
+  deliveredRevision: number | null;
   routeIds: string[];
   completedAt: string | null;
   createdAt: string;
@@ -145,6 +153,8 @@ export type DestinationView = {
   name: string;
   enabled: boolean;
   lastError: string | null;
+  /** Receives edit and recall events (always true for devices). */
+  lifecycleEvents: boolean;
   groupIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -216,11 +226,11 @@ const iso = (value: Date) => value.toISOString();
 const isoOrNull = (value: Date | null) => (value ? value.toISOString() : null);
 
 function deliveryStatus(counts: DeliveryCounts): NotificationStatus {
-  const total = counts.pending + counts.succeeded + counts.failed;
-  if (total === 0) return 'unrouted';
+  const finished = counts.succeeded + counts.canceled;
+  if (counts.pending + finished + counts.failed === 0) return 'unrouted';
   if (counts.pending > 0) return 'pending';
   if (counts.failed === 0) return 'delivered';
-  if (counts.succeeded === 0) return 'failed';
+  if (finished === 0) return 'failed';
   return 'partial';
 }
 
@@ -248,10 +258,12 @@ async function deliveryCounts(
       pending: 0,
       succeeded: 0,
       failed: 0,
+      canceled: 0,
     };
     const count = Number(row.count);
     if (row.status === 'succeeded') entry.succeeded += count;
     else if (row.status === 'failed') entry.failed += count;
+    else if (row.status === 'canceled') entry.canceled += count;
     else entry.pending += count;
     counts.set(row.notificationId, entry);
   }
@@ -264,7 +276,12 @@ function summaryView(
   row: NotificationRow,
   counts: DeliveryCounts | undefined,
 ): NotificationSummaryView {
-  const deliveries = counts ?? { pending: 0, succeeded: 0, failed: 0 };
+  const deliveries = counts ?? {
+    pending: 0,
+    succeeded: 0,
+    failed: 0,
+    canceled: 0,
+  };
   return {
     id: row.id,
     sourceType: row.sourceType,
@@ -278,6 +295,9 @@ function summaryView(
     autoOpenUrl: row.autoOpenUrl,
     occurredAt: iso(row.occurredAt),
     createdAt: iso(row.createdAt),
+    revision: row.revision,
+    editedAt: isoOrNull(row.editedAt),
+    recalledAt: isoOrNull(row.recalledAt),
     status: deliveryStatus(deliveries),
     deliveries,
   };
@@ -321,12 +341,14 @@ function statusFilter(status: NotificationStatus): SQL {
     case 'failed':
       return and(
         exists(deliveriesWith(['failed'])),
-        notExists(deliveriesWith(['pending', 'in_progress', 'succeeded'])),
+        notExists(
+          deliveriesWith(['pending', 'in_progress', 'succeeded', 'canceled']),
+        ),
       ) as SQL;
     case 'partial':
       return and(
         exists(deliveriesWith(['failed'])),
-        exists(deliveriesWith(['succeeded'])),
+        exists(deliveriesWith(['succeeded', 'canceled'])),
         notExists(deliveriesWith(['pending', 'in_progress'])),
       ) as SQL;
   }
@@ -377,6 +399,7 @@ function deliveryView(
     lastError: row.lastError,
     httpStatus: row.httpStatus,
     result: row.result,
+    deliveredRevision: row.deliveredRevision,
     routeIds: row.routeIds,
     completedAt: isoOrNull(row.completedAt),
     createdAt: iso(row.createdAt),
@@ -538,6 +561,7 @@ export async function listDestinations(): Promise<DestinationView[]> {
       name: row.name,
       enabled: row.enabled,
       lastError: row.lastError,
+      lifecycleEvents: row.type === 'device' || row.lifecycleEvents,
       groupIds: members
         .filter((member) => member.destinationId === row.id)
         .map((member) => member.groupId),
@@ -579,6 +603,7 @@ async function destinationView(id: string): Promise<DestinationView> {
 export async function createWebhook(input: {
   name: string;
   url: string;
+  lifecycleEvents?: boolean;
 }): Promise<{ destination: DestinationView; secret: string }> {
   const id = newNotificationId();
   const secret = mintWebhookSecret();
@@ -588,6 +613,7 @@ export async function createWebhook(input: {
     name: cleanName(input.name, 'Name'),
     url: cleanWebhookUrl(input.url),
     secretCiphertext: encryptWebhookSecret(id, secret),
+    lifecycleEvents: input.lifecycleEvents === true,
   });
   return { destination: await destinationView(id), secret };
 }
@@ -611,6 +637,7 @@ export async function updateDestination(input: {
   name?: string;
   enabled?: boolean;
   url?: string;
+  lifecycleEvents?: boolean;
 }): Promise<DestinationView> {
   const row = await db.query.notificationDestinations.findFirst({
     where: { id: input.id },
@@ -627,6 +654,13 @@ export async function updateDestination(input: {
   }
   if (input.url !== undefined && row.type !== 'webhook') {
     throw new AppError('Only webhook destinations have a URL.', 400);
+  }
+  if (input.lifecycleEvents !== undefined && row.type !== 'webhook') {
+    // Devices always take them; an App declares them in its manifest.
+    throw new AppError(
+      'Only webhook destinations choose whether to receive edits and recalls.',
+      400,
+    );
   }
   if (input.name !== undefined && row.type === 'app') {
     throw new AppError('App destinations are named after their App.', 400);
@@ -648,6 +682,9 @@ export async function updateDestination(input: {
         }
       : {}),
     ...(input.url !== undefined ? { url: cleanWebhookUrl(input.url) } : {}),
+    ...(input.lifecycleEvents !== undefined
+      ? { lifecycleEvents: input.lifecycleEvents }
+      : {}),
   };
   if (Object.keys(values).length > 0) {
     await db

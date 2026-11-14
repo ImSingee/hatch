@@ -1,7 +1,9 @@
 /**
- * External Channel push endpoint:
+ * External Channel endpoints:
  *
- *   POST /api/notifications/channel/<channelId>  → 202 { id, deduplicated }
+ *   POST /api/notifications/channel/<channelId>         → 202 { id, deduplicated }
+ *   POST /api/notifications/channel/<channelId>/update  → 200 { id, revision, recalled }
+ *   POST /api/notifications/channel/<channelId>/recall  → 200 { id, revision, recalled }
  *
  * The caller presents the channel token in `x-hatch-secret` (preferred) or
  * `?secret=`; header presence wins, even when empty. Only the token's sha256
@@ -16,6 +18,7 @@ import {
   notificationPushSchema,
 } from './contract';
 import { ingestNotification } from './ingest';
+import { applyLifecycleRequest, type LifecycleAction } from './lifecycle-http';
 import { hashChannelToken } from './secrets';
 
 export const CHANNEL_SECRET_HEADER = 'x-hatch-secret';
@@ -27,6 +30,7 @@ export function channelPushPath(channelId: string): string {
 export async function handleChannelPush(
   request: Request,
   channelId: string,
+  action: 'push' | LifecycleAction = 'push',
 ): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', {
@@ -62,6 +66,13 @@ export async function handleChannelPush(
     json = JSON.parse(rawBody);
   } catch {
     return new Response('Body must be JSON', { status: 400 });
+  }
+  if (action !== 'push') {
+    return applyLifecycleRequest(
+      { type: 'channel', channelId: channel.id },
+      action,
+      json,
+    );
   }
   const push = notificationPushSchema.safeParse(json);
   if (!push.success) {

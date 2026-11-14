@@ -43,6 +43,14 @@ export function parseKindSpec(value: string) {
   return { kind, name };
 }
 
+/** Delivery status, plus whether the source edited or recalled it. */
+function revisionLabel(row: Row | undefined): string {
+  const status = field(row, 'status');
+  if (field(row, 'recalledAt')) return `${status}, recalled`;
+  if (field(row, 'editedAt')) return `${status}, edited`;
+  return status;
+}
+
 function exclusive(values: Values, ...flags: string[]) {
   const present = flags.filter((flag) => values[flag] !== undefined);
   if (present.length > 1)
@@ -52,6 +60,15 @@ function exclusive(values: Values, ...flags: string[]) {
 function enabledFlag(values: Values): boolean | undefined {
   exclusive(values, 'enable', 'disable');
   return values.enable ? true : values.disable ? false : undefined;
+}
+
+function lifecycleFlag(values: Values): boolean | undefined {
+  exclusive(values, 'lifecycle-events', 'no-lifecycle-events');
+  return values['lifecycle-events']
+    ? true
+    : values['no-lifecycle-events']
+      ? false
+      : undefined;
 }
 
 function str(values: Values, flag: string): string | undefined {
@@ -203,7 +220,7 @@ const specs: Record<string, Spec> = {
             rows(response.notifications).map((row) => [
               field(row, 'id'),
               field(row, 'createdAt'),
-              field(row, 'status'),
+              revisionLabel(row),
               `${field(row, 'sourceName')} / ${field(row, 'kind')}`,
               field(row, 'title'),
             ]),
@@ -238,9 +255,17 @@ const specs: Record<string, Spec> = {
           ];
         });
         return [
-          `${field(summary, 'title')} (${field(summary, 'status')})`,
+          `${field(summary, 'title')} (${revisionLabel(summary)})`,
           `Source: ${field(summary, 'sourceName')} (${field(summary, 'sourceType')}) · Kind: ${field(summary, 'kindName')} [${field(summary, 'kind')}]`,
           `Occurred: ${field(summary, 'occurredAt')}`,
+          ...(field(summary, 'editedAt')
+            ? [
+                `Edited: ${field(summary, 'editedAt')} (revision ${field(summary, 'revision')})`,
+              ]
+            : []),
+          ...(field(summary, 'recalledAt')
+            ? [`Recalled: ${field(summary, 'recalledAt')}`]
+            : []),
           ...(field(summary, 'body') ? ['', field(summary, 'body')] : []),
           ...(field(summary, 'url')
             ? [
@@ -342,14 +367,22 @@ const specs: Record<string, Spec> = {
   },
   'webhook create': {
     positionals: [],
-    options: { name: { type: 'string' }, url: { type: 'string' } },
+    options: {
+      name: { type: 'string' },
+      url: { type: 'string' },
+      'lifecycle-events': { type: 'boolean' },
+    },
     build: (_positionals, values) => {
       const name = str(values, 'name');
       const url = str(values, 'url');
       if (!name || !url) invalid('Supply --name and --url.');
       return {
         method: 'createWebhook',
-        request: { name, url },
+        request: {
+          name,
+          url,
+          lifecycleEvents: values['lifecycle-events'] === true,
+        },
         text: (response) =>
           [
             `Webhook ${field(response.destination as Row, 'id')} created.`,
@@ -361,15 +394,25 @@ const specs: Record<string, Spec> = {
   },
   'webhook update': {
     ...id,
-    options: { name: { type: 'string' }, url: { type: 'string' } },
+    options: {
+      name: { type: 'string' },
+      url: { type: 'string' },
+      'lifecycle-events': { type: 'boolean' },
+      'no-lifecycle-events': { type: 'boolean' },
+    },
     build: ([destinationId], values) => {
       const request = {
         id: destinationId,
         name: str(values, 'name'),
         url: str(values, 'url'),
+        lifecycleEvents: lifecycleFlag(values),
       };
-      if (request.name === undefined && request.url === undefined)
-        invalid('Supply --name and/or --url.');
+      if (
+        request.name === undefined &&
+        request.url === undefined &&
+        request.lifecycleEvents === undefined
+      )
+        invalid('Supply --name, --url or --[no-]lifecycle-events.');
       return {
         method: 'updateDestination',
         request,

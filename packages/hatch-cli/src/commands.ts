@@ -201,13 +201,17 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['notification', 'webhook', 'create'],
-    usage: 'notification webhook create --name <name> --url <url>',
-    description: 'Add a webhook destination; prints its signing secret once.',
+    usage:
+      'notification webhook create --name <name> --url <url> [--lifecycle-events]',
+    description:
+      'Add a webhook destination; prints its signing secret once. --lifecycle-events also sends edits and recalls.',
   },
   {
     path: ['notification', 'webhook', 'update'],
-    usage: 'notification webhook update <id> [--name <name>] [--url <url>]',
-    description: 'Change a webhook name or URL.',
+    usage:
+      'notification webhook update <id> [--name <name>] [--url <url>] [--lifecycle-events | --no-lifecycle-events]',
+    description:
+      'Change a webhook name, URL, or whether it receives edits and recalls.',
   },
   {
     path: ['notification', 'webhook', 'rotate-secret'],

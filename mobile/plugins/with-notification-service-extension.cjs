@@ -21,7 +21,7 @@ import Foundation
 import Security
 import UserNotifications
 
-private struct HatchPushPlaintext: Decodable {
+struct HatchPushPlaintext: Decodable {
   let v: Int
   let id: String
   let o: String
@@ -33,9 +33,14 @@ private struct HatchPushPlaintext: Decodable {
   let u: String?
   let ao: Bool?
   let at: String
+  /// Notification revision (absent from instances that predate edits).
+  let r: Int?
+  /// "u": edit of a shown notification; "r": recall (carries no content).
+  let e: String?
 }
 
 final class NotificationService: UNNotificationServiceExtension {
+  private let lock = NSLock()
   private var deliver: ((UNNotificationContent) -> Void)?
   private var fallback: UNNotificationContent?
 
@@ -44,15 +49,69 @@ final class NotificationService: UNNotificationServiceExtension {
     withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
   ) {
     let unverified = Self.unverified(request.content)
+    lock.lock()
     deliver = contentHandler
     fallback = unverified
-    contentHandler(Self.decrypt(request.content, key: Self.key(for:)) ?? unverified)
-    deliver = nil
+    lock.unlock()
+    guard let opened = Self.open(request.content, key: Self.key(for:)) else {
+      finish(unverified)
+      return
+    }
+    let (message, content) = opened
+    // Past this point the push is authentic; never fall back to "unverified".
+    lock.lock()
+    fallback = content
+    lock.unlock()
+    guard message.e == "u" || message.e == "r" else {
+      finish(content)
+      return
+    }
+    // Edits and recalls replace the notification with the same identifier
+    // (the APNs collapse id is the notification id). With the filtering
+    // entitlement a recall removes it outright, and an edit of a notification
+    // that is no longer shown, or already newer, shows nothing.
+    let filtering = Self.canFilter()
+    UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+      let shown = delivered.filter { notification in
+        let data = notification.request.content.userInfo["body"] as? [String: Any]
+        return notification.request.identifier == message.id
+          && (data?["hatchOrigin"] as? String) == message.o
+      }
+      if message.e == "r" {
+        guard filtering else { return self.finish(content) }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(
+          withIdentifiers: shown.map { $0.request.identifier })
+        return self.finish(UNNotificationContent())
+      }
+      let newest = shown.compactMap { notification in
+        (notification.request.content.userInfo["body"] as? [String: Any])?["hatchRevision"] as? Int
+      }.max()
+      if filtering, shown.isEmpty || (newest ?? 0) >= (message.r ?? 0) {
+        return self.finish(UNNotificationContent())
+      }
+      self.finish(content)
+    }
   }
 
   override func serviceExtensionTimeWillExpire() {
-    if let deliver, let fallback { deliver(fallback) }
+    lock.lock()
+    let fallback = fallback
+    lock.unlock()
+    if let fallback { finish(fallback) }
+  }
+
+  /// Hands content to the system once; later calls do nothing.
+  private func finish(_ content: UNNotificationContent) {
+    lock.lock()
+    let handler = deliver
     deliver = nil
+    lock.unlock()
+    handler?(content)
+  }
+
+  /// Whether this build carries the notification filtering entitlement.
+  static func canFilter() -> Bool {
+    Bundle.main.object(forInfoDictionaryKey: "HatchNotificationFiltering") as? Bool == true
   }
 
   static func unverified(_ original: UNNotificationContent) -> UNNotificationContent {
@@ -95,9 +154,9 @@ final class NotificationService: UNNotificationServiceExtension {
   }
 
   /// Returns nil unless the payload authenticates with this phone's key.
-  static func decrypt(
+  static func open(
     _ original: UNNotificationContent, key lookup: (String) -> SymmetricKey?
-  ) -> UNNotificationContent? {
+  ) -> (HatchPushPlaintext, UNNotificationContent)? {
     guard let envelope = original.userInfo["h"] as? [String: Any],
           (envelope["v"] as? Int) == 1,
           let kid = envelope["kid"] as? String,
@@ -118,9 +177,13 @@ final class NotificationService: UNNotificationServiceExtension {
     content.subtitle = "\\(message.s) · \\(message.k)"
     content.body = message.b ?? ""
     content.sound = original.sound
+    content.interruptionLevel = original.interruptionLevel
     content.threadIdentifier = "\\(message.o)|\\(message.g)"
     // expo-notifications exposes a remote push's \`body\` dictionary as \`data\`.
     var data: [String: Any] = ["hatchNotificationId": message.id, "hatchOrigin": message.o]
+    if let revision = message.r { data["hatchRevision"] = revision }
+    if message.e == "u" { data["hatchEvent"] = "updated" }
+    if message.e == "r" { data["hatchEvent"] = "recalled" }
     if let url = message.u {
       data["hatchUrl"] = url
       // A push that skips this extension can write the same fields, so the
@@ -132,12 +195,12 @@ final class NotificationService: UNNotificationServiceExtension {
       }
     }
     content.userInfo = ["body": data]
-    return content
+    return (message, content)
   }
 }
 `;
 
-function extensionInfoPlist(version, buildNumber) {
+function extensionInfoPlist(version, buildNumber, filtering) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -162,6 +225,8 @@ function extensionInfoPlist(version, buildNumber) {
   <string>${buildNumber}</string>
   <key>HatchSharedKeychainGroup</key>
   <string>${SHARED_GROUP}</string>
+  <key>HatchNotificationFiltering</key>
+  <${filtering ? 'true' : 'false'}/>
   <key>NSExtension</key>
   <dict>
     <key>NSExtensionPointIdentifier</key>
@@ -174,7 +239,7 @@ function extensionInfoPlist(version, buildNumber) {
 `;
 }
 
-function extensionEntitlements(apnsEnvironment) {
+function extensionEntitlements(apnsEnvironment, filtering) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -184,7 +249,13 @@ function extensionEntitlements(apnsEnvironment) {
   <key>keychain-access-groups</key>
   <array>
     <string>${SHARED_GROUP}</string>
-  </array>
+  </array>${
+    filtering
+      ? `
+  <key>com.apple.developer.usernotifications.filtering</key>
+  <true/>`
+      : ''
+  }
 </dict>
 </plist>
 `;
@@ -221,6 +292,7 @@ function withExtensionFiles(config) {
         extensionInfoPlist(
           config.version ?? '1.0.0',
           config.ios?.buildNumber ?? '1',
+          config.extra?.notificationFiltering === true,
         ),
       );
       fs.writeFileSync(
@@ -229,6 +301,7 @@ function withExtensionFiles(config) {
           config.extra?.apnsEnvironment === 'production'
             ? 'production'
             : 'development',
+          config.extra?.notificationFiltering === true,
         ),
       );
       return config;

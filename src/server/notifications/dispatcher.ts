@@ -8,9 +8,13 @@
 import { and, eq, gt, notExists, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import { publishPlatformEvent } from '~server/platform-events';
-import type { NotificationRecord } from './contract';
+import type { NotificationEvent, NotificationRecord } from './contract';
 import { MAX_DELIVERY_RESULT } from './contract';
-import type { DeliveryAdapter, DeliveryOutcome } from './delivery';
+import type {
+  DeliveryAdapter,
+  DeliveryOutcome,
+  DestinationRow,
+} from './delivery';
 
 export const MAX_DELIVERY_ATTEMPTS = 6;
 /** Delay before attempt n+1 after attempt n failed (n = 1..5). */
@@ -128,81 +132,192 @@ function truncate(value: string, max: number): string {
   return value.length > max ? value.slice(0, max) : value;
 }
 
-/** Persist one attempt's outcome, guarded against a lease taken over since. */
+type ClaimedRow = {
+  notificationId: string;
+  destinationId: string | null;
+  deliveredRevision: number | null;
+};
+
+/**
+ * An attempt's result. `canceled` ends a delivery whose notification was
+ * recalled before the destination ever received it; `skipped` records the
+ * revision as delivered without contacting a destination that does not take
+ * edit and recall events.
+ */
+type AttemptResult =
+  | DeliveryOutcome
+  | { kind: 'canceled' }
+  | { kind: 'skipped' };
+
+type DeliveryPlan =
+  | { kind: 'send'; event: NotificationEvent }
+  | { kind: 'canceled' }
+  | { kind: 'skipped' };
+
+/** What this attempt must tell the destination about the notification. */
+export function planDelivery(
+  deliveredRevision: number | null,
+  notification: Pick<NotificationRecord, 'revision' | 'recalledAt'>,
+  destination: Pick<DestinationRow, 'type' | 'lifecycleEvents'>,
+): DeliveryPlan {
+  if (deliveredRevision === null) {
+    return notification.recalledAt
+      ? { kind: 'canceled' }
+      : { kind: 'send', event: 'created' };
+  }
+  if (deliveredRevision >= notification.revision) return { kind: 'skipped' };
+  if (destination.type !== 'device' && !destination.lifecycleEvents) {
+    return { kind: 'skipped' };
+  }
+  return {
+    kind: 'send',
+    event: notification.recalledAt ? 'recalled' : 'updated',
+  };
+}
+
+/**
+ * Persist one attempt's outcome, guarded against a lease taken over since.
+ *
+ * The notification row is share-locked first, so an edit or recall either
+ * commits before (and this attempt sees its newer revision) or waits until
+ * this delivery has left `in_progress` (and re-queues it itself). A delivery
+ * that sent an older revision than the current one starts a fresh attempt
+ * series for the newer state instead of finishing.
+ */
 export async function recordOutcome(
   claimed: ClaimedDelivery,
-  outcome: DeliveryOutcome,
-  destinationId: string | null,
+  outcome: AttemptResult,
+  delivery: ClaimedRow,
+  sentRevision: number | null,
 ): Promise<void> {
   const now = new Date();
-  const guard = and(
-    eq(schema.notificationDeliveries.id, claimed.id),
-    eq(schema.notificationDeliveries.status, 'in_progress'),
-    eq(schema.notificationDeliveries.attempts, claimed.attempts),
-  );
-  const delay =
-    outcome.kind === 'retry' ? retryDelayMs(claimed.attempts) : null;
-  const error =
-    outcome.kind === 'success'
-      ? null
-      : truncate(outcome.error, MAX_ERROR_LENGTH);
-  const updated = await db
-    .update(schema.notificationDeliveries)
-    .set(
-      outcome.kind === 'success'
-        ? {
+  const updated = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        revision: schema.notifications.revision,
+        recalledAt: schema.notifications.recalledAt,
+      })
+      .from(schema.notifications)
+      .where(eq(schema.notifications.id, delivery.notificationId))
+      .for('share');
+    const deliveredRevision =
+      outcome.kind === 'success' || outcome.kind === 'skipped'
+        ? sentRevision
+        : delivery.deliveredRevision;
+    const behind =
+      current !== undefined &&
+      sentRevision !== null &&
+      current.revision > sentRevision;
+    const delay =
+      outcome.kind === 'retry' ? retryDelayMs(claimed.attempts) : null;
+    const error =
+      outcome.kind === 'retry' || outcome.kind === 'fail'
+        ? truncate(outcome.error, MAX_ERROR_LENGTH)
+        : null;
+    const httpStatus =
+      outcome.kind === 'canceled' || outcome.kind === 'skipped'
+        ? null
+        : (outcome.httpStatus ?? null);
+    const fresh = {
+      status: 'pending' as const,
+      attempts: 0,
+      nextAttemptAt: now,
+      leaseExpiresAt: null,
+      completedAt: null,
+    };
+
+    let values: Partial<typeof schema.notificationDeliveries.$inferInsert>;
+    if (outcome.kind === 'canceled') {
+      values = {
+        status: 'canceled',
+        leaseExpiresAt: null,
+        completedAt: now,
+        lastError: null,
+        httpStatus: null,
+      };
+    } else if (outcome.kind === 'success' || outcome.kind === 'skipped') {
+      const result =
+        outcome.kind === 'success' &&
+        outcome.result !== undefined &&
+        outcome.result !== null
+          ? truncate(outcome.result, MAX_DELIVERY_RESULT)
+          : null;
+      values = behind
+        ? { ...fresh, deliveredRevision, lastError: null, httpStatus }
+        : {
             status: 'succeeded',
             leaseExpiresAt: null,
             completedAt: now,
+            deliveredRevision,
             lastError: null,
-            httpStatus: outcome.httpStatus ?? null,
-            result:
-              outcome.result === undefined || outcome.result === null
-                ? null
-                : truncate(outcome.result, MAX_DELIVERY_RESULT),
-          }
-        : delay !== null
-          ? {
-              status: 'pending',
-              leaseExpiresAt: null,
-              nextAttemptAt: new Date(now.getTime() + delay),
-              lastError: error,
-              httpStatus: outcome.httpStatus ?? null,
-            }
-          : {
-              status: 'failed',
-              leaseExpiresAt: null,
-              completedAt: now,
-              lastError: error,
-              httpStatus: outcome.httpStatus ?? null,
-            },
-    )
-    .where(guard)
-    .returning({
-      notificationId: schema.notificationDeliveries.notificationId,
-    });
+            httpStatus,
+            ...(outcome.kind === 'success' ? { result } : {}),
+          };
+    } else if (delay !== null) {
+      values = {
+        status: 'pending',
+        leaseExpiresAt: null,
+        nextAttemptAt: new Date(now.getTime() + delay),
+        lastError: error,
+        httpStatus,
+      };
+    } else if (behind && deliveredRevision === null && current?.recalledAt) {
+      // The original never arrived and is recalled now: never send it.
+      values = {
+        status: 'canceled',
+        leaseExpiresAt: null,
+        completedAt: now,
+        lastError: error,
+        httpStatus,
+      };
+    } else if (behind && deliveredRevision !== null) {
+      values = { ...fresh, lastError: error, httpStatus };
+    } else {
+      values = {
+        status: 'failed',
+        leaseExpiresAt: null,
+        completedAt: now,
+        lastError: error,
+        httpStatus,
+      };
+    }
 
-  if (destinationId && outcome.destination?.remove) {
+    return tx
+      .update(schema.notificationDeliveries)
+      .set(values)
+      .where(
+        and(
+          eq(schema.notificationDeliveries.id, claimed.id),
+          eq(schema.notificationDeliveries.status, 'in_progress'),
+          eq(schema.notificationDeliveries.attempts, claimed.attempts),
+        ),
+      )
+      .returning({ status: schema.notificationDeliveries.status });
+  });
+
+  const { destinationId } = delivery;
+  const effect =
+    outcome.kind === 'canceled' || outcome.kind === 'skipped'
+      ? undefined
+      : outcome.destination;
+  if (destinationId && effect?.remove) {
     await pruneEndedDeviceDestinations(destinationId);
-  } else if (destinationId && outcome.destination) {
+  } else if (destinationId && effect) {
     await db
       .update(schema.notificationDestinations)
       .set({
-        ...(outcome.destination.disable
+        ...(effect.disable
           ? { enabled: false, disabledReason: 'unregistered' as const }
           : {}),
-        ...(outcome.destination.lastError !== undefined
-          ? { lastError: outcome.destination.lastError }
+        ...(effect.lastError !== undefined
+          ? { lastError: effect.lastError }
           : {}),
       })
       .where(
         and(
           eq(schema.notificationDestinations.id, destinationId),
-          outcome.destination.ifApnsToken
-            ? eq(
-                schema.notificationDestinations.apnsToken,
-                outcome.destination.ifApnsToken,
-              )
+          effect.ifApnsToken
+            ? eq(schema.notificationDestinations.apnsToken, effect.ifApnsToken)
             : undefined,
         ),
       );
@@ -212,9 +327,13 @@ export async function recordOutcome(
   if (row) {
     publishPlatformEvent({
       type: 'notification.delivery.updated',
-      notificationId: row.notificationId,
+      notificationId: delivery.notificationId,
       deliveryId: claimed.id,
     });
+    // A newer revision is due right away on this same delivery.
+    if (row.status === 'pending' && outcome.kind !== 'retry') {
+      wakeNotificationDispatcher();
+    }
   }
 }
 
@@ -231,12 +350,14 @@ export async function runClaimedDelivery(
     await recordOutcome(
       claimed,
       { kind: 'fail', error: 'Delivery exceeded its attempt budget.' },
+      { ...delivery, destinationId: null },
       null,
     );
     return;
   }
 
-  let outcome: DeliveryOutcome;
+  let outcome: AttemptResult;
+  let sentRevision: number | null = null;
   try {
     const [notification, destination] = await Promise.all([
       db.query.notifications.findFirst({
@@ -249,8 +370,14 @@ export async function runClaimedDelivery(
         : Promise.resolve(undefined),
     ]);
     if (!notification) return;
+    sentRevision = notification.revision;
+    const plan = destination
+      ? planDelivery(delivery.deliveredRevision, notification, destination)
+      : null;
     if (!destination) {
       outcome = { kind: 'fail', error: 'Destination was removed.' };
+    } else if (plan && plan.kind !== 'send') {
+      outcome = plan;
     } else if (!destination.enabled) {
       outcome = { kind: 'fail', error: 'Destination is disabled.' };
     } else {
@@ -265,6 +392,7 @@ export async function runClaimedDelivery(
       outcome = await adapters[destination.type]({
         deliveryId: delivery.id,
         attempt: claimed.attempts,
+        event: plan?.kind === 'send' ? plan.event : 'created',
         notification: notification as NotificationRecord,
         destination,
         sourceSlug,
@@ -276,7 +404,7 @@ export async function runClaimedDelivery(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-  await recordOutcome(claimed, outcome, delivery.destinationId);
+  await recordOutcome(claimed, outcome, delivery, sentRevision);
 }
 
 async function tick(current: DispatcherState): Promise<void> {

@@ -184,6 +184,52 @@ export class PushRegistrar {
   }
 }
 
+/** How a push arriving while the app is open is presented. */
+export type ForegroundPresentation = {
+  shouldShowBanner: boolean;
+  shouldShowList: boolean;
+  shouldPlaySound: boolean;
+  shouldSetBadge: false;
+};
+
+/** Which change of an earlier notification a Hatch push carries, if any. */
+export function pushChange(data: unknown): 'updated' | 'recalled' | null {
+  if (!data || typeof data !== 'object') return null;
+  const event = (data as Record<string, unknown>).hatchEvent;
+  return event === 'updated' || event === 'recalled' ? event : null;
+}
+
+/**
+ * New notifications show a banner. An edit only replaces the notification in
+ * Notification Center, silently; a recall shows nothing (the caller also
+ * removes the recalled notification).
+ */
+export function foregroundPresentation(data: unknown): ForegroundPresentation {
+  const change = pushChange(data);
+  if (change === 'recalled') {
+    return {
+      shouldShowBanner: false,
+      shouldShowList: false,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    };
+  }
+  if (change === 'updated') {
+    return {
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    };
+  }
+  return {
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  };
+}
+
 /** What tapping a Hatch push opens. */
 export type PushTap = {
   origin: string;

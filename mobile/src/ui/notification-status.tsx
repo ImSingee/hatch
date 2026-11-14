@@ -22,11 +22,25 @@ export function NotificationStatusTag({ status }: { status: string }) {
   return <Tag tone={tone} label={label} />;
 }
 
+/** Shown beside the status when the source changed the notification. */
+export function NotificationChangeTag({
+  editedAt,
+  recalledAt,
+}: {
+  editedAt: string | null;
+  recalledAt: string | null;
+}) {
+  if (recalledAt) return <Tag tone="quiet" label="Recalled" />;
+  if (editedAt) return <Tag tone="quiet" label="Edited" />;
+  return null;
+}
+
 const deliveryLabels: Record<string, string> = {
   pending: 'Waiting',
   in_progress: 'Sending',
   succeeded: 'Delivered',
   failed: 'Failed',
+  canceled: 'Not sent',
 };
 
 export function DeliveryStatusTag({ status }: { status: string }) {

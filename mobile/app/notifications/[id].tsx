@@ -8,6 +8,7 @@ import { Button } from '../../src/ui/button';
 import { Busy, Card, Notice, errorText } from '../../src/ui/primitives';
 import {
   DeliveryStatusTag,
+  NotificationChangeTag,
   NotificationStatusTag,
   notificationTime,
 } from '../../src/ui/notification-status';
@@ -59,8 +60,24 @@ export default function NotificationScreen() {
       <View style={{ paddingHorizontal: 16, gap: 14 }}>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <NotificationStatusTag status={data.status} />
+          <NotificationChangeTag
+            editedAt={data.editedAt}
+            recalledAt={data.recalledAt}
+          />
           <Text style={type.meta}>{notificationTime(data.occurredAt)}</Text>
         </View>
+        {data.recalledAt ? (
+          <Text style={type.small}>
+            The sender recalled this notification on{' '}
+            {notificationTime(data.recalledAt)}. It was removed from phones and
+            is kept here for history.
+          </Text>
+        ) : data.editedAt ? (
+          <Text style={type.small}>
+            The sender edited this notification on{' '}
+            {notificationTime(data.editedAt)}.
+          </Text>
+        ) : null}
         {data.body ? (
           <Card>
             <Text selectable style={type.body}>

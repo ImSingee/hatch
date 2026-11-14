@@ -1,11 +1,13 @@
 import { Badge, Loader } from '@mantine/core';
 import {
   IconAppWindow,
+  IconArrowBackUp,
   IconBroadcast,
   IconCheck,
   IconClock,
   IconDeviceMobile,
   IconMinus,
+  IconPencil,
   IconSparkles,
   IconWebhook,
   IconX,
@@ -13,7 +15,12 @@ import {
 import type { ReactNode } from 'react';
 import type { NotificationStatus } from '~server/notifications';
 
-type DeliveryStatus = 'pending' | 'in_progress' | 'succeeded' | 'failed';
+type DeliveryStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'succeeded'
+  | 'failed'
+  | 'canceled';
 
 const NOTIFICATION_META: Record<
   NotificationStatus,
@@ -92,6 +99,11 @@ const DELIVERY_META: Record<
     color: 'red',
     icon: <IconX size={11} stroke={2.5} />,
   },
+  canceled: {
+    label: 'Not sent',
+    color: 'gray',
+    icon: <IconMinus size={11} stroke={2.5} />,
+  },
 };
 
 export function DeliveryStatusBadge({ status }: { status: DeliveryStatus }) {
@@ -106,6 +118,49 @@ export function DeliveryStatusBadge({ status }: { status: DeliveryStatus }) {
       {meta.label}
     </Badge>
   );
+}
+
+/** Edited and recalled notifications, next to the delivery status. */
+export function NotificationRevisionBadge({
+  editedAt,
+  recalledAt,
+}: {
+  editedAt: string | null;
+  recalledAt: string | null;
+}) {
+  if (recalledAt) {
+    return (
+      <Badge
+        color="gray"
+        variant="outline"
+        radius="sm"
+        leftSection={
+          <span style={{ display: 'inline-flex' }}>
+            <IconArrowBackUp size={11} stroke={2.5} />
+          </span>
+        }
+      >
+        Recalled
+      </Badge>
+    );
+  }
+  if (editedAt) {
+    return (
+      <Badge
+        color="gray"
+        variant="outline"
+        radius="sm"
+        leftSection={
+          <span style={{ display: 'inline-flex' }}>
+            <IconPencil size={11} stroke={2.5} />
+          </span>
+        }
+      >
+        Edited
+      </Badge>
+    );
+  }
+  return null;
 }
 
 type DestinationType = 'device' | 'webhook' | 'app';

@@ -1,8 +1,15 @@
+import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Alert, Linking } from 'react-native';
-import { pushTap, verifiedTapUrl, type PushTap } from '../core/push';
+import { Alert, AppState, Linking } from 'react-native';
+import {
+  foregroundPresentation,
+  pushChange,
+  pushTap,
+  verifiedTapUrl,
+  type PushTap,
+} from '../core/push';
 import {
   nativePushPlatform,
   pushRegistrar,
@@ -10,15 +17,34 @@ import {
 } from './push-registrar';
 import { allowDevelopmentLoopback, useSession, vault } from './session';
 
-// Show Hatch notifications as banners while the app is open too.
+// Show new Hatch notifications as banners while the app is open too. A recall
+// arriving now removes the notification it recalls (same identifier).
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const { data } = notification.request.content;
+    if (pushChange(data) === 'recalled') {
+      await Notifications.dismissNotificationAsync(
+        notification.request.identifier,
+      ).catch(() => {});
+    }
+    return foregroundPresentation(data);
+  },
 });
+
+/**
+ * Without the filtering entitlement a recall leaves a silent "recalled"
+ * placeholder in Notification Center; clear those once the app is open.
+ */
+async function clearRecalledPlaceholders() {
+  const presented = await Notifications.getPresentedNotificationsAsync();
+  await Promise.all(
+    presented
+      .filter((entry) => pushChange(entry.request.content.data) === 'recalled')
+      .map((entry) =>
+        Notifications.dismissNotificationAsync(entry.request.identifier),
+      ),
+  );
+}
 
 let pending: PushTap | null = null;
 
@@ -34,6 +60,7 @@ function openNotification(id: string) {
  */
 export function usePushLifecycle() {
   const { ready, origin, api, epoch, connect } = useSession();
+  const queryClient = useQueryClient();
   const current = useRef({ origin, connect });
   useEffect(() => {
     current.current = { origin, connect };
@@ -51,6 +78,33 @@ export function usePushLifecycle() {
     });
     return () => subscription.remove();
   }, [origin, api]);
+
+  useEffect(() => {
+    if (!pushSupported) return;
+    void clearRecalledPlaceholders().catch(() => {});
+    const state = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void clearRecalledPlaceholders().catch(() => {});
+    });
+    // New, edited and recalled notifications all change the history list.
+    const received = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        const target = pushTap(notification.request.content.data, {
+          allowDevelopmentLoopback,
+        });
+        if (!target) return;
+        void queryClient.invalidateQueries({
+          queryKey: [target.origin, 'notifications'],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: [target.origin, 'notification', target.notificationId],
+        });
+      },
+    );
+    return () => {
+      state.remove();
+      received.remove();
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     if (pending && origin && pending.origin === origin) {

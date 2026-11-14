@@ -124,6 +124,7 @@ export const listDestinationsFn = createServerFn({ method: 'GET' })
 const createWebhookSchema = z.object({
   name: shortText,
   url: z.string().max(2048),
+  lifecycleEvents: z.boolean().optional(),
 });
 
 export const createWebhookFn = createServerFn({ method: 'POST' })
@@ -138,6 +139,7 @@ const updateDestinationSchema = z.object({
   name: shortText.optional(),
   enabled: z.boolean().optional(),
   url: z.string().max(2048).optional(),
+  lifecycleEvents: z.boolean().optional(),
 });
 
 export const updateDestinationFn = createServerFn({ method: 'POST' })
