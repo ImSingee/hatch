@@ -48,12 +48,16 @@ Both endpoints accept the same JSON body (≤64 KiB):
 }
 ```
 
-`url` is an absolute http(s) URL or a Hatch deep link: the page's path on the
-instance after `hatch://`, such as `hatch://app/<slug>#/orders/42` or
+`url` is any absolute URL a device can open: a web page, another app by its
+own scheme (`mailto:`, `tel:`, `slack://…`), since leaving for another app is
+intended, or a Hatch deep link: the page's path on the instance after
+`hatch://`, such as `hatch://app/<slug>#/orders/42` or
 `hatch://agent/<id>`, optionally `?instance=<origin>` for a page on another
 instance. Phones open deep links natively; the web opens them on the instance.
 Deep links to `/api`, `/cli` or `/login`, with dot segments, or with an
-instance that is not a bare HTTPS origin are rejected with `400`. Destinations
+instance that is not a bare HTTPS origin are rejected with `400`, and so are
+relative URLs and schemes that only run inside the current document
+(`javascript:`, `data:`, `blob:`, `file:`, `about:`). Destinations
 receive `url` as written.
 
 `autoOpenUrl` makes tapping the notification on a phone open `url` instead of

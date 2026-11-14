@@ -206,13 +206,20 @@ describe('deep links', () => {
       `${origin}/settings/providers`,
       'https://status.example.com/db-1',
       'mailto:ops@example.com',
+      'slack://channel?team=T1&id=C1',
     ])
       expect(notificationUrlAction(url, origin)).toEqual({
         open: 'outside',
         url,
       });
-    // A deep link never leaves for the system, not even unreadable ones.
-    for (const url of ['hatch://more/unknown', 'hatch://api/rpc'])
+    // A deep link never leaves for the system, not even unreadable ones, and
+    // a scheme that runs inside a document opens nothing.
+    for (const url of [
+      'hatch://more/unknown',
+      'hatch://api/rpc',
+      'javascript:alert(1)',
+      'data:text/html,x',
+    ])
       expect(notificationUrlAction(url, origin)).toEqual({ open: 'none' });
   });
 

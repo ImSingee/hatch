@@ -578,11 +578,34 @@ describe('ingress authentication', () => {
         .map((request) => JSON.parse(request.body))
         .find((body) => body.notification.id === deepId),
     ).toMatchObject({ notification: { url: link, autoOpenUrl: true } });
+    // Any scheme another app opens is a URL too, so a tap can leave for it.
+    for (const other of [
+      'mailto:ops@example.com',
+      'tel:+15550100',
+      'slack://channel?team=T1&id=C1',
+      'ftp://files.example.com/report.csv',
+    ]) {
+      const response = await send({ url: other });
+      expect(response.status).toBe(202);
+      const otherId = ((await response.json()) as { id: string }).id;
+      expect(await service.getNotification(otherId)).toMatchObject({
+        url: other,
+        autoOpenUrl: true,
+      });
+    }
     for (const unsafe of [
       'hatch://api/rpc',
       'hatch://app/%2e%2e/api',
       'hatch://app/x?instance=http://evil.example',
       'javascript:alert(1)',
+      ' JavaScript:alert(1)',
+      'java\tscript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'blob:https://hatch.example.test/1',
+      'file:///etc/passwd',
+      'about:blank',
+      '/relative/path',
+      'not a url',
     ])
       expect((await send({ url: unsafe })).status).toBe(400);
   });
@@ -649,7 +672,10 @@ describe('user channel sends', () => {
       service.sendChannelNotification(channel.id, red({ kind: 'deploy.done' })),
     ).rejects.toMatchObject({ status: 400 });
     await expect(
-      service.sendChannelNotification(channel.id, red({ url: 'ftp://x' })),
+      service.sendChannelNotification(
+        channel.id,
+        red({ url: 'javascript:alert(1)' }),
+      ),
     ).rejects.toMatchObject({ status: 400 });
     await expect(
       service.sendChannelNotification(channel.id, red({ autoOpenUrl: true })),

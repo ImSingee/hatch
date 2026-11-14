@@ -74,7 +74,10 @@ phone is signed in to, after asking unless it is a decrypted push. Pages
 without a screen open in the browser; a web surface leaves those in place.
 Notification URLs (the detail's link and a verified auto-open on tap) go
 through `notificationUrlAction`: Hatch pages by address or deep link open in
-the app, and a `hatch:` link never leaves for the system.
+the app, and a `hatch:` link never leaves for the system. Any other scheme is
+allowed to leave: web pages open in the browser and other schemes (`mailto:`,
+`someapp://…`) in the app that owns them; document schemes (`javascript:`,
+`data:`, …) open nothing.
 
 An App screen's back steps through WebKit's own `canGoBack` before leaving.
 While the page has history the screen turns off its native swipe
