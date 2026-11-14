@@ -174,7 +174,9 @@ message SendNotificationRequest {
   // push rules so both paths accept the same titles.
   string title = 3 [(buf.validate.field).string.min_len = 1];
   optional string body = 4 [(buf.validate.field).string.max_len = 4000];
-  // Absolute http(s) URL.
+  // Absolute URL a device can open: a web page, another app's scheme
+  // (mailto:, slack://...) or a hatch:// deep link. javascript:, data:, blob:,
+  // file: and about: are rejected.
   optional string url = 5 [(buf.validate.field).string.max_len = 2048];
   // JSON object, at most 32 KiB serialized.
   optional string data_json = 6 [(buf.validate.field).string.max_len = 65536];
