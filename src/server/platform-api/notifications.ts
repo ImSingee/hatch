@@ -28,9 +28,9 @@ import {
   retryDelivery,
   rotateChannelToken,
   rotateWebhookSecret,
-  recallChannelNotification,
+  recallSentNotification,
   sendNotification,
-  updateChannelNotification,
+  updateSentNotification,
   sendTestNotification,
   unregisterDevice,
   updateChannel,
@@ -124,6 +124,13 @@ function callerOf(context: HandlerContext) {
     throw publicApiError('SESSION_REQUIRED');
   }
   return status.user;
+}
+
+/** As the named Channel, or as the caller for their own direct sends. */
+function changeAs(input: { channelId: string }, context: HandlerContext) {
+  return input.channelId
+    ? { type: 'channel' as const, id: input.channelId }
+    : { type: 'user' as const, userId: callerOf(context).id };
 }
 
 function sessionOf(context: HandlerContext) {
@@ -238,8 +245,8 @@ export function registerNotificationApi(router: ConnectRouter) {
           deliveryCount: result.deliveries,
         };
       },
-      updateNotification: async (input) => {
-        const result = await updateChannelNotification(input.channelId, {
+      updateNotification: async (input, context) => {
+        const result = await updateSentNotification(changeAs(input, context), {
           id: input.id,
           title: input.title,
           body: input.body,
@@ -255,9 +262,9 @@ export function registerNotificationApi(router: ConnectRouter) {
         });
         return { revision: result.revision, changed: result.changed };
       },
-      recallNotification: async (input) => {
-        const result = await recallChannelNotification(
-          input.channelId,
+      recallNotification: async (input, context) => {
+        const result = await recallSentNotification(
+          changeAs(input, context),
           input.id,
         );
         return { revision: result.revision, changed: result.changed };

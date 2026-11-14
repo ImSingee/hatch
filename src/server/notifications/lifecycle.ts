@@ -1,5 +1,6 @@
 /**
- * Edits and recalls of a notification by the App or Channel that sent it.
+ * Edits and recalls of a notification by the App, Channel or user that sent
+ * it.
  *
  * Each one increments the notification's revision. Deliveries record the
  * revision they last delivered, so the dispatcher sends every destination
@@ -16,7 +17,8 @@ import { wakeNotificationDispatcher } from './dispatcher';
 
 export type NotificationSender =
   | { type: 'app'; appId: string }
-  | { type: 'channel'; channelId: string };
+  | { type: 'channel'; channelId: string }
+  | { type: 'user'; userId: string };
 
 /** `changed` is false when nothing new happened and nothing is sent. */
 export type LifecycleResult = {
@@ -92,10 +94,15 @@ async function lockOwnNotification(
               eq(notifications.sourceType, 'app'),
               eq(notifications.appId, sender.appId),
             )
-          : and(
-              eq(notifications.sourceType, 'channel'),
-              eq(notifications.channelId, sender.channelId),
-            ),
+          : sender.type === 'user'
+            ? and(
+                eq(notifications.sourceType, 'user'),
+                eq(notifications.userId, sender.userId),
+              )
+            : and(
+                eq(notifications.sourceType, 'channel'),
+                eq(notifications.channelId, sender.channelId),
+              ),
       ),
     )
     .for('update');

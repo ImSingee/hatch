@@ -109,7 +109,8 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
 ### Edits and recalls
 
 The source of a notification can edit or recall it, under the same
-authentication as pushing:
+authentication as pushing (for a `user` notification, only the user who sent
+it):
 
 - App: `POST /api/app/<id>/notifications/update` and `…/recall` (SDK
   `updateNotification(id, patch)` and `recallNotification(id)`).
@@ -139,11 +140,14 @@ of a recalled notification. Repeating a recall, or an edit that changes
 nothing, leaves the revision as it is, answers `changed: false` and sends
 nothing.
 
-Users act as a Channel through `NotificationService.UpdateNotification` and
-`RecallNotification` (CLI `hatch notification update|recall <channel-id>
-<id>`), the counterparts of `SendNotification`. They take the Channel id and
-change only that Channel's notifications, with the same rules; in the RPC an
-empty `body`, `url` or `data_json` clears the field.
+Users edit and recall through `NotificationService.UpdateNotification` and
+`RecallNotification` (CLI `hatch notification update|recall <id>
+[--channel <channel-id>]`), the counterparts of `SendNotification`, with the
+same rules. With `channel_id` they act as that Channel and change only its
+notifications (a disabled Channel is a conflict). Without it they act as
+themselves and change only `user` notifications they sent to a group or
+destination; another user's direct send is not found. In the RPC an empty
+`body`, `url` or `data_json` clears the field.
 
 Every edit and the recall increment `notifications.revision`, which starts at
 

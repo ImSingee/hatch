@@ -445,8 +445,9 @@ const specs: Record<string, Spec> = {
     },
   },
   update: {
-    positionals: ['channel-id', 'notification-id'],
+    positionals: ['notification-id'],
     options: {
+      channel: { type: 'string' },
       title: { type: 'string' },
       body: { type: 'string' },
       'clear-body': { type: 'boolean' },
@@ -457,7 +458,9 @@ const specs: Record<string, Spec> = {
       data: { type: 'string' },
       'clear-data': { type: 'boolean' },
     },
-    build: ([channelId, id], values) => {
+    build: ([id], values) => {
+      // Without --channel: a notification you sent to a group or destination.
+      const channelId = oneOf(values, ['channel'])?.id;
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
       const title = str(values, 'title');
       if (title !== undefined && !title.trim())
@@ -476,9 +479,8 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
       };
-      if (
-        Object.values(request).filter((value) => value !== undefined).length < 3
-      )
+      const { channelId: _, id: __, ...changes } = request;
+      if (Object.values(changes).every((value) => value === undefined))
         invalid(
           'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
         );
@@ -493,10 +495,12 @@ const specs: Record<string, Spec> = {
     },
   },
   recall: {
-    positionals: ['channel-id', 'notification-id'],
-    build: ([channelId, id]) => ({
+    positionals: ['notification-id'],
+    options: { channel: { type: 'string' } },
+    build: ([id], values) => ({
       method: 'recallNotification',
-      request: { channelId, id },
+      // Without --channel: a notification you sent to a group or destination.
+      request: { channelId: oneOf(values, ['channel'])?.id, id },
       text: (response) =>
         response.changed === true
           ? `Recalled notification ${id} (revision ${field(response, 'revision')}). Phones remove it, destinations that have not received it never will, and those that take recalls are told.`

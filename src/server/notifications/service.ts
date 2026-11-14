@@ -1422,12 +1422,27 @@ async function asAppError<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Edit a notification as the Channel that sent it (SendNotification's peer). */
-export async function updateChannelNotification(
-  channelId: string,
+/**
+ * Who edits or recalls a notification on behalf of a signed-in user: a
+ * Channel, for that Channel's notifications, or the user, for the ones they
+ * sent straight to a group or destination.
+ */
+export type ChangeNotificationAs =
+  | { type: 'channel'; id: string }
+  | { type: 'user'; userId: string };
+
+function changeSender(as: ChangeNotificationAs) {
+  return as.type === 'channel'
+    ? senderChannel(as.id)
+    : Promise.resolve({ type: 'user' as const, userId: as.userId });
+}
+
+/** Edit a notification as its sender (SendNotification's peer). */
+export async function updateSentNotification(
+  as: ChangeNotificationAs,
   body: unknown,
 ): Promise<LifecycleResult> {
-  const sender = await senderChannel(channelId);
+  const sender = await changeSender(as);
   const update = notificationUpdateSchema.safeParse(body);
   if (!update.success) {
     throw new AppError(
@@ -1438,12 +1453,12 @@ export async function updateChannelNotification(
   return asAppError(() => updateNotification(sender, update.data));
 }
 
-/** Recall a notification as the Channel that sent it. */
-export async function recallChannelNotification(
-  channelId: string,
+/** Recall a notification as its sender. */
+export async function recallSentNotification(
+  as: ChangeNotificationAs,
   id: string,
 ): Promise<LifecycleResult> {
-  const sender = await senderChannel(channelId);
+  const sender = await changeSender(as);
   return asAppError(() => recallNotification(sender, id));
 }
 
