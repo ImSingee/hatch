@@ -321,6 +321,9 @@ message ListNotificationSourcesRequest {}
 message ListNotificationSourcesResponse {
   repeated NotificationAppSource apps = 1;
   repeated NotificationChannelSource channels = 2;
+  // Kinds of retained notifications people sent straight to a group or
+  // destination; free labels, so they come from history.
+  repeated NotificationKind user_kinds = 3;
 }
 
 message GetApnsStatusRequest {}

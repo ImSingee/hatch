@@ -532,6 +532,17 @@ const specs: Record<string, Spec> = {
             field(row, 'name'),
             kindText(row),
           ]),
+          // Direct sends have no source id; their kinds come from history.
+          ...(rows(response.userKinds).length > 0
+            ? [
+                [
+                  'user',
+                  '-',
+                  'Sent by people',
+                  kindText({ kinds: response.userKinds }),
+                ],
+              ]
+            : []),
         ]);
       },
     }),

@@ -778,6 +778,11 @@ describe('user sends', () => {
       kind: 'deploy.done',
       kindName: 'deploy.done',
     });
+    // Free-label kinds are only known from history; the filter lists them.
+    expect((await service.listNotificationSources()).userKinds).toEqual([
+      { kind: 'deploy.done', name: 'deploy.done' },
+      { kind: 'message', name: 'Message' },
+    ]);
     expect(await runAllDue()).toBe(2);
     expect(
       received.map((request) => JSON.parse(request.body).notification.source),

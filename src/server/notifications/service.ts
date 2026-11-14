@@ -231,6 +231,11 @@ export type NotificationSourcesView = {
     name: string;
     kinds: NotificationKindDeclaration[];
   }[];
+  /**
+   * Kinds of retained notifications people sent straight to a group or
+   * destination. They are free labels, so only stored history knows them.
+   */
+  userKinds: NotificationKindDeclaration[];
 };
 
 export type ApnsStatusView = ReturnType<typeof describeApnsCredentials>;
@@ -492,6 +497,12 @@ export async function listNotificationSources(): Promise<NotificationSourcesView
   const channels = await db.query.notificationChannels.findMany({
     orderBy: { name: 'asc' },
   });
+  const n = schema.notifications;
+  const userKinds = await db
+    .selectDistinct({ kind: n.kind, name: n.kindName })
+    .from(n)
+    .where(eq(n.sourceType, 'user'))
+    .orderBy(n.kind, n.kindName);
   return {
     apps: candidates.flatMap((app) => {
       const kinds =
@@ -506,6 +517,7 @@ export async function listNotificationSources(): Promise<NotificationSourcesView
       name: channel.name,
       kinds: channel.kinds,
     })),
+    userKinds,
   };
 }
 

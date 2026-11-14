@@ -270,6 +270,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             ...entry,
             kinds: kinds(entry.kinds),
           })),
+          userKinds: kinds(sources.userKinds),
         };
       },
       getApnsStatus: () => {

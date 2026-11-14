@@ -93,12 +93,23 @@ export function NotificationHistory() {
   const kindOptions = useMemo(() => {
     const selected = parseSource(source);
     const all = [
-      ...(sources?.apps ?? []).map((app) => ({ id: app.id, kinds: app.kinds })),
+      ...(sources?.apps ?? []).map((app) => ({
+        type: 'app',
+        id: app.id,
+        kinds: app.kinds,
+      })),
       ...(sources?.channels ?? []).map((channel) => ({
+        type: 'channel',
         id: channel.id,
         kinds: channel.kinds,
       })),
-    ].filter((entry) => !selected.sourceId || entry.id === selected.sourceId);
+      { type: 'user', id: null, kinds: sources?.userKinds ?? [] },
+    ].filter(
+      (entry) =>
+        !selected.sourceType ||
+        (entry.type === selected.sourceType &&
+          (!selected.sourceId || entry.id === selected.sourceId)),
+    );
     const seen = new Map<string, string>();
     for (const entry of all) {
       for (const k of entry.kinds) {
