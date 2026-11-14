@@ -113,7 +113,8 @@ function script(label: string, renew: boolean, finishWithoutCli = false) {
         renew
           ? `cli(['workflow','create','--file','-','--directory','./disposable-workflow'], JSON.stringify({slug:${JSON.stringify(`runner-cli-${randomUUID()}`)},name:'Runner CLI acceptance'}));
       await new Promise(r=>setTimeout(r,7000));
-      cli(['auth','status']); cli(['app','list']); cli(['workflow','list']);`
+      cli(['auth','status']); cli(['app','list']); cli(['workflow','list']);
+      cli(['notification','group','list']);`
           : ''
       }
       await capture('ready');
@@ -560,7 +561,7 @@ describe.runIf(Boolean(databaseUrl))(
         ),
       ).toBe(true);
       observations.push(
-        'Installed CLI auth status, App/Workflow reads, Workflow creation and a later command succeeded; ended tokens and command channels were rejected.',
+        'Installed CLI auth status, App/Workflow/notification reads, Workflow creation and a later command succeeded; ended tokens and command channels were rejected.',
       );
 
       const resumed = await start('reconnected');

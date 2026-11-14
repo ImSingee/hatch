@@ -112,6 +112,14 @@ Before declaring any Agent task complete, re-run `pnpm check:types` and `pnpm fo
   Commit generated descriptors and the locked Buf dependencies.
 - Keep native Better Auth login/device/logout HTTP endpoints. Do not add REST
   aliases, oRPC contracts or an OpenAPI endpoint for public business RPCs.
+- Every valid credential (Better Auth session, user API key or Agent Run JWT)
+  has the same authority on public RPCs. The platform Agent calls them through
+  the CLI with its Run credential, so do not add request gates or checks that
+  reject a credential type. Only an operation bound to the caller's native
+  login session may require one (device registration, browser handoff); name
+  each such binding in the plan and the PR. When an operation needs an actor
+  and the caller is a Run, attribute it to the platform Agent instead of
+  rejecting it.
 
 ## CLI Coverage for Platform Capabilities
 
@@ -127,8 +135,12 @@ weaker than the Web UI.
 - The only exceptions are capabilities bound to a device or browser, such as
   push device registration, passkeys or OAuth consent. Name each exception and
   its reason in the plan, the PR and `docs/cli-tool-parity.md`.
-- Deciding whether to also expose an Agent Tool, and whether Run credentials
-  may call the command, is separate. Record it in `docs/cli-tool-parity.md`.
+- Every command must work inside an Agent Run with the injected Run
+  credential, exactly as with a user login (see Public Platform API).
+- Agent Tools for platform capabilities are frozen: the CLI is the Agent's
+  interface. Keep existing Tools working, but do not add Tools or MCP tools
+  for new capabilities, and do not extend existing Tools with new ones. Record
+  CLI coverage in `docs/cli-tool-parity.md`.
 
 Design commands for an agent that cannot see the screen or answer prompts:
 
