@@ -298,6 +298,11 @@ describe('notification send', () => {
         'd1',
       ),
     ).toThrow(/only one of --group, --destination/);
+    // An empty id from an unset shell variable must not fall back to routes.
+    for (const flag of ['--group', '--destination'])
+      expect(() =>
+        parse('send', 'channel-1', '--kind', 'a', '--title', 'Hi', flag, ''),
+      ).toThrow(/non-empty id/);
   });
 
   it('rejects incomplete or malformed input before calling the platform', () => {

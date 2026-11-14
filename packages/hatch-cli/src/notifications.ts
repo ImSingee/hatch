@@ -64,12 +64,18 @@ function list(values: Values, flag: string): string[] | undefined {
   return Array.isArray(value) ? value : undefined;
 }
 
+/**
+ * `--group` or `--destination`. A present but blank id is an error, never an
+ * omitted flag: `--destination "$UNSET"` must not fall back to routing.
+ */
 function target(values: Values) {
   exclusive(values, 'group', 'destination');
-  const group = str(values, 'group');
-  const destination = str(values, 'destination');
-  if (group) return { targetType: 'group', targetId: group };
-  if (destination) return { targetType: 'destination', targetId: destination };
+  for (const flag of ['group', 'destination'] as const) {
+    const id = str(values, flag);
+    if (id === undefined) continue;
+    if (!id.trim()) invalid(`--${flag} needs a non-empty id.`);
+    return { targetType: flag, targetId: id };
+  }
   return undefined;
 }
 
