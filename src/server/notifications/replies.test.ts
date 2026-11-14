@@ -24,8 +24,12 @@ const { callAppBackend } = await import('~server/apps/runtime');
 const { verifyHatchSignature } = await import('~server/secrets');
 const service = await import('./service');
 const { handleChannelPush } = await import('./channel-ingress');
-const { claimDueDeliveries, runClaimedDelivery, runClaimedResponseDelivery } =
-  await import('./dispatcher');
+const {
+  claimDueDeliveries,
+  planDelivery,
+  runClaimedDelivery,
+  runClaimedResponseDelivery,
+} = await import('./dispatcher');
 const { deliverToWebhook } = await import('./adapters/webhook');
 const { deliverToApp } = await import('./adapters/app');
 const { pushPlaintext } = await import('./adapters/device');
@@ -474,6 +478,47 @@ describe('direct notifications from a member', () => {
   });
 });
 
+describe('answers and edit events', () => {
+  it('never tell webhooks or Apps about an answer as an edit', () => {
+    const webhook = { type: 'webhook' as const, lifecycleEvents: true };
+    const answered = { revision: 2, recalledAt: null, responseRevision: 2 };
+    expect(planDelivery(1, answered, webhook)).toEqual({ kind: 'skipped' });
+    expect(
+      planDelivery(1, answered, { type: 'device', lifecycleEvents: false }),
+    ).toEqual({ kind: 'send', event: 'updated' });
+    // An edit after the answer is still a change to send.
+    expect(planDelivery(1, { ...answered, revision: 3 }, webhook)).toEqual({
+      kind: 'send',
+      event: 'updated',
+    });
+  });
+
+  it('lets a delivery re-queued by an answer finish without sending again', async () => {
+    await service.updateDestination({ id: webhookId, lifecycleEvents: true });
+    const id = await sendForm();
+    received.length = 0;
+    await respondToNotification(
+      id,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    // As if the webhook delivery was in flight and re-queued itself.
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ status: 'pending', nextAttemptAt: new Date() })
+      .where(eq(schema.notificationDeliveries.destinationId, webhookId));
+    await runAll();
+    expect(received).toHaveLength(0);
+    const delivery = (await service.getNotification(id)).deliveryList.find(
+      (entry) => entry.destinationId === webhookId,
+    );
+    expect(delivery).toMatchObject({
+      status: 'succeeded',
+      deliveredRevision: 2,
+    });
+  });
+});
+
 describe('answers signed by a phone', () => {
   it('records the answer as the device owner, for notifications the device received', async () => {
     const id = await sendForm();
@@ -539,6 +584,38 @@ describe('answers signed by a phone', () => {
     );
     expect(disabled.status).toBe(403);
     expect(await db.query.notificationResponses.findMany()).toHaveLength(0);
+  });
+
+  it('rejects answers once the device session has expired', async () => {
+    const id = await sendForm();
+    await db
+      .update(schema.session)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.session.id, 'session-1'));
+    const response = await handleDeviceResponse(
+      deviceRequest({ notificationId: id, answers: { decision: 'approve' } }),
+    );
+    expect(response.status).toBe(403);
+    expect(await db.query.notificationResponses.findMany()).toHaveLength(0);
+  });
+
+  it('stops reading a body over the limit, even without a length', async () => {
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        if (pulled > 64) controller.close();
+        else controller.enqueue(new Uint8Array(4096));
+      },
+    });
+    const response = await handleDeviceResponse(
+      new Request(
+        'https://hatch.example.test/api/notifications/device-response',
+        { method: 'POST', body, duplex: 'half' } as RequestInit,
+      ),
+    );
+    expect(response.status).toBe(413);
+    expect(pulled).toBeLessThan(64);
   });
 });
 

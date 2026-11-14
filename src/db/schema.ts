@@ -923,6 +923,11 @@ export const notifications = snakeCase.table(
     reply: jsonb().$type<ReplyForm>(),
     /** Set once when someone answers `reply` (one answer per notification). */
     respondedAt: timestamp('responded_at'),
+    /**
+     * The revision the answer created. Only phones are told about it, so
+     * webhooks and Apps do not count it as a change they missed.
+     */
+    responseRevision: integer(),
     createdAt,
   },
   (table) => [

@@ -14,6 +14,7 @@ import { modals } from '@mantine/modals';
 import { useState } from 'react';
 import {
   ReplyAnswerError,
+  answerOf,
   describeAnswers,
   validateAnswers,
   type ReplyAnswers,
@@ -170,7 +171,7 @@ function ReplyFormView({
         <FieldInput
           key={field.id}
           field={field}
-          value={answers[field.id]}
+          value={answerOf(answers, field.id)}
           error={error?.field === field.id ? error.message : undefined}
           disabled={respond.isPending}
           onChange={(value) => set(field.id, value)}

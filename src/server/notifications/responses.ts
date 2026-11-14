@@ -11,6 +11,7 @@ import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db, schema, type TX } from '~/db';
 import type { NotificationResponseVia } from '~/db/schema';
 import { AppError } from '~server/errors';
+import { readCappedText } from '~server/http-body';
 import { publishPlatformEvent } from '~server/platform-events';
 import {
   ReplyAnswerError,
@@ -202,6 +203,7 @@ export async function respondToNotification(
       .set({
         respondedAt: now,
         revision: sql`${schema.notifications.revision} + 1`,
+        responseRevision: sql`${schema.notifications.revision} + 1`,
       })
       .where(eq(schema.notifications.id, notificationId));
     // Phones replace the shown notification with the answered one. Webhooks
@@ -309,6 +311,16 @@ export async function respondFromDevice(args: {
   if (!device.enabled) {
     throw new DeviceResponseError('This device is turned off.', 403);
   }
+  // Expired sessions linger until the hourly prune; their keys answer nothing.
+  const session = device.sessionId
+    ? await db.query.session.findFirst({
+        where: { id: device.sessionId },
+        columns: { expiresAt: true },
+      })
+    : undefined;
+  if (!session || session.expiresAt.getTime() <= (args.now ?? Date.now())) {
+    throw new DeviceResponseError('This device is no longer signed in.', 403);
+  }
 
   let parsed: unknown;
   try {
@@ -350,12 +362,9 @@ export async function respondFromDevice(args: {
 export async function handleDeviceResponse(
   request: Request,
 ): Promise<Response> {
-  const length = Number(request.headers.get('content-length') ?? 0);
-  if (length > DEVICE_RESPONSE_MAX_BYTES) {
-    return new Response('Payload too large', { status: 413 });
-  }
-  const body = await request.text();
-  if (Buffer.byteLength(body) > DEVICE_RESPONSE_MAX_BYTES) {
+  // Stop reading at the limit: the body arrives before it is authenticated.
+  const body = await readCappedText(request, DEVICE_RESPONSE_MAX_BYTES);
+  if (body === null) {
     return new Response('Payload too large', { status: 413 });
   }
   try {

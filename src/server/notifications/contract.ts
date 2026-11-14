@@ -253,6 +253,8 @@ export type NotificationRecord = {
   recalledAt: Date | null;
   reply: ReplyForm | null;
   respondedAt: Date | null;
+  /** Revision the answer created; null until answered. */
+  responseRevision: number | null;
   createdAt: Date;
 };
 

@@ -246,10 +246,14 @@ a `text` field the trimmed text. Unanswered optional fields are left out.
    `notification_responses` has the notification id as primary key.
 2. It stores the answer with the user, a name snapshot, where it was given
    (`via`: `push`, `mobile`, `web`, `cli`) and, from a push, the device. It
-   sets `responded_at` and increments the revision.
+   sets `responded_at` and increments the revision, recording the new value
+   as `response_revision`.
 3. It re-queues only device deliveries, so phones replace the notification
    with its answered state (see the phone section). Webhooks and Apps learn of
-   the answer only through response routes.
+   the answer only through response routes: `planDelivery` does not count
+   `response_revision` as a change they missed, so a webhook or App delivery
+   that was in flight when the answer landed finishes without sending an
+   edit event.
 4. It queues one `notification_response_deliveries` row per destination that
    matching, enabled response routes select. Like routing, this applies to
    App and Channel notifications only: a member's direct notification (to a
@@ -510,9 +514,11 @@ this path:
   signature and a matching category.
 - The request carries `x-hatch-kid`, `x-hatch-timestamp` and
   `x-hatch-signature`: an HMAC with another derived key (`hatch-response-v1`)
-  over `hatch-response-v1|<timestamp>|<body>`. The platform accepts it within
-  five minutes from an enabled device that received the notification, and
-  records the answer as the device owner's (`via: push`).
+  over `hatch-response-v1|<timestamp>|<body>`. The platform reads at most
+  16 KiB of body and accepts it within five minutes from an enabled device
+  whose sign-in session is still live (expired sessions linger until the
+  hourly prune) and that received the notification. It records the answer as
+  the device owner's (`via: push`).
 
 When the request fails or someone answered first, the phone shows a local
 notification saying so. The JavaScript tap handler ignores these actions and

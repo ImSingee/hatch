@@ -1,5 +1,6 @@
 import {
   ReplyAnswerError,
+  answerOf,
   describeAnswers,
   validateAnswers,
   type ReplyAnswers,
@@ -138,8 +139,8 @@ export function ReplyFormCard({
               label={field.label}
               placeholder={field.placeholder ?? 'Write your answer…'}
               value={
-                typeof answers[field.id] === 'string'
-                  ? String(answers[field.id])
+                typeof answerOf(answers, field.id) === 'string'
+                  ? String(answerOf(answers, field.id))
                   : ''
               }
               unavailable={busy}
@@ -150,7 +151,7 @@ export function ReplyFormCard({
           ) : field.type === 'buttons' ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {field.options.map((option) => {
-                const selected = answers[field.id] === option.id;
+                const selected = answerOf(answers, field.id) === option.id;
                 return (
                   <Button
                     key={option.id}
@@ -187,7 +188,7 @@ export function ReplyFormCard({
                 </Text>
               ) : null}
               {field.options.map((option) => {
-                const current = answers[field.id];
+                const current = answerOf(answers, field.id);
                 const selected = Array.isArray(current)
                   ? current.includes(option.id)
                   : current === option.id;

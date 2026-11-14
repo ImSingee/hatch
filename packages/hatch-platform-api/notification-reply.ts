@@ -86,6 +86,19 @@ export type ReplyForm = {
  */
 export type ReplyAnswers = Record<string, string | string[]>;
 
+/**
+ * The value an answers object holds for a field, if any. Field ids such as
+ * `constructor` must never resolve through the object prototype.
+ */
+export function answerOf<T>(
+  answers: Record<string, T>,
+  fieldId: string,
+): T | undefined {
+  return Object.prototype.hasOwnProperty.call(answers, fieldId)
+    ? answers[fieldId]
+    : undefined;
+}
+
 export class ReplyAnswerError extends Error {
   readonly field: string | null;
 
@@ -119,7 +132,7 @@ export function validateAnswers(
   }
   const result: ReplyAnswers = {};
   for (const field of reply.fields) {
-    const raw = input[field.id];
+    const raw = answerOf(input, field.id);
     if (field.type === 'text') {
       if (raw !== undefined && raw !== null && typeof raw !== 'string') {
         throw new ReplyAnswerError('must be text', field.id);
@@ -215,7 +228,7 @@ export function describeAnswers(
 ): AnswerLine[] {
   const lines: AnswerLine[] = [];
   for (const field of reply.fields) {
-    const answer = answers[field.id];
+    const answer = answerOf(answers, field.id);
     if (answer === undefined) continue;
     let value: string;
     if (field.type === 'text') {

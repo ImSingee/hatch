@@ -171,7 +171,10 @@ type DeliveryPlan =
 /** What this attempt must tell the destination about the notification. */
 export function planDelivery(
   deliveredRevision: number | null,
-  notification: Pick<NotificationRecord, 'revision' | 'recalledAt'>,
+  notification: Pick<
+    NotificationRecord,
+    'revision' | 'recalledAt' | 'responseRevision'
+  >,
   destination: Pick<DestinationRow, 'type' | 'lifecycleEvents'>,
 ): DeliveryPlan {
   if (deliveredRevision === null) {
@@ -181,6 +184,18 @@ export function planDelivery(
   }
   if (deliveredRevision >= notification.revision) return { kind: 'skipped' };
   if (destination.type !== 'device' && !destination.lifecycleEvents) {
+    return { kind: 'skipped' };
+  }
+  // An answer only changes what phones show; webhooks and Apps hear of it
+  // through response routes. A delivery that missed nothing else (say, one
+  // in flight when the answer landed and so re-queued) sends nothing.
+  const answered =
+    notification.responseRevision !== null &&
+    notification.responseRevision > deliveredRevision;
+  if (
+    destination.type !== 'device' &&
+    notification.revision - deliveredRevision - (answered ? 1 : 0) <= 0
+  ) {
     return { kind: 'skipped' };
   }
   return {

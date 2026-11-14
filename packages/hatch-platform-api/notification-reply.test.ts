@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeAnswers,
   replyPushMode,
   validateAnswers,
   type ReplyForm,
@@ -158,6 +159,23 @@ describe('answers', () => {
     expect(validateAnswers(form, { when: 'o0', who: [], note: '' })).toEqual({
       when: 'o0',
     });
+  });
+
+  it('never reads an unanswered field through the object prototype', () => {
+    const tricky = notificationReplySchema.parse({
+      fields: [
+        { id: 'constructor', type: 'text', label: 'Note', required: false },
+        {
+          id: 'tostring',
+          type: 'multiple',
+          label: 'Tags',
+          options: choice(2),
+          required: false,
+        },
+      ],
+    });
+    expect(validateAnswers(tricky, {})).toEqual({});
+    expect(describeAnswers(tricky, {})).toEqual([]);
   });
 
   it('names the field of an answer that does not fit', () => {

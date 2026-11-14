@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "42a70c6c-2442-4454-b6f0-7bfbab388f55",
+  "id": "0514d938-67cc-4ea4-bea1-2486aaff7558",
   "prevIds": ["3b72eec2-7398-4e94-af39-aa13d7be2995"],
   "ddl": [
     {
@@ -3665,6 +3665,19 @@
       "generated": null,
       "identity": null,
       "name": "responded_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "response_revision",
       "entityType": "columns",
       "schema": "public",
       "table": "notifications"

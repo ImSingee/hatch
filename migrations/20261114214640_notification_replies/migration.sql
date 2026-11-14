@@ -48,6 +48,7 @@ CREATE TABLE "notification_responses" (
 ALTER TABLE "notification_destinations" ADD COLUMN "accepts_responses" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "notifications" ADD COLUMN "reply" jsonb;--> statement-breakpoint
 ALTER TABLE "notifications" ADD COLUMN "responded_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "notifications" ADD COLUMN "response_revision" integer;--> statement-breakpoint
 CREATE UNIQUE INDEX "notification_response_deliveries_notification_destination_idx" ON "notification_response_deliveries" ("notification_id","destination_id");--> statement-breakpoint
 CREATE INDEX "notification_response_deliveries_due_idx" ON "notification_response_deliveries" ("status","next_attempt_at") WHERE "notification_response_deliveries"."status" in ('pending', 'in_progress');--> statement-breakpoint
 ALTER TABLE "notification_response_deliveries" ADD CONSTRAINT "notification_response_deliveries_664FQtBlUS29_fkey" FOREIGN KEY ("notification_id") REFERENCES "notifications"("id") ON DELETE CASCADE;--> statement-breakpoint

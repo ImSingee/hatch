@@ -3,7 +3,10 @@ import { parseArgs } from 'node:util';
 import { toJson, type JsonValue } from '@bufbuild/protobuf';
 import { createClient, type Transport } from '@connectrpc/connect';
 import { NotificationService } from '../../hatch-platform-api/gen/hatch/platform/v1/notification_pb';
-import type { ReplyAnswers } from '../../hatch-platform-api/notification-reply';
+import {
+  answerOf,
+  type ReplyAnswers,
+} from '../../hatch-platform-api/notification-reply';
 import {
   answersToMessages,
   replyToMessage,
@@ -192,7 +195,7 @@ export function parseAnswerFlags(values: readonly string[]): ReplyAnswers {
       invalid(`--answer "${entry}" must be <field-id>=<value>.`);
     const fieldId = entry.slice(0, separator);
     const value = entry.slice(separator + 1);
-    const current = answers[fieldId];
+    const current = answerOf(answers, fieldId);
     answers[fieldId] =
       current === undefined
         ? value
@@ -239,7 +242,7 @@ function answerLines(reply: ReplyRow | undefined, answers: unknown): string[] {
         >)
       : {};
   return (reply?.fields ?? []).flatMap((replyField) => {
-    const answer = map[replyField.id ?? ''];
+    const answer = answerOf(map, replyField.id ?? '');
     if (!answer) return [];
     const labels = new Map(
       (replyField.options ?? []).map((option) => [option.id, option.label]),
