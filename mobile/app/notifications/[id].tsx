@@ -11,7 +11,10 @@ import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
 import { MobileError, notificationUrlAction } from '../../src/core';
 import { openSurfaceLink } from '../../src/state/deep-links';
 import { allowDevelopmentLoopback, useSession } from '../../src/state/session';
-import { useDeleteNotification } from '../../src/state/use-delete-notification';
+import {
+  useDeleteNotification,
+  useNotificationDeleted,
+} from '../../src/state/use-delete-notification';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
 import { Button } from '../../src/ui/button';
 import { glyphs } from '../../src/ui/glyph.types';
@@ -42,10 +45,11 @@ export default function NotificationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const { api, origin } = useSession();
+  const deleted = useNotificationDeleted(id);
   const query = useQuery({
     queryKey: [origin, 'notification', id],
     queryFn: ({ signal }) => api!.notification(id, signal),
-    enabled: Boolean(api),
+    enabled: Boolean(api) && !deleted,
   });
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
   const { confirmDelete, isPending: deleting } = useDeleteNotification({
@@ -58,7 +62,10 @@ export default function NotificationScreen() {
   });
   const data = query.data;
   // Deleted (here, elsewhere, or expired): never show a cached copy.
-  if (query.error instanceof MobileError && query.error.status === 404)
+  if (
+    deleted ||
+    (query.error instanceof MobileError && query.error.status === 404)
+  )
     return (
       <View style={{ flex: 1, padding: 16, backgroundColor: c.paper }}>
         <EmptyState

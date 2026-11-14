@@ -1,5 +1,6 @@
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
@@ -41,6 +42,24 @@ function evictWhenUnused(queryClient: QueryClient, queryKey: QueryKey) {
   });
 }
 
+const deletedKey = (origin: string | null, id: string) =>
+  [origin, 'notification-deleted', id] as const;
+
+/**
+ * Whether this phone deleted the notification during this session. Never
+ * fetched: only a successful delete sets it.
+ */
+export function useNotificationDeleted(id: string): boolean {
+  const { origin } = useSession();
+  return (
+    useQuery({
+      queryKey: deletedKey(origin, id),
+      queryFn: () => false,
+      enabled: false,
+    }).data === true
+  );
+}
+
 /**
  * Ask, then delete a notification from the instance's history. Deleting is
  * workspace-wide and sends nothing, so only this phone's Notification Center
@@ -68,6 +87,9 @@ export function useDeleteNotification(
           },
       );
       void dismissPresentedNotification(origin, id).catch(() => {});
+      // A detail screen still mounted under a newer one shows it as deleted
+      // from now on, even offline; its cached copy goes once it unmounts.
+      queryClient.setQueryData(deletedKey(origin, id), true);
       evictWhenUnused(queryClient, [origin, 'notification', id]);
     },
     onError: (error) =>
