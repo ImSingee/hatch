@@ -22,30 +22,49 @@ export function notificationDeletedToastId(id: string) {
 
 /**
  * Drop the cached detail of a deleted notification so going back to its page
- * reports it missing instead of showing the stale copy. Call it once no
- * mounted page reads the detail anymore, or that page would refetch it.
+ * reports it missing instead of showing the stale copy. A detail page that is
+ * still open keeps reading it until it leaves; removing it before then would
+ * only make that page refetch, so wait for its last observer to go.
  */
 export function forgetNotification(queryClient: QueryClient, id: string) {
-  queryClient.removeQueries({
-    queryKey: [...NOTIFICATIONS_KEY, 'detail', id],
+  const queryKey = [...NOTIFICATIONS_KEY, 'detail', id];
+  const cache = queryClient.getQueryCache();
+  const query = cache.find({ queryKey, exact: true });
+  if (!query) return;
+  const evict = () => queryClient.removeQueries({ queryKey, exact: true });
+  if (query.getObserversCount() === 0) {
+    evict();
+    return;
+  }
+  const unsubscribe = cache.subscribe((event) => {
+    if (event.query !== query) return;
+    if (event.type === 'removed') unsubscribe();
+    else if (
+      event.type === 'observerRemoved' &&
+      query.getObserversCount() === 0
+    ) {
+      unsubscribe();
+      evict();
+    }
   });
 }
 
 /**
  * Confirm and delete a notification from history. Errors are toasted by the
- * global mutation handler; history refreshes either way.
+ * global mutation handler; history refreshes either way. `onDeleted` runs
+ * only while the component that asked is still mounted, so a slow response
+ * never acts on a page the user has since left.
  */
 export function useDeleteNotification(
-  options: { onDeleted?: (id: string) => Promise<void> | void } = {},
+  options: { onDeleted?: (id: string) => void } = {},
 ) {
   const queryClient = useQueryClient();
   const remove = useMutation({
     mutationFn: (id: string) => deleteNotificationFn({ data: id }),
-    onSuccess: async (_result, id) => {
+    onSuccess: (_result, id) => {
       toast.success('Notification deleted', {
         id: notificationDeletedToastId(id),
       });
-      await options.onDeleted?.(id);
       forgetNotification(queryClient, id);
     },
     onSettled: () =>
@@ -81,7 +100,10 @@ export function useDeleteNotification(
       ),
       labels: { confirm: 'Delete', cancel: 'Cancel' },
       confirmProps: { color: 'red' },
-      onConfirm: () => remove.mutate(notification.id),
+      onConfirm: () =>
+        remove.mutate(notification.id, {
+          onSuccess: (_result, id) => options.onDeleted?.(id),
+        }),
     });
 
   return { confirmDelete, isPending: remove.isPending };

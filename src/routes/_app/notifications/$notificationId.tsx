@@ -1,5 +1,5 @@
 import { Button, Center, Loader } from '@mantine/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Link,
   createFileRoute,
@@ -7,12 +7,11 @@ import {
   useNavigate,
 } from '@tanstack/react-router';
 import { IconArrowLeft, IconTrash } from '@tabler/icons-react';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Page } from '~components/app-shell/page';
 import { NotificationDetail } from '~components/notifications/notification-detail';
 import {
-  forgetNotification,
   notificationDeletedToastId,
   useDeleteNotification,
 } from '~components/notifications/use-delete-notification';
@@ -44,10 +43,17 @@ function NotificationDetailPage() {
   const notification =
     useQuery(notificationDetailQueryOptions(notificationId)).data ?? loaded;
   useLiveNotifications();
-  const queryClient = useQueryClient();
-  const leave = () => navigate({ to: '/notifications', replace: true });
+  // The page stays mounted when it switches to another notification, so a
+  // late delete success checks which one is shown before leaving.
+  const shownId = useRef(notificationId);
+  useEffect(() => {
+    shownId.current = notificationId;
+  }, [notificationId]);
+  const leave = () => void navigate({ to: '/notifications', replace: true });
   const { confirmDelete, isPending } = useDeleteNotification({
-    onDeleted: leave,
+    onDeleted: (id) => {
+      if (id === shownId.current) leave();
+    },
   });
   // Another member (or tab) deleted it while it was open.
   usePlatformEvent('notification.deleted', (event) => {
@@ -55,7 +61,7 @@ function NotificationDetailPage() {
     toast.info('This notification was deleted', {
       id: notificationDeletedToastId(notificationId),
     });
-    void leave().then(() => forgetNotification(queryClient, notificationId));
+    leave();
   });
   return (
     <Page

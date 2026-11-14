@@ -68,7 +68,6 @@ export function useDeleteNotification(
           },
       );
       void dismissPresentedNotification(origin, id).catch(() => {});
-      options.onDeleted?.(id);
       evictWhenUnused(queryClient, [origin, 'notification', id]);
     },
     onError: (error) =>
@@ -86,7 +85,11 @@ export function useDeleteNotification(
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => remove.mutate(notification.id),
+          // Per-call callbacks skip a screen that has unmounted meanwhile.
+          onPress: () =>
+            remove.mutate(notification.id, {
+              onSuccess: (_result, id) => options.onDeleted?.(id),
+            }),
         },
       ],
     );

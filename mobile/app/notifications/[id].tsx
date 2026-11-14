@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { Stack, router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import {
+  Stack,
+  router,
+  useIsFocused,
+  useLocalSearchParams,
+  useNavigation,
+} from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
 import { MobileError, notificationUrlAction } from '../../src/core';
@@ -34,6 +40,7 @@ const destinationLabels: Record<string, string> = {
 
 export default function NotificationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
   const { api, origin } = useSession();
   const query = useQuery({
     queryKey: [origin, 'notification', id],
@@ -43,6 +50,8 @@ export default function NotificationScreen() {
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
   const { confirmDelete, isPending: deleting } = useDeleteNotification({
     onDeleted: () => {
+      // A slow response must not pop a screen the user opened since.
+      if (!navigation.isFocused()) return;
       if (router.canGoBack()) router.back();
       else router.replace('/notifications');
     },

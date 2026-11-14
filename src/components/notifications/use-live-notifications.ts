@@ -4,6 +4,7 @@ import {
   usePlatformResync,
 } from '~components/system/platform-events';
 import { NOTIFICATIONS_KEY } from '~queries/notifications';
+import { forgetNotification } from './use-delete-notification';
 
 /**
  * Keep notification history and detail views current: refetch on new,
@@ -30,11 +31,8 @@ export function useLiveNotifications() {
   });
   usePlatformEvent('notification.deleted', (event) => {
     void refreshHistory();
-    // An open detail page leaves on its own; only drop cached copies.
-    queryClient.removeQueries({
-      queryKey: [...NOTIFICATIONS_KEY, 'detail', event.notificationId],
-      type: 'inactive',
-    });
+    // An open detail page leaves on its own; its copy goes once it has.
+    forgetNotification(queryClient, event.notificationId);
   });
   usePlatformEvent('notification.delivery.updated', (event) => {
     void refreshHistory();
