@@ -4,6 +4,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Group,
   Menu,
   Modal,
@@ -82,10 +83,16 @@ function describe(destination: DestinationView): string {
       .filter(Boolean)
       .join(' · ');
   }
-  if (destination.webhook) return destination.webhook.url;
+  if (destination.webhook) {
+    return destination.lifecycleEvents
+      ? `${destination.webhook.url} · edits and recalls`
+      : destination.webhook.url;
+  }
   if (destination.app) {
     return destination.app.accepting
-      ? `App · /app/${destination.app.slug ?? destination.app.appId}`
+      ? `App · /app/${destination.app.slug ?? destination.app.appId}${
+          destination.lifecycleEvents ? ' · receives edits and recalls' : ''
+        }`
       : 'App no longer accepts notifications';
   }
   return DESTINATION_TYPE_LABEL[destination.type];
@@ -102,25 +109,33 @@ function WebhookModal({
 }) {
   const [name, setName] = useState(editing?.name ?? '');
   const [url, setUrl] = useState(editing?.webhook?.url ?? '');
+  const [lifecycleEvents, setLifecycleEvents] = useState(
+    editing?.lifecycleEvents ?? false,
+  );
   const [secret, setSecret] = useState<string | null>(null);
 
   const create = useNotificationMutation(
-    (input: { name: string; url: string }) => createWebhookFn({ data: input }),
+    (input: { name: string; url: string; lifecycleEvents: boolean }) =>
+      createWebhookFn({ data: input }),
     {
       success: 'Webhook added',
       onSuccess: (result) => setSecret(result.secret),
     },
   );
   const update = useNotificationMutation(
-    (input: { id: string; name: string; url: string }) =>
-      updateDestinationFn({ data: input }),
+    (input: {
+      id: string;
+      name: string;
+      url: string;
+      lifecycleEvents: boolean;
+    }) => updateDestinationFn({ data: input }),
     { success: 'Webhook updated', onSuccess: () => onClose() },
   );
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (editing) update.mutate({ id: editing.id, name, url });
-    else create.mutate({ name, url });
+    if (editing) update.mutate({ id: editing.id, name, url, lifecycleEvents });
+    else create.mutate({ name, url, lifecycleEvents });
   };
 
   return (
@@ -165,6 +180,14 @@ function WebhookModal({
               required
               type="url"
               description="Redirects are not followed. Local network and Tailscale addresses are allowed."
+            />
+            <Checkbox
+              label="Also send edits and recalls"
+              description="When a source edits or recalls a notification this webhook received, Hatch POSTs hatch.notification.updated or hatch.notification.recalled. Leave this off if the receiver treats every request as a new notification."
+              checked={lifecycleEvents}
+              onChange={(event) =>
+                setLifecycleEvents(event.currentTarget.checked)
+              }
             />
             <Group justify="flex-end">
               <Button variant="default" onClick={onClose}>

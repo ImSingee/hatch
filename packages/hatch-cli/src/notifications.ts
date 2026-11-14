@@ -43,6 +43,14 @@ export function parseKindSpec(value: string) {
   return { kind, name };
 }
 
+/** Delivery status, plus whether the source edited or recalled it. */
+function revisionLabel(row: Row | undefined): string {
+  const status = field(row, 'status');
+  if (field(row, 'recalledAt')) return `${status}, recalled`;
+  if (field(row, 'editedAt')) return `${status}, edited`;
+  return status;
+}
+
 const KIND_DESCRIPTION_MAX = 500;
 
 /**
@@ -90,6 +98,36 @@ function exclusive(values: Values, ...flags: string[]) {
 function enabledFlag(values: Values): boolean | undefined {
   exclusive(values, 'enable', 'disable');
   return values.enable ? true : values.disable ? false : undefined;
+}
+
+function lifecycleFlag(values: Values): boolean | undefined {
+  exclusive(values, 'lifecycle-events', 'no-lifecycle-events');
+  return values['lifecycle-events']
+    ? true
+    : values['no-lifecycle-events']
+      ? false
+      : undefined;
+}
+
+/** A flag holding a JSON object, passed on as its original text. */
+function jsonObjectFlag(values: Values, flag: string): string | undefined {
+  const text = str(values, flag);
+  if (text === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    invalid(`--${flag} must be a JSON object.`);
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    invalid(`--${flag} must be a JSON object.`);
+  return text;
+}
+
+/** A value, its `--clear-` flag (sent as ""), or undefined to keep it. */
+function clearable(values: Values, flag: string): string | undefined {
+  exclusive(values, flag, `clear-${flag}`);
+  return values[`clear-${flag}`] ? '' : str(values, flag);
 }
 
 function str(values: Values, flag: string): string | undefined {
@@ -150,12 +188,17 @@ function destinationLines(response: Record<string, unknown>, key: string) {
         ]
           .filter(Boolean)
           .join(' · ');
+      // Devices always take edits and recalls; say so only where it varies.
+      const changes =
+        row.type !== 'device' && row.lifecycleEvents === true
+          ? 'edits+recalls'
+          : '';
       return [
         field(row, 'id'),
         field(row, 'type'),
         row.enabled === false ? 'disabled' : 'enabled',
         field(row, 'name'),
-        detail,
+        [detail, changes].filter(Boolean).join(' · '),
       ];
     }),
   );
@@ -241,7 +284,7 @@ const specs: Record<string, Spec> = {
             rows(response.notifications).map((row) => [
               field(row, 'id'),
               field(row, 'createdAt'),
-              field(row, 'status'),
+              revisionLabel(row),
               `${field(row, 'sourceName')} / ${field(row, 'kind')}`,
               field(row, 'title'),
             ]),
@@ -260,8 +303,21 @@ const specs: Record<string, Spec> = {
       text: (response) => {
         const detail = response.notification as Row | undefined;
         const summary = detail?.summary as Row | undefined;
+        const revision = Number(summary?.revision ?? 1);
         const deliveries = rows(detail?.deliveries).map((row) => {
+          const received = Number(row.deliveredRevision ?? 0);
+          // Destinations that take edits and recalls are re-queued for each
+          // change, so one that finished behind the latest revision takes none.
+          const changes =
+            revision <= 1 || !received
+              ? ''
+              : received >= revision
+                ? `revision ${received} (latest)`
+                : row.status === 'succeeded'
+                  ? `revision ${received} of ${revision}; takes no edits or recalls`
+                  : `revision ${received} of ${revision}`;
           const extra = [
+            changes,
             field(row, 'result') && `result: ${field(row, 'result')}`,
             field(row, 'lastError') && `error: ${field(row, 'lastError')}`,
           ]
@@ -276,9 +332,15 @@ const specs: Record<string, Spec> = {
           ];
         });
         return [
-          `${field(summary, 'title')} (${field(summary, 'status')})`,
+          `${field(summary, 'title')} (${revisionLabel(summary)})`,
           `Source: ${field(summary, 'sourceName')} (${field(summary, 'sourceType')}) · Kind: ${field(summary, 'kindName')} [${field(summary, 'kind')}]`,
           `Occurred: ${field(summary, 'occurredAt')}`,
+          ...(field(summary, 'editedAt')
+            ? [`Edited: ${field(summary, 'editedAt')}`]
+            : []),
+          ...(field(summary, 'recalledAt')
+            ? [`Recalled: ${field(summary, 'recalledAt')}`]
+            : []),
           ...(field(summary, 'body') ? ['', field(summary, 'body')] : []),
           ...(field(summary, 'url')
             ? [
@@ -323,21 +385,7 @@ const specs: Record<string, Spec> = {
         invalid(
           `Invalid kind "${kind}": use 1-64 lowercase letters, digits, ".", "_" or "-".`,
         );
-      const data = str(values, 'data');
-      if (data !== undefined) {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          invalid('--data must be a JSON object.');
-        }
-        if (
-          parsed === null ||
-          typeof parsed !== 'object' ||
-          Array.isArray(parsed)
-        )
-          invalid('--data must be a JSON object.');
-      }
+      const data = jsonObjectFlag(values, 'data');
       return {
         method: 'sendNotification',
         request: {
@@ -366,6 +414,65 @@ const specs: Record<string, Spec> = {
         },
       };
     },
+  },
+  update: {
+    positionals: ['channel-id', 'notification-id'],
+    options: {
+      title: { type: 'string' },
+      body: { type: 'string' },
+      'clear-body': { type: 'boolean' },
+      url: { type: 'string' },
+      'clear-url': { type: 'boolean' },
+      'auto-open-url': { type: 'boolean' },
+      'no-auto-open-url': { type: 'boolean' },
+      data: { type: 'string' },
+      'clear-data': { type: 'boolean' },
+    },
+    build: ([channelId, id], values) => {
+      exclusive(values, 'auto-open-url', 'no-auto-open-url');
+      const title = str(values, 'title');
+      if (title !== undefined && !title.trim())
+        invalid('--title cannot be empty.');
+      exclusive(values, 'data', 'clear-data');
+      const request = {
+        channelId,
+        id,
+        title,
+        body: clearable(values, 'body'),
+        url: clearable(values, 'url'),
+        autoOpenUrl: values['auto-open-url']
+          ? true
+          : values['no-auto-open-url']
+            ? false
+            : undefined,
+        dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
+      };
+      if (
+        Object.values(request).filter((value) => value !== undefined).length < 3
+      )
+        invalid(
+          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
+        );
+      return {
+        method: 'updateNotification',
+        request,
+        text: (response) =>
+          response.changed === true
+            ? `Updated notification ${id} (revision ${field(response, 'revision')}). Phones and destinations that take edits get the new content.`
+            : `Notification ${id} already has this content; nothing was sent.`,
+      };
+    },
+  },
+  recall: {
+    positionals: ['channel-id', 'notification-id'],
+    build: ([channelId, id]) => ({
+      method: 'recallNotification',
+      request: { channelId, id },
+      text: (response) =>
+        response.changed === true
+          ? `Recalled notification ${id} (revision ${field(response, 'revision')}). Phones remove it, destinations that have not received it never will, and those that take recalls are told.`
+          : `Notification ${id} was already recalled; nothing was sent.`,
+    }),
   },
   retry: {
     positionals: ['delivery-id'],
@@ -471,14 +578,22 @@ const specs: Record<string, Spec> = {
   },
   'webhook create': {
     positionals: [],
-    options: { name: { type: 'string' }, url: { type: 'string' } },
+    options: {
+      name: { type: 'string' },
+      url: { type: 'string' },
+      'lifecycle-events': { type: 'boolean' },
+    },
     build: (_positionals, values) => {
       const name = str(values, 'name');
       const url = str(values, 'url');
       if (!name || !url) invalid('Supply --name and --url.');
       return {
         method: 'createWebhook',
-        request: { name, url },
+        request: {
+          name,
+          url,
+          lifecycleEvents: values['lifecycle-events'] === true,
+        },
         text: (response) =>
           [
             `Webhook ${field(response.destination as Row, 'id')} created.`,
@@ -490,15 +605,25 @@ const specs: Record<string, Spec> = {
   },
   'webhook update': {
     ...id,
-    options: { name: { type: 'string' }, url: { type: 'string' } },
+    options: {
+      name: { type: 'string' },
+      url: { type: 'string' },
+      'lifecycle-events': { type: 'boolean' },
+      'no-lifecycle-events': { type: 'boolean' },
+    },
     build: ([destinationId], values) => {
       const request = {
         id: destinationId,
         name: str(values, 'name'),
         url: str(values, 'url'),
+        lifecycleEvents: lifecycleFlag(values),
       };
-      if (request.name === undefined && request.url === undefined)
-        invalid('Supply --name and/or --url.');
+      if (
+        request.name === undefined &&
+        request.url === undefined &&
+        request.lifecycleEvents === undefined
+      )
+        invalid('Supply --name, --url or --[no-]lifecycle-events.');
       return {
         method: 'updateDestination',
         request,

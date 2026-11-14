@@ -12,6 +12,8 @@ export const APNS_MAX_PAYLOAD_BYTES = 4096;
 export const PUSH_PAYLOAD_VERSION = 1;
 export const PLACEHOLDER_TITLE = 'Hatch';
 export const PLACEHOLDER_BODY = 'New notification';
+/** Shown where a recalled notification was, when the phone cannot hide it. */
+export const RECALLED_TITLE = 'Notification recalled';
 
 /** Decrypted content the extension renders and the app opens on tap. */
 export type PushPlaintext = {
@@ -32,6 +34,13 @@ export type PushPlaintext = {
   /** Tapping opens `u` instead of the notification. Only sent with `u`. */
   ao?: true;
   at: string;
+  /** Notification revision; a phone never replaces newer content with older. */
+  r: number;
+  /**
+   * `u`: replaces an edited notification; `r`: removes a recalled one (its
+   * content is never sent). Absent for the original notification.
+   */
+  e?: 'u' | 'r';
 };
 
 export function pushAssociatedData(keyId: string): Buffer {
@@ -55,11 +64,19 @@ function seal(key: Buffer, keyId: string, plaintext: PushPlaintext): string {
 
 function encode(key: Buffer, keyId: string, plaintext: PushPlaintext): string {
   return JSON.stringify({
-    aps: {
-      alert: { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY },
-      sound: 'default',
-      'mutable-content': 1,
-    },
+    // Edits and recalls change what is already shown: no sound, no banner
+    // lighting the screen, even on app builds that predate them.
+    aps: plaintext.e
+      ? {
+          alert: { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY },
+          'interruption-level': 'passive',
+          'mutable-content': 1,
+        }
+      : {
+          alert: { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY },
+          sound: 'default',
+          'mutable-content': 1,
+        },
     h: { v: PUSH_PAYLOAD_VERSION, kid: keyId, c: seal(key, keyId, plaintext) },
   });
 }

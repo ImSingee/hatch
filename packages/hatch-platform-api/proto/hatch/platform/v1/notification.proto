@@ -15,6 +15,10 @@ service NotificationService {
   // Push a notification as a Channel without its token; routed like a
   // Channel push. Run credentials are rejected like every other method.
   rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+  // Edit or recall a notification as the Channel that sent it, like the
+  // Channel's own /update and /recall endpoints.
+  rpc UpdateNotification(UpdateNotificationRequest) returns (UpdateNotificationResponse);
+  rpc RecallNotification(RecallNotificationRequest) returns (RecallNotificationResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
   rpc GetApnsStatus(GetApnsStatusRequest) returns (GetApnsStatusResponse);
 
@@ -54,6 +58,8 @@ message NotificationDeliveryCounts {
   uint32 pending = 1;
   uint32 succeeded = 2;
   uint32 failed = 3;
+  // Recalled before reaching the destination; counts as finished.
+  uint32 canceled = 4;
 }
 
 message NotificationSummary {
@@ -75,6 +81,12 @@ message NotificationSummary {
   NotificationDeliveryCounts deliveries = 13;
   // Tapping the phone push opens url instead of the notification.
   bool auto_open_url = 14;
+  // 1 for the original; every edit and the recall increment it.
+  uint32 revision = 15;
+  // ISO-8601; set when the source last edited the notification.
+  optional string edited_at = 16;
+  // ISO-8601; set when the source recalled the notification.
+  optional string recalled_at = 17;
 }
 
 message NotificationDelivery {
@@ -83,7 +95,7 @@ message NotificationDelivery {
   // device | webhook | app
   string destination_type = 3;
   string destination_name = 4;
-  // pending | in_progress | succeeded | failed
+  // pending | in_progress | succeeded | failed | canceled
   string status = 5;
   uint32 attempts = 6;
   optional string next_attempt_at = 7;
@@ -95,6 +107,8 @@ message NotificationDelivery {
   optional string completed_at = 12;
   string created_at = 13;
   string updated_at = 14;
+  // Notification revision this destination last received; unset when never.
+  optional uint32 delivered_revision = 15;
 }
 
 message NotificationDetail {
@@ -197,6 +211,51 @@ message SendNotificationResponse {
   uint32 delivery_count = 3;
 }
 
+// Unset fields keep their value; an empty body, url or data_json clears it.
+// Without auto_open_url, a newly added url opens on phone tap, a cleared one
+// stops and a replaced one keeps the setting. Kind, dedupe key and
+// occurred_at never change.
+message UpdateNotificationRequest {
+  // The Channel that sent the notification.
+  string channel_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  string id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  optional string title = 3 [(buf.validate.field).string.max_len = 200];
+  optional string body = 4 [(buf.validate.field).string.max_len = 4000];
+  optional string url = 5 [(buf.validate.field).string.max_len = 2048];
+  optional bool auto_open_url = 6;
+  // JSON object, at most 32 KiB serialized.
+  optional string data_json = 7 [(buf.validate.field).string.max_len = 65536];
+}
+message UpdateNotificationResponse {
+  // 1 for the original; every edit and the recall increment it.
+  uint32 revision = 1;
+  // False when the content was already the same; nothing was sent.
+  bool changed = 2;
+}
+
+message RecallNotificationRequest {
+  // The Channel that sent the notification.
+  string channel_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  string id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+message RecallNotificationResponse {
+  uint32 revision = 1;
+  // False when it was already recalled; nothing was sent again.
+  bool changed = 2;
+}
+
 message NotificationKind {
   string kind = 1 [(buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$"];
   string name = 2 [(buf.validate.field).string = {
@@ -270,6 +329,9 @@ message NotificationDestination {
   NotificationDeviceInfo device = 9;
   NotificationWebhookInfo webhook = 10;
   NotificationAppInfo app = 11;
+  // Receives edit and recall events. Always true for devices; set by the
+  // manifest for Apps and by settings for webhooks.
+  bool lifecycle_events = 12;
 }
 
 message ListDestinationsRequest {}
@@ -286,6 +348,8 @@ message CreateWebhookRequest {
     uri: true
     max_len: 2048
   }];
+  // Also POST hatch.notification.updated and hatch.notification.recalled.
+  bool lifecycle_events = 3;
 }
 message CreateWebhookResponse {
   NotificationDestination destination = 1;
@@ -307,6 +371,8 @@ message UpdateDestinationRequest {
     uri: true
     max_len: 2048
   }];
+  // Webhooks only.
+  optional bool lifecycle_events = 5;
 }
 message UpdateDestinationResponse {
   NotificationDestination destination = 1;

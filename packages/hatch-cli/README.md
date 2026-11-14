@@ -314,3 +314,34 @@ a session ID. Workflows have no association feature.
 See [the 15-tool comparison](../../../docs/cli-tool-parity.md). Platform and CLI
 contracts/SDKs are built and released together; strict DTO validation does not
 promise compatibility with older CLI binaries.
+
+## Notifications
+
+`hatch notification ...` manages the notification center with a user session
+or API key; Run credentials are rejected (`SESSION_REQUIRED`, exit 4). `hatch
+help` lists every command. Sending, editing and recalling act as a Channel, so
+they need its id but not its token:
+
+```sh
+hatch notification send <channel-id> --kind build.failed --title 'master is red' --json
+hatch notification update <channel-id> <notification-id> --title 'master is green' --clear-body --json
+hatch notification recall <channel-id> <notification-id> --json
+```
+
+`update` changes only the flags given: `--clear-body`, `--clear-url` and
+`--clear-data` clear a field, and `--auto-open-url` / `--no-auto-open-url` set
+whether a phone tap opens the URL (without either, a newly added URL opens on
+tap, a cleared one stops and a replaced one keeps the setting). Kind, dedupe
+key and occurrence time never change. Phones replace the notification without
+alerting again; webhook and App destinations that take edits and recalls
+receive `hatch.notification.updated`. `recall` removes it from phones, cancels
+deliveries that have not happened yet and sends `hatch.notification.recalled`
+where edits and recalls are taken; it cannot be undone. Both answer
+`{revision, changed}`; `changed: false` means nothing new happened and nothing
+was sent. An edit with no change flag is rejected locally (exit 2); another
+Channel's notification is not found (exit 5); editing a recalled notification
+or using a disabled Channel is a conflict (exit 6).
+
+Webhooks take edits and recalls only with `webhook create --lifecycle-events`
+or `webhook update <id> --lifecycle-events` (`--no-lifecycle-events` turns it
+off); `destination list` marks them `edits+recalls`.

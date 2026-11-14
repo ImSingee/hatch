@@ -15,6 +15,7 @@ import {
 import {
   MAX_DELIVERY_RESULT,
   NOTIFICATION_DELIVERY_HEADER,
+  NOTIFICATION_EVENT_HEADER,
   NOTIFICATION_ID_HEADER,
   buildEnvelope,
 } from '../contract';
@@ -61,6 +62,7 @@ export function parseAppResult(
 export const deliverToApp: DeliveryAdapter = async ({
   deliveryId,
   attempt,
+  event,
   notification,
   destination,
   sourceSlug,
@@ -100,9 +102,14 @@ export const deliverToApp: DeliveryAdapter = async ({
     return { kind: 'fail', error: 'App has no signing secret.' };
   }
 
-  const body = JSON.stringify(
-    buildEnvelope({ notification, deliveryId, attempt, sourceSlug }),
-  );
+  const envelope = buildEnvelope({
+    event,
+    notification,
+    deliveryId,
+    attempt,
+    sourceSlug,
+  });
+  const body = JSON.stringify(envelope);
   const timestamp = String(Date.now());
   let response: { status: number; body: string; contentType: string | null };
   try {
@@ -115,6 +122,7 @@ export const deliverToApp: DeliveryAdapter = async ({
           'content-type': 'application/json',
           [NOTIFICATION_ID_HEADER]: notification.id,
           [NOTIFICATION_DELIVERY_HEADER]: deliveryId,
+          [NOTIFICATION_EVENT_HEADER]: envelope.type,
           [HATCH_TIMESTAMP_HEADER]: timestamp,
           [HATCH_SIGNATURE_HEADER]: hatchSignature(
             app.signingSecret,

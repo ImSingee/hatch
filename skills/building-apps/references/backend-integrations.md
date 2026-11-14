@@ -276,7 +276,10 @@ chooses recipients.
         "description": "Payment or fulfilment failed"
       }
     ],
-    "destination": { "description": "Forwards notifications to Slack" }
+    "destination": {
+      "description": "Forwards notifications to Slack",
+      "lifecycleEvents": true
+    }
   }
 }
 ```
@@ -318,6 +321,32 @@ rejected); `data` is a JSON object ≤32 KiB; the request body is capped at
 Pushing returns once the notification is stored; delivery happens afterwards
 with retries, so never wait for or retry delivery yourself.
 
+### Editing and recalling
+
+Keep the `id` that `notify` returns when the App may later correct or
+withdraw the notification:
+
+```ts
+import {
+  notify,
+  recallNotification,
+  updateNotification,
+} from '@hatch/app/notifications';
+
+const { id } = await notify({ kind: 'order.shipped', title: 'Order shipped' });
+await updateNotification(id, { title: 'Order delivered', body: null });
+await recallNotification(id);
+```
+
+`updateNotification` changes any of `title`, `body`, `url`, `autoOpenUrl` and
+`data`. Omitted fields keep their value; `null` clears `body`, `url` or
+`data`. Phones replace the shown notification in place without alerting
+again. `recallNotification` removes it from phones, and destinations that have
+not received it yet never will. An App can only change notifications it pushed
+itself (others answer 404). Editing a recalled notification throws
+`NotificationError` with status 409. Repeating a recall changes nothing. Both
+return `{ id, revision, recalled, changed }`.
+
 ### Receiving as a destination
 
 Declaring `destination` adds the App to the notification destinations users
@@ -331,6 +360,15 @@ failures are retried with backoff up to 6 attempts; 4xx other than 408/429 fail
 immediately. The same `deliveryId` can arrive more than once, so make handling
 idempotent. An App never receives notifications it pushed itself.
 
+With `"lifecycleEvents": true` on `destination`, the App is also told when a
+source edits or recalls a notification it already received:
+`type` is `hatch.notification.updated` or `hatch.notification.recalled`, and
+`notification` carries the current state with `revision`, `editedAt` and
+`recalledAt`. Several quick edits may arrive as one event. Handle events by
+`(notification.id, revision)` and ignore a revision lower than one already
+handled. Without the flag only `hatch.notification` arrives. Switch on
+`envelope.type` whenever the flag is set.
+
 Always verify the platform signature (HMAC over `<timestamp>.<raw body>`):
 
 ```ts
@@ -342,8 +380,12 @@ import {
 
 if (new URL(request.url).pathname === '/__notification') {
   try {
-    const { notification } = await verifyNotificationRequest(request);
-    await forwardToSlack(notification);
+    const { type, notification } = await verifyNotificationRequest(request);
+    if (type === 'hatch.notification.recalled') {
+      await deleteSlackMessage(notification.id);
+    } else {
+      await upsertSlackMessage(notification);
+    }
     return notificationResult(`forwarded to #ops`);
   } catch (error) {
     if (error instanceof NotificationVerificationError) {

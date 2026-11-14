@@ -10,7 +10,12 @@ import {
   type ApnsSendResult,
 } from '../apns/client';
 import { getApnsCredentials } from '../apns/credentials';
-import { buildEncryptedApnsPayload } from '../apns/payload';
+import {
+  RECALLED_TITLE,
+  buildEncryptedApnsPayload,
+  type PushPlaintext,
+} from '../apns/payload';
+import type { NotificationEvent, NotificationRecord } from '../contract';
 import type { DeliveryAdapter, DeliveryOutcome } from '../delivery';
 import { decryptDeviceKey } from '../secrets';
 
@@ -70,6 +75,40 @@ export function classifyApnsResult(result: ApnsSendResult): DeliveryOutcome {
   return { kind: 'fail', httpStatus: result.status, error };
 }
 
+/**
+ * What the phone decrypts. A recall carries no content, so a phone that
+ * cannot hide the notification only shows that it was recalled.
+ */
+export function pushPlaintext(
+  notification: NotificationRecord,
+  event: NotificationEvent,
+  origin: string,
+): PushPlaintext {
+  const base = {
+    v: 1 as const,
+    id: notification.id,
+    o: origin,
+    s: notification.sourceName,
+    k: notification.kindName,
+    g: notification.appId ?? notification.channelId ?? 'platform',
+    at: notification.occurredAt.toISOString(),
+    r: notification.revision,
+  };
+  if (event === 'recalled') {
+    return { ...base, t: RECALLED_TITLE, b: null, u: null, e: 'r' };
+  }
+  return {
+    ...base,
+    t: notification.title,
+    b: notification.body,
+    u: notification.url,
+    ...(notification.url && notification.autoOpenUrl
+      ? { ao: true as const }
+      : {}),
+    ...(event === 'updated' ? { e: 'u' as const } : {}),
+  };
+}
+
 export function createDeviceAdapter(
   options: {
     send?: (request: ApnsSendRequest) => Promise<ApnsSendResult>;
@@ -78,7 +117,7 @@ export function createDeviceAdapter(
 ): DeliveryAdapter {
   const send = options.send ?? sendApnsRequest;
   const origins = options.origins ?? APNS_ORIGINS;
-  return async ({ notification, destination }) => {
+  return async ({ notification, destination, event }) => {
     if (
       !destination.apnsToken ||
       !destination.apnsEnvironment ||
@@ -122,21 +161,7 @@ export function createDeviceAdapter(
     const payload = buildEncryptedApnsPayload(
       decryptDeviceKey(destination.id, destination.e2eKeyCiphertext),
       destination.e2eKeyId,
-      {
-        v: 1,
-        id: notification.id,
-        o: getPlatformEnv().appUrl,
-        t: notification.title,
-        b: notification.body,
-        s: notification.sourceName,
-        k: notification.kindName,
-        g: notification.appId ?? notification.channelId ?? 'platform',
-        u: notification.url,
-        ...(notification.url && notification.autoOpenUrl
-          ? { ao: true as const }
-          : {}),
-        at: notification.occurredAt.toISOString(),
-      },
+      pushPlaintext(notification, event, getPlatformEnv().appUrl),
     );
     let result: ApnsSendResult;
     try {

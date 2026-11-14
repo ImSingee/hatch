@@ -9,12 +9,19 @@ const apnsEnvironment =
     ? 'production'
     : 'sandbox';
 
+// Recalled notifications disappear from Notification Center only when the
+// extension may suppress pushes, which needs Apple's approved
+// com.apple.developer.usernotifications.filtering entitlement on the team.
+// Without it a recall replaces the notification with a silent placeholder.
+const notificationFiltering = process.env.HATCH_NOTIFICATION_FILTERING === '1';
+
 const config: ExpoConfig = {
   name: 'Hatch',
   slug: 'hatch-mobile',
   owner: 'singee',
   extra: {
     apnsEnvironment,
+    notificationFiltering,
     eas: {
       projectId: '2ed99159-8abc-41eb-91a5-c6c754bb4354',
       build: {
@@ -32,6 +39,11 @@ const config: ExpoConfig = {
                   'keychain-access-groups': [
                     '$(AppIdentifierPrefix)app.hatch.mobile.shared',
                   ],
+                  ...(notificationFiltering
+                    ? {
+                        'com.apple.developer.usernotifications.filtering': true,
+                      }
+                    : {}),
                 },
               },
             ],

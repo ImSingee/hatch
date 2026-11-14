@@ -8,6 +8,7 @@ import { Reflow } from '../../src/ui/columns';
 import { glyphs } from '../../src/ui/glyph.types';
 import { Busy, EmptyState, Notice, errorText } from '../../src/ui/primitives';
 import {
+  NotificationChangeTag,
   NotificationStatusTag,
   notificationTime,
 } from '../../src/ui/notification-status';
@@ -99,7 +100,13 @@ export default function NotificationsScreen() {
                         {item.body}
                       </Text>
                     ) : null}
-                    <NotificationStatusTag status={item.status} />
+                    <View style={styles.tags}>
+                      <NotificationStatusTag status={item.status} />
+                      <NotificationChangeTag
+                        editedAt={item.editedAt}
+                        recalledAt={item.recalledAt}
+                      />
+                    </View>
                   </Pressable>
                 ))}
               </Group>
@@ -124,4 +131,5 @@ const styles = StyleSheet.create({
   row: { paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
   header: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   grow: { flex: 1 },
+  tags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
 });

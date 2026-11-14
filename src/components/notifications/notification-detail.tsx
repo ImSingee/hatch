@@ -33,6 +33,7 @@ import {
   DESTINATION_TYPE_LABEL,
   DeliveryStatusBadge,
   DestinationTypeIcon,
+  NotificationRevisionBadge,
   NotificationStatusBadge,
 } from './status';
 
@@ -46,9 +47,16 @@ export function NotificationDetail({ id }: { id: string }) {
       <Box component="section">
         <Group gap="sm" mb="md" wrap="wrap">
           <NotificationStatusBadge status={data.status} />
+          <NotificationRevisionBadge
+            editedAt={data.editedAt}
+            recalledAt={data.recalledAt}
+          />
           <Text size="sm" c="dimmed">
             {data.deliveries.succeeded} delivered · {data.deliveries.pending} in
             progress · {data.deliveries.failed} failed
+            {data.deliveries.canceled > 0
+              ? ` · ${data.deliveries.canceled} not sent`
+              : ''}
           </Text>
         </Group>
         <Stack gap={8}>
@@ -63,6 +71,15 @@ export function NotificationDetail({ id }: { id: string }) {
           <Field label="Kind" value={`${data.kindName} (${data.kind})`} />
           <Field label="Occurred" value={formatExact(data.occurredAt)} />
           <Field label="Received" value={formatExact(data.createdAt)} />
+          {data.editedAt ? (
+            <Field label="Edited" value={formatExact(data.editedAt)} />
+          ) : null}
+          {data.recalledAt ? (
+            <Field
+              label="Recalled"
+              value={`${formatExact(data.recalledAt)} · removed from phones; content kept here`}
+            />
+          ) : null}
           {data.dedupeKey ? (
             <Field label="Dedupe key" value={data.dedupeKey} mono />
           ) : null}
@@ -127,6 +144,7 @@ export function NotificationDetail({ id }: { id: string }) {
                 <DeliveryRow
                   key={delivery.id}
                   notificationId={id}
+                  revision={data.revision}
                   delivery={delivery}
                 />
               ))}
@@ -140,9 +158,11 @@ export function NotificationDetail({ id }: { id: string }) {
 
 function DeliveryRow({
   notificationId,
+  revision,
   delivery,
 }: {
   notificationId: string;
+  revision: number;
   delivery: DeliveryView;
 }) {
   const queryClient = useQueryClient();
@@ -187,7 +207,7 @@ function DeliveryRow({
         </Text>
       </Table.Td>
       <Table.Td>
-        <DeliveryOutcome delivery={delivery} />
+        <DeliveryOutcome delivery={delivery} revision={revision} />
       </Table.Td>
       <Table.Td>
         {delivery.status === 'failed' && delivery.destinationId ? (
@@ -206,8 +226,32 @@ function DeliveryRow({
   );
 }
 
-function DeliveryOutcome({ delivery }: { delivery: DeliveryView }) {
+function DeliveryOutcome({
+  delivery,
+  revision,
+}: {
+  delivery: DeliveryView;
+  revision: number;
+}) {
   const lines: { label: string; value: string; mono?: boolean }[] = [];
+  if (delivery.status === 'canceled') {
+    lines.push({ label: 'Recalled', value: 'before it was delivered' });
+  } else if (revision > 1 && delivery.deliveredRevision !== null) {
+    // Destinations that take edits and recalls are re-queued for every
+    // change, so a finished delivery behind the latest revision never takes
+    // them (a webhook with the option off, or an App that does not declare it).
+    lines.push({
+      label: 'Changes',
+      value:
+        delivery.deliveredRevision >= revision
+          ? 'latest edit or recall received'
+          : delivery.status === 'succeeded'
+            ? 'not sent here (destination takes no edits or recalls)'
+            : delivery.status === 'failed'
+              ? 'latest edit or recall failed'
+              : 'sending the latest edit or recall',
+    });
+  }
   if (delivery.result) {
     lines.push({ label: 'App result', value: delivery.result });
   }

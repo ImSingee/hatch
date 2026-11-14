@@ -30,6 +30,7 @@ const { ingestNotification } = await import('./ingest');
 const { claimDueDeliveries, pruneEndedDeviceDestinations, runClaimedDelivery } =
   await import('./dispatcher');
 const { createDeviceAdapter } = await import('./adapters/device');
+const { recallNotification, updateNotification } = await import('./lifecycle');
 type DeliveryAdapter = import('./delivery').DeliveryAdapter;
 const { closeApnsSessions, sendApnsRequest } = await import('./apns/client');
 const { APNS_MAX_PAYLOAD_BYTES, pushAssociatedData } =
@@ -337,6 +338,46 @@ describe('APNs delivery', () => {
     const delivery = await deliver('Hello', null);
     expect(delivery).toMatchObject({ status: 'pending', httpStatus: null });
     expect(delivery.lastError).toContain('without a response');
+  });
+  it('replaces an edited push silently and recalls without its content', async () => {
+    await registerDevice();
+    await deliver('Disk full', 'db-1 is at 98%', {
+      url: 'https://status.example.com/db-1',
+      autoOpenUrl: true,
+    });
+    const id = decrypt(seen[0].body).content.id as string;
+    const sender = { type: 'channel' as const, channelId };
+    const runDue = async () => {
+      for (const claimed of await claimDueDeliveries(5)) {
+        await runClaimedDelivery(claimed, adapters);
+      }
+    };
+
+    await updateNotification(sender, { id, title: 'Disk at 99%' });
+    await runDue();
+    const edit = JSON.parse(seen[1].body) as { aps: Record<string, unknown> };
+    expect(seen[1].headers['apns-collapse-id']).toBe(id);
+    expect(edit.aps).not.toHaveProperty('sound');
+    expect(edit.aps['interruption-level']).toBe('passive');
+    expect(decrypt(seen[1].body).content).toMatchObject({
+      id,
+      t: 'Disk at 99%',
+      b: 'db-1 is at 98%',
+      ao: true,
+      r: 2,
+      e: 'u',
+    });
+
+    await recallNotification(sender, id);
+    await runDue();
+    expect(seen).toHaveLength(3);
+    expect(seen[2].headers['apns-collapse-id']).toBe(id);
+    expect(seen[2].body).not.toContain('Disk');
+    const { content } = decrypt(seen[2].body);
+    expect(content).toMatchObject({ id, b: null, u: null, r: 3, e: 'r' });
+    expect(content).not.toHaveProperty('ao');
+    expect(content.t).not.toContain('Disk');
+    expect(JSON.parse(seen[2].body).aps).not.toHaveProperty('sound');
   });
 });
 

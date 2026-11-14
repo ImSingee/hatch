@@ -4,8 +4,10 @@ import {
   NotificationService,
   type CreateChannelRequest,
   type CreateRouteRequest,
+  type RecallNotificationRequest,
   type SendNotificationRequest,
   type UpdateGroupRequest,
+  type UpdateNotificationRequest,
   type UpdateRouteRequest,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
@@ -24,6 +26,8 @@ function recordingTransport() {
     createChannel?: CreateChannelRequest;
     updateGroup?: UpdateGroupRequest;
     sendNotification?: SendNotificationRequest;
+    updateNotification?: UpdateNotificationRequest;
+    recallNotification?: RecallNotificationRequest;
   } = {};
   const transport = createRouterTransport(({ service }) => {
     service(NotificationService, {
@@ -70,6 +74,14 @@ function recordingTransport() {
       sendNotification: (request) => {
         received.sendNotification = request;
         return { notificationId: 'notification-1', deliveryCount: 0 };
+      },
+      updateNotification: (request) => {
+        received.updateNotification = request;
+        return { revision: 2, changed: true };
+      },
+      recallNotification: (request) => {
+        received.recallNotification = request;
+        return { revision: 3, changed: false };
       },
     });
   });
@@ -325,6 +337,71 @@ describe('notification send', () => {
     expect(() => parse('send', '--kind', 'a', '--title', 'Hi')).toThrow(
       /<channel-id>/,
     );
+  });
+});
+
+describe('notification update and recall', () => {
+  it('sends only the fields to change and empty values to clear', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse(
+        'update',
+        'channel-1',
+        'notification-1',
+        '--title',
+        'master is green',
+        '--clear-body',
+        '--no-auto-open-url',
+        '--clear-data',
+      ),
+    );
+    expect(received.updateNotification).toMatchObject({
+      channelId: 'channel-1',
+      id: 'notification-1',
+      title: 'master is green',
+      body: '',
+      autoOpenUrl: false,
+      dataJson: '',
+    });
+    // Unset fields keep their value on the platform.
+    expect(received.updateNotification?.url).toBeUndefined();
+    expect(result.text).toMatch(/revision 2/);
+  });
+
+  it('rejects edits that change nothing or contradict themselves', () => {
+    expect(() => parse('update', 'channel-1', 'notification-1')).toThrow(
+      /at least one change/,
+    );
+    expect(() =>
+      parse(
+        'update',
+        'channel-1',
+        'notification-1',
+        '--body',
+        'x',
+        '--clear-body',
+      ),
+    ).toThrow(/only one of/);
+    expect(() =>
+      parse('update', 'channel-1', 'notification-1', '--data', '[]'),
+    ).toThrow(/JSON object/);
+    expect(() => parse('update', 'channel-1', '--title', 'x')).toThrow(
+      /<notification-id>/,
+    );
+  });
+
+  it('recalls as the Channel and reports a repeated recall', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse('recall', 'channel-1', 'notification-1'),
+    );
+    expect(received.recallNotification).toMatchObject({
+      channelId: 'channel-1',
+      id: 'notification-1',
+    });
+    expect(result.text).toMatch(/already recalled/);
   });
 });
 

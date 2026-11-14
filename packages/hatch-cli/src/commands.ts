@@ -181,6 +181,19 @@ const definitions: readonly CliCommandDefinition[] = [
       'Push a notification as a Channel; routes decide where it is delivered. Tapping it on a phone opens --url unless --no-auto-open-url is set.',
   },
   {
+    path: ['notification', 'update'],
+    usage:
+      'notification update <channel-id> <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data]',
+    description:
+      'Edit a notification the Channel sent. Phones replace it without alerting again; destinations that take edits receive hatch.notification.updated.',
+  },
+  {
+    path: ['notification', 'recall'],
+    usage: 'notification recall <channel-id> <notification-id>',
+    description:
+      'Recall a notification the Channel sent. Phones remove it; destinations that have not received it never will.',
+  },
+  {
     path: ['notification', 'retry'],
     usage: 'notification retry <delivery-id>',
     description: 'Queue a failed delivery for a fresh series of attempts.',
@@ -214,13 +227,17 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['notification', 'webhook', 'create'],
-    usage: 'notification webhook create --name <name> --url <url>',
-    description: 'Add a webhook destination; prints its signing secret once.',
+    usage:
+      'notification webhook create --name <name> --url <url> [--lifecycle-events]',
+    description:
+      'Add a webhook destination; prints its signing secret once. --lifecycle-events also sends edits and recalls.',
   },
   {
     path: ['notification', 'webhook', 'update'],
-    usage: 'notification webhook update <id> [--name <name>] [--url <url>]',
-    description: 'Change a webhook name or URL.',
+    usage:
+      'notification webhook update <id> [--name <name>] [--url <url>] [--lifecycle-events | --no-lifecycle-events]',
+    description:
+      'Change a webhook name, URL, or whether it receives edits and recalls.',
   },
   {
     path: ['notification', 'webhook', 'rotate-secret'],
