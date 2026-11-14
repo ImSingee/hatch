@@ -316,7 +316,10 @@ export type NotificationEnvelope = {
     recalledAt: string | null;
     /** The form to answer, or null. */
     reply: ReplyForm | null;
-    /** The answer, once someone gave it. */
+    /**
+     * The answer, only in `hatch.notification.responded`: destinations get
+     * answers solely through response routes.
+     */
     response: NotificationResponseEnvelope | null;
     createdAt: string;
     source: {

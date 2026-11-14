@@ -444,9 +444,12 @@ export async function runClaimedDelivery(
         attempt: claimed.attempts,
         event: plan?.kind === 'send' ? plan.event : 'created',
         notification: notification as NotificationRecord,
-        response: notification.respondedAt
-          ? await loadResponse(notification.id)
-          : null,
+        // Phones show who answered. Webhooks and Apps get answers only from
+        // response routes, never with the notification itself.
+        response:
+          destination.type === 'device' && notification.respondedAt
+            ? await loadResponse(notification.id)
+            : null,
         destination,
         sourceSlug: await sourceSlugOf(notification.appId),
       });

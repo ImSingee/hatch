@@ -299,7 +299,10 @@ export type HatchNotificationEnvelope = {
     recalledAt: string | null;
     /** The form to answer, or null. */
     reply: NotificationReply | null;
-    /** The answer, once someone gave it. */
+    /**
+     * The answer, only in `hatch.notification.responded` (sent by a response
+     * route); null in every other event.
+     */
     response: NotificationResponse | null;
     createdAt: string;
     source: {

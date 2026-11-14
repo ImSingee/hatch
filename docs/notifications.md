@@ -276,7 +276,10 @@ receives them only while its live manifest sets
 setting onto `accepts_responses`, and only such Apps (and webhooks) can be
 response route targets. When an App later drops the setting, its deliveries
 fail with "App no longer accepts responses." Every envelope's `notification`
-carries `reply` and `response`:
+carries `reply`. Only `hatch.notification.responded` carries `response`:
+ordinary notification, edit and recall deliveries to a webhook or App never
+include the answer, so a destination receives answers only when a response
+route selects it.
 
 ```json
 {

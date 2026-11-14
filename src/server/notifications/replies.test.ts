@@ -582,6 +582,32 @@ describe('answer events', () => {
   });
 });
 
+describe('answers outside response routes', () => {
+  it('never ride along with notification deliveries to webhooks', async () => {
+    await service.updateDestination({ id: webhookId, lifecycleEvents: true });
+    const id = await sendForm();
+    await respondToNotification(
+      id,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    await updateNotification(
+      { type: 'channel', channelId },
+      { id, title: 'Deploy v2.5?' },
+    );
+    received.length = 0;
+    await runAll();
+    const events = received.map((entry) => JSON.parse(entry.body));
+    expect(events.map((event) => event.type)).toEqual([
+      'hatch.notification.updated',
+    ]);
+    expect(events[0].notification.response).toBeNull();
+    // The phone still learns who answered.
+    const update = deviceCalls.at(-1)!;
+    expect(update.response?.answers).toEqual({ decision: 'approve' });
+  });
+});
+
 describe('answers signed by a phone', () => {
   it('records the answer as the device owner, for notifications the device received', async () => {
     const id = await sendForm();
