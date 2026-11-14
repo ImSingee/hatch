@@ -39,6 +39,39 @@ export class NotificationLifecycleError extends Error {
 type LockedNotification = typeof schema.notifications.$inferSelect;
 
 /**
+ * JSON equality that ignores object key order: Postgres `jsonb` reorders keys
+ * on storage, so stored data rarely stringifies like the request did.
+ */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (
+    a === null ||
+    b === null ||
+    typeof a !== 'object' ||
+    typeof b !== 'object' ||
+    Array.isArray(a) !== Array.isArray(b)
+  ) {
+    return false;
+  }
+  if (Array.isArray(a)) {
+    const other = b as unknown[];
+    return (
+      a.length === other.length &&
+      a.every((item, index) => sameJson(item, other[index]))
+    );
+  }
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every(
+      (key) => Object.hasOwn(right, key) && sameJson(left[key], right[key]),
+    )
+  );
+}
+
+/**
  * Lock the sender's own notification. Another source's notification is
  * reported exactly like a missing one.
  */
@@ -154,7 +187,7 @@ export async function updateNotification(
       next.body !== current.body ||
       next.url !== current.url ||
       next.autoOpenUrl !== current.autoOpenUrl ||
-      JSON.stringify(next.data) !== JSON.stringify(current.data);
+      !sameJson(next.data, current.data);
     if (!changed) {
       return { id: current.id, revision: current.revision, changed: false };
     }

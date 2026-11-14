@@ -982,6 +982,104 @@ describe('edits and recalls', () => {
     ]);
   });
 
+  it('gives a change that lands during a failing attempt a fresh series', async () => {
+    const { destination } = await service.createWebhook({
+      name: 'Hook',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    await routeAll(destination.id);
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    webhookStatus = 503;
+    let editStatus = 0;
+    const racing = {
+      ...adapters,
+      webhook: async (context: Parameters<typeof deliverToWebhook>[0]) => {
+        const outcome = await deliverToWebhook(context);
+        editStatus ||= (await signedApp('update', { id, title: 'Edited' }))
+          .status;
+        return outcome;
+      },
+    };
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, racing);
+    }
+    expect(editStatus).toBe(200);
+    // Not the 30 s backoff of the outdated attempt: due now, full budget.
+    const [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({ status: 'pending', attempts: 0 });
+    expect(Date.parse(delivery.nextAttemptAt!)).toBeLessThanOrEqual(Date.now());
+
+    webhookStatus = 200;
+    await runAllDue();
+    expect(envelopes().at(-1)).toMatchObject({
+      type: 'hatch.notification',
+      revision: 2,
+      notification: { title: 'Edited' },
+    });
+  });
+
+  it('keeps an App result when an edit lands during its delivery', async () => {
+    await routeAll('dest-app-destination');
+    vi.mocked(callAppBackend).mockResolvedValue({
+      status: 200,
+      body: JSON.stringify({ result: 'forwarded to #ops' }),
+      contentType: 'application/json',
+    });
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    const racing = {
+      ...adapters,
+      app: async (context: Parameters<typeof deliverToApp>[0]) => {
+        const outcome = await deliverToApp(context);
+        await signedApp('update', { id, title: 'Edited' });
+        return outcome;
+      },
+    };
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, racing);
+    }
+    // The App takes no lifecycle events: the follow-up is skipped.
+    await runAllDue();
+    const [delivery] = (await service.getNotification(id)).deliveryList;
+    expect(delivery).toMatchObject({
+      status: 'succeeded',
+      result: 'forwarded to #ops',
+      deliveredRevision: 2,
+    });
+    expect(callAppBackend).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats the same data in another key order as unchanged', async () => {
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push('order.shipped', {
+        data: { order: { id: 7, items: [1, 2] }, carrier: 'ups' },
+      }),
+    });
+    const same = await signedApp('update', {
+      id,
+      data: { carrier: 'ups', order: { items: [1, 2], id: 7 } },
+    });
+    expect(await same.json()).toMatchObject({ revision: 1, changed: false });
+    const reordered = await signedApp('update', {
+      id,
+      data: { carrier: 'ups', order: { items: [2, 1], id: 7 } },
+    });
+    expect(await reordered.json()).toMatchObject({
+      revision: 2,
+      changed: true,
+    });
+  });
+
   it('lets a source change only its own notifications', async () => {
     const { id } = await ingestNotification({
       source: appSource,

@@ -242,24 +242,20 @@ export async function recordOutcome(
         outcome.result !== null
           ? truncate(outcome.result, MAX_DELIVERY_RESULT)
           : null;
-      values = behind
-        ? { ...fresh, deliveredRevision, lastError: null, httpStatus }
-        : {
-            status: 'succeeded',
-            leaseExpiresAt: null,
-            completedAt: now,
-            deliveredRevision,
-            lastError: null,
-            httpStatus,
-            ...(outcome.kind === 'success' ? { result } : {}),
-          };
-    } else if (delay !== null) {
       values = {
-        status: 'pending',
-        leaseExpiresAt: null,
-        nextAttemptAt: new Date(now.getTime() + delay),
-        lastError: error,
+        ...(behind
+          ? fresh
+          : {
+              status: 'succeeded' as const,
+              leaseExpiresAt: null,
+              completedAt: now,
+            }),
+        deliveredRevision,
+        lastError: null,
         httpStatus,
+        // Keep an App's answer even when a newer revision follows, which a
+        // destination without lifecycle events then skips.
+        ...(outcome.kind === 'success' ? { result } : {}),
       };
     } else if (behind && deliveredRevision === null && current?.recalledAt) {
       // The original never arrived and is recalled now: never send it.
@@ -270,8 +266,19 @@ export async function recordOutcome(
         lastError: error,
         httpStatus,
       };
-    } else if (behind && deliveredRevision !== null) {
+    } else if (behind) {
+      // This attempt failed on a revision that is already outdated; the
+      // newer state gets its own attempt series now instead of inheriting
+      // the old backoff and attempt count.
       values = { ...fresh, lastError: error, httpStatus };
+    } else if (delay !== null) {
+      values = {
+        status: 'pending',
+        leaseExpiresAt: null,
+        nextAttemptAt: new Date(now.getTime() + delay),
+        lastError: error,
+        httpStatus,
+      };
     } else {
       values = {
         status: 'failed',
@@ -292,7 +299,10 @@ export async function recordOutcome(
           eq(schema.notificationDeliveries.attempts, claimed.attempts),
         ),
       )
-      .returning({ status: schema.notificationDeliveries.status });
+      .returning({
+        status: schema.notificationDeliveries.status,
+        attempts: schema.notificationDeliveries.attempts,
+      });
   });
 
   const { destinationId } = delivery;
@@ -330,8 +340,8 @@ export async function recordOutcome(
       notificationId: delivery.notificationId,
       deliveryId: claimed.id,
     });
-    // A newer revision is due right away on this same delivery.
-    if (row.status === 'pending' && outcome.kind !== 'retry') {
+    // A fresh series (attempts reset) means a newer revision is due now.
+    if (row.status === 'pending' && row.attempts === 0) {
       wakeNotificationDispatcher();
     }
   }
