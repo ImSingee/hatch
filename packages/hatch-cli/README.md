@@ -323,13 +323,13 @@ help` lists every command. `send` takes exactly one recipient. `--channel`
 acts as that Channel (its id, not its token): its kinds, dedupe scope and
 routes apply, and `--kind` is required. `--group` and `--destination` deliver
 straight there from you, never routed, with `--kind` optional (default
-`message`). `update` and `recall` take the same `--channel` for a Channel's
-notifications, and without it change one you sent to a group or destination:
+`message`). `update` and `recall` take only the notification id (ids are
+globally unique) and change any notification, whatever sent it:
 
 ```sh
 hatch notification send --channel <channel-id> --kind build.failed --title 'master is red' --json
 hatch notification send --destination <destination-id> --title 'Deploy finished' --json
-hatch notification update <notification-id> --channel <channel-id> --title 'master is green' --clear-body --json
+hatch notification update <notification-id> --title 'master is green' --clear-body --json
 hatch notification recall <notification-id> --json
 ```
 
@@ -343,10 +343,10 @@ receive `hatch.notification.updated`. `recall` removes it from phones, cancels
 deliveries that have not happened yet and sends `hatch.notification.recalled`
 where edits and recalls are taken; it cannot be undone. Both answer
 `{revision, changed}`; `changed: false` means nothing new happened and nothing
-was sent. An edit with no change flag, or a blank recipient or `--channel`
-id, is rejected locally (exit 2); a notification from another Channel or
-another user is not found (exit 5); editing a recalled notification or using a
-disabled Channel or destination is a conflict (exit 6).
+was sent. An edit with no change flag, or a blank recipient id, is rejected
+locally (exit 2); an unknown notification id is not found (exit 5); editing a
+recalled notification or sending to a disabled Channel or destination is a
+conflict (exit 6).
 
 Webhooks take edits and recalls only with `webhook create --lifecycle-events`
 or `webhook update <id> --lifecycle-events` (`--no-lifecycle-events` turns it

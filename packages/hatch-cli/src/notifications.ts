@@ -447,7 +447,6 @@ const specs: Record<string, Spec> = {
   update: {
     positionals: ['notification-id'],
     options: {
-      channel: { type: 'string' },
       title: { type: 'string' },
       body: { type: 'string' },
       'clear-body': { type: 'boolean' },
@@ -459,15 +458,12 @@ const specs: Record<string, Spec> = {
       'clear-data': { type: 'boolean' },
     },
     build: ([id], values) => {
-      // Without --channel: a notification you sent to a group or destination.
-      const channelId = oneOf(values, ['channel'])?.id;
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
       const title = str(values, 'title');
       if (title !== undefined && !title.trim())
         invalid('--title cannot be empty.');
       exclusive(values, 'data', 'clear-data');
       const request = {
-        channelId,
         id,
         title,
         body: clearable(values, 'body'),
@@ -479,7 +475,7 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
       };
-      const { channelId: _, id: __, ...changes } = request;
+      const { id: _, ...changes } = request;
       if (Object.values(changes).every((value) => value === undefined))
         invalid(
           'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
@@ -496,11 +492,9 @@ const specs: Record<string, Spec> = {
   },
   recall: {
     positionals: ['notification-id'],
-    options: { channel: { type: 'string' } },
-    build: ([id], values) => ({
+    build: ([id]) => ({
       method: 'recallNotification',
-      // Without --channel: a notification you sent to a group or destination.
-      request: { channelId: oneOf(values, ['channel'])?.id, id },
+      request: { id },
       text: (response) =>
         response.changed === true
           ? `Recalled notification ${id} (revision ${field(response, 'revision')}). Phones remove it, destinations that have not received it never will, and those that take recalls are told.`

@@ -1,6 +1,6 @@
 /**
- * Edits and recalls of a notification by the App, Channel or user that sent
- * it.
+ * Edits and recalls of a notification, by the App or Channel that sent it or
+ * by any signed-in workspace member.
  *
  * Each one increments the notification's revision. Deliveries record the
  * revision they last delivered, so the dispatcher sends every destination
@@ -15,10 +15,15 @@ import { publishPlatformEvent } from '~server/platform-events';
 import type { NotificationUpdate } from './contract';
 import { wakeNotificationDispatcher } from './dispatcher';
 
+/**
+ * Who changes a notification. Apps and Channels, authenticated by their own
+ * credentials, reach only what they sent. A `member` (a user session or API
+ * key) reaches every notification: workspace members are all equal.
+ */
 export type NotificationSender =
   | { type: 'app'; appId: string }
   | { type: 'channel'; channelId: string }
-  | { type: 'user'; userId: string };
+  | { type: 'member' };
 
 /** `changed` is false when nothing new happened and nothing is sent. */
 export type LifecycleResult = {
@@ -74,8 +79,8 @@ function sameJson(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Lock the sender's own notification. Another source's notification is
- * reported exactly like a missing one.
+ * Lock a notification the sender may change. For an App or Channel, another
+ * source's notification is reported exactly like a missing one.
  */
 async function lockOwnNotification(
   tx: TX,
@@ -89,15 +94,12 @@ async function lockOwnNotification(
     .where(
       and(
         eq(notifications.id, id),
-        sender.type === 'app'
-          ? and(
-              eq(notifications.sourceType, 'app'),
-              eq(notifications.appId, sender.appId),
-            )
-          : sender.type === 'user'
+        sender.type === 'member'
+          ? undefined
+          : sender.type === 'app'
             ? and(
-                eq(notifications.sourceType, 'user'),
-                eq(notifications.userId, sender.userId),
+                eq(notifications.sourceType, 'app'),
+                eq(notifications.appId, sender.appId),
               )
             : and(
                 eq(notifications.sourceType, 'channel'),

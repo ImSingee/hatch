@@ -379,8 +379,6 @@ describe('notification update and recall', () => {
       parse(
         'update',
         'notification-1',
-        '--channel',
-        'channel-1',
         '--title',
         'master is green',
         '--clear-body',
@@ -389,7 +387,6 @@ describe('notification update and recall', () => {
       ),
     );
     expect(received.updateNotification).toMatchObject({
-      channelId: 'channel-1',
       id: 'notification-1',
       title: 'master is green',
       body: '',
@@ -401,23 +398,7 @@ describe('notification update and recall', () => {
     expect(result.text).toMatch(/revision 2/);
   });
 
-  it('edits your own direct send without --channel', async () => {
-    const { transport, received } = recordingTransport();
-    await executeNotificationCall(
-      transport,
-      parse('update', 'notification-1', '--title', 'Fixed'),
-    );
-    expect(received.updateNotification).toMatchObject({
-      channelId: '',
-      id: 'notification-1',
-      title: 'Fixed',
-    });
-  });
-
   it('rejects edits that change nothing or contradict themselves', () => {
-    expect(() =>
-      parse('update', 'notification-1', '--channel', 'channel-1'),
-    ).toThrow(/at least one change/);
     expect(() => parse('update', 'notification-1')).toThrow(
       /at least one change/,
     );
@@ -428,35 +409,25 @@ describe('notification update and recall', () => {
       /JSON object/,
     );
     expect(() => parse('update', '--title', 'x')).toThrow(/<notification-id>/);
-    // A blank --channel must not silently act on your own sends instead.
-    expect(() =>
-      parse('update', 'notification-1', '--channel', '', '--title', 'x'),
-    ).toThrow(/non-empty id/);
-    expect(() => parse('recall', 'notification-1', '--channel', '')).toThrow(
-      /non-empty id/,
-    );
-    // The channel is a flag now, not a positional.
+    // The notification id alone identifies it; there is no channel to name.
     expect(() => parse('recall', 'channel-1', 'notification-1')).toThrow(
       /<notification-id>/,
     );
+    expect(() =>
+      parse('recall', 'notification-1', '--channel', 'channel-1'),
+    ).toThrow(/Invalid notification arguments/);
   });
 
-  it('recalls as the Channel or as yourself and reports a repeated recall', async () => {
+  it('recalls by id and reports a repeated recall', async () => {
     const { transport, received } = recordingTransport();
     const result = await executeNotificationCall(
       transport,
-      parse('recall', 'notification-1', '--channel', 'channel-1'),
+      parse('recall', 'notification-1'),
     );
     expect(received.recallNotification).toMatchObject({
-      channelId: 'channel-1',
       id: 'notification-1',
     });
     expect(result.text).toMatch(/already recalled/);
-    await executeNotificationCall(transport, parse('recall', 'notification-1'));
-    expect(received.recallNotification).toMatchObject({
-      channelId: '',
-      id: 'notification-1',
-    });
   });
 });
 

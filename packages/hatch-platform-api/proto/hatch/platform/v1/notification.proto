@@ -16,9 +16,9 @@ service NotificationService {
   // Channel push) or from the caller straight to a group or destination. Run
   // credentials are rejected like every other method.
   rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
-  // Edit or recall a notification as the Channel that sent it (like the
-  // Channel's own /update and /recall endpoints), or one the caller sent
-  // straight to a group or destination.
+  // Edit or recall any notification by its id, whatever sent it: members
+  // are all equal. Apps and Channels change only their own through their
+  // /update and /recall endpoints.
   rpc UpdateNotification(UpdateNotificationRequest) returns (UpdateNotificationResponse);
   rpc RecallNotification(RecallNotificationRequest) returns (RecallNotificationResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
@@ -259,15 +259,9 @@ message SendNotificationResponse {
 // stops and a replaced one keeps the setting. Kind, dedupe key and
 // occurred_at never change.
 message UpdateNotificationRequest {
-  // The Channel that sent the notification. Empty: a notification the
-  // caller sent straight to a group or destination.
-  string channel_id = 1 [
-    (buf.validate.field).string = {
-      min_len: 1
-      max_len: 64
-    },
-    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
-  ];
+  // Was the sending Channel's id; any member may change any notification.
+  reserved 1;
+  reserved "channel_id";
   string id = 2 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
@@ -287,15 +281,9 @@ message UpdateNotificationResponse {
 }
 
 message RecallNotificationRequest {
-  // The Channel that sent the notification. Empty: a notification the
-  // caller sent straight to a group or destination.
-  string channel_id = 1 [
-    (buf.validate.field).string = {
-      min_len: 1
-      max_len: 64
-    },
-    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
-  ];
+  // Was the sending Channel's id; any member may change any notification.
+  reserved 1;
+  reserved "channel_id";
   string id = 2 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64

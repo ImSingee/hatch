@@ -1395,22 +1395,6 @@ export async function sendNotification(input: {
   });
 }
 
-/** A Channel that may change what it sent, like its own ingress does. */
-async function senderChannel(channelId: string) {
-  const channel = await db.query.notificationChannels.findFirst({
-    where: { id: channelId },
-    columns: { id: true, enabled: true },
-  });
-  if (!channel) notFound('Channel');
-  if (!channel.enabled) {
-    throw new AppError(
-      'Enable the channel before changing its notifications.',
-      409,
-    );
-  }
-  return { type: 'channel' as const, channelId: channel.id };
-}
-
 async function asAppError<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
@@ -1423,26 +1407,12 @@ async function asAppError<T>(run: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Who edits or recalls a notification on behalf of a signed-in user: a
- * Channel, for that Channel's notifications, or the user, for the ones they
- * sent straight to a group or destination.
+ * Edit any notification by id on behalf of a workspace member (session or API
+ * key), whatever sent it: members are all equal (SendNotification's peer).
  */
-export type ChangeNotificationAs =
-  | { type: 'channel'; id: string }
-  | { type: 'user'; userId: string };
-
-function changeSender(as: ChangeNotificationAs) {
-  return as.type === 'channel'
-    ? senderChannel(as.id)
-    : Promise.resolve({ type: 'user' as const, userId: as.userId });
-}
-
-/** Edit a notification as its sender (SendNotification's peer). */
-export async function updateSentNotification(
-  as: ChangeNotificationAs,
+export async function updateNotificationAsMember(
   body: unknown,
 ): Promise<LifecycleResult> {
-  const sender = await changeSender(as);
   const update = notificationUpdateSchema.safeParse(body);
   if (!update.success) {
     throw new AppError(
@@ -1450,16 +1420,14 @@ export async function updateSentNotification(
       400,
     );
   }
-  return asAppError(() => updateNotification(sender, update.data));
+  return asAppError(() => updateNotification({ type: 'member' }, update.data));
 }
 
-/** Recall a notification as its sender. */
-export async function recallSentNotification(
-  as: ChangeNotificationAs,
+/** Recall any notification by id on behalf of a workspace member. */
+export async function recallNotificationAsMember(
   id: string,
 ): Promise<LifecycleResult> {
-  const sender = await changeSender(as);
-  return asAppError(() => recallNotification(sender, id));
+  return asAppError(() => recallNotification({ type: 'member' }, id));
 }
 
 export function apnsStatus(): ApnsStatusView {

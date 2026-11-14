@@ -108,13 +108,15 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
 
 ### Edits and recalls
 
-The source of a notification can edit or recall it, under the same
-authentication as pushing (for a `user` notification, only the user who sent
-it):
+An App or Channel can edit or recall what it sent, under the same
+authentication as pushing, and any workspace member can edit or recall any
+notification:
 
 - App: `POST /api/app/<id>/notifications/update` and `…/recall` (SDK
   `updateNotification(id, patch)` and `recallNotification(id)`).
 - Channel: `POST /api/notifications/channel/<channelId>/update` and `…/recall`.
+- Member (session or API key): `NotificationService.UpdateNotification` and
+  `RecallNotification` (below).
 
 ```json
 {
@@ -140,14 +142,15 @@ of a recalled notification. Repeating a recall, or an edit that changes
 nothing, leaves the revision as it is, answers `changed: false` and sends
 nothing.
 
-Users edit and recall through `NotificationService.UpdateNotification` and
-`RecallNotification` (CLI `hatch notification update|recall <id>
-[--channel <channel-id>]`), the counterparts of `SendNotification`, with the
-same rules. With `channel_id` they act as that Channel and change only its
-notifications (a disabled Channel is a conflict). Without it they act as
-themselves and change only `user` notifications they sent to a group or
-destination; another user's direct send is not found. In the RPC an empty
-`body`, `url` or `data_json` clears the field.
+Members edit and recall through `NotificationService.UpdateNotification` and
+`RecallNotification` (CLI `hatch notification update|recall <id>`), the
+counterparts of `SendNotification`, with the same rules. Notification ids are
+globally unique, so the id alone names the notification. The platform has no
+per-user permissions and members are all equal, so a member may change any
+notification, whatever its source (App, Channel, platform or any user) and
+whether or not its Channel is enabled. An App or Channel that edits it later
+still can, and finds it recalled (`409`) if a member recalled it. In the RPC
+an empty `body`, `url` or `data_json` clears the field.
 
 Every edit and the recall increment `notifications.revision`, which starts at
 

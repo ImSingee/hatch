@@ -1587,8 +1587,7 @@ describe('notification center authority', () => {
       body: { ...message, destinationId: 'missing' },
     });
     expect(missingTarget.status).toBe(404);
-    // Without channel_id, edits and recalls act on the caller's own direct
-    // sends; the Channel cannot reach them.
+    // Members edit and recall any notification by its id alone.
     const editDirect = await call('NotificationService/UpdateNotification', {
       headers: apiKey,
       body: { id: direct, title: 'Paged twice' },
@@ -1598,11 +1597,6 @@ describe('notification center authority', () => {
       revision: 2,
       changed: true,
     });
-    const recallAsChannel = await call(
-      'NotificationService/RecallNotification',
-      { headers: apiKey, body: { channelId, id: direct } },
-    );
-    expect(recallAsChannel.status).toBe(404);
     const recallDirect = await call('NotificationService/RecallNotification', {
       headers: apiKey,
       body: { id: direct },

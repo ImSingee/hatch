@@ -183,15 +183,15 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'update'],
     usage:
-      'notification update <notification-id> [--channel <id>] [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data]',
+      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data]',
     description:
-      'Edit a notification sent with --channel, or without it one you sent to a group or destination. Phones replace it without alerting again; destinations that take edits receive hatch.notification.updated.',
+      'Edit any notification by id, whatever sent it. Phones replace it without alerting again; destinations that take edits receive hatch.notification.updated.',
   },
   {
     path: ['notification', 'recall'],
-    usage: 'notification recall <notification-id> [--channel <id>]',
+    usage: 'notification recall <notification-id>',
     description:
-      'Recall a notification sent with --channel, or without it one you sent to a group or destination. Phones remove it; destinations that have not received it never will.',
+      'Recall any notification by id, whatever sent it; cannot be undone. Phones remove it; destinations that have not received it never will.',
   },
   {
     path: ['notification', 'retry'],

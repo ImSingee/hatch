@@ -1327,63 +1327,7 @@ describe('edits and recalls', () => {
     }
   });
 
-  it('lets users act as a Channel on that Channel’s notifications only', async () => {
-    const { channel } = await service.createChannel({
-      name: 'Monitoring',
-      kinds: [{ kind: 'alert', name: 'Alert' }],
-    });
-    const own = await service.sendNotification({
-      to: { type: 'channel', id: channel.id },
-      sender: { userId: 'user-1', name: 'Owner' },
-      body: {
-        kind: 'alert',
-        title: 'Disk full',
-        body: 'db-1',
-        data: { host: 'db-1' },
-      },
-    });
-    const app = await ingestNotification({
-      source: appSource,
-      kind: KINDS[0],
-      push: push(),
-    });
-    const asChannel = { type: 'channel' as const, id: channel.id };
-
-    await expect(
-      service.updateSentNotification(asChannel, {
-        id: app.id,
-        title: 'x',
-      }),
-    ).rejects.toMatchObject({ status: 404 });
-    const edited = await service.updateSentNotification(asChannel, {
-      id: own.id,
-      body: '',
-      data: null,
-    });
-    expect(edited).toMatchObject({ revision: 2, changed: true });
-    expect(await service.getNotification(own.id)).toMatchObject({
-      title: 'Disk full',
-      body: null,
-      data: null,
-    });
-
-    await service.updateChannel({ id: channel.id, enabled: false });
-    await expect(
-      service.recallSentNotification(asChannel, own.id),
-    ).rejects.toMatchObject({ status: 409 });
-    await service.updateChannel({ id: channel.id, enabled: true });
-    expect(
-      await service.recallSentNotification(asChannel, own.id),
-    ).toMatchObject({ revision: 3, changed: true });
-    expect(
-      await service.recallSentNotification(asChannel, own.id),
-    ).toMatchObject({ revision: 3, changed: false });
-    await expect(
-      service.updateSentNotification(asChannel, { id: own.id, title: 'x' }),
-    ).rejects.toMatchObject({ status: 409 });
-  });
-
-  it('lets users edit and recall only what they sent directly', async () => {
+  it('lets members edit and recall any notification by id', async () => {
     await db.insert(schema.user).values([
       { id: 'user-1', name: 'Owner', email: 'owner@example.test' },
       { id: 'user-2', name: 'Other', email: 'other@example.test' },
@@ -1394,59 +1338,83 @@ describe('edits and recalls', () => {
         url: webhookUrl,
       });
       const { channel } = await service.createChannel({
-        name: 'CI',
+        name: 'Monitoring',
         kinds: [{ kind: 'alert', name: 'Alert' }],
-      });
-      const asOwner = { type: 'user' as const, userId: 'user-1' };
-      const direct = await service.sendNotification({
-        to: { type: 'destination', id: hook.id },
-        sender: { userId: 'user-1', name: 'Owner' },
-        body: { title: 'Deploy started' },
       });
       const fromChannel = await service.sendNotification({
         to: { type: 'channel', id: channel.id },
         sender: { userId: 'user-1', name: 'Owner' },
-        body: { kind: 'alert', title: 'Disk full' },
+        body: {
+          kind: 'alert',
+          title: 'Disk full',
+          body: 'db-1',
+          data: { host: 'db-1' },
+        },
+      });
+      const fromApp = await ingestNotification({
+        source: appSource,
+        kind: KINDS[0],
+        push: push(),
+      });
+      const fromOtherUser = await service.sendNotification({
+        to: { type: 'destination', id: hook.id },
+        sender: { userId: 'user-2', name: 'Other' },
+        body: { title: 'Deploy started' },
       });
 
-      // Another user, the user acting on a Channel's notification, and a
-      // Channel acting on a user's notification all see "not found".
-      await expect(
-        service.updateSentNotification(
-          { type: 'user', userId: 'user-2' },
-          { id: direct.id, title: 'x' },
-        ),
-      ).rejects.toMatchObject({ status: 404 });
-      await expect(
-        service.recallSentNotification(asOwner, fromChannel.id),
-      ).rejects.toMatchObject({ status: 404 });
-      await expect(
-        service.recallSentNotification(
-          { type: 'channel', id: channel.id },
-          direct.id,
-        ),
-      ).rejects.toMatchObject({ status: 404 });
-
+      // Whatever sent it, and even with its Channel disabled.
+      await service.updateChannel({ id: channel.id, enabled: false });
       expect(
-        await service.updateSentNotification(asOwner, {
-          id: direct.id,
-          title: 'Deploy finished',
+        await service.updateNotificationAsMember({
+          id: fromChannel.id,
+          body: '',
+          data: null,
         }),
       ).toMatchObject({ revision: 2, changed: true });
+      expect(await service.getNotification(fromChannel.id)).toMatchObject({
+        title: 'Disk full',
+        body: null,
+        data: null,
+      });
+      expect(
+        await service.updateNotificationAsMember({
+          id: fromApp.id,
+          title: 'Edited by a person',
+        }),
+      ).toMatchObject({ revision: 2, changed: true });
+
       // Recalled before delivery: the destination never gets it.
       expect(
-        await service.recallSentNotification(asOwner, direct.id),
-      ).toMatchObject({ revision: 3, recalled: true, changed: true });
-      const detail = await service.getNotification(direct.id);
-      expect(detail).toMatchObject({
-        title: 'Deploy finished',
-        recalledAt: expect.any(String),
-      });
-      expect(detail.deliveryList.map((delivery) => delivery.status)).toEqual([
-        'canceled',
-      ]);
+        await service.recallNotificationAsMember(fromOtherUser.id),
+      ).toMatchObject({ revision: 2, recalled: true, changed: true });
+      expect(
+        await service.recallNotificationAsMember(fromOtherUser.id),
+      ).toMatchObject({ revision: 2, changed: false });
+      expect(
+        (await service.getNotification(fromOtherUser.id)).deliveryList.map(
+          (delivery) => delivery.status,
+        ),
+      ).toEqual(['canceled']);
       expect(await runAllDue()).toBe(0);
       expect(received).toHaveLength(0);
+      await expect(
+        service.updateNotificationAsMember({
+          id: fromOtherUser.id,
+          title: 'x',
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(
+        service.recallNotificationAsMember('missing-notification'),
+      ).rejects.toMatchObject({ status: 404 });
+
+      // A Channel's own credentials still reach only what it sent.
+      const { recallNotification } = await import('./lifecycle');
+      await expect(
+        recallNotification(
+          { type: 'channel', channelId: channel.id },
+          fromApp.id,
+        ),
+      ).rejects.toMatchObject({ status: 404 });
     } finally {
       await db.delete(schema.notifications);
       await db.delete(schema.user);
