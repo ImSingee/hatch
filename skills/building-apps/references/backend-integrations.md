@@ -350,8 +350,9 @@ return `{ id, revision, recalled, changed }`.
 ### Receiving as a destination
 
 Declaring `destination` adds the App to the notification destinations users
-can select. Routed notifications arrive as `POST /__notification` with a JSON
-envelope that includes the source (App or Channel id, slug and name), kind,
+can select. Routed notifications, and ones a user sends straight to the App,
+arrive as `POST /__notification` with a JSON envelope that includes the source
+(`type` `app`, `channel`, `platform` or `user`, with its id, slug and name), kind,
 title, body, url, `autoOpenUrl`, data, dedupe key and timestamps. The handler may do anything
 with it (ignore it, forward it to another service, store it). Return 2xx when
 handled; optionally return a free-form `result` string (≤2000 characters) that

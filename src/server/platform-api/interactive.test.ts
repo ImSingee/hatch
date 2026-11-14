@@ -1542,6 +1542,69 @@ describe('notification center authority', () => {
       body: { ...alert, kind: 'other' },
     });
     expect(undeclared.status).toBe(400);
+    // Exactly one recipient: a channel (needs a kind), a group or a
+    // destination. Group and destination sends come from the caller.
+    const { channelId: _, kind: __, ...message } = alert;
+    for (const body of [
+      message,
+      { ...alert, groupId: 'g1' },
+      { channelId, title: 'No kind' },
+    ]) {
+      const response = await call('NotificationService/SendNotification', {
+        headers: apiKey,
+        body,
+      });
+      expect(response.status).toBe(400);
+    }
+    const group = await call('NotificationService/CreateGroup', {
+      headers: apiKey,
+      body: { name: 'Pager' },
+    });
+    const groupId = ((await group.json()) as { group: { id: string } }).group
+      .id;
+    const toGroup = await call('NotificationService/SendNotification', {
+      headers: apiKey,
+      body: { ...message, groupId },
+    });
+    expect(toGroup.status).toBe(200);
+    const { notificationId: direct } = (await toGroup.json()) as {
+      notificationId: string;
+    };
+    const directDetail = await call('NotificationService/GetNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(
+      ((await directDetail.json()) as { notification: { summary: unknown } })
+        .notification.summary,
+    ).toMatchObject({
+      sourceType: 'user',
+      sourceName: 'Notification test',
+      kind: 'message',
+    });
+    const missingTarget = await call('NotificationService/SendNotification', {
+      headers: apiKey,
+      body: { ...message, destinationId: 'missing' },
+    });
+    expect(missingTarget.status).toBe(404);
+    // Members edit and recall any notification by its id alone.
+    const editDirect = await call('NotificationService/UpdateNotification', {
+      headers: apiKey,
+      body: { id: direct, title: 'Paged twice' },
+    });
+    expect(editDirect.status).toBe(200);
+    expect(await editDirect.json()).toMatchObject({
+      revision: 2,
+      changed: true,
+    });
+    const recallDirect = await call('NotificationService/RecallNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(await recallDirect.json()).toMatchObject({
+      revision: 3,
+      changed: true,
+    });
     const register = await call('NotificationService/RegisterDevice', {
       headers: apiKey,
       body: device,

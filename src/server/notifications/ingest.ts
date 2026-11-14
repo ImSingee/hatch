@@ -13,7 +13,8 @@ import { wakeNotificationDispatcher } from './dispatcher';
 export type NotificationSource =
   | { type: 'app'; appId: string; name: string }
   | { type: 'channel'; channelId: string; name: string }
-  | { type: 'platform'; name: string };
+  | { type: 'platform'; name: string }
+  | { type: 'user'; userId: string; name: string };
 
 /** `deliveries` counts the deliveries queued now; 0 for a duplicate. */
 export type IngestResult = {
@@ -33,6 +34,53 @@ type RoutableDestination = {
   appId: string | null;
 };
 
+type Targets = Map<
+  string,
+  { destination: RoutableDestination; routeIds: string[] }
+>;
+
+/** An explicit recipient that replaces routing for one notification. */
+export type NotificationTarget = { type: 'group' | 'destination'; id: string };
+
+const routableColumns = {
+  id: true,
+  type: true,
+  name: true,
+  appId: true,
+} as const;
+
+/**
+ * The enabled destinations of an explicit target: the destination itself, or
+ * every member of the group. Deliveries record no routes.
+ */
+async function resolveTargetDestinations(
+  tx: TX,
+  target: NotificationTarget,
+): Promise<Targets> {
+  const ids =
+    target.type === 'destination'
+      ? [target.id]
+      : (
+          await tx
+            .select({
+              destinationId: schema.notificationGroupMembers.destinationId,
+            })
+            .from(schema.notificationGroupMembers)
+            .where(eq(schema.notificationGroupMembers.groupId, target.id))
+        ).map((member) => member.destinationId);
+  if (ids.length === 0) return new Map();
+  const destinations = await tx.query.notificationDestinations.findMany({
+    where: { id: { in: ids }, enabled: true },
+    columns: routableColumns,
+  });
+  return new Map(
+    destinations.map((destination) => [
+      destination.id,
+      { destination, routeIds: [] },
+    ]),
+  );
+}
+
 /**
  * Destinations for one notification, keyed by destination id with the route
  * ids that selected it. Disabled routes and destinations never match, and an
@@ -42,14 +90,10 @@ export async function resolveRoutedDestinations(
   tx: TX,
   source: NotificationSource,
   kind: string,
-): Promise<
-  Map<string, { destination: RoutableDestination; routeIds: string[] }>
-> {
-  const result = new Map<
-    string,
-    { destination: RoutableDestination; routeIds: string[] }
-  >();
-  if (source.type === 'platform') return result;
+): Promise<Targets> {
+  const result: Targets = new Map();
+  // Platform and user notifications always name their recipient.
+  if (source.type === 'platform' || source.type === 'user') return result;
 
   const routes = (
     await tx.query.notificationRoutes.findMany({
@@ -105,7 +149,7 @@ export async function resolveRoutedDestinations(
 
   const destinations = await tx.query.notificationDestinations.findMany({
     where: { id: { in: [...routeIdsByDestination.keys()] }, enabled: true },
-    columns: { id: true, type: true, name: true, appId: true },
+    columns: routableColumns,
   });
   for (const destination of destinations) {
     if (
@@ -133,21 +177,23 @@ async function findDuplicate(
     where:
       source.type === 'app'
         ? { appId: source.appId, dedupeKey }
-        : { channelId: source.channelId, dedupeKey },
+        : source.type === 'user'
+          ? { userId: source.userId, dedupeKey }
+          : { channelId: source.channelId, dedupeKey },
     columns: { id: true },
   });
   return existing?.id ?? null;
 }
 
 /**
- * Persist one notification and its deliveries. `onlyDestinationId` bypasses
- * routing for platform test notifications.
+ * Persist one notification and its deliveries. `target` replaces routing with
+ * an explicit group or destination; platform and user sources require one.
  */
 export async function ingestNotification(args: {
   source: NotificationSource;
   kind: NotificationKindDeclaration;
   push: NotificationPush;
-  onlyDestinationId?: string;
+  target?: NotificationTarget;
 }): Promise<IngestResult> {
   const { source, kind, push } = args;
   const id = newNotificationId();
@@ -161,6 +207,7 @@ export async function ingestNotification(args: {
         sourceType: source.type,
         appId: source.type === 'app' ? source.appId : null,
         channelId: source.type === 'channel' ? source.channelId : null,
+        userId: source.type === 'user' ? source.userId : null,
         sourceName: source.name,
         kind: kind.kind,
         kindName: kind.name,
@@ -183,21 +230,9 @@ export async function ingestNotification(args: {
       return { id: duplicate, deduplicated: true, deliveries: 0 };
     }
 
-    let targets: Map<
-      string,
-      { destination: RoutableDestination; routeIds: string[] }
-    >;
-    if (args.onlyDestinationId) {
-      const destination = await tx.query.notificationDestinations.findFirst({
-        where: { id: args.onlyDestinationId },
-        columns: { id: true, type: true, name: true, appId: true },
-      });
-      targets = new Map(
-        destination ? [[destination.id, { destination, routeIds: [] }]] : [],
-      );
-    } else {
-      targets = await resolveRoutedDestinations(tx, source, kind.kind);
-    }
+    const targets = args.target
+      ? await resolveTargetDestinations(tx, args.target)
+      : await resolveRoutedDestinations(tx, source, kind.kind);
     if (targets.size > 0) {
       await tx.insert(schema.notificationDeliveries).values(
         [...targets.values()].map(({ destination, routeIds }) => ({

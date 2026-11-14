@@ -215,6 +215,7 @@ export type NotificationRecord = {
   sourceType: NotificationSourceType;
   appId: string | null;
   channelId: string | null;
+  userId: string | null;
   sourceName: string;
   kind: string;
   kindName: string;
@@ -282,6 +283,13 @@ export type NotificationEnvelope = {
   };
 };
 
+/** The App, Channel or sending user id; null for platform notifications. */
+export function notificationSourceId(
+  notification: Pick<NotificationRecord, 'appId' | 'channelId' | 'userId'>,
+): string | null {
+  return notification.appId ?? notification.channelId ?? notification.userId;
+}
+
 export function buildEnvelope(args: {
   event: NotificationEvent;
   notification: NotificationRecord;
@@ -313,7 +321,7 @@ export function buildEnvelope(args: {
       createdAt: notification.createdAt.toISOString(),
       source: {
         type: notification.sourceType,
-        id: notification.appId ?? notification.channelId,
+        id: notificationSourceId(notification),
         slug: args.sourceSlug,
         name: notification.sourceName,
       },

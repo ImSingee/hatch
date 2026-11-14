@@ -140,13 +140,28 @@ function list(values: Values, flag: string): string[] | undefined {
   return Array.isArray(value) ? value : undefined;
 }
 
-function target(values: Values) {
-  exclusive(values, 'group', 'destination');
-  const group = str(values, 'group');
-  const destination = str(values, 'destination');
-  if (group) return { targetType: 'group', targetId: group };
-  if (destination) return { targetType: 'destination', targetId: destination };
+/**
+ * The one id flag of `flags` that is present. A present but blank id is an
+ * error, never an omitted flag, so `--destination "$UNSET"` fails loudly.
+ */
+function oneOf<const Flag extends string>(
+  values: Values,
+  flags: readonly Flag[],
+): { flag: Flag; id: string } | undefined {
+  exclusive(values, ...flags);
+  for (const flag of flags) {
+    const id = str(values, flag);
+    if (id === undefined) continue;
+    if (!id.trim()) invalid(`--${flag} needs a non-empty id.`);
+    return { flag, id };
+  }
   return undefined;
+}
+
+/** A route's `--group` or `--destination`. */
+function target(values: Values) {
+  const to = oneOf(values, ['group', 'destination']);
+  return to && { targetType: to.flag, targetId: to.id };
 }
 
 function sourceType(value: string | undefined, allowed: readonly string[]) {
@@ -272,6 +287,7 @@ const specs: Record<string, Spec> = {
             'app',
             'channel',
             'platform',
+            'user',
           ]),
           sourceId: str(values, 'source'),
           kind: str(values, 'kind'),
@@ -366,8 +382,11 @@ const specs: Record<string, Spec> = {
     }),
   },
   send: {
-    positionals: ['channel-id'],
+    positionals: [],
     options: {
+      channel: { type: 'string' },
+      group: { type: 'string' },
+      destination: { type: 'string' },
       kind: { type: 'string' },
       title: { type: 'string' },
       body: { type: 'string' },
@@ -377,11 +396,16 @@ const specs: Record<string, Spec> = {
       'dedupe-key': { type: 'string' },
       'occurred-at': { type: 'string' },
     },
-    build: ([channelId], values) => {
+    build: (_positionals, values) => {
+      const to = oneOf(values, ['channel', 'group', 'destination']);
+      if (!to) invalid('Supply one of --channel, --group or --destination.');
       const kind = str(values, 'kind');
       const title = str(values, 'title');
-      if (!kind || !title?.trim()) invalid('Supply --kind and --title.');
-      if (!KIND_RE.test(kind))
+      if (!title?.trim()) invalid('Supply --title.');
+      // A Channel only accepts its declared kinds; elsewhere kind is a label.
+      if (to.flag === 'channel' && !kind)
+        invalid('Supply --kind when sending to a channel.');
+      if (kind !== undefined && !KIND_RE.test(kind))
         invalid(
           `Invalid kind "${kind}": use 1-64 lowercase letters, digits, ".", "_" or "-".`,
         );
@@ -389,7 +413,7 @@ const specs: Record<string, Spec> = {
       return {
         method: 'sendNotification',
         request: {
-          channelId,
+          [`${to.flag}Id`]: to.id,
           kind,
           title,
           body: str(values, 'body'),
@@ -405,6 +429,11 @@ const specs: Record<string, Spec> = {
           if (response.deduplicated === true)
             return `Notification ${notificationId} already exists for this dedupe key; nothing new was sent.`;
           const count = Number(response.deliveryCount ?? 0);
+          if (count === 0 && to.flag === 'group')
+            return [
+              `Sent notification ${notificationId}, but nothing was delivered: the group has no enabled destinations.`,
+              'Check hatch notification group list and hatch notification destination list.',
+            ].join('\n');
           if (count === 0)
             return [
               `Sent notification ${notificationId}, but nothing was delivered: no route matched it, or every matched destination is disabled.`,
@@ -416,7 +445,7 @@ const specs: Record<string, Spec> = {
     },
   },
   update: {
-    positionals: ['channel-id', 'notification-id'],
+    positionals: ['notification-id'],
     options: {
       title: { type: 'string' },
       body: { type: 'string' },
@@ -428,14 +457,13 @@ const specs: Record<string, Spec> = {
       data: { type: 'string' },
       'clear-data': { type: 'boolean' },
     },
-    build: ([channelId, id], values) => {
+    build: ([id], values) => {
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
       const title = str(values, 'title');
       if (title !== undefined && !title.trim())
         invalid('--title cannot be empty.');
       exclusive(values, 'data', 'clear-data');
       const request = {
-        channelId,
         id,
         title,
         body: clearable(values, 'body'),
@@ -447,9 +475,8 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
       };
-      if (
-        Object.values(request).filter((value) => value !== undefined).length < 3
-      )
+      const { id: _, ...changes } = request;
+      if (Object.values(changes).every((value) => value === undefined))
         invalid(
           'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
         );
@@ -464,10 +491,10 @@ const specs: Record<string, Spec> = {
     },
   },
   recall: {
-    positionals: ['channel-id', 'notification-id'],
-    build: ([channelId, id]) => ({
+    positionals: ['notification-id'],
+    build: ([id]) => ({
       method: 'recallNotification',
-      request: { channelId, id },
+      request: { id },
       text: (response) =>
         response.changed === true
           ? `Recalled notification ${id} (revision ${field(response, 'revision')}). Phones remove it, destinations that have not received it never will, and those that take recalls are told.`
@@ -505,6 +532,17 @@ const specs: Record<string, Spec> = {
             field(row, 'name'),
             kindText(row),
           ]),
+          // Direct sends have no source id; their kinds come from history.
+          ...(rows(response.userKinds).length > 0
+            ? [
+                [
+                  'user',
+                  '-',
+                  'Sent by people',
+                  kindText({ kinds: response.userKinds }),
+                ],
+              ]
+            : []),
         ]);
       },
     }),

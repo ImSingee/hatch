@@ -31,6 +31,8 @@ import {
   NOTIFICATION_KIND_RE,
   channelKindsSchema,
   isHttpUrl,
+  notificationPushSchema,
+  notificationSourceId,
   notificationUpdateSchema,
   type NotificationPush,
 } from './contract';
@@ -38,6 +40,7 @@ import { ingestChannelPush } from './channel-ingress';
 import {
   ingestNotification,
   newNotificationId,
+  type NotificationTarget,
   requeueDelivery,
 } from './ingest';
 import {
@@ -228,6 +231,11 @@ export type NotificationSourcesView = {
     name: string;
     kinds: NotificationKindDeclaration[];
   }[];
+  /**
+   * Kinds of retained notifications people sent straight to a group or
+   * destination. They are free labels, so only stored history knows them.
+   */
+  userKinds: NotificationKindDeclaration[];
 };
 
 export type ApnsStatusView = ReturnType<typeof describeApnsCredentials>;
@@ -295,7 +303,7 @@ function summaryView(
   return {
     id: row.id,
     sourceType: row.sourceType,
-    sourceId: row.appId ?? row.channelId,
+    sourceId: notificationSourceId(row),
     sourceName: row.sourceName,
     kind: row.kind,
     kindName: row.kindName,
@@ -372,7 +380,7 @@ export async function listNotifications(
   const conditions: (SQL | undefined)[] = [
     input.sourceType ? eq(n.sourceType, input.sourceType) : undefined,
     input.sourceId
-      ? sql`coalesce(${n.appId}, ${n.channelId}) = ${input.sourceId}`
+      ? sql`coalesce(${n.appId}, ${n.channelId}, ${n.userId}) = ${input.sourceId}`
       : undefined,
     input.kind ? eq(n.kind, input.kind) : undefined,
     input.cursor ? lt(n.id, input.cursor) : undefined,
@@ -489,6 +497,12 @@ export async function listNotificationSources(): Promise<NotificationSourcesView
   const channels = await db.query.notificationChannels.findMany({
     orderBy: { name: 'asc' },
   });
+  const n = schema.notifications;
+  const userKinds = await db
+    .selectDistinct({ kind: n.kind, name: n.kindName })
+    .from(n)
+    .where(eq(n.sourceType, 'user'))
+    .orderBy(n.kind, n.kindName);
   return {
     apps: candidates.flatMap((app) => {
       const kinds =
@@ -503,6 +517,7 @@ export async function listNotificationSources(): Promise<NotificationSourcesView
       name: channel.name,
       kinds: channel.kinds,
     })),
+    userKinds,
   };
 }
 
@@ -1309,50 +1324,87 @@ export async function sendTestNotification(
     source: { type: 'platform', name: 'Hatch' },
     kind: TEST_KIND,
     push,
-    onlyDestinationId: destination.id,
+    target: { type: 'destination', id: destination.id },
   });
   return { id: result.id };
 }
 
-/**
- * Push a notification as a Channel on behalf of a signed-in user: the same
- * body rules, kind check and routing as a token-authenticated Channel push.
- */
-export async function sendChannelNotification(
-  channelId: string,
-  body: unknown,
-): Promise<{ id: string; deduplicated: boolean; deliveries: number }> {
-  const channel = await db.query.notificationChannels.findFirst({
-    where: { id: channelId },
-    columns: { id: true, name: true, kinds: true, enabled: true },
-  });
-  if (!channel) notFound('Channel');
-  if (!channel.enabled) {
-    throw new AppError('Enable the channel before sending to it.', 409);
-  }
-  const result = await ingestChannelPush(channel, body);
-  if (!result.ok) throw new AppError(`${result.message}.`, 400);
-  return {
-    id: result.id,
-    deduplicated: result.deduplicated,
-    deliveries: result.deliveries,
-  };
-}
+/** Kind of a user-addressed send that names none. */
+export const USER_MESSAGE_KIND = { kind: 'message', name: 'Message' };
 
-/** A Channel that may change what it sent, like its own ingress does. */
-async function senderChannel(channelId: string) {
-  const channel = await db.query.notificationChannels.findFirst({
-    where: { id: channelId },
-    columns: { id: true, enabled: true },
+export type SendNotificationTarget =
+  | { type: 'channel'; id: string }
+  | NotificationTarget;
+
+/**
+ * Send a notification on behalf of a signed-in user or API key.
+ *
+ * - `channel`: as that Channel, without its token: the same body rules,
+ *   declared kinds, dedupe scope and routing as a token push.
+ * - `group` / `destination`: from the user, never routed. It reaches the
+ *   destination, or the group's enabled members. `kind` is a free label
+ *   (default `message`), and dedupe keys are scoped to the sending user.
+ */
+export async function sendNotification(input: {
+  to: SendNotificationTarget;
+  sender: { userId: string; name: string };
+  body: Record<string, unknown>;
+}): Promise<{ id: string; deduplicated: boolean; deliveries: number }> {
+  const { to, sender, body } = input;
+  if (to.type === 'channel') {
+    const channel = await db.query.notificationChannels.findFirst({
+      where: { id: to.id },
+      columns: { id: true, name: true, kinds: true, enabled: true },
+    });
+    if (!channel) notFound('Channel');
+    if (!channel.enabled) {
+      throw new AppError('Enable the channel before sending to it.', 409);
+    }
+    const result = await ingestChannelPush(channel, body);
+    if (!result.ok) throw new AppError(`${result.message}.`, 400);
+    return {
+      id: result.id,
+      deduplicated: result.deduplicated,
+      deliveries: result.deliveries,
+    };
+  }
+
+  if (to.type === 'group') {
+    const group = await db.query.notificationGroups.findFirst({
+      where: { id: to.id },
+      columns: { id: true },
+    });
+    if (!group) notFound('Group');
+  } else {
+    const destination = await db.query.notificationDestinations.findFirst({
+      where: { id: to.id },
+      columns: { id: true, enabled: true },
+    });
+    if (!destination) notFound('Destination');
+    if (!destination.enabled) {
+      throw new AppError('Enable the destination before sending to it.', 409);
+    }
+  }
+  const push = notificationPushSchema.safeParse({
+    ...body,
+    kind: body.kind ?? USER_MESSAGE_KIND.kind,
   });
-  if (!channel) notFound('Channel');
-  if (!channel.enabled) {
+  if (!push.success) {
     throw new AppError(
-      'Enable the channel before changing its notifications.',
-      409,
+      `${push.error.issues[0]?.message ?? 'Invalid request'}.`,
+      400,
     );
   }
-  return { type: 'channel' as const, channelId: channel.id };
+  const kind =
+    push.data.kind === USER_MESSAGE_KIND.kind
+      ? USER_MESSAGE_KIND
+      : { kind: push.data.kind, name: push.data.kind };
+  return ingestNotification({
+    source: { type: 'user', userId: sender.userId, name: sender.name },
+    kind,
+    push: push.data,
+    target: to,
+  });
 }
 
 async function asAppError<T>(run: () => Promise<T>): Promise<T> {
@@ -1366,12 +1418,13 @@ async function asAppError<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Edit a notification as the Channel that sent it (SendNotification's peer). */
-export async function updateChannelNotification(
-  channelId: string,
+/**
+ * Edit any notification by id on behalf of a workspace member (session or API
+ * key), whatever sent it: members are all equal (SendNotification's peer).
+ */
+export async function updateNotificationAsMember(
   body: unknown,
 ): Promise<LifecycleResult> {
-  const sender = await senderChannel(channelId);
   const update = notificationUpdateSchema.safeParse(body);
   if (!update.success) {
     throw new AppError(
@@ -1379,16 +1432,14 @@ export async function updateChannelNotification(
       400,
     );
   }
-  return asAppError(() => updateNotification(sender, update.data));
+  return asAppError(() => updateNotification({ type: 'member' }, update.data));
 }
 
-/** Recall a notification as the Channel that sent it. */
-export async function recallChannelNotification(
-  channelId: string,
+/** Recall any notification by id on behalf of a workspace member. */
+export async function recallNotificationAsMember(
   id: string,
 ): Promise<LifecycleResult> {
-  const sender = await senderChannel(channelId);
-  return asAppError(() => recallNotification(sender, id));
+  return asAppError(() => recallNotification({ type: 'member' }, id));
 }
 
 export function apnsStatus(): ApnsStatusView {

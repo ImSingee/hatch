@@ -68,7 +68,7 @@ const kindsSchema = z
   .max(100);
 
 const listInputSchema = z.object({
-  sourceType: z.enum(['app', 'channel', 'platform']).optional(),
+  sourceType: z.enum(['app', 'channel', 'platform', 'user']).optional(),
   sourceId: idSchema.optional(),
   kind: z.string().max(64).optional(),
   status: z

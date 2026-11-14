@@ -8,7 +8,8 @@ signed-in user can see and change it.
 ## Model
 
 - **Source**: an App (kinds declared in its manifest), a Channel (kinds
-  declared in platform configuration), or the platform itself (test sends).
+  declared in platform configuration), the platform itself (test sends), or a
+  user who sent straight to a group or destination (`user`, below).
 - **Destination**: `device` (one mobile sign-in session), `webhook` (URL +
   signing secret), or `app` (an App whose live manifest declares
   `notifications.destination`). The App destination row is created on the
@@ -25,6 +26,8 @@ signed-in user can see and change it.
   Null source/kind match anything. All matching routes are expanded, then
   deduplicated per destination; each destination gets one delivery recording
   every route that selected it. An App never receives its own notifications.
+  Platform and user notifications are never routed: they name their
+  recipient, and their deliveries record no routes.
 
 Code: `src/server/notifications/` (`ingest.ts`, `dispatcher.ts`, `service.ts`,
 `adapters/*`, `apns/*`). Tables: `notifications`, `notification_deliveries`,
@@ -78,26 +81,42 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   token in `x-hatch-secret` (header presence wins, even empty) or `?secret=`.
   Only the token's sha256 is stored; create and rotate return it once.
   Disabled channels answer 403.
-- **Channel, as a user**: `SendNotification` (`hatch notification send
-  <channel-id> --kind … --title …`) pushes the same body as that Channel
-  without its token, authenticated by a user session or API key. An unset
-  `auto_open_url` takes the same default as `autoOpenUrl`; the CLI sends
-  `false` only for `--no-auto-open-url`. It shares
-  the kind check, dedupe scope and routing with token pushes
-  (`ingestChannelPush`), answers `CONFLICT` for a disabled channel and
-  `BAD_REQUEST` for an invalid body or undeclared kind, and returns the
-  queued delivery count so callers can spot sends that reached no enabled
-  destination. `NotificationService` reads requests up to 128 KiB (twice the
-  Channel push cap) because `data_json` is escaped inside the request.
+- **User sends**: `SendNotification` (`hatch notification send`) takes the
+  same body and exactly one recipient, authenticated by a user session or API
+  key:
+  - `channel_id` (`--channel`): as that Channel, without its token. It shares
+    the kind check, dedupe scope and routing with token pushes
+    (`ingestChannelPush`); `kind` is required. A disabled channel answers
+    `CONFLICT`.
+  - `group_id` (`--group`) or `destination_id` (`--destination`, any device,
+    webhook or App destination): from the caller, never routed. The source is
+    `user` with the caller's id and name (`notifications.user_id`, set null
+    if the user is deleted; `source_name` keeps the name). A group reaches its
+    enabled members, none queues nothing; a destination must be enabled
+    (`CONFLICT`). `kind` is a free label, default `message` ("Message"), and
+    dedupe keys are scoped to the sending user. Token pushes and Apps cannot
+    address recipients this way: choosing them outside routes is reserved to
+    users.
+
+  An unset `auto_open_url` takes the same default as `autoOpenUrl`; the CLI
+  sends `false` only for `--no-auto-open-url`. Unknown recipients answer
+  `NOT_FOUND`, an invalid body or undeclared Channel kind `BAD_REQUEST`, and
+  the response carries the queued delivery count so callers can spot sends
+  that reached no enabled destination. `NotificationService` reads requests
+  up to 128 KiB (twice the Channel push cap) because `data_json` is escaped
+  inside the request.
 
 ### Edits and recalls
 
-The source of a notification can edit or recall it, under the same
-authentication as pushing:
+An App or Channel can edit or recall what it sent, under the same
+authentication as pushing, and any workspace member can edit or recall any
+notification:
 
 - App: `POST /api/app/<id>/notifications/update` and `…/recall` (SDK
   `updateNotification(id, patch)` and `recallNotification(id)`).
 - Channel: `POST /api/notifications/channel/<channelId>/update` and `…/recall`.
+- Member (session or API key): `NotificationService.UpdateNotification` and
+  `RecallNotification` (below).
 
 ```json
 {
@@ -123,11 +142,15 @@ of a recalled notification. Repeating a recall, or an edit that changes
 nothing, leaves the revision as it is, answers `changed: false` and sends
 nothing.
 
-Users act as a Channel through `NotificationService.UpdateNotification` and
-`RecallNotification` (CLI `hatch notification update|recall <channel-id>
-<id>`), the counterparts of `SendNotification`. They take the Channel id and
-change only that Channel's notifications, with the same rules; in the RPC an
-empty `body`, `url` or `data_json` clears the field.
+Members edit and recall through `NotificationService.UpdateNotification` and
+`RecallNotification` (CLI `hatch notification update|recall <id>`), the
+counterparts of `SendNotification`, with the same rules. Notification ids are
+globally unique, so the id alone names the notification. The platform has no
+per-user permissions and members are all equal, so a member may change any
+notification, whatever its source (App, Channel, platform or any user) and
+whether or not its Channel is enabled. An App or Channel that edits it later
+still can, and finds it recalled (`409`) if a member recalled it. In the RPC
+an empty `body`, `url` or `data_json` clears the field.
 
 Every edit and the recall increment `notifications.revision`, which starts at
 
@@ -204,6 +227,10 @@ Webhook and App destinations receive the same envelope:
   }
 }
 ```
+
+`source.type` is `app`, `channel`, `platform` or `user`; `source.id` is the
+App, Channel or sending user id (null for platform and deleted users) and
+`slug` is set only for Apps.
 
 `type` is `hatch.notification.updated` or `hatch.notification.recalled` for an
 edit or a recall. Those envelopes carry the notification's current state.
@@ -358,3 +385,6 @@ that do not set it never receive the new event types, which older SDKs'
 fields. Historical
 deployments lack the field and neither push nor accept notifications. The
 manifest schema is strict, so Platform and Runner must ship the same build.
+The `user` source type is an additive envelope value: App destinations built
+against the earlier `app | channel | platform` set receive it as a plain
+string, so no compatibility version change is needed either.

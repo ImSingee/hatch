@@ -28,9 +28,9 @@ import {
   retryDelivery,
   rotateChannelToken,
   rotateWebhookSecret,
-  recallChannelNotification,
-  sendChannelNotification,
-  updateChannelNotification,
+  recallNotificationAsMember,
+  sendNotification,
+  updateNotificationAsMember,
   sendTestNotification,
   unregisterDevice,
   updateChannel,
@@ -112,6 +112,18 @@ function dataObject(json: string | undefined): unknown {
     throw publicApiError('BAD_REQUEST', 'data_json must be a JSON object.');
   }
   return value;
+}
+
+/** The user behind a session or API key (the request gate admits no other). */
+function callerOf(context: HandlerContext) {
+  const status = context.values.get(publicApiContext).status;
+  if (
+    status?.credentialType !== 'session' &&
+    status?.credentialType !== 'api-key'
+  ) {
+    throw publicApiError('SESSION_REQUIRED');
+  }
+  return status.user;
 }
 
 function sessionOf(context: HandlerContext) {
@@ -198,16 +210,27 @@ export function registerNotificationApi(router: ConnectRouter) {
       sendTestNotification: async (input) => ({
         notificationId: (await sendTestNotification(input.destinationId)).id,
       }),
-      sendNotification: async (input) => {
-        const result = await sendChannelNotification(input.channelId, {
-          kind: input.kind,
-          title: input.title,
-          body: input.body,
-          url: input.url,
-          autoOpenUrl: input.autoOpenUrl,
-          data: dataObject(input.dataJson),
-          dedupeKey: input.dedupeKey,
-          occurredAt: input.occurredAt,
+      sendNotification: async (input, context) => {
+        const user = callerOf(context);
+        // Protovalidate requires exactly one recipient.
+        const to = input.channelId
+          ? { type: 'channel' as const, id: input.channelId }
+          : input.groupId
+            ? { type: 'group' as const, id: input.groupId }
+            : { type: 'destination' as const, id: input.destinationId };
+        const result = await sendNotification({
+          to,
+          sender: { userId: user.id, name: user.name || user.email },
+          body: {
+            kind: input.kind || undefined,
+            title: input.title,
+            body: input.body,
+            url: input.url,
+            autoOpenUrl: input.autoOpenUrl,
+            data: dataObject(input.dataJson),
+            dedupeKey: input.dedupeKey,
+            occurredAt: input.occurredAt,
+          },
         });
         return {
           notificationId: result.id,
@@ -216,7 +239,7 @@ export function registerNotificationApi(router: ConnectRouter) {
         };
       },
       updateNotification: async (input) => {
-        const result = await updateChannelNotification(input.channelId, {
+        const result = await updateNotificationAsMember({
           id: input.id,
           title: input.title,
           body: input.body,
@@ -233,10 +256,7 @@ export function registerNotificationApi(router: ConnectRouter) {
         return { revision: result.revision, changed: result.changed };
       },
       recallNotification: async (input) => {
-        const result = await recallChannelNotification(
-          input.channelId,
-          input.id,
-        );
+        const result = await recallNotificationAsMember(input.id);
         return { revision: result.revision, changed: result.changed };
       },
       listNotificationSources: async () => {
@@ -250,6 +270,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             ...entry,
             kinds: kinds(entry.kinds),
           })),
+          userKinds: kinds(sources.userKinds),
         };
       },
       getApnsStatus: () => {

@@ -834,7 +834,11 @@ export type NotificationKindDeclaration = {
   description?: string;
 };
 
-export type NotificationSourceType = 'app' | 'channel' | 'platform';
+/**
+ * `user`: a signed-in user or API key addressed one group or destination
+ * directly (`SendNotification`); never routed.
+ */
+export type NotificationSourceType = 'app' | 'channel' | 'platform' | 'user';
 export type NotificationRouteSourceType = 'app' | 'channel' | 'any';
 export type NotificationDestinationType = 'device' | 'webhook' | 'app';
 export type NotificationApnsEnvironment = 'sandbox' | 'production';
@@ -889,6 +893,8 @@ export const notifications = snakeCase.table(
     channelId: ulid().references(() => notificationChannels.id, {
       onDelete: 'set null',
     }),
+    /** Sender of a `user` notification; cleared when the user is deleted. */
+    userId: text().references(() => user.id, { onDelete: 'set null' }),
     sourceName: text().notNull(),
     kind: text().notNull(),
     kindName: text().notNull(),
@@ -928,12 +934,18 @@ export const notifications = snakeCase.table(
       .where(
         sql`"notifications"."channel_id" is not null and "notifications"."dedupe_key" is not null`,
       ),
+    uniqueIndex('notifications_user_dedupe_idx')
+      .on(table.userId, table.dedupeKey)
+      .where(
+        sql`"notifications"."user_id" is not null and "notifications"."dedupe_key" is not null`,
+      ),
     check(
       'notifications_source_check',
       sql`(
-        ("notifications"."source_type" = 'app' and "notifications"."channel_id" is null)
-        or ("notifications"."source_type" = 'channel' and "notifications"."app_id" is null)
-        or ("notifications"."source_type" = 'platform' and "notifications"."app_id" is null and "notifications"."channel_id" is null)
+        ("notifications"."source_type" = 'app' and "notifications"."channel_id" is null and "notifications"."user_id" is null)
+        or ("notifications"."source_type" = 'channel' and "notifications"."app_id" is null and "notifications"."user_id" is null)
+        or ("notifications"."source_type" = 'platform' and "notifications"."app_id" is null and "notifications"."channel_id" is null and "notifications"."user_id" is null)
+        or ("notifications"."source_type" = 'user' and "notifications"."app_id" is null and "notifications"."channel_id" is null)
       )`,
     ),
   ],

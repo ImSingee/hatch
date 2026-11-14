@@ -15,7 +15,11 @@ import {
   buildEncryptedApnsPayload,
   type PushPlaintext,
 } from '../apns/payload';
-import type { NotificationEvent, NotificationRecord } from '../contract';
+import {
+  notificationSourceId,
+  type NotificationEvent,
+  type NotificationRecord,
+} from '../contract';
 import type { DeliveryAdapter, DeliveryOutcome } from '../delivery';
 import { decryptDeviceKey } from '../secrets';
 
@@ -90,7 +94,7 @@ export function pushPlaintext(
     o: origin,
     s: notification.sourceName,
     k: notification.kindName,
-    g: notification.appId ?? notification.channelId ?? 'platform',
+    g: notificationSourceId(notification) ?? notification.sourceType,
     at: notification.occurredAt.toISOString(),
     r: notification.revision,
   };

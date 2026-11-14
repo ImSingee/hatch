@@ -262,6 +262,7 @@ describe('notification send', () => {
       transport,
       parse(
         'send',
+        '--channel',
         'channel-1',
         '--kind',
         'build.failed',
@@ -279,6 +280,8 @@ describe('notification send', () => {
     );
     expect(received.sendNotification).toMatchObject({
       channelId: 'channel-1',
+      groupId: '',
+      destinationId: '',
       kind: 'build.failed',
       title: 'master is red',
       body: 'Build 42 failed',
@@ -293,7 +296,30 @@ describe('notification send', () => {
       deduplicated: false,
       deliveryCount: 0,
     });
-    expect(result.text).toMatch(/nothing was delivered/);
+    expect(result.text).toMatch(/no route matched/);
+  });
+
+  it('sends straight to a group or destination without a kind', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse('send', '--group', 'g1', '--title', 'Hi'),
+    );
+    expect(received.sendNotification).toMatchObject({
+      channelId: '',
+      groupId: 'g1',
+      kind: '',
+      title: 'Hi',
+    });
+    expect(result.text).toMatch(/group has no enabled destinations/);
+    await executeNotificationCall(
+      transport,
+      parse('send', '--destination', 'd1', '--kind', 'ping', '--title', 'Hi'),
+    );
+    expect(received.sendNotification).toMatchObject({
+      destinationId: 'd1',
+      kind: 'ping',
+    });
   });
 
   it('sends an explicit false to keep the notification page', async () => {
@@ -302,9 +328,8 @@ describe('notification send', () => {
       transport,
       parse(
         'send',
-        'channel-1',
-        '--kind',
-        'a',
+        '--destination',
+        'd1',
         '--title',
         'Hi',
         '--url',
@@ -316,27 +341,33 @@ describe('notification send', () => {
   });
 
   it('rejects incomplete or malformed input before calling the platform', () => {
-    expect(() => parse('send', 'channel-1', '--title', 'Hi')).toThrow(
-      /--kind and --title/,
+    expect(() => parse('send', '--title', 'Hi')).toThrow(
+      /one of --channel, --group or --destination/,
     );
     expect(() =>
-      parse('send', 'channel-1', '--kind', 'Bad Kind', '--title', 'Hi'),
+      parse('send', '--channel', 'c1', '--group', 'g1', '--title', 'Hi'),
+    ).toThrow(/only one of --channel, --group, --destination/);
+    // An empty id from an unset shell variable must not be ignored.
+    for (const flag of ['--channel', '--group', '--destination'])
+      expect(() =>
+        parse('send', flag, '', '--kind', 'a', '--title', 'Hi'),
+      ).toThrow(/non-empty id/);
+    expect(() => parse('send', '--channel', 'c1', '--title', 'Hi')).toThrow(
+      /--kind when sending to a channel/,
+    );
+    expect(() => parse('send', '--group', 'g1', '--kind', 'a')).toThrow(
+      /--title/,
+    );
+    expect(() =>
+      parse('send', '--group', 'g1', '--kind', 'Bad Kind', '--title', 'Hi'),
     ).toThrow(/Invalid kind/);
     expect(() =>
-      parse(
-        'send',
-        'channel-1',
-        '--kind',
-        'a',
-        '--title',
-        'Hi',
-        '--data',
-        '[]',
-      ),
+      parse('send', '--group', 'g1', '--title', 'Hi', '--data', '[]'),
     ).toThrow(/JSON object/);
-    expect(() => parse('send', '--kind', 'a', '--title', 'Hi')).toThrow(
-      /<channel-id>/,
-    );
+    // The channel is a flag now, not a positional.
+    expect(() =>
+      parse('send', 'channel-1', '--kind', 'a', '--title', 'Hi'),
+    ).toThrow(/no positional arguments/);
   });
 });
 
@@ -347,7 +378,6 @@ describe('notification update and recall', () => {
       transport,
       parse(
         'update',
-        'channel-1',
         'notification-1',
         '--title',
         'master is green',
@@ -357,7 +387,6 @@ describe('notification update and recall', () => {
       ),
     );
     expect(received.updateNotification).toMatchObject({
-      channelId: 'channel-1',
       id: 'notification-1',
       title: 'master is green',
       body: '',
@@ -370,35 +399,32 @@ describe('notification update and recall', () => {
   });
 
   it('rejects edits that change nothing or contradict themselves', () => {
-    expect(() => parse('update', 'channel-1', 'notification-1')).toThrow(
+    expect(() => parse('update', 'notification-1')).toThrow(
       /at least one change/,
     );
     expect(() =>
-      parse(
-        'update',
-        'channel-1',
-        'notification-1',
-        '--body',
-        'x',
-        '--clear-body',
-      ),
+      parse('update', 'notification-1', '--body', 'x', '--clear-body'),
     ).toThrow(/only one of/);
-    expect(() =>
-      parse('update', 'channel-1', 'notification-1', '--data', '[]'),
-    ).toThrow(/JSON object/);
-    expect(() => parse('update', 'channel-1', '--title', 'x')).toThrow(
+    expect(() => parse('update', 'notification-1', '--data', '[]')).toThrow(
+      /JSON object/,
+    );
+    expect(() => parse('update', '--title', 'x')).toThrow(/<notification-id>/);
+    // The notification id alone identifies it; there is no channel to name.
+    expect(() => parse('recall', 'channel-1', 'notification-1')).toThrow(
       /<notification-id>/,
     );
+    expect(() =>
+      parse('recall', 'notification-1', '--channel', 'channel-1'),
+    ).toThrow(/Invalid notification arguments/);
   });
 
-  it('recalls as the Channel and reports a repeated recall', async () => {
+  it('recalls by id and reports a repeated recall', async () => {
     const { transport, received } = recordingTransport();
     const result = await executeNotificationCall(
       transport,
-      parse('recall', 'channel-1', 'notification-1'),
+      parse('recall', 'notification-1'),
     );
     expect(received.recallNotification).toMatchObject({
-      channelId: 'channel-1',
       id: 'notification-1',
     });
     expect(result.text).toMatch(/already recalled/);

@@ -159,7 +159,7 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'list'],
     usage:
-      'notification list [--source-type app|channel|platform] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--limit <1-100>] [--cursor <id>]',
+      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--limit <1-100>] [--cursor <id>]',
     description: 'List notifications, newest first.',
   },
   {
@@ -176,22 +176,22 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'send'],
     usage:
-      'notification send <channel-id> --kind <kind> --title <title> [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>]',
+      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>]',
     description:
-      'Push a notification as a Channel; routes decide where it is delivered. Tapping it on a phone opens --url unless --no-auto-open-url is set.',
+      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set.',
   },
   {
     path: ['notification', 'update'],
     usage:
-      'notification update <channel-id> <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data]',
+      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data]',
     description:
-      'Edit a notification the Channel sent. Phones replace it without alerting again; destinations that take edits receive hatch.notification.updated.',
+      'Edit any notification by id, whatever sent it. Phones replace it without alerting again; destinations that take edits receive hatch.notification.updated.',
   },
   {
     path: ['notification', 'recall'],
-    usage: 'notification recall <channel-id> <notification-id>',
+    usage: 'notification recall <notification-id>',
     description:
-      'Recall a notification the Channel sent. Phones remove it; destinations that have not received it never will.',
+      'Recall any notification by id, whatever sent it; cannot be undone. Phones remove it; destinations that have not received it never will.',
   },
   {
     path: ['notification', 'retry'],

@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
+import type { NotificationSourceType } from '~/db/schema';
 import {
   getApnsStatusFn,
   getNotificationFn,
@@ -15,7 +16,7 @@ import {
 export const NOTIFICATIONS_KEY = ['notifications'] as const;
 
 export type NotificationFilters = {
-  sourceType?: 'app' | 'channel' | 'platform';
+  sourceType?: NotificationSourceType;
   sourceId?: string;
   kind?: string;
   status?: NotificationStatus;

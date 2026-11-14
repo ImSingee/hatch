@@ -33,7 +33,7 @@ function parseSource(
   value: string | null,
 ): Pick<NotificationFilters, 'sourceType' | 'sourceId'> {
   if (!value) return {};
-  if (value === 'platform') return { sourceType: 'platform' };
+  if (value === 'platform' || value === 'user') return { sourceType: value };
   const [type, id] = value.split(':');
   return {
     sourceType: type === 'app' ? 'app' : 'channel',
@@ -81,7 +81,10 @@ export function NotificationHistory() {
         : []),
       {
         group: 'Hatch',
-        items: [{ value: 'platform', label: 'Test notifications' }],
+        items: [
+          { value: 'user', label: 'Sent by people' },
+          { value: 'platform', label: 'Test notifications' },
+        ],
       },
     ],
     [sources],
@@ -90,12 +93,23 @@ export function NotificationHistory() {
   const kindOptions = useMemo(() => {
     const selected = parseSource(source);
     const all = [
-      ...(sources?.apps ?? []).map((app) => ({ id: app.id, kinds: app.kinds })),
+      ...(sources?.apps ?? []).map((app) => ({
+        type: 'app',
+        id: app.id,
+        kinds: app.kinds,
+      })),
       ...(sources?.channels ?? []).map((channel) => ({
+        type: 'channel',
         id: channel.id,
         kinds: channel.kinds,
       })),
-    ].filter((entry) => !selected.sourceId || entry.id === selected.sourceId);
+      { type: 'user', id: null, kinds: sources?.userKinds ?? [] },
+    ].filter(
+      (entry) =>
+        !selected.sourceType ||
+        (entry.type === selected.sourceType &&
+          (!selected.sourceId || entry.id === selected.sourceId)),
+    );
     const seen = new Map<string, string>();
     for (const entry of all) {
       for (const k of entry.kinds) {
