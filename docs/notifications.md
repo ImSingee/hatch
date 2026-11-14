@@ -83,7 +83,14 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   (`ingestChannelPush`), answers `CONFLICT` for a disabled channel and
   `BAD_REQUEST` for an invalid body or undeclared kind, and returns the
   queued delivery count so callers can spot sends that reached no enabled
-  destination. `NotificationService` reads requests up to 128 KiB (twice the
+  destination. `target_type` + `target_id` (`--group <id>` or
+  `--destination <id>`, any device, webhook or App destination) replace
+  routing: routes are not consulted, the deliveries record no route ids, a
+  group reaches its enabled members (none queues nothing), and a missing
+  target answers `NOT_FOUND`, a disabled destination `CONFLICT`. Kinds and
+  dedupe still apply, so a repeated dedupe key returns the first
+  notification wherever it was sent. Token pushes cannot name a target:
+  choosing recipients outside routes is reserved to users. `NotificationService` reads requests up to 128 KiB (twice the
   Channel push cap) because `data_json` is escaped inside the request.
 
 ## Delivery

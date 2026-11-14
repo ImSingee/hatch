@@ -670,6 +670,98 @@ describe('user channel sends', () => {
       service.sendChannelNotification('missing-channel', red()),
     ).rejects.toMatchObject({ status: 404 });
   });
+
+  it('deliver only to an explicit group or destination, ignoring routes', async () => {
+    const { channel } = await service.createChannel({
+      name: 'CI',
+      kinds: [CI_KIND],
+    });
+    const hook = async (name: string) =>
+      (await service.createWebhook({ name, url: webhookUrl })).destination;
+    const routed = await hook('Routed');
+    const direct = await hook('Direct');
+    const member = await hook('Member');
+    const muted = await hook('Muted');
+    await service.updateDestination({ id: muted.id, enabled: false });
+    await service.createRoute({
+      sourceType: 'channel',
+      sourceId: channel.id,
+      targetType: 'destination',
+      targetId: routed.id,
+    });
+    const group = await service.createGroup({
+      name: 'On call',
+      destinationIds: [member.id, muted.id],
+    });
+    const deliveredTo = async (id: string) =>
+      (await service.getNotification(id)).deliveryList.map((delivery) => ({
+        destinationId: delivery.destinationId,
+        routeIds: delivery.routeIds,
+      }));
+
+    const toDestination = await service.sendChannelNotification(
+      channel.id,
+      red(),
+      { type: 'destination', id: direct.id },
+    );
+    expect(toDestination.deliveries).toBe(1);
+    expect(await deliveredTo(toDestination.id)).toEqual([
+      { destinationId: direct.id, routeIds: [] },
+    ]);
+
+    // A group reaches its enabled members only; routes stay out of it.
+    const toGroup = await service.sendChannelNotification(channel.id, red(), {
+      type: 'group',
+      id: group.id,
+    });
+    expect(toGroup.deliveries).toBe(1);
+    expect(await deliveredTo(toGroup.id)).toEqual([
+      { destinationId: member.id, routeIds: [] },
+    ]);
+    expect(await runAllDue()).toBe(2);
+
+    // The channel's kinds and dedupe scope still apply to addressed sends.
+    await expect(
+      service.sendChannelNotification(
+        channel.id,
+        red({ kind: 'deploy.done' }),
+        {
+          type: 'group',
+          id: group.id,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    const first = await service.sendChannelNotification(
+      channel.id,
+      red({ dedupeKey: 'build-7' }),
+    );
+    expect(
+      await service.sendChannelNotification(
+        channel.id,
+        red({ dedupeKey: 'build-7' }),
+        { type: 'destination', id: direct.id },
+      ),
+    ).toEqual({ id: first.id, deduplicated: true, deliveries: 0 });
+
+    await expect(
+      service.sendChannelNotification(channel.id, red(), {
+        type: 'destination',
+        id: muted.id,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.sendChannelNotification(channel.id, red(), {
+        type: 'destination',
+        id: 'missing-destination',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service.sendChannelNotification(channel.id, red(), {
+        type: 'group',
+        id: 'missing-group',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
 });
 
 describe('devices', () => {

@@ -247,6 +247,59 @@ describe('notification send', () => {
     expect(received.sendNotification?.autoOpenUrl).toBe(false);
   });
 
+  it('addresses one group or destination instead of routes', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse(
+        'send',
+        'channel-1',
+        '--kind',
+        'a',
+        '--title',
+        'Hi',
+        '--group',
+        'g1',
+      ),
+    );
+    expect(received.sendNotification).toMatchObject({
+      targetType: 'group',
+      targetId: 'g1',
+    });
+    expect(result.text).toMatch(/group has no enabled destinations/);
+    await executeNotificationCall(
+      transport,
+      parse(
+        'send',
+        'channel-1',
+        '--kind',
+        'a',
+        '--title',
+        'Hi',
+        '--destination',
+        'd1',
+      ),
+    );
+    expect(received.sendNotification).toMatchObject({
+      targetType: 'destination',
+      targetId: 'd1',
+    });
+    expect(() =>
+      parse(
+        'send',
+        'channel-1',
+        '--kind',
+        'a',
+        '--title',
+        'Hi',
+        '--group',
+        'g1',
+        '--destination',
+        'd1',
+      ),
+    ).toThrow(/only one of --group, --destination/);
+  });
+
   it('rejects incomplete or malformed input before calling the platform', () => {
     expect(() => parse('send', 'channel-1', '--title', 'Hi')).toThrow(
       /--kind and --title/,

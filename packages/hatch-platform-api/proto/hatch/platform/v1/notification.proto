@@ -13,7 +13,8 @@ service NotificationService {
   rpc RetryDelivery(RetryDeliveryRequest) returns (RetryDeliveryResponse);
   rpc SendTestNotification(SendTestNotificationRequest) returns (SendTestNotificationResponse);
   // Push a notification as a Channel without its token; routed like a
-  // Channel push. Run credentials are rejected like every other method.
+  // Channel push unless it names a group or destination to deliver to. Run
+  // credentials are rejected like every other method.
   rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
   rpc GetApnsStatus(GetApnsStatusRequest) returns (GetApnsStatusResponse);
@@ -186,12 +187,32 @@ message SendNotificationRequest {
   // defaults to whether url is set; false keeps the notification page; true
   // requires url.
   optional bool auto_open_url = 9;
+  // Deliver to this group or destination instead of matching routes. Set
+  // both or neither. A group reaches its enabled members; a destination must
+  // be enabled.
+  optional string target_type = 10 [(buf.validate.field).string = {
+    in: [
+      "group",
+      "destination"
+    ]
+  }];
+  optional string target_id = 11 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+
+  option (buf.validate.message).cel = {
+    id: "send_notification.target"
+    message: "target_type and target_id must be set together"
+    expression: "has(this.target_type) == has(this.target_id)"
+  };
 }
 message SendNotificationResponse {
   string notification_id = 1;
   // True when dedupe_key matched an earlier notification from this Channel.
   bool deduplicated = 2;
-  // Deliveries queued by matching routes; 0 for a duplicate.
+  // Deliveries queued by matching routes or the explicit target; 0 for a
+  // duplicate.
   uint32 delivery_count = 3;
 }
 

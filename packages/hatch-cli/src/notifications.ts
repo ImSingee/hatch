@@ -276,8 +276,12 @@ const specs: Record<string, Spec> = {
       data: { type: 'string' },
       'dedupe-key': { type: 'string' },
       'occurred-at': { type: 'string' },
+      group: { type: 'string' },
+      destination: { type: 'string' },
     },
     build: ([channelId], values) => {
+      // An explicit recipient replaces routing; without one, routes decide.
+      const to = target(values);
       const kind = str(values, 'kind');
       const title = str(values, 'title');
       if (!kind || !title?.trim()) invalid('Supply --kind and --title.');
@@ -313,12 +317,18 @@ const specs: Record<string, Spec> = {
           dataJson: data,
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
+          ...to,
         },
         text: (response) => {
           const notificationId = field(response, 'notificationId');
           if (response.deduplicated === true)
             return `Notification ${notificationId} already exists for this dedupe key; nothing new was sent.`;
           const count = Number(response.deliveryCount ?? 0);
+          if (count === 0 && to?.targetType === 'group')
+            return [
+              `Sent notification ${notificationId}, but nothing was delivered: the group has no enabled destinations.`,
+              'Check hatch notification group list and hatch notification destination list.',
+            ].join('\n');
           if (count === 0)
             return [
               `Sent notification ${notificationId}, but nothing was delivered: no route matched it, or every matched destination is disabled.`,

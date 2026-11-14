@@ -1542,6 +1542,31 @@ describe('notification center authority', () => {
       body: { ...alert, kind: 'other' },
     });
     expect(undeclared.status).toBe(400);
+    // An explicit target replaces routing and needs both of its fields.
+    const halfTarget = await call('NotificationService/SendNotification', {
+      headers: apiKey,
+      body: { ...alert, targetType: 'group' },
+    });
+    expect(halfTarget.status).toBe(400);
+    const group = await call('NotificationService/CreateGroup', {
+      headers: apiKey,
+      body: { name: 'Pager' },
+    });
+    const groupId = ((await group.json()) as { group: { id: string } }).group
+      .id;
+    const toGroup = await call('NotificationService/SendNotification', {
+      headers: apiKey,
+      body: { ...alert, targetType: 'group', targetId: groupId },
+    });
+    expect(toGroup.status).toBe(200);
+    expect(await toGroup.json()).toMatchObject({
+      notificationId: expect.any(String),
+    });
+    const missingTarget = await call('NotificationService/SendNotification', {
+      headers: apiKey,
+      body: { ...alert, targetType: 'destination', targetId: 'missing' },
+    });
+    expect(missingTarget.status).toBe(404);
     const register = await call('NotificationService/RegisterDevice', {
       headers: apiKey,
       body: device,

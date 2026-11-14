@@ -33,6 +33,53 @@ type RoutableDestination = {
   appId: string | null;
 };
 
+type Targets = Map<
+  string,
+  { destination: RoutableDestination; routeIds: string[] }
+>;
+
+/** An explicit recipient that replaces routing for one notification. */
+export type NotificationTarget = { type: 'group' | 'destination'; id: string };
+
+const routableColumns = {
+  id: true,
+  type: true,
+  name: true,
+  appId: true,
+} as const;
+
+/**
+ * The enabled destinations of an explicit target: the destination itself, or
+ * every member of the group. Deliveries record no routes.
+ */
+async function resolveTargetDestinations(
+  tx: TX,
+  target: NotificationTarget,
+): Promise<Targets> {
+  const ids =
+    target.type === 'destination'
+      ? [target.id]
+      : (
+          await tx
+            .select({
+              destinationId: schema.notificationGroupMembers.destinationId,
+            })
+            .from(schema.notificationGroupMembers)
+            .where(eq(schema.notificationGroupMembers.groupId, target.id))
+        ).map((member) => member.destinationId);
+  if (ids.length === 0) return new Map();
+  const destinations = await tx.query.notificationDestinations.findMany({
+    where: { id: { in: ids }, enabled: true },
+    columns: routableColumns,
+  });
+  return new Map(
+    destinations.map((destination) => [
+      destination.id,
+      { destination, routeIds: [] },
+    ]),
+  );
+}
+
 /**
  * Destinations for one notification, keyed by destination id with the route
  * ids that selected it. Disabled routes and destinations never match, and an
@@ -42,13 +89,8 @@ export async function resolveRoutedDestinations(
   tx: TX,
   source: NotificationSource,
   kind: string,
-): Promise<
-  Map<string, { destination: RoutableDestination; routeIds: string[] }>
-> {
-  const result = new Map<
-    string,
-    { destination: RoutableDestination; routeIds: string[] }
-  >();
+): Promise<Targets> {
+  const result: Targets = new Map();
   if (source.type === 'platform') return result;
 
   const routes = (
@@ -105,7 +147,7 @@ export async function resolveRoutedDestinations(
 
   const destinations = await tx.query.notificationDestinations.findMany({
     where: { id: { in: [...routeIdsByDestination.keys()] }, enabled: true },
-    columns: { id: true, type: true, name: true, appId: true },
+    columns: routableColumns,
   });
   for (const destination of destinations) {
     if (
@@ -140,14 +182,14 @@ async function findDuplicate(
 }
 
 /**
- * Persist one notification and its deliveries. `onlyDestinationId` bypasses
- * routing for platform test notifications.
+ * Persist one notification and its deliveries. `target` replaces routing with
+ * an explicit group or destination (test sends, user-addressed sends).
  */
 export async function ingestNotification(args: {
   source: NotificationSource;
   kind: NotificationKindDeclaration;
   push: NotificationPush;
-  onlyDestinationId?: string;
+  target?: NotificationTarget;
 }): Promise<IngestResult> {
   const { source, kind, push } = args;
   const id = newNotificationId();
@@ -183,21 +225,9 @@ export async function ingestNotification(args: {
       return { id: duplicate, deduplicated: true, deliveries: 0 };
     }
 
-    let targets: Map<
-      string,
-      { destination: RoutableDestination; routeIds: string[] }
-    >;
-    if (args.onlyDestinationId) {
-      const destination = await tx.query.notificationDestinations.findFirst({
-        where: { id: args.onlyDestinationId },
-        columns: { id: true, type: true, name: true, appId: true },
-      });
-      targets = new Map(
-        destination ? [[destination.id, { destination, routeIds: [] }]] : [],
-      );
-    } else {
-      targets = await resolveRoutedDestinations(tx, source, kind.kind);
-    }
+    const targets = args.target
+      ? await resolveTargetDestinations(tx, args.target)
+      : await resolveRoutedDestinations(tx, source, kind.kind);
     if (targets.size > 0) {
       await tx.insert(schema.notificationDeliveries).values(
         [...targets.values()].map(({ destination, routeIds }) => ({

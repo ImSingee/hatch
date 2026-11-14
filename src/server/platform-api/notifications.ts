@@ -194,16 +194,26 @@ export function registerNotificationApi(router: ConnectRouter) {
         notificationId: (await sendTestNotification(input.destinationId)).id,
       }),
       sendNotification: async (input) => {
-        const result = await sendChannelNotification(input.channelId, {
-          kind: input.kind,
-          title: input.title,
-          body: input.body,
-          url: input.url,
-          autoOpenUrl: input.autoOpenUrl,
-          data: dataObject(input.dataJson),
-          dedupeKey: input.dedupeKey,
-          occurredAt: input.occurredAt,
-        });
+        const result = await sendChannelNotification(
+          input.channelId,
+          {
+            kind: input.kind,
+            title: input.title,
+            body: input.body,
+            url: input.url,
+            autoOpenUrl: input.autoOpenUrl,
+            data: dataObject(input.dataJson),
+            dedupeKey: input.dedupeKey,
+            occurredAt: input.occurredAt,
+          },
+          // Protovalidate requires both fields or neither.
+          input.targetType !== undefined && input.targetId !== undefined
+            ? {
+                type: input.targetType as 'group' | 'destination',
+                id: input.targetId,
+              }
+            : undefined,
+        );
         return {
           notificationId: result.id,
           deduplicated: result.deduplicated,

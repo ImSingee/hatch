@@ -37,6 +37,7 @@ import { ingestChannelPush } from './channel-ingress';
 import {
   ingestNotification,
   newNotificationId,
+  type NotificationTarget,
   requeueDelivery,
 } from './ingest';
 import {
@@ -1265,18 +1266,21 @@ export async function sendTestNotification(
     source: { type: 'platform', name: 'Hatch' },
     kind: TEST_KIND,
     push,
-    onlyDestinationId: destination.id,
+    target: { type: 'destination', id: destination.id },
   });
   return { id: result.id };
 }
 
 /**
  * Push a notification as a Channel on behalf of a signed-in user: the same
- * body rules, kind check and routing as a token-authenticated Channel push.
+ * body rules, kind check and dedupe scope as a token-authenticated Channel
+ * push. Without a `target` it is routed like one; with a target it reaches
+ * only that destination or the group's enabled members.
  */
 export async function sendChannelNotification(
   channelId: string,
   body: unknown,
+  target?: NotificationTarget,
 ): Promise<{ id: string; deduplicated: boolean; deliveries: number }> {
   const channel = await db.query.notificationChannels.findFirst({
     where: { id: channelId },
@@ -1286,7 +1290,23 @@ export async function sendChannelNotification(
   if (!channel.enabled) {
     throw new AppError('Enable the channel before sending to it.', 409);
   }
-  const result = await ingestChannelPush(channel, body);
+  if (target?.type === 'group') {
+    const group = await db.query.notificationGroups.findFirst({
+      where: { id: target.id },
+      columns: { id: true },
+    });
+    if (!group) notFound('Group');
+  } else if (target) {
+    const destination = await db.query.notificationDestinations.findFirst({
+      where: { id: target.id },
+      columns: { id: true, enabled: true },
+    });
+    if (!destination) notFound('Destination');
+    if (!destination.enabled) {
+      throw new AppError('Enable the destination before sending to it.', 409);
+    }
+  }
+  const result = await ingestChannelPush(channel, body, target);
   if (!result.ok) throw new AppError(`${result.message}.`, 400);
   return {
     id: result.id,
