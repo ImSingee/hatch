@@ -192,6 +192,12 @@ const definitions: readonly CliCommandDefinition[] = [
       'List Apps and Channels with the notification kinds they declare.',
   },
   {
+    path: ['notification', 'apns-status'],
+    usage: 'notification apns-status',
+    description:
+      'Show which APNs key this instance uses for iOS device deliveries.',
+  },
+  {
     path: ['notification', 'destination', 'list'],
     usage: 'notification destination list',
     description: 'List devices, webhooks and App destinations.',
@@ -280,15 +286,16 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'channel', 'create'],
     usage:
-      'notification channel create --name <name> [--description <text>] --kind <kind>[:<display name>]...',
+      'notification channel create --name <name> [--description <text>] --kind <kind>[:<display name>]... [--kind-description <kind>=<text>]...',
     description:
       'Create a channel for external systems; prints its push URL and token once.',
   },
   {
     path: ['notification', 'channel', 'update'],
     usage:
-      'notification channel update <id> [--name <name>] [--description <text>] [--kind <kind>[:<display name>]...] [--enable | --disable]',
-    description: 'Change a channel; --kind replaces the full kind list.',
+      'notification channel update <id> [--name <name>] [--description <text>] [--kind <kind>[:<display name>]... [--kind-description <kind>=<text>]...] [--enable | --disable]',
+    description:
+      'Change a channel; --kind replaces the full kind list, so repeat every kind with its name and description.',
   },
   {
     path: ['notification', 'channel', 'rotate-token'],
