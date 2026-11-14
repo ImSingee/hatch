@@ -939,6 +939,12 @@ export const notifications = snakeCase.table(
       .where(
         sql`"notifications"."user_id" is not null and "notifications"."dedupe_key" is not null`,
       ),
+    // Platform sends (an Agent Run's direct sends) share one dedupe scope.
+    uniqueIndex('notifications_platform_dedupe_idx')
+      .on(table.dedupeKey)
+      .where(
+        sql`"notifications"."source_type" = 'platform' and "notifications"."dedupe_key" is not null`,
+      ),
     check(
       'notifications_source_check',
       sql`(

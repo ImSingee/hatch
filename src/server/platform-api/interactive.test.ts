@@ -1424,7 +1424,7 @@ describe('notification center authority', () => {
     };
   }
 
-  it('lets users manage delivery, keeps Runs out, and binds devices to sessions', async () => {
+  it('lets users and Runs manage delivery, and binds devices to sessions', async () => {
     const user = await signUp();
     const keyResponse = await authCall(
       'api-key/create',
@@ -1612,27 +1612,66 @@ describe('notification center authority', () => {
     expect(register.status).toBe(403);
     expect(await errorCode(register)).toBe('SESSION_REQUIRED');
 
-    // Run credentials cannot read or change notification configuration.
-    for (const path of [
-      'NotificationService/ListDestinations',
-      'NotificationService/ListChannels',
-      'NotificationService/CreateGroup',
-      'NotificationService/SendNotification',
-      'NotificationService/DeleteNotification',
-    ]) {
-      const response = await call(path, {
-        headers: { authorization: `Bearer ${jwt.token}` },
-        body: path.endsWith('CreateGroup')
-          ? { name: 'Agents' }
-          : path.endsWith('SendNotification')
-            ? alert
-            : path.endsWith('DeleteNotification')
-              ? { id: direct }
-              : {},
+    // Run credentials have the same authority as users: they read and change
+    // configuration and send, as the platform Agent.
+    const run = { authorization: `Bearer ${jwt.token}` };
+    const runGroup = await call('NotificationService/CreateGroup', {
+      headers: run,
+      body: { name: 'Agents' },
+    });
+    expect(runGroup.status).toBe(200);
+    const runGroupId = ((await runGroup.json()) as { group: { id: string } })
+      .group.id;
+    const runGroups = await call('NotificationService/ListGroups', {
+      headers: run,
+    });
+    expect(
+      ((await runGroups.json()) as { groups: { id: string }[] }).groups.map(
+        (entry) => entry.id,
+      ),
+    ).toContain(runGroupId);
+    const runChannelSend = await call('NotificationService/SendNotification', {
+      headers: run,
+      body: alert,
+    });
+    expect(runChannelSend.status).toBe(200);
+    const agentSend = async () => {
+      const response = await call('NotificationService/SendNotification', {
+        headers: run,
+        body: { ...message, groupId: runGroupId, dedupeKey: 'agent-1' },
       });
-      expect(response.status).toBe(403);
-      expect(await errorCode(response)).toBe('SESSION_REQUIRED');
-    }
+      expect(response.status).toBe(200);
+      return (await response.json()) as {
+        notificationId: string;
+        deduplicated?: boolean;
+      };
+    };
+    const agentFirst = await agentSend();
+    // Platform sends dedupe by key like any other sender.
+    expect(await agentSend()).toEqual({
+      ...agentFirst,
+      deduplicated: true,
+    });
+    const agentDetail = await call('NotificationService/GetNotification', {
+      headers: run,
+      body: { id: agentFirst.notificationId },
+    });
+    expect(
+      ((await agentDetail.json()) as { notification: { summary: unknown } })
+        .notification.summary,
+    ).toMatchObject({ sourceType: 'platform', sourceName: 'Hatch Agent' });
+    const runRecall = await call('NotificationService/RecallNotification', {
+      headers: run,
+      body: { id: agentFirst.notificationId },
+    });
+    expect(runRecall.status).toBe(200);
+    // A device belongs to the native login session that registered it.
+    const runRegister = await call('NotificationService/RegisterDevice', {
+      headers: run,
+      body: device,
+    });
+    expect(runRegister.status).toBe(403);
+    expect(await errorCode(runRegister)).toBe('SESSION_REQUIRED');
 
     // Members delete any notification from history by its id.
     const deleteDirect = await call('NotificationService/DeleteNotification', {
@@ -1650,6 +1689,12 @@ describe('notification center authority', () => {
       body: { id: direct },
     });
     expect(deleteAgain.status).toBe(404);
+    // A Run deletes with the same authority.
+    const runDelete = await call('NotificationService/DeleteNotification', {
+      headers: run,
+      body: { id: agentFirst.notificationId },
+    });
+    expect(runDelete.status).toBe(200);
 
     // A session registers its own device; revoking the session removes it.
     const session = { authorization: `Bearer ${user.token}` };

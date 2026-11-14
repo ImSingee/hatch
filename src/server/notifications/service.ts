@@ -41,6 +41,7 @@ import { ingestChannelPush } from './channel-ingress';
 import {
   ingestNotification,
   newNotificationId,
+  type NotificationSource,
   type NotificationTarget,
   requeueDelivery,
 } from './ingest';
@@ -1337,18 +1338,32 @@ export type SendNotificationTarget =
   | { type: 'channel'; id: string }
   | NotificationTarget;
 
+/** Who a direct (group or destination) send comes from. */
+export type DirectSender = Extract<
+  NotificationSource,
+  { type: 'user' } | { type: 'platform' }
+>;
+
+/** Sender of direct sends made with an Agent Run credential. */
+export const AGENT_SENDER: DirectSender = {
+  type: 'platform',
+  name: 'Hatch Agent',
+};
+
 /**
- * Send a notification on behalf of a signed-in user or API key.
+ * Send a notification on behalf of a user (session or API key) or the
+ * platform Agent (Run credential).
  *
  * - `channel`: as that Channel, without its token: the same body rules,
  *   declared kinds, dedupe scope and routing as a token push.
- * - `group` / `destination`: from the user, never routed. It reaches the
+ * - `group` / `destination`: from the sender, never routed. It reaches the
  *   destination, or the group's enabled members. `kind` is a free label
- *   (default `message`), and dedupe keys are scoped to the sending user.
+ *   (default `message`), and dedupe keys are scoped to the sending user, or
+ *   shared by all platform sends.
  */
 export async function sendNotification(input: {
   to: SendNotificationTarget;
-  sender: { userId: string; name: string };
+  sender: DirectSender;
   body: Record<string, unknown>;
 }): Promise<{ id: string; deduplicated: boolean; deliveries: number }> {
   const { to, sender, body } = input;
@@ -1401,7 +1416,7 @@ export async function sendNotification(input: {
       ? USER_MESSAGE_KIND
       : { kind: push.data.kind, name: push.data.kind };
   return ingestNotification({
-    source: { type: 'user', userId: sender.userId, name: sender.name },
+    source: sender,
     kind,
     push: push.data,
     target: to,
@@ -1420,8 +1435,9 @@ async function asAppError<T>(run: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Edit any notification by id on behalf of a workspace member (session or API
- * key), whatever sent it: members are all equal (SendNotification's peer).
+ * Edit any notification by id on behalf of a workspace member (session, API
+ * key or Agent Run), whatever sent it: members are all equal
+ * (SendNotification's peer).
  */
 export async function updateNotificationAsMember(
   body: unknown,

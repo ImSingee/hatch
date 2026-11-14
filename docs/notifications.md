@@ -82,8 +82,8 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   Only the token's sha256 is stored; create and rotate return it once.
   Disabled channels answer 403.
 - **User sends**: `SendNotification` (`hatch notification send`) takes the
-  same body and exactly one recipient, authenticated by a user session or API
-  key:
+  same body and exactly one recipient, authenticated by a user session, API
+  key or Agent Run credential:
   - `channel_id` (`--channel`): as that Channel, without its token. It shares
     the kind check, dedupe scope and routing with token pushes
     (`ingestChannelPush`); `kind` is required. A disabled channel answers
@@ -115,7 +115,7 @@ notification:
 - App: `POST /api/app/<id>/notifications/update` and `…/recall` (SDK
   `updateNotification(id, patch)` and `recallNotification(id)`).
 - Channel: `POST /api/notifications/channel/<channelId>/update` and `…/recall`.
-- Member (session or API key): `NotificationService.UpdateNotification` and
+- Member (session, API key or Agent Run): `NotificationService.UpdateNotification` and
   `RecallNotification` (below).
 
 ```json
@@ -189,8 +189,8 @@ Any workspace member can delete any notification from history, whatever sent
 it: Web (row menu in the history list and Delete on the detail page), the
 mobile app (touch and hold a row, or the trash button on the detail screen),
 and `NotificationService.DeleteNotification` (`hatch notification delete <id>
---yes`). Apps and Channels cannot delete; they recall. Run credentials are
-rejected like every other `NotificationService` call.
+--yes`), which accepts sessions, API keys and Agent Run credentials alike.
+Apps and Channels cannot delete through their own credentials; they recall.
 
 - Deleting removes the `notifications` row; its deliveries cascade. It is
   permanent and there is no tombstone.
@@ -395,11 +395,13 @@ The extension tags its content with `hatchRevision` and `hatchEvent`.
 
 Web UI: Server Functions in `src/server/notifications.ts`. Native clients and
 the CLI: `NotificationService` (`notification.proto`) at `/api/rpc`. Both call
-`service.ts`. Session and API-key credentials may manage everything; Run
-credentials are rejected (`SESSION_REQUIRED`), so Agents cannot reconfigure
-delivery or push through `SendNotification`, and there is intentionally no
-Agent tool. `RegisterDevice`,
-`UnregisterDevice` and `GetCurrentDevice` require a user session.
+`service.ts`. Session, API-key and Agent Run credentials may manage
+everything, so the platform Agent uses `hatch notification ...` like a user.
+A Run has no user, so its group and destination sends are recorded as source
+`platform` named `Hatch Agent`; platform sends share one dedupe-key scope.
+There is no Agent tool: new platform capabilities ship as CLI commands only.
+`RegisterDevice`, `UnregisterDevice` and `GetCurrentDevice` act on the device
+of the calling native login session, so they require a user session.
 
 ## Compatibility
 

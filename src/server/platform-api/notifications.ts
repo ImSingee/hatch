@@ -7,6 +7,7 @@ import type {
   NotificationSourceType,
 } from '~/db/schema';
 import {
+  AGENT_SENDER,
   apnsStatus,
   createChannel,
   createGroup,
@@ -40,13 +41,12 @@ import {
   updateRoute,
   type ChannelView,
   type DestinationView,
+  type DirectSender,
   type NotificationStatus,
   type NotificationSummaryView,
 } from '~server/notifications/service';
 import { MAX_NOTIFICATION_BODY_BYTES } from '~server/notifications/contract';
-import { sessionOriginError } from '~server/session-http-auth';
-import { authenticatePublicApi } from './auth';
-import { publicApiError, publicError } from './errors';
+import { publicApiError } from './errors';
 import { publicApiContext } from './context';
 
 const none = <T>(value: T | null | undefined) => value ?? undefined;
@@ -115,18 +115,23 @@ function dataObject(json: string | undefined): unknown {
   return value;
 }
 
-/** The user behind a session or API key (the request gate admits no other). */
-function callerOf(context: HandlerContext) {
+/**
+ * Who a direct send comes from: the user behind a session or API key, or the
+ * platform Agent for a Run credential (Runs have no user of their own).
+ */
+function senderOf(context: HandlerContext): DirectSender {
   const status = context.values.get(publicApiContext).status;
   if (
-    status?.credentialType !== 'session' &&
-    status?.credentialType !== 'api-key'
+    status?.credentialType === 'session' ||
+    status?.credentialType === 'api-key'
   ) {
-    throw publicApiError('SESSION_REQUIRED');
+    const { user } = status;
+    return { type: 'user', userId: user.id, name: user.name || user.email };
   }
-  return status.user;
+  return AGENT_SENDER;
 }
 
+/** A device destination belongs to the native login session that registered it. */
 function sessionOf(context: HandlerContext) {
   const auth = context.values.get(publicApiContext);
   if (auth.status?.credentialType !== 'session' || !auth.session) {
@@ -138,35 +143,12 @@ function sessionOf(context: HandlerContext) {
 /**
  * SendNotification carries `data_json` as a string inside the request, so
  * escaping can double the 32 KiB data and text fields of a Channel push. The
- * request gate runs before the body is read, so only session and API-key
+ * request gate authenticates before the body is read, so only authenticated
  * callers can send bodies this large.
  */
 export const NOTIFICATION_RPC_BODY_LIMIT = 2 * MAX_NOTIFICATION_BODY_BYTES;
 
 export function registerNotificationApi(router: ConnectRouter) {
-  // Users (session or API key) manage delivery; Run credentials never do.
-  const userCredentials = {
-    grpc: false,
-    grpcWeb: false,
-    readMaxBytes: NOTIFICATION_RPC_BODY_LIMIT,
-    requestGate: async (context: HandlerContext) => {
-      try {
-        const request = new Request(context.url, {
-          headers: context.requestHeader,
-        });
-        if (sessionOriginError(request)) throw publicApiError('FORBIDDEN');
-        const auth = await authenticatePublicApi(request);
-        const type = auth.status?.credentialType;
-        if (type !== 'session' && type !== 'api-key') {
-          throw publicApiError('SESSION_REQUIRED');
-        }
-        context.values.set(publicApiContext, auth);
-      } catch (error) {
-        throw publicError(error);
-      }
-    },
-  };
-
   router.service(
     NotificationService,
     {
@@ -212,7 +194,6 @@ export function registerNotificationApi(router: ConnectRouter) {
         notificationId: (await sendTestNotification(input.destinationId)).id,
       }),
       sendNotification: async (input, context) => {
-        const user = callerOf(context);
         // Protovalidate requires exactly one recipient.
         const to = input.channelId
           ? { type: 'channel' as const, id: input.channelId }
@@ -221,7 +202,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             : { type: 'destination' as const, id: input.destinationId };
         const result = await sendNotification({
           to,
-          sender: { userId: user.id, name: user.name || user.email },
+          sender: senderOf(context),
           body: {
             kind: input.kind || undefined,
             title: input.title,
@@ -458,6 +439,8 @@ export function registerNotificationApi(router: ConnectRouter) {
         return {};
       },
     },
-    userCredentials,
+    // Every credential has full authority here, like the rest of the public
+    // API; only device registration needs a native login session.
+    { readMaxBytes: NOTIFICATION_RPC_BODY_LIMIT },
   );
 }
