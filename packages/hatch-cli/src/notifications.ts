@@ -501,6 +501,16 @@ const specs: Record<string, Spec> = {
           : `Notification ${id} was already recalled; nothing was sent.`,
     }),
   },
+  delete: {
+    positionals: ['notification-id'],
+    build: ([id]) => ({
+      method: 'deleteNotification',
+      request: { id },
+      text: done(
+        `Deleted notification ${id} and its delivery history. Copies destinations already received were not touched.`,
+      ),
+    }),
+  },
   retry: {
     positionals: ['delivery-id'],
     build: ([deliveryId]) => ({

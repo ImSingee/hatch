@@ -1441,3 +1441,78 @@ describe('edits and recalls', () => {
     expect(late.status).toBe(409);
   });
 });
+
+describe('deletion', () => {
+  it('removes a notification and its deliveries without sending anything', async () => {
+    const { destination } = await service.createWebhook({
+      name: 'Hook',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    const group = await service.createGroup({
+      name: 'All',
+      destinationIds: [destination.id],
+    });
+    await service.createRoute({
+      sourceType: 'any',
+      targetType: 'group',
+      targetId: group.id,
+    });
+
+    const delivered = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push('order.shipped', { dedupeKey: 'order-1' }),
+    });
+    expect(await runAllDue()).toBe(1);
+    expect(received).toHaveLength(1);
+    await service.deleteNotification(delivered.id);
+    await expect(service.getNotification(delivered.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(
+      await db.query.notificationDeliveries.findMany({
+        where: { notificationId: delivered.id },
+      }),
+    ).toHaveLength(0);
+    // Destinations are not told, and the dedupe key is free again.
+    expect(await runAllDue()).toBe(0);
+    expect(received).toHaveLength(1);
+    const repeated = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push('order.shipped', { dedupeKey: 'order-1' }),
+    });
+    expect(repeated).toMatchObject({ deduplicated: false });
+    expect(repeated.id).not.toBe(delivered.id);
+
+    // A delivery that was still due never goes out.
+    await service.deleteNotification(repeated.id);
+    expect(await runAllDue()).toBe(0);
+    expect(received).toHaveLength(1);
+
+    // An attempt already in flight finishes without being recorded.
+    const racing = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    const deleting = {
+      ...adapters,
+      webhook: async (context: Parameters<typeof deliverToWebhook>[0]) => {
+        await service.deleteNotification(racing.id);
+        return deliverToWebhook(context);
+      },
+    };
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, deleting);
+    }
+    expect(received).toHaveLength(2);
+    expect(await db.query.notificationDeliveries.findMany()).toHaveLength(0);
+    expect(await service.listNotifications({})).toMatchObject({ items: [] });
+
+    await expect(service.deleteNotification(racing.id)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+});

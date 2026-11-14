@@ -1618,6 +1618,7 @@ describe('notification center authority', () => {
       'NotificationService/ListChannels',
       'NotificationService/CreateGroup',
       'NotificationService/SendNotification',
+      'NotificationService/DeleteNotification',
     ]) {
       const response = await call(path, {
         headers: { authorization: `Bearer ${jwt.token}` },
@@ -1625,11 +1626,30 @@ describe('notification center authority', () => {
           ? { name: 'Agents' }
           : path.endsWith('SendNotification')
             ? alert
-            : {},
+            : path.endsWith('DeleteNotification')
+              ? { id: direct }
+              : {},
       });
       expect(response.status).toBe(403);
       expect(await errorCode(response)).toBe('SESSION_REQUIRED');
     }
+
+    // Members delete any notification from history by its id.
+    const deleteDirect = await call('NotificationService/DeleteNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(deleteDirect.status).toBe(200);
+    const deletedDetail = await call('NotificationService/GetNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(deletedDetail.status).toBe(404);
+    const deleteAgain = await call('NotificationService/DeleteNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(deleteAgain.status).toBe(404);
 
     // A session registers its own device; revoking the session removes it.
     const session = { authorization: `Bearer ${user.token}` };

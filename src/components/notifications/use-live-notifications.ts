@@ -7,7 +7,8 @@ import { NOTIFICATIONS_KEY } from '~queries/notifications';
 
 /**
  * Keep notification history and detail views current: refetch on new,
- * edited and recalled notifications and delivery updates, and after the event stream reconnects.
+ * edited, recalled and deleted notifications and delivery updates, and after
+ * the event stream reconnects.
  */
 export function useLiveNotifications() {
   const queryClient = useQueryClient();
@@ -26,6 +27,14 @@ export function useLiveNotifications() {
   usePlatformEvent('notification.updated', (event) => {
     void refreshHistory();
     void refreshDetail(event.notificationId);
+  });
+  usePlatformEvent('notification.deleted', (event) => {
+    void refreshHistory();
+    // An open detail page leaves on its own; only drop cached copies.
+    queryClient.removeQueries({
+      queryKey: [...NOTIFICATIONS_KEY, 'detail', event.notificationId],
+      type: 'inactive',
+    });
   });
   usePlatformEvent('notification.delivery.updated', (event) => {
     void refreshHistory();

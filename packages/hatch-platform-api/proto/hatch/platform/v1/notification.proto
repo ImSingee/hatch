@@ -21,6 +21,10 @@ service NotificationService {
   // /update and /recall endpoints.
   rpc UpdateNotification(UpdateNotificationRequest) returns (UpdateNotificationResponse);
   rpc RecallNotification(RecallNotificationRequest) returns (RecallNotificationResponse);
+  // Delete any notification and its delivery records from history. Copies
+  // destinations already received stay there and nothing is sent; recall
+  // first to remove it from phones.
+  rpc DeleteNotification(DeleteNotificationRequest) returns (DeleteNotificationResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
   rpc GetApnsStatus(GetApnsStatusRequest) returns (GetApnsStatusResponse);
 
@@ -294,6 +298,14 @@ message RecallNotificationResponse {
   // False when it was already recalled; nothing was sent again.
   bool changed = 2;
 }
+
+message DeleteNotificationRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+message DeleteNotificationResponse {}
 
 message NotificationKind {
   string kind = 1 [(buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$"];

@@ -16,6 +16,7 @@ import {
   deleteChannel,
   deleteDestination,
   deleteGroup,
+  deleteNotification,
   deleteRoute,
   getNotification,
   listChannels,
@@ -258,6 +259,10 @@ export function registerNotificationApi(router: ConnectRouter) {
       recallNotification: async (input) => {
         const result = await recallNotificationAsMember(input.id);
         return { revision: result.revision, changed: result.changed };
+      },
+      deleteNotification: async (input) => {
+        await deleteNotification(input.id);
+        return {};
       },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();

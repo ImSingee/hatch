@@ -48,6 +48,32 @@ async function clearRecalledPlaceholders() {
 }
 
 /**
+ * Remove a deleted notification from this phone's Notification Center. Other
+ * phones keep their copy; the server sends nothing on delete.
+ */
+export async function dismissPresentedNotification(
+  origin: string,
+  notificationId: string,
+) {
+  if (!pushSupported) return;
+  const presented = await Notifications.getPresentedNotificationsAsync();
+  await Promise.all(
+    presented
+      .filter((entry) => {
+        const target = pushTap(entry.request.content.data, {
+          allowDevelopmentLoopback,
+        });
+        return (
+          target?.origin === origin && target.notificationId === notificationId
+        );
+      })
+      .map((entry) =>
+        Notifications.dismissNotificationAsync(entry.request.identifier),
+      ),
+  );
+}
+
+/**
  * Opens the notification itself on the instance that sent it. Only the
  * extension writes this payload after decrypting it with the instance's key,
  * so it may switch to that instance without asking.

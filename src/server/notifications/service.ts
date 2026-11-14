@@ -25,6 +25,7 @@ import type {
 import { getPlatformEnv } from '~/env';
 import type { NormalizedManifest } from '~server/apps/manifest';
 import { AppError } from '~server/errors';
+import { publishPlatformEvent } from '~server/platform-events';
 import { describeApnsCredentials } from './apns/credentials';
 import { channelPushPath } from './channel-ingress';
 import {
@@ -1440,6 +1441,23 @@ export async function recallNotificationAsMember(
   id: string,
 ): Promise<LifecycleResult> {
   return asAppError(() => recallNotification({ type: 'member' }, id));
+}
+
+/**
+ * Delete a notification and its delivery records from history on behalf of a
+ * workspace member, whatever sent it. Destinations are not told: copies that
+ * already arrived stay where they are (recall first to remove them from
+ * phones), deliveries that were still due are dropped, and an attempt already
+ * in flight finishes without being recorded. The dedupe key is released, so a
+ * repeated push with it becomes a new notification.
+ */
+export async function deleteNotification(id: string): Promise<void> {
+  const [row] = await db
+    .delete(schema.notifications)
+    .where(eq(schema.notifications.id, id))
+    .returning({ id: schema.notifications.id });
+  if (!row) notFound('Notification');
+  publishPlatformEvent({ type: 'notification.deleted', notificationId: id });
 }
 
 export function apnsStatus(): ApnsStatusView {
