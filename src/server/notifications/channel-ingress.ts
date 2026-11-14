@@ -2,8 +2,8 @@
  * External Channel endpoints:
  *
  *   POST /api/notifications/channel/<channelId>         → 202 { id, deduplicated }
- *   POST /api/notifications/channel/<channelId>/update  → 200 { id, revision, recalled }
- *   POST /api/notifications/channel/<channelId>/recall  → 200 { id, revision, recalled }
+ *   POST /api/notifications/channel/<channelId>/update  → 200 { id, revision, recalled, changed }
+ *   POST /api/notifications/channel/<channelId>/recall  → 200 { id, revision, recalled, changed }
  *
  * The caller presents the channel token in `x-hatch-secret` (preferred) or
  * `?secret=`; header presence wins, even when empty. Only the token's sha256

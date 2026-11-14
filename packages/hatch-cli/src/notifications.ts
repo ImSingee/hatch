@@ -71,6 +71,27 @@ function lifecycleFlag(values: Values): boolean | undefined {
       : undefined;
 }
 
+/** A flag holding a JSON object, passed on as its original text. */
+function jsonObjectFlag(values: Values, flag: string): string | undefined {
+  const text = str(values, flag);
+  if (text === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    invalid(`--${flag} must be a JSON object.`);
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    invalid(`--${flag} must be a JSON object.`);
+  return text;
+}
+
+/** A value, its `--clear-` flag (sent as ""), or undefined to keep it. */
+function clearable(values: Values, flag: string): string | undefined {
+  exclusive(values, flag, `clear-${flag}`);
+  return values[`clear-${flag}`] ? '' : str(values, flag);
+}
+
 function str(values: Values, flag: string): string | undefined {
   const value = values[flag];
   return typeof value === 'string' ? value : undefined;
@@ -259,9 +280,7 @@ const specs: Record<string, Spec> = {
           `Source: ${field(summary, 'sourceName')} (${field(summary, 'sourceType')}) · Kind: ${field(summary, 'kindName')} [${field(summary, 'kind')}]`,
           `Occurred: ${field(summary, 'occurredAt')}`,
           ...(field(summary, 'editedAt')
-            ? [
-                `Edited: ${field(summary, 'editedAt')} (revision ${field(summary, 'revision')})`,
-              ]
+            ? [`Edited: ${field(summary, 'editedAt')}`]
             : []),
           ...(field(summary, 'recalledAt')
             ? [`Recalled: ${field(summary, 'recalledAt')}`]
@@ -310,21 +329,7 @@ const specs: Record<string, Spec> = {
         invalid(
           `Invalid kind "${kind}": use 1-64 lowercase letters, digits, ".", "_" or "-".`,
         );
-      const data = str(values, 'data');
-      if (data !== undefined) {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          invalid('--data must be a JSON object.');
-        }
-        if (
-          parsed === null ||
-          typeof parsed !== 'object' ||
-          Array.isArray(parsed)
-        )
-          invalid('--data must be a JSON object.');
-      }
+      const data = jsonObjectFlag(values, 'data');
       return {
         method: 'sendNotification',
         request: {
@@ -353,6 +358,65 @@ const specs: Record<string, Spec> = {
         },
       };
     },
+  },
+  update: {
+    positionals: ['channel-id', 'notification-id'],
+    options: {
+      title: { type: 'string' },
+      body: { type: 'string' },
+      'clear-body': { type: 'boolean' },
+      url: { type: 'string' },
+      'clear-url': { type: 'boolean' },
+      'auto-open-url': { type: 'boolean' },
+      'no-auto-open-url': { type: 'boolean' },
+      data: { type: 'string' },
+      'clear-data': { type: 'boolean' },
+    },
+    build: ([channelId, id], values) => {
+      exclusive(values, 'auto-open-url', 'no-auto-open-url');
+      const title = str(values, 'title');
+      if (title !== undefined && !title.trim())
+        invalid('--title cannot be empty.');
+      exclusive(values, 'data', 'clear-data');
+      const request = {
+        channelId,
+        id,
+        title,
+        body: clearable(values, 'body'),
+        url: clearable(values, 'url'),
+        autoOpenUrl: values['auto-open-url']
+          ? true
+          : values['no-auto-open-url']
+            ? false
+            : undefined,
+        dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
+      };
+      if (
+        Object.values(request).filter((value) => value !== undefined).length < 3
+      )
+        invalid(
+          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
+        );
+      return {
+        method: 'updateNotification',
+        request,
+        text: (response) =>
+          response.changed === true
+            ? `Updated notification ${id} (revision ${field(response, 'revision')}). Phones and destinations that take edits get the new content.`
+            : `Notification ${id} already has this content; nothing was sent.`,
+      };
+    },
+  },
+  recall: {
+    positionals: ['channel-id', 'notification-id'],
+    build: ([channelId, id]) => ({
+      method: 'recallNotification',
+      request: { channelId, id },
+      text: (response) =>
+        response.changed === true
+          ? `Recalled notification ${id} (revision ${field(response, 'revision')}). Phones remove it, destinations that have not received it never will, and those that take recalls are told.`
+          : `Notification ${id} was already recalled; nothing was sent.`,
+    }),
   },
   retry: {
     positionals: ['delivery-id'],

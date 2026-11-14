@@ -817,7 +817,12 @@ describe('edits and recalls', () => {
       200,
     );
     const second = await signedApp('update', { id, body: 'Now with body' });
-    expect(await second.json()).toEqual({ id, revision: 3, recalled: false });
+    expect(await second.json()).toEqual({
+      id,
+      revision: 3,
+      recalled: false,
+      changed: true,
+    });
     received.length = 0;
     await runAllDue();
     expect(envelopes()).toEqual([
@@ -840,10 +845,15 @@ describe('edits and recalls', () => {
 
     // Unchanged content is not an edit.
     const same = await signedApp('update', { id, title: 'First' });
-    expect(await same.json()).toMatchObject({ revision: 3 });
+    expect(await same.json()).toMatchObject({ revision: 3, changed: false });
 
     const recalled = await signedApp('recall', { id });
-    expect(await recalled.json()).toEqual({ id, revision: 4, recalled: true });
+    expect(await recalled.json()).toEqual({
+      id,
+      revision: 4,
+      recalled: true,
+      changed: true,
+    });
     received.length = 0;
     await runAllDue();
     expect(envelopes()).toEqual([
@@ -1021,7 +1031,7 @@ describe('edits and recalls', () => {
       await runAllDue();
       expect(
         await sdk.updateNotification(id, { title: 'Delivered' }, options),
-      ).toEqual({ id, revision: 2, recalled: false });
+      ).toEqual({ id, revision: 2, recalled: false, changed: true });
       await runAllDue();
       const [, , init] = vi.mocked(callAppBackend).mock.calls.at(-1)!;
       const envelope = await sdk.verifyNotificationRequest(
@@ -1041,6 +1051,7 @@ describe('edits and recalls', () => {
         id,
         revision: 3,
         recalled: true,
+        changed: true,
       });
       await expect(
         sdk.updateNotification(id, { title: 'Again' }, options),
@@ -1048,6 +1059,57 @@ describe('edits and recalls', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('lets users act as a Channel on that Channel’s notifications only', async () => {
+    const { channel } = await service.createChannel({
+      name: 'Monitoring',
+      kinds: [{ kind: 'alert', name: 'Alert' }],
+    });
+    const own = await service.sendChannelNotification(channel.id, {
+      kind: 'alert',
+      title: 'Disk full',
+      body: 'db-1',
+      data: { host: 'db-1' },
+    });
+    const app = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+
+    await expect(
+      service.updateChannelNotification(channel.id, {
+        id: app.id,
+        title: 'x',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    const edited = await service.updateChannelNotification(channel.id, {
+      id: own.id,
+      body: '',
+      data: null,
+    });
+    expect(edited).toMatchObject({ revision: 2, changed: true });
+    expect(await service.getNotification(own.id)).toMatchObject({
+      title: 'Disk full',
+      body: null,
+      data: null,
+    });
+
+    await service.updateChannel({ id: channel.id, enabled: false });
+    await expect(
+      service.recallChannelNotification(channel.id, own.id),
+    ).rejects.toMatchObject({ status: 409 });
+    await service.updateChannel({ id: channel.id, enabled: true });
+    expect(
+      await service.recallChannelNotification(channel.id, own.id),
+    ).toMatchObject({ revision: 3, changed: true });
+    expect(
+      await service.recallChannelNotification(channel.id, own.id),
+    ).toMatchObject({ revision: 3, changed: false });
+    await expect(
+      service.updateChannelNotification(channel.id, { id: own.id, title: 'x' }),
+    ).rejects.toMatchObject({ status: 409 });
   });
 
   it('rejects edits of recalled notifications and empty edits', async () => {

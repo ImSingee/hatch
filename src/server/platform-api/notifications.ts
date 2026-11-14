@@ -28,7 +28,9 @@ import {
   retryDelivery,
   rotateChannelToken,
   rotateWebhookSecret,
+  recallChannelNotification,
   sendChannelNotification,
+  updateChannelNotification,
   sendTestNotification,
   unregisterDevice,
   updateChannel,
@@ -212,6 +214,30 @@ export function registerNotificationApi(router: ConnectRouter) {
           deduplicated: result.deduplicated,
           deliveryCount: result.deliveries,
         };
+      },
+      updateNotification: async (input) => {
+        const result = await updateChannelNotification(input.channelId, {
+          id: input.id,
+          title: input.title,
+          body: input.body,
+          url: input.url,
+          autoOpenUrl: input.autoOpenUrl,
+          // An empty string clears the data; unset keeps it.
+          data:
+            input.dataJson === undefined
+              ? undefined
+              : input.dataJson === ''
+                ? null
+                : dataObject(input.dataJson),
+        });
+        return { revision: result.revision, changed: result.changed };
+      },
+      recallNotification: async (input) => {
+        const result = await recallChannelNotification(
+          input.channelId,
+          input.id,
+        );
+        return { revision: result.revision, changed: result.changed };
       },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();

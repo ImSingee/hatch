@@ -112,11 +112,18 @@ Without `autoOpenUrl`, a newly added `url` opens on tap (the push default), a
 cleared one stops and a replaced one keeps the setting. `kind`, `dedupeKey` and
 `occurredAt` never change. A recall takes only `id`. The id is in the body
 because the HMAC covers only the body: a replay can only repeat the same
-change. Both respond `200 { id, revision, recalled }`. `400` means an invalid
+change. Both respond `200 { id, revision, recalled, changed }`. `400` means an invalid
 body or an empty edit. `404` means the notification does not exist or belongs
 to another source (the two cases are indistinguishable). `409` means an edit
 of a recalled notification. Repeating a recall, or an edit that changes
-nothing, leaves the revision as it is and sends nothing.
+nothing, leaves the revision as it is, answers `changed: false` and sends
+nothing.
+
+Users act as a Channel through `NotificationService.UpdateNotification` and
+`RecallNotification` (CLI `hatch notification update|recall <channel-id>
+<id>`), the counterparts of `SendNotification`. They take the Channel id and
+change only that Channel's notifications, with the same rules; in the RPC an
+empty `body`, `url` or `data_json` clears the field.
 
 Every edit and the recall increment `notifications.revision`, which starts at
 

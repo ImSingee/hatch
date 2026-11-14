@@ -343,7 +343,7 @@ again. `recallNotification` removes it from phones, and destinations that have
 not received it yet never will. An App can only change notifications it pushed
 itself (others answer 404). Editing a recalled notification throws
 `NotificationError` with status 409. Repeating a recall changes nothing. Both
-return `{ id, revision, recalled }`.
+return `{ id, revision, recalled, changed }`.
 
 ### Receiving as a destination
 

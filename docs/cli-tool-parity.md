@@ -48,7 +48,7 @@ of this feature.
 
 ## Notification center: CLI only, no Agent Tool
 
-`hatch notification ...` (history, test/send/retry, sources, destinations,
+`hatch notification ...` (history, test/send/update/recall/retry, sources, destinations,
 webhooks, groups, routes and channels) calls `NotificationService` and
 intentionally has no Agent Tool counterpart: delivery configuration and
 user-authenticated sends are user decisions, made in the Web UI or the CLI,

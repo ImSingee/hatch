@@ -31,6 +31,7 @@ import {
   NOTIFICATION_KIND_RE,
   channelKindsSchema,
   isHttpUrl,
+  notificationUpdateSchema,
   type NotificationPush,
 } from './contract';
 import { ingestChannelPush } from './channel-ingress';
@@ -39,6 +40,12 @@ import {
   newNotificationId,
   requeueDelivery,
 } from './ingest';
+import {
+  NotificationLifecycleError,
+  recallNotification,
+  updateNotification,
+  type LifecycleResult,
+} from './lifecycle';
 import {
   encryptDeviceKey,
   encryptWebhookSecret,
@@ -1330,6 +1337,58 @@ export async function sendChannelNotification(
     deduplicated: result.deduplicated,
     deliveries: result.deliveries,
   };
+}
+
+/** A Channel that may change what it sent, like its own ingress does. */
+async function senderChannel(channelId: string) {
+  const channel = await db.query.notificationChannels.findFirst({
+    where: { id: channelId },
+    columns: { id: true, enabled: true },
+  });
+  if (!channel) notFound('Channel');
+  if (!channel.enabled) {
+    throw new AppError(
+      'Enable the channel before changing its notifications.',
+      409,
+    );
+  }
+  return { type: 'channel' as const, channelId: channel.id };
+}
+
+async function asAppError<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof NotificationLifecycleError) {
+      throw new AppError(`${error.message}.`, error.status);
+    }
+    throw error;
+  }
+}
+
+/** Edit a notification as the Channel that sent it (SendNotification's peer). */
+export async function updateChannelNotification(
+  channelId: string,
+  body: unknown,
+): Promise<LifecycleResult> {
+  const sender = await senderChannel(channelId);
+  const update = notificationUpdateSchema.safeParse(body);
+  if (!update.success) {
+    throw new AppError(
+      `${update.error.issues[0]?.message ?? 'Invalid request'}.`,
+      400,
+    );
+  }
+  return asAppError(() => updateNotification(sender, update.data));
+}
+
+/** Recall a notification as the Channel that sent it. */
+export async function recallChannelNotification(
+  channelId: string,
+  id: string,
+): Promise<LifecycleResult> {
+  const sender = await senderChannel(channelId);
+  return asAppError(() => recallNotification(sender, id));
 }
 
 export function apnsStatus(): ApnsStatusView {

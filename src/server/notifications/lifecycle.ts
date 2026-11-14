@@ -18,10 +18,12 @@ export type NotificationSender =
   | { type: 'app'; appId: string }
   | { type: 'channel'; channelId: string };
 
+/** `changed` is false when nothing new happened and nothing is sent. */
 export type LifecycleResult = {
   id: string;
   revision: number;
   recalled: boolean;
+  changed: boolean;
 };
 
 export class NotificationLifecycleError extends Error {
@@ -169,7 +171,12 @@ export async function updateNotification(
     return { id: current.id, revision: row!.revision, changed: true };
   });
   if (outcome.changed) publishChange(outcome.id);
-  return { id: outcome.id, revision: outcome.revision, recalled: false };
+  return {
+    id: outcome.id,
+    revision: outcome.revision,
+    recalled: false,
+    changed: outcome.changed,
+  };
 }
 
 /** Recall a notification; repeating a recall changes nothing. */
@@ -211,5 +218,10 @@ export async function recallNotification(
     return { revision: row!.revision, changed: true };
   });
   if (outcome.changed) publishChange(id);
-  return { id, revision: outcome.revision, recalled: true };
+  return {
+    id,
+    revision: outcome.revision,
+    recalled: true,
+    changed: outcome.changed,
+  };
 }

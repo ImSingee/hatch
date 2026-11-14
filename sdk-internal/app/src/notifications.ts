@@ -125,11 +125,16 @@ export type NotificationUpdateInput = {
   data?: { [key: string]: NotificationJson } | null;
 };
 
-/** `revision` increases with every edit and with the recall. */
+/**
+ * `revision` increases with every edit and with the recall. `changed` is
+ * false when the edit changed nothing or the notification was already
+ * recalled; nothing is sent then.
+ */
 export type NotificationChangeResult = {
   id: string;
   revision: number;
   recalled: boolean;
+  changed: boolean;
 };
 
 /**

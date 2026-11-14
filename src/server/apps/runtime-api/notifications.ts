@@ -27,8 +27,8 @@ const ACTIONS = {
  * App-facing notification endpoints:
  *
  *   POST /api/app/<id>/notifications         → 202 { id, deduplicated }
- *   POST /api/app/<id>/notifications/update  → 200 { id, revision, recalled }
- *   POST /api/app/<id>/notifications/recall  → 200 { id, revision, recalled }
+ *   POST /api/app/<id>/notifications/update  → 200 { id, revision, recalled, changed }
+ *   POST /api/app/<id>/notifications/recall  → 200 { id, revision, recalled, changed }
  *
  * Called by the App's own backend and authenticated like KV: an HMAC over
  * `<timestamp>.<rawBody>` with the per-app signing secret. The App id in the
