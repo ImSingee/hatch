@@ -31,6 +31,8 @@ import {
   NOTIFICATION_KIND_RE,
   channelKindsSchema,
   isHttpUrl,
+  notificationPushSchema,
+  notificationSourceId,
   type NotificationPush,
 } from './contract';
 import { ingestChannelPush } from './channel-ingress';
@@ -272,7 +274,7 @@ function summaryView(
   return {
     id: row.id,
     sourceType: row.sourceType,
-    sourceId: row.appId ?? row.channelId,
+    sourceId: notificationSourceId(row),
     sourceName: row.sourceName,
     kind: row.kind,
     kindName: row.kindName,
@@ -344,7 +346,7 @@ export async function listNotifications(
   const conditions: (SQL | undefined)[] = [
     input.sourceType ? eq(n.sourceType, input.sourceType) : undefined,
     input.sourceId
-      ? sql`coalesce(${n.appId}, ${n.channelId}) = ${input.sourceId}`
+      ? sql`coalesce(${n.appId}, ${n.channelId}, ${n.userId}) = ${input.sourceId}`
       : undefined,
     input.kind ? eq(n.kind, input.kind) : undefined,
     input.cursor ? lt(n.id, input.cursor) : undefined,
@@ -1271,34 +1273,55 @@ export async function sendTestNotification(
   return { id: result.id };
 }
 
+/** Kind of a user-addressed send that names none. */
+export const USER_MESSAGE_KIND = { kind: 'message', name: 'Message' };
+
+export type SendNotificationTarget =
+  | { type: 'channel'; id: string }
+  | NotificationTarget;
+
 /**
- * Push a notification as a Channel on behalf of a signed-in user: the same
- * body rules, kind check and dedupe scope as a token-authenticated Channel
- * push. Without a `target` it is routed like one; with a target it reaches
- * only that destination or the group's enabled members.
+ * Send a notification on behalf of a signed-in user or API key.
+ *
+ * - `channel`: as that Channel, without its token: the same body rules,
+ *   declared kinds, dedupe scope and routing as a token push.
+ * - `group` / `destination`: from the user, never routed. It reaches the
+ *   destination, or the group's enabled members. `kind` is a free label
+ *   (default `message`), and dedupe keys are scoped to the sending user.
  */
-export async function sendChannelNotification(
-  channelId: string,
-  body: unknown,
-  target?: NotificationTarget,
-): Promise<{ id: string; deduplicated: boolean; deliveries: number }> {
-  const channel = await db.query.notificationChannels.findFirst({
-    where: { id: channelId },
-    columns: { id: true, name: true, kinds: true, enabled: true },
-  });
-  if (!channel) notFound('Channel');
-  if (!channel.enabled) {
-    throw new AppError('Enable the channel before sending to it.', 409);
+export async function sendNotification(input: {
+  to: SendNotificationTarget;
+  sender: { userId: string; name: string };
+  body: Record<string, unknown>;
+}): Promise<{ id: string; deduplicated: boolean; deliveries: number }> {
+  const { to, sender, body } = input;
+  if (to.type === 'channel') {
+    const channel = await db.query.notificationChannels.findFirst({
+      where: { id: to.id },
+      columns: { id: true, name: true, kinds: true, enabled: true },
+    });
+    if (!channel) notFound('Channel');
+    if (!channel.enabled) {
+      throw new AppError('Enable the channel before sending to it.', 409);
+    }
+    const result = await ingestChannelPush(channel, body);
+    if (!result.ok) throw new AppError(`${result.message}.`, 400);
+    return {
+      id: result.id,
+      deduplicated: result.deduplicated,
+      deliveries: result.deliveries,
+    };
   }
-  if (target?.type === 'group') {
+
+  if (to.type === 'group') {
     const group = await db.query.notificationGroups.findFirst({
-      where: { id: target.id },
+      where: { id: to.id },
       columns: { id: true },
     });
     if (!group) notFound('Group');
-  } else if (target) {
+  } else {
     const destination = await db.query.notificationDestinations.findFirst({
-      where: { id: target.id },
+      where: { id: to.id },
       columns: { id: true, enabled: true },
     });
     if (!destination) notFound('Destination');
@@ -1306,13 +1329,26 @@ export async function sendChannelNotification(
       throw new AppError('Enable the destination before sending to it.', 409);
     }
   }
-  const result = await ingestChannelPush(channel, body, target);
-  if (!result.ok) throw new AppError(`${result.message}.`, 400);
-  return {
-    id: result.id,
-    deduplicated: result.deduplicated,
-    deliveries: result.deliveries,
-  };
+  const push = notificationPushSchema.safeParse({
+    ...body,
+    kind: body.kind ?? USER_MESSAGE_KIND.kind,
+  });
+  if (!push.success) {
+    throw new AppError(
+      `${push.error.issues[0]?.message ?? 'Invalid request'}.`,
+      400,
+    );
+  }
+  const kind =
+    push.data.kind === USER_MESSAGE_KIND.kind
+      ? USER_MESSAGE_KIND
+      : { kind: push.data.kind, name: push.data.kind };
+  return ingestNotification({
+    source: { type: 'user', userId: sender.userId, name: sender.name },
+    kind,
+    push: push.data,
+    target: to,
+  });
 }
 
 export function apnsStatus(): ApnsStatusView {

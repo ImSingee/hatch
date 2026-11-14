@@ -33,7 +33,11 @@ import {
   NotificationStatusBadge,
 } from './status';
 
-const SOURCE_TYPE_LABEL = { app: 'App', channel: 'Channel' } as const;
+const SOURCE_TYPE_LABEL = {
+  app: 'App',
+  channel: 'Channel',
+  user: 'User',
+} as const;
 
 export function NotificationDetail({ id }: { id: string }) {
   const { data } = useSuspenseQuery(notificationDetailQueryOptions(id));

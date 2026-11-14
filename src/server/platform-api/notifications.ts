@@ -28,7 +28,7 @@ import {
   retryDelivery,
   rotateChannelToken,
   rotateWebhookSecret,
-  sendChannelNotification,
+  sendNotification,
   sendTestNotification,
   unregisterDevice,
   updateChannel,
@@ -108,6 +108,18 @@ function dataObject(json: string | undefined): unknown {
     throw publicApiError('BAD_REQUEST', 'data_json must be a JSON object.');
   }
   return value;
+}
+
+/** The user behind a session or API key (the request gate admits no other). */
+function callerOf(context: HandlerContext) {
+  const status = context.values.get(publicApiContext).status;
+  if (
+    status?.credentialType !== 'session' &&
+    status?.credentialType !== 'api-key'
+  ) {
+    throw publicApiError('SESSION_REQUIRED');
+  }
+  return status.user;
 }
 
 function sessionOf(context: HandlerContext) {
@@ -193,11 +205,19 @@ export function registerNotificationApi(router: ConnectRouter) {
       sendTestNotification: async (input) => ({
         notificationId: (await sendTestNotification(input.destinationId)).id,
       }),
-      sendNotification: async (input) => {
-        const result = await sendChannelNotification(
-          input.channelId,
-          {
-            kind: input.kind,
+      sendNotification: async (input, context) => {
+        const user = callerOf(context);
+        // Protovalidate requires exactly one recipient.
+        const to = input.channelId
+          ? { type: 'channel' as const, id: input.channelId }
+          : input.groupId
+            ? { type: 'group' as const, id: input.groupId }
+            : { type: 'destination' as const, id: input.destinationId };
+        const result = await sendNotification({
+          to,
+          sender: { userId: user.id, name: user.name || user.email },
+          body: {
+            kind: input.kind || undefined,
             title: input.title,
             body: input.body,
             url: input.url,
@@ -206,14 +226,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             dedupeKey: input.dedupeKey,
             occurredAt: input.occurredAt,
           },
-          // Protovalidate requires both fields or neither.
-          input.targetType !== undefined && input.targetId !== undefined
-            ? {
-                type: input.targetType as 'group' | 'destination',
-                id: input.targetId,
-              }
-            : undefined,
-        );
+        });
         return {
           notificationId: result.id,
           deduplicated: result.deduplicated,

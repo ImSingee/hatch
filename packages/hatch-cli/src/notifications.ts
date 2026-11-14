@@ -65,18 +65,27 @@ function list(values: Values, flag: string): string[] | undefined {
 }
 
 /**
- * `--group` or `--destination`. A present but blank id is an error, never an
- * omitted flag: `--destination "$UNSET"` must not fall back to routing.
+ * The one id flag of `flags` that is present. A present but blank id is an
+ * error, never an omitted flag, so `--destination "$UNSET"` fails loudly.
  */
-function target(values: Values) {
-  exclusive(values, 'group', 'destination');
-  for (const flag of ['group', 'destination'] as const) {
+function oneOf<const Flag extends string>(
+  values: Values,
+  flags: readonly Flag[],
+): { flag: Flag; id: string } | undefined {
+  exclusive(values, ...flags);
+  for (const flag of flags) {
     const id = str(values, flag);
     if (id === undefined) continue;
     if (!id.trim()) invalid(`--${flag} needs a non-empty id.`);
-    return { targetType: flag, targetId: id };
+    return { flag, id };
   }
   return undefined;
+}
+
+/** A route's `--group` or `--destination`. */
+function target(values: Values) {
+  const to = oneOf(values, ['group', 'destination']);
+  return to && { targetType: to.flag, targetId: to.id };
 }
 
 function sourceType(value: string | undefined, allowed: readonly string[]) {
@@ -197,6 +206,7 @@ const specs: Record<string, Spec> = {
             'app',
             'channel',
             'platform',
+            'user',
           ]),
           sourceId: str(values, 'source'),
           kind: str(values, 'kind'),
@@ -272,8 +282,11 @@ const specs: Record<string, Spec> = {
     }),
   },
   send: {
-    positionals: ['channel-id'],
+    positionals: [],
     options: {
+      channel: { type: 'string' },
+      group: { type: 'string' },
+      destination: { type: 'string' },
       kind: { type: 'string' },
       title: { type: 'string' },
       body: { type: 'string' },
@@ -282,16 +295,17 @@ const specs: Record<string, Spec> = {
       data: { type: 'string' },
       'dedupe-key': { type: 'string' },
       'occurred-at': { type: 'string' },
-      group: { type: 'string' },
-      destination: { type: 'string' },
     },
-    build: ([channelId], values) => {
-      // An explicit recipient replaces routing; without one, routes decide.
-      const to = target(values);
+    build: (_positionals, values) => {
+      const to = oneOf(values, ['channel', 'group', 'destination']);
+      if (!to) invalid('Supply one of --channel, --group or --destination.');
       const kind = str(values, 'kind');
       const title = str(values, 'title');
-      if (!kind || !title?.trim()) invalid('Supply --kind and --title.');
-      if (!KIND_RE.test(kind))
+      if (!title?.trim()) invalid('Supply --title.');
+      // A Channel only accepts its declared kinds; elsewhere kind is a label.
+      if (to.flag === 'channel' && !kind)
+        invalid('Supply --kind when sending to a channel.');
+      if (kind !== undefined && !KIND_RE.test(kind))
         invalid(
           `Invalid kind "${kind}": use 1-64 lowercase letters, digits, ".", "_" or "-".`,
         );
@@ -313,7 +327,7 @@ const specs: Record<string, Spec> = {
       return {
         method: 'sendNotification',
         request: {
-          channelId,
+          [`${to.flag}Id`]: to.id,
           kind,
           title,
           body: str(values, 'body'),
@@ -323,14 +337,13 @@ const specs: Record<string, Spec> = {
           dataJson: data,
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
-          ...to,
         },
         text: (response) => {
           const notificationId = field(response, 'notificationId');
           if (response.deduplicated === true)
             return `Notification ${notificationId} already exists for this dedupe key; nothing new was sent.`;
           const count = Number(response.deliveryCount ?? 0);
-          if (count === 0 && to?.targetType === 'group')
+          if (count === 0 && to.flag === 'group')
             return [
               `Sent notification ${notificationId}, but nothing was delivered: the group has no enabled destinations.`,
               'Check hatch notification group list and hatch notification destination list.',

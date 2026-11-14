@@ -194,6 +194,7 @@ describe('notification send', () => {
       transport,
       parse(
         'send',
+        '--channel',
         'channel-1',
         '--kind',
         'build.failed',
@@ -211,6 +212,8 @@ describe('notification send', () => {
     );
     expect(received.sendNotification).toMatchObject({
       channelId: 'channel-1',
+      groupId: '',
+      destinationId: '',
       kind: 'build.failed',
       title: 'master is red',
       body: 'Build 42 failed',
@@ -225,7 +228,30 @@ describe('notification send', () => {
       deduplicated: false,
       deliveryCount: 0,
     });
-    expect(result.text).toMatch(/nothing was delivered/);
+    expect(result.text).toMatch(/no route matched/);
+  });
+
+  it('sends straight to a group or destination without a kind', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse('send', '--group', 'g1', '--title', 'Hi'),
+    );
+    expect(received.sendNotification).toMatchObject({
+      channelId: '',
+      groupId: 'g1',
+      kind: '',
+      title: 'Hi',
+    });
+    expect(result.text).toMatch(/group has no enabled destinations/);
+    await executeNotificationCall(
+      transport,
+      parse('send', '--destination', 'd1', '--kind', 'ping', '--title', 'Hi'),
+    );
+    expect(received.sendNotification).toMatchObject({
+      destinationId: 'd1',
+      kind: 'ping',
+    });
   });
 
   it('sends an explicit false to keep the notification page', async () => {
@@ -234,9 +260,8 @@ describe('notification send', () => {
       transport,
       parse(
         'send',
-        'channel-1',
-        '--kind',
-        'a',
+        '--destination',
+        'd1',
         '--title',
         'Hi',
         '--url',
@@ -247,86 +272,34 @@ describe('notification send', () => {
     expect(received.sendNotification?.autoOpenUrl).toBe(false);
   });
 
-  it('addresses one group or destination instead of routes', async () => {
-    const { transport, received } = recordingTransport();
-    const result = await executeNotificationCall(
-      transport,
-      parse(
-        'send',
-        'channel-1',
-        '--kind',
-        'a',
-        '--title',
-        'Hi',
-        '--group',
-        'g1',
-      ),
-    );
-    expect(received.sendNotification).toMatchObject({
-      targetType: 'group',
-      targetId: 'g1',
-    });
-    expect(result.text).toMatch(/group has no enabled destinations/);
-    await executeNotificationCall(
-      transport,
-      parse(
-        'send',
-        'channel-1',
-        '--kind',
-        'a',
-        '--title',
-        'Hi',
-        '--destination',
-        'd1',
-      ),
-    );
-    expect(received.sendNotification).toMatchObject({
-      targetType: 'destination',
-      targetId: 'd1',
-    });
-    expect(() =>
-      parse(
-        'send',
-        'channel-1',
-        '--kind',
-        'a',
-        '--title',
-        'Hi',
-        '--group',
-        'g1',
-        '--destination',
-        'd1',
-      ),
-    ).toThrow(/only one of --group, --destination/);
-    // An empty id from an unset shell variable must not fall back to routes.
-    for (const flag of ['--group', '--destination'])
-      expect(() =>
-        parse('send', 'channel-1', '--kind', 'a', '--title', 'Hi', flag, ''),
-      ).toThrow(/non-empty id/);
-  });
-
   it('rejects incomplete or malformed input before calling the platform', () => {
-    expect(() => parse('send', 'channel-1', '--title', 'Hi')).toThrow(
-      /--kind and --title/,
+    expect(() => parse('send', '--title', 'Hi')).toThrow(
+      /one of --channel, --group or --destination/,
     );
     expect(() =>
-      parse('send', 'channel-1', '--kind', 'Bad Kind', '--title', 'Hi'),
+      parse('send', '--channel', 'c1', '--group', 'g1', '--title', 'Hi'),
+    ).toThrow(/only one of --channel, --group, --destination/);
+    // An empty id from an unset shell variable must not be ignored.
+    for (const flag of ['--channel', '--group', '--destination'])
+      expect(() =>
+        parse('send', flag, '', '--kind', 'a', '--title', 'Hi'),
+      ).toThrow(/non-empty id/);
+    expect(() => parse('send', '--channel', 'c1', '--title', 'Hi')).toThrow(
+      /--kind when sending to a channel/,
+    );
+    expect(() => parse('send', '--group', 'g1', '--kind', 'a')).toThrow(
+      /--title/,
+    );
+    expect(() =>
+      parse('send', '--group', 'g1', '--kind', 'Bad Kind', '--title', 'Hi'),
     ).toThrow(/Invalid kind/);
     expect(() =>
-      parse(
-        'send',
-        'channel-1',
-        '--kind',
-        'a',
-        '--title',
-        'Hi',
-        '--data',
-        '[]',
-      ),
+      parse('send', '--group', 'g1', '--title', 'Hi', '--data', '[]'),
     ).toThrow(/JSON object/);
-    expect(() => parse('send', '--kind', 'a', '--title', 'Hi')).toThrow(
-      /<channel-id>/,
-    );
+    // The channel is a flag now, not a positional.
+    expect(() =>
+      parse('send', 'channel-1', '--kind', 'a', '--title', 'Hi'),
+    ).toThrow(/no positional arguments/);
   });
 });
 

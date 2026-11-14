@@ -16,11 +16,7 @@ import {
   findKind,
   notificationPushSchema,
 } from './contract';
-import {
-  ingestNotification,
-  type IngestResult,
-  type NotificationTarget,
-} from './ingest';
+import { ingestNotification, type IngestResult } from './ingest';
 import { hashChannelToken } from './secrets';
 
 type NotificationChannel = typeof notificationChannels.$inferSelect;
@@ -82,13 +78,11 @@ export async function handleChannelPush(
 
 /**
  * Validate a push body against one Channel's declared kinds and ingest it.
- * Callers authenticate the sender and reject disabled channels first; only
- * user-authenticated callers may pass a `target` that replaces routing.
+ * Callers authenticate the sender and reject disabled channels first.
  */
 export async function ingestChannelPush(
   channel: Pick<NotificationChannel, 'id' | 'name' | 'kinds'>,
   body: unknown,
-  target?: NotificationTarget,
 ): Promise<
   | ({ ok: true } & IngestResult)
   | { ok: false; status: 400 | 422; message: string }
@@ -113,7 +107,6 @@ export async function ingestChannelPush(
     source: { type: 'channel', channelId: channel.id, name: channel.name },
     kind,
     push: push.data,
-    target,
   });
   return { ok: true, ...result };
 }

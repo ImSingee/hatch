@@ -1542,12 +1542,20 @@ describe('notification center authority', () => {
       body: { ...alert, kind: 'other' },
     });
     expect(undeclared.status).toBe(400);
-    // An explicit target replaces routing and needs both of its fields.
-    const halfTarget = await call('NotificationService/SendNotification', {
-      headers: apiKey,
-      body: { ...alert, targetType: 'group' },
-    });
-    expect(halfTarget.status).toBe(400);
+    // Exactly one recipient: a channel (needs a kind), a group or a
+    // destination. Group and destination sends come from the caller.
+    const { channelId: _, kind: __, ...message } = alert;
+    for (const body of [
+      message,
+      { ...alert, groupId: 'g1' },
+      { channelId, title: 'No kind' },
+    ]) {
+      const response = await call('NotificationService/SendNotification', {
+        headers: apiKey,
+        body,
+      });
+      expect(response.status).toBe(400);
+    }
     const group = await call('NotificationService/CreateGroup', {
       headers: apiKey,
       body: { name: 'Pager' },
@@ -1556,15 +1564,27 @@ describe('notification center authority', () => {
       .id;
     const toGroup = await call('NotificationService/SendNotification', {
       headers: apiKey,
-      body: { ...alert, targetType: 'group', targetId: groupId },
+      body: { ...message, groupId },
     });
     expect(toGroup.status).toBe(200);
-    expect(await toGroup.json()).toMatchObject({
-      notificationId: expect.any(String),
+    const { notificationId: direct } = (await toGroup.json()) as {
+      notificationId: string;
+    };
+    const directDetail = await call('NotificationService/GetNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(
+      ((await directDetail.json()) as { notification: { summary: unknown } })
+        .notification.summary,
+    ).toMatchObject({
+      sourceType: 'user',
+      sourceName: 'Notification test',
+      kind: 'message',
     });
     const missingTarget = await call('NotificationService/SendNotification', {
       headers: apiKey,
-      body: { ...alert, targetType: 'destination', targetId: 'missing' },
+      body: { ...message, destinationId: 'missing' },
     });
     expect(missingTarget.status).toBe(404);
     const register = await call('NotificationService/RegisterDevice', {

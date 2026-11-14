@@ -12,6 +12,7 @@ import {
 import { getApnsCredentials } from '../apns/credentials';
 import { buildEncryptedApnsPayload } from '../apns/payload';
 import type { DeliveryAdapter, DeliveryOutcome } from '../delivery';
+import { notificationSourceId } from '../contract';
 import { decryptDeviceKey } from '../secrets';
 
 /** Undelivered pushes are useless after a day; APNs drops them then. */
@@ -130,7 +131,7 @@ export function createDeviceAdapter(
         b: notification.body,
         s: notification.sourceName,
         k: notification.kindName,
-        g: notification.appId ?? notification.channelId ?? 'platform',
+        g: notificationSourceId(notification) ?? notification.sourceType,
         u: notification.url,
         ...(notification.url && notification.autoOpenUrl
           ? { ao: true as const }

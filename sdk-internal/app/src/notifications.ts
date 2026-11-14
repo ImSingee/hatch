@@ -114,7 +114,8 @@ export type HatchNotificationEnvelope = {
     occurredAt: string;
     createdAt: string;
     source: {
-      type: 'app' | 'channel' | 'platform';
+      /** `user`: sent straight to this App by a person; id is the user id. */
+      type: 'app' | 'channel' | 'platform' | 'user';
       id: string | null;
       slug: string | null;
       name: string;

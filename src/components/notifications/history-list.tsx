@@ -32,7 +32,7 @@ function parseSource(
   value: string | null,
 ): Pick<NotificationFilters, 'sourceType' | 'sourceId'> {
   if (!value) return {};
-  if (value === 'platform') return { sourceType: 'platform' };
+  if (value === 'platform' || value === 'user') return { sourceType: value };
   const [type, id] = value.split(':');
   return {
     sourceType: type === 'app' ? 'app' : 'channel',
@@ -80,7 +80,10 @@ export function NotificationHistory() {
         : []),
       {
         group: 'Hatch',
-        items: [{ value: 'platform', label: 'Test notifications' }],
+        items: [
+          { value: 'user', label: 'Sent by people' },
+          { value: 'platform', label: 'Test notifications' },
+        ],
       },
     ],
     [sources],

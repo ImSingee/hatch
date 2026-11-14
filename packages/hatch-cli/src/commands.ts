@@ -159,7 +159,7 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'list'],
     usage:
-      'notification list [--source-type app|channel|platform] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--limit <1-100>] [--cursor <id>]',
+      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--limit <1-100>] [--cursor <id>]',
     description: 'List notifications, newest first.',
   },
   {
@@ -176,9 +176,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'send'],
     usage:
-      'notification send <channel-id> --kind <kind> --title <title> [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--group <id> | --destination <id>]',
+      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>]',
     description:
-      'Push a notification as a Channel. Routes decide where it is delivered unless --group or --destination (a device, webhook or App from destination list) names the recipient. Tapping it on a phone opens --url unless --no-auto-open-url is set.',
+      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set.',
   },
   {
     path: ['notification', 'retry'],

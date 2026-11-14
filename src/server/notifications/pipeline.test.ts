@@ -1,7 +1,15 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 vi.mock('~/db', async () => {
   const { createTestDb } = await import('~/db/test-db');
@@ -588,12 +596,30 @@ describe('ingress authentication', () => {
   });
 });
 
-describe('user channel sends', () => {
+describe('user sends', () => {
   const CI_KIND = { kind: 'build.failed', name: 'Build failed' };
   const red = (extra: Record<string, unknown> = {}) => ({
     kind: CI_KIND.kind,
     title: 'master is red',
     ...extra,
+  });
+  const sender = { userId: 'user-1', name: 'Owner' };
+  const send = (
+    to: Parameters<typeof service.sendNotification>[0]['to'],
+    body: Record<string, unknown>,
+    from = sender,
+  ) => service.sendNotification({ to, sender: from, body });
+  const toChannel = (id: string) => ({ type: 'channel' as const, id });
+
+  beforeEach(async () => {
+    await db.delete(schema.user);
+    await db.insert(schema.user).values([
+      { id: 'user-1', name: 'Owner', email: 'owner@example.test' },
+      { id: 'user-2', name: 'Other', email: 'other@example.test' },
+    ]);
+  });
+  afterEach(async () => {
+    await db.delete(schema.user);
   });
 
   it('route like a token push and enforce channel state and kinds', async () => {
@@ -606,7 +632,7 @@ describe('user channel sends', () => {
       url: webhookUrl,
     });
 
-    const unrouted = await service.sendChannelNotification(channel.id, red());
+    const unrouted = await send(toChannel(channel.id), red());
     expect(unrouted).toMatchObject({ deduplicated: false, deliveries: 0 });
     expect((await service.getNotification(unrouted.id)).status).toBe(
       'unrouted',
@@ -618,8 +644,8 @@ describe('user channel sends', () => {
       targetType: 'destination',
       targetId: hook.id,
     });
-    const sent = await service.sendChannelNotification(
-      channel.id,
+    const sent = await send(
+      toChannel(channel.id),
       red({ dedupeKey: 'build-42', data: { build: 42 } }),
     );
     expect(sent).toMatchObject({ deduplicated: false, deliveries: 1 });
@@ -646,16 +672,16 @@ describe('user channel sends', () => {
     expect(await tokenPush.json()).toEqual({ id: sent.id, deduplicated: true });
 
     await expect(
-      service.sendChannelNotification(channel.id, red({ kind: 'deploy.done' })),
+      send(toChannel(channel.id), red({ kind: 'deploy.done' })),
     ).rejects.toMatchObject({ status: 400 });
     await expect(
-      service.sendChannelNotification(channel.id, red({ url: 'ftp://x' })),
+      send(toChannel(channel.id), red({ url: 'ftp://x' })),
     ).rejects.toMatchObject({ status: 400 });
     await expect(
-      service.sendChannelNotification(channel.id, red({ autoOpenUrl: true })),
+      send(toChannel(channel.id), red({ autoOpenUrl: true })),
     ).rejects.toMatchObject({ status: 400 });
-    const opening = await service.sendChannelNotification(
-      channel.id,
+    const opening = await send(
+      toChannel(channel.id),
       red({ url: 'https://ci.example/42', autoOpenUrl: true }),
     );
     expect(await service.getNotification(opening.id)).toMatchObject({
@@ -663,15 +689,15 @@ describe('user channel sends', () => {
       autoOpenUrl: true,
     });
     await service.updateChannel({ id: channel.id, enabled: false });
+    await expect(send(toChannel(channel.id), red())).rejects.toMatchObject({
+      status: 409,
+    });
     await expect(
-      service.sendChannelNotification(channel.id, red()),
-    ).rejects.toMatchObject({ status: 409 });
-    await expect(
-      service.sendChannelNotification('missing-channel', red()),
+      send(toChannel('missing-channel'), red()),
     ).rejects.toMatchObject({ status: 404 });
   });
 
-  it('deliver only to an explicit group or destination, ignoring routes', async () => {
+  it('deliver straight to a group or destination from the user, never routed', async () => {
     const { channel } = await service.createChannel({
       name: 'CI',
       kinds: [CI_KIND],
@@ -683,9 +709,9 @@ describe('user channel sends', () => {
     const member = await hook('Member');
     const muted = await hook('Muted');
     await service.updateDestination({ id: muted.id, enabled: false });
+    // A catch-all route must not pick up user sends.
     await service.createRoute({
-      sourceType: 'channel',
-      sourceId: channel.id,
+      sourceType: 'any',
       targetType: 'destination',
       targetId: routed.id,
     });
@@ -699,68 +725,95 @@ describe('user channel sends', () => {
         routeIds: delivery.routeIds,
       }));
 
-    const toDestination = await service.sendChannelNotification(
-      channel.id,
-      red(),
+    const toDestination = await send(
       { type: 'destination', id: direct.id },
+      { title: 'Deploy done' },
     );
     expect(toDestination.deliveries).toBe(1);
     expect(await deliveredTo(toDestination.id)).toEqual([
       { destinationId: direct.id, routeIds: [] },
     ]);
-
-    // A group reaches its enabled members only; routes stay out of it.
-    const toGroup = await service.sendChannelNotification(channel.id, red(), {
-      type: 'group',
-      id: group.id,
+    // The sender is the user; kind defaults to a plain message.
+    expect(await service.getNotification(toDestination.id)).toMatchObject({
+      sourceType: 'user',
+      sourceId: 'user-1',
+      sourceName: 'Owner',
+      kind: 'message',
+      kindName: 'Message',
     });
+
+    // A group reaches its enabled members only; any kind is a free label.
+    const toGroup = await send(
+      { type: 'group', id: group.id },
+      { kind: 'deploy.done', title: 'Deploy done' },
+    );
     expect(toGroup.deliveries).toBe(1);
     expect(await deliveredTo(toGroup.id)).toEqual([
       { destinationId: member.id, routeIds: [] },
     ]);
+    expect(await service.getNotification(toGroup.id)).toMatchObject({
+      kind: 'deploy.done',
+      kindName: 'deploy.done',
+    });
     expect(await runAllDue()).toBe(2);
+    expect(
+      received.map((request) => JSON.parse(request.body).notification.source),
+    ).toEqual([
+      { type: 'user', id: 'user-1', slug: null, name: 'Owner' },
+      { type: 'user', id: 'user-1', slug: null, name: 'Owner' },
+    ]);
 
-    // The channel's kinds and dedupe scope still apply to addressed sends.
-    await expect(
-      service.sendChannelNotification(
-        channel.id,
-        red({ kind: 'deploy.done' }),
-        {
-          type: 'group',
-          id: group.id,
-        },
-      ),
-    ).rejects.toMatchObject({ status: 400 });
-    const first = await service.sendChannelNotification(
-      channel.id,
-      red({ dedupeKey: 'build-7' }),
+    // Dedupe keys are scoped to the sending user, apart from Channels.
+    const first = await send(
+      { type: 'destination', id: direct.id },
+      { title: 'Once', dedupeKey: 'k' },
     );
     expect(
-      await service.sendChannelNotification(
-        channel.id,
-        red({ dedupeKey: 'build-7' }),
-        { type: 'destination', id: direct.id },
+      await send(
+        { type: 'group', id: group.id },
+        { title: 'Once', dedupeKey: 'k' },
       ),
     ).toEqual({ id: first.id, deduplicated: true, deliveries: 0 });
+    const otherUser = await send(
+      { type: 'destination', id: direct.id },
+      { title: 'Once', dedupeKey: 'k' },
+      { userId: 'user-2', name: 'Other' },
+    );
+    expect(otherUser.deduplicated).toBe(false);
+    const fromChannel = await send(
+      toChannel(channel.id),
+      red({ dedupeKey: 'k' }),
+    );
+    expect(fromChannel.deduplicated).toBe(false);
+    expect(
+      (
+        await service.listNotifications({
+          sourceType: 'user',
+          sourceId: 'user-1',
+        })
+      ).items.length,
+    ).toBe(3);
 
     await expect(
-      service.sendChannelNotification(channel.id, red(), {
-        type: 'destination',
-        id: muted.id,
-      }),
+      send({ type: 'destination', id: direct.id }, { title: 'x', kind: 'Bad' }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      send({ type: 'destination', id: muted.id }, { title: 'x' }),
     ).rejects.toMatchObject({ status: 409 });
     await expect(
-      service.sendChannelNotification(channel.id, red(), {
-        type: 'destination',
-        id: 'missing-destination',
-      }),
+      send({ type: 'destination', id: 'missing-destination' }, { title: 'x' }),
     ).rejects.toMatchObject({ status: 404 });
     await expect(
-      service.sendChannelNotification(channel.id, red(), {
-        type: 'group',
-        id: 'missing-group',
-      }),
+      send({ type: 'group', id: 'missing-group' }, { title: 'x' }),
     ).rejects.toMatchObject({ status: 404 });
+
+    // History outlives the sender.
+    await db.delete(schema.user).where(eq(schema.user.id, 'user-1'));
+    expect(await service.getNotification(toDestination.id)).toMatchObject({
+      sourceType: 'user',
+      sourceId: null,
+      sourceName: 'Owner',
+    });
   });
 });
 

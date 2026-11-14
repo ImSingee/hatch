@@ -7,10 +7,12 @@ import {
   IconDeviceMobile,
   IconMinus,
   IconSparkles,
+  IconUser,
   IconWebhook,
   IconX,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
+import type { NotificationSourceType } from '~/db/schema';
 import type { NotificationStatus } from '~server/notifications';
 
 type DeliveryStatus = 'pending' | 'in_progress' | 'succeeded' | 'failed';
@@ -132,10 +134,11 @@ export function SourceTypeIcon({
   type,
   size = 16,
 }: {
-  type: 'app' | 'channel' | 'platform';
+  type: NotificationSourceType;
   size?: number;
 }) {
   if (type === 'app') return <IconAppWindow size={size} stroke={1.6} />;
   if (type === 'channel') return <IconBroadcast size={size} stroke={1.6} />;
+  if (type === 'user') return <IconUser size={size} stroke={1.6} />;
   return <IconSparkles size={size} stroke={1.6} />;
 }

@@ -12,8 +12,8 @@ service NotificationService {
   rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
   rpc RetryDelivery(RetryDeliveryRequest) returns (RetryDeliveryResponse);
   rpc SendTestNotification(SendTestNotificationRequest) returns (SendTestNotificationResponse);
-  // Push a notification as a Channel without its token; routed like a
-  // Channel push unless it names a group or destination to deliver to. Run
+  // Send a notification as a Channel (without its token, routed like a
+  // Channel push) or from the caller straight to a group or destination. Run
   // credentials are rejected like every other method.
   rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
@@ -59,7 +59,7 @@ message NotificationDeliveryCounts {
 
 message NotificationSummary {
   string id = 1;
-  // app | channel | platform
+  // app | channel | platform | user
   string source_type = 2;
   optional string source_id = 3;
   string source_name = 4;
@@ -111,7 +111,8 @@ message ListNotificationsRequest {
     in: [
       "app",
       "channel",
-      "platform"
+      "platform",
+      "user"
     ]
   }];
   optional string source_id = 2 [(buf.validate.field).string = {
@@ -164,13 +165,23 @@ message SendTestNotificationResponse {
   string notification_id = 1;
 }
 
-// Same fields and limits as the Channel push body.
+// Same fields and limits as the Channel push body, sent to exactly one of
+// channel_id, group_id or destination_id.
 message SendNotificationRequest {
-  string channel_id = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 64
-  }];
-  string kind = 2 [(buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$"];
+  // As this Channel: its declared kinds, dedupe scope and routes apply.
+  string channel_id = 1 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  // Required with channel_id. For a group or destination it is a free label
+  // and defaults to "message".
+  string kind = 2 [
+    (buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$",
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
   // At most 200 characters after trimming, checked by the shared Channel
   // push rules so both paths accept the same titles.
   string title = 3 [(buf.validate.field).string.min_len = 1];
@@ -179,7 +190,8 @@ message SendNotificationRequest {
   optional string url = 5 [(buf.validate.field).string.max_len = 2048];
   // JSON object, at most 32 KiB serialized.
   optional string data_json = 6 [(buf.validate.field).string.max_len = 65536];
-  // Repeats from the same Channel return the first notification.
+  // Repeats return the first notification: per Channel for channel_id, per
+  // sending user for a group or destination.
   optional string dedupe_key = 7 [(buf.validate.field).string.max_len = 200];
   // ISO-8601 timestamp; defaults to now.
   optional string occurred_at = 8 [(buf.validate.field).string.max_len = 64];
@@ -187,32 +199,41 @@ message SendNotificationRequest {
   // defaults to whether url is set; false keeps the notification page; true
   // requires url.
   optional bool auto_open_url = 9;
-  // Deliver to this group or destination instead of matching routes. Set
-  // both or neither. A group reaches its enabled members; a destination must
-  // be enabled.
-  optional string target_type = 10 [(buf.validate.field).string = {
-    in: [
-      "group",
-      "destination"
-    ]
-  }];
-  optional string target_id = 11 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 64
-  }];
+  // From the sending user, never routed: the group's enabled members.
+  string group_id = 10 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  // From the sending user, never routed: one enabled device, webhook or App
+  // destination.
+  string destination_id = 11 [
+    (buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    },
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
 
   option (buf.validate.message).cel = {
-    id: "send_notification.target"
-    message: "target_type and target_id must be set together"
-    expression: "has(this.target_type) == has(this.target_id)"
+    id: "send_notification.recipient"
+    message: "set exactly one of channel_id, group_id or destination_id"
+    expression: "[this.channel_id, this.group_id, this.destination_id].filter(id, id != '').size() == 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "send_notification.channel_kind"
+    message: "kind is required when sending to a channel"
+    expression: "this.channel_id == '' || this.kind != ''"
   };
 }
 message SendNotificationResponse {
   string notification_id = 1;
-  // True when dedupe_key matched an earlier notification from this Channel.
+  // True when dedupe_key matched an earlier notification in its scope.
   bool deduplicated = 2;
-  // Deliveries queued by matching routes or the explicit target; 0 for a
-  // duplicate.
+  // Deliveries queued by matching routes or to the group or destination; 0
+  // for a duplicate.
   uint32 delivery_count = 3;
 }
 

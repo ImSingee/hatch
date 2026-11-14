@@ -13,7 +13,8 @@ import { wakeNotificationDispatcher } from './dispatcher';
 export type NotificationSource =
   | { type: 'app'; appId: string; name: string }
   | { type: 'channel'; channelId: string; name: string }
-  | { type: 'platform'; name: string };
+  | { type: 'platform'; name: string }
+  | { type: 'user'; userId: string; name: string };
 
 /** `deliveries` counts the deliveries queued now; 0 for a duplicate. */
 export type IngestResult = {
@@ -91,7 +92,8 @@ export async function resolveRoutedDestinations(
   kind: string,
 ): Promise<Targets> {
   const result: Targets = new Map();
-  if (source.type === 'platform') return result;
+  // Platform and user notifications always name their recipient.
+  if (source.type === 'platform' || source.type === 'user') return result;
 
   const routes = (
     await tx.query.notificationRoutes.findMany({
@@ -175,7 +177,9 @@ async function findDuplicate(
     where:
       source.type === 'app'
         ? { appId: source.appId, dedupeKey }
-        : { channelId: source.channelId, dedupeKey },
+        : source.type === 'user'
+          ? { userId: source.userId, dedupeKey }
+          : { channelId: source.channelId, dedupeKey },
     columns: { id: true },
   });
   return existing?.id ?? null;
@@ -183,7 +187,7 @@ async function findDuplicate(
 
 /**
  * Persist one notification and its deliveries. `target` replaces routing with
- * an explicit group or destination (test sends, user-addressed sends).
+ * an explicit group or destination; platform and user sources require one.
  */
 export async function ingestNotification(args: {
   source: NotificationSource;
@@ -203,6 +207,7 @@ export async function ingestNotification(args: {
         sourceType: source.type,
         appId: source.type === 'app' ? source.appId : null,
         channelId: source.type === 'channel' ? source.channelId : null,
+        userId: source.type === 'user' ? source.userId : null,
         sourceName: source.name,
         kind: kind.kind,
         kindName: kind.name,

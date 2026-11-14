@@ -8,7 +8,8 @@ signed-in user can see and change it.
 ## Model
 
 - **Source**: an App (kinds declared in its manifest), a Channel (kinds
-  declared in platform configuration), or the platform itself (test sends).
+  declared in platform configuration), the platform itself (test sends), or a
+  user who sent straight to a group or destination (`user`, below).
 - **Destination**: `device` (one mobile sign-in session), `webhook` (URL +
   signing secret), or `app` (an App whose live manifest declares
   `notifications.destination`). The App destination row is created on the
@@ -25,6 +26,8 @@ signed-in user can see and change it.
   Null source/kind match anything. All matching routes are expanded, then
   deduplicated per destination; each destination gets one delivery recording
   every route that selected it. An App never receives its own notifications.
+  Platform and user notifications are never routed: they name their
+  recipient, and their deliveries record no routes.
 
 Code: `src/server/notifications/` (`ingest.ts`, `dispatcher.ts`, `service.ts`,
 `adapters/*`, `apns/*`). Tables: `notifications`, `notification_deliveries`,
@@ -74,24 +77,30 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   token in `x-hatch-secret` (header presence wins, even empty) or `?secret=`.
   Only the token's sha256 is stored; create and rotate return it once.
   Disabled channels answer 403.
-- **Channel, as a user**: `SendNotification` (`hatch notification send
-  <channel-id> --kind … --title …`) pushes the same body as that Channel
-  without its token, authenticated by a user session or API key. An unset
-  `auto_open_url` takes the same default as `autoOpenUrl`; the CLI sends
-  `false` only for `--no-auto-open-url`. It shares
-  the kind check, dedupe scope and routing with token pushes
-  (`ingestChannelPush`), answers `CONFLICT` for a disabled channel and
-  `BAD_REQUEST` for an invalid body or undeclared kind, and returns the
-  queued delivery count so callers can spot sends that reached no enabled
-  destination. `target_type` + `target_id` (`--group <id>` or
-  `--destination <id>`, any device, webhook or App destination) replace
-  routing: routes are not consulted, the deliveries record no route ids, a
-  group reaches its enabled members (none queues nothing), and a missing
-  target answers `NOT_FOUND`, a disabled destination `CONFLICT`. Kinds and
-  dedupe still apply, so a repeated dedupe key returns the first
-  notification wherever it was sent. Token pushes cannot name a target:
-  choosing recipients outside routes is reserved to users. `NotificationService` reads requests up to 128 KiB (twice the
-  Channel push cap) because `data_json` is escaped inside the request.
+- **User sends**: `SendNotification` (`hatch notification send`) takes the
+  same body and exactly one recipient, authenticated by a user session or API
+  key:
+  - `channel_id` (`--channel`): as that Channel, without its token. It shares
+    the kind check, dedupe scope and routing with token pushes
+    (`ingestChannelPush`); `kind` is required. A disabled channel answers
+    `CONFLICT`.
+  - `group_id` (`--group`) or `destination_id` (`--destination`, any device,
+    webhook or App destination): from the caller, never routed. The source is
+    `user` with the caller's id and name (`notifications.user_id`, set null
+    if the user is deleted; `source_name` keeps the name). A group reaches its
+    enabled members, none queues nothing; a destination must be enabled
+    (`CONFLICT`). `kind` is a free label, default `message` ("Message"), and
+    dedupe keys are scoped to the sending user. Token pushes and Apps cannot
+    address recipients this way: choosing them outside routes is reserved to
+    users.
+
+  An unset `auto_open_url` takes the same default as `autoOpenUrl`; the CLI
+  sends `false` only for `--no-auto-open-url`. Unknown recipients answer
+  `NOT_FOUND`, an invalid body or undeclared Channel kind `BAD_REQUEST`, and
+  the response carries the queued delivery count so callers can spot sends
+  that reached no enabled destination. `NotificationService` reads requests
+  up to 128 KiB (twice the Channel push cap) because `data_json` is escaped
+  inside the request.
 
 ## Delivery
 
@@ -133,6 +142,10 @@ Webhook and App destinations receive the same envelope:
   }
 }
 ```
+
+`source.type` is `app`, `channel`, `platform` or `user`; `source.id` is the
+App, Channel or sending user id (null for platform and deleted users) and
+`slug` is set only for Apps.
 
 Headers: `x-hatch-notification-id`, `x-hatch-delivery-id`,
 `x-hatch-timestamp`, `x-hatch-signature` (`sha256=<hex HMAC(timestamp + "." + body)>`).
@@ -252,3 +265,6 @@ Agent tool. `RegisterDevice`,
 compatibility version or Runner protocol change is needed. Historical
 deployments lack the field and neither push nor accept notifications. The
 manifest schema is strict, so Platform and Runner must ship the same build.
+The `user` source type is an additive envelope value: App destinations built
+against the earlier `app | channel | platform` set receive it as a plain
+string, so no compatibility version change is needed either.
