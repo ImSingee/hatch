@@ -51,7 +51,9 @@ try {
     )
   )
     throw new CliError('unknown_command', 'Unknown command. Use hatch help.');
-  if (['auth', 'app', 'workflow'].includes(name) && !args.includes('--help'))
+  // Every online command accepts Run credentials; only help and version are
+  // offline.
+  if (!help && !['version', '--version'].includes(name))
     await refreshRunEnvironment(process.env, controller.signal);
   if (help) {
     const scope =

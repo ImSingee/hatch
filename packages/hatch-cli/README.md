@@ -317,9 +317,9 @@ promise compatibility with older CLI binaries.
 
 ## Notifications
 
-`hatch notification ...` manages the notification center with a user session
-or API key; Run credentials are rejected (`SESSION_REQUIRED`, exit 4). `hatch
-help` lists every command. `send` takes exactly one recipient. `--channel`
+`hatch notification ...` manages the notification center with a user session,
+API key or Agent Run credential. In a Run, `--group` and `--destination` sends
+come from `Hatch Agent`. `hatch help` lists every command. `send` takes exactly one recipient. `--channel`
 acts as that Channel (its id, not its token): its kinds, dedupe scope and
 routes apply, and `--kind` is required. `--group` and `--destination` deliver
 straight there from you, never routed, with `--kind` optional (default

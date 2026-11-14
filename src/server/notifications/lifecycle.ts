@@ -17,8 +17,8 @@ import { wakeNotificationDispatcher } from './dispatcher';
 
 /**
  * Who changes a notification. Apps and Channels, authenticated by their own
- * credentials, reach only what they sent. A `member` (a user session or API
- * key) reaches every notification: workspace members are all equal.
+ * credentials, reach only what they sent. A `member` (a user session, API key
+ * or Agent Run) reaches every notification: workspace members are all equal.
  */
 export type NotificationSender =
   | { type: 'app'; appId: string }
