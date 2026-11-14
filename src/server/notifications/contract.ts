@@ -371,7 +371,12 @@ export function buildEnvelope(args: {
     version: 1,
     deliveryId: args.deliveryId,
     attempt: args.attempt,
-    revision: notification.revision,
+    // The answer is one event whatever happens to the notification later:
+    // its revision is the one the answer created, on every attempt.
+    revision:
+      args.event === 'responded' && notification.responseRevision !== null
+        ? notification.responseRevision
+        : notification.revision,
     notification: {
       id: notification.id,
       kind: notification.kind,

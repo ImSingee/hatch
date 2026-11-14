@@ -271,7 +271,9 @@ const EVENT_TYPES: readonly string[] = [
 /**
  * Envelope the platform POSTs to `/__notification` on App destinations.
  * Edits and recalls carry the notification's current state; `revision`
- * orders them and `(notification.id, revision)` identifies one event.
+ * orders them and `(notification.id, revision)` identifies one event. For
+ * `hatch.notification.responded`, `revision` is the revision the answer
+ * created, even when the notification changed after it.
  */
 export type HatchNotificationEnvelope = {
   type: HatchNotificationEventType;

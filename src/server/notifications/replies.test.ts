@@ -33,7 +33,8 @@ const {
 const { deliverToWebhook } = await import('./adapters/webhook');
 const { deliverToApp } = await import('./adapters/app');
 const { pushPlaintext } = await import('./adapters/device');
-const { recallNotification } = await import('./lifecycle');
+const { recallNotification, updateNotification } = await import('./lifecycle');
+const { pruneHistory } = await import('~server/retention');
 const { syncAppNotificationDestination } = await import('./app-destinations');
 const {
   AlreadyRespondedError,
@@ -516,6 +517,68 @@ describe('answers and edit events', () => {
       status: 'succeeded',
       deliveredRevision: 2,
     });
+  });
+});
+
+describe('answer events', () => {
+  it('keep the revision the answer created, even after a later edit', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      destinationId: webhookId,
+    });
+    const id = await sendForm();
+    await respondToNotification(
+      id,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    await updateNotification(
+      { type: 'channel', channelId },
+      { id, title: 'Deploy v2.5?' },
+    );
+    received.length = 0;
+    await runAll();
+    const envelope = JSON.parse(
+      received.find(
+        (entry) =>
+          entry.headers['x-hatch-event'] === 'hatch.notification.responded',
+      )!.body,
+    );
+    expect(envelope.revision).toBe(2);
+    expect(envelope.notification.revision).toBe(3);
+    expect(envelope.notification.title).toBe('Deploy v2.5?');
+  });
+
+  it('survive history retention until they are delivered', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      destinationId: webhookId,
+    });
+    const id = await sendForm();
+    await respondToNotification(
+      id,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    // Old enough to prune, with every notification delivery finished.
+    await db
+      .update(schema.notifications)
+      .set({ createdAt: new Date(Date.now() - 400 * 24 * 60 * 60_000) })
+      .where(eq(schema.notifications.id, id));
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ status: 'succeeded' })
+      .where(eq(schema.notificationDeliveries.notificationId, id));
+    await pruneHistory();
+    expect(
+      await db.query.notifications.findFirst({ where: { id } }),
+    ).toBeDefined();
+
+    await runAll();
+    await pruneHistory();
+    expect(
+      await db.query.notifications.findFirst({ where: { id } }),
+    ).toBeUndefined();
   });
 });
 

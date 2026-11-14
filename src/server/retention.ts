@@ -67,7 +67,8 @@ export async function pruneHistory(): Promise<void> {
           and coalesce(r.completed_at, r.created_at)
               < ${cutoff(RETENTION_DAYS.agentRunEvents)}::timestamptz`,
   );
-  // Never drop a notification that still has a delivery in flight.
+  // Never drop a notification that still has a delivery in flight, of the
+  // notification itself or of its answer.
   await db.execute(
     sql`delete from notifications n
         where n.created_at < ${cutoff(RETENTION_DAYS.notifications)}::timestamptz
@@ -75,6 +76,11 @@ export async function pruneHistory(): Promise<void> {
             select 1 from notification_deliveries d
             where d.notification_id = n.id
               and d.status in ('pending', 'in_progress')
+          )
+          and not exists (
+            select 1 from notification_response_deliveries r
+            where r.notification_id = n.id
+              and r.status in ('pending', 'in_progress')
           )`,
   );
   await prunePendingAgentAttachments();

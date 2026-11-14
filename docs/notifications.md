@@ -295,7 +295,11 @@ carries `reply` and `response`:
 ```
 
 `notification.data` passes through unchanged, so the sender can correlate the
-answer with its own records.
+answer with its own records. The envelope's top-level `revision` is the revision the answer
+created (`response_revision`), on every attempt, even if the notification is
+edited or recalled before the answer is delivered; `notification` itself shows
+the current state. History retention keeps a notification while any delivery
+of its answer is pending.
 
 ## Delivery
 
