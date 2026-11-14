@@ -626,7 +626,7 @@ describe('user sends', () => {
     title: 'master is red',
     ...extra,
   });
-  const sender = { userId: 'user-1', name: 'Owner' };
+  const sender = { type: 'user' as const, userId: 'user-1', name: 'Owner' };
   const send = (
     to: Parameters<typeof service.sendNotification>[0]['to'],
     body: Record<string, unknown>,
@@ -805,7 +805,7 @@ describe('user sends', () => {
     const otherUser = await send(
       { type: 'destination', id: direct.id },
       { title: 'Once', dedupeKey: 'k' },
-      { userId: 'user-2', name: 'Other' },
+      { type: 'user' as const, userId: 'user-2', name: 'Other' },
     );
     expect(otherUser.deduplicated).toBe(false);
     const fromChannel = await send(
@@ -1348,7 +1348,7 @@ describe('edits and recalls', () => {
       });
       const fromChannel = await service.sendNotification({
         to: { type: 'channel', id: channel.id },
-        sender: { userId: 'user-1', name: 'Owner' },
+        sender: { type: 'user' as const, userId: 'user-1', name: 'Owner' },
         body: {
           kind: 'alert',
           title: 'Disk full',
@@ -1363,7 +1363,7 @@ describe('edits and recalls', () => {
       });
       const fromOtherUser = await service.sendNotification({
         to: { type: 'destination', id: hook.id },
-        sender: { userId: 'user-2', name: 'Other' },
+        sender: { type: 'user' as const, userId: 'user-2', name: 'Other' },
         body: { title: 'Deploy started' },
       });
 

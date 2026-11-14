@@ -48,6 +48,8 @@ type DispatcherState = {
   pruneTimer: ReturnType<typeof setInterval> | null;
   ticking: boolean;
   again: boolean;
+  /** Which queue claims first next time; alternates every claim. */
+  responsesFirst: boolean;
 };
 
 type DispatcherGlobal = typeof globalThis & {
@@ -591,6 +593,30 @@ const RUNNERS: Record<
   response: runClaimedResponseDelivery,
 };
 
+/**
+ * Claim up to `limit` deliveries across both queues so neither starves the
+ * other: the first queue takes at most half the slots (all of one slot), the
+ * second the rest, and the first fills whatever the second left. Callers
+ * alternate which queue goes first.
+ */
+export async function claimFairly(
+  limit: number,
+  responsesFirst: boolean,
+): Promise<{ queue: DeliveryQueue; delivery: ClaimedDelivery }[]> {
+  const [first, second]: DeliveryQueue[] = responsesFirst
+    ? ['response', 'notification']
+    : ['notification', 'response'];
+  const claimed: { queue: DeliveryQueue; delivery: ClaimedDelivery }[] = [];
+  const take = async (queue: DeliveryQueue, count: number) => {
+    const due = await claimDueDeliveries(count, queue);
+    claimed.push(...due.map((delivery) => ({ queue, delivery })));
+  };
+  await take(first, Math.ceil(limit / 2));
+  await take(second, limit - claimed.length);
+  await take(first, limit - claimed.length);
+  return claimed;
+}
+
 async function tick(current: DispatcherState): Promise<void> {
   if (current.ticking) {
     current.again = true;
@@ -600,14 +626,11 @@ async function tick(current: DispatcherState): Promise<void> {
   try {
     do {
       current.again = false;
-      const claimed: { queue: DeliveryQueue; delivery: ClaimedDelivery }[] = [];
-      for (const queue of ['notification', 'response'] as const) {
-        const due = await claimDueDeliveries(
-          CONCURRENCY - current.active - claimed.length,
-          queue,
-        );
-        claimed.push(...due.map((delivery) => ({ queue, delivery })));
-      }
+      const claimed = await claimFairly(
+        CONCURRENCY - current.active,
+        current.responsesFirst,
+      );
+      current.responsesFirst = !current.responsesFirst;
       for (const { queue, delivery } of claimed) {
         current.active += 1;
         void RUNNERS[queue](delivery, current.adapters)
@@ -643,6 +666,7 @@ export function ensureNotificationDispatcher(adapters: DeliveryAdapters): void {
     pruneTimer: null,
     ticking: false,
     again: false,
+    responsesFirst: false,
   };
   global.__hatchNotificationDispatcher__ = current;
   current.timer = setInterval(() => void tick(current), POLL_INTERVAL_MS);

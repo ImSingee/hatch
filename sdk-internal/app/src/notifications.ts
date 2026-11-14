@@ -273,7 +273,8 @@ const EVENT_TYPES: readonly string[] = [
  * Edits and recalls carry the notification's current state; `revision`
  * orders them and `(notification.id, revision)` identifies one event. For
  * `hatch.notification.responded`, `revision` is the revision the answer
- * created, even when the notification changed after it.
+ * created, even when the notification changed after it; no other event
+ * carries that revision.
  */
 export type HatchNotificationEnvelope = {
   type: HatchNotificationEventType;

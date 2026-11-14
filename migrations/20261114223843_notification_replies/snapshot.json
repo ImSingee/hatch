@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "0514d938-67cc-4ea4-bea1-2486aaff7558",
-  "prevIds": ["3b72eec2-7398-4e94-af39-aa13d7be2995"],
+  "id": "5b2b7b25-fae6-4400-88ee-a556e435f162",
+  "prevIds": ["64a5e840-cdda-4b9e-b127-d5fe7430368a"],
   "ddl": [
     {
       "values": ["desktop", "tablet", "mobile"],
@@ -6306,6 +6306,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "notifications_user_dedupe_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "dedupe_key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"notifications\".\"source_type\" = 'platform' and \"notifications\".\"dedupe_key\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "notifications_platform_dedupe_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "notifications"

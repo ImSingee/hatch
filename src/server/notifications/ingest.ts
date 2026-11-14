@@ -172,14 +172,15 @@ async function findDuplicate(
   source: NotificationSource,
   dedupeKey: string,
 ): Promise<string | null> {
-  if (source.type === 'platform') return null;
   const existing = await tx.query.notifications.findFirst({
     where:
       source.type === 'app'
         ? { appId: source.appId, dedupeKey }
         : source.type === 'user'
           ? { userId: source.userId, dedupeKey }
-          : { channelId: source.channelId, dedupeKey },
+          : source.type === 'channel'
+            ? { channelId: source.channelId, dedupeKey }
+            : { sourceType: 'platform', dedupeKey },
     columns: { id: true },
   });
   return existing?.id ?? null;

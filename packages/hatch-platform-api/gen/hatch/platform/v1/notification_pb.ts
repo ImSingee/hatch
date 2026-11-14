@@ -2919,8 +2919,9 @@ export const DeleteChannelResponseSchema: GenMessage<DeleteChannelResponse> =
 
 /**
  * Notification center: history, destinations, groups, routes and channels.
- * Accepts user sessions and API keys; Run credentials are rejected so Agents
- * cannot reconfigure delivery. Device registration requires a user session.
+ * Accepts user sessions, API keys and Agent Run credentials with the same
+ * authority; Run sends to a group or destination come from "Hatch Agent".
+ * Device registration requires the native login session that owns the device.
  *
  * @generated from service hatch.platform.v1.NotificationService
  */

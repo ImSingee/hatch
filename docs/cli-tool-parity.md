@@ -50,14 +50,24 @@ of this feature.
 
 `hatch notification ...` (history, test/send/update/recall/respond/retry, sources, APNs status,
 destinations, webhooks, groups, routes, response routes and channels) calls
-`NotificationService` and intentionally has no Agent Tool counterpart:
-delivery configuration and user-authenticated sends are user decisions, made
-in the Web UI or the CLI, never by an Agent. The service accepts user sessions
-and API keys and rejects Run JWTs, so these commands are not part of the Run
-credential refresh path in `packages/hatch-cli/src/main.ts`; inside an Agent
-Run they fail with `SESSION_REQUIRED` (exit 4). Device registration is
-mobile-only and has no CLI command. Answering from the notification itself
+`NotificationService` and has no Agent Tool counterpart because Agent Tools
+for platform capabilities are frozen: the platform Agent uses the CLI. The
+service accepts sessions, API keys and Run JWTs alike, and every online CLI
+command refreshes Run credentials in `packages/hatch-cli/src/main.ts`. A Run
+has no user, so its group and destination sends come from source `platform`
+named `Hatch Agent`. Device registration is bound to a native login session,
+is mobile-only and has no CLI command. Answering from the notification itself
 (`POST /api/notifications/device-response`, signed with the phone's push key)
 is bound to the device as well; the CLI answers the same forms with
-`hatch notification respond`. Secrets (webhook signing secrets, channel
+`hatch notification respond`, and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
 tokens) are printed only by the create/rotate commands that mint them.
+
+## Known gaps
+
+`AgentService` (model catalog, Agent sessions) and `WorkspaceService`
+(workspace navigation, Dashboard auto-refresh) still accept only a native user
+session and have no `hatch` CLI commands. Both are pending: add their CLI
+commands and remove the session-only gate in `src/server/platform-api/router.ts`
+together, so Run credentials gain the same authority. `AuthService.CreateHandoff`
+stays session-only because it exchanges the caller's native login session for
+a browser session.

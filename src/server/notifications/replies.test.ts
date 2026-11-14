@@ -26,6 +26,7 @@ const service = await import('./service');
 const { handleChannelPush } = await import('./channel-ingress');
 const {
   claimDueDeliveries,
+  claimFairly,
   planDelivery,
   runClaimedDelivery,
   runClaimedResponseDelivery,
@@ -451,14 +452,14 @@ describe('direct notifications from a member', () => {
     });
     const sent = await service.sendNotification({
       to: { type: 'destination', id: deviceId },
-      sender: { userId: 'user-2', name: 'Bob' },
+      sender: { type: 'user', userId: 'user-2', name: 'Bob' },
       body: { title: 'Lunch?', reply: APPROVE_FORM },
     });
     await runAll();
     await expect(
       service.sendNotification({
         to: { type: 'destination', id: deviceId },
-        sender: { userId: 'user-2', name: 'Bob' },
+        sender: { type: 'user', userId: 'user-2', name: 'Bob' },
         body: { title: 'Bad', reply: { fields: [] } },
       }),
     ).rejects.toMatchObject({
@@ -549,6 +550,50 @@ describe('answer events', () => {
     expect(envelope.notification.title).toBe('Deploy v2.5?');
   });
 
+  it('never share a revision with notification events', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      destinationId: webhookId,
+    });
+    const events = async (body: Record<string, unknown>, edit: boolean) => {
+      // Answered (and maybe edited) before anything was delivered.
+      const pushed = await pushAsChannel({
+        kind: 'deploy',
+        title: 'Deploy?',
+        ...body,
+      });
+      const { id } = (await pushed.json()) as { id: string };
+      if (edit) {
+        await updateNotification(
+          { type: 'channel', channelId },
+          { id, title: 'Deploy v2.5?' },
+        );
+      }
+      await respondToNotification(
+        id,
+        { decision: 'approve' },
+        { userId: 'user-1', via: 'web' },
+      );
+      received.length = 0;
+      await runAll();
+      return received
+        .map((entry) => JSON.parse(entry.body))
+        .map((event) => [
+          event.type,
+          event.revision,
+          event.notification.revision,
+        ]);
+    };
+    expect(await events({ reply: APPROVE_FORM }, false)).toEqual([
+      ['hatch.notification', 1, 1],
+      ['hatch.notification.responded', 2, 1],
+    ]);
+    expect(await events({ reply: APPROVE_FORM }, true)).toEqual([
+      ['hatch.notification', 2, 2],
+      ['hatch.notification.responded', 3, 2],
+    ]);
+  });
+
   it('survive history retention until they are delivered', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
@@ -579,6 +624,45 @@ describe('answer events', () => {
     expect(
       await db.query.notifications.findFirst({ where: { id } }),
     ).toBeUndefined();
+  });
+});
+
+describe('dispatching answers under load', () => {
+  it('claims answer deliveries even while notifications are backed up', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      destinationId: webhookId,
+    });
+    const answered = await sendForm();
+    await respondToNotification(
+      answered,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    // A backlog of ordinary deliveries, all due before the answer.
+    for (let i = 0; i < 10; i += 1) {
+      await pushAsChannel({ kind: 'deploy', title: `Backlog ${i}` });
+    }
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ nextAttemptAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.notificationDeliveries.status, 'pending'));
+
+    const queues = async (limit: number, responsesFirst: boolean) =>
+      (await claimFairly(limit, responsesFirst)).map((entry) => entry.queue);
+    // One free slot: the queue whose turn it is gets it.
+    expect(await queues(1, false)).toEqual(['notification']);
+    expect(await queues(1, true)).toEqual(['response']);
+  });
+
+  it('fills spare slots from either queue', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await pushAsChannel({ kind: 'deploy', title: `Only ${i}` });
+    }
+    // Nothing waits in the answer queue, so notifications take every slot.
+    const claimed = await claimFairly(8, true);
+    expect(claimed.every((entry) => entry.queue === 'notification')).toBe(true);
+    expect(claimed).toHaveLength(6);
   });
 });
 

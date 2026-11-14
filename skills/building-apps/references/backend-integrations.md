@@ -259,10 +259,11 @@ export default {
 ## Notifications
 
 Enable `notifications` and `backend`, then declare the kinds the App pushes
-and/or `destination` to let users route notifications to this App. Users
-decide in Settings → Notifications (or `hatch notification route ...`) which
-notifications reach which devices, webhooks or App destinations; the App never
-chooses recipients.
+and/or `destination` to let users route notifications to this App. Routes in
+Settings → Notifications decide which notifications reach which devices,
+webhooks or App destinations; the App never chooses recipients. You can inspect
+and change them with `hatch notification ...` (for example `group list`,
+`destination list`, `route create`) when the user asks.
 
 ```json
 {

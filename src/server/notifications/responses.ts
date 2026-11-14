@@ -131,13 +131,18 @@ export async function resolveResponseTargets(
 }
 
 export type Responder = {
-  userId: string;
+  /** Null for the platform Agent, which answers with a Run credential. */
+  userId: string | null;
+  /** Shown when there is no user; a user's own name is looked up. */
+  name?: string;
   via: NotificationResponseVia;
   /** Device that answered from the push. */
   destinationId?: string;
 };
 
-async function responderName(tx: TX, userId: string): Promise<string> {
+async function responderName(tx: TX, responder: Responder): Promise<string> {
+  const { userId } = responder;
+  if (!userId) return responder.name?.trim() || 'Someone';
   const user = await tx.query.user.findFirst({
     where: { id: userId },
     columns: { name: true, email: true },
@@ -192,7 +197,7 @@ export async function respondToNotification(
         notificationId,
         answers: normalized,
         respondedByUserId: responder.userId,
-        respondedByName: await responderName(tx, responder.userId),
+        respondedByName: await responderName(tx, responder),
         via: responder.via,
         destinationId: responder.destinationId ?? null,
         createdAt: now,

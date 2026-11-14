@@ -91,8 +91,8 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
   Only the token's sha256 is stored; create and rotate return it once.
   Disabled channels answer 403.
 - **User sends**: `SendNotification` (`hatch notification send`) takes the
-  same body and exactly one recipient, authenticated by a user session or API
-  key:
+  same body and exactly one recipient, authenticated by a user session, API
+  key or Agent Run credential:
   - `channel_id` (`--channel`): as that Channel, without its token. It shares
     the kind check, dedupe scope and routing with token pushes
     (`ingestChannelPush`); `kind` is required. A disabled channel answers
@@ -124,7 +124,7 @@ notification:
 - App: `POST /api/app/<id>/notifications/update` and `…/recall` (SDK
   `updateNotification(id, patch)` and `recallNotification(id)`).
 - Channel: `POST /api/notifications/channel/<channelId>/update` and `…/recall`.
-- Member (session or API key): `NotificationService.UpdateNotification` and
+- Member (session, API key or Agent Run): `NotificationService.UpdateNotification` and
   `RecallNotification` (below).
 
 ```json
@@ -301,7 +301,11 @@ route selects it.
 answer with its own records. The envelope's top-level `revision` is the revision the answer
 created (`response_revision`), on every attempt, even if the notification is
 edited or recalled before the answer is delivered; `notification` itself shows
-the current state. History retention keeps a notification while any delivery
+the current state. No other event carries that revision: notification, edit
+and recall events use the content revision (`contentRevision`), which skips
+the answer's, so `(notification.id, revision)` stays unique per event. The
+dispatcher alternates which queue claims first, so a backlog of notification
+deliveries never holds answers back. History retention keeps a notification while any delivery
 of its answer is pending.
 
 ## Delivery
@@ -536,13 +540,16 @@ replaces the shown notification passively, without its actions.
 
 Web UI: Server Functions in `src/server/notifications.ts`. Native clients and
 the CLI: `NotificationService` (`notification.proto`) at `/api/rpc`. Both call
-`service.ts`. Session and API-key credentials may manage everything; Run
-credentials are rejected (`SESSION_REQUIRED`), so Agents cannot reconfigure
-delivery or push through `SendNotification`, and there is intentionally no
-Agent tool. `RegisterDevice`,
-`UnregisterDevice` and `GetCurrentDevice` require a user session.
-`RespondToNotification` answers as the calling user, and response routes have
-their own CRUD (`ListResponseRoutes`, `CreateResponseRoute`, …).
+`service.ts`. Session, API-key and Agent Run credentials may manage
+everything, so the platform Agent uses `hatch notification ...` like a user.
+A Run has no user, so its group and destination sends are recorded as source
+`platform` named `Hatch Agent`; platform sends share one dedupe-key scope.
+There is no Agent tool: new platform capabilities ship as CLI commands only.
+`RegisterDevice`, `UnregisterDevice` and `GetCurrentDevice` act on the device
+of the calling native login session, so they require a user session.
+`RespondToNotification` answers as the calling user (a Run, which has no user,
+answers as `Hatch Agent`), and response routes have their own CRUD
+(`ListResponseRoutes`, `CreateResponseRoute`, …).
 
 ## Compatibility
 

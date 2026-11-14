@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "notifications_platform_dedupe_idx" ON "notifications" ("dedupe_key") WHERE "notifications"."source_type" = 'platform' and "notifications"."dedupe_key" is not null;

@@ -360,6 +360,21 @@ export function responseEnvelope(
   };
 }
 
+/**
+ * The revision of the notification's own content (send, edits, recall). The
+ * revision an answer creates belongs to its `responded` event alone, so no
+ * other event ever carries it. Answers happen once and add exactly one, so
+ * when the answer is the latest change the content revision is the one
+ * before it.
+ */
+export function contentRevision(
+  notification: Pick<NotificationRecord, 'revision' | 'responseRevision'>,
+): number {
+  return notification.responseRevision === notification.revision
+    ? notification.revision - 1
+    : notification.revision;
+}
+
 export function buildEnvelope(args: {
   event: NotificationEvent;
   notification: NotificationRecord;
@@ -374,12 +389,13 @@ export function buildEnvelope(args: {
     version: 1,
     deliveryId: args.deliveryId,
     attempt: args.attempt,
-    // The answer is one event whatever happens to the notification later:
-    // its revision is the one the answer created, on every attempt.
+    // `(notification.id, revision)` identifies one event. The answer keeps
+    // the revision it created on every attempt, whatever happens to the
+    // notification later; every other event uses the content revision.
     revision:
       args.event === 'responded' && notification.responseRevision !== null
         ? notification.responseRevision
-        : notification.revision,
+        : contentRevision(notification),
     notification: {
       id: notification.id,
       kind: notification.kind,
@@ -391,7 +407,7 @@ export function buildEnvelope(args: {
       data: notification.data,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),
-      revision: notification.revision,
+      revision: contentRevision(notification),
       editedAt: notification.editedAt?.toISOString() ?? null,
       recalledAt: notification.recalledAt?.toISOString() ?? null,
       reply: notification.reply,
