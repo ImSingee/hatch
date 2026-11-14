@@ -440,16 +440,18 @@ describe('notification update and recall', () => {
     const { transport, received } = recordingTransport();
     const result = await executeNotificationCall(
       transport,
-      parse('delete', 'notification-1'),
+      parse('delete', 'notification-1', '--yes'),
     );
     expect(received.deleteNotification).toMatchObject({
       id: 'notification-1',
     });
     expect(result.text).toContain('notification-1');
-    expect(() => parse('delete')).toThrow(/<notification-id>/);
-    expect(() => parse('delete', 'notification-1', 'notification-2')).toThrow(
-      /<notification-id>/,
-    );
+    // Permanent deletion needs explicit consent; nothing is sent without it.
+    expect(() => parse('delete', 'notification-1')).toThrow(/--yes/);
+    expect(() => parse('delete', '--yes')).toThrow(/<notification-id>/);
+    expect(() =>
+      parse('delete', 'notification-1', 'notification-2', '--yes'),
+    ).toThrow(/<notification-id>/);
   });
 });
 

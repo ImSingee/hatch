@@ -188,8 +188,8 @@ as edited or recalled.
 Any workspace member can delete any notification from history, whatever sent
 it: Web (row menu in the history list and Delete on the detail page), the
 mobile app (touch and hold a row, or the trash button on the detail screen),
-and `NotificationService.DeleteNotification` (`hatch notification delete
-<id>`). Apps and Channels cannot delete; they recall. Run credentials are
+and `NotificationService.DeleteNotification` (`hatch notification delete <id>
+--yes`). Apps and Channels cannot delete; they recall. Run credentials are
 rejected like every other `NotificationService` call.
 
 - Deleting removes the `notifications` row; its deliveries cascade. It is

@@ -2,6 +2,8 @@ import {
   useMutation,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
+  type QueryKey,
 } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 import type { NotificationSummary } from '../core';
@@ -10,6 +12,34 @@ import { dismissPresentedNotification } from './push';
 import { useSession } from './session';
 
 type HistoryPage = { items: NotificationSummary[]; nextCursor: string | null };
+
+/**
+ * Drop a deleted notification's cached detail so reopening it fetches and
+ * shows "not found" instead of the stale copy. A detail screen that is still
+ * leaving keeps observing it until it unmounts; removing it before then would
+ * only make that screen refetch, so wait for its last observer to go.
+ */
+function evictWhenUnused(queryClient: QueryClient, queryKey: QueryKey) {
+  const cache = queryClient.getQueryCache();
+  const query = cache.find({ queryKey, exact: true });
+  if (!query) return;
+  const evict = () => queryClient.removeQueries({ queryKey, exact: true });
+  if (query.getObserversCount() === 0) {
+    evict();
+    return;
+  }
+  const unsubscribe = cache.subscribe((event) => {
+    if (event.query !== query) return;
+    if (event.type === 'removed') unsubscribe();
+    else if (
+      event.type === 'observerRemoved' &&
+      query.getObserversCount() === 0
+    ) {
+      unsubscribe();
+      evict();
+    }
+  });
+}
 
 /**
  * Ask, then delete a notification from the instance's history. Deleting is
@@ -39,10 +69,7 @@ export function useDeleteNotification(
       );
       void dismissPresentedNotification(origin, id).catch(() => {});
       options.onDeleted?.(id);
-      queryClient.removeQueries({
-        queryKey: [origin, 'notification', id],
-        type: 'inactive',
-      });
+      evictWhenUnused(queryClient, [origin, 'notification', id]);
     },
     onError: (error) =>
       Alert.alert('Couldn’t delete notification', errorText(error)),

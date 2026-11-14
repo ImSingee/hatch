@@ -195,9 +195,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['notification', 'delete'],
-    usage: 'notification delete <notification-id>',
+    usage: 'notification delete <notification-id> --yes',
     description:
-      'Permanently delete any notification and its delivery history; cannot be undone. Nothing is sent: copies phones, webhooks and Apps already received stay, so recall first to remove it from phones. Deliveries not yet made are dropped.',
+      'Permanently delete any notification and its delivery history; cannot be undone, so --yes is required. Nothing is sent: copies phones, webhooks and Apps already received stay, so recall first to remove it from phones. Deliveries not yet made are dropped.',
   },
   {
     path: ['notification', 'retry'],
