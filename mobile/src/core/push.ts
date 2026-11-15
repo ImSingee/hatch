@@ -202,9 +202,8 @@ export function pushChange(data: unknown): 'updated' | 'recalled' | null {
 }
 
 /**
- * New notifications show a banner. An edit only replaces the notification in
- * Notification Center, silently; a recall shows nothing (the caller also
- * removes the recalled notification).
+ * New notifications and alerting edits show a banner. Silent edits only
+ * replace content; a recall shows nothing (the caller also removes it).
  */
 export function foregroundPresentation(data: unknown): ForegroundPresentation {
   const change = pushChange(data);
@@ -216,7 +215,10 @@ export function foregroundPresentation(data: unknown): ForegroundPresentation {
       shouldSetBadge: false,
     };
   }
-  if (change === 'updated') {
+  if (
+    change === 'updated' &&
+    (data as Record<string, unknown>).hatchAlert !== true
+  ) {
     return {
       shouldShowBanner: false,
       shouldShowList: true,

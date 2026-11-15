@@ -53,6 +53,7 @@ export const deliverToWebhook: DeliveryAdapter = async ({
   response: answer,
   destination,
   sourceSlug,
+  silent,
 }) => {
   if (!destination.url || !destination.secretCiphertext) {
     return { kind: 'fail', error: 'Webhook destination is incomplete.' };
@@ -68,6 +69,7 @@ export const deliverToWebhook: DeliveryAdapter = async ({
     deliveryId,
     attempt,
     sourceSlug,
+    silent,
   });
   const body = JSON.stringify(envelope);
   const timestamp = String(Date.now());

@@ -209,6 +209,8 @@ export async function notify(
  * replacing it keeps the current setting.
  */
 export type NotificationUpdateInput = {
+  /** Only change content, without another alert. Defaults to false. */
+  silent?: boolean;
   title?: string;
   body?: string | null;
   url?: string | null;
@@ -218,8 +220,8 @@ export type NotificationUpdateInput = {
 
 /**
  * `revision` increases with every edit and with the recall. `changed` is
- * false when the edit changed nothing or the notification was already
- * recalled; nothing is sent then.
+ * false when a silent edit changed nothing or the notification was already
+ * recalled; nothing is sent then. An alerting update always advances it.
  */
 export type NotificationChangeResult = {
   id: string;
@@ -230,10 +232,12 @@ export type NotificationChangeResult = {
 
 /**
  * Edit a notification this App sent (by the `id` from `notify`). Phones
- * replace it in place without alerting again; destinations that take edit
- * events receive `hatch.notification.updated`. A recalled notification
- * cannot be edited (409), and an answered one cannot change its `data` (409),
- * which its answer is delivered with.
+ * replace it in place and alert again at its original priority, even with
+ * unchanged content. Pass `silent: true` to only change content; `{}` repeats
+ * the alert. Destinations that take edit events receive
+ * `hatch.notification.updated`. A recalled notification cannot be edited
+ * (409), and an answered one cannot change its `data` (409), which its answer
+ * is delivered with.
  */
 export async function updateNotification(
   id: string,
@@ -295,6 +299,8 @@ export type HatchNotificationEnvelope = {
   /** 1-based; the same deliveryId may arrive again after a failed attempt. */
   attempt: number;
   revision: number;
+  /** True for silent edits, recalls and reply events. */
+  silent: boolean;
   notification: {
     id: string;
     kind: string;

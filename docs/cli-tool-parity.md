@@ -62,6 +62,12 @@ is bound to the device as well; the CLI answers the same forms with
 `hatch notification respond`, and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
 tokens) are printed only by the create/rotate commands that mint them.
 
+`notification update <id>` updates content and alerts phones again by default,
+including when the content is unchanged or no content flags are supplied.
+`--silent` maps to `UpdateNotification.silent` and only changes content; it
+requires at least one content flag. SDK and Channel updates use the same
+domain service and `silent: true` option. No Agent Tool is added.
+
 ## Known gaps
 
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`

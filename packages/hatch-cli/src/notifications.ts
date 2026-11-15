@@ -735,6 +735,7 @@ const specs: Record<string, Spec> = {
   update: {
     positionals: ['notification-id'],
     options: {
+      silent: { type: 'boolean' },
       title: { type: 'string' },
       body: { type: 'string' },
       'clear-body': { type: 'boolean' },
@@ -753,6 +754,7 @@ const specs: Record<string, Spec> = {
       exclusive(values, 'data', 'clear-data');
       const request = {
         id,
+        silent: values.silent === true,
         title,
         body: clearable(values, 'body'),
         url: clearable(values, 'url'),
@@ -763,8 +765,11 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
       };
-      const { id: _, ...changes } = request;
-      if (Object.values(changes).every((value) => value === undefined))
+      const { id: _, silent, ...changes } = request;
+      if (
+        silent &&
+        Object.values(changes).every((value) => value === undefined)
+      )
         invalid(
           'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
         );
@@ -773,7 +778,7 @@ const specs: Record<string, Spec> = {
         request,
         text: (response) =>
           response.changed === true
-            ? `Updated notification ${id} (revision ${field(response, 'revision')}). Phones and destinations that take edits get the new content.`
+            ? `Updated notification ${id} (revision ${field(response, 'revision')}). ${silent ? 'Content changes without another phone alert.' : 'Phones alert again with the latest content.'} Destinations that take edits receive the update.`
             : `Notification ${id} already has this content; nothing was sent.`,
       };
     },

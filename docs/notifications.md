@@ -152,23 +152,30 @@ notification:
   "body": null,
   "url": null,
   "autoOpenUrl": false,
-  "data": null
+  "data": null,
+  "silent": true
 }
 ```
 
 An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
+By default it also alerts phones again, replacing the notification with the
+same id. Pass `silent: true` to only change content without another alert.
+An update with only `id` repeats the alert with the current content.
 Omitted fields keep their value and `null` clears `body`, `url` or `data`.
 Without `autoOpenUrl`, a newly added `url` opens on tap (the push default), a
 cleared one stops and a replaced one keeps the setting. `kind`, `priority`,
-`dedupeKey` and `occurredAt` never change: priority only decides how the
-notification first arrives, and edits always arrive quietly. A recall takes only `id`. The id is in the body
+`dedupeKey` and `occurredAt` never change. Default edits use the original
+priority: low stays quiet, normal alerts normally, high is time-sensitive,
+and lowest stays off devices. A recall takes only `id`. The id is in the body
 because the HMAC covers only the body: a replay can only repeat the same
 change. Both respond `200 { id, revision, recalled, changed }`. `400` means an invalid
-body or an empty edit. `404` means the notification does not exist or belongs
+body or an empty silent edit. `404` means the notification does not exist or belongs
 to another source (the two cases are indistinguishable). `409` means an edit
-of a recalled notification. Repeating a recall, or an edit that changes
+of a recalled notification. Repeating a recall, or a silent edit that changes
 nothing, leaves the revision as it is, answers `changed: false` and sends
-nothing.
+nothing. A default update always advances the revision, even if content is
+unchanged. Retrying an update request can therefore request another alert;
+delivery retries reuse the same revision.
 
 Members edit and recall through `NotificationService.UpdateNotification` and
 `RecallNotification` (CLI `hatch notification update|recall <id>`), the
@@ -179,6 +186,9 @@ notification, whatever its source (App, Channel, platform or any user) and
 whether or not its Channel is enabled. An App or Channel that edits it later
 still can, and finds it recalled (`409`) if a member recalled it. In the RPC
 an empty `body`, `url` or `data_json` clears the field.
+RPC `silent: true` and CLI `--silent` preserve the content-only update behavior.
+`hatch notification update <id>` repeats the alert; use `--silent` alongside
+content flags to make a correction quietly.
 
 Every edit and the recall increment `notifications.revision`, which starts at
 
@@ -196,6 +206,12 @@ Every edit and the recall increment `notifications.revision`, which starts at
   `hatch.notification` when nothing was delivered yet, otherwise
   `hatch.notification.updated` or `hatch.notification.recalled`. Edits made
   before the dispatcher runs collapse into one event for the latest state.
+- `alert_revision` records the most recent update requesting another alert
+  (historical rows start at 0). A delivery alerts when that revision is newer
+  than its `delivered_revision`. A subsequent silent correction cannot erase
+  an outstanding alert, and a silent correction after a successful alert does
+  not repeat it. A recall always suppresses outstanding alerts. Envelopes
+  expose this per-delivery choice as `silent` (always true for recalls).
 - `recordOutcome` share-locks the notification row before it writes. An
   attempt that sent an older revision than the current one goes back to
   `pending` instead of finishing, so a change that lands while a delivery is
@@ -544,28 +560,42 @@ turn it back on:
 
 An edit or recall push reuses the notification id as `apns-collapse-id`,
 which iOS uses as the request identifier, so it replaces the notification
-already shown. The `aps` of these pushes has no `sound` and sets
-`interruption-level: passive`, so they never alert again. The encrypted
-content carries `r` (revision) and `e` (`u` for an edit, `r` for a recall). A
+already shown. Default edits respect the original priority: normal and high
+carry `sound: default`, high remains time-sensitive, low stays passive, and
+lowest is not pushed to devices.
+Silent edits and recalls have no `sound` and set `interruption-level: passive`.
+The encrypted content carries `r` (revision), `e` (`u` for an edit, `r` for a
+recall), and `a: true` for an edit that should alert again. A
 recall's content is only "Notification recalled", without the original title,
-body or link. App builds that predate edits ignore the new fields and still
-replace the notification quietly.
+body or link. Historical payloads without `a` remain silent. Existing app
+builds that understand edits but predate `a` still suppress edit banners in
+the foreground; rebuild the mobile app for the full behavior.
 
-The extension tags its content with `hatchRevision` and `hatchEvent`.
+The extension tags its content with `hatchRevision`, `hatchEvent` and, for
+alerting edits, `hatchAlert: true`. The app presents those edits with a banner
+and sound even in the foreground. Device notification permissions, Focus and
+sound settings still control the actual system presentation.
 
 - **Builds without the filtering entitlement (default):** a recall leaves a
   silent "Notification recalled" placeholder. The app removes those
   placeholders when it opens, and removes the recalled notification directly
-  when the recall arrives while the app is in the foreground. An edit appears
-  in Notification Center without a banner.
+  when the recall arrives while the app is in the foreground. Only a silent
+  edit appears in Notification Center without a banner.
 - **Builds with the entitlement:** set `HATCH_NOTIFICATION_FILTERING=1`. The
   build then adds `com.apple.developer.usernotifications.filtering` to the
   extension and sets `HatchNotificationFiltering` in its Info.plist. Apple must
   approve that entitlement for the team, otherwise signing fails. In these
   builds the extension removes the recalled notification and suppresses the
-  recall push itself. It also suppresses an edit when the original is no
-  longer shown, or when the shown copy is already the same or a newer
-  revision.
+  recall push itself. It suppresses a silent edit when the original is no
+  longer shown, and suppresses any edit when the shown copy is already the
+  same or a newer revision. An alerting edit may reappear after dismissal.
+
+Rollout order: apply the generated `alert_revision` migration before starting
+the updated server, rebuild the SDK packages, and rebuild/install the mobile
+app for foreground banners and filtering behavior. The migration is additive
+and gives existing rows 0, so an already pending historical edit stays quiet.
+Rolling the server back leaves the extra column unused; a forward restart
+uses each destination's delivered revision to resume pending changes.
 
 ### Replies on the phone
 

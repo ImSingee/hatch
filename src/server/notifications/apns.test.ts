@@ -343,6 +343,78 @@ describe('APNs delivery', () => {
     expect(delivery).toMatchObject({ status: 'pending', httpStatus: null });
     expect(delivery.lastError).toContain('without a response');
   });
+  it('preserves default alerts across silent corrections and keeps recalls silent', async () => {
+    await registerDevice();
+    await deliver('Disk full', 'db-1 is at 98%');
+    const id = decrypt(seen[0].body).content.id as string;
+    const sender = { type: 'channel' as const, channelId };
+    const runDue = async () => {
+      for (const claimed of await claimDueDeliveries(5)) {
+        await runClaimedDelivery(claimed, adapters);
+      }
+    };
+    const expectAlert = (revision: number, title: string) => {
+      const push = seen.at(-1)!;
+      expect(push.headers['apns-collapse-id']).toBe(id);
+      expect(JSON.parse(push.body).aps).toMatchObject({ sound: 'default' });
+      expect(JSON.parse(push.body).aps).not.toHaveProperty(
+        'interruption-level',
+      );
+      expect(decrypt(push.body).content).toMatchObject({
+        id,
+        t: title,
+        r: revision,
+        e: 'u',
+        a: true,
+      });
+    };
+
+    await updateNotification(sender, { id, title: 'Disk at 99%' });
+    await runDue();
+    expectAlert(2, 'Disk at 99%');
+    const editedAt = (await service.getNotification(id)).editedAt;
+
+    // Unchanged content still alerts without pretending the content was edited.
+    expect(
+      await updateNotification(sender, { id, title: 'Disk at 99%' }),
+    ).toMatchObject({ changed: true, revision: 3 });
+    await runDue();
+    expectAlert(3, 'Disk at 99%');
+    expect((await service.getNotification(id)).editedAt).toBe(editedAt);
+
+    await updateNotification(sender, { id });
+    await updateNotification(sender, { id, title: 'Corrected', silent: true });
+    await runDue();
+    expectAlert(5, 'Corrected');
+
+    await updateNotification(sender, {
+      id,
+      body: 'Quiet correction',
+      silent: true,
+    });
+    await runDue();
+    expect(JSON.parse(seen.at(-1)!.body).aps).toMatchObject({
+      'interruption-level': 'passive',
+    });
+    expect(JSON.parse(seen.at(-1)!.body).aps).not.toHaveProperty('sound');
+    expect(decrypt(seen.at(-1)!.body).content).not.toHaveProperty('a');
+    expect(
+      await updateNotification(sender, {
+        id,
+        body: 'Quiet correction',
+        silent: true,
+      }),
+    ).toMatchObject({ changed: false, revision: 6 });
+
+    await updateNotification(sender, { id });
+    await recallNotification(sender, id);
+    await runDue();
+    expect(JSON.parse(seen.at(-1)!.body).aps).not.toHaveProperty('sound');
+    expect(decrypt(seen.at(-1)!.body).content).toMatchObject({ e: 'r', r: 8 });
+    expect(decrypt(seen.at(-1)!.body).content).not.toHaveProperty('a');
+    expect(seen).toHaveLength(6);
+  });
+
   it('replaces an edited push silently and recalls without its content', async () => {
     await registerDevice();
     await deliver('Disk full', 'db-1 is at 98%', {
@@ -357,7 +429,11 @@ describe('APNs delivery', () => {
       }
     };
 
-    await updateNotification(sender, { id, title: 'Disk at 99%' });
+    await updateNotification(sender, {
+      id,
+      title: 'Disk at 99%',
+      silent: true,
+    });
     await runDue();
     const edit = JSON.parse(seen[1].body) as { aps: Record<string, unknown> };
     expect(seen[1].headers['apns-collapse-id']).toBe(id);
@@ -415,15 +491,37 @@ describe('APNs priority', () => {
     }
   });
 
-  it('replaces a high-priority notification without alerting again', async () => {
+  it('preserves high priority for default edits and lets silent edits suppress it', async () => {
     await registerDevice();
     await deliver('Outage', null, noLink, 1);
     const id = decrypt(seen[0].body).content.id as string;
-    await updateNotification(sender(), { id, title: 'Outage resolved' });
+    await updateNotification(sender(), {
+      id,
+      title: 'Outage resolved',
+      silent: true,
+    });
     await runDue();
     expect(seen).toHaveLength(2);
     expect(apsOf(seen[1])).not.toHaveProperty('sound');
     expect(apsOf(seen[1])['interruption-level']).toBe('passive');
+    await updateNotification(sender(), { id });
+    await runDue();
+    expect(apsOf(seen[2])).toMatchObject({
+      sound: 'default',
+      'interruption-level': 'time-sensitive',
+    });
+    expect(decrypt(seen[2].body).content).toMatchObject({ e: 'u', a: true });
+  });
+
+  it('keeps low-priority edits passive even with the default alert request', async () => {
+    await registerDevice();
+    await deliver('Low', null, noLink, -1);
+    const id = decrypt(seen[0].body).content.id as string;
+    await updateNotification(sender(), { id, title: 'Corrected' });
+    await runDue();
+    expect(apsOf(seen[1])['interruption-level']).toBe('passive');
+    expect(apsOf(seen[1])).not.toHaveProperty('sound');
+    expect(decrypt(seen[1].body).content).not.toHaveProperty('a');
   });
 
   it('never pushes lowest priority, nor its edits and recalls', async () => {

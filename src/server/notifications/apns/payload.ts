@@ -66,6 +66,8 @@ export type PushPlaintext = {
    * content is never sent). Absent for the original notification.
    */
   e?: 'u' | 'r';
+  /** An edit requests another alert; absent on historical silent edits. */
+  a?: true;
   /** Reply form; absent when the notification asks nothing. */
   q?: PushReply;
 };
@@ -92,14 +94,18 @@ function seal(key: Buffer, keyId: string, plaintext: PushPlaintext): string {
 const alert = { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY };
 
 /**
- * Edits and recalls change what is already shown, and low priority arrives
+ * Silent edits, recalls and low priority arrive
  * quietly: no sound, no banner lighting the screen. High priority is
  * time-sensitive, which iOS shows during Focus (Do Not Disturb included)
  * unless the user turned that off for Hatch; it never overrides the ring /
  * silent switch.
  */
-function apsFor(priority: PushPriority, event: PushPlaintext['e']) {
-  if (event || priority === -1) {
+function apsFor(priority: PushPriority, plaintext: PushPlaintext) {
+  if (
+    plaintext.e === 'r' ||
+    (plaintext.e === 'u' && !plaintext.a) ||
+    priority === -1
+  ) {
     return { alert, 'interruption-level': 'passive', 'mutable-content': 1 };
   }
   return {
@@ -117,7 +123,7 @@ function encode(
   priority: PushPriority,
 ): string {
   return JSON.stringify({
-    aps: apsFor(priority, plaintext.e),
+    aps: apsFor(priority, plaintext),
     h: { v: PUSH_PAYLOAD_VERSION, kid: keyId, c: seal(key, keyId, plaintext) },
   });
 }

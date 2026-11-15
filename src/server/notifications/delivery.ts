@@ -15,6 +15,8 @@ export type DeliveryContext = {
   attempt: number;
   /** Derived from what this destination already received. */
   event: NotificationEvent;
+  /** Outstanding alert requests are tracked per destination across edits. */
+  silent?: boolean;
   notification: NotificationRecord;
   /** The answer to the notification's reply form, once given. */
   response: NotificationResponseRecord | null;

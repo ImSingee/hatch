@@ -415,11 +415,14 @@ message UpdateNotificationRequest {
   optional bool auto_open_url = 6;
   // JSON object, at most 32 KiB serialized.
   optional string data_json = 7 [(buf.validate.field).string.max_len = 65536];
+  // Update without another phone alert. Unset/false alerts again, even when
+  // content is unchanged. With no content fields, this repeats the alert.
+  bool silent = 8;
 }
 message UpdateNotificationResponse {
   // 1 for the original; every edit and the recall increment it.
   uint32 revision = 1;
-  // False when the content was already the same; nothing was sent.
+  // False when a silent edit left the content unchanged; nothing was sent.
   bool changed = 2;
 }
 

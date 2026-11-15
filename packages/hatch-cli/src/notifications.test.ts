@@ -424,11 +424,12 @@ describe('notification update and recall', () => {
     });
     // Unset fields keep their value on the platform.
     expect(received.updateNotification?.url).toBeUndefined();
+    expect(received.updateNotification?.silent).toBe(false);
     expect(result.text).toMatch(/revision 2/);
   });
 
   it('rejects edits that change nothing or contradict themselves', () => {
-    expect(() => parse('update', 'notification-1')).toThrow(
+    expect(() => parse('update', 'notification-1', '--silent')).toThrow(
       /at least one change/,
     );
     expect(() =>
@@ -445,6 +446,22 @@ describe('notification update and recall', () => {
     expect(() =>
       parse('recall', 'notification-1', '--channel', 'channel-1'),
     ).toThrow(/Invalid notification arguments/);
+  });
+
+  it('maps silent edits and repeats alerts with no content fields', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--body', 'Corrected', '--silent'),
+    );
+    expect(received.updateNotification).toMatchObject({
+      id: 'notification-1',
+      body: 'Corrected',
+      silent: true,
+    });
+    await executeNotificationCall(transport, parse('update', 'notification-1'));
+    expect(received.updateNotification?.silent).toBe(false);
+    expect(received.updateNotification?.body).toBeUndefined();
   });
 
   it('recalls by id and reports a repeated recall', async () => {

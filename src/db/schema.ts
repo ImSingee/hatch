@@ -921,6 +921,8 @@ export const notifications = snakeCase.table(
      * the revision they last delivered, so destinations catch up in order.
      */
     revision: integer().notNull().default(1),
+    /** Latest edit requesting another alert; 0 preserves historical edits. */
+    alertRevision: integer('alert_revision').notNull().default(0),
     /** Last time the source edited the content. */
     editedAt: timestamp('edited_at'),
     /** Set once when the source recalls the notification. */

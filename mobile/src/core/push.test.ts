@@ -249,7 +249,7 @@ describe('push taps', () => {
 });
 
 describe('foreground presentation', () => {
-  it('alerts for new notifications, quietly lists edits and hides recalls', () => {
+  it('alerts for new notifications and alerting edits, quietly lists silent edits and hides recalls', () => {
     const base = { hatchNotificationId: 'n1', hatchOrigin: origin };
     expect(foregroundPresentation(base)).toMatchObject({
       shouldShowBanner: true,
@@ -261,6 +261,17 @@ describe('foreground presentation', () => {
       shouldShowBanner: false,
       shouldShowList: true,
       shouldPlaySound: false,
+    });
+    expect(
+      foregroundPresentation({
+        ...base,
+        hatchEvent: 'updated',
+        hatchAlert: true,
+      }),
+    ).toMatchObject({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
     });
     expect(
       foregroundPresentation({ ...base, hatchEvent: 'recalled' }),

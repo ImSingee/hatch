@@ -167,7 +167,7 @@ function publishChange(id: string) {
   wakeNotificationDispatcher();
 }
 
-/** Apply an edit; unchanged content leaves the revision as it is. */
+/** Apply an edit and alert again unless the caller explicitly asks for silence. */
 export async function updateNotification(
   sender: NotificationSender,
   update: NotificationUpdate,
@@ -219,7 +219,7 @@ export async function updateNotification(
       next.url !== current.url ||
       next.autoOpenUrl !== current.autoOpenUrl ||
       !sameJson(next.data, current.data);
-    if (!changed) {
+    if (!changed && update.silent === true) {
       return { id: current.id, revision: current.revision, changed: false };
     }
     const [row] = await tx
@@ -227,7 +227,10 @@ export async function updateNotification(
       .set({
         ...next,
         revision: sql`${schema.notifications.revision} + 1`,
-        editedAt: now,
+        ...(update.silent === true
+          ? {}
+          : { alertRevision: current.revision + 1 }),
+        ...(changed ? { editedAt: now } : {}),
       })
       .where(eq(schema.notifications.id, current.id))
       .returning({ revision: schema.notifications.revision });

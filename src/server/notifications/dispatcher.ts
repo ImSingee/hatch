@@ -445,6 +445,10 @@ export async function runClaimedDelivery(
         deliveryId: delivery.id,
         attempt: claimed.attempts,
         event: plan?.kind === 'send' ? plan.event : 'created',
+        silent:
+          notification.recalledAt !== null ||
+          (delivery.deliveredRevision !== null &&
+            notification.alertRevision <= delivery.deliveredRevision),
         notification: notification as NotificationRecord,
         // Phones show who answered. Webhooks and Apps get answers only from
         // response routes, never with the notification itself.

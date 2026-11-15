@@ -37,6 +37,8 @@ struct HatchPushPlaintext: Decodable {
   let r: Int?
   /// "u": edit of a shown notification; "r": recall (carries no content).
   let e: String?
+  /// An edit should alert again (absent on historical silent edits).
+  let a: Bool?
   /// Reply form, as the phone offers it (absent when it asks nothing).
   let q: HatchPushReply?
 }
@@ -185,7 +187,8 @@ final class NotificationService: UNNotificationServiceExtension {
     // Edits and recalls replace the notification with the same identifier
     // (the APNs collapse id is the notification id). With the filtering
     // entitlement a recall removes it outright, and an edit of a notification
-    // that is no longer shown, or already newer, shows nothing.
+    // that is already newer shows nothing. Only silent edits are suppressed
+    // when the original is no longer shown; alerting edits may reappear.
     let filtering = Self.canFilter()
     UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
       let shown = delivered.filter { notification in
@@ -202,7 +205,7 @@ final class NotificationService: UNNotificationServiceExtension {
       let newest = shown.compactMap { notification in
         (notification.request.content.userInfo["body"] as? [String: Any])?["hatchRevision"] as? Int
       }.max()
-      if filtering, shown.isEmpty || (newest ?? 0) >= (message.r ?? 0) {
+      if filtering, (shown.isEmpty && message.a != true) || (newest ?? 0) >= (message.r ?? 0) {
         return self.finish(UNNotificationContent())
       }
       self.finish(content)
@@ -308,6 +311,7 @@ final class NotificationService: UNNotificationServiceExtension {
     var data: [String: Any] = ["hatchNotificationId": message.id, "hatchOrigin": message.o]
     if let revision = message.r { data["hatchRevision"] = revision }
     if message.e == "u" { data["hatchEvent"] = "updated" }
+    if message.e == "u", message.a == true { data["hatchAlert"] = true }
     if message.e == "r" { data["hatchEvent"] = "recalled" }
     if let url = message.u {
       data["hatchUrl"] = url

@@ -13,6 +13,10 @@ import { AuthService } from '../../../packages/hatch-platform-api/gen/hatch/plat
 import { WorkspaceService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/workspace_pb';
 import { PublicErrorSchema } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { promisify } from 'node:util';
 import {
   afterAll,
   beforeAll,
@@ -1411,6 +1415,100 @@ describe('session workspace navigation', () => {
 });
 
 describe('notification center authority', () => {
+  it('executes default and silent CLI updates against the local RPC server', async () => {
+    const server = http.createServer(async (incoming, outgoing) => {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
+        const response = await handlePlatformApiRequest(
+          new Request(`${origin}${incoming.url}`, {
+            method: incoming.method,
+            headers: incoming.headers as Record<string, string>,
+            body: Buffer.concat(chunks),
+          }),
+        );
+        outgoing.writeHead(
+          response.status,
+          Object.fromEntries(response.headers),
+        );
+        outgoing.end(Buffer.from(await response.arrayBuffer()));
+      } catch {
+        outgoing.writeHead(500).end();
+      }
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const run = (...args: string[]) =>
+      promisify(execFile)(
+        process.execPath,
+        [
+          '--import',
+          'tsx',
+          'packages/hatch-cli/src/main.ts',
+          '--json',
+          ...args,
+        ],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            HATCH_CLI_URL: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+            HATCH_CLI_TOKEN: token,
+            HATCH_CLI_API_KEY: undefined,
+            HATCH_CLI_RUN_ENDPOINT: undefined,
+          },
+          timeout: 15000,
+        },
+      ).then(({ stdout }) => JSON.parse(stdout));
+    try {
+      const { group } = await run(
+        'notification',
+        'group',
+        'create',
+        '--name',
+        'CLI alerts',
+      );
+      const { notificationId: id } = await run(
+        'notification',
+        'send',
+        '--group',
+        group.id,
+        '--title',
+        'Status',
+      );
+      expect(
+        await run('notification', 'update', id, '--title', 'Updated'),
+      ).toMatchObject({ revision: 2, changed: true });
+      expect(
+        await db.query.notifications.findFirst({ where: { id } }),
+      ).toMatchObject({ revision: 2, alertRevision: 2 });
+      expect(
+        await run(
+          'notification',
+          'update',
+          id,
+          '--body',
+          'Correction',
+          '--silent',
+        ),
+      ).toMatchObject({ revision: 3, changed: true });
+      expect(
+        await db.query.notifications.findFirst({ where: { id } }),
+      ).toMatchObject({ revision: 3, alertRevision: 2 });
+      expect(await run('notification', 'update', id)).toMatchObject({
+        revision: 4,
+        changed: true,
+      });
+      expect(
+        await db.query.notifications.findFirst({ where: { id } }),
+      ).toMatchObject({ revision: 4, alertRevision: 4 });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 30000);
+
   async function signUp() {
     const response = await authCall('sign-up/email', {
       name: 'Notification test',

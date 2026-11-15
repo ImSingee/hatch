@@ -318,14 +318,25 @@ describe('answering', () => {
     expect(deviceCalls).toHaveLength(1);
     const update = deviceCalls[0]!;
     expect(update.event).toBe('updated');
+    expect(update.silent).toBe(true);
     expect(
       pushPlaintext(
         update.notification,
         update.event,
         'https://o',
         update.response,
+        update.silent,
       ).q,
     ).toEqual({ m: 'x', s: 'Answered by Bob: Approve' });
+    expect(
+      pushPlaintext(
+        update.notification,
+        update.event,
+        'https://o',
+        update.response,
+        update.silent,
+      ),
+    ).not.toHaveProperty('a');
 
     // The webhook takes no lifecycle events: only the response route's
     // delivery of the answer reaches it.
@@ -721,7 +732,7 @@ describe('answered notifications', () => {
     expect(stored).toMatchObject({ name: 'Renamed', enabled: false });
   });
 
-  it('pages response routes oldest first until no cursor remains', async () => {
+  it('pages response routes in id order until no cursor remains', async () => {
     const created = [];
     for (const name of ['One', 'Two', 'Three'])
       created.push(
@@ -731,15 +742,19 @@ describe('answered notifications', () => {
           destinationId: webhookId,
         }),
       );
+    // ULIDs created in the same millisecond have random suffixes.
+    const ordered = [...created].sort((a, b) => a.id.localeCompare(b.id));
     const first = await service.listResponseRoutes({ limit: 2 });
-    expect(first.routes.map((route) => route.name)).toEqual(['One', 'Two']);
-    expect(first.nextCursor).toBe(created[1]!.id);
+    expect(first.routes.map((route) => route.name)).toEqual(
+      ordered.slice(0, 2).map((route) => route.name),
+    );
+    expect(first.nextCursor).toBe(ordered[1]!.id);
     const second = await service.listResponseRoutes({
       limit: 2,
       cursor: first.nextCursor!,
     });
     expect(second).toMatchObject({
-      routes: [{ name: 'Three' }],
+      routes: [{ name: ordered[2]!.name }],
       nextCursor: null,
     });
   });
