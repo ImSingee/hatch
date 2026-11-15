@@ -4,11 +4,16 @@ This directory owns SDK source, public package definitions, and generated
 distribution output. These private, versionless packages are materialized by
 the platform; Apps and Workflows must not install them or commit `.hatch/`.
 
-| Package           | Authored source                      | Public entrypoints                               |
-| ----------------- | ------------------------------------ | ------------------------------------------------ |
-| `@hatch/app`      | `app/src`                            | `.`, `./data`, `./data/react`, `./notifications` |
-| `@hatch/workflow` | `workflow/src`                       | `.`, `./manifest`                                |
-| `@hatch/data`     | None; generated compatibility facade | `.`, `./react`                                   |
+| Package           | Authored source                      | Public entrypoints                                                                                    |
+| ----------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `@hatch/app`      | `app/src`                            | `.`, `./data`, `./data/react`, `./notifications`, `./storage`, `./storage/react`, `./storage/install` |
+| `@hatch/workflow` | `workflow/src`                       | `.`, `./manifest`                                                                                     |
+| `@hatch/data`     | None; generated compatibility facade | `.`, `./react`                                                                                        |
+
+`@hatch/app/storage/install` is not for App source: the platform build runs
+it in a classic script at the start of each App page's `<head>` and as the
+banner of each widget bundle, scoping `localStorage` and `sessionStorage` to
+the App id before App code runs. `@hatch/app/storage` reads that scope.
 
 The App root exports `defineAppManifest` and `AppManifestInput`. The Workflow
 manifest entry exports `defineWorkflowManifest` and `WorkflowManifestInput`.
