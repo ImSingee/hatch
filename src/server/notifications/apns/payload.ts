@@ -31,6 +31,15 @@ export type PushReply =
   | { m: 'f' }
   | { m: 'x'; s: string };
 
+/**
+ * Priorities that reach a phone; lowest (-2) notifications are never pushed.
+ * The level is in the clear `aps` (like the sound) so iOS applies it even
+ * when the extension falls back to its own content, and so app builds that
+ * predate priorities, whose extension already copies the original level,
+ * show it too.
+ */
+export type PushPriority = -1 | 0 | 1;
+
 /** Decrypted content the extension renders and the app opens on tap. */
 export type PushPlaintext = {
   v: 1;
@@ -80,21 +89,35 @@ function seal(key: Buffer, keyId: string, plaintext: PushPlaintext): string {
   );
 }
 
-function encode(key: Buffer, keyId: string, plaintext: PushPlaintext): string {
+const alert = { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY };
+
+/**
+ * Edits and recalls change what is already shown, and low priority arrives
+ * quietly: no sound, no banner lighting the screen. High priority is
+ * time-sensitive, which iOS shows during Focus (Do Not Disturb included)
+ * unless the user turned that off for Hatch; it never overrides the ring /
+ * silent switch.
+ */
+function apsFor(priority: PushPriority, event: PushPlaintext['e']) {
+  if (event || priority === -1) {
+    return { alert, 'interruption-level': 'passive', 'mutable-content': 1 };
+  }
+  return {
+    alert,
+    sound: 'default',
+    ...(priority === 1 ? { 'interruption-level': 'time-sensitive' } : {}),
+    'mutable-content': 1,
+  };
+}
+
+function encode(
+  key: Buffer,
+  keyId: string,
+  plaintext: PushPlaintext,
+  priority: PushPriority,
+): string {
   return JSON.stringify({
-    // Edits and recalls change what is already shown: no sound, no banner
-    // lighting the screen, even on app builds that predate them.
-    aps: plaintext.e
-      ? {
-          alert: { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY },
-          'interruption-level': 'passive',
-          'mutable-content': 1,
-        }
-      : {
-          alert: { title: PLACEHOLDER_TITLE, body: PLACEHOLDER_BODY },
-          sound: 'default',
-          'mutable-content': 1,
-        },
+    aps: apsFor(priority, plaintext.e),
     h: { v: PUSH_PAYLOAD_VERSION, kid: keyId, c: seal(key, keyId, plaintext) },
   });
 }
@@ -136,8 +159,10 @@ export function buildEncryptedApnsPayload(
   key: Buffer,
   keyId: string,
   plaintext: PushPlaintext,
+  priority: PushPriority = 0,
 ): string {
-  const render = (content: PushPlaintext) => encode(key, keyId, content);
+  const render = (content: PushPlaintext) =>
+    encode(key, keyId, content, priority);
   const full = render(plaintext);
   if (fits(full)) return full;
 

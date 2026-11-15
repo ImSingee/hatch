@@ -54,6 +54,7 @@ Both endpoints accept the same JSON body (≤64 KiB):
   "body": "optional, ≤4000",
   "url": "https://optional.example/absolute",
   "autoOpenUrl": "optional boolean; defaults to whether url is set",
+  "priority": "optional integer -2..1; default 0",
   "data": { "optional": "JSON object ≤32 KiB" },
   "dedupeKey": "optional; repeats return the first notification",
   "occurredAt": "optional ISO-8601"
@@ -77,6 +78,21 @@ the notification's page in the app. It defaults to `true` when `url` is set and
 `false` otherwise; `false` keeps the notification page, and `true` without
 `url` is rejected. Other destinations receive the flag in their envelope; the web UI shows
 it on the notification detail.
+
+`priority` follows Pushover's scale without emergency priority (`2`, repeat
+until acknowledged, rejected with `400` like any other value outside
+`-2..1`, a non-integer or a string):
+
+| Priority | Name             | Phones                                                                      | Webhook and App destinations |
+| -------- | ---------------- | --------------------------------------------------------------------------- | ---------------------------- |
+| `-2`     | Lowest           | Not pushed; only in history (web, CLI, app)                                 | Delivered                    |
+| `-1`     | Low              | Quiet: no sound, no banner, screen stays dark; lands in Notification Center | Delivered                    |
+| `0`      | Normal (default) | Banner and sound                                                            | Delivered                    |
+| `1`      | High             | Time-sensitive: also shown during Focus and Do Not Disturb                  | Delivered                    |
+
+Every destination receives `priority` in its envelope and decides for itself
+what it means there. See "Priority on the phone" below for the APNs details.
+Priority never changes after the push.
 
 Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
 `422` undeclared kind.
@@ -108,7 +124,9 @@ Responses: `202 { id, deduplicated }`, `400` invalid body, `413` too large,
     users.
 
   An unset `auto_open_url` takes the same default as `autoOpenUrl`; the CLI
-  sends `false` only for `--no-auto-open-url`. Unknown recipients answer
+  sends `false` only for `--no-auto-open-url`. An unset `priority` is `0`;
+  the CLI's `--priority` takes `lowest`, `low`, `normal`, `high` or the
+  number (`--priority=-1` for negatives, since a bare `-1` reads as a flag). Unknown recipients answer
   `NOT_FOUND`, an invalid body or undeclared Channel kind `BAD_REQUEST`, and
   the response carries the queued delivery count so callers can spot sends
   that reached no enabled destination. `NotificationService` reads requests
@@ -141,8 +159,9 @@ notification:
 An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
 Omitted fields keep their value and `null` clears `body`, `url` or `data`.
 Without `autoOpenUrl`, a newly added `url` opens on tap (the push default), a
-cleared one stops and a replaced one keeps the setting. `kind`, `dedupeKey` and
-`occurredAt` never change. A recall takes only `id`. The id is in the body
+cleared one stops and a replaced one keeps the setting. `kind`, `priority`,
+`dedupeKey` and `occurredAt` never change: priority only decides how the
+notification first arrives, and edits always arrive quietly. A recall takes only `id`. The id is in the body
 because the HMAC covers only the body: a replay can only repeat the same
 change. Both respond `200 { id, revision, recalled, changed }`. `400` means an invalid
 body or an empty edit. `404` means the notification does not exist or belongs
@@ -370,6 +389,7 @@ Webhook and App destinations receive the same envelope:
     "body": null,
     "url": null,
     "autoOpenUrl": false,
+    "priority": 0,
     "data": null,
     "dedupeKey": null,
     "occurredAt": "…",
@@ -449,6 +469,34 @@ payload within 4 KiB, then the URL is dropped, then the title is shortened;
 the full text stays in the app's notification detail. When the URL opens on
 tap (`ao: true` in the encrypted content), the title is shortened before the
 URL is dropped, and dropping the URL always drops `ao`.
+
+### Priority on the phone
+
+The interruption level travels in the clear `aps`, next to the sound, so iOS
+applies it even when the extension falls back to its own content, and app
+builds that predate priorities (whose extension already copies the original
+level onto the decrypted content) honor it too. Apple therefore sees each
+push's priority, but never its text.
+
+- `-2`: the device adapter sends nothing. The delivery succeeds with the
+  result "Not pushed: lowest-priority notifications only appear in history",
+  and so do the edits, recalls and answers of that notification, since the
+  phone has nothing to replace. A reply form on it is answered in the app,
+  on the web or with the CLI, never from a push.
+- `-1`: no `sound`, `interruption-level: passive` (what Pushover's own app
+  does for `-1`).
+- `0`: `sound: default`, no level (active).
+- `1`: `sound: default`, `interruption-level: time-sensitive`. The app holds
+  `com.apple.developer.usernotifications.time-sensitive`, a capability that
+  needs no Apple approval. iOS shows these during any Focus, Do Not Disturb
+  included, unless the user turned time-sensitive notifications off for
+  Hatch; they never override the ring/silent switch. That needs critical
+  alerts (`com.apple.developer.usernotifications.critical-alerts`), which
+  Apple grants only for health, safety and security apps and Hatch does not
+  request. Builds without the capability show them as normal notifications.
+
+All priorities use `apns-priority: 10`. The unverified fallback (a push the
+extension cannot decrypt) never keeps the requested level.
 
 Opening the URL on tap is gated on the extension. A push that bypasses it (no
 `mutable-content`, see the residual risk above) can write any tap data, so the

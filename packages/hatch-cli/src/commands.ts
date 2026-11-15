@@ -177,9 +177,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'send'],
     usage:
-      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->]',
+      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--priority <lowest|low|normal|high>] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->]',
     description:
-      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer.',
+      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --priority (also -2, -1, 0, 1; write --priority=-1 for negatives) defaults to normal: lowest stays in history and reaches webhooks and Apps without a phone push, low arrives quietly, high is time-sensitive and shows during Focus and Do Not Disturb. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer.',
   },
   {
     path: ['notification', 'update'],

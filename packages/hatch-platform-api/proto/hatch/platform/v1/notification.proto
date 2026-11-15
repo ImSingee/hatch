@@ -107,6 +107,9 @@ message NotificationSummary {
   NotificationReply reply = 18;
   // ISO-8601; set when someone answered the reply form.
   optional string responded_at = 19;
+  // -2 lowest (history only, never pushed to phones), -1 low (quiet on
+  // phones), 0 normal, 1 high (time-sensitive on phones). Never changes.
+  int32 priority = 20;
 }
 
 // ---------------------------------------------------------------- replies
@@ -363,6 +366,16 @@ message SendNotificationRequest {
     },
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
   ];
+
+  // Pushover-style priority; unset means 0. -2 lowest: kept in history and
+  // sent to webhook and App destinations, never pushed to phones. -1 low:
+  // phones get it quietly (no sound, no banner). 0 normal. 1 high:
+  // time-sensitive, shown on phones during Focus and Do Not Disturb.
+  // Emergency priority 2 is not supported.
+  optional int32 priority = 13 [(buf.validate.field).int32 = {
+    gte: -2
+    lte: 1
+  }];
 
   option (buf.validate.message).cel = {
     id: "send_notification.recipient"

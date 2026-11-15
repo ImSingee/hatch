@@ -317,11 +317,26 @@ does not need the instance origin. Tapping a notification with a `url` on a
 phone opens that URL (a deep link opens the page in the Hatch app) instead of
 the notification; pass `autoOpenUrl: false` when the link is only a reference
 and the notification itself should open (`autoOpenUrl: true` without `url` is
-rejected); `data` is a JSON object ≤32 KiB; the request body is capped at
-64 KiB. A repeated `dedupeKey` returns the first notification with
+rejected); `priority` is `-2`, `-1`, `0` (default) or `1` (see below);
+`data` is a JSON object ≤32 KiB; the request body is capped at 64 KiB. A repeated `dedupeKey` returns the first notification with
 `deduplicated: true`. Errors throw `NotificationError` with the HTTP status.
 Pushing returns once the notification is stored; delivery happens afterwards
 with retries, so never wait for or retry delivery yourself.
+
+`priority` decides how phones present the notification; webhook and App
+destinations receive every priority:
+
+- `1` high: time-sensitive, shown even during Focus and Do Not Disturb. Use it
+  only when someone should act now (a failed payment, an outage), not for
+  routine updates.
+- `0` normal: the default; omit the field.
+- `-1` low: arrives quietly, with no sound and no banner.
+- `-2` lowest: never pushed to phones; it is only listed in the notification
+  history and still reaches webhook and App destinations. Do not combine it
+  with a `reply` form someone must answer soon: nobody is alerted.
+
+Any other value, including Pushover's emergency `2`, is rejected with 400.
+Priority cannot be changed by `updateNotification`.
 
 ### Editing and recalling
 
@@ -400,7 +415,7 @@ Declaring `destination` adds the App to the notification destinations users
 can select. Routed notifications, and ones a user sends straight to the App,
 arrive as `POST /__notification` with a JSON envelope that includes the source
 (`type` `app`, `channel`, `platform` or `user`, with its id, slug and name), kind,
-title, body, url, `autoOpenUrl`, data, dedupe key and timestamps. The handler may do anything
+title, body, url, `autoOpenUrl`, `priority`, data, dedupe key and timestamps. The handler may do anything
 with it (ignore it, forward it to another service, store it). Return 2xx when
 handled; optionally return a free-form `result` string (≤2000 characters) that
 users see in the notification history. Non-2xx, timeouts (30 s) and network

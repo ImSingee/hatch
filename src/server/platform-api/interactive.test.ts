@@ -1537,6 +1537,37 @@ describe('notification center authority', () => {
     };
     expect(await autoOpen({})).toBe(true);
     expect(await autoOpen({ autoOpenUrl: false })).toBeFalsy();
+    // Priority reaches the stored notification (0 is omitted in JSON);
+    // Pushover's emergency 2 is rejected by the RPC contract.
+    const priorityOf = async (extra: Record<string, unknown>) => {
+      const response = await call('NotificationService/SendNotification', {
+        headers: apiKey,
+        body: { ...alert, ...extra },
+      });
+      expect(response.status).toBe(200);
+      const { notificationId } = (await response.json()) as {
+        notificationId: string;
+      };
+      const detail = await call('NotificationService/GetNotification', {
+        headers: apiKey,
+        body: { id: notificationId },
+      });
+      return (
+        (await detail.json()) as {
+          notification: { summary: { priority?: number } };
+        }
+      ).notification.summary.priority;
+    };
+    expect(await priorityOf({})).toBeUndefined();
+    expect(await priorityOf({ priority: -2 })).toBe(-2);
+    expect(await priorityOf({ priority: 1 })).toBe(1);
+    for (const priority of [2, -3]) {
+      const response = await call('NotificationService/SendNotification', {
+        headers: apiKey,
+        body: { ...alert, priority },
+      });
+      expect(response.status).toBe(400);
+    }
     const undeclared = await call('NotificationService/SendNotification', {
       headers: apiKey,
       body: { ...alert, kind: 'other' },

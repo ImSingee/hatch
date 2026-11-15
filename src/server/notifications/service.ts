@@ -32,6 +32,7 @@ import { publishPlatformEvent } from '~server/platform-events';
 import { describeApnsCredentials } from './apns/credentials';
 import { channelPushPath } from './channel-ingress';
 import {
+  DEFAULT_NOTIFICATION_PRIORITY,
   NOTIFICATION_KIND_RE,
   channelKindsSchema,
   isHttpUrl,
@@ -132,6 +133,8 @@ export type NotificationSummaryView = {
   body: string | null;
   url: string | null;
   autoOpenUrl: boolean;
+  /** -2 lowest, -1 low, 0 normal, 1 high. */
+  priority: number;
   occurredAt: string;
   createdAt: string;
   /** 1 for the original; every edit and the recall increment it. */
@@ -349,6 +352,7 @@ function summaryView(
     body: row.body,
     url: row.url,
     autoOpenUrl: row.autoOpenUrl,
+    priority: row.priority,
     occurredAt: iso(row.occurredAt),
     createdAt: iso(row.createdAt),
     revision: row.revision,
@@ -1553,6 +1557,7 @@ export async function sendTestNotification(
     body: `This is a test sent to "${destination.name}" from Hatch.`,
     url: null,
     autoOpenUrl: false,
+    priority: DEFAULT_NOTIFICATION_PRIORITY,
     data: null,
     reply: null,
     dedupeKey: null,

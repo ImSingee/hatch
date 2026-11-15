@@ -216,6 +216,7 @@ export async function ingestNotification(args: {
         body: push.body,
         url: push.url,
         autoOpenUrl: push.autoOpenUrl,
+        priority: push.priority,
         data: push.data,
         reply: push.reply,
         dedupeKey: push.dedupeKey,

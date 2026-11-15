@@ -10,6 +10,7 @@ import { glyphs } from '../../src/ui/glyph.types';
 import { Busy, EmptyState, Notice, errorText } from '../../src/ui/primitives';
 import {
   NotificationChangeTag,
+  NotificationPriorityTag,
   NotificationReplyTag,
   NotificationStatusTag,
   notificationTime,
@@ -119,6 +120,9 @@ export default function NotificationsScreen() {
                             ) : null}
                             <View style={styles.tags}>
                               <NotificationStatusTag status={item.status} />
+                              <NotificationPriorityTag
+                                priority={item.priority}
+                              />
                               <NotificationChangeTag
                                 editedAt={item.editedAt}
                                 recalledAt={item.recalledAt}

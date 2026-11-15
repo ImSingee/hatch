@@ -29,6 +29,7 @@ import {
 import {
   DeliveryStatusTag,
   NotificationChangeTag,
+  NotificationPriorityTag,
   NotificationReplyTag,
   NotificationStatusTag,
   notificationTime,
@@ -138,6 +139,7 @@ export default function NotificationScreen() {
       <View style={{ paddingHorizontal: 16, gap: 14 }}>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <NotificationStatusTag status={data.status} />
+          <NotificationPriorityTag priority={data.priority} />
           <NotificationChangeTag
             editedAt={data.editedAt}
             recalledAt={data.recalledAt}
@@ -149,6 +151,12 @@ export default function NotificationScreen() {
           />
           <Text style={type.meta}>{notificationTime(data.occurredAt)}</Text>
         </View>
+        {data.priority === -2 ? (
+          <Text style={type.small}>
+            Lowest priority: this notification is kept here and was not pushed
+            to phones.
+          </Text>
+        ) : null}
         {data.recalledAt ? (
           <Text style={type.small}>
             The sender recalled this notification on{' '}

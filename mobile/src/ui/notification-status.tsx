@@ -51,6 +51,19 @@ export function NotificationReplyTag({
   return <Tag tone="lime" label="Awaiting answer" />;
 }
 
+const priorityLabels: Record<number, string> = {
+  [-2]: 'Lowest priority',
+  [-1]: 'Low priority',
+  1: 'High priority',
+};
+
+/** Shown beside the status for any priority other than normal. */
+export function NotificationPriorityTag({ priority }: { priority: number }) {
+  const label = priorityLabels[priority];
+  if (!label) return null;
+  return <Tag tone={priority > 0 ? 'outline' : 'quiet'} label={label} />;
+}
+
 const deliveryLabels: Record<string, string> = {
   pending: 'Waiting',
   in_progress: 'Sending',

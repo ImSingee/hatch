@@ -40,6 +40,23 @@ export const MAX_NOTIFICATION_DEDUPE_KEY = 200;
 export const MAX_DELIVERY_RESULT = 2000;
 export const MAX_CHANNEL_KINDS = 100;
 
+/**
+ * Pushover-style priorities. Emergency (2, repeat until acknowledged) is not
+ * supported.
+ */
+export const NOTIFICATION_PRIORITIES = [-2, -1, 0, 1] as const;
+export type NotificationPriority = (typeof NOTIFICATION_PRIORITIES)[number];
+export const DEFAULT_NOTIFICATION_PRIORITY = 0;
+
+export function isNotificationPriority(
+  value: unknown,
+): value is NotificationPriority {
+  return (
+    typeof value === 'number' &&
+    (NOTIFICATION_PRIORITIES as readonly number[]).includes(value)
+  );
+}
+
 const optionalText = (max: number) =>
   z
     .string()
@@ -72,6 +89,26 @@ const dataField = z
     },
   );
 
+/**
+ * -2 lowest: history and webhook/App destinations only, no phone push.
+ * -1 low: delivered quietly (no sound, no banner, screen stays dark).
+ * 0 normal (default). 1 high: time-sensitive, shown during Focus.
+ */
+const priorityField = z
+  .number({ error: 'priority must be an integer from -2 to 1' })
+  .nullish()
+  .refine(
+    (value) =>
+      value === null || value === undefined || isNotificationPriority(value),
+    {
+      message:
+        'priority must be an integer from -2 to 1 (emergency priority 2 is not supported)',
+    },
+  )
+  .transform(
+    (value) => (value ?? DEFAULT_NOTIFICATION_PRIORITY) as NotificationPriority,
+  );
+
 /** Notification ids are lowercase ULIDs. */
 const notificationIdField = z.string().regex(/^[0-9a-z]{26}$/, {
   message: 'id must be a notification id',
@@ -90,6 +127,7 @@ export const notificationPushSchema = z
      * the notification page.
      */
     autoOpenUrl: z.boolean().nullish(),
+    priority: priorityField,
     data: dataField,
     /** Form people answer once; the answer goes to response routes. */
     reply: optionalReplySchema.optional().transform((value) => value ?? null),
@@ -133,9 +171,10 @@ export function pushIssueMessage(error: z.ZodError): string {
  * Edit of a notification the caller sent. An omitted field keeps its value;
  * `null` (or an empty value) clears `body`, `url` and `data`. Without
  * `autoOpenUrl`, a new `url` opens on tap like a push, a cleared one stops and
- * a replaced one keeps the setting. `kind`,
- * `dedupeKey` and `occurredAt` never change. The id is part of the signed
- * body, so a replayed request can only repeat the same edit.
+ * a replaced one keeps the setting. `kind`, `priority`, `dedupeKey` and
+ * `occurredAt` never change: priority only decides how the notification
+ * first arrives, and edits always arrive quietly. The id is part of the
+ * signed body, so a replayed request can only repeat the same edit.
  */
 export const notificationUpdateSchema = z
   .object({
@@ -245,6 +284,7 @@ export type NotificationRecord = {
   body: string | null;
   url: string | null;
   autoOpenUrl: boolean;
+  priority: number;
   data: JsonObject | null;
   dedupeKey: string | null;
   occurredAt: Date;
@@ -308,6 +348,8 @@ export type NotificationEnvelope = {
     url: string | null;
     /** Phone pushes open `url` on tap instead of the notification. */
     autoOpenUrl: boolean;
+    /** -2 lowest, -1 low, 0 normal, 1 high. */
+    priority: number;
     data: JsonObject | null;
     dedupeKey: string | null;
     occurredAt: string;
@@ -404,6 +446,7 @@ export function buildEnvelope(args: {
       body: notification.body,
       url: notification.url,
       autoOpenUrl: notification.autoOpenUrl,
+      priority: notification.priority,
       data: notification.data,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),

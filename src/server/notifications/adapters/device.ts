@@ -15,6 +15,7 @@ import {
   RECALLED_TITLE,
   buildEncryptedApnsPayload,
   type PushPlaintext,
+  type PushPriority,
   type PushReply,
 } from '../apns/payload';
 import {
@@ -32,6 +33,10 @@ import { decryptDeviceKey } from '../secrets';
 
 /** Undelivered pushes are useless after a day; APNs drops them then. */
 const PUSH_EXPIRY_MS = 24 * 60 * 60_000;
+
+/** Recorded on device deliveries of lowest-priority notifications. */
+export const LOWEST_PRIORITY_RESULT =
+  'Not pushed: lowest-priority notifications only appear in history.';
 
 /** APNs rejections meaning this token will never work again. */
 const DEAD_TOKEN_REASONS = new Set([
@@ -171,6 +176,11 @@ export function pushPlaintext(
   };
 }
 
+function pushPriority(priority: number): PushPriority {
+  if (priority >= 1) return 1;
+  return priority <= -1 ? -1 : 0;
+}
+
 export function createDeviceAdapter(
   options: {
     send?: (request: ApnsSendRequest) => Promise<ApnsSendResult>;
@@ -180,6 +190,10 @@ export function createDeviceAdapter(
   const send = options.send ?? sendApnsRequest;
   const origins = options.origins ?? APNS_ORIGINS;
   return async ({ notification, response, destination, event }) => {
+    // Nothing was shown, so there is nothing to edit, recall or answer either.
+    if (notification.priority <= -2) {
+      return { kind: 'success', result: LOWEST_PRIORITY_RESULT };
+    }
     if (
       !destination.apnsToken ||
       !destination.apnsEnvironment ||
@@ -224,6 +238,7 @@ export function createDeviceAdapter(
       decryptDeviceKey(destination.id, destination.e2eKeyCiphertext),
       destination.e2eKeyId,
       pushPlaintext(notification, event, getPlatformEnv().appUrl, response),
+      pushPriority(notification.priority),
     );
     let result: ApnsSendResult;
     try {

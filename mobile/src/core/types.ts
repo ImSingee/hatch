@@ -155,6 +155,8 @@ export type NotificationSummary = {
   url: string | null;
   occurredAt: string;
   status: string;
+  /** -2 lowest (not pushed to phones), -1 low, 0 normal, 1 high. */
+  priority: number;
   /** Set when the source edited the notification. */
   editedAt: string | null;
   /** Set when the source recalled it; phones no longer show it. */

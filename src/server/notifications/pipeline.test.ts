@@ -108,6 +108,7 @@ function push(kind = 'order.shipped', extra: Record<string, unknown> = {}) {
     body: null,
     url: null,
     autoOpenUrl: false,
+    priority: 0,
     data: null,
     dedupeKey: null,
     occurredAt: null,
@@ -616,6 +617,62 @@ describe('ingress authentication', () => {
       'not a url',
     ])
       expect((await send({ url: unsafe })).status).toBe(400);
+  });
+
+  it('accepts priorities -2 to 1, defaults to 0 and hands them to webhooks', async () => {
+    const { channel, token } = await service.createChannel({
+      name: 'Monitoring',
+      kinds: [{ kind: 'alert', name: 'Alert' }],
+    });
+    const { destination } = await service.createWebhook({
+      name: 'Hook',
+      url: webhookUrl,
+    });
+    await service.createRoute({
+      sourceType: 'any',
+      targetType: 'destination',
+      targetId: destination.id,
+    });
+    const send = (body: Record<string, unknown>) =>
+      handleChannelPush(
+        new Request(
+          `https://hatch.example.test${new URL(channel.pushUrl).pathname}`,
+          {
+            method: 'POST',
+            headers: { 'x-hatch-secret': token },
+            body: JSON.stringify({
+              kind: 'alert',
+              title: 'Disk full',
+              ...body,
+            }),
+          },
+        ),
+        channel.id,
+      );
+    const stored = async (body: Record<string, unknown>) => {
+      const response = await send(body);
+      expect(response.status).toBe(202);
+      const { id } = (await response.json()) as { id: string };
+      return (await service.getNotification(id)).priority;
+    };
+
+    expect(await stored({})).toBe(0);
+    expect(await stored({ priority: null })).toBe(0);
+    for (const priority of [-2, -1, 0, 1]) {
+      expect(await stored({ priority })).toBe(priority);
+    }
+    for (const priority of [2, -3, 0.5, '1', true]) {
+      const response = await send({ priority });
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain('priority');
+    }
+
+    // Lowest priority skips phones only; other destinations still get it.
+    await runAllDue();
+    const priorities = received
+      .map((request): number => JSON.parse(request.body).notification.priority)
+      .sort((a, b) => a - b);
+    expect(priorities).toEqual([-2, -1, 0, 0, 0, 1]);
   });
 });
 

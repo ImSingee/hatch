@@ -30,6 +30,7 @@ import type {
 } from '~server/notifications';
 import {
   NOTIFICATION_STATUS_OPTIONS,
+  NotificationPriorityBadge,
   NotificationReplyBadge,
   NotificationRevisionBadge,
   REPLY_STATE_OPTIONS,
@@ -273,6 +274,7 @@ export function NotificationHistory() {
                   <Table.Td>
                     <Group gap={6} wrap="wrap">
                       <NotificationStatusBadge status={item.status} />
+                      <NotificationPriorityBadge priority={item.priority} />
                       <NotificationRevisionBadge
                         editedAt={item.editedAt}
                         recalledAt={item.recalledAt}

@@ -29,7 +29,8 @@ const service = await import('./service');
 const { ingestNotification } = await import('./ingest');
 const { claimDueDeliveries, pruneEndedDeviceDestinations, runClaimedDelivery } =
   await import('./dispatcher');
-const { createDeviceAdapter } = await import('./adapters/device');
+const { LOWEST_PRIORITY_RESULT, createDeviceAdapter } =
+  await import('./adapters/device');
 const { recallNotification, updateNotification } = await import('./lifecycle');
 type DeliveryAdapter = import('./delivery').DeliveryAdapter;
 const { closeApnsSessions, sendApnsRequest } = await import('./apns/client');
@@ -128,6 +129,7 @@ async function deliver(
     url: null,
     autoOpenUrl: false,
   },
+  priority: -2 | -1 | 0 | 1 = 0,
 ) {
   const { id } = await ingestNotification({
     source: { type: 'channel', channelId, name: 'Monitoring' },
@@ -137,6 +139,7 @@ async function deliver(
       title,
       body,
       ...link,
+      priority,
       data: null,
       reply: null,
       dedupeKey: null,
@@ -382,6 +385,71 @@ describe('APNs delivery', () => {
   });
 });
 
+describe('APNs priority', () => {
+  const noLink = { url: null, autoOpenUrl: false };
+  const sender = () => ({ type: 'channel' as const, channelId });
+  const runDue = async () => {
+    for (const claimed of await claimDueDeliveries(5)) {
+      await runClaimedDelivery(claimed, adapters);
+    }
+  };
+  const apsOf = (request: Seen) =>
+    (JSON.parse(request.body) as { aps: Record<string, unknown> }).aps;
+
+  it('arrives quietly when low, normally at 0 and time-sensitive when high', async () => {
+    await registerDevice();
+    await deliver('Low', null, noLink, -1);
+    await deliver('Normal', null, noLink, 0);
+    await deliver('High', null, noLink, 1);
+    const [low, normal, high] = seen.map(apsOf);
+
+    expect(low).not.toHaveProperty('sound');
+    expect(low['interruption-level']).toBe('passive');
+    expect(normal.sound).toBe('default');
+    expect(normal).not.toHaveProperty('interruption-level');
+    expect(high.sound).toBe('default');
+    expect(high['interruption-level']).toBe('time-sensitive');
+    for (const aps of [low, normal, high]) {
+      expect(aps['mutable-content']).toBe(1);
+      expect(aps.alert).toEqual({ title: 'Hatch', body: 'New notification' });
+    }
+  });
+
+  it('replaces a high-priority notification without alerting again', async () => {
+    await registerDevice();
+    await deliver('Outage', null, noLink, 1);
+    const id = decrypt(seen[0].body).content.id as string;
+    await updateNotification(sender(), { id, title: 'Outage resolved' });
+    await runDue();
+    expect(seen).toHaveLength(2);
+    expect(apsOf(seen[1])).not.toHaveProperty('sound');
+    expect(apsOf(seen[1])['interruption-level']).toBe('passive');
+  });
+
+  it('never pushes lowest priority, nor its edits and recalls', async () => {
+    await registerDevice();
+    const delivery = await deliver('Nightly report', 'All green', noLink, -2);
+    expect(seen).toHaveLength(0);
+    expect(delivery).toMatchObject({
+      status: 'succeeded',
+      result: LOWEST_PRIORITY_RESULT,
+    });
+
+    const [{ id }] = (await service.listNotifications({})).items;
+    await updateNotification(sender(), { id, title: 'Nightly report (late)' });
+    await runDue();
+    await recallNotification(sender(), id);
+    await runDue();
+    expect(seen).toHaveLength(0);
+    const detail = await service.getNotification(id);
+    expect(detail.priority).toBe(-2);
+    expect(detail.deliveryList[0]).toMatchObject({
+      status: 'succeeded',
+      result: LOWEST_PRIORITY_RESULT,
+    });
+  });
+});
+
 describe('device refresh', () => {
   const refresh = (apnsToken: string) =>
     service.registerDevice({
@@ -417,6 +485,7 @@ describe('device refresh', () => {
         url: null,
         reply: null,
         autoOpenUrl: false,
+        priority: 0,
         data: null,
         dedupeKey: null,
         occurredAt: null,

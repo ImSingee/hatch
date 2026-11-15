@@ -1,9 +1,12 @@
-import { Badge, Loader } from '@mantine/core';
+import { Badge, Loader, Tooltip } from '@mantine/core';
 import {
   IconAppWindow,
   IconArrowBackUp,
+  IconArrowDown,
+  IconArrowUp,
   IconBroadcast,
   IconCheck,
+  IconChevronsDown,
   IconClock,
   IconDeviceMobile,
   IconMessageCheck,
@@ -215,6 +218,77 @@ export const REPLY_STATE_OPTIONS = [
   { value: 'awaiting', label: 'Awaiting answer' },
   { value: 'answered', label: 'Answered' },
 ];
+
+const PRIORITY_META: Record<
+  number,
+  {
+    label: string;
+    effect: string | null;
+    color: string;
+    icon: ReactNode;
+    description: string;
+  }
+> = {
+  [-2]: {
+    label: 'Lowest',
+    effect: 'history only, not pushed to phones',
+    color: 'gray',
+    icon: <IconChevronsDown size={11} stroke={2.5} />,
+    description:
+      'Priority -2: kept in history and sent to webhooks and Apps, never pushed to phones.',
+  },
+  [-1]: {
+    label: 'Low',
+    effect: 'quiet on phones',
+    color: 'gray',
+    icon: <IconArrowDown size={11} stroke={2.5} />,
+    description:
+      'Priority -1: arrives on phones quietly, with no sound and no banner.',
+  },
+  0: {
+    label: 'Normal',
+    effect: null,
+    color: 'gray',
+    icon: null,
+    description: 'Priority 0: a regular notification.',
+  },
+  1: {
+    label: 'High',
+    effect: 'time-sensitive on phones',
+    color: 'ember',
+    icon: <IconArrowUp size={11} stroke={2.5} />,
+    description:
+      'Priority 1: time-sensitive on phones, shown during Focus and Do Not Disturb.',
+  },
+};
+
+/** For example "High (1) · time-sensitive on phones". */
+export function notificationPriorityLabel(priority: number): string {
+  const meta = PRIORITY_META[priority];
+  if (!meta) return String(priority);
+  const label = `${meta.label} (${priority})`;
+  return meta.effect ? `${label} · ${meta.effect}` : label;
+}
+
+/** Non-normal priorities, next to the delivery status. */
+export function NotificationPriorityBadge({ priority }: { priority: number }) {
+  const meta = PRIORITY_META[priority];
+  if (!meta || priority === 0) return null;
+  return (
+    <Tooltip label={meta.description} withArrow multiline maw={280}>
+      <Badge
+        color={meta.color}
+        variant="outline"
+        radius="sm"
+        leftSection={
+          <span style={{ display: 'inline-flex' }}>{meta.icon}</span>
+        }
+      >
+        {meta.label}
+      </Badge>
+    </Tooltip>
+  );
+}
 
 type DestinationType = 'device' | 'webhook' | 'app';
 

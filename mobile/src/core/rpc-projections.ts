@@ -158,6 +158,7 @@ export function notificationSummaryProjection(
     url: value.url ?? null,
     occurredAt: value.occurredAt,
     status: value.status,
+    priority: value.priority,
     editedAt: value.editedAt ?? null,
     recalledAt: value.recalledAt ?? null,
     reply: value.reply ? replyFromMessage(value.reply) : null,
