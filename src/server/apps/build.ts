@@ -531,16 +531,34 @@ async function storageInstallScript(
   return result.outputFiles[0].text;
 }
 
+/**
+ * Blank out what the browser does not parse as tags (comments and the bodies
+ * of script, style, template and textarea elements) without changing the
+ * length, so indexes found in the result address the same place in `html`.
+ */
+function markupOnly(html: string): string {
+  const blank = (text: string) => text.replace(/[^\n]/g, ' ');
+  // One left-to-right scan, so whichever construct opens first wins.
+  return html.replace(
+    /<!--[\s\S]*?(?:-->|$)|(<(script|style|template|textarea)\b[^>]*>)([\s\S]*?)(<\/\2\s*>|$)/gi,
+    (match, open?: string, _name?: string, body?: string, close?: string) =>
+      open === undefined ? blank(match) : open + blank(body!) + close!,
+  );
+}
+
 /** Inline `code` as a classic script that runs before every page script. */
 function prependHeadScript(html: string, code: string): string {
   const tag = `<script>${code.replace(/<\/script/gi, '<\\/script')}</script>`;
-  const head = /<head(?:\s[^>]*)?>/i;
-  if (head.test(html)) return html.replace(head, (open) => `${open}${tag}`);
+  const markup = markupOnly(html);
+  const insertAt = (index: number) =>
+    html.slice(0, index) + tag + html.slice(index);
+  const head = /<head(?:\s[^>]*)?>/i.exec(markup);
+  if (head) return insertAt(head.index + head[0].length);
   // Without an explicit head, the first script still precedes all others.
-  const firstScript = /<script\b/i;
-  return firstScript.test(html)
-    ? html.replace(firstScript, (open) => `${tag}${open}`)
-    : html.replace(/<\/body>/i, (close) => `${tag}${close}`);
+  const firstScript = /<script\b/i.exec(markup);
+  if (firstScript) return insertAt(firstScript.index);
+  const body = /<\/body\s*>/i.exec(markup);
+  return body ? insertAt(body.index) : html + tag;
 }
 
 /** Resolve only the public, platform-owned Hatch SDK browser entrypoints. */

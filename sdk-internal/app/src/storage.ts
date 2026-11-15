@@ -58,9 +58,12 @@ export type AppStorage = {
   entries(): [string, string][];
   /**
    * Calls `listener` for every key that changes, whether the change was made
-   * in this page (through this object or `localStorage` directly), in another
-   * tab, or in another frame of this App such as a dashboard widget. Returns
-   * a function that stops listening.
+   * in this page (through this object or `localStorage` directly) or in
+   * another document of this App: another tab, or a frame such as a dashboard
+   * widget. The session area is per tab, so its changes come only from this
+   * page and frames in the same tab. Changes made by a listener are delivered
+   * after the current change reaches every listener. Returns a function that
+   * stops listening.
    */
   watch(listener: AppStorageListener): () => void;
   /** Like {@link watch}, for one key. */
@@ -90,19 +93,13 @@ export function createAppStorage(options: AppStorageOptions = {}): AppStorage {
   if (area !== 'local' && area !== 'session') {
     throw new TypeError(`Unknown App storage area: ${String(area)}`);
   }
-  // An absent area is blocked by the browser; reading it rethrows that error.
-  const storage =
-    installed().areas[area] ??
-    window[area === 'local' ? 'localStorage' : 'sessionStorage'];
-
-  const keys = (): string[] => {
-    const result: string[] = [];
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (key !== null) result.push(key);
-    }
-    return result;
-  };
+  const scope = installed().areas[area];
+  if (!scope) {
+    // The browser blocks this area: reading it rethrows the browser's error.
+    void window[area === 'local' ? 'localStorage' : 'sessionStorage'];
+    throw new Error(`Browser ${area} storage is unavailable`);
+  }
+  const { storage, keys } = scope;
   const snapshot = () =>
     new Map(keys().map((key) => [key, storage.getItem(key)!]));
 
@@ -112,9 +109,7 @@ export function createAppStorage(options: AppStorageOptions = {}): AppStorage {
   let known = new Map<string, string>();
   let detach: (() => void) | undefined;
 
-  const emit = (change: AppStorageChange) => {
-    if (change.newValue === null) known.delete(change.key);
-    else known.set(change.key, change.newValue);
+  const deliver = (change: AppStorageChange) => {
     // Snapshot: a listener may subscribe or unsubscribe while being called.
     for (const listener of Array.from(listeners)) {
       if (listener.key !== undefined && listener.key !== change.key) continue;
@@ -124,6 +119,25 @@ export function createAppStorage(options: AppStorageOptions = {}): AppStorage {
       } catch (error) {
         reportError(error);
       }
+    }
+  };
+
+  // Changes a listener causes wait until the current change has reached every
+  // listener, so all of them observe one ordered history.
+  const pending: AppStorageChange[] = [];
+  let delivering = false;
+  const emit = (change: AppStorageChange) => {
+    if (change.newValue === null) known.delete(change.key);
+    else known.set(change.key, change.newValue);
+    pending.push(change);
+    if (delivering) return;
+    delivering = true;
+    try {
+      for (let next = pending.shift(); next; next = pending.shift()) {
+        deliver(next);
+      }
+    } finally {
+      delivering = false;
     }
   };
 

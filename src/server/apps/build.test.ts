@@ -345,7 +345,9 @@ describe('buildApp backend', () => {
         // An authored head script runs before module scripts; it must already
         // see the scoped area.
         'app/index.html': [
-          '<!doctype html><html><head><title>Demo</title>',
+          // Commented-out tags must not attract the storage installer.
+          '<!doctype html><!-- Configure the <head> and <script> below. -->',
+          '<html><head><title>Demo</title>',
           "<script>localStorage.setItem('theme', 'dark')</script>",
           '</head><body><script type="module" src="./app.js"></script>',
           '</body></html>',
@@ -359,9 +361,16 @@ describe('buildApp backend', () => {
       path.join(outputDir, 'app', 'index.html'),
       'utf8',
     );
-    expect(html.startsWith('<!doctype html><html><head><script>')).toBe(true);
+    expect(
+      html.startsWith(
+        '<!doctype html><!-- Configure the <head> and <script> below. -->' +
+          '<html><head><script>',
+      ),
+    ).toBe(true);
     const scripts = [
-      ...html.matchAll(/<script(?: type="module")?>([\s\S]*?)<\/script>/g),
+      ...html
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .matchAll(/<script(?: type="module")?>([\s\S]*?)<\/script>/g),
     ].map((match) => match[1]);
     expect(scripts).toHaveLength(3);
     const widget = await fs.readFile(

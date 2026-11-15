@@ -73,10 +73,12 @@ function ThemeToggle() {
 
 The object reads and writes the same entries as `localStorage` and has the
 same methods, plus `keys()`, `entries()`, and `watch(listener)` or
-`watch(key, listener)`, which report `{ key, oldValue, newValue }` for
-changes from this page, other tabs, and the App's widgets and return an
-unsubscribe function. `useAppStorageItem(storage, key)` returns
-`[value, setValue]`; `setValue(null)` removes the key.
+`watch(key, listener)`, which report `{ key, oldValue, newValue }` and return
+an unsubscribe function. Local-area watchers see changes from this page, other
+tabs, and the App's widgets. `sessionStorage` is separate per tab, so
+session-area watchers see changes only from this page and frames in the same
+tab. `useAppStorageItem(storage, key)` returns `[value, setValue]`;
+`setValue(null)` removes the key.
 
 Values are strings; `JSON.stringify` structured data and validate it with Zod
 when read. Entries survive deployments and slug changes but live in one

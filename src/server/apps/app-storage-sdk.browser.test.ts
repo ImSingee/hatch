@@ -189,4 +189,54 @@ describe('App browser storage scope', () => {
     a.localStorage.setItem('theme', 'after');
     expect(all).toHaveLength(stopped);
   });
+
+  it('delivers changes made by listeners after the current change, in order', async () => {
+    const raw = await frameWindow();
+    const a = await appPage('app-a');
+    const { createAppStorage } = await sdk(a);
+    const storage = createAppStorage();
+    storage.setItem('draft', 'saved');
+    storage.setItem('theme', 'dark');
+
+    const stopNormalize = storage.watch('value', (change) => {
+      if (change.newValue === 'raw') storage.setItem('value', 'normalized');
+    });
+    const stopRestore = storage.watch('draft', (change) => {
+      // Restoring another key while a whole-area clear is being reported.
+      if (change.newValue === null) storage.setItem('theme', 'restored');
+    });
+    const seen: Sdk.AppStorageChange[] = [];
+    const stopSeen = storage.watch((change) => seen.push(change));
+
+    storage.setItem('value', 'raw');
+    expect(seen).toEqual([
+      { key: 'value', oldValue: null, newValue: 'raw' },
+      { key: 'value', oldValue: 'raw', newValue: 'normalized' },
+    ]);
+
+    seen.length = 0;
+    raw.localStorage.clear();
+    await expect.poll(() => seen.length).toBeGreaterThanOrEqual(3);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Keys are visited in the browser's order, so theme may be reported
+    // removed before the restore; either way its history is one unbroken
+    // chain ending at the stored value, with no removal after the restore.
+    const theme = seen.filter((change) => change.key === 'theme');
+    expect(theme.map((change) => change.oldValue)).toEqual([
+      'dark',
+      ...theme.slice(0, -1).map((change) => change.newValue),
+    ]);
+    expect(theme.at(-1)?.newValue).toBe('restored');
+    expect(a.localStorage.getItem('theme')).toBe('restored');
+
+    // The restored key is still tracked, so the next clear reports it.
+    seen.length = 0;
+    stopRestore();
+    raw.localStorage.clear();
+    await expect
+      .poll(() => seen.find((change) => change.key === 'theme'))
+      .toEqual({ key: 'theme', oldValue: 'restored', newValue: null });
+    stopNormalize();
+    stopSeen();
+  });
 });

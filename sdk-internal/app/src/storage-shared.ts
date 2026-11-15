@@ -20,8 +20,15 @@ export type AppStorageChangeDetail = {
   newValue: string | null;
 };
 
+export type InstalledAppStorageArea = {
+  /** The scoped area that replaces `localStorage` or `sessionStorage`. */
+  readonly storage: Storage;
+  /** The area's App-relative keys, listed in one pass. */
+  keys(): string[];
+};
+
 export type InstalledAppStorage = {
   readonly appId: string;
   /** Scoped areas; an area is absent when the browser blocks its storage. */
-  readonly areas: Partial<Record<AppStorageArea, Storage>>;
+  readonly areas: Partial<Record<AppStorageArea, InstalledAppStorageArea>>;
 };

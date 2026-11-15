@@ -17,6 +17,7 @@ import {
   type AppStorageArea,
   type AppStorageChangeDetail,
   type InstalledAppStorage,
+  type InstalledAppStorageArea,
 } from './storage-shared.js';
 
 type StorageWindow = Window & typeof globalThis;
@@ -39,7 +40,7 @@ function scopedStorage(
   native: Storage,
   prefix: string,
   area: AppStorageArea,
-): Storage {
+): InstalledAppStorageArea {
   const keys = (): string[] => {
     const result: string[] = [];
     for (let index = 0; index < native.length; index += 1) {
@@ -83,7 +84,7 @@ function scopedStorage(
   const isStoredName = (prop: string | symbol): prop is string =>
     typeof prop === 'string' && !(prop in proto) && getItem(prop) !== null;
 
-  return new Proxy(Object.create(proto) as Storage, {
+  const storage = new Proxy(Object.create(proto) as Storage, {
     get(object, prop, receiver) {
       if (prop === 'length') return keys().length;
       if (typeof prop === 'string' && Object.hasOwn(methods, prop)) {
@@ -134,6 +135,7 @@ function scopedStorage(
       };
     },
   });
+  return { storage, keys };
 }
 
 /**
@@ -147,7 +149,7 @@ export function installAppStorage(
   if (!appId) throw new TypeError('installAppStorage requires an App id');
   if (Object.hasOwn(target, APP_STORAGE_GLOBAL)) return;
   const prefix = appStoragePrefix(appId);
-  const areas: Partial<Record<AppStorageArea, Storage>> = {};
+  const areas: Partial<Record<AppStorageArea, InstalledAppStorageArea>> = {};
   const scopedByNative = new Map<Storage, Storage>();
 
   for (const [area, property] of AREAS) {
@@ -158,8 +160,9 @@ export function installAppStorage(
       // Blocked storage keeps throwing its native error on access.
       continue;
     }
-    const scoped = scopedStorage(target, native, prefix, area);
-    areas[area] = scoped;
+    const scope = scopedStorage(target, native, prefix, area);
+    const scoped = scope.storage;
+    areas[area] = scope;
     scopedByNative.set(native, scoped);
     try {
       Object.defineProperty(target, property, {
