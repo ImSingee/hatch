@@ -25,6 +25,7 @@ import {
   deleteDestination,
   deleteGroup,
   deleteResponseRoute,
+  deleteNotification,
   deleteRoute,
   getNotification,
   listChannels,
@@ -300,6 +301,10 @@ export function registerNotificationApi(router: ConnectRouter) {
           },
         );
         return { response: response(answered) };
+      },
+      deleteNotification: async (input) => {
+        await deleteNotification(input.id);
+        return {};
       },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();

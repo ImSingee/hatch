@@ -1,7 +1,8 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Stack, router, useIsFocused } from 'expo-router';
+import { Link, Stack, router, useIsFocused } from 'expo-router';
 import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useSession } from '../../src/state/session';
+import { useDeleteNotification } from '../../src/state/use-delete-notification';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
 import { Button } from '../../src/ui/button';
 import { Reflow } from '../../src/ui/columns';
@@ -29,6 +30,7 @@ export default function NotificationsScreen() {
     enabled: Boolean(api),
   });
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
+  const { confirmDelete } = useDeleteNotification();
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const host = origin?.replace(/^https?:\/\//, '') ?? '';
   return (
@@ -77,43 +79,70 @@ export default function NotificationsScreen() {
             render={(column) => (
               <Group>
                 {column.map((item) => (
-                  <Pressable
+                  // Touch and hold for the native context menu.
+                  <Link
                     key={item.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.title}, from ${item.sourceName}`}
-                    onPress={() => router.push(`/notifications/${item.id}`)}
-                    style={({ pressed }) => [
-                      styles.row,
-                      pressed && { backgroundColor: c.limeSoft },
-                    ]}
+                    href={`/notifications/${item.id}`}
+                    asChild
                   >
-                    <View style={styles.header}>
-                      <Text style={[type.meta, styles.grow]} numberOfLines={1}>
-                        {item.sourceName} · {item.kindName}
-                      </Text>
-                      <Text style={type.meta}>
-                        {notificationTime(item.occurredAt)}
-                      </Text>
-                    </View>
-                    <Text style={type.heading}>{item.title}</Text>
-                    {item.body ? (
-                      <Text style={type.small} numberOfLines={3}>
-                        {item.body}
-                      </Text>
-                    ) : null}
-                    <View style={styles.tags}>
-                      <NotificationStatusTag status={item.status} />
-                      <NotificationChangeTag
-                        editedAt={item.editedAt}
-                        recalledAt={item.recalledAt}
-                      />
-                      <NotificationReplyTag
-                        hasReply={item.reply !== null}
-                        respondedAt={item.respondedAt}
-                        recalledAt={item.recalledAt}
-                      />
-                    </View>
-                  </Pressable>
+                    <Link.Trigger>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.title}, from ${item.sourceName}`}
+                        accessibilityHint="Touch and hold for more actions"
+                      >
+                        {/* Link's Slot cannot merge a style function, so the
+                            pressed look lives on an inner view. */}
+                        {({ pressed }) => (
+                          <View
+                            style={[
+                              styles.row,
+                              pressed && { backgroundColor: c.limeSoft },
+                            ]}
+                          >
+                            <View style={styles.header}>
+                              <Text
+                                style={[type.meta, styles.grow]}
+                                numberOfLines={1}
+                              >
+                                {item.sourceName} · {item.kindName}
+                              </Text>
+                              <Text style={type.meta}>
+                                {notificationTime(item.occurredAt)}
+                              </Text>
+                            </View>
+                            <Text style={type.heading}>{item.title}</Text>
+                            {item.body ? (
+                              <Text style={type.small} numberOfLines={3}>
+                                {item.body}
+                              </Text>
+                            ) : null}
+                            <View style={styles.tags}>
+                              <NotificationStatusTag status={item.status} />
+                              <NotificationChangeTag
+                                editedAt={item.editedAt}
+                                recalledAt={item.recalledAt}
+                              />
+                              <NotificationReplyTag
+                                hasReply={item.reply !== null}
+                                respondedAt={item.respondedAt}
+                                recalledAt={item.recalledAt}
+                              />
+                            </View>
+                          </View>
+                        )}
+                      </Pressable>
+                    </Link.Trigger>
+                    <Link.Menu>
+                      <Link.MenuAction
+                        icon="trash"
+                        destructive
+                        onPress={() => confirmDelete(item)}
+                      >
+                        Delete
+                      </Link.MenuAction>
+                    </Link.Menu>
+                  </Link>
                 ))}
               </Group>
             )}

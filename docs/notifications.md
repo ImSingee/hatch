@@ -308,6 +308,31 @@ dispatcher alternates which queue claims first, so a backlog of notification
 deliveries never holds answers back. History retention keeps a notification while any delivery
 of its answer is pending.
 
+### Deleting notifications
+
+Any workspace member can delete any notification from history, whatever sent
+it: Web (row menu in the history list and Delete on the detail page), the
+mobile app (touch and hold a row, or the trash button on the detail screen),
+and `NotificationService.DeleteNotification` (`hatch notification delete <id>
+--yes`), which accepts sessions, API keys and Agent Run credentials alike.
+Apps and Channels cannot delete through their own credentials; they recall.
+
+- Deleting removes the `notifications` row; its deliveries, its answer and
+  any answer deliveries cascade. It is permanent and there is no tombstone.
+- Nothing is sent. Copies that phones, webhooks and Apps already received
+  stay where they are; recall first to remove it from phones. Deliveries
+  that had not happened yet are dropped with their rows. An attempt that was
+  already in flight may still reach its destination, and its outcome is not
+  recorded (`recordOutcome` updates no row).
+- The dedupe key is released, so a repeated push with it creates a new
+  notification.
+- An App or Channel that later edits or recalls the id gets `404`, like any
+  unknown notification.
+- `notification.deleted` (platform event) refreshes open Web history views and
+  sends an open detail page back to the list. The phone that deletes also
+  removes its own Notification Center copy; other phones keep theirs, and
+  opening it shows "Notification not found".
+
 ## Delivery
 
 Ingest writes the notification and its deliveries in one transaction and
@@ -322,7 +347,8 @@ the Nitro startup plugin; it also polls every 5 s).
   timeouts, 5xx, 408 and 429 retry; other statuses fail. Failed deliveries can
   be retried manually (Web UI, `hatch notification retry`, `RetryDelivery`).
 - Notifications are retained 90 days (deliveries cascade); rows with
-  in-flight deliveries are never pruned.
+  in-flight deliveries are never pruned. Members can also delete one earlier
+  (above).
 
 Webhook and App destinations receive the same envelope:
 

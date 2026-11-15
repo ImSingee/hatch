@@ -19,6 +19,7 @@ import {
   deleteDestination,
   deleteGroup,
   deleteResponseRoute,
+  deleteNotification,
   deleteRoute,
   getNotification,
   listChannels,
@@ -130,6 +131,14 @@ export const respondToNotificationFn = createServerFn({ method: 'POST' })
       userId: user.id,
       via: 'web',
     });
+  });
+
+export const deleteNotificationFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((id: string) => idSchema.parse(id))
+  .handler(async ({ data }) => {
+    await deleteNotification(data);
+    return { ok: true as const };
   });
 
 export const sendTestNotificationFn = createServerFn({ method: 'POST' })

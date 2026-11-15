@@ -415,6 +415,13 @@ export class HatchApiClient {
       signal,
     ).then(() => undefined);
   }
+  /** Delete a notification and its delivery history for the whole workspace. */
+  deleteNotification(id: string, signal?: AbortSignal) {
+    return this.rpcRequest(
+      (signal) => this.notificationRpc.deleteNotification({ id }, { signal }),
+      signal,
+    ).then(() => undefined);
+  }
   /** Bind this phone's APNs token and end-to-end key to the current session. */
   registerPushDevice(input: PushRegistration, signal?: AbortSignal) {
     return this.rpcRequest(

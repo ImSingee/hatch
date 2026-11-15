@@ -202,6 +202,12 @@ const definitions: readonly CliCommandDefinition[] = [
       'Answer a notification reply form as the signed-in user; one answer per notification, final once sent. Repeat --answer for each option of a multiple field. Sends the answer to matching response routes.',
   },
   {
+    path: ['notification', 'delete'],
+    usage: 'notification delete <notification-id> --yes',
+    description:
+      'Permanently delete any notification and its delivery history; cannot be undone, so --yes is required. Nothing is sent: copies phones, webhooks and Apps already received stay, so recall first to remove it from phones. Deliveries not yet made are dropped.',
+  },
+  {
     path: ['notification', 'retry'],
     usage: 'notification retry <delivery-id>',
     description:

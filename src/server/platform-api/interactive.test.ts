@@ -1673,6 +1673,29 @@ describe('notification center authority', () => {
     expect(runRegister.status).toBe(403);
     expect(await errorCode(runRegister)).toBe('SESSION_REQUIRED');
 
+    // Members delete any notification from history by its id.
+    const deleteDirect = await call('NotificationService/DeleteNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(deleteDirect.status).toBe(200);
+    const deletedDetail = await call('NotificationService/GetNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(deletedDetail.status).toBe(404);
+    const deleteAgain = await call('NotificationService/DeleteNotification', {
+      headers: apiKey,
+      body: { id: direct },
+    });
+    expect(deleteAgain.status).toBe(404);
+    // A Run deletes with the same authority.
+    const runDelete = await call('NotificationService/DeleteNotification', {
+      headers: run,
+      body: { id: agentFirst.notificationId },
+    });
+    expect(runDelete.status).toBe(200);
+
     // A session registers its own device; revoking the session removes it.
     const session = { authorization: `Bearer ${user.token}` };
     const registered = await call('NotificationService/RegisterDevice', {

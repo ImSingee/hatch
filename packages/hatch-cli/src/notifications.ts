@@ -766,6 +766,24 @@ const specs: Record<string, Spec> = {
       };
     },
   },
+  delete: {
+    positionals: ['notification-id'],
+    options: { yes: { type: 'boolean' } },
+    build: ([id], values) => {
+      // Deleting is permanent and workspace-wide; never infer consent.
+      if (values.yes !== true)
+        invalid(
+          'Deleting a notification is permanent. Pass --yes to delete it and its delivery history.',
+        );
+      return {
+        method: 'deleteNotification',
+        request: { id },
+        text: done(
+          `Deleted notification ${id} and its delivery history. Copies destinations already received were not touched.`,
+        ),
+      };
+    },
+  },
   retry: {
     positionals: ['delivery-id'],
     build: ([deliveryId]) => ({

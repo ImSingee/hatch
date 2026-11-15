@@ -8,6 +8,8 @@ export type PlatformEvent =
   | { type: 'notification.created'; notificationId: string }
   /** The source edited or recalled the notification. */
   | { type: 'notification.updated'; notificationId: string }
+  /** A member deleted the notification from history. */
+  | { type: 'notification.deleted'; notificationId: string }
   | {
       type: 'notification.delivery.updated';
       notificationId: string;

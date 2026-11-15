@@ -376,6 +376,12 @@ A response route targets a webhook, or an App whose manifest sets
 `notifications.destination.responses` (`destination list` marks those
 `responses`). `retry` also retries failed answer deliveries.
 
+`hatch notification delete <notification-id> --yes` permanently removes a
+notification and its delivery history, whatever sent it; it cannot be undone
+and answers `{}`. Without `--yes` it is rejected locally (exit 2). It sends nothing: copies already on phones, webhooks and Apps
+stay, so recall first to remove it from phones. Deliveries not yet made are
+dropped, and the dedupe key is free again. An unknown id is not found (exit 5).
+
 Webhooks take edits and recalls only with `webhook create --lifecycle-events`
 or `webhook update <id> --lifecycle-events` (`--no-lifecycle-events` turns it
 off); `destination list` marks them `edits+recalls`.
