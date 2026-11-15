@@ -679,7 +679,7 @@ describe('answered notifications', () => {
     const pushed = await pushAsChannel({
       kind: 'deploy',
       title: 'Deploy?',
-      data: { deployId: 'A' },
+      data: { deployId: 'A', environment: 'production' },
       reply: APPROVE_FORM,
     });
     const { id } = (await pushed.json()) as { id: string };
@@ -697,10 +697,11 @@ describe('answered notifications', () => {
     ).rejects.toMatchObject({ status: 409 });
     // Other content may still change, and repeating the same data is fine.
     await expect(
+      // The same data with its keys in another order (jsonb reorders them).
       updateNotification(sender, {
         id,
         title: 'Deployed',
-        data: { deployId: 'A' },
+        data: { environment: 'production', deployId: 'A' },
       }),
     ).resolves.toMatchObject({ changed: true });
   });

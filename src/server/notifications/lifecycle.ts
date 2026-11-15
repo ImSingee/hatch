@@ -187,7 +187,7 @@ export async function updateNotification(
     if (
       current.respondedAt &&
       update.data !== undefined &&
-      JSON.stringify(update.data) !== JSON.stringify(current.data)
+      !sameJson(update.data, current.data)
     ) {
       throw new NotificationLifecycleError(
         'The data of an answered notification cannot change',

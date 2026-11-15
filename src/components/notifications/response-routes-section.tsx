@@ -160,6 +160,25 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/**
+ * A route's enabled switch with its own mutation: it is disabled while its
+ * update is pending, so changes to one route land in click order whatever
+ * happens to other routes.
+ */
+function ResponseRouteSwitch({ route }: { route: ResponseRouteView }) {
+  const toggle = useNotificationMutation((enabled: boolean) =>
+    updateResponseRouteFn({ data: { id: route.id, enabled } }),
+  );
+  return (
+    <Switch
+      checked={toggle.isPending ? toggle.variables : route.enabled}
+      onChange={(event) => toggle.mutate(event.currentTarget.checked)}
+      disabled={toggle.isPending}
+      aria-label="Enable response route"
+    />
+  );
+}
+
 /** Where answers to notification reply forms are sent. */
 export function ResponseRoutesSection() {
   const { data: routes } = useSuspenseQuery(
@@ -171,10 +190,6 @@ export function ResponseRoutesSection() {
   );
   const [creating, setCreating] = useState(false);
 
-  const toggle = useNotificationMutation(
-    (input: { id: string; enabled: boolean }) =>
-      updateResponseRouteFn({ data: input }),
-  );
   const remove = useNotificationMutation(
     (id: string) => deleteResponseRouteFn({ data: id }),
     { success: 'Response route deleted' },
@@ -286,24 +301,7 @@ export function ResponseRoutesSection() {
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Switch
-                      checked={
-                        toggle.isPending && toggle.variables?.id === route.id
-                          ? toggle.variables.enabled
-                          : route.enabled
-                      }
-                      onChange={(event) =>
-                        toggle.mutate({
-                          id: route.id,
-                          enabled: event.currentTarget.checked,
-                        })
-                      }
-                      // One change at a time, so writes land in click order.
-                      disabled={
-                        toggle.isPending && toggle.variables?.id === route.id
-                      }
-                      aria-label="Enable response route"
-                    />
+                    <ResponseRouteSwitch route={route} />
                   </Table.Td>
                   <Table.Td>
                     <Tooltip label="Delete response route" withArrow>

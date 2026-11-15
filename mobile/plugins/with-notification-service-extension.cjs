@@ -108,11 +108,24 @@ enum HatchReplyActions {
   /// could drop each other's category.
   private static let queue = DispatchQueue(label: "app.hatch.mobile.reply-categories")
 
+  /// One registration's write permission: a callback that arrives after the
+  /// registration gave up must not write its stale snapshot over a newer one.
+  private final class Attempt {
+    let lock = NSLock()
+    var abandoned = false
+  }
+
   static func register(_ category: UNNotificationCategory, then done: @escaping () -> Void) {
     queue.async {
       let center = UNUserNotificationCenter.current()
       let finished = DispatchSemaphore(value: 0)
+      let attempt = Attempt()
       center.getNotificationCategories { existing in
+        // Read, decide and write while holding the attempt's lock, so giving
+        // up below either waits for this write or stops it entirely.
+        attempt.lock.lock()
+        defer { attempt.lock.unlock() }
+        guard !attempt.abandoned else { return }
         let others = existing.filter { !$0.identifier.hasPrefix(categoryPrefix) }
         let replies = existing
           .filter { $0.identifier.hasPrefix(categoryPrefix) && $0.identifier != category.identifier }
@@ -122,7 +135,11 @@ enum HatchReplyActions {
         finished.signal()
       }
       // Bounded, so a stuck callback never holds the extension past its time.
-      _ = finished.wait(timeout: .now() + 5)
+      if finished.wait(timeout: .now() + 5) == .timedOut {
+        attempt.lock.lock()
+        attempt.abandoned = true
+        attempt.lock.unlock()
+      }
       done()
     }
   }
