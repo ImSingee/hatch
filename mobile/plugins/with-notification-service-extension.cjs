@@ -103,15 +103,26 @@ enum HatchReplyActions {
 
   /// Registers the notification's own category (its buttons come from the
   /// decrypted push), keeping the newest ones; ids are time-ordered.
+  /// Registrations run one at a time: \`setNotificationCategories\` replaces
+  /// the whole set, so two overlapping read-modify-writes in this process
+  /// could drop each other's category.
+  private static let queue = DispatchQueue(label: "app.hatch.mobile.reply-categories")
+
   static func register(_ category: UNNotificationCategory, then done: @escaping () -> Void) {
-    let center = UNUserNotificationCenter.current()
-    center.getNotificationCategories { existing in
-      let others = existing.filter { !$0.identifier.hasPrefix(categoryPrefix) }
-      let replies = existing
-        .filter { $0.identifier.hasPrefix(categoryPrefix) && $0.identifier != category.identifier }
-        .sorted { $0.identifier > $1.identifier }
-        .prefix(keep - 1)
-      center.setNotificationCategories(others.union(replies).union([category]))
+    queue.async {
+      let center = UNUserNotificationCenter.current()
+      let finished = DispatchSemaphore(value: 0)
+      center.getNotificationCategories { existing in
+        let others = existing.filter { !$0.identifier.hasPrefix(categoryPrefix) }
+        let replies = existing
+          .filter { $0.identifier.hasPrefix(categoryPrefix) && $0.identifier != category.identifier }
+          .sorted { $0.identifier > $1.identifier }
+          .prefix(keep - 1)
+        center.setNotificationCategories(others.union(replies).union([category]))
+        finished.signal()
+      }
+      // Bounded, so a stuck callback never holds the extension past its time.
+      _ = finished.wait(timeout: .now() + 5)
       done()
     }
   }

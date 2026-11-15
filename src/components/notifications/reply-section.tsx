@@ -1,4 +1,5 @@
 import {
+  Anchor,
   Button,
   Checkbox,
   Group,
@@ -58,7 +59,14 @@ export function ReplySection({
       </Text>
     );
   }
-  return <ReplyFormView notificationId={notificationId} reply={reply} />;
+  // Keyed so a draft never carries over to another notification.
+  return (
+    <ReplyFormView
+      key={notificationId}
+      notificationId={notificationId}
+      reply={reply}
+    />
+  );
 }
 
 function AnswerSummary({
@@ -244,7 +252,6 @@ function FieldInput({
       error,
       disabled,
       placeholder: field.placeholder,
-      maxLength: field.maxLength,
       value: typeof value === 'string' ? value : '',
       onChange: (event: { currentTarget: { value: string } }) =>
         onChange(event.currentTarget.value),
@@ -303,6 +310,19 @@ function FieldInput({
               disabled={disabled}
             />
           ))}
+          {!required && typeof value === 'string' ? (
+            <Anchor
+              component="button"
+              type="button"
+              size="xs"
+              c="dimmed"
+              w="fit-content"
+              disabled={disabled}
+              onClick={() => onChange(undefined)}
+            >
+              Clear answer
+            </Anchor>
+          ) : null}
         </Stack>
       </Radio.Group>
     );

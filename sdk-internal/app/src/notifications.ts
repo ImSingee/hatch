@@ -221,7 +221,8 @@ export type NotificationChangeResult = {
  * Edit a notification this App sent (by the `id` from `notify`). Phones
  * replace it in place without alerting again; destinations that take edit
  * events receive `hatch.notification.updated`. A recalled notification
- * cannot be edited (409).
+ * cannot be edited (409), and an answered one cannot change its `data` (409),
+ * which its answer is delivered with.
  */
 export async function updateNotification(
   id: string,

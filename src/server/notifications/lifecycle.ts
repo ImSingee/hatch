@@ -181,6 +181,19 @@ export async function updateNotification(
         409,
       );
     }
+    // Answers are delivered with `data`, which receivers use to tell what
+    // was answered; changing it afterwards would pin the answer on something
+    // else.
+    if (
+      current.respondedAt &&
+      update.data !== undefined &&
+      JSON.stringify(update.data) !== JSON.stringify(current.data)
+    ) {
+      throw new NotificationLifecycleError(
+        'The data of an answered notification cannot change',
+        409,
+      );
+    }
     const next = {
       title: update.title ?? current.title,
       body: update.body === undefined ? current.body : update.body,

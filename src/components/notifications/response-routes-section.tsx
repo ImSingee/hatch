@@ -298,6 +298,10 @@ export function ResponseRoutesSection() {
                           enabled: event.currentTarget.checked,
                         })
                       }
+                      // One change at a time, so writes land in click order.
+                      disabled={
+                        toggle.isPending && toggle.variables?.id === route.id
+                      }
                       aria-label="Enable response route"
                     />
                   </Table.Td>

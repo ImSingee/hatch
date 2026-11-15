@@ -232,7 +232,10 @@ by ingress, the CLI and the mobile app. Empty values (`null`, `""`, `[]`, `0`)
 mean "omitted"; settings that do not apply to a field type are rejected. The
 stored form is normalized with every default filled in, and a `400` names the
 field to fix (`reply.fields.0.options: …`). The form is fixed once sent: edits
-cannot change it, and recalling the notification closes it. With a form,
+cannot change it, and recalling the notification closes it. Once answered, the
+notification's `data` cannot change either (`409`), because answers are
+delivered with it and receivers use it to tell what was answered; its other
+content may still be edited. With a form,
 `autoOpenUrl` defaults to `false`, so a phone tap opens the form.
 
 Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or

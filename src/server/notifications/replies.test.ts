@@ -3,8 +3,11 @@
  * the web, the CLI/RPC or a push signed by the phone), phones are told it was
  * answered, and response routes deliver the answer.
  */
+import { mkdtempSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,6 +21,11 @@ vi.mock('~server/apps/runtime', () => ({
 
 vi.stubEnv('APP_URL', 'https://hatch.example.test');
 vi.stubEnv('SECRET', 'platform-secret');
+// pruneHistory also sweeps agent attachments under the workspace root.
+vi.stubEnv(
+  'HATCH_DATA_DIR',
+  mkdtempSync(path.join(os.tmpdir(), 'hatch-replies-test-')),
+);
 
 const { db, schema } = await import('~/db');
 const { callAppBackend } = await import('~server/apps/runtime');
@@ -663,6 +671,51 @@ describe('dispatching answers under load', () => {
     const claimed = await claimFairly(8, true);
     expect(claimed.every((entry) => entry.queue === 'notification')).toBe(true);
     expect(claimed).toHaveLength(6);
+  });
+});
+
+describe('answered notifications', () => {
+  it('keep the data their answer was given for', async () => {
+    const pushed = await pushAsChannel({
+      kind: 'deploy',
+      title: 'Deploy?',
+      data: { deployId: 'A' },
+      reply: APPROVE_FORM,
+    });
+    const { id } = (await pushed.json()) as { id: string };
+    await respondToNotification(
+      id,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    const sender = { type: 'channel' as const, channelId };
+    await expect(
+      updateNotification(sender, { id, data: { deployId: 'B' } }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      updateNotification(sender, { id, data: null }),
+    ).rejects.toMatchObject({ status: 409 });
+    // Other content may still change, and repeating the same data is fine.
+    await expect(
+      updateNotification(sender, {
+        id,
+        title: 'Deployed',
+        data: { deployId: 'A' },
+      }),
+    ).resolves.toMatchObject({ changed: true });
+  });
+
+  it('let response route edits keep a concurrent disable', async () => {
+    const route = await service.createResponseRoute({
+      sourceType: 'any',
+      destinationId: webhookId,
+    });
+    await Promise.all([
+      service.updateResponseRoute({ id: route.id, enabled: false }),
+      service.updateResponseRoute({ id: route.id, name: 'Renamed' }),
+    ]);
+    const [stored] = await service.listResponseRoutes();
+    expect(stored).toMatchObject({ name: 'Renamed', enabled: false });
   });
 });
 

@@ -145,7 +145,6 @@ export function ReplyFormCard({
               }
               unavailable={busy}
               multiline={field.multiline}
-              maxLength={field.maxLength}
               onChange={(text) => set(field.id, text)}
             />
           ) : field.type === 'buttons' ? (
@@ -201,7 +200,12 @@ export function ReplyFormCard({
                     disabled={busy}
                     onPress={() => {
                       if (field.type === 'single') {
-                        set(field.id, option.id);
+                        // Tapping the chosen option of an optional question
+                        // leaves it unanswered again.
+                        set(
+                          field.id,
+                          selected && !field.required ? undefined : option.id,
+                        );
                         return;
                       }
                       const list = Array.isArray(current) ? current : [];

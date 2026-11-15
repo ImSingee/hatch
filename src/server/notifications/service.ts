@@ -1352,10 +1352,24 @@ export async function createResponseRoute(
 export async function updateResponseRoute(
   input: { id: string } & Partial<ResponseRouteInput>,
 ): Promise<ResponseRouteView> {
-  const existing = await db.query.notificationResponseRoutes.findFirst({
-    where: { id: input.id },
+  // Lock the row: fields left out keep their current value, never one read
+  // before a concurrent change (such as a disable) committed.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.notificationResponseRoutes)
+      .where(eq(schema.notificationResponseRoutes.id, input.id))
+      .for('update');
+    if (!existing) notFound('Response route');
+    return writeResponseRoute(tx, existing, input);
   });
-  if (!existing) notFound('Response route');
+}
+
+async function writeResponseRoute(
+  tx: TX,
+  existing: ResponseRouteRow,
+  input: { id: string } & Partial<ResponseRouteInput>,
+): Promise<ResponseRouteView> {
   const current = responseRouteView(existing);
   const merged: ResponseRouteInput = {
     name: input.name !== undefined ? input.name : current.name,
@@ -1377,7 +1391,7 @@ export async function updateResponseRoute(
       (merged.kind || null) !== current.kind,
     target: merged.destinationId !== current.destinationId,
   };
-  const [row] = await db
+  const [row] = await tx
     .update(schema.notificationResponseRoutes)
     .set(await responseRouteValues(merged, checks))
     .where(eq(schema.notificationResponseRoutes.id, input.id))
