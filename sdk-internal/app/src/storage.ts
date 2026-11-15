@@ -138,14 +138,16 @@ export function createAppStorage(options: AppStorageOptions = {}): AppStorage {
     }
   };
 
-  const onChange = (key: string | null, oldValue: string | null) => {
+  const onChange = (key: string | null) => {
     if (key === null) {
       resync();
       return;
     }
     const newValue = storage.getItem(key);
-    // Read the current value: collapse bursts and ignore undone changes.
-    const previous = known.get(key) ?? oldValue;
+    // Compare current values: `known` is a complete snapshot while watching,
+    // so an absent key is null. Queued events may carry stale old values;
+    // reading the store collapses bursts and ignores undone changes.
+    const previous = known.get(key) ?? null;
     if (previous !== newValue) emit({ key, oldValue: previous, newValue });
   };
 
@@ -153,11 +155,11 @@ export function createAppStorage(options: AppStorageOptions = {}): AppStorage {
     known = snapshot();
     // Changes from other documents, already relative to this App.
     const onStorage = (event: StorageEvent) => {
-      if (event.storageArea === storage) onChange(event.key, event.oldValue);
+      if (event.storageArea === storage) onChange(event.key);
     };
     const onLocal = (event: Event) => {
       const detail = (event as CustomEvent<AppStorageChangeDetail>).detail;
-      if (detail?.area === area) onChange(detail.key, detail.oldValue);
+      if (detail?.area === area) onChange(detail.key);
     };
     window.addEventListener('storage', onStorage);
     window.addEventListener(APP_STORAGE_CHANGE_EVENT, onLocal);

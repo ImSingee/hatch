@@ -152,9 +152,22 @@ describe('App browser storage scope', () => {
       { key: 'draft', oldValue: 'one', newValue: null },
     ]);
 
+    // A burst from another tab (update, then remove) arrives as queued events
+    // after the fact; it is one removal, not two.
+    a.localStorage.setItem('burst', 'one');
+    const burstStart = all.length;
+    otherTabOfA.localStorage.setItem('burst', 'two');
+    otherTabOfA.localStorage.removeItem('burst');
+    await expect.poll(() => all.length).toBe(burstStart + 1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(all.slice(burstStart)).toEqual([
+      { key: 'burst', oldValue: 'one', newValue: null },
+    ]);
+
     stopAll();
     stopDraft();
+    const stopped = all.length;
     a.localStorage.setItem('theme', 'after');
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(stopped);
   });
 });
