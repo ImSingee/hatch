@@ -357,8 +357,11 @@ await recallNotification(id);
 
 `updateNotification` changes any of `title`, `body`, `url`, `autoOpenUrl` and
 `data`. Omitted fields keep their value; `null` clears `body`, `url` or
-`data`. Phones replace the shown notification in place without alerting
-again. `recallNotification` removes it from phones, and destinations that have
+`data`. Phones replace the shown notification in place and alert again by
+default, even if the content is unchanged. Pass `silent: true` to only change
+content, or `{}` to repeat the alert with current content. Destinations that
+take edits receive `hatch.notification.updated` with envelope `silent` telling
+them whether to alert. `recallNotification` removes it from phones, and destinations that have
 not received it yet never will. An App can only change notifications it pushed
 itself (others answer 404). Editing a recalled notification throws
 `NotificationError` with status 409. Repeating a recall changes nothing. Both

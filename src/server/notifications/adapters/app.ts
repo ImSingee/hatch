@@ -67,6 +67,7 @@ export const deliverToApp: DeliveryAdapter = async ({
   response: answer,
   destination,
   sourceSlug,
+  silent,
 }) => {
   if (!destination.appId) {
     return { kind: 'fail', error: 'App destination is incomplete.' };
@@ -117,6 +118,7 @@ export const deliverToApp: DeliveryAdapter = async ({
     deliveryId,
     attempt,
     sourceSlug,
+    silent,
   });
   const body = JSON.stringify(envelope);
   const timestamp = String(Date.now());

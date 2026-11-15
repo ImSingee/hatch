@@ -1,0 +1,1 @@
+ALTER TABLE "notifications" ADD COLUMN "alert_revision" integer DEFAULT 0 NOT NULL;

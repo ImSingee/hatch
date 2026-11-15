@@ -1008,6 +1008,7 @@ describe('edits and recalls', () => {
       ...(JSON.parse(entry.body) as {
         type: string;
         revision: number;
+        silent: boolean;
         notification: { title: string; body: string | null };
       }),
     }));
@@ -1073,8 +1074,12 @@ describe('edits and recalls', () => {
       revision: 3,
     });
 
-    // Unchanged content is not an edit.
-    const same = await signedApp('update', { id, title: 'First' });
+    // A silent update with unchanged content is not an edit.
+    const same = await signedApp('update', {
+      id,
+      title: 'First',
+      silent: true,
+    });
     expect(await same.json()).toMatchObject({ revision: 3, changed: false });
 
     const recalled = await signedApp('recall', { id });
@@ -1109,6 +1114,39 @@ describe('edits and recalls', () => {
       Plain: ['succeeded', 1],
       'Destination App': ['succeeded', 4],
     });
+  });
+
+  it('keeps an outstanding alert independently for each destination', async () => {
+    const fast = await service.createWebhook({
+      name: 'Fast',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    const slow = await service.createWebhook({
+      name: 'Slow',
+      url: webhookUrl,
+      lifecycleEvents: true,
+    });
+    await routeAll(fast.destination.id, slow.destination.id);
+    const { id } = await ingestNotification({
+      source: appSource,
+      kind: KINDS[0],
+      push: push(),
+    });
+    await runAllDue();
+    await signedApp('update', { id, title: 'Alert' });
+    const claimed = await claimDueDeliveries(5);
+    // Only one destination receives this alert before the quiet correction.
+    await runClaimedDelivery(claimed[0], adapters);
+    await signedApp('update', { id, body: 'Correction', silent: true });
+    await runClaimedDelivery(claimed[1], adapters);
+    await runAllDue();
+    expect(
+      envelopes()
+        .filter((entry) => entry.revision === 3)
+        .map((entry) => entry.silent)
+        .sort(),
+    ).toEqual([false, true]);
   });
 
   it('never sends a recalled notification where it had not arrived yet', async () => {
@@ -1271,6 +1309,7 @@ describe('edits and recalls', () => {
     });
     const same = await signedApp('update', {
       id,
+      silent: true,
       data: { carrier: 'ups', order: { items: [1, 2], id: 7 } },
     });
     expect(await same.json()).toMatchObject({ revision: 1, changed: false });
@@ -1373,11 +1412,35 @@ describe('edits and recalls', () => {
       expect(envelope).toMatchObject({
         type: 'hatch.notification.updated',
         revision: 2,
+        silent: false,
         notification: { id, title: 'Delivered' },
       });
+      expect(
+        await sdk.updateNotification(
+          id,
+          { body: 'Correction', silent: true },
+          options,
+        ),
+      ).toMatchObject({ revision: 3, changed: true });
+      await runAllDue();
+      expect(
+        JSON.parse(
+          String(vi.mocked(callAppBackend).mock.calls.at(-1)![2]!.body),
+        ),
+      ).toMatchObject({ revision: 3, silent: true });
+      expect(await sdk.updateNotification(id, {}, options)).toMatchObject({
+        revision: 4,
+        changed: true,
+      });
+      await runAllDue();
+      expect(
+        JSON.parse(
+          String(vi.mocked(callAppBackend).mock.calls.at(-1)![2]!.body),
+        ),
+      ).toMatchObject({ revision: 4, silent: false });
       expect(await sdk.recallNotification(id, options)).toEqual({
         id,
-        revision: 3,
+        revision: 5,
         recalled: true,
         changed: true,
       });
@@ -1489,7 +1552,10 @@ describe('edits and recalls', () => {
       kind: KINDS[0],
       push: push(),
     });
-    expect((await signedApp('update', { id })).status).toBe(400);
+    expect((await signedApp('update', { id, silent: true })).status).toBe(400);
+    expect((await signedApp('update', { id, silent: 'true' })).status).toBe(
+      400,
+    );
     expect((await signedApp('update', { id, autoOpenUrl: true })).status).toBe(
       400,
     );

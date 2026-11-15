@@ -148,6 +148,7 @@ export function pushPlaintext(
   event: NotificationEvent,
   origin: string,
   response: NotificationResponseRecord | null = null,
+  silent = false,
 ): PushPlaintext {
   const base = {
     v: 1 as const,
@@ -171,7 +172,14 @@ export function pushPlaintext(
     ...(notification.url && notification.autoOpenUrl
       ? { ao: true as const }
       : {}),
-    ...(event === 'updated' ? { e: 'u' as const } : {}),
+    ...(event === 'updated'
+      ? {
+          e: 'u' as const,
+          ...(!silent && notification.priority >= 0
+            ? { a: true as const }
+            : {}),
+        }
+      : {}),
     ...(q ? { q } : {}),
   };
 }
@@ -189,7 +197,7 @@ export function createDeviceAdapter(
 ): DeliveryAdapter {
   const send = options.send ?? sendApnsRequest;
   const origins = options.origins ?? APNS_ORIGINS;
-  return async ({ notification, response, destination, event }) => {
+  return async ({ notification, response, destination, event, silent }) => {
     // Nothing was shown, so there is nothing to edit, recall or answer either.
     if (notification.priority <= -2) {
       return { kind: 'success', result: LOWEST_PRIORITY_RESULT };
@@ -237,7 +245,13 @@ export function createDeviceAdapter(
     const payload = buildEncryptedApnsPayload(
       decryptDeviceKey(destination.id, destination.e2eKeyCiphertext),
       destination.e2eKeyId,
-      pushPlaintext(notification, event, getPlatformEnv().appUrl, response),
+      pushPlaintext(
+        notification,
+        event,
+        getPlatformEnv().appUrl,
+        response,
+        silent,
+      ),
       pushPriority(notification.priority),
     );
     let result: ApnsSendResult;

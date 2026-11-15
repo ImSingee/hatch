@@ -275,6 +275,7 @@ export function registerNotificationApi(router: ConnectRouter) {
           body: input.body,
           url: input.url,
           autoOpenUrl: input.autoOpenUrl,
+          silent: input.silent,
           // An empty string clears the data; unset keeps it.
           data:
             input.dataJson === undefined

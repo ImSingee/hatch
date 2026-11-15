@@ -184,9 +184,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'update'],
     usage:
-      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data]',
+      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--silent]',
     description:
-      'Edit any notification by id, whatever sent it. Phones replace it without alerting again; destinations that take edits receive hatch.notification.updated.',
+      'Edit any notification by id and alert phones again, even with unchanged content. Use --silent to only change content. With no fields, repeats the alert. Destinations that take edits receive hatch.notification.updated.',
   },
   {
     path: ['notification', 'recall'],

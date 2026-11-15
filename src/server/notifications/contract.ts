@@ -172,9 +172,9 @@ export function pushIssueMessage(error: z.ZodError): string {
  * `null` (or an empty value) clears `body`, `url` and `data`. Without
  * `autoOpenUrl`, a new `url` opens on tap like a push, a cleared one stops and
  * a replaced one keeps the setting. `kind`, `priority`, `dedupeKey` and
- * `occurredAt` never change: priority only decides how the notification
- * first arrives, and edits always arrive quietly. The id is part of the
- * signed body, so a replayed request can only repeat the same edit.
+ * `occurredAt` never change. Updates alert again at the original priority
+ * by default; `silent: true` only changes content. The id is part of the
+ * signed body.
  */
 export const notificationUpdateSchema = z
   .object({
@@ -193,6 +193,8 @@ export const notificationUpdateSchema = z
       .transform((value) => value === true)
       .optional(),
     data: dataField.optional(),
+    /** Only replace content without alerting again. Defaults to false. */
+    silent: z.boolean().optional(),
   })
   .strict()
   .refine(
@@ -201,8 +203,9 @@ export const notificationUpdateSchema = z
       update.body !== undefined ||
       update.url !== undefined ||
       update.autoOpenUrl !== undefined ||
-      update.data !== undefined,
-    { message: 'update must change at least one field' },
+      update.data !== undefined ||
+      update.silent !== true,
+    { message: 'a silent update must change at least one field' },
   );
 
 export type NotificationUpdate = z.output<typeof notificationUpdateSchema>;
@@ -339,6 +342,8 @@ export type NotificationEnvelope = {
   deliveryId: string;
   attempt: number;
   revision: number;
+  /** Whether this delivery only changes state without another alert. */
+  silent: boolean;
   notification: {
     id: string;
     kind: string;
@@ -424,6 +429,7 @@ export function buildEnvelope(args: {
   deliveryId: string;
   attempt: number;
   sourceSlug: string | null;
+  silent?: boolean;
 }): NotificationEnvelope {
   const { notification } = args;
   return {
@@ -438,6 +444,10 @@ export function buildEnvelope(args: {
       args.event === 'responded' && notification.responseRevision !== null
         ? notification.responseRevision
         : contentRevision(notification),
+    silent:
+      args.event === 'recalled' ||
+      args.event === 'responded' ||
+      args.silent === true,
     notification: {
       id: notification.id,
       kind: notification.kind,
