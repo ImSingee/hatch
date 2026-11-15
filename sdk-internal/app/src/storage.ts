@@ -127,28 +127,24 @@ export function createAppStorage(options: AppStorageOptions = {}): AppStorage {
     }
   };
 
-  const resync = () => {
-    const current = snapshot();
-    for (const [key, oldValue] of known) {
-      if (!current.has(key)) emit({ key, oldValue, newValue: null });
-    }
-    for (const [key, newValue] of current) {
-      const oldValue = known.get(key) ?? null;
-      if (oldValue !== newValue) emit({ key, oldValue, newValue });
-    }
-  };
-
-  const onChange = (key: string | null) => {
-    if (key === null) {
-      resync();
-      return;
-    }
+  const compare = (key: string) => {
     const newValue = storage.getItem(key);
     // Compare current values: `known` is a complete snapshot while watching,
     // so an absent key is null. Queued events may carry stale old values;
     // reading the store collapses bursts and ignores undone changes.
     const previous = known.get(key) ?? null;
     if (previous !== newValue) emit({ key, oldValue: previous, newValue });
+  };
+
+  const onChange = (key: string | null) => {
+    if (key !== null) {
+      compare(key);
+      return;
+    }
+    // A whole-area clear: compare every key either side knows about. Iterate
+    // a fixed list and re-read live values per key, because listeners may
+    // write (for example restore a default) while earlier keys are reported.
+    for (const key of new Set([...known.keys(), ...keys()])) compare(key);
   };
 
   const attach = () => {

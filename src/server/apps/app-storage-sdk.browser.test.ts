@@ -164,6 +164,25 @@ describe('App browser storage scope', () => {
       { key: 'burst', oldValue: 'one', newValue: null },
     ]);
 
+    // A watcher restoring a default while a clear is reported sees the
+    // removal and its own restore once, and keeps tracking the restored key.
+    const restore = watcher.watch('theme', (change) => {
+      if (change.newValue === null) watcher.setItem('theme', 'default');
+    });
+    a.localStorage.setItem('theme', 'dark');
+    for (const previous of ['dark', 'default']) {
+      const clearStart = all.length;
+      raw.localStorage.clear();
+      await expect.poll(() => all.length).toBe(clearStart + 2);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(all.slice(clearStart)).toEqual([
+        { key: 'theme', oldValue: previous, newValue: null },
+        { key: 'theme', oldValue: null, newValue: 'default' },
+      ]);
+      expect(a.localStorage.getItem('theme')).toBe('default');
+    }
+    restore();
+
     stopAll();
     stopDraft();
     const stopped = all.length;
