@@ -7,8 +7,9 @@ import { newNotificationId } from './ingest';
 /**
  * Called inside the deploy/rollback cutover transaction. Declaring
  * `notifications.destination` creates (or renames) the App's destination,
- * and `destination.lifecycleEvents` decides whether it receives edit and
- * recall events.
+ * `destination.lifecycleEvents` decides whether it receives edit and
+ * recall events, and `destination.responses` whether response routes may send
+ * it answers.
  * Dropping the declaration keeps the row so groups and routes survive a
  * redeploy; delivery checks the live manifest and fails with a clear reason.
  */
@@ -20,18 +21,26 @@ export async function syncAppNotificationDestination(
 ): Promise<void> {
   const lifecycleEvents =
     manifest?.notifications?.destination?.lifecycleEvents === true;
+  const acceptsResponses =
+    manifest?.notifications?.destination?.responses === true;
   const existing = await tx.query.notificationDestinations.findFirst({
     where: { appId },
-    columns: { id: true, name: true, lifecycleEvents: true },
+    columns: {
+      id: true,
+      name: true,
+      lifecycleEvents: true,
+      acceptsResponses: true,
+    },
   });
   if (existing) {
     if (
       existing.name !== appName ||
-      existing.lifecycleEvents !== lifecycleEvents
+      existing.lifecycleEvents !== lifecycleEvents ||
+      existing.acceptsResponses !== acceptsResponses
     ) {
       await tx
         .update(schema.notificationDestinations)
-        .set({ name: appName, lifecycleEvents })
+        .set({ name: appName, lifecycleEvents, acceptsResponses })
         .where(eq(schema.notificationDestinations.id, existing.id));
     }
     return;
@@ -43,5 +52,6 @@ export async function syncAppNotificationDestination(
     name: appName,
     appId,
     lifecycleEvents,
+    acceptsResponses,
   });
 }

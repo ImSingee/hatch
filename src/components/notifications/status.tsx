@@ -6,6 +6,8 @@ import {
   IconCheck,
   IconClock,
   IconDeviceMobile,
+  IconMessageCheck,
+  IconMessageQuestion,
   IconMinus,
   IconPencil,
   IconSparkles,
@@ -164,6 +166,55 @@ export function NotificationRevisionBadge({
   }
   return null;
 }
+
+/** Whether a notification with a reply form still waits for its answer. */
+export function NotificationReplyBadge({
+  hasReply,
+  respondedAt,
+  recalledAt,
+}: {
+  hasReply: boolean;
+  respondedAt: string | null;
+  recalledAt: string | null;
+}) {
+  if (!hasReply) return null;
+  if (respondedAt) {
+    return (
+      <Badge
+        color="ember"
+        variant="outline"
+        radius="sm"
+        leftSection={
+          <span style={{ display: 'inline-flex' }}>
+            <IconMessageCheck size={11} stroke={2.5} />
+          </span>
+        }
+      >
+        Answered
+      </Badge>
+    );
+  }
+  if (recalledAt) return null;
+  return (
+    <Badge
+      color="yellow"
+      variant="light"
+      radius="sm"
+      leftSection={
+        <span style={{ display: 'inline-flex' }}>
+          <IconMessageQuestion size={11} stroke={2.5} />
+        </span>
+      }
+    >
+      Awaiting answer
+    </Badge>
+  );
+}
+
+export const REPLY_STATE_OPTIONS = [
+  { value: 'awaiting', label: 'Awaiting answer' },
+  { value: 'answered', label: 'Answered' },
+];
 
 type DestinationType = 'device' | 'webhook' | 'app';
 

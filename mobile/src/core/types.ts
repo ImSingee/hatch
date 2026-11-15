@@ -8,6 +8,8 @@ import type {
   AgentPendingAsk,
   AgentPendingEnvironment,
   AgentSessionSummary as RpcSessionSummary,
+  ReplyAnswers,
+  ReplyForm,
 } from '@hatch/platform-api';
 
 /** Remove Protobuf runtime metadata without duplicating the shared contract. */
@@ -157,6 +159,17 @@ export type NotificationSummary = {
   editedAt: string | null;
   /** Set when the source recalled it; phones no longer show it. */
   recalledAt: string | null;
+  /** Form the notification asks people to answer once. */
+  reply: ReplyForm | null;
+  respondedAt: string | null;
+};
+/** The one answer to a notification's reply form. */
+export type NotificationAnswer = {
+  answers: ReplyAnswers;
+  respondedByName: string;
+  /** push | mobile | web | cli */
+  via: string;
+  respondedAt: string;
 };
 export type NotificationDelivery = {
   id: string;
@@ -170,6 +183,7 @@ export type NotificationDelivery = {
 };
 export type NotificationDetail = NotificationSummary & {
   deliveries: NotificationDelivery[];
+  response: NotificationAnswer | null;
 };
 /** This phone's destination on the connected instance. */
 export type PushDevice = {

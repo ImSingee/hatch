@@ -8,7 +8,11 @@
 import { and, eq, gt, notExists, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import { publishPlatformEvent } from '~server/platform-events';
-import type { NotificationEvent, NotificationRecord } from './contract';
+import type {
+  NotificationEvent,
+  NotificationRecord,
+  NotificationResponseRecord,
+} from './contract';
 import { MAX_DELIVERY_RESULT } from './contract';
 import type {
   DeliveryAdapter,
@@ -44,6 +48,8 @@ type DispatcherState = {
   pruneTimer: ReturnType<typeof setInterval> | null;
   ticking: boolean;
   again: boolean;
+  /** Which queue claims first next time; alternates every claim. */
+  responsesFirst: boolean;
 };
 
 type DispatcherGlobal = typeof globalThis & {
@@ -61,20 +67,30 @@ export function retryDelayMs(attempt: number): number | null {
 
 type ClaimedDelivery = { id: string; attempts: number };
 
+/** Notification deliveries, or deliveries of answers on response routes. */
+type DeliveryQueue = 'notification' | 'response';
+
+const QUEUE_TABLES: Record<DeliveryQueue, string> = {
+  notification: 'notification_deliveries',
+  response: 'notification_response_deliveries',
+};
+
 /** Claim up to `limit` due deliveries, leasing them to this worker. */
 export async function claimDueDeliveries(
   limit: number,
+  queue: DeliveryQueue = 'notification',
 ): Promise<ClaimedDelivery[]> {
   if (limit <= 0) return [];
   const leaseSeconds = Math.round(LEASE_MS / 1000);
+  const table = sql.identifier(QUEUE_TABLES[queue]);
   const rows = await db.execute<{ id: string; attempts: number }>(sql`
-    update notification_deliveries
+    update ${table}
     set status = 'in_progress',
         attempts = attempts + 1,
         lease_expires_at = now() + make_interval(secs => ${leaseSeconds}),
         updated_at = now()
     where id in (
-      select id from notification_deliveries
+      select id from ${table}
       where (status = 'pending' and next_attempt_at <= now())
          or (status = 'in_progress' and lease_expires_at < now())
       order by next_attempt_at
@@ -157,7 +173,10 @@ type DeliveryPlan =
 /** What this attempt must tell the destination about the notification. */
 export function planDelivery(
   deliveredRevision: number | null,
-  notification: Pick<NotificationRecord, 'revision' | 'recalledAt'>,
+  notification: Pick<
+    NotificationRecord,
+    'revision' | 'recalledAt' | 'responseRevision'
+  >,
   destination: Pick<DestinationRow, 'type' | 'lifecycleEvents'>,
 ): DeliveryPlan {
   if (deliveredRevision === null) {
@@ -167,6 +186,18 @@ export function planDelivery(
   }
   if (deliveredRevision >= notification.revision) return { kind: 'skipped' };
   if (destination.type !== 'device' && !destination.lifecycleEvents) {
+    return { kind: 'skipped' };
+  }
+  // An answer only changes what phones show; webhooks and Apps hear of it
+  // through response routes. A delivery that missed nothing else (say, one
+  // in flight when the answer landed and so re-queued) sends nothing.
+  const answered =
+    notification.responseRevision !== null &&
+    notification.responseRevision > deliveredRevision;
+  if (
+    destination.type !== 'device' &&
+    notification.revision - deliveredRevision - (answered ? 1 : 0) <= 0
+  ) {
     return { kind: 'skipped' };
   }
   return {
@@ -347,6 +378,25 @@ export async function recordOutcome(
   }
 }
 
+/** The answer to a notification, when it has one. */
+export async function loadResponse(
+  notificationId: string,
+): Promise<NotificationResponseRecord | null> {
+  const row = await db.query.notificationResponses.findFirst({
+    where: { notificationId },
+  });
+  return row ?? null;
+}
+
+async function sourceSlugOf(appId: string | null): Promise<string | null> {
+  if (!appId) return null;
+  const app = await db.query.apps.findFirst({
+    where: { id: appId },
+    columns: { slug: true },
+  });
+  return app?.slug ?? null;
+}
+
 /** Load everything one attempt needs, then run the matching adapter. */
 export async function runClaimedDelivery(
   claimed: ClaimedDelivery,
@@ -391,21 +441,19 @@ export async function runClaimedDelivery(
     } else if (!destination.enabled) {
       outcome = { kind: 'fail', error: 'Destination is disabled.' };
     } else {
-      const sourceSlug = notification.appId
-        ? ((
-            await db.query.apps.findFirst({
-              where: { id: notification.appId },
-              columns: { slug: true },
-            })
-          )?.slug ?? null)
-        : null;
       outcome = await adapters[destination.type]({
         deliveryId: delivery.id,
         attempt: claimed.attempts,
         event: plan?.kind === 'send' ? plan.event : 'created',
         notification: notification as NotificationRecord,
+        // Phones show who answered. Webhooks and Apps get answers only from
+        // response routes, never with the notification itself.
+        response:
+          destination.type === 'device' && notification.respondedAt
+            ? await loadResponse(notification.id)
+            : null,
         destination,
-        sourceSlug,
+        sourceSlug: await sourceSlugOf(notification.appId),
       });
     }
   } catch (error) {
@@ -417,6 +465,158 @@ export async function runClaimedDelivery(
   await recordOutcome(claimed, outcome, delivery, sentRevision);
 }
 
+/**
+ * Persist one attempt at delivering an answer. Answers never change, so an
+ * attempt either finishes, waits for its retry, or fails for good.
+ */
+export async function recordResponseOutcome(
+  claimed: ClaimedDelivery,
+  outcome: DeliveryOutcome,
+  notificationId: string,
+): Promise<void> {
+  const now = new Date();
+  const delay =
+    outcome.kind === 'retry' ? retryDelayMs(claimed.attempts) : null;
+  const httpStatus = outcome.httpStatus ?? null;
+  const values: Partial<
+    typeof schema.notificationResponseDeliveries.$inferInsert
+  > =
+    outcome.kind === 'success'
+      ? {
+          status: 'succeeded',
+          leaseExpiresAt: null,
+          completedAt: now,
+          lastError: null,
+          httpStatus,
+          result:
+            outcome.result === undefined || outcome.result === null
+              ? null
+              : truncate(outcome.result, MAX_DELIVERY_RESULT),
+        }
+      : delay !== null
+        ? {
+            status: 'pending',
+            leaseExpiresAt: null,
+            nextAttemptAt: new Date(now.getTime() + delay),
+            lastError: truncate(outcome.error, MAX_ERROR_LENGTH),
+            httpStatus,
+          }
+        : {
+            status: 'failed',
+            leaseExpiresAt: null,
+            completedAt: now,
+            lastError: truncate(outcome.error, MAX_ERROR_LENGTH),
+            httpStatus,
+          };
+  const deliveries = schema.notificationResponseDeliveries;
+  const updated = await db
+    .update(deliveries)
+    .set(values)
+    .where(
+      and(
+        eq(deliveries.id, claimed.id),
+        eq(deliveries.status, 'in_progress'),
+        eq(deliveries.attempts, claimed.attempts),
+      ),
+    )
+    .returning({ id: deliveries.id });
+  if (updated.length > 0) {
+    publishPlatformEvent({
+      type: 'notification.delivery.updated',
+      notificationId,
+      deliveryId: claimed.id,
+    });
+  }
+}
+
+/** Send one answer to a response route's destination. */
+export async function runClaimedResponseDelivery(
+  claimed: ClaimedDelivery,
+  adapters: DeliveryAdapters,
+): Promise<void> {
+  const delivery = await db.query.notificationResponseDeliveries.findFirst({
+    where: { id: claimed.id },
+  });
+  if (!delivery) return;
+  let outcome: DeliveryOutcome;
+  try {
+    const [notification, response, destination] = await Promise.all([
+      db.query.notifications.findFirst({
+        where: { id: delivery.notificationId },
+      }),
+      loadResponse(delivery.notificationId),
+      delivery.destinationId
+        ? db.query.notificationDestinations.findFirst({
+            where: { id: delivery.destinationId },
+          })
+        : Promise.resolve(undefined),
+    ]);
+    if (!notification) return;
+    if (claimed.attempts > MAX_DELIVERY_ATTEMPTS) {
+      outcome = {
+        kind: 'fail',
+        error: 'Delivery exceeded its attempt budget.',
+      };
+    } else if (!response) {
+      outcome = { kind: 'fail', error: 'The notification has no answer.' };
+    } else if (!destination) {
+      outcome = { kind: 'fail', error: 'Destination was removed.' };
+    } else if (!destination.enabled) {
+      outcome = { kind: 'fail', error: 'Destination is disabled.' };
+    } else if (destination.type === 'device') {
+      outcome = { kind: 'fail', error: 'Devices do not receive answers.' };
+    } else {
+      outcome = await adapters[destination.type]({
+        deliveryId: delivery.id,
+        attempt: claimed.attempts,
+        event: 'responded',
+        notification: notification as NotificationRecord,
+        response,
+        destination,
+        sourceSlug: await sourceSlugOf(notification.appId),
+      });
+    }
+  } catch (error) {
+    outcome = {
+      kind: 'retry',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  await recordResponseOutcome(claimed, outcome, delivery.notificationId);
+}
+
+const RUNNERS: Record<
+  DeliveryQueue,
+  (claimed: ClaimedDelivery, adapters: DeliveryAdapters) => Promise<void>
+> = {
+  notification: runClaimedDelivery,
+  response: runClaimedResponseDelivery,
+};
+
+/**
+ * Claim up to `limit` deliveries across both queues so neither starves the
+ * other: the first queue takes at most half the slots (all of one slot), the
+ * second the rest, and the first fills whatever the second left. Callers
+ * alternate which queue goes first.
+ */
+export async function claimFairly(
+  limit: number,
+  responsesFirst: boolean,
+): Promise<{ queue: DeliveryQueue; delivery: ClaimedDelivery }[]> {
+  const [first, second]: DeliveryQueue[] = responsesFirst
+    ? ['response', 'notification']
+    : ['notification', 'response'];
+  const claimed: { queue: DeliveryQueue; delivery: ClaimedDelivery }[] = [];
+  const take = async (queue: DeliveryQueue, count: number) => {
+    const due = await claimDueDeliveries(count, queue);
+    claimed.push(...due.map((delivery) => ({ queue, delivery })));
+  };
+  await take(first, Math.ceil(limit / 2));
+  await take(second, limit - claimed.length);
+  await take(first, limit - claimed.length);
+  return claimed;
+}
+
 async function tick(current: DispatcherState): Promise<void> {
   if (current.ticking) {
     current.again = true;
@@ -426,10 +626,14 @@ async function tick(current: DispatcherState): Promise<void> {
   try {
     do {
       current.again = false;
-      const claimed = await claimDueDeliveries(CONCURRENCY - current.active);
-      for (const delivery of claimed) {
+      const claimed = await claimFairly(
+        CONCURRENCY - current.active,
+        current.responsesFirst,
+      );
+      current.responsesFirst = !current.responsesFirst;
+      for (const { queue, delivery } of claimed) {
         current.active += 1;
-        void runClaimedDelivery(delivery, current.adapters)
+        void RUNNERS[queue](delivery, current.adapters)
           .catch((error) => {
             console.error('Notification delivery failed unexpectedly.', error);
           })
@@ -462,6 +666,7 @@ export function ensureNotificationDispatcher(adapters: DeliveryAdapters): void {
     pruneTimer: null,
     ticking: false,
     again: false,
+    responsesFirst: false,
   };
   global.__hatchNotificationDispatcher__ = current;
   current.timer = setInterval(() => void tick(current), POLL_INTERVAL_MS);

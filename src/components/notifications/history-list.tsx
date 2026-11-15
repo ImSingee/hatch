@@ -24,10 +24,15 @@ import {
   notificationSourcesQueryOptions,
   type NotificationFilters,
 } from '~queries/notifications';
-import type { NotificationStatus } from '~server/notifications';
+import type {
+  NotificationReplyState,
+  NotificationStatus,
+} from '~server/notifications';
 import {
   NOTIFICATION_STATUS_OPTIONS,
+  NotificationReplyBadge,
   NotificationRevisionBadge,
+  REPLY_STATE_OPTIONS,
   NotificationStatusBadge,
   SourceTypeIcon,
 } from './status';
@@ -50,12 +55,16 @@ export function NotificationHistory() {
   const [source, setSource] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [status, setStatus] = useState<NotificationStatus | null>(null);
+  const [replyState, setReplyState] = useState<NotificationReplyState | null>(
+    null,
+  );
   const { data: sources } = useQuery(notificationSourcesQueryOptions);
 
   const filters: NotificationFilters = {
     ...parseSource(source),
     ...(kind ? { kind } : {}),
     ...(status ? { status } : {}),
+    ...(replyState ? { replyState } : {}),
   };
   const history = useInfiniteQuery(notificationHistoryQueryOptions(filters));
   const { confirmDelete } = useDeleteNotification();
@@ -125,7 +134,7 @@ export function NotificationHistory() {
   }, [source, sources]);
 
   const items = history.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(source || kind || status);
+  const filtered = Boolean(source || kind || status || replyState);
 
   return (
     <Stack gap="md">
@@ -160,6 +169,17 @@ export function NotificationHistory() {
           data={NOTIFICATION_STATUS_OPTIONS}
           value={status}
           onChange={(value) => setStatus(value as NotificationStatus | null)}
+          clearable
+          w={180}
+        />
+        <Select
+          placeholder="Any reply state"
+          aria-label="Filter by reply state"
+          data={REPLY_STATE_OPTIONS}
+          value={replyState}
+          onChange={(value) =>
+            setReplyState(value as NotificationReplyState | null)
+          }
           clearable
           w={180}
         />
@@ -255,6 +275,11 @@ export function NotificationHistory() {
                       <NotificationStatusBadge status={item.status} />
                       <NotificationRevisionBadge
                         editedAt={item.editedAt}
+                        recalledAt={item.recalledAt}
+                      />
+                      <NotificationReplyBadge
+                        hasReply={item.reply !== null}
+                        respondedAt={item.respondedAt}
                         recalledAt={item.recalledAt}
                       />
                     </Group>

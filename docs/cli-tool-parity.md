@@ -48,15 +48,18 @@ of this feature.
 
 ## Notification center: CLI only, no Agent Tool
 
-`hatch notification ...` (history, test/send/update/recall/delete/retry, sources, APNs status,
-destinations, webhooks, groups, routes and channels) calls
+`hatch notification ...` (history, test/send/update/recall/delete/respond/retry, sources, APNs status,
+destinations, webhooks, groups, routes, response routes and channels) calls
 `NotificationService` and has no Agent Tool counterpart because Agent Tools
 for platform capabilities are frozen: the platform Agent uses the CLI. The
 service accepts sessions, API keys and Run JWTs alike, and every online CLI
 command refreshes Run credentials in `packages/hatch-cli/src/main.ts`. A Run
 has no user, so its group and destination sends come from source `platform`
 named `Hatch Agent`. Device registration is bound to a native login session,
-is mobile-only and has no CLI command. Secrets (webhook signing secrets, channel
+is mobile-only and has no CLI command. Answering from the notification itself
+(`POST /api/notifications/device-response`, signed with the phone's push key)
+is bound to the device as well; the CLI answers the same forms with
+`hatch notification respond`, and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
 tokens) are printed only by the create/rotate commands that mint them.
 
 ## Known gaps

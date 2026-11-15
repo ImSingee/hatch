@@ -114,10 +114,17 @@ async function lockOwnNotification(
 
 /**
  * Queue the new revision for every destination that already received the
- * notification and takes edit and recall events. Deliveries in progress are
- * left alone: their outcome sees the newer revision and re-queues itself.
+ * notification and takes edit and recall events (`devicesOnly`: phones only,
+ * for an answer, which other destinations learn of through response routes).
+ * Deliveries in progress are left alone: their outcome sees the newer
+ * revision and re-queues itself.
  */
-async function requeueDelivered(tx: TX, notificationId: string, now: Date) {
+export async function requeueDelivered(
+  tx: TX,
+  notificationId: string,
+  now: Date,
+  options: { devicesOnly?: boolean } = {},
+) {
   const deliveries = schema.notificationDeliveries;
   const destinations = schema.notificationDestinations;
   const takesEvents = tx
@@ -126,10 +133,12 @@ async function requeueDelivered(tx: TX, notificationId: string, now: Date) {
     .where(
       and(
         eq(destinations.enabled, true),
-        or(
-          eq(destinations.type, 'device'),
-          eq(destinations.lifecycleEvents, true),
-        ),
+        options.devicesOnly
+          ? eq(destinations.type, 'device')
+          : or(
+              eq(destinations.type, 'device'),
+              eq(destinations.lifecycleEvents, true),
+            ),
       ),
     );
   await tx
@@ -169,6 +178,19 @@ export async function updateNotification(
     if (current.recalledAt) {
       throw new NotificationLifecycleError(
         'A recalled notification cannot be edited',
+        409,
+      );
+    }
+    // Answers are delivered with `data`, which receivers use to tell what
+    // was answered; changing it afterwards would pin the answer on something
+    // else.
+    if (
+      current.respondedAt &&
+      update.data !== undefined &&
+      !sameJson(update.data, current.data)
+    ) {
+      throw new NotificationLifecycleError(
+        'The data of an answered notification cannot change',
         409,
       );
     }

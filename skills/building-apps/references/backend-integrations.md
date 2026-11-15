@@ -279,7 +279,8 @@ and change them with `hatch notification ...` (for example `group list`,
     ],
     "destination": {
       "description": "Forwards notifications to Slack",
-      "lifecycleEvents": true
+      "lifecycleEvents": true,
+      "responses": true
     }
   }
 }
@@ -348,6 +349,51 @@ itself (others answer 404). Editing a recalled notification throws
 `NotificationError` with status 409. Repeating a recall changes nothing. Both
 return `{ id, revision, recalled, changed }`.
 
+### Asking for an answer
+
+A notification can carry a `reply` form that people answer once: on the phone
+(straight from the notification when the form is one required `buttons` or
+`text` field), in the Hatch app, on the web or with the CLI. Whoever answers
+first wins, and the answer cannot change.
+
+```ts
+const { id } = await notify({
+  kind: 'deploy.approval',
+  title: 'Deploy v2.4 to production?',
+  data: { deployId: deploy.id },
+  reply: {
+    fields: [
+      {
+        id: 'decision',
+        type: 'buttons',
+        label: 'Approve the deploy?',
+        options: [
+          { id: 'approve', label: 'Approve' },
+          { id: 'reject', label: 'Reject', destructive: true },
+        ],
+      },
+    ],
+  },
+});
+```
+
+Field types: `buttons` (a single choice shown as buttons, 1-4 options, labels
+≤32 characters), `single` and `multiple` (2-50 options; `multiple` takes
+`minSelected`/`maxSelected`), and `text` (`placeholder`, `multiline`,
+`maxLength` ≤4000). Use up to 10 fields with unique lowercase ids (letters,
+digits, `_`); `required` defaults to `true`. An invalid form throws
+`NotificationError` (400) naming the field, for example
+`reply.fields.0.options: buttons fields need 1-4 options`. The form cannot be
+edited later; recall the notification to close it. With a form, a phone tap
+opens the form unless `autoOpenUrl: true`.
+
+The App does not pick where answers go. Users add response routes (Settings →
+Notifications, or `hatch notification response-route create`) that send
+answers to a webhook or to an App destination that declares
+`"responses": true`. To receive answers to the App's own questions, declare
+`destination.responses`, and tell users to add a response route to this App.
+Put whatever the App needs to correlate the answer in `data`.
+
 ### Receiving as a destination
 
 Declaring `destination` adds the App to the notification destinations users
@@ -360,7 +406,8 @@ handled; optionally return a free-form `result` string (≤2000 characters) that
 users see in the notification history. Non-2xx, timeouts (30 s) and network
 failures are retried with backoff up to 6 attempts; 4xx other than 408/429 fail
 immediately. The same `deliveryId` can arrive more than once, so make handling
-idempotent. An App never receives notifications it pushed itself.
+idempotent. An App never receives notifications it pushed itself, but response
+routes may send it answers to its own questions.
 
 With `"lifecycleEvents": true` on `destination`, the App is also told when a
 source edits or recalls a notification it already received:
@@ -370,6 +417,15 @@ source edits or recalls a notification it already received:
 `(notification.id, revision)` and ignore a revision lower than one already
 handled. Without the flag only `hatch.notification` arrives. Switch on
 `envelope.type` whenever the flag is set.
+
+With `"responses": true`, response routes may send the App
+`hatch.notification.responded`. `notification.reply` is the form, with every
+default filled in, and `notification.response` the answer:
+`{ answers, respondedBy: { userId, name }, via, respondedAt }`. `answers` is
+keyed by field id: an option id for `buttons` and `single`, a list of option
+ids for `multiple`, the text for `text`. Unanswered optional fields are
+absent. Each notification has exactly one answer, so handle it once per
+`notification.id`.
 
 Always verify the platform signature (HMAC over `<timestamp>.<raw body>`):
 
@@ -383,7 +439,10 @@ import {
 if (new URL(request.url).pathname === '/__notification') {
   try {
     const { type, notification } = await verifyNotificationRequest(request);
-    if (type === 'hatch.notification.recalled') {
+    if (type === 'hatch.notification.responded') {
+      const decision = notification.response?.answers.decision;
+      await recordDecision(notification.data?.deployId, decision);
+    } else if (type === 'hatch.notification.recalled') {
       await deleteSlackMessage(notification.id);
     } else {
       await upsertSlackMessage(notification);

@@ -17,6 +17,7 @@ import {
   MAX_NOTIFICATION_BODY_BYTES,
   findKind,
   notificationPushSchema,
+  pushIssueMessage,
 } from './contract';
 import { ingestNotification, type IngestResult } from './ingest';
 import { applyLifecycleRequest, type LifecycleAction } from './lifecycle-http';
@@ -103,7 +104,7 @@ export async function ingestChannelPush(
     return {
       ok: false,
       status: 400,
-      message: push.error.issues[0]?.message ?? 'Invalid request',
+      message: pushIssueMessage(push.error),
     };
   }
   const kind = findKind(channel.kinds, push.data.kind);

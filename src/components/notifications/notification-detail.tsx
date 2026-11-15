@@ -33,9 +33,11 @@ import {
   DESTINATION_TYPE_LABEL,
   DeliveryStatusBadge,
   DestinationTypeIcon,
+  NotificationReplyBadge,
   NotificationRevisionBadge,
   NotificationStatusBadge,
 } from './status';
+import { ReplySection } from './reply-section';
 
 const SOURCE_TYPE_LABEL = {
   app: 'App',
@@ -53,6 +55,11 @@ export function NotificationDetail({ id }: { id: string }) {
           <NotificationStatusBadge status={data.status} />
           <NotificationRevisionBadge
             editedAt={data.editedAt}
+            recalledAt={data.recalledAt}
+          />
+          <NotificationReplyBadge
+            hasReply={data.reply !== null}
+            respondedAt={data.respondedAt}
             recalledAt={data.recalledAt}
           />
           <Text size="sm" c="dimmed">
@@ -121,6 +128,42 @@ export function NotificationDetail({ id }: { id: string }) {
         ) : null}
       </Box>
 
+      {data.reply ? (
+        <>
+          <Divider />
+          <Box component="section">
+            <Text fw={600} fz="lg" mb="xs">
+              Reply
+            </Text>
+            <ReplySection
+              notificationId={id}
+              reply={data.reply}
+              response={data.response}
+              recalledAt={data.recalledAt}
+            />
+            {data.response ? (
+              <Box mt="lg">
+                <Text fw={600} size="sm" mb="xs">
+                  Answer deliveries
+                </Text>
+                {data.responseDeliveryList.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    No response route matched, so the answer is only recorded
+                    here. Add a response route in Settings → Notifications.
+                  </Text>
+                ) : (
+                  <DeliveryTable
+                    notificationId={id}
+                    revision={data.revision}
+                    deliveries={data.responseDeliveryList}
+                  />
+                )}
+              </Box>
+            ) : null}
+          </Box>
+        </>
+      ) : null}
+
       <Divider />
 
       <Box component="section">
@@ -133,30 +176,48 @@ export function NotificationDetail({ id }: { id: string }) {
             delivered. Add a route in Settings → Notifications.
           </Text>
         ) : (
-          <Table verticalSpacing="sm" layout="fixed">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Destination</Table.Th>
-                <Table.Th w={130}>Status</Table.Th>
-                <Table.Th w={80}>Attempts</Table.Th>
-                <Table.Th>Outcome</Table.Th>
-                <Table.Th w={110} aria-label="Actions" />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {data.deliveryList.map((delivery) => (
-                <DeliveryRow
-                  key={delivery.id}
-                  notificationId={id}
-                  revision={data.revision}
-                  delivery={delivery}
-                />
-              ))}
-            </Table.Tbody>
-          </Table>
+          <DeliveryTable
+            notificationId={id}
+            revision={data.revision}
+            deliveries={data.deliveryList}
+          />
         )}
       </Box>
     </Stack>
+  );
+}
+
+function DeliveryTable({
+  notificationId,
+  revision,
+  deliveries,
+}: {
+  notificationId: string;
+  revision: number;
+  deliveries: DeliveryView[];
+}) {
+  return (
+    <Table verticalSpacing="sm" layout="fixed">
+      <Table.Thead>
+        <Table.Tr>
+          <Table.Th>Destination</Table.Th>
+          <Table.Th w={130}>Status</Table.Th>
+          <Table.Th w={80}>Attempts</Table.Th>
+          <Table.Th>Outcome</Table.Th>
+          <Table.Th w={110} aria-label="Actions" />
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {deliveries.map((delivery) => (
+          <DeliveryRow
+            key={delivery.id}
+            notificationId={notificationId}
+            revision={revision}
+            delivery={delivery}
+          />
+        ))}
+      </Table.Tbody>
+    </Table>
   );
 }
 

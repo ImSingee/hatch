@@ -22,6 +22,9 @@ service NotificationService {
   // /update and /recall endpoints.
   rpc UpdateNotification(UpdateNotificationRequest) returns (UpdateNotificationResponse);
   rpc RecallNotification(RecallNotificationRequest) returns (RecallNotificationResponse);
+  // Answer a notification's reply form as the calling user. A notification
+  // takes one answer: a second one is rejected with CONFLICT.
+  rpc RespondToNotification(RespondToNotificationRequest) returns (RespondToNotificationResponse);
   // Delete any notification and its delivery records from history. Copies
   // destinations already received stay there and nothing is sent; recall
   // first to remove it from phones.
@@ -51,6 +54,12 @@ service NotificationService {
   rpc CreateRoute(CreateRouteRequest) returns (CreateRouteResponse);
   rpc UpdateRoute(UpdateRouteRequest) returns (UpdateRouteResponse);
   rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
+
+  // Response routes: where answers to reply forms are sent.
+  rpc ListResponseRoutes(ListResponseRoutesRequest) returns (ListResponseRoutesResponse);
+  rpc CreateResponseRoute(CreateResponseRouteRequest) returns (CreateResponseRouteResponse);
+  rpc UpdateResponseRoute(UpdateResponseRouteRequest) returns (UpdateResponseRouteResponse);
+  rpc DeleteResponseRoute(DeleteResponseRouteRequest) returns (DeleteResponseRouteResponse);
 
   rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse);
   rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
@@ -94,6 +103,107 @@ message NotificationSummary {
   optional string edited_at = 16;
   // ISO-8601; set when the source recalled the notification.
   optional string recalled_at = 17;
+  // Form people answer once; absent when the notification asks nothing.
+  NotificationReply reply = 18;
+  // ISO-8601; set when someone answered the reply form.
+  optional string responded_at = 19;
+}
+
+// ---------------------------------------------------------------- replies
+
+message NotificationReplyOption {
+  string id = 1 [(buf.validate.field).string.max_len = 40];
+  string label = 2 [(buf.validate.field).string.max_len = 100];
+  // Buttons only: shown as a destructive action.
+  bool destructive = 3;
+}
+
+// One question. Limits beyond the field lengths (option counts, which
+// settings apply to which type, unique ids) are checked by the shared reply
+// rules, so every sender is held to the same form.
+message NotificationReplyField {
+  // Lowercase letters, digits and "_", starting with a letter; unique.
+  string id = 1 [(buf.validate.field).string.max_len = 40];
+  // buttons | single | multiple | text. buttons is a single choice shown as
+  // buttons (1-4 options); single and multiple take 2-50 options.
+  string type = 2 [(buf.validate.field).string = {
+    in: [
+      "buttons",
+      "single",
+      "multiple",
+      "text"
+    ]
+  }];
+  string label = 3 [(buf.validate.field).string.max_len = 100];
+  optional string description = 4 [(buf.validate.field).string.max_len = 300];
+  // Unset defaults to true.
+  optional bool required = 5;
+  repeated NotificationReplyOption options = 6 [(buf.validate.field).repeated.max_items = 50];
+  // multiple only; defaults to 1 and to the number of options.
+  optional uint32 min_selected = 7;
+  optional uint32 max_selected = 8;
+  // text only.
+  optional string placeholder = 9 [(buf.validate.field).string.max_len = 100];
+  optional bool multiline = 10;
+  // text only; defaults to 1000, at most 4000.
+  optional uint32 max_length = 11;
+}
+
+// A reply form. Read APIs return it normalized, with every default set.
+message NotificationReply {
+  repeated NotificationReplyField fields = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 10
+  }];
+  // Defaults to "Submit".
+  optional string submit_label = 2 [(buf.validate.field).string.max_len = 32];
+}
+
+message NotificationAnswerOptions {
+  repeated string ids = 1 [(buf.validate.field).repeated.max_items = 50];
+}
+
+// The answer to one field: `value` is the option id of a buttons or single
+// field or the text of a text field; `option_ids` lists the options chosen in
+// a multiple field.
+message NotificationAnswer {
+  oneof answer {
+    string value = 1 [(buf.validate.field).string.max_len = 4000];
+    NotificationAnswerOptions option_ids = 2;
+  }
+}
+
+message NotificationResponse {
+  // Keyed by field id; unanswered optional fields are absent.
+  map<string, NotificationAnswer> answers = 1;
+  // Absent once the user was removed.
+  optional string responded_by_user_id = 2;
+  string responded_by_name = 3;
+  // push | mobile | web | cli
+  string via = 4;
+  // Device that answered from the push itself.
+  optional string destination_id = 5;
+  // ISO-8601.
+  string responded_at = 6;
+}
+
+message RespondToNotificationRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  map<string, NotificationAnswer> answers = 2 [(buf.validate.field).map.max_pairs = 10];
+  // Where the answer was given, recorded for the history: mobile (the phone
+  // app) or cli. Defaults to cli. It never changes what the caller may do.
+  optional string via = 3 [(buf.validate.field).string = {
+    in: [
+      "mobile",
+      "cli"
+    ]
+  }];
+}
+message RespondToNotificationResponse {
+  NotificationResponse response = 1;
 }
 
 message NotificationDelivery {
@@ -124,6 +234,10 @@ message NotificationDetail {
   optional string data_json = 2;
   optional string dedupe_key = 3;
   repeated NotificationDelivery deliveries = 4;
+  // The answer to the reply form, once given.
+  NotificationResponse response = 5;
+  // Deliveries of the answer to response route destinations.
+  repeated NotificationDelivery response_deliveries = 6;
 }
 
 message ListNotificationsRequest {
@@ -151,6 +265,14 @@ message ListNotificationsRequest {
   }];
   optional string cursor = 5 [(buf.validate.field).string.max_len = 64];
   uint32 limit = 6 [(buf.validate.field).uint32.lte = 100];
+  // awaiting: a reply form nobody answered (and not recalled);
+  // answered: someone answered it.
+  optional string reply_state = 7 [(buf.validate.field).string = {
+    in: [
+      "awaiting",
+      "answered"
+    ]
+  }];
 }
 message ListNotificationsResponse {
   repeated NotificationSummary notifications = 1;
@@ -219,8 +341,11 @@ message SendNotificationRequest {
   optional string occurred_at = 8 [(buf.validate.field).string.max_len = 64];
   // Tapping the phone push opens url instead of the notification. Unset
   // defaults to whether url is set; false keeps the notification page; true
-  // requires url.
+  // requires url. With a reply form, unset defaults to false.
   optional bool auto_open_url = 9;
+  // Form people answer once; answers go to response routes.
+  NotificationReply reply = 12;
+
   // From the sending user, never routed: the group's enabled members.
   string group_id = 10 [
     (buf.validate.field).string = {
@@ -387,6 +512,9 @@ message NotificationDestination {
   // Receives edit and recall events. Always true for devices; set by the
   // manifest for Apps and by settings for webhooks.
   bool lifecycle_events = 12;
+  // Response routes may send it answers: every webhook, and an App whose
+  // manifest sets notifications.destination.responses. Never a device.
+  bool accepts_responses = 13;
 }
 
 message ListDestinationsRequest {}
@@ -650,6 +778,92 @@ message DeleteRouteRequest {
   }];
 }
 message DeleteRouteResponse {}
+
+// ---------------------------------------------------------------- response routes
+
+// Answers to notifications matching (source, kind) go to one webhook, or to
+// one App that accepts responses.
+message NotificationResponseRoute {
+  string id = 1;
+  optional string name = 2;
+  // app | channel | any
+  string source_type = 3;
+  // Absent: any source of source_type.
+  optional string source_id = 4;
+  // Absent: any kind.
+  optional string kind = 5;
+  string destination_id = 6;
+  bool enabled = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+
+message ListResponseRoutesRequest {
+  // Return routes created after this route id.
+  optional string cursor = 1 [(buf.validate.field).string.max_len = 64];
+  // Routes per page; 0 means 50.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+}
+message ListResponseRoutesResponse {
+  repeated NotificationResponseRoute routes = 1;
+  optional string next_cursor = 2;
+}
+
+message CreateResponseRouteRequest {
+  optional string name = 1 [(buf.validate.field).string.max_len = 80];
+  string source_type = 2 [(buf.validate.field).string = {
+    in: [
+      "app",
+      "channel",
+      "any"
+    ]
+  }];
+  optional string source_id = 3 [(buf.validate.field).string.max_len = 191];
+  optional string kind = 4 [(buf.validate.field).string.max_len = 64];
+  string destination_id = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  optional bool enabled = 6;
+}
+message CreateResponseRouteResponse {
+  NotificationResponseRoute route = 1;
+}
+
+message UpdateResponseRouteRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  optional string name = 2 [(buf.validate.field).string.max_len = 80];
+  optional string source_type = 3 [(buf.validate.field).string = {
+    in: [
+      "app",
+      "channel",
+      "any"
+    ]
+  }];
+  // Empty string clears the source (any source of source_type).
+  optional string source_id = 4 [(buf.validate.field).string.max_len = 191];
+  // Empty string clears the kind (any kind).
+  optional string kind = 5 [(buf.validate.field).string.max_len = 64];
+  optional string destination_id = 6 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  optional bool enabled = 7;
+}
+message UpdateResponseRouteResponse {
+  NotificationResponseRoute route = 1;
+}
+
+message DeleteResponseRouteRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+message DeleteResponseRouteResponse {}
 
 // ---------------------------------------------------------------- channels
 

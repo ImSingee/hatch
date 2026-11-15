@@ -8,7 +8,9 @@ import {
   listGroupsFn,
   listNotificationSourcesFn,
   listNotificationsFn,
+  listResponseRoutesFn,
   listRoutesFn,
+  type NotificationReplyState,
   type NotificationStatus,
 } from '~server/notifications';
 
@@ -20,6 +22,7 @@ export type NotificationFilters = {
   sourceId?: string;
   kind?: string;
   status?: NotificationStatus;
+  replyState?: NotificationReplyState;
 };
 
 export const notificationHistoryQueryOptions = (filters: NotificationFilters) =>
@@ -57,6 +60,11 @@ export const notificationGroupsQueryOptions = queryOptions({
 export const notificationRoutesQueryOptions = queryOptions({
   queryKey: [...NOTIFICATIONS_KEY, 'routes'],
   queryFn: () => listRoutesFn(),
+});
+
+export const notificationResponseRoutesQueryOptions = queryOptions({
+  queryKey: [...NOTIFICATIONS_KEY, 'response-routes'],
+  queryFn: () => listResponseRoutesFn(),
 });
 
 export const notificationChannelsQueryOptions = queryOptions({

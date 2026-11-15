@@ -6,6 +6,7 @@ import { notificationUrlAction } from '../core/deep-link';
 import {
   foregroundPresentation,
   pushChange,
+  pushReplyAction,
   pushTap,
   verifiedTapUrl,
   type PushTap,
@@ -173,10 +174,17 @@ export function usePushLifecycle() {
     // Wait for the saved instance to be restored before taking a cold-start tap.
     if (!pushSupported || !ready) return;
     const open = async (response: Notifications.NotificationResponse) => {
+      const reply = pushReplyAction(response.actionIdentifier);
+      // Answered from the notification by the native reply handler.
+      if (reply === 'native') return;
       const target = pushTap(response.notification.request.content.data, {
         allowDevelopmentLoopback,
       });
       if (!target) return;
+      if (reply === 'form') {
+        openNotification(target);
+        return;
+      }
       // The sender asked for the link instead of the notification. If it is
       // not verified or nothing can open it, the notification opens and
       // still shows its link.

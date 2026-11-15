@@ -11,15 +11,22 @@ import {
 } from '../apns/client';
 import { getApnsCredentials } from '../apns/credentials';
 import {
+  MAX_ANSWERED_SUMMARY,
   RECALLED_TITLE,
   buildEncryptedApnsPayload,
   type PushPlaintext,
+  type PushReply,
 } from '../apns/payload';
 import {
   notificationSourceId,
   type NotificationEvent,
   type NotificationRecord,
+  type NotificationResponseRecord,
 } from '../contract';
+import {
+  replyPushMode,
+  summarizeAnswers,
+} from '../../../../packages/hatch-platform-api/notification-reply';
 import type { DeliveryAdapter, DeliveryOutcome } from '../delivery';
 import { decryptDeviceKey } from '../secrets';
 
@@ -79,6 +86,54 @@ export function classifyApnsResult(result: ApnsSendResult): DeliveryOutcome {
   return { kind: 'fail', httpStatus: result.status, error };
 }
 
+function shorten(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : text;
+}
+
+/** How the phone offers the reply form, or shows the answer once given. */
+export function pushReply(
+  notification: Pick<NotificationRecord, 'reply'>,
+  response: NotificationResponseRecord | null,
+): PushReply | undefined {
+  const { reply } = notification;
+  if (!reply) return undefined;
+  if (response) {
+    const summary = summarizeAnswers(reply, response.answers);
+    return {
+      m: 'x',
+      s: shorten(
+        `Answered by ${response.respondedByName}${summary ? `: ${summary}` : ''}`,
+        MAX_ANSWERED_SUMMARY,
+      ),
+    };
+  }
+  const [field] = reply.fields;
+  switch (replyPushMode(reply)) {
+    case 'buttons':
+      if (field?.type !== 'buttons') return { m: 'f' };
+      return {
+        m: 'b',
+        f: field.id,
+        a: field.options.map((option) => ({
+          i: option.id,
+          l: option.label,
+          ...(option.destructive ? { d: 1 as const } : {}),
+        })),
+      };
+    case 'text':
+      if (field?.type !== 'text') return { m: 'f' };
+      return {
+        m: 't',
+        f: field.id,
+        l: reply.submitLabel,
+        ...(field.placeholder ? { p: field.placeholder } : {}),
+      };
+    case 'form':
+      return { m: 'f' };
+  }
+}
+
 /**
  * What the phone decrypts. A recall carries no content, so a phone that
  * cannot hide the notification only shows that it was recalled.
@@ -87,6 +142,7 @@ export function pushPlaintext(
   notification: NotificationRecord,
   event: NotificationEvent,
   origin: string,
+  response: NotificationResponseRecord | null = null,
 ): PushPlaintext {
   const base = {
     v: 1 as const,
@@ -101,6 +157,7 @@ export function pushPlaintext(
   if (event === 'recalled') {
     return { ...base, t: RECALLED_TITLE, b: null, u: null, e: 'r' };
   }
+  const q = pushReply(notification, response);
   return {
     ...base,
     t: notification.title,
@@ -110,6 +167,7 @@ export function pushPlaintext(
       ? { ao: true as const }
       : {}),
     ...(event === 'updated' ? { e: 'u' as const } : {}),
+    ...(q ? { q } : {}),
   };
 }
 
@@ -121,7 +179,7 @@ export function createDeviceAdapter(
 ): DeliveryAdapter {
   const send = options.send ?? sendApnsRequest;
   const origins = options.origins ?? APNS_ORIGINS;
-  return async ({ notification, destination, event }) => {
+  return async ({ notification, response, destination, event }) => {
     if (
       !destination.apnsToken ||
       !destination.apnsEnvironment ||
@@ -165,7 +223,7 @@ export function createDeviceAdapter(
     const payload = buildEncryptedApnsPayload(
       decryptDeviceKey(destination.id, destination.e2eKeyCiphertext),
       destination.e2eKeyId,
-      pushPlaintext(notification, event, getPlatformEnv().appUrl),
+      pushPlaintext(notification, event, getPlatformEnv().appUrl, response),
     );
     let result: ApnsSendResult;
     try {

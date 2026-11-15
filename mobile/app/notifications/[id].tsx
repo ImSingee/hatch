@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ReplyAnswers } from '@hatch/platform-api';
 import {
   Stack,
   router,
@@ -28,9 +29,11 @@ import {
 import {
   DeliveryStatusTag,
   NotificationChangeTag,
+  NotificationReplyTag,
   NotificationStatusTag,
   notificationTime,
 } from '../../src/ui/notification-status';
+import { AnswerCard, ReplyFormCard } from '../../src/ui/reply-card';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
 import { palette as c } from '../../src/ui/theme';
@@ -52,6 +55,25 @@ export default function NotificationScreen() {
     enabled: Boolean(api) && !deleted,
   });
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
+  const queryClient = useQueryClient();
+  const respond = useMutation({
+    mutationFn: (answers: ReplyAnswers) =>
+      api!.respondToNotification(id, answers),
+    onError: (error) =>
+      Alert.alert(
+        'Answer not sent',
+        error instanceof MobileError && error.status === 409
+          ? 'Someone already answered, or the sender recalled it.'
+          : errorText(error),
+      ),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [origin, 'notification', id],
+        }),
+        queryClient.invalidateQueries({ queryKey: [origin, 'notifications'] }),
+      ]),
+  });
   const { confirmDelete, isPending: deleting } = useDeleteNotification({
     onDeleted: () => {
       // A slow response must not pop a screen the user opened since.
@@ -120,6 +142,11 @@ export default function NotificationScreen() {
             editedAt={data.editedAt}
             recalledAt={data.recalledAt}
           />
+          <NotificationReplyTag
+            hasReply={data.reply !== null}
+            respondedAt={data.respondedAt}
+            recalledAt={data.recalledAt}
+          />
           <Text style={type.meta}>{notificationTime(data.occurredAt)}</Text>
         </View>
         {data.recalledAt ? (
@@ -140,6 +167,15 @@ export default function NotificationScreen() {
               {data.body}
             </Text>
           </Card>
+        ) : null}
+        {data.reply && data.response ? (
+          <AnswerCard reply={data.reply} answer={data.response} />
+        ) : data.reply && !data.recalledAt ? (
+          <ReplyFormCard
+            reply={data.reply}
+            busy={respond.isPending}
+            onSubmit={(answers) => respond.mutate(answers)}
+          />
         ) : null}
         {data.url ? (
           <Button

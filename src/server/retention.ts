@@ -67,16 +67,34 @@ export async function pruneHistory(): Promise<void> {
           and coalesce(r.completed_at, r.created_at)
               < ${cutoff(RETENTION_DAYS.agentRunEvents)}::timestamptz`,
   );
-  // Never drop a notification that still has a delivery in flight.
-  await db.execute(
-    sql`delete from notifications n
-        where n.created_at < ${cutoff(RETENTION_DAYS.notifications)}::timestamptz
-          and not exists (
-            select 1 from notification_deliveries d
-            where d.notification_id = n.id
-              and d.status in ('pending', 'in_progress')
-          )`,
-  );
+  // Never drop a notification that still has a delivery in flight, of the
+  // notification itself or of its answer. Candidates are locked first (an
+  // answer in progress holds its row and is skipped), and the delivery check
+  // runs as a later statement, so it sees anything committed meanwhile; an
+  // answer that locks a row after this deletes it finds it gone.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`create temporary table expired_notifications on commit drop as
+          select id from notifications
+          where created_at < ${cutoff(RETENTION_DAYS.notifications)}::timestamptz
+          for update skip locked`,
+    );
+    await tx.execute(
+      sql`delete from notifications n
+          using expired_notifications e
+          where n.id = e.id
+            and not exists (
+              select 1 from notification_deliveries d
+              where d.notification_id = n.id
+                and d.status in ('pending', 'in_progress')
+            )
+            and not exists (
+              select 1 from notification_response_deliveries r
+              where r.notification_id = n.id
+                and r.status in ('pending', 'in_progress')
+            )`,
+    );
+  });
   await prunePendingAgentAttachments();
   await pruneOrphanedAgentAttachmentSessions();
 }

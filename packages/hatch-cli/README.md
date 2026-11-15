@@ -348,6 +348,34 @@ locally (exit 2); an unknown notification id is not found (exit 5); editing a
 recalled notification or sending to a disabled Channel or destination is a
 conflict (exit 6).
 
+### Reply forms
+
+`send --reply <json>` (or `--reply-file <path|->`) asks for one answer; the
+form is checked locally with the platform's rules and an invalid one exits 2
+with the field to fix (`--reply: fields.0.options: …`). Answer it as the
+signed-in user with `respond`; repeat `--answer` for each option of a
+`multiple` field, or pass the whole object with `--answers`/`--answers-file`:
+
+```sh
+hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.4?' \
+  --reply '{"fields":[{"id":"decision","type":"buttons","label":"Approve?","options":[{"id":"approve","label":"Approve"},{"id":"reject","label":"Reject"}]}]}'
+hatch notification respond <notification-id> --answer decision=approve --json
+hatch notification list --reply-state awaiting
+```
+
+A notification takes one answer and it is final: answering again, or answering
+a recalled notification, is a conflict (exit 6), and an answer that does not
+fit the form is `BAD_REQUEST` (exit 2) naming the field. `get` shows the form,
+the answer and its deliveries. Answers go where response routes send them:
+
+```sh
+hatch notification response-route create --source-type channel --source <channel-id> --destination <webhook-id>
+```
+
+A response route targets a webhook, or an App whose manifest sets
+`notifications.destination.responses` (`destination list` marks those
+`responses`). `retry` also retries failed answer deliveries.
+
 `hatch notification delete <notification-id> --yes` permanently removes a
 notification and its delivery history, whatever sent it; it cannot be undone
 and answers `{}`. Without `--yes` it is rejected locally (exit 2). It sends nothing: copies already on phones, webhooks and Apps

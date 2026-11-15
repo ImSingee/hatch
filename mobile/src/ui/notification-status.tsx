@@ -35,6 +35,22 @@ export function NotificationChangeTag({
   return null;
 }
 
+/** Whether a notification with a reply form still waits for its answer. */
+export function NotificationReplyTag({
+  hasReply,
+  respondedAt,
+  recalledAt,
+}: {
+  hasReply: boolean;
+  respondedAt: string | null;
+  recalledAt: string | null;
+}) {
+  if (!hasReply) return null;
+  if (respondedAt) return <Tag tone="quiet" label="Answered" />;
+  if (recalledAt) return null;
+  return <Tag tone="lime" label="Awaiting answer" />;
+}
+
 const deliveryLabels: Record<string, string> = {
   pending: 'Waiting',
   in_progress: 'Sending',

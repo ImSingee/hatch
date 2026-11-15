@@ -50,6 +50,7 @@ export const deliverToWebhook: DeliveryAdapter = async ({
   attempt,
   event,
   notification,
+  response: answer,
   destination,
   sourceSlug,
 }) => {
@@ -63,6 +64,7 @@ export const deliverToWebhook: DeliveryAdapter = async ({
   const envelope = buildEnvelope({
     event,
     notification,
+    response: answer,
     deliveryId,
     attempt,
     sourceSlug,

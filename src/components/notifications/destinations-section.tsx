@@ -92,7 +92,7 @@ function describe(destination: DestinationView): string {
     return destination.app.accepting
       ? `App · /app/${destination.app.slug ?? destination.app.appId}${
           destination.lifecycleEvents ? ' · receives edits and recalls' : ''
-        }`
+        }${destination.acceptsResponses ? ' · accepts answers' : ''}`
       : 'App no longer accepts notifications';
   }
   return DESTINATION_TYPE_LABEL[destination.type];

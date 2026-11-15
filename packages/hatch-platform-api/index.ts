@@ -10,3 +10,5 @@ export * from './gen/hatch/platform/v1/workspace_pb.js';
 export * from './gen/hatch/platform/v1/notification_pb.js';
 export * from './dashboard-refresh.js';
 export * from './deep-link.js';
+export * from './notification-reply.js';
+export * from './notification-reply-proto.js';

@@ -8,7 +8,10 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
+  isNotNull,
+  isNull,
   lt,
   notExists,
   sql,
@@ -36,14 +39,17 @@ import {
   notificationSourceId,
   notificationUpdateSchema,
   type NotificationPush,
+  pushIssueMessage,
 } from './contract';
 import { ingestChannelPush } from './channel-ingress';
+import type { ReplyForm } from '../../../packages/hatch-platform-api/notification-reply';
 import {
   ingestNotification,
   newNotificationId,
   type NotificationSource,
   type NotificationTarget,
   requeueDelivery,
+  requeueResponseDelivery,
 } from './ingest';
 import {
   NotificationLifecycleError,
@@ -51,6 +57,7 @@ import {
   updateNotification,
   type LifecycleResult,
 } from './lifecycle';
+import { loadResponseView, type NotificationResponseView } from './responses';
 import {
   encryptDeviceKey,
   encryptWebhookSecret,
@@ -131,9 +138,18 @@ export type NotificationSummaryView = {
   revision: number;
   editedAt: string | null;
   recalledAt: string | null;
+  /** Form people answer once; null when the notification asks nothing. */
+  reply: ReplyForm | null;
+  respondedAt: string | null;
   status: NotificationStatus;
   deliveries: DeliveryCounts;
 };
+
+/**
+ * `awaiting`: a reply form nobody answered yet (and not recalled);
+ * `answered`: someone answered it.
+ */
+export type NotificationReplyState = 'awaiting' | 'answered';
 
 export type DeliveryView = {
   id: string;
@@ -158,6 +174,9 @@ export type NotificationDetailView = NotificationSummaryView & {
   data: Record<string, unknown> | null;
   dedupeKey: string | null;
   deliveryList: DeliveryView[];
+  response: NotificationResponseView | null;
+  /** Deliveries of the answer to response route destinations. */
+  responseDeliveryList: DeliveryView[];
 };
 
 export type DestinationView = {
@@ -168,6 +187,11 @@ export type DestinationView = {
   lastError: string | null;
   /** Receives edit and recall events (always true for devices). */
   lifecycleEvents: boolean;
+  /**
+   * Response routes may send it answers: every webhook, and an App whose
+   * manifest accepts responses. Never a device.
+   */
+  acceptsResponses: boolean;
   groupIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -205,6 +229,18 @@ export type RouteView = {
   kind: string | null;
   targetType: 'group' | 'destination';
   targetId: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ResponseRouteView = {
+  id: string;
+  name: string | null;
+  sourceType: NotificationRouteSourceType;
+  sourceId: string | null;
+  kind: string | null;
+  destinationId: string;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -318,6 +354,8 @@ function summaryView(
     revision: row.revision,
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
+    reply: row.reply,
+    respondedAt: isoOrNull(row.respondedAt),
     status: deliveryStatus(deliveries),
     deliveries,
   };
@@ -330,6 +368,7 @@ export type ListNotificationsInput = {
   sourceId?: string;
   kind?: string;
   status?: NotificationStatus;
+  replyState?: NotificationReplyState;
   /** Return notifications older than this id (ids are time-ordered ULIDs). */
   cursor?: string;
   limit?: number;
@@ -387,6 +426,11 @@ export async function listNotifications(
     input.kind ? eq(n.kind, input.kind) : undefined,
     input.cursor ? lt(n.id, input.cursor) : undefined,
     input.status ? statusFilter(input.status) : undefined,
+    input.replyState === 'awaiting'
+      ? and(isNotNull(n.reply), isNull(n.respondedAt), isNull(n.recalledAt))
+      : input.replyState === 'answered'
+        ? isNotNull(n.respondedAt)
+        : undefined,
   ];
   const rows = await db
     .select()
@@ -403,7 +447,10 @@ export async function listNotifications(
 }
 
 function deliveryView(
-  row: typeof schema.notificationDeliveries.$inferSelect,
+  row: Omit<
+    typeof schema.notificationDeliveries.$inferSelect,
+    'deliveredRevision'
+  > & { deliveredRevision?: number | null },
 ): DeliveryView {
   return {
     id: row.id,
@@ -419,7 +466,7 @@ function deliveryView(
     lastError: row.lastError,
     httpStatus: row.httpStatus,
     result: row.result,
-    deliveredRevision: row.deliveredRevision,
+    deliveredRevision: row.deliveredRevision ?? null,
     routeIds: row.routeIds,
     completedAt: isoOrNull(row.completedAt),
     createdAt: iso(row.createdAt),
@@ -432,24 +479,39 @@ export async function getNotification(
 ): Promise<NotificationDetailView> {
   const row = await db.query.notifications.findFirst({ where: { id } });
   if (!row) notFound('Notification');
-  const deliveries = await db.query.notificationDeliveries.findMany({
-    where: { notificationId: id },
-    orderBy: { createdAt: 'asc' },
-  });
+  const [deliveries, responseDeliveries, response] = await Promise.all([
+    db.query.notificationDeliveries.findMany({
+      where: { notificationId: id },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.query.notificationResponseDeliveries.findMany({
+      where: { notificationId: id },
+      orderBy: { createdAt: 'asc' },
+    }),
+    row.respondedAt ? loadResponseView(id) : Promise.resolve(null),
+  ]);
   const counts = (await deliveryCounts([id])).get(id);
   return {
     ...summaryView(row, counts),
     data: row.data,
     dedupeKey: row.dedupeKey,
     deliveryList: deliveries.map(deliveryView),
+    response,
+    responseDeliveryList: responseDeliveries.map(deliveryView),
   };
 }
 
+/** Retry a failed delivery of a notification or of its answer. */
 export async function retryDelivery(deliveryId: string): Promise<void> {
-  const delivery = await db.query.notificationDeliveries.findFirst({
-    where: { id: deliveryId },
-    columns: { status: true, destinationId: true },
-  });
+  const delivery =
+    (await db.query.notificationDeliveries.findFirst({
+      where: { id: deliveryId },
+      columns: { status: true, destinationId: true },
+    })) ??
+    (await db.query.notificationResponseDeliveries.findFirst({
+      where: { id: deliveryId },
+      columns: { status: true, destinationId: true },
+    }));
   if (!delivery) notFound('Delivery');
   if (delivery.status !== 'failed') {
     throw new AppError('Only failed deliveries can be retried.', 409);
@@ -457,7 +519,10 @@ export async function retryDelivery(deliveryId: string): Promise<void> {
   if (!delivery.destinationId) {
     throw new AppError('The destination of this delivery was removed.', 409);
   }
-  if (!(await requeueDelivery(deliveryId))) {
+  if (
+    !(await requeueDelivery(deliveryId)) &&
+    !(await requeueResponseDelivery(deliveryId))
+  ) {
     throw new AppError('Only failed deliveries can be retried.', 409);
   }
 }
@@ -589,6 +654,8 @@ export async function listDestinations(): Promise<DestinationView[]> {
       enabled: row.enabled,
       lastError: row.lastError,
       lifecycleEvents: row.type === 'device' || row.lifecycleEvents,
+      acceptsResponses:
+        row.type === 'webhook' || (row.type === 'app' && row.acceptsResponses),
       groupIds: members
         .filter((member) => member.destinationId === row.id)
         .map((member) => member.groupId),
@@ -1071,16 +1138,12 @@ function routeView(row: RouteRow): RouteView {
 }
 
 /**
- * Normalize a route and validate the parts being set. Declarations are only
- * checked for matching criteria or targets that change, so a route whose
- * source later stopped declaring its kind can still be renamed or disabled.
+ * Normalize and check a route's matching criteria. `check: false` skips the
+ * declaration lookup for criteria that did not change.
  */
-async function routeValues(
-  input: RouteInput,
-  checks: { source: boolean; target: boolean } = {
-    source: true,
-    target: true,
-  },
+async function routeSource(
+  input: Pick<RouteInput, 'sourceType' | 'sourceId' | 'kind'>,
+  check: boolean,
 ) {
   const sourceId = input.sourceId || null;
   const kind = input.kind || null;
@@ -1090,7 +1153,7 @@ async function routeValues(
   if (input.sourceType === 'any' && sourceId) {
     throw new AppError('A route for any source cannot name a source.', 400);
   }
-  if (sourceId && checks.source) {
+  if (sourceId && check) {
     const sources = await listNotificationSources();
     const declared =
       input.sourceType === 'app'
@@ -1102,6 +1165,27 @@ async function routeValues(
       throw new AppError(`The source does not declare kind "${kind}".`, 400);
     }
   }
+  return {
+    sourceType: input.sourceType,
+    appId: input.sourceType === 'app' ? sourceId : null,
+    channelId: input.sourceType === 'channel' ? sourceId : null,
+    kind,
+  };
+}
+
+/**
+ * Normalize a route and validate the parts being set. Declarations are only
+ * checked for matching criteria or targets that change, so a route whose
+ * source later stopped declaring its kind can still be renamed or disabled.
+ */
+async function routeValues(
+  input: RouteInput,
+  checks: { source: boolean; target: boolean } = {
+    source: true,
+    target: true,
+  },
+) {
+  const source = await routeSource(input, checks.source);
   if (!checks.target) {
     // Unchanged target: it still exists, because deleting it cascades.
   } else if (input.targetType === 'group') {
@@ -1120,10 +1204,7 @@ async function routeValues(
   const name = input.name?.trim() ? cleanName(input.name, 'Route name') : null;
   return {
     name,
-    sourceType: input.sourceType,
-    appId: input.sourceType === 'app' ? sourceId : null,
-    channelId: input.sourceType === 'channel' ? sourceId : null,
-    kind,
+    ...source,
     targetGroupId: input.targetType === 'group' ? input.targetId : null,
     targetDestinationId:
       input.targetType === 'destination' ? input.targetId : null,
@@ -1191,6 +1272,160 @@ export async function deleteRoute(id: string): Promise<void> {
     .where(eq(schema.notificationRoutes.id, id))
     .returning({ id: schema.notificationRoutes.id });
   if (deleted.length === 0) notFound('Route');
+}
+
+/** ================== response routes ================== */
+
+export type ResponseRouteInput = {
+  name?: string | null;
+  sourceType: NotificationRouteSourceType;
+  sourceId?: string | null;
+  kind?: string | null;
+  destinationId: string;
+  enabled?: boolean;
+};
+
+type ResponseRouteRow = typeof schema.notificationResponseRoutes.$inferSelect;
+
+function responseRouteView(row: ResponseRouteRow): ResponseRouteView {
+  return {
+    id: row.id,
+    name: row.name,
+    sourceType: row.sourceType,
+    sourceId: row.appId ?? row.channelId,
+    kind: row.kind,
+    destinationId: row.targetDestinationId,
+    enabled: row.enabled,
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+async function responseRouteValues(
+  input: ResponseRouteInput,
+  checks: { source: boolean; target: boolean } = {
+    source: true,
+    target: true,
+  },
+) {
+  const source = await routeSource(input, checks.source);
+  if (checks.target) {
+    const destination = await db.query.notificationDestinations.findFirst({
+      where: { id: input.destinationId },
+      columns: { id: true, type: true, acceptsResponses: true },
+    });
+    if (!destination) notFound('Destination');
+    if (
+      destination.type !== 'webhook' &&
+      !(destination.type === 'app' && destination.acceptsResponses)
+    ) {
+      throw new AppError(
+        'Answers can only go to a webhook, or to an App whose manifest sets notifications.destination.responses.',
+        400,
+      );
+    }
+  }
+  return {
+    name: input.name?.trim() ? cleanName(input.name, 'Route name') : null,
+    ...source,
+    targetDestinationId: input.destinationId,
+    enabled: input.enabled ?? true,
+  };
+}
+
+/**
+ * Response routes, oldest first. Without a page every route is returned (the
+ * settings page shows them all); with one, at most `limit` routes after
+ * `cursor` (ids are time-ordered ULIDs) and the cursor for the next page.
+ */
+export async function listResponseRoutes(page?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<{ routes: ResponseRouteView[]; nextCursor: string | null }> {
+  const r = schema.notificationResponseRoutes;
+  const limit = page
+    ? Math.min(Math.max(page.limit || 50, 1), LIST_LIMIT_MAX)
+    : undefined;
+  const rows = await db
+    .select()
+    .from(r)
+    .where(page?.cursor ? gt(r.id, page.cursor) : undefined)
+    .orderBy(r.id)
+    .limit(limit === undefined ? Number.MAX_SAFE_INTEGER : limit + 1);
+  const routes = limit === undefined ? rows : rows.slice(0, limit);
+  return {
+    routes: routes.map(responseRouteView),
+    nextCursor:
+      limit !== undefined && rows.length > limit ? routes.at(-1)!.id : null,
+  };
+}
+
+export async function createResponseRoute(
+  input: ResponseRouteInput,
+): Promise<ResponseRouteView> {
+  const [row] = await db
+    .insert(schema.notificationResponseRoutes)
+    .values({ id: newNotificationId(), ...(await responseRouteValues(input)) })
+    .returning();
+  return responseRouteView(row!);
+}
+
+export async function updateResponseRoute(
+  input: { id: string } & Partial<ResponseRouteInput>,
+): Promise<ResponseRouteView> {
+  // Lock the row: fields left out keep their current value, never one read
+  // before a concurrent change (such as a disable) committed.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.notificationResponseRoutes)
+      .where(eq(schema.notificationResponseRoutes.id, input.id))
+      .for('update');
+    if (!existing) notFound('Response route');
+    return writeResponseRoute(tx, existing, input);
+  });
+}
+
+async function writeResponseRoute(
+  tx: TX,
+  existing: ResponseRouteRow,
+  input: { id: string } & Partial<ResponseRouteInput>,
+): Promise<ResponseRouteView> {
+  const current = responseRouteView(existing);
+  const merged: ResponseRouteInput = {
+    name: input.name !== undefined ? input.name : current.name,
+    sourceType: input.sourceType ?? current.sourceType,
+    sourceId:
+      input.sourceId !== undefined
+        ? input.sourceId
+        : input.sourceType && input.sourceType !== current.sourceType
+          ? null
+          : current.sourceId,
+    kind: input.kind !== undefined ? input.kind : current.kind,
+    destinationId: input.destinationId ?? current.destinationId,
+    enabled: input.enabled ?? current.enabled,
+  };
+  const checks = {
+    source:
+      merged.sourceType !== current.sourceType ||
+      (merged.sourceId || null) !== current.sourceId ||
+      (merged.kind || null) !== current.kind,
+    target: merged.destinationId !== current.destinationId,
+  };
+  const [row] = await tx
+    .update(schema.notificationResponseRoutes)
+    .set(await responseRouteValues(merged, checks))
+    .where(eq(schema.notificationResponseRoutes.id, input.id))
+    .returning();
+  return responseRouteView(row!);
+}
+
+export async function deleteResponseRoute(id: string): Promise<void> {
+  const deleted = await db
+    .delete(schema.notificationResponseRoutes)
+    .where(eq(schema.notificationResponseRoutes.id, id))
+    .returning({ id: schema.notificationResponseRoutes.id });
+  if (deleted.length === 0) notFound('Response route');
 }
 
 /** ================== channels ================== */
@@ -1319,6 +1554,7 @@ export async function sendTestNotification(
     url: null,
     autoOpenUrl: false,
     data: null,
+    reply: null,
     dedupeKey: null,
     occurredAt: null,
   };
@@ -1406,10 +1642,7 @@ export async function sendNotification(input: {
     kind: body.kind ?? USER_MESSAGE_KIND.kind,
   });
   if (!push.success) {
-    throw new AppError(
-      `${push.error.issues[0]?.message ?? 'Invalid request'}.`,
-      400,
-    );
+    throw new AppError(`${pushIssueMessage(push.error)}.`, 400);
   }
   const kind =
     push.data.kind === USER_MESSAGE_KIND.kind

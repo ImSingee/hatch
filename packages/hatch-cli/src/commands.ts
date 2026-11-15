@@ -159,14 +159,15 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'list'],
     usage:
-      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--limit <1-100>] [--cursor <id>]',
-    description: 'List notifications, newest first.',
+      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',
+    description:
+      'List notifications, newest first; --reply-state lists reply forms awaiting an answer or answered.',
   },
   {
     path: ['notification', 'get'],
     usage: 'notification get <id>',
     description:
-      'Inspect a notification and every delivery, including App result strings.',
+      'Inspect a notification and every delivery, including App result strings, its reply form, the answer and the answer deliveries.',
   },
   {
     path: ['notification', 'test'],
@@ -176,9 +177,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'send'],
     usage:
-      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>]',
+      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->]',
     description:
-      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set.',
+      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer.',
   },
   {
     path: ['notification', 'update'],
@@ -194,6 +195,13 @@ const definitions: readonly CliCommandDefinition[] = [
       'Recall any notification by id, whatever sent it; cannot be undone. Phones remove it; destinations that have not received it never will.',
   },
   {
+    path: ['notification', 'respond'],
+    usage:
+      'notification respond <notification-id> (--answer <field-id>=<value>... | --answers <json> | --answers-file <path|->)',
+    description:
+      'Answer a notification reply form as the signed-in user; one answer per notification, final once sent. Repeat --answer for each option of a multiple field. Sends the answer to matching response routes.',
+  },
+  {
     path: ['notification', 'delete'],
     usage: 'notification delete <notification-id> --yes',
     description:
@@ -202,7 +210,8 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'retry'],
     usage: 'notification retry <delivery-id>',
-    description: 'Queue a failed delivery for a fresh series of attempts.',
+    description:
+      'Queue a failed delivery (of a notification or of its answer) for a fresh series of attempts.',
   },
   {
     path: ['notification', 'sources'],
@@ -300,6 +309,30 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['notification', 'route', 'delete'],
     usage: 'notification route delete <id>',
     description: 'Delete a routing rule.',
+  },
+  {
+    path: ['notification', 'response-route', 'list'],
+    usage: 'notification response-route list [--limit <1-100>] [--cursor <id>]',
+    description:
+      'List response routes, oldest first: where answers to reply forms go. Prints the next cursor when more remain.',
+  },
+  {
+    path: ['notification', 'response-route', 'create'],
+    usage:
+      'notification response-route create --source-type app|channel|any [--source <id>] [--kind <kind>] --destination <id> [--name <name>] [--disabled]',
+    description:
+      'Send answers to matching notifications to a webhook, or to an App whose manifest sets notifications.destination.responses. Omit --source/--kind to match any.',
+  },
+  {
+    path: ['notification', 'response-route', 'update'],
+    usage:
+      'notification response-route update <id> [--source-type app|channel|any] [--source <id> | --any-source] [--kind <kind> | --any-kind] [--destination <id>] [--name <name>] [--enable | --disable]',
+    description: 'Change a response route.',
+  },
+  {
+    path: ['notification', 'response-route', 'delete'],
+    usage: 'notification response-route delete <id>',
+    description: 'Delete a response route.',
   },
   {
     path: ['notification', 'channel', 'list'],
