@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import vm from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { HATCH_SDK_IMPORT_MAP } from '~agent/hatch-sdk';
 import { buildApp } from './build';
@@ -326,6 +327,92 @@ describe('buildApp backend', () => {
       buildApp('demo', { sourceDir, outputDir }),
     ).resolves.toMatchObject({
       source: { compatibilityVersion: 2 },
+    });
+  });
+
+  it('scopes browser storage before App page and widget code runs', async () => {
+    const { sourceDir, outputDir } = await makeAppSource(
+      {
+        id: 'demo',
+        name: 'Demo',
+        compatibilityVersion: 2,
+        capabilities: { frontend: true, widgets: true },
+        app: { entry: 'app/main.ts', html: 'app/index.html', routes: [] },
+        widgets: [{ id: 'note', name: 'Note', entry: 'widgets/note.ts' }],
+      },
+      {
+        'app/main.ts': "window.localStorage.setItem('fromModule', '1');\n",
+        // An authored head script runs before module scripts; it must already
+        // see the scoped area.
+        'app/index.html': [
+          // Commented-out tags must not attract the storage installer.
+          '<!doctype html><!-- Configure the <head> and <script> below. -->',
+          '<html><head><title>Demo</title>',
+          "<script>localStorage.setItem('theme', 'dark')</script>",
+          '</head><body><script type="module" src="./app.js"></script>',
+          '</body></html>',
+        ].join(''),
+        'widgets/note.ts': 'export function mount() { return () => {}; }\n',
+      },
+    );
+
+    await buildApp('demo', { sourceDir, outputDir });
+    const html = await fs.readFile(
+      path.join(outputDir, 'app', 'index.html'),
+      'utf8',
+    );
+    expect(
+      html.startsWith(
+        '<!doctype html><!-- Configure the <head> and <script> below. -->' +
+          '<html><head><script>',
+      ),
+    ).toBe(true);
+    const scripts = [
+      ...html
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .matchAll(/<script(?: type="module")?>([\s\S]*?)<\/script>/g),
+    ].map((match) => match[1]);
+    expect(scripts).toHaveLength(3);
+    const widget = await fs.readFile(
+      path.join(outputDir, 'widgets', 'note.js'),
+      'utf8',
+    );
+    expect(widget.startsWith(scripts[0])).toBe(true);
+
+    class FakeStorage {
+      readonly items = new Map<string, string>();
+      get length() {
+        return this.items.size;
+      }
+      key(index: number) {
+        return [...this.items.keys()][index] ?? null;
+      }
+      getItem(key: string) {
+        return this.items.get(key) ?? null;
+      }
+      setItem(key: string, value: string) {
+        this.items.set(key, value);
+      }
+      removeItem(key: string) {
+        this.items.delete(key);
+      }
+    }
+    const local = new FakeStorage();
+    const page: Record<string, unknown> = {
+      Storage: FakeStorage,
+      localStorage: local,
+      sessionStorage: new FakeStorage(),
+      CustomEvent: class {},
+      StorageEvent: class {},
+      addEventListener: () => {},
+      dispatchEvent: () => true,
+    };
+    page.window = page;
+    const context = vm.createContext(page);
+    for (const script of scripts) vm.runInContext(script, context);
+    expect(Object.fromEntries(local.items)).toEqual({
+      'hatch:app:demo:theme': 'dark',
+      'hatch:app:demo:fromModule': '1',
     });
   });
 

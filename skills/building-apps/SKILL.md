@@ -110,8 +110,10 @@ and materialization. The authoritative declaration entry for `@hatch/app/data` i
 the `exports` map in `.hatch/sdk/@hatch/app/package.json`.
 
 Use `@hatch/app` for `defineAppManifest`, `@hatch/app/data` for Data Tables,
-and `@hatch/app/data/react` for the React adapter. Existing `@hatch/data`
-imports remain supported by platform-generated re-export stubs for current
+`@hatch/app/data/react` for the React adapter, and `@hatch/app/storage` (with
+`@hatch/app/storage/react`) to list or watch the App's browser storage. Hatch
+installs `@hatch/app/storage/install` itself; never import it. Existing
+`@hatch/data` imports remain supported by platform-generated re-export stubs for current
 compatibility versions. Do not author those stubs or rewrite historical source
 unless migrating it; the next-version removal is documented in
 `app-compatibility`.
@@ -478,7 +480,8 @@ older backups may still contain plaintext. When updating a KV value, omit the
 Read only the reference relevant to the requested capability:
 
 - [Frontend and widgets](references/frontend-widgets.md): React Router/Query,
-  Connect clients, responsive widget sizing, and refresh behavior.
+  Connect clients, App-scoped browser storage, responsive widget sizing, and
+  refresh behavior.
 - [Backend integrations](references/backend-integrations.md): Connect backend,
   cron authentication, webhooks, long-running mode, and workflow calls.
   Webhooks always strip Authorization and x-api-key (all casing), including

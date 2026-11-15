@@ -40,6 +40,54 @@ export function useTodos() {
 Adapt the scaffolded router and Query client rather than replacing their
 platform wiring. Import packages normally after adding them to `package.json`.
 
+## Browser storage
+
+Every App page and widget runs on the Hatch origin. Before any App code runs,
+Hatch scopes that page's `localStorage` and `sessionStorage` to the App: keys,
+`length`, `clear()` and `storage` events cover only this App's entries, so
+Apps and Hatch cannot overwrite or clear each other's values. Use the standard
+API and libraries built on it (such as Mantine `useLocalStorage` or Zustand
+`persist`) normally. The page and its widgets share the App's entries.
+
+`@hatch/app/storage` adds listing and change notifications that also report
+changes made in the same page:
+
+```tsx
+import { createAppStorage } from '@hatch/app/storage';
+import { useAppStorageItem } from '@hatch/app/storage/react';
+
+const storage = createAppStorage(); // { area: 'session' } for sessionStorage
+
+function ThemeToggle() {
+  const [theme, setTheme] = useAppStorageItem(storage, 'theme');
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+    >
+      {theme ?? 'light'}
+    </button>
+  );
+}
+```
+
+The object reads and writes the same entries as `localStorage` and has the
+same methods, plus `keys()`, `entries()`, and `watch(listener)` or
+`watch(key, listener)`, which report `{ key, oldValue, newValue }` and return
+an unsubscribe function. Local-area watchers see changes from this page, other
+tabs, and the App's widgets. `sessionStorage` is separate per tab, so
+session-area watchers see changes only from this page and frames in the same
+tab. `useAppStorageItem(storage, key)` returns `[value, setValue]`;
+`setValue(null)` removes the key.
+
+Values are strings; `JSON.stringify` structured data and validate it with Zod
+when read. Entries survive deployments and slug changes but live in one
+browser profile: they are not synchronized across devices or users, and the
+origin's quota (about 5 MB) is shared with other Apps. Keep only small UI
+preferences and drafts here; store user data with Data Tables, KV, or the
+backend. The scope prevents collisions, not snooping, so never store secrets
+in browser storage.
+
 ## Widgets
 
 Each widget is a standalone bundle and must export `mount(element, context)`

@@ -502,6 +502,65 @@ function browserDefine(
   };
 }
 
+/**
+ * A classic script that scopes `localStorage` and `sessionStorage` to this App
+ * before any App or library code runs (see @hatch/app/storage/install). Keyed
+ * by the immutable id so renaming the slug keeps users' stored values.
+ */
+async function storageInstallScript(
+  id: string,
+  esbuildResolve: Pick<esbuild.BuildOptions, 'absWorkingDir' | 'plugins'>,
+): Promise<string> {
+  const result = await esbuild.build({
+    ...esbuildResolve,
+    stdin: {
+      contents:
+        "import { installAppStorage } from '@hatch/app/storage/install';\n" +
+        `installAppStorage(${JSON.stringify(id)});\n`,
+      resolveDir: esbuildResolve.absWorkingDir,
+      loader: 'js',
+    },
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    minify: true,
+    write: false,
+    logLevel: 'silent',
+  });
+  return result.outputFiles[0].text;
+}
+
+/**
+ * Blank out what the browser does not parse as tags (comments and the bodies
+ * of script, style, template and textarea elements) without changing the
+ * length, so indexes found in the result address the same place in `html`.
+ */
+function markupOnly(html: string): string {
+  const blank = (text: string) => text.replace(/[^\n]/g, ' ');
+  // One left-to-right scan, so whichever construct opens first wins.
+  return html.replace(
+    /<!--[\s\S]*?(?:-->|$)|(<(script|style|template|textarea)\b[^>]*>)([\s\S]*?)(<\/\2\s*>|$)/gi,
+    (match, open?: string, _name?: string, body?: string, close?: string) =>
+      open === undefined ? blank(match) : open + blank(body!) + close!,
+  );
+}
+
+/** Inline `code` as a classic script that runs before every page script. */
+function prependHeadScript(html: string, code: string): string {
+  const tag = `<script>${code.replace(/<\/script/gi, '<\\/script')}</script>`;
+  const markup = markupOnly(html);
+  const insertAt = (index: number) =>
+    html.slice(0, index) + tag + html.slice(index);
+  const head = /<head(?:\s[^>]*)?>/i.exec(markup);
+  if (head) return insertAt(head.index + head[0].length);
+  // Without an explicit head, the first script still precedes all others.
+  const firstScript = /<script\b/i.exec(markup);
+  if (firstScript) return insertAt(firstScript.index);
+  const body = /<\/body\s*>/i.exec(markup);
+  return body ? insertAt(body.index) : html + tag;
+}
+
 /** Resolve only the public, platform-owned Hatch SDK browser entrypoints. */
 function hatchSdkPlugin(src: string): esbuild.Plugin {
   const entries = new Map(
@@ -510,6 +569,10 @@ function hatchSdkPlugin(src: string): esbuild.Plugin {
       path.resolve(src, '.hatch', target),
     ]),
   );
+  // Legacy @hatch/data aliases still resolve but are not suggested.
+  const suggested = [...entries.keys()]
+    .filter((specifier) => /^@hatch\/app(?:\/|$)/.test(specifier))
+    .join(', ');
   return {
     name: 'hatch-sdk',
     setup(build) {
@@ -521,7 +584,7 @@ function hatchSdkPlugin(src: string): esbuild.Plugin {
             {
               text:
                 `Unknown Hatch SDK import "${args.path}". ` +
-                'Use @hatch/app, @hatch/app/data or @hatch/app/data/react.',
+                `Use one of: ${suggested}.`,
             },
           ],
         };
@@ -942,6 +1005,11 @@ export async function buildApp(
     };
 
     const define = browserDefine(id, manifest.name, options.deploymentId);
+    const storageInstall =
+      (manifest.capabilities.frontend && manifest.app) ||
+      (manifest.capabilities.widgets && manifest.widgets.length > 0)
+        ? await storageInstallScript(id, esbuildResolve)
+        : '';
     let bundledBackendEntry: string | undefined;
 
     // 3) Bundle the frontend SPA -> static app/app.js + index.html.
@@ -978,7 +1046,12 @@ export async function buildApp(
         /<\/script>/g,
         '<\\/script>',
       )}</script>`;
-      let html = await fs.readFile(htmlSrc, 'utf8');
+      // Place the storage scope in the authored markup before inlining the
+      // bundle, so a `<head>` inside bundled code can never be matched.
+      let html = prependHeadScript(
+        await fs.readFile(htmlSrc, 'utf8'),
+        storageInstall,
+      );
       const scriptTag =
         /<script[^>]*src=["']\.?\/?app\.js["'][^>]*>\s*<\/script>/;
       // Use a replacement function so `$`-sequences in the bundle (e.g. React's
@@ -1003,6 +1076,8 @@ export async function buildApp(
           ...esbuildResolve,
           entryPoints: [entry],
           outfile: path.join(out, 'widgets', `${widget.id}.js`),
+          // Runs before the widget's modules: each widget has its own frame.
+          banner: { js: storageInstall },
           bundle: true,
           format: 'esm',
           platform: 'browser',

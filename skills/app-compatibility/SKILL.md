@@ -76,11 +76,12 @@ above.
   This proposal concerns authored source, not stored deployment JSON.
 
 - Starting with the next App compatibility version (currently proposed v3),
-  App SDK imports must use `@hatch/app`, `@hatch/app/data`, or
-  `@hatch/app/data/react`. Replace `@hatch/data` with `@hatch/app/data` and
-  `@hatch/data/react` with `@hatch/app/data/react`, including type imports,
-  re-exports, and dynamic imports. The platform will no longer generate the
-  legacy Data stubs or expose their import-map/browser aliases for that version.
+  App SDK imports must use the `@hatch/app` entrypoints, such as
+  `@hatch/app/data` or `@hatch/app/data/react`. Replace `@hatch/data` with
+  `@hatch/app/data` and `@hatch/data/react` with `@hatch/app/data/react`,
+  including type imports, re-exports, and dynamic imports. The platform will
+  no longer generate the legacy Data stubs or expose their import-map/browser
+  aliases for that version.
   Supported v1/v2 sources retain the stubs; an omitted version still means v2.
   Enforce the policy after restricted TypeScript manifest evaluation, including
   its dependency graph, and before building the remaining source. Refreshing a
