@@ -1,19 +1,22 @@
 import {
+  ActionIcon,
   Box,
   Button,
   Center,
   Group,
   Loader,
+  Menu,
   Select,
   Stack,
   Table,
   Text,
   ThemeIcon,
   Tooltip,
+  VisuallyHidden,
 } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { IconBell } from '@tabler/icons-react';
+import { IconBell, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { formatExact, formatRelative } from '~lib/format';
 import {
@@ -28,6 +31,7 @@ import {
   NotificationStatusBadge,
   SourceTypeIcon,
 } from './status';
+import { useDeleteNotification } from './use-delete-notification';
 
 function parseSource(
   value: string | null,
@@ -54,6 +58,7 @@ export function NotificationHistory() {
     ...(status ? { status } : {}),
   };
   const history = useInfiniteQuery(notificationHistoryQueryOptions(filters));
+  const { confirmDelete } = useDeleteNotification();
 
   const sourceOptions = useMemo(
     () => [
@@ -197,6 +202,9 @@ export function NotificationHistory() {
                 <Table.Th w={200}>Source</Table.Th>
                 <Table.Th w={150}>Status</Table.Th>
                 <Table.Th w={140}>Received</Table.Th>
+                <Table.Th w={48}>
+                  <VisuallyHidden>Actions</VisuallyHidden>
+                </Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -257,6 +265,29 @@ export function NotificationHistory() {
                         {formatRelative(item.createdAt)}
                       </Text>
                     </Tooltip>
+                  </Table.Td>
+                  {/* Menu clicks bubble through the portal; keep them off the row. */}
+                  <Table.Td onClick={(event) => event.stopPropagation()}>
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Actions for ${item.title}`}
+                        >
+                          <IconDotsVertical size={16} stroke={1.6} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          color="red"
+                          leftSection={<IconTrash size={14} stroke={1.6} />}
+                          onClick={() => confirmDelete(item)}
+                        >
+                          Delete
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
                   </Table.Td>
                 </Table.Tr>
               ))}

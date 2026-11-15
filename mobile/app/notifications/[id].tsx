@@ -1,13 +1,30 @@
 import { useQuery } from '@tanstack/react-query';
-import { useIsFocused, useLocalSearchParams } from 'expo-router';
+import {
+  Stack,
+  router,
+  useIsFocused,
+  useLocalSearchParams,
+  useNavigation,
+} from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
-import { notificationUrlAction } from '../../src/core';
+import { MobileError, notificationUrlAction } from '../../src/core';
 import { openSurfaceLink } from '../../src/state/deep-links';
 import { allowDevelopmentLoopback, useSession } from '../../src/state/session';
+import {
+  useDeleteNotification,
+  useNotificationDeleted,
+} from '../../src/state/use-delete-notification';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
 import { Button } from '../../src/ui/button';
-import { Busy, Card, Notice, errorText } from '../../src/ui/primitives';
+import { glyphs } from '../../src/ui/glyph.types';
+import {
+  Busy,
+  Card,
+  EmptyState,
+  Notice,
+  errorText,
+} from '../../src/ui/primitives';
 import {
   DeliveryStatusTag,
   NotificationChangeTag,
@@ -26,14 +43,41 @@ const destinationLabels: Record<string, string> = {
 
 export default function NotificationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
   const { api, origin } = useSession();
+  const deleted = useNotificationDeleted(id);
   const query = useQuery({
     queryKey: [origin, 'notification', id],
     queryFn: ({ signal }) => api!.notification(id, signal),
-    enabled: Boolean(api),
+    enabled: Boolean(api) && !deleted,
   });
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
+  const { confirmDelete, isPending: deleting } = useDeleteNotification({
+    onDeleted: () => {
+      // A slow response must not pop a screen the user opened since.
+      if (!navigation.isFocused()) return;
+      if (router.canGoBack()) router.back();
+      else router.replace('/notifications');
+    },
+  });
   const data = query.data;
+  // Deleted (here, elsewhere, or expired): never show a cached copy.
+  if (
+    deleted ||
+    (query.error instanceof MobileError && query.error.status === 404)
+  )
+    return (
+      <View style={{ flex: 1, padding: 16, backgroundColor: c.paper }}>
+        <EmptyState
+          title="Notification not found"
+          detail="It was deleted or has expired from history on this instance."
+          action={{
+            label: 'All notifications',
+            onPress: () => router.replace('/notifications'),
+          }}
+        />
+      </View>
+    );
   if (query.error && !data)
     return (
       <View style={{ flex: 1, padding: 16, backgroundColor: c.paper }}>
@@ -59,6 +103,16 @@ export default function NotificationScreen() {
         />
       }
     >
+      {/* A native bar item so iPhone Duo can move it to the vertical bar. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon={glyphs.trash}
+          disabled={deleting}
+          onPress={() => confirmDelete(data)}
+        >
+          Delete notification
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <View style={{ paddingHorizontal: 16, gap: 14 }}>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <NotificationStatusTag status={data.status} />

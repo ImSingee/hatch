@@ -48,7 +48,7 @@ of this feature.
 
 ## Notification center: CLI only, no Agent Tool
 
-`hatch notification ...` (history, test/send/update/recall/retry, sources, APNs status,
+`hatch notification ...` (history, test/send/update/recall/delete/retry, sources, APNs status,
 destinations, webhooks, groups, routes and channels) calls
 `NotificationService` and has no Agent Tool counterpart because Agent Tools
 for platform capabilities are frozen: the platform Agent uses the CLI. The

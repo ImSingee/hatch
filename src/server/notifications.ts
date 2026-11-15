@@ -17,6 +17,7 @@ import {
   deleteChannel,
   deleteDestination,
   deleteGroup,
+  deleteNotification,
   deleteRoute,
   getNotification,
   listChannels,
@@ -99,6 +100,14 @@ export const retryDeliveryFn = createServerFn({ method: 'POST' })
   .validator((deliveryId: string) => idSchema.parse(deliveryId))
   .handler(async ({ data }) => {
     await retryDelivery(data);
+    return { ok: true as const };
+  });
+
+export const deleteNotificationFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((id: string) => idSchema.parse(id))
+  .handler(async ({ data }) => {
+    await deleteNotification(data);
     return { ok: true as const };
   });
 

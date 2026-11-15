@@ -4,6 +4,7 @@ import {
   NotificationService,
   type CreateChannelRequest,
   type CreateRouteRequest,
+  type DeleteNotificationRequest,
   type RecallNotificationRequest,
   type SendNotificationRequest,
   type UpdateGroupRequest,
@@ -28,6 +29,7 @@ function recordingTransport() {
     sendNotification?: SendNotificationRequest;
     updateNotification?: UpdateNotificationRequest;
     recallNotification?: RecallNotificationRequest;
+    deleteNotification?: DeleteNotificationRequest;
   } = {};
   const transport = createRouterTransport(({ service }) => {
     service(NotificationService, {
@@ -82,6 +84,10 @@ function recordingTransport() {
       recallNotification: (request) => {
         received.recallNotification = request;
         return { revision: 3, changed: false };
+      },
+      deleteNotification: (request) => {
+        received.deleteNotification = request;
+        return {};
       },
     });
   });
@@ -428,6 +434,24 @@ describe('notification update and recall', () => {
       id: 'notification-1',
     });
     expect(result.text).toMatch(/already recalled/);
+  });
+
+  it('deletes exactly one notification by id', async () => {
+    const { transport, received } = recordingTransport();
+    const result = await executeNotificationCall(
+      transport,
+      parse('delete', 'notification-1', '--yes'),
+    );
+    expect(received.deleteNotification).toMatchObject({
+      id: 'notification-1',
+    });
+    expect(result.text).toContain('notification-1');
+    // Permanent deletion needs explicit consent; nothing is sent without it.
+    expect(() => parse('delete', 'notification-1')).toThrow(/--yes/);
+    expect(() => parse('delete', '--yes')).toThrow(/<notification-id>/);
+    expect(() =>
+      parse('delete', 'notification-1', 'notification-2', '--yes'),
+    ).toThrow(/<notification-id>/);
   });
 });
 
