@@ -36,6 +36,7 @@ import {
   NotificationReplyBadge,
   NotificationRevisionBadge,
   NotificationStatusBadge,
+  notificationPriorityLabel,
 } from './status';
 import { ReplySection } from './reply-section';
 
@@ -80,6 +81,10 @@ export function NotificationDetail({ id }: { id: string }) {
             }
           />
           <Field label="Kind" value={`${data.kindName} (${data.kind})`} />
+          <Field
+            label="Priority"
+            value={notificationPriorityLabel(data.priority)}
+          />
           <Field label="Occurred" value={formatExact(data.occurredAt)} />
           <Field label="Received" value={formatExact(data.createdAt)} />
           {data.editedAt ? (
@@ -318,7 +323,10 @@ function DeliveryOutcome({
     });
   }
   if (delivery.result) {
-    lines.push({ label: 'App result', value: delivery.result });
+    lines.push({
+      label: delivery.destinationType === 'app' ? 'App result' : 'Result',
+      value: delivery.result,
+    });
   }
   if (delivery.lastError) {
     lines.push({ label: 'Error', value: delivery.lastError });

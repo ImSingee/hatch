@@ -1,0 +1,2 @@
+ALTER TABLE "notifications" ADD COLUMN "priority" smallint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_priority_check" CHECK ("notifications"."priority" between -2 and 1);

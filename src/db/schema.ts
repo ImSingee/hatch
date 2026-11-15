@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   primaryKey,
+  smallint,
   snakeCase,
   text,
   uniqueIndex,
@@ -907,6 +908,11 @@ export const notifications = snakeCase.table(
     url: text(),
     /** Tapping the phone push opens `url` instead of the notification. */
     autoOpenUrl: boolean().notNull().default(false),
+    /**
+     * Pushover-style priority: -2 lowest (history only, no phone push), -1
+     * low (quiet), 0 normal, 1 high (time-sensitive). Never changes.
+     */
+    priority: smallint().notNull().default(0),
     data: jsonb().$type<JsonObject>(),
     dedupeKey: text(),
     occurredAt: timestamp('occurred_at').notNull(),
@@ -958,6 +964,10 @@ export const notifications = snakeCase.table(
       .where(
         sql`"notifications"."source_type" = 'platform' and "notifications"."dedupe_key" is not null`,
       ),
+    check(
+      'notifications_priority_check',
+      sql`"notifications"."priority" between -2 and 1`,
+    ),
     check(
       'notifications_source_check',
       sql`(

@@ -350,6 +350,25 @@ describe('notification send', () => {
     expect(received.sendNotification?.autoOpenUrl).toBe(false);
   });
 
+  it('takes a priority by name or number and leaves it unset otherwise', () => {
+    const priority = (...flags: string[]) =>
+      parse('send', '--group', 'g1', '--title', 'Hi', ...flags).request
+        .priority;
+    expect(priority()).toBeUndefined();
+    expect(priority('--priority', 'lowest')).toBe(-2);
+    expect(priority('--priority', 'Low')).toBe(-1);
+    expect(priority('--priority', 'normal')).toBe(0);
+    expect(priority('--priority', 'high')).toBe(1);
+    expect(priority('--priority=-2')).toBe(-2);
+    expect(priority('--priority', '1')).toBe(1);
+    for (const value of ['2', '-3', '0.5', 'urgent', 'emergency', ''])
+      expect(() => priority(`--priority=${value}`)).toThrow(
+        /Invalid --priority/,
+      );
+    // A bare negative reads as a flag; the error says how to write it.
+    expect(() => priority('--priority', '-1')).toThrow(/--priority=-XYZ/);
+  });
+
   it('rejects incomplete or malformed input before calling the platform', () => {
     expect(() => parse('send', '--title', 'Hi')).toThrow(
       /one of --channel, --group or --destination/,

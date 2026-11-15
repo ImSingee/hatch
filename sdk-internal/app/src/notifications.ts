@@ -85,6 +85,9 @@ export type NotificationResponse = {
   respondedAt: string;
 };
 
+/** `-2` lowest, `-1` low, `0` normal, `1` high. */
+export type NotificationPriority = -2 | -1 | 0 | 1;
+
 /** A notification of a kind declared in `notifications.kinds`. */
 export type NotificationInput = {
   kind: string;
@@ -106,6 +109,14 @@ export type NotificationInput = {
    * reference. `true` requires `url`.
    */
   autoOpenUrl?: boolean;
+  /**
+   * Pushover-style priority, default `0`. `-2` lowest: kept in history and
+   * sent to webhook and App destinations, never pushed to phones. `-1` low:
+   * phones receive it quietly (no sound, no banner). `0` normal. `1` high:
+   * time-sensitive, shown on phones during Focus and Do Not Disturb. It never
+   * changes after the push.
+   */
+  priority?: NotificationPriority;
   /** Extra structured data delivered to webhook and App destinations. */
   data?: { [key: string]: NotificationJson };
   /**
@@ -293,6 +304,7 @@ export type HatchNotificationEnvelope = {
     url: string | null;
     /** Phone notifications open `url` on tap instead of the notification. */
     autoOpenUrl: boolean;
+    priority: NotificationPriority;
     data: { [key: string]: NotificationJson } | null;
     dedupeKey: string | null;
     occurredAt: string;

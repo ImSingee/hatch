@@ -329,9 +329,18 @@ globally unique) and change any notification, whatever sent it:
 ```sh
 hatch notification send --channel <channel-id> --kind build.failed --title 'master is red' --json
 hatch notification send --destination <destination-id> --title 'Deploy finished' --json
+hatch notification send --group <group-id> --title 'Disk 95% full' --priority high --json
 hatch notification update <notification-id> --title 'master is green' --clear-body --json
 hatch notification recall <notification-id> --json
 ```
+
+`--priority` sets how phones present it: `high` (or `1`) is time-sensitive
+and shows during Focus and Do Not Disturb, `normal` (`0`) is the default, `low`
+(`-1`) arrives quietly, and `lowest` (`-2`) is never pushed to phones but stays
+in history and still reaches webhooks and Apps. Write negative numbers as
+`--priority=-1`; anything else, including Pushover's emergency `2`, is
+rejected locally (exit 2). Priority cannot be changed later. `get` prints the
+priority and `list` marks non-normal ones next to the status.
 
 `update` changes only the flags given: `--clear-body`, `--clear-url` and
 `--clear-data` clear a field, and `--auto-open-url` / `--no-auto-open-url` set

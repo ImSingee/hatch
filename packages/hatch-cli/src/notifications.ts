@@ -61,12 +61,53 @@ export function parseKindSpec(value: string) {
   return { kind, name };
 }
 
-/** Delivery status, plus whether the source edited or recalled it. */
+/** Pushover-style priorities; emergency (2) is not supported. */
+const PRIORITIES = [
+  { value: -2, name: 'lowest', effect: 'history only, not pushed to phones' },
+  { value: -1, name: 'low', effect: 'quiet on phones' },
+  { value: 0, name: 'normal', effect: '' },
+  { value: 1, name: 'high', effect: 'time-sensitive on phones' },
+] as const;
+
+/**
+ * `--priority` as a name or its number. Names avoid the `--priority=-1`
+ * spelling that negative numbers need.
+ */
+export function parsePriority(value: string): number {
+  const text = value.trim().toLowerCase();
+  const match = PRIORITIES.find(
+    (entry) => entry.name === text || String(entry.value) === text,
+  );
+  if (!match)
+    invalid(
+      `Invalid --priority "${value}": use lowest (-2), low (-1), normal (0) or high (1). Emergency priority 2 is not supported.`,
+    );
+  return match.value;
+}
+
+/** Proto3 JSON omits a zero priority. */
+function priorityOf(row: Row | undefined): number {
+  return Number(row?.priority ?? 0);
+}
+
+function priorityText(priority: number): string {
+  const entry = PRIORITIES.find((candidate) => candidate.value === priority);
+  if (!entry) return String(priority);
+  return `${entry.name} (${priority})${entry.effect ? ` · ${entry.effect}` : ''}`;
+}
+
+/** Delivery status, a non-normal priority and whether it was edited/recalled. */
 function revisionLabel(row: Row | undefined): string {
-  const status = field(row, 'status');
-  if (field(row, 'recalledAt')) return `${status}, recalled`;
-  if (field(row, 'editedAt')) return `${status}, edited`;
-  return status;
+  const parts = [field(row, 'status')];
+  const priority = priorityOf(row);
+  if (priority !== 0)
+    parts.push(
+      PRIORITIES.find((entry) => entry.value === priority)?.name ??
+        `priority ${priority}`,
+    );
+  if (field(row, 'recalledAt')) parts.push('recalled');
+  else if (field(row, 'editedAt')) parts.push('edited');
+  return parts.join(', ');
 }
 
 const KIND_DESCRIPTION_MAX = 500;
@@ -576,6 +617,7 @@ const specs: Record<string, Spec> = {
         return [
           `${field(summary, 'title')} (${revisionLabel(summary)})`,
           `Source: ${field(summary, 'sourceName')} (${field(summary, 'sourceType')}) · Kind: ${field(summary, 'kindName')} [${field(summary, 'kind')}]`,
+          `Priority: ${priorityText(priorityOf(summary))}`,
           `Occurred: ${field(summary, 'occurredAt')}`,
           ...(field(summary, 'editedAt')
             ? [`Edited: ${field(summary, 'editedAt')}`]
@@ -619,6 +661,7 @@ const specs: Record<string, Spec> = {
       body: { type: 'string' },
       url: { type: 'string' },
       'no-auto-open-url': { type: 'boolean' },
+      priority: { type: 'string' },
       data: { type: 'string' },
       'dedupe-key': { type: 'string' },
       'occurred-at': { type: 'string' },
@@ -640,6 +683,7 @@ const specs: Record<string, Spec> = {
           `Invalid kind "${kind}": use 1-64 lowercase letters, digits, ".", "_" or "-".`,
         );
       const data = jsonObjectFlag(values, 'data');
+      const priority = str(values, 'priority');
       return {
         method: 'sendNotification',
         request: {
@@ -650,6 +694,8 @@ const specs: Record<string, Spec> = {
           url: str(values, 'url'),
           // Unset lets the platform open --url on phone tap by default.
           autoOpenUrl: values['no-auto-open-url'] ? false : undefined,
+          priority:
+            priority === undefined ? undefined : parsePriority(priority),
           dataJson: data,
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
@@ -1408,8 +1454,14 @@ export function parseNotificationCommand(
       allowPositionals: true,
       strict: true,
     });
-  } catch {
-    invalid('Invalid notification arguments. Use hatch help notification.');
+  } catch (error) {
+    // Node names the offending flag, e.g. "--priority=-1" for a value that
+    // starts with a dash.
+    const detail =
+      error instanceof Error ? ` ${error.message.replaceAll('\n', ' ')}` : '';
+    invalid(
+      `Invalid notification arguments.${detail} Use hatch help notification.`,
+    );
   }
   const positionals = parsed.positionals;
   if (

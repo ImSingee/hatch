@@ -420,6 +420,20 @@ function withMainAppKeychain(config) {
   });
 }
 
+/**
+ * High-priority pushes are time-sensitive: shown during Focus and Do Not
+ * Disturb unless the user turns that off for Hatch. The capability needs no
+ * Apple approval, unlike critical alerts; without it iOS shows them as
+ * ordinary notifications. The extension keeps the level the push asked for.
+ */
+function withTimeSensitiveNotifications(config) {
+  return withEntitlementsPlist(config, (config) => {
+    config.modResults['com.apple.developer.usernotifications.time-sensitive'] =
+      true;
+    return config;
+  });
+}
+
 function withExtensionFiles(config) {
   return withDangerousMod(config, [
     'ios',
@@ -530,6 +544,7 @@ function withExtensionTarget(config, { bundleIdentifier }) {
 module.exports = function withNotificationServiceExtension(config) {
   const bundleIdentifier = `${config.ios?.bundleIdentifier ?? 'app.hatch.mobile'}.NotificationService`;
   config = withMainAppKeychain(config);
+  config = withTimeSensitiveNotifications(config);
   config = withExtensionFiles(config);
   config = withExtensionTarget(config, { bundleIdentifier });
   return config;
