@@ -425,6 +425,21 @@ function channelSecret(response: Record<string, unknown>, label: string) {
 const done = (message: string) => () => message;
 const id = { positionals: ['id'] } as const;
 
+/** `--limit` as a page size (1–100), or 0 for the server default. */
+function pageLimit(values: Values): number {
+  const limit = str(values, 'limit');
+  if (limit === undefined) return 0;
+  const parsed = Number(limit);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100)
+    invalid('--limit must be an integer between 1 and 100.');
+  return parsed;
+}
+
+const page = (lines: string, response: Row) => {
+  const next = field(response, 'nextCursor');
+  return next ? `${lines}\nMore: --cursor ${next}` : lines;
+};
+
 const specs: Record<string, Spec> = {
   list: {
     positionals: [],
@@ -454,13 +469,6 @@ const specs: Record<string, Spec> = {
         invalid(
           '--status must be unrouted, pending, delivered, partial or failed.',
         );
-      const limit = str(values, 'limit');
-      const parsedLimit = limit === undefined ? undefined : Number(limit);
-      if (
-        parsedLimit !== undefined &&
-        (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100)
-      )
-        invalid('--limit must be an integer between 1 and 100.');
       return {
         method: 'listNotifications',
         request: {
@@ -475,21 +483,23 @@ const specs: Record<string, Spec> = {
           status,
           replyState,
           cursor: str(values, 'cursor'),
-          limit: parsedLimit ?? 0,
+          limit: pageLimit(values),
         },
-        text: (response) => {
-          const lines = table(
-            rows(response.notifications).map((row) => [
-              field(row, 'id'),
-              field(row, 'createdAt'),
-              [revisionLabel(row), replyLabel(row)].filter(Boolean).join(', '),
-              `${field(row, 'sourceName')} / ${field(row, 'kind')}`,
-              field(row, 'title'),
-            ]),
-          );
-          const next = field(response, 'nextCursor');
-          return next ? `${lines}\nMore: --cursor ${next}` : lines;
-        },
+        text: (response) =>
+          page(
+            table(
+              rows(response.notifications).map((row) => [
+                field(row, 'id'),
+                field(row, 'createdAt'),
+                [revisionLabel(row), replyLabel(row)]
+                  .filter(Boolean)
+                  .join(', '),
+                `${field(row, 'sourceName')} / ${field(row, 'kind')}`,
+                field(row, 'title'),
+              ]),
+            ),
+            response,
+          ),
       };
     },
   },
@@ -1159,10 +1169,12 @@ const specs: Record<string, Spec> = {
   },
   'response-route list': {
     positionals: [],
-    build: () => ({
+    options: { limit: { type: 'string' }, cursor: { type: 'string' } },
+    build: (_positionals, values) => ({
       method: 'listResponseRoutes',
-      request: {},
-      text: (response) => table(rows(response.routes).map(responseRouteLine)),
+      request: { cursor: str(values, 'cursor'), limit: pageLimit(values) },
+      text: (response) =>
+        page(table(rows(response.routes).map(responseRouteLine)), response),
     }),
   },
   'response-route create': {

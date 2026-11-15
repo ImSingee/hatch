@@ -470,9 +470,16 @@ export function registerNotificationApi(router: ConnectRouter) {
         return {};
       },
 
-      listResponseRoutes: async () => ({
-        routes: (await listResponseRoutes()).map(responseRoute),
-      }),
+      listResponseRoutes: async (input) => {
+        const page = await listResponseRoutes({
+          cursor: input.cursor || undefined,
+          limit: input.limit || undefined,
+        });
+        return {
+          routes: page.routes.map(responseRoute),
+          nextCursor: none(page.nextCursor),
+        };
+      },
       createResponseRoute: async (input) => ({
         route: responseRoute(
           await createResponseRoute({

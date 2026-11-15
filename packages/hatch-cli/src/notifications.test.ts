@@ -4,6 +4,7 @@ import {
   NotificationService,
   type CreateChannelRequest,
   type CreateResponseRouteRequest,
+  type ListResponseRoutesRequest,
   type CreateRouteRequest,
   type DeleteNotificationRequest,
   type RecallNotificationRequest,
@@ -507,6 +508,7 @@ describe('notification reply commands', () => {
       respondToNotification?: RespondToNotificationRequest;
       createResponseRoute?: CreateResponseRouteRequest;
       updateResponseRoute?: UpdateResponseRouteRequest;
+      listResponseRoutes?: ListResponseRoutesRequest;
     } = {};
     const transport = createRouterTransport(({ service }) => {
       service(NotificationService, {
@@ -524,6 +526,10 @@ describe('notification reply commands', () => {
               respondedAt: 'now',
             },
           };
+        },
+        listResponseRoutes: (request) => {
+          received.listResponseRoutes = request;
+          return { routes: [] };
         },
         createResponseRoute: (request) => {
           received.createResponseRoute = request;
@@ -713,6 +719,21 @@ describe('notification reply commands', () => {
     ).toThrow('Supply --destination <id>.');
     expect(() => parse('response-route', 'update', 'route-1')).toThrow(
       'Supply at least one response route change.',
+    );
+  });
+
+  it('pages response-route list and rejects an unusable --limit', async () => {
+    const { transport, received } = replyTransport();
+    await executeNotificationCall(
+      transport,
+      parse('response-route', 'list', '--limit', '20', '--cursor', 'route-9'),
+    );
+    expect(received.listResponseRoutes).toMatchObject({
+      limit: 20,
+      cursor: 'route-9',
+    });
+    expect(() => parse('response-route', 'list', '--limit', '0')).toThrow(
+      '--limit must be an integer between 1 and 100.',
     );
   });
 });

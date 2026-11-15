@@ -8,6 +8,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -1332,11 +1333,31 @@ async function responseRouteValues(
   };
 }
 
-export async function listResponseRoutes(): Promise<ResponseRouteView[]> {
-  const rows = await db.query.notificationResponseRoutes.findMany({
-    orderBy: { createdAt: 'asc' },
-  });
-  return rows.map(responseRouteView);
+/**
+ * Response routes, oldest first. Without a page every route is returned (the
+ * settings page shows them all); with one, at most `limit` routes after
+ * `cursor` (ids are time-ordered ULIDs) and the cursor for the next page.
+ */
+export async function listResponseRoutes(page?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<{ routes: ResponseRouteView[]; nextCursor: string | null }> {
+  const r = schema.notificationResponseRoutes;
+  const limit = page
+    ? Math.min(Math.max(page.limit || 50, 1), LIST_LIMIT_MAX)
+    : undefined;
+  const rows = await db
+    .select()
+    .from(r)
+    .where(page?.cursor ? gt(r.id, page.cursor) : undefined)
+    .orderBy(r.id)
+    .limit(limit === undefined ? Number.MAX_SAFE_INTEGER : limit + 1);
+  const routes = limit === undefined ? rows : rows.slice(0, limit);
+  return {
+    routes: routes.map(responseRouteView),
+    nextCursor:
+      limit !== undefined && rows.length > limit ? routes.at(-1)!.id : null,
+  };
 }
 
 export async function createResponseRoute(

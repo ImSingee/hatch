@@ -715,8 +715,33 @@ describe('answered notifications', () => {
       service.updateResponseRoute({ id: route.id, enabled: false }),
       service.updateResponseRoute({ id: route.id, name: 'Renamed' }),
     ]);
-    const [stored] = await service.listResponseRoutes();
+    const {
+      routes: [stored],
+    } = await service.listResponseRoutes();
     expect(stored).toMatchObject({ name: 'Renamed', enabled: false });
+  });
+
+  it('pages response routes oldest first until no cursor remains', async () => {
+    const created = [];
+    for (const name of ['One', 'Two', 'Three'])
+      created.push(
+        await service.createResponseRoute({
+          name,
+          sourceType: 'any',
+          destinationId: webhookId,
+        }),
+      );
+    const first = await service.listResponseRoutes({ limit: 2 });
+    expect(first.routes.map((route) => route.name)).toEqual(['One', 'Two']);
+    expect(first.nextCursor).toBe(created[1]!.id);
+    const second = await service.listResponseRoutes({
+      limit: 2,
+      cursor: first.nextCursor!,
+    });
+    expect(second).toMatchObject({
+      routes: [{ name: 'Three' }],
+      nextCursor: null,
+    });
   });
 });
 

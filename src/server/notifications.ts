@@ -278,7 +278,7 @@ export const deleteRouteFn = createServerFn({ method: 'POST' })
 
 export const listResponseRoutesFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .handler(() => listResponseRoutes());
+  .handler(async () => (await listResponseRoutes()).routes);
 
 const responseRouteSchema = z.object({
   name: shortText.nullable().optional(),

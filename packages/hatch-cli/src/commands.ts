@@ -312,8 +312,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['notification', 'response-route', 'list'],
-    usage: 'notification response-route list',
-    description: 'List response routes: where answers to reply forms go.',
+    usage: 'notification response-route list [--limit <1-100>] [--cursor <id>]',
+    description:
+      'List response routes, oldest first: where answers to reply forms go. Prints the next cursor when more remain.',
   },
   {
     path: ['notification', 'response-route', 'create'],
