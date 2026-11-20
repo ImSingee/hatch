@@ -74,7 +74,8 @@ export function compactionTriggerTokens(model: ModelBudget): number {
  * its whole budget, and compaction could never bring it under the trigger.
  */
 export function compactionSettings(model: ModelBudget): CompactionSettings {
-  const share = Math.floor(compactionTriggerTokens(model) / 4);
+  // At least one token each: a zero tail budget could never be widened.
+  const share = Math.max(1, Math.floor(compactionTriggerTokens(model) / 4));
   return {
     enabled: true,
     reserveTokens: Math.min(DEFAULT_COMPACTION_SETTINGS.reserveTokens, share),
@@ -234,6 +235,12 @@ export async function estimateSessionContextTokens(
  * only cut in front of a user or assistant message, so one tool result larger
  * than the tail budget leaves it with no cut at all. Widening the tail until a
  * cut appears still summarizes the history in front of that result.
+ *
+ * pi summarizes a split turn's prefix on its own and only consults the
+ * previous summary when older history precedes the turn. When the previous
+ * compaction kept exactly from this turn's user message, there is none, and
+ * the earlier summary would be replaced by "No prior history." The prefix is
+ * then summarized as ordinary history, which updates the previous summary.
  */
 function prepareSummarizableCompaction(
   branch: SessionTreeEntry[],
@@ -250,11 +257,17 @@ function prepareSummarizableCompaction(
       keepRecentTokens,
     });
     if (!preparation.ok || !preparation.value) return undefined;
-    if (
-      preparation.value.isSplitTurn ||
-      preparation.value.messagesToSummarize.length > 0
-    ) {
-      return preparation.value;
+    const value = preparation.value;
+    if (value.messagesToSummarize.length > 0) return value;
+    if (value.isSplitTurn) {
+      return value.previousSummary === undefined
+        ? value
+        : {
+            ...value,
+            isSplitTurn: false,
+            messagesToSummarize: value.turnPrefixMessages,
+            turnPrefixMessages: [],
+          };
     }
     if (keepRecentTokens >= maxKeepRecentTokens) return undefined;
   }

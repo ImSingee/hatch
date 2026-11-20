@@ -83,6 +83,72 @@ describe('openTranscriptSession', () => {
 });
 
 describe('createSessionCompactor', () => {
+  it('gives up instead of looping when the model leaves no input budget', async () => {
+    const { models, model } = setup({ contextWindow: 8000, maxTokens: 7999 });
+    const { session } = await newSession([user('hello')]);
+    const compactor = createSessionCompactor({ session, models, model });
+    expect(await compactor.compactAfterOverflow()).toBe(false);
+  });
+
+  it('carries the previous summary into a compaction that splits the kept turn', async () => {
+    const { faux, models, model } = setup({
+      contextWindow: 200000,
+      maxTokens: 20000,
+    });
+    const summaryPrompts: string[] = [];
+    faux.setResponses(
+      Array.from({ length: 4 }, () => (context) => {
+        summaryPrompts.push(JSON.stringify(context.messages));
+        return fauxAssistantMessage('second summary');
+      }),
+    );
+    const toolRound = (id: string) => [
+      fauxAssistantMessage({
+        type: 'toolCall',
+        id,
+        name: 'read',
+        arguments: {},
+      }),
+      {
+        role: 'toolResult',
+        toolCallId: id,
+        toolName: 'read',
+        content: [{ type: 'text', text: 'y'.repeat(120000) }],
+        isError: false,
+        timestamp: 1,
+      },
+    ];
+    // The earlier compaction kept exactly from this turn's user message, so
+    // the next one finds no older history in front of the turn it splits.
+    const { session } = await newSession([
+      user('old request'),
+      fauxAssistantMessage('old answer'),
+      user('current request'),
+      {
+        role: 'compactionSummary',
+        summary: 'FIRST-SUMMARY-FACTS',
+        tokensBefore: 150000,
+        timestamp: 1,
+        firstKeptIndex: 2,
+      },
+      ...toolRound('call-1'),
+      ...toolRound('call-2'),
+    ]);
+
+    const compactor = createSessionCompactor({ session, models, model });
+    expect(await compactor.compactAfterOverflow()).toBe(true);
+
+    expect(summaryPrompts).toHaveLength(1);
+    expect(summaryPrompts[0]).toContain('FIRST-SUMMARY-FACTS');
+    expect(summaryPrompts[0]).toContain('current request');
+    const context = (await session.buildContext()).messages;
+    expect(context.map((message) => message.role)).toEqual([
+      'compactionSummary',
+      'assistant',
+      'toolResult',
+    ]);
+  });
+
   it('summarizes the history in front of a tool result larger than the tail budget', async () => {
     const { faux, models, model } = setup({
       contextWindow: 200000,
