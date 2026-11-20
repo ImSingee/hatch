@@ -14,6 +14,8 @@ type PasswordContext = {
   aadPrefix: string;
 };
 
+// The legacy `my-space/` prefix derives keys for stored ciphertext; changing
+// it makes existing secrets undecryptable.
 const APP_DB_PASSWORD_CONTEXT: PasswordContext = {
   label: 'app database',
   domain: 'my-space/app-db-password/aes-256-gcm/v1',

@@ -1,5 +1,7 @@
 import { decryptEnvelope, encryptEnvelope } from '../crypto/envelope';
 
+// The legacy `my-space/` prefix derives keys for stored ciphertext; changing
+// it makes existing secrets undecryptable.
 const KV_SECRET_DOMAIN = 'my-space/app-kv-secret/aes-256-gcm/v1';
 const KV_SECRET_AAD_DOMAIN = 'my-space/app-kv-secret';
 
