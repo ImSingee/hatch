@@ -31,8 +31,8 @@ export async function command(
   cwd: string,
   signal: AbortSignal,
   allowFailure = false,
-  options: { input?: string; env?: NodeJS.ProcessEnv } = {},
-): Promise<{ code: number; stdout: string }> {
+  options: { input?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
+): Promise<{ code: number; stdout: string; stderr: string }> {
   if (signal.aborted) throw new CliError('cancelled', 'Cancelled.', 130);
   return new Promise((resolveResult, reject) => {
     const child = spawn(executable, args, {
@@ -56,7 +56,7 @@ export async function command(
       }
     };
     signal.addEventListener('abort', kill, { once: true });
-    const timer = setTimeout(kill, 300000);
+    const timer = setTimeout(kill, options.timeoutMs ?? 300000);
     timer.unref();
     if (signal.aborted) kill();
     child.stdin.on('error', () => {});
@@ -67,7 +67,12 @@ export async function command(
       stdout += data;
       if (stdout.length > 300 * 1024 * 1024) kill();
     });
-    child.stderr.resume();
+    // Kept only so callers can classify a failure; never printed as-is.
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (data) => {
+      stderr = (stderr + data).slice(-64 * 1024);
+    });
     child.once('error', () => {
       clearTimeout(timer);
       signal.removeEventListener('abort', kill);
@@ -97,7 +102,7 @@ export async function command(
             6,
           ),
         );
-      else resolveResult({ code: code ?? 1, stdout: stdout.trim() });
+      else resolveResult({ code: code ?? 1, stdout: stdout.trim(), stderr });
     });
   });
 }
@@ -106,6 +111,7 @@ export const git = async (
   signal: AbortSignal,
   args: string[],
   allowFailure = false,
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
 ) =>
   command(
     'git',
@@ -119,4 +125,5 @@ export const git = async (
     root,
     signal,
     allowFailure,
+    options,
   );

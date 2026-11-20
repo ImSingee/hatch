@@ -41,14 +41,13 @@ const mocks = vi.hoisted(() => ({
   setKeepAlive: vi.fn<(id: string, keepAlive: boolean) => void>(),
   reloadScheduler: vi.fn<() => Promise<void>>(),
   publishPlatformEvent: vi.fn<(event: unknown) => void>(),
-  assertDeployableWorktree:
-    vi.fn<(id: string, sourceDir: string) => Promise<void>>(),
+  resolveDeployCommit:
+    vi.fn<(id: string, commit?: string) => Promise<string>>(),
   deleteDeploymentTag: vi.fn<(id: string, tag: string) => Promise<void>>(),
-  prepareDeployCheckout: vi.fn<(id: string) => Promise<string>>(),
+  prepareDeployCheckout:
+    vi.fn<(id: string, commit: string) => Promise<string>>(),
   publishDeploymentSource:
-    vi.fn<
-      (id: string, sourceDir: string, version: number) => Promise<unknown>
-    >(),
+    vi.fn<(id: string, commit: string, version: number) => Promise<unknown>>(),
   beginAppDatabaseDeployment:
     vi.fn<
       (
@@ -306,7 +305,7 @@ vi.mock('./build-identity', () => ({
   liveBuildMatchesDeployment: mocks.liveBuildMatchesDeployment,
 }));
 vi.mock('./git', () => ({
-  assertDeployableWorktree: mocks.assertDeployableWorktree,
+  resolveDeployCommit: mocks.resolveDeployCommit,
   deleteDeploymentTag: mocks.deleteDeploymentTag,
   prepareDeployCheckout: mocks.prepareDeployCheckout,
   publishDeploymentSource: mocks.publishDeploymentSource,
@@ -541,7 +540,7 @@ describe('App deployment activation recovery', () => {
     mocks.getWorkflowCallability.mockResolvedValue({ state: 'unavailable' });
     mocks.ensureAppRunning.mockResolvedValue(1234);
     mocks.reloadScheduler.mockResolvedValue();
-    mocks.assertDeployableWorktree.mockResolvedValue();
+    mocks.resolveDeployCommit.mockResolvedValue('source-commit');
     mocks.prepareDeployCheckout.mockResolvedValue('/source');
     mocks.publishDeploymentSource.mockResolvedValue({
       tag: 'deploy/v1',
@@ -578,7 +577,7 @@ describe('App deployment activation recovery', () => {
 
     const result = await deployApp(id, {
       message: 'First deployment',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
 
     expect(result.compatibilityVersion).toBe(2);
@@ -613,7 +612,7 @@ describe('App deployment activation recovery', () => {
 
     const result = await deployApp(id, {
       message: 'Deploy source compatibility',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
 
     expect(result.compatibilityVersion).toBe(1);
@@ -648,7 +647,7 @@ describe('App deployment activation recovery', () => {
       await expect(
         deployApp(id, {
           message: 'Reject unsupported compatibility',
-          sourceDir: '/source',
+          commit: 'source-commit',
         }),
       ).rejects.toThrow(expectedError);
 
@@ -685,7 +684,7 @@ describe('App deployment activation recovery', () => {
     await expect(
       deployApp(id, {
         message: 'Reference a newer Workflow',
-        sourceDir: '/source',
+        commit: 'source-commit',
       }),
     ).rejects.toThrow(/Workflow cannot run.*newer.*Update the platform/);
 
@@ -711,7 +710,7 @@ describe('App deployment activation recovery', () => {
     mocks.buildApp.mockRejectedValueOnce(failure);
 
     await expect(
-      deployApp(id, { message: 'Broken deployment', sourceDir: '/source' }),
+      deployApp(id, { message: 'Broken deployment', commit: 'source-commit' }),
     ).rejects.toBe(failure);
 
     expect(mocks.publishPlatformEvent).not.toHaveBeenCalled();
@@ -733,7 +732,7 @@ describe('App deployment activation recovery', () => {
 
     const result = await deployApp(id, {
       message: 'Committed deployment',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
 
     expect(result.compatibilityVersion).toBe(1);
@@ -1028,7 +1027,7 @@ describe('App deployment activation recovery', () => {
     mocks.buildApp.mockRejectedValueOnce(new Error('retry build failed'));
 
     await expect(
-      deployApp(id, { message: 'Retry deployment', sourceDir: '/source' }),
+      deployApp(id, { message: 'Retry deployment', commit: 'source-commit' }),
     ).rejects.toThrow('retry build failed');
 
     expect(mocks.setKeepAlive).toHaveBeenCalledWith(id, true);
@@ -1054,7 +1053,7 @@ describe('App deployment activation recovery', () => {
     );
 
     await expect(
-      deployApp(id, { message: 'Broken source', sourceDir: '/source' }),
+      deployApp(id, { message: 'Broken source', commit: 'source-commit' }),
     ).rejects.toThrow('Source validation failed during deno check');
 
     expect(app.status).toBe('deployed');
@@ -1081,7 +1080,10 @@ describe('App deployment activation recovery', () => {
     );
 
     await expect(
-      deployApp(id, { message: 'Retry invalid source', sourceDir: '/source' }),
+      deployApp(id, {
+        message: 'Retry invalid source',
+        commit: 'source-commit',
+      }),
     ).rejects.toThrow('Source validation failed during deno check');
 
     expect(app.status).toBe('building');
@@ -1131,7 +1133,7 @@ describe('App deployment activation recovery', () => {
     });
 
     await expect(
-      deployApp(id, { message: 'Concurrent archive', sourceDir: '/source' }),
+      deployApp(id, { message: 'Concurrent archive', commit: 'source-commit' }),
     ).rejects.toThrow(/changed state while its deployment was building/);
 
     expect(app.status).toBe('archived');
@@ -1164,7 +1166,7 @@ describe('App deployment activation recovery', () => {
     });
 
     await expect(
-      deployApp(id, { message: 'Retry deployment', sourceDir: '/source' }),
+      deployApp(id, { message: 'Retry deployment', commit: 'source-commit' }),
     ).rejects.toBe(migrationFailure);
 
     await expect(fs.access(pendingArtifact)).rejects.toMatchObject({
@@ -1185,7 +1187,7 @@ describe('App deployment activation recovery', () => {
     });
 
     await expect(
-      deployApp(id, { message: 'Retry deployment', sourceDir: '/source' }),
+      deployApp(id, { message: 'Retry deployment', commit: 'source-commit' }),
     ).rejects.toBe(cleanupFailure);
 
     expect(app.dataActivationId).toBe(pendingId);
@@ -1239,7 +1241,7 @@ describe('App deployment activation recovery', () => {
     });
 
     await expect(
-      deployApp(id, { message: 'Claim Data DB', sourceDir: '/source' }),
+      deployApp(id, { message: 'Claim Data DB', commit: 'source-commit' }),
     ).rejects.toBe(failure);
 
     expect(app).toMatchObject({
@@ -1292,7 +1294,7 @@ describe('App deployment activation recovery', () => {
     await fs.mkdir(`${mocks.root}/live`, { recursive: true });
     await deployApp(id, {
       message: 'Database warm start',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
     expect(mocks.ensureAppRunning).toHaveBeenCalledOnce();
     expect(warmState).toEqual({
@@ -1321,7 +1323,7 @@ describe('App deployment activation recovery', () => {
     await fs.mkdir(`${mocks.root}/live`, { recursive: true });
     await deployApp(id, {
       message: 'Database-free deployment',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
     expect(app.dbName).toBeNull();
   });
@@ -1352,7 +1354,7 @@ describe('App deployment activation recovery', () => {
 
     const result = await deployApp(id, {
       message: 'Disable Data Tables',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
 
     expect(mocks.applyDataMigration).not.toHaveBeenCalled();
@@ -1402,7 +1404,7 @@ describe('App deployment activation recovery', () => {
 
     const result = await deployApp(id, {
       message: 'Re-enable Data Tables',
-      sourceDir: '/source',
+      commit: 'source-commit',
     });
 
     expect(mocks.applyDataMigration).toHaveBeenCalledWith(

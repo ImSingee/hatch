@@ -228,6 +228,7 @@ export const appDetailSchema = appSummarySchema
 export const workflowDetailSchema = resourceSchema
   .extend({
     liveVersion: z.number().nullable(),
+    currentSourceCommit: nullable,
     compatibility: compatibilitySchema.nullable(),
     inputSchema: z.unknown(),
     network: networkView.nullable(),

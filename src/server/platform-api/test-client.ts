@@ -93,9 +93,17 @@ export async function rpcCall<T = any>(
         data = body === undefined ? await api.list({}) : await api.create(body);
       else if (!operation) data = await api.get({ id });
       else if (operation === 'source') data = await api.source({ id });
-      else if (operation === 'deploy')
-        data = await api.deploy({ params: { id }, body });
-      else if (operation === 'rollback')
+      else if (operation === 'deploy') {
+        // Fixtures still exercise the deprecated bundle transport, which the
+        // CLI client no longer sends; the extra field reaches the wire as-is.
+        const { bundleBase64, ...rest } = body;
+        data = await api.deploy({
+          params: { id },
+          body: bundleBase64
+            ? { ...rest, bundle: Buffer.from(bundleBase64, 'base64') }
+            : rest,
+        });
+      } else if (operation === 'rollback')
         data = await api.rollback({ params: { id }, body });
       else return missing();
     } else return missing();

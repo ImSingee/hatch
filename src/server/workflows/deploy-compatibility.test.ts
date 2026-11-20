@@ -8,9 +8,7 @@ const mocks = vi.hoisted(() => ({
   compatibilityVersion: 1,
   buildWorkflow: vi.fn<(id: string, options: unknown) => Promise<unknown>>(),
   publishDeploymentSource:
-    vi.fn<
-      (id: string, sourceDir: string, version: number) => Promise<unknown>
-    >(),
+    vi.fn<(id: string, commit: string, version: number) => Promise<unknown>>(),
   reloadWorkflowScheduler: vi.fn<() => Promise<void>>(),
 }));
 
@@ -36,9 +34,9 @@ vi.mock('~server/deploy-lock', () => ({
 
 vi.mock('./build', () => ({ buildWorkflow: mocks.buildWorkflow }));
 vi.mock('./git', () => ({
-  assertDeployableWorktree: vi.fn<() => Promise<void>>(),
+  resolveDeployCommit: vi.fn<() => Promise<string>>(async () => 'commit'),
   deleteDeploymentTag: vi.fn<() => Promise<void>>(),
-  prepareDeployCheckout: vi.fn<() => Promise<string>>(),
+  prepareDeployCheckout: vi.fn<() => Promise<string>>(async () => '/source'),
   publishDeploymentSource: mocks.publishDeploymentSource,
 }));
 vi.mock('./scheduler', () => ({
@@ -106,7 +104,7 @@ afterEach(async () => {
 describe('Workflow final deployment compatibility recording', () => {
   it('keeps the live release when source type checking fails', async () => {
     const previous = await deployWorkflow(WORKFLOW_ID, {
-      sourceDir: '/source',
+      commit: 'commit',
       message: 'Initial deployment',
     });
     mocks.publishDeploymentSource.mockClear();
@@ -117,7 +115,7 @@ describe('Workflow final deployment compatibility recording', () => {
 
     await expect(
       deployWorkflow(WORKFLOW_ID, {
-        sourceDir: '/source',
+        commit: 'commit',
         message: 'Invalid source',
       }),
     ).rejects.toThrow(/source validation failed during deno check/);
@@ -140,7 +138,7 @@ describe('Workflow final deployment compatibility recording', () => {
 
   it('records and returns the manifest-selected compatibility version', async () => {
     const result = await deployWorkflow(WORKFLOW_ID, {
-      sourceDir: '/source',
+      commit: 'commit',
       message: 'Initial deployment',
     });
 
@@ -168,7 +166,7 @@ describe('Workflow final deployment compatibility recording', () => {
 
     await expect(
       deployWorkflow(WORKFLOW_ID, {
-        sourceDir: '/source',
+        commit: 'commit',
         message: 'Unsupported deployment',
       }),
     ).rejects.toThrow(/newer than this platform's latest supported/);

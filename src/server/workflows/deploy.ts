@@ -16,10 +16,10 @@ import { createDeployLock, workspaceRelative } from '~server/deploy-lock';
 import { AppError } from '~server/errors';
 import { buildWorkflow } from './build';
 import {
-  assertDeployableWorktree,
   deleteDeploymentTag,
   prepareDeployCheckout,
   publishDeploymentSource,
+  resolveDeployCommit,
 } from './git';
 import type { NormalizedWorkflowManifest } from './manifest';
 import { reloadWorkflowScheduler } from './scheduler';
@@ -35,7 +35,8 @@ export type DeployWorkflowResult = {
 };
 
 export type DeployWorkflowOptions = {
-  sourceDir?: string;
+  /** Commit to release; must be on master. Defaults to the master tip. */
+  commit?: string;
   /** Required release note recorded on the deployment. */
   message: string;
   /** Reject if this workflow id now belongs to another incarnation. */
@@ -94,8 +95,8 @@ async function deployWorkflowInner(
   }
   assertWorkflowGeneration(id, options.expectedGeneration, workflow.createdAt);
 
-  const sourceDir = options.sourceDir ?? (await prepareDeployCheckout(id));
-  await assertDeployableWorktree(id, sourceDir);
+  const sourceCommit = await resolveDeployCommit(id, options.commit);
+  const sourceDir = await prepareDeployCheckout(id, sourceCommit);
 
   // A deployment row records a successful release only — a failed build leaves
   // no row and burns no version number. Mint the id up front to key dirs.
@@ -211,7 +212,11 @@ async function deployWorkflowInner(
       });
       version = (last?.version ?? 0) + 1;
 
-      const published = await publishDeploymentSource(id, sourceDir, version);
+      const published = await publishDeploymentSource(
+        id,
+        sourceCommit,
+        version,
+      );
       publishedTag = published.tag;
 
       await tx.insert(schema.workflowDeployments).values({
@@ -326,5 +331,7 @@ async function deployWorkflowInner(
     throw error;
   } finally {
     await fs.rm(path.dirname(tempBuild), { recursive: true, force: true });
+    // The source checkout is only an input to this build.
+    await fs.rm(sourceDir, { recursive: true, force: true });
   }
 }

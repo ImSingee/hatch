@@ -9,7 +9,12 @@ import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_p
 import { fromJson } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
 /** Durable CLI source/data boundaries through real child processes and Git. */
-import { createServer } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
+import { createGunzip } from 'node:zlib';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import {
@@ -30,8 +35,11 @@ const entry = fileURLToPath(new URL('./main.ts', import.meta.url));
 let directory: string;
 let origin: string;
 let generation: string;
-let bundle: string | null;
+/** Bare repository behind the fixture's Git endpoint. */
+let remote: string;
 let master: string | null;
+let released: string | null;
+let deployedCommits: (string | undefined)[];
 let deploys: number;
 let loseResponse: boolean;
 let sdkDelay: (() => Promise<void>) | undefined;
@@ -46,7 +54,7 @@ const getResource = () => ({
   status: 'draft',
   createdAt: generation,
   updatedAt: generation,
-  view: fromJson(ValueSchema, {}),
+  view: fromJson(ValueSchema, { currentSourceCommit: released }),
 });
 function createResource(
   data: Pick<CreateAppRequest, 'slug' | 'name' | 'pin' | 'description'>,
@@ -96,21 +104,10 @@ const rpc = connectNodeAdapter({
     router.service(WorkflowService, {
       createWorkflow: createResource,
       getWorkflow: () => ({ resource: getResource() }),
-      getWorkflowSource: () => ({
-        source: {
-          id: 'immutable',
-          masterCommit: master ?? undefined,
-          bundle: bundle === null ? undefined : Buffer.from(bundle, 'base64'),
-        },
-      }),
       deployWorkflow: async (data) => {
         deploys++;
-        const file = join(directory, 'uploaded.bundle');
-        await writeFile(file, data.bundle);
-        const refs = execFileSync('git', ['bundle', 'list-heads', file], {
-          encoding: 'utf8',
-        });
-        master = refs.trim().split(' ')[0];
+        deployedCommits.push(data.commit);
+        released = data.commit ?? null;
         return {
           deployment: {
             deploymentId: 'release-1',
@@ -141,7 +138,53 @@ const rpc = connectNodeAdapter({
     });
   },
 });
+/** Minimal Git smart HTTP over the fixture's bare repository. */
+function gitHttp(request: IncomingMessage, response: ServerResponse) {
+  const basic = /^Basic (\S+)$/.exec(request.headers.authorization ?? '')?.[1];
+  const secret = basic
+    ? Buffer.from(basic, 'base64').toString().split(':')[1]
+    : /^Bearer (\S+)$/.exec(request.headers.authorization ?? '')?.[1];
+  if (secret !== token) {
+    response.writeHead(401, { 'www-authenticate': 'Basic realm="fixture"' });
+    response.end();
+    return;
+  }
+  const url = new URL(request.url ?? '', origin);
+  const advertise = url.pathname.endsWith('/info/refs');
+  const service = advertise
+    ? String(url.searchParams.get('service'))
+    : String(url.pathname.split('/').pop());
+  const protocol = String(request.headers['git-protocol'] ?? '');
+  const child = spawn(
+    'git',
+    [
+      service.replace('git-', ''),
+      '--stateless-rpc',
+      ...(advertise ? ['--advertise-refs'] : []),
+      remote,
+    ],
+    { env: { ...process.env, GIT_PROTOCOL: protocol } },
+  );
+  response.writeHead(200, {
+    'content-type': `application/x-${service}-${advertise ? 'advertisement' : 'result'}`,
+  });
+  if (advertise && !protocol.includes('version=2')) {
+    const line = `# service=${service}\n`;
+    response.write(
+      `${(line.length + 4).toString(16).padStart(4, '0')}${line}0000`,
+    );
+  }
+  (request.headers['content-encoding'] === 'gzip'
+    ? request.pipe(createGunzip())
+    : request
+  ).pipe(child.stdin);
+  child.stdout.pipe(response);
+}
 const server = createServer(async (request, response) => {
+  if (request.url?.startsWith('/api/git/workflow/immutable.git/')) {
+    gitHttp(request, response);
+    return;
+  }
   if (loseResponse && request.url?.endsWith('/DeployWorkflow')) {
     deploys++;
     request.socket.destroy();
@@ -206,12 +249,12 @@ async function create() {
   assert.equal(result.code, 0, JSON.stringify(result));
   return join(directory, 'source');
 }
+/** Another client pushes `root`'s HEAD to platform master. */
 async function publish(root: string) {
-  const file = join(directory, 'remote.bundle');
-  git(root, 'bundle', 'create', file, 'master');
-  bundle = (await readFile(file)).toString('base64');
+  git(root, 'push', '--quiet', remote, 'HEAD:refs/heads/master');
   master = git(root, 'rev-parse', 'HEAD');
 }
+const remoteMaster = () => git(remote, 'rev-parse', 'refs/heads/master');
 function commit(root: string, message: string) {
   git(root, 'add', '.');
   git(
@@ -232,8 +275,12 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       await mkdtemp(join(tmpdir(), 'hatch-cli-boundary-')),
     );
     generation = new Date().toISOString();
-    bundle = null;
+    remote = `${directory}-remote.git`;
+    execFileSync('git', ['init', '--quiet', '--bare', '-b', 'master', remote]);
+    git(remote, 'config', 'receive.denyNonFastForwards', 'true');
     master = null;
+    released = null;
+    deployedCommits = [];
     deploys = 0;
     loseResponse = false;
     sdkDelay = undefined;
@@ -248,6 +295,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
   afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
+    await rm(remote, { recursive: true, force: true });
   });
   it.each(['app', 'workflow'])(
     'creates a %s with a digit-leading slug in the default directory',
@@ -387,8 +435,149 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
         .error.code,
     ).toBe('non_fast_forward');
     expect(git(clone, 'rev-parse', 'HEAD')).toBe(local);
-    expect(git(clone, 'rev-parse', 'FETCH_HEAD')).toBe(master);
+    expect(git(clone, 'rev-parse', 'origin/master')).toBe(master);
+    // A push from the diverged checkout is refused the same way.
+    expect(
+      (await run(['workflow', 'push', '--directory', clone]).result).data.error
+        .code,
+    ).toBe('non_fast_forward');
+    expect(remoteMaster()).toBe(master);
   });
+  it('pushes without deploying, and deploys by commit', async () => {
+    const root = await create();
+    const first = git(root, 'rev-parse', 'HEAD');
+    // Uncommitted work neither blocks a push nor is sent.
+    await writeFile(join(root, 'draft.txt'), 'uncommitted');
+    const pushed = await run(['workflow', 'push', '--directory', root]).result;
+    expect(pushed.data).toMatchObject({ commit: first, state: 'pushed' });
+    expect(remoteMaster()).toBe(first);
+    expect(
+      (await run(['workflow', 'push', '--directory', root]).result).data.state,
+    ).toBe('up-to-date');
+    expect(deploys).toBe(0);
+
+    commit(root, 'Second');
+    const second = git(root, 'rev-parse', 'HEAD');
+    const deployed = await run(['workflow', 'deploy', '--directory', root])
+      .result;
+    expect(deployed.data).toMatchObject({
+      sourceCommit: second,
+      pushState: 'pushed',
+    });
+    expect(remoteMaster()).toBe(second);
+
+    // --commit releases an already pushed commit and pushes nothing.
+    await writeFile(join(root, 'third.txt'), 'local only');
+    commit(root, 'Third');
+    const older = await run([
+      'workflow',
+      'deploy',
+      '--directory',
+      root,
+      '--commit',
+      first,
+    ]).result;
+    expect(older.data.sourceCommit).toBe(first);
+    expect(older.data.pushState).toBeUndefined();
+    expect(remoteMaster()).toBe(second);
+    expect(deployedCommits).toEqual([second, first]);
+
+    for (const extra of [
+      ['--commit', 'master'],
+      ['--commit', first.slice(0, 12)],
+      ['--commit', first, '--reconcile'],
+    ])
+      expect(
+        (
+          await run(['workflow', 'deploy', '--directory', root, ...extra])
+            .result
+        ).data.error.code,
+      ).toBe('invalid_arguments');
+    expect(deploys).toBe(2);
+  });
+  it('keeps local commits when platform master moves back, then pushes them again', async () => {
+    const root = await create();
+    const first = git(root, 'rev-parse', 'HEAD');
+    await publish(root);
+    await writeFile(join(root, 'next.txt'), 'next');
+    commit(root, 'Next');
+    const next = git(root, 'rev-parse', 'HEAD');
+    await publish(root);
+    // A rollback rewinds platform master to the restored release.
+    git(remote, 'update-ref', 'refs/heads/master', first);
+
+    const updated = await run(['workflow', 'update', '--directory', root])
+      .result;
+    expect(updated.data).toMatchObject({ state: 'ahead', headCommit: next });
+    expect(git(root, 'rev-parse', 'origin/master')).toBe(first);
+    expect(
+      (await run(['workflow', 'push', '--directory', root]).result).data.state,
+    ).toBe('pushed');
+    expect(remoteMaster()).toBe(next);
+  });
+  it.skipIf(process.platform === 'win32')(
+    'gives plain git a working origin without storing the credential',
+    async () => {
+      const root = await create();
+      await publish(root);
+      const url = `${origin}/api/git/workflow/immutable.git`;
+      expect(git(root, 'remote', 'get-url', 'origin')).toBe(url);
+      expect(await readFile(join(root, '.git/config'), 'utf8')).not.toContain(
+        token,
+      );
+
+      // The helper answers only for the instance the credential belongs to.
+      const helper = (host: string) =>
+        execFileSync(
+          process.execPath,
+          ['--import', 'tsx', entry, 'git-credential', 'get'],
+          {
+            input: `protocol=http\nhost=${host}\n\n`,
+            encoding: 'utf8',
+            env: {
+              ...process.env,
+              HATCH_CLI_URL: origin,
+              HATCH_CLI_TOKEN: token,
+              HATCH_CLI_API_KEY: undefined,
+            },
+          },
+        );
+      expect(helper(new URL(origin).host)).toBe(
+        `username=hatch\npassword=${token}\n`,
+      );
+      expect(helper('other.example.test')).toBe('');
+
+      // Plain git reaches the remote through `hatch git-credential`.
+      const bin = join(directory, 'bin');
+      await mkdir(bin);
+      await writeFile(
+        join(bin, 'hatch'),
+        `#!/bin/sh\nexec "${process.execPath}" --import "${import.meta.resolve('tsx')}" "${entry}" "$@"\n`,
+        { mode: 0o755 },
+      );
+      await writeFile(join(root, 'native.txt'), 'native');
+      commit(root, 'Native');
+      // Asynchronous: the fixture server runs in this process.
+      const push = spawn('git', ['push', '--quiet', 'origin', 'master'], {
+        cwd: root,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          PATH: `${bin}${delimiter}${process.env.PATH}`,
+          GIT_TERMINAL_PROMPT: '0',
+          GIT_CONFIG_NOSYSTEM: '1',
+          GIT_CONFIG_GLOBAL: '/dev/null',
+          HATCH_CLI_URL: origin,
+          HATCH_CLI_TOKEN: token,
+          HATCH_CLI_API_KEY: undefined,
+        } as NodeJS.ProcessEnv,
+      });
+      expect(await new Promise((resolve) => push.once('close', resolve))).toBe(
+        0,
+      );
+      expect(remoteMaster()).toBe(git(root, 'rev-parse', 'HEAD'));
+    },
+  );
   it('replaces only explicit safe targets after preparation and restores existing work on failure', async () => {
     const source = await create();
     await publish(source);
@@ -501,6 +690,8 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       ).code,
     ).toBe(0);
     expect(deploys).toBe(2);
+    expect(deployedCommits).toEqual([pending.commit]);
+    expect(remoteMaster()).toBe(pending.commit);
     expect(
       JSON.parse(await readFile(join(root, '.git/hatch-cli.json'), 'utf8'))
         .pending,

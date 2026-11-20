@@ -60,17 +60,22 @@ const definitions: readonly CliCommandDefinition[] = [
     {
       path: [resource, 'clone'],
       usage: `${resource} clone <id> [--directory <path>] [--force]`,
-      description: `Clone ${resource} source into a local checkout.`,
+      description: `Clone ${resource} source over Git into a local checkout whose origin is the platform remote. --force replaces the directory.`,
     },
     {
       path: [resource, 'update'],
       usage: `${resource} update [--directory <path>]`,
-      description: `Refresh a ${resource} checkout while preserving local work.`,
+      description: `Fetch platform master into origin/master and fast-forward the ${resource} checkout. Local commits are preserved; a checkout that is only ahead reports state "ahead".`,
+    },
+    {
+      path: [resource, 'push'],
+      usage: `${resource} push [--directory <path>]`,
+      description: `Push the checkout's HEAD to platform master without deploying. Fast-forward only; a rejected push exits with non_fast_forward. Uncommitted changes are not pushed.`,
     },
     {
       path: [resource, 'deploy'],
-      usage: `${resource} deploy [--directory <path>] [--message <text>] [--allow-destructive-data-migration --data-migration-approval-token <token>] [--reconcile | --retry-after-confirming <commit>]`,
-      description: `Deploy a ${resource} checkout.`,
+      usage: `${resource} deploy [--directory <path>] [--message <text>] [--commit <sha>] [--allow-destructive-data-migration --data-migration-approval-token <token>] [--reconcile | --retry-after-confirming <commit>]`,
+      description: `Push HEAD to platform master, then release it. --commit <sha> skips the push and releases that full commit id, which must already be on platform master.`,
     },
     {
       path: [resource, 'rollback'],
@@ -78,6 +83,12 @@ const definitions: readonly CliCommandDefinition[] = [
       description: `Activate a previous ${resource} deployment.`,
     },
   ]),
+  {
+    path: ['git-credential'],
+    usage: 'git-credential <get|store|erase>',
+    description:
+      'Git credential helper for checkouts created by this CLI; git runs it, not people. get reads a request on stdin and prints the current credential to stdout as the password, only for the logged-in platform URL. store and erase do nothing.',
+  },
   ...(['app', 'workflow'] as const).map((resource) => ({
     path: [resource, 'adopt'],
     usage: `${resource} adopt <id> --directory <path>`,

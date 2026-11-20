@@ -1,6 +1,7 @@
 # App and Workflow Tool / CLI capability parity
 
-All methods below use Connect RPC under `/api/rpc/hatch.platform.v1`.
+All methods below use Connect RPC under `/api/rpc/hatch.platform.v1`, except
+source transfer, which uses Git smart HTTP under `/api/git` (see below).
 Tools remain available, and every
 valid native session, API key or Run JWT has full public authority. The shared
 contract and SDK are shipped with the same platform build. No database migration,
@@ -10,19 +11,35 @@ App/Workflow compatibility bump or protocol-18 wire change is required.
 | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | list_apps            | app list                                | AppService/ListApps; currentVersion, compatibility, capabilities                                          |
 | get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, history                                           |
-| checkout_app         | app clone / update / adopt              | GetApp/GetAppSource, SdkService/GetSdk, AssociateAppSession; frozen preparation, force/recovery           |
+| checkout_app         | app clone / update / adopt              | GetApp, Git fetch (adopt: GetAppSource), SdkService/GetSdk, AssociateAppSession; frozen preparation       |
 | create_app           | app create                              | AppService/CreateApp; template, pin, directory, SDK, ID/slug/path/recovery                                |
-| deploy_app           | app deploy                              | AppService/DeployApp; normalized release/URLs, generation, migration approval, Run association            |
+| deploy_app           | app push / deploy                       | Git push, then AppService/DeployApp by commit; release/URLs, generation, migration approval, association  |
 | rollback_app         | app rollback                            | AppService/RollbackApp; compatibility and forward-only data/source recovery                               |
 | query_app_db         | app db query                            | AppService/QueryAppDb; registered DB lifecycle lock, DDL/DML, caps/cancellation; no implicit provisioning |
 | query_app_kv         | app kv list/get/set/delete              | AppService/QueryAppKv; empty/large UTF-8, masking/reveal, preserve/clear secret, pagination               |
 | query_app_data_table | app data-table inspect/query/mutate/sql | AppService/QueryAppDataTable; schema/counts, JSON, cursors/revision, atomic mutations, bounded SQL        |
 | list_workflows       | workflow list                           | WorkflowService/ListWorkflows; liveVersion, compatibility, webhook, cronCount                             |
 | get_workflow         | workflow get                            | WorkflowService/GetWorkflow; input Schema, network/triggers, runs/history/errors                          |
-| checkout_workflow    | workflow clone / update / adopt         | GetWorkflow/GetWorkflowSource, SdkService/GetSdk; history/dirty/generation, force/recovery                |
+| checkout_workflow    | workflow clone / update / adopt         | GetWorkflow, Git fetch (adopt: GetWorkflowSource), SdkService/GetSdk; history/dirty/generation, recovery  |
 | create_workflow      | workflow create                         | WorkflowService/CreateWorkflow; template, pin/directory, SDK, ID/slug/path/recovery                       |
-| deploy_workflow      | workflow deploy                         | WorkflowService/DeployWorkflow; normalized release/triggers and generation                                |
+| deploy_workflow      | workflow push / deploy                  | Git push, then WorkflowService/DeployWorkflow by commit; normalized release/triggers and generation       |
 | rollback_workflow    | workflow rollback                       | WorkflowService/RollbackWorkflow; compatibility and source recovery                                       |
+
+Source transfer and release are separate. `push` and the fetch behind `clone` /
+`update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`
+pushes, then calls the Deploy RPC with the commit to release (`--commit`
+releases a commit already on `master` without pushing). The Tools keep the
+bundle transport: `deploy_app` / `deploy_workflow` upload a bundle that the
+platform fast-forwards onto `master` and then releases, and Tool checkouts keep
+a local bundle as `origin`. Two deliberate deviations from the CLI rules:
+
+- `push` and source fetch are not backed by a Connect RPC. Git is the public
+  contract for source transfer; the endpoint accepts the same credentials as
+  the RPCs (session token, API key or Run JWT, with no gate on credential
+  type) and associates a pushing Run with its App, as deploy does.
+- `git-credential get` prints the current credential although it is not a
+  create or rotate command. The Git credential-helper protocol requires it;
+  the command only answers for the logged-in platform URL.
 
 CLI extends local checkout output with head/master, dirty/status,
 replacedExisting/synchronizedExisting and preparation. Text and JSON modes retain

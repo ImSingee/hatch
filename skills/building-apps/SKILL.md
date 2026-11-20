@@ -52,10 +52,14 @@ Do not import generated files or execution modules from the manifest.
    Follow Local validation: check `manifest.ts` when selected, generate RPC
    code, check enabled source entries, and run relevant tests.
 5. In the returned worktree, inspect `git status`, stage only intended authored
-   files, and commit. Do not push branches or create/push tags.
+   files, and commit. Do not `git push` from it: its `origin` is a local
+   read-only bundle, and `deploy_app` uploads the commit. Never create
+   `deploy/*` tags; the platform owns them.
 6. Call `deploy_app` with the same `source_path` and a concise release `message`.
-   Deploy repeats source validation before building or changing durable
-   deployment state. Fix any failure, validate again, commit, and redeploy.
+   Deploy first puts the commit on platform `master`, then repeats source
+   validation before building or changing durable deployment state. A failed
+   deploy leaves that commit on `master` unreleased: fix the failure, validate
+   again, commit on top, and redeploy.
 7. Call `get_app` to confirm the deployed state, then explain how to open it.
 
 If deploy says `master` advanced, refresh the same checkout, run

@@ -93,7 +93,7 @@ previous released contract and reserve removed field names/numbers.
 Buf Protovalidate annotations are the public input validation source of truth.
 The server applies `@connectrpc/validate` before invoking services. Rules cover
 required strings, slug syntax/length, App name Unicode code-point length,
-positive rollback versions, nonempty deployment bundles and allowed SDK kinds.
+positive rollback versions, full deployment commit ids and allowed SDK kinds.
 Protobuf decoding handles wire types. Unknown fields follow Protobuf evolution
 rules. These rules do not reproduce the former Zod parsing or error messages.
 Runner and Agent tool contracts retain their independent Zod validation.
@@ -110,6 +110,16 @@ resource existence, generation conflicts, Git cleanliness/fast-forward,
 manifest compatibility, migration approvals, release locking and rollback
 artifact/data fences. Deployment requests include the resource's observed
 `createdAt` as `generation`, checked again under the deploy lock.
+
+Source is not transferred through these RPCs. Clients push and fetch over Git
+smart HTTP at `/api/git/{app|workflow}/<id-or-slug>.git`, authenticated by the
+same credentials (HTTP Basic password, `Authorization: Bearer` or `X-API-Key`;
+never a Cookie). `master` accepts fast-forward pushes only and `deploy/*` tags
+belong to the platform. A Deploy request names the `commit` to release, which
+must be on `master`, and defaults to its tip. The `bundle` field and the
+`Get*Source` bundle remain for Agent Tools and older CLIs: an uploaded bundle is
+fast-forwarded onto `master` and then released. Rollback moves `master` back to
+the restored release.
 
 ## Authentication and transport policy
 

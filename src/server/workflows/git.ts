@@ -13,7 +13,6 @@ export type { PublishedSource };
 
 const core = createGitSource({
   noun: 'workflow',
-  deployTool: 'deploy_workflow',
   repoDir: workflowRepoDir,
   deployCheckoutDir: workflowDeployCheckoutDir,
 });
@@ -21,9 +20,9 @@ const core = createGitSource({
 export const ensureWorkflowRepo = core.ensureRepo;
 export const workflowMasterCommit = core.masterCommit;
 export const prepareDeployCheckout = core.prepareDeployCheckout;
-export const assertDeployableWorktree = core.assertDeployableWorktree;
+export const resolveDeployCommit = core.resolveDeployCommit;
 export const publishDeploymentSource = core.publishDeploymentSource;
 export const deleteDeploymentTag = core.deleteDeploymentTag;
 export const moveMasterToDeploymentTag = core.moveMasterToDeploymentTag;
 export const exportWorkflowMasterBundle = core.exportMasterBundle;
-export const stageWorkflowBundleCheckout = core.stageBundleCheckout;
+export const importWorkflowBundleToMaster = core.importBundleToMaster;

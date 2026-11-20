@@ -35,13 +35,8 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(appId: string) => Promise<string | null> | string | null>(),
   exportAppMasterBundle:
     vi.fn<(appId: string) => Promise<Buffer | null> | Buffer | null>(),
-  stageAppBundleCheckout:
-    vi.fn<
-      (
-        appId: string,
-        bundle: Buffer,
-      ) => Promise<{ dir: string; cleanup: () => Promise<void> | void }>
-    >(),
+  importAppBundleToMaster:
+    vi.fn<(appId: string, bundle: Buffer) => Promise<string>>(),
   deployApp: vi.fn<(appId: string, options: unknown) => Promise<unknown>>(),
   appSlug: vi.fn<(appId: string) => Promise<string | null>>(),
   projectAppManifestUrls:
@@ -86,7 +81,7 @@ vi.mock('~server/apps/inspect', () => ({
 vi.mock('~server/apps/git', () => ({
   appMasterCommit: mocks.appMasterCommit,
   exportAppMasterBundle: mocks.exportAppMasterBundle,
-  stageAppBundleCheckout: mocks.stageAppBundleCheckout,
+  importAppBundleToMaster: mocks.importAppBundleToMaster,
 }));
 
 vi.mock('~server/apps/deploy', () => ({ deployApp: mocks.deployApp }));
@@ -182,10 +177,7 @@ beforeEach(() => {
   );
   mocks.appMasterCommit.mockResolvedValue('master-commit');
   mocks.exportAppMasterBundle.mockResolvedValue(Buffer.from('bundle'));
-  mocks.stageAppBundleCheckout.mockResolvedValue({
-    dir: '/tmp/staged-app',
-    cleanup: vi.fn<() => void>(),
-  });
+  mocks.importAppBundleToMaster.mockResolvedValue('pushed-commit');
   mocks.deployApp.mockResolvedValue({
     deploymentId: 'deployment-one',
     version: 1,
@@ -302,7 +294,7 @@ const appRouteCases = [
       bundleBase64: Buffer.from('bundle').toString('base64'),
     },
     assertId: () =>
-      expect(mocks.stageAppBundleCheckout).toHaveBeenCalledWith(
+      expect(mocks.importAppBundleToMaster).toHaveBeenCalledWith(
         'immutable-app-id',
         Buffer.from('bundle'),
       ),
