@@ -1561,6 +1561,14 @@ function forwardToAppBackend(
   return new Promise((resolve, reject) => {
     const outgoing: Record<string, string> = {};
     for (const [name, value] of headers) outgoing[name] = value;
+    // Frame every forwarded body explicitly. Node only frames implicitly for
+    // methods it expects to carry one: DELETE and OPTIONS bodies would go out
+    // with neither Content-Length nor chunked encoding, so the backend reads
+    // an empty body and the bytes corrupt the next request on the pooled
+    // keep-alive socket.
+    if (Buffer.isBuffer(body))
+      outgoing['content-length'] = String(body.byteLength);
+    else if (body) outgoing['transfer-encoding'] = 'chunked';
     let settled = false;
     let source: Readable | undefined;
     const fail = (error: unknown) => {
