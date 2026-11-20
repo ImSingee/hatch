@@ -7,16 +7,6 @@ import type { WorkPhase } from './work-process';
 export type RenderTurn =
   | { kind: 'user'; key: string; userTurn: number; message: ChatMessage }
   | {
-      /**
-       * Boundary where earlier history was compacted into a summary. Carries
-       * the compaction's own summary so the row can expand into it.
-       */
-      kind: 'compaction';
-      key: string;
-      tokensBefore: number;
-      summary: string;
-    }
-  | {
       kind: 'assistant';
       key: string;
       /**
@@ -34,19 +24,13 @@ export type RenderTurn =
  * assistant + tool-result messages — into a single turn. Tool-result messages
  * are dropped because they are merged into their call rows by `pairToolResults`.
  * Blocks keep their order, so the reply's last text stays its final answer.
+ * A compaction marker joins the reply it happened in as one more step.
  */
 export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
   const turns: RenderTurn[] = [];
   let userTurns = 0;
   messages.forEach((message, index) => {
-    if (message.role === 'compactionSummary') {
-      turns.push({
-        kind: 'compaction',
-        key: `m${index}`,
-        tokensBefore: message.tokensBefore,
-        summary: message.summary,
-      });
-    } else if (message.role === 'user') {
+    if (message.role === 'user') {
       turns.push({
         kind: 'user',
         key: `m${index}`,
@@ -54,22 +38,37 @@ export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
         message,
       });
       userTurns += 1;
-    } else if (message.role === 'assistant') {
+    } else if (
+      message.role === 'assistant' ||
+      message.role === 'compactionSummary'
+    ) {
+      const blocks: AssistantBlock[] =
+        message.role === 'assistant'
+          ? message.content
+          : [
+              {
+                type: 'compaction',
+                summary: message.summary,
+                tokensBefore: message.tokensBefore,
+              },
+            ];
+      const stopReason =
+        message.role === 'assistant' ? message.stopReason : undefined;
+      const errorMessage =
+        message.role === 'assistant' ? message.errorMessage : undefined;
       const last = turns.at(-1);
       if (last?.kind === 'assistant') {
-        last.blocks = [...last.blocks, ...message.content];
-        last.stopReason = message.stopReason ?? last.stopReason;
-        last.errorMessage = message.errorMessage ?? last.errorMessage;
+        last.blocks = [...last.blocks, ...blocks];
+        last.stopReason = stopReason ?? last.stopReason;
+        last.errorMessage = errorMessage ?? last.errorMessage;
       } else {
         turns.push({
           kind: 'assistant',
           key: `m${index}`,
           userTurn: userTurns > 0 ? userTurns - 1 : null,
-          blocks: [...message.content],
-          ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-          ...(message.errorMessage
-            ? { errorMessage: message.errorMessage }
-            : {}),
+          blocks: [...blocks],
+          ...(stopReason ? { stopReason } : {}),
+          ...(errorMessage ? { errorMessage } : {}),
         });
       }
     }

@@ -119,10 +119,7 @@ describe('groupTurns', () => {
     ];
 
     expect(
-      groupTurns(messages).map((turn) => [
-        turn.kind,
-        turn.kind === 'compaction' ? undefined : turn.userTurn,
-      ]),
+      groupTurns(messages).map((turn) => [turn.kind, turn.userTurn]),
     ).toEqual([
       ['user', 0],
       ['user', 1],
@@ -132,32 +129,42 @@ describe('groupTurns', () => {
     expect(nextUserTurn(messages)).toBe(3);
   });
 
-  it('renders a persisted compactionSummary as a boundary marker', () => {
+  it('shows a compaction marker as a step of the reply it happened in', () => {
+    // The transcript keeps the whole history; the marker only records where
+    // the model's context was summarized.
     const messages: ChatMessage[] = [
+      { role: 'user', content: 'First' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Answer.' }] },
+      { role: 'user', content: 'Second' },
       {
         role: 'compactionSummary',
         summary: 'Earlier work condensed.',
         tokensBefore: 120000,
         timestamp: 1,
       },
-      { role: 'user', content: 'Kept tail request' },
       { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
     ];
 
     const turns = groupTurns(messages);
-    expect(turns.map((turn) => turn.kind)).toEqual([
-      'compaction',
-      'user',
-      'assistant',
+    expect(turns.map((turn) => [turn.kind, turn.userTurn])).toEqual([
+      ['user', 0],
+      ['assistant', 0],
+      ['user', 1],
+      ['assistant', 1],
     ]);
-    expect(turns[0]).toMatchObject({
-      kind: 'compaction',
-      tokensBefore: 120000,
-      summary: 'Earlier work condensed.',
+    expect(turns[3]).toMatchObject({
+      blocks: [
+        {
+          type: 'compaction',
+          summary: 'Earlier work condensed.',
+          tokensBefore: 120000,
+        },
+        { type: 'text', text: 'Done.' },
+      ],
     });
-    // The boundary is not a user message, so turn numbering stays aligned
-    // with the platform's nextUserTurn count.
-    expect(nextUserTurn(messages)).toBe(1);
+    // The marker is not a user message, so turn numbering stays aligned with
+    // the platform's nextUserTurn count.
+    expect(nextUserTurn(messages)).toBe(2);
   });
 });
 

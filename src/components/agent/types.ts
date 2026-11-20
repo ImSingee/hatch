@@ -17,7 +17,21 @@ export type ToolCallBlock = {
   /** Provider output is persisted before tool validation and may be malformed. */
   arguments: unknown;
 };
-export type AssistantBlock = TextBlock | ThinkingBlock | ToolCallBlock;
+/**
+ * A compaction marker shown inside the reply it happened in. Not part of any
+ * persisted assistant message: `groupTurns` derives it from the transcript's
+ * `compactionSummary` item.
+ */
+export type CompactionBlock = {
+  type: 'compaction';
+  summary: string;
+  tokensBefore: number;
+};
+export type AssistantBlock =
+  | TextBlock
+  | ThinkingBlock
+  | ToolCallBlock
+  | CompactionBlock;
 
 export type ContentPart = {
   type: string;
@@ -50,7 +64,11 @@ export type ChatMessage =
       isError?: boolean;
     }
   | {
-      /** Persisted auto-compaction boundary written by the Runner. */
+      /**
+       * Auto-compaction marker written by the Runner at the point where it
+       * summarized earlier history for the model. The history itself stays in
+       * the transcript.
+       */
       role: 'compactionSummary';
       summary: string;
       tokensBefore: number;

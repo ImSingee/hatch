@@ -37,7 +37,6 @@ import { useLastSelectedModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
 import { resolveEffectiveModel, splitModelValue } from './model-value';
-import { CompactionStep } from './steps';
 import { StreamingBubble } from './streaming-bubble';
 import { type ChatMessage, pairToolResults } from './types';
 import {
@@ -626,17 +625,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
   const renderedTurns = useMemo(
     () =>
       turns.flatMap((turn) => {
-        if (turn.kind === 'compaction') {
-          return [
-            <Box key={turn.key} className={classes.steps}>
-              <CompactionStep
-                status="done"
-                tokensBefore={turn.tokensBefore}
-                summary={turn.summary}
-              />
-            </Box>,
-          ];
-        }
         if (turn.kind === 'user') {
           const rows = [
             <MessageView

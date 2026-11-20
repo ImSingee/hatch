@@ -1102,6 +1102,22 @@ describe('stream replay and recovery', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
   });
+  it('keeps streaming past compaction events it does not render', async () => {
+    const onEvent = vi.fn<(packet: RunStreamEvent) => void>();
+    await streamRunEvents(
+      stream([
+        event(1, {
+          type: 'compact',
+          reason: 'threshold',
+          phase: 'start',
+          tokensBefore: 120000,
+        }),
+        event(2, { type: 'done' }),
+      ]),
+      { onEvent },
+    );
+    expect(onEvent).toHaveBeenCalledTimes(2);
+  });
   it('does not skip missing sequences or accept oversized / malformed events', async () => {
     const onEvent = vi.fn<(packet: RunStreamEvent) => void>();
     await expect(

@@ -9,23 +9,14 @@ import {
   AgentHarness,
   InMemorySessionRepo,
   type AgentMessage,
-  type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
-import {
-  isContextOverflow,
-  type AssistantMessage,
-  type Models,
-} from '@earendil-works/pi-ai';
+import type { Models } from '@earendil-works/pi-ai';
 import { hasBetaFeature, WORKFLOW_BETA_FEATURE } from '~/beta-features';
 import type { JsonValue } from '~/db/schema';
 import {
-  compactSessionMessages,
-  createMidTurnCompactor,
-  isOverCompactThreshold,
-  pinMaxOutputTokens,
-  transcriptBeforeLastUserMessage,
-  type AutoCompactPhase,
-  type AutoCompactReason,
+  createSessionCompactor,
+  openTranscriptSession,
+  withOverflowRecovery,
 } from './auto-compaction';
 import { formatAttachmentPrompt, type AgentAttachmentRef } from './attachments';
 import type { AgentComposerContentPart } from './composer-content';
@@ -206,7 +197,8 @@ export type RunAgentTurnResult = {
 export async function runAgentTurn(
   opts: RunAgentTurnOptions,
 ): Promise<RunAgentTurnResult> {
-  const { sessionId, userText, signal, emit, models, picked } = opts;
+  const { priorMessages, sessionId, userText, signal, emit, models, picked } =
+    opts;
   const workflowBetaEnabled = hasBetaFeature(
     opts.betaFeatures,
     WORKFLOW_BETA_FEATURE,
@@ -223,6 +215,12 @@ export async function runAgentTurn(
     shellEnv: agentShellEnv(sessionId),
     readOnlyRoots: [SKILLS_DIR],
   });
+
+  const repo = new InMemorySessionRepo();
+  const session = await repo.create({ id: sessionId });
+  // `priorMessages` is the complete transcript, compaction markers included;
+  // the session derives the (possibly compacted) model context from it.
+  const transcript = await openTranscriptSession(session, priorMessages);
 
   const skills = await loadAgentSkills(env, { workflowBetaEnabled });
   const tools = createTools(env, {
@@ -253,198 +251,67 @@ export async function runAgentTurn(
     }
   }
 
-  const images = (opts.images ?? []).map((i) => ({
-    type: 'image' as const,
-    data: i.data,
-    mimeType: i.mimeType,
-  }));
-  const thinkingLevel: ThinkingLevel = picked.model.reasoning
-    ? 'medium'
-    : 'off';
-
-  const emitCompact = (
-    reason: AutoCompactReason,
-    phase: AutoCompactPhase,
-    tokensBefore?: number,
-    tokensAfter?: number,
-  ) =>
-    emit({
-      type: 'compact',
-      reason,
-      phase,
-      ...(tokensBefore === undefined ? {} : { tokensBefore }),
-      ...(tokensAfter === undefined ? {} : { tokensAfter }),
-    });
-
-  let attemptPriorMessages = opts.priorMessages;
-  // The overflow retry always compacts: the estimate already cleared this
-  // history once and the provider rejected it anyway.
-  let forceCompact = false;
-  for (;;) {
-    const attempt = await runAgentTurnAttempt({
-      appUrl: opts.appUrl,
-      priorMessages: attemptPriorMessages,
-      sessionId,
-      userText,
-      composerContent: opts.composerContent,
-      attachments: opts.attachments,
-      images,
-      models,
-      picked,
-      tools,
-      labelByName,
-      streamStartDetailsByName,
-      streamDetailsByName,
-      thinkingLevel,
-      signal,
-      emit,
-      emitCompact,
-      forceCompact,
-      skills,
-      workflowBetaEnabled,
-    });
-
-    // A provider-side context-length rejection means the estimate was wrong
-    // (or a silent truncation). Retry the turn once on a compacted history:
-    // drop the failed turn's partial work (everything from the last user
-    // message on), force-persisted compaction on the rest, then re-prompt.
-    const retryable =
-      !forceCompact &&
-      attempt.assistant !== undefined &&
-      (attempt.assistant.stopReason === 'error' ||
-        attempt.assistant.stopReason === 'length') &&
-      isContextOverflow(attempt.assistant, picked.model.contextWindow);
-    if (retryable) {
-      const head = transcriptBeforeLastUserMessage(attempt.messages);
-      if (head && head.length > 0) {
-        attemptPriorMessages = head;
-        forceCompact = true;
-        continue;
-      }
-    }
-    return attempt.result;
-  }
-}
-
-type TurnAttemptResult = {
-  result: RunAgentTurnResult;
-  /** The prompt's assistant message, for overflow classification. */
-  assistant?: AssistantMessage;
-  /** Undecorated transcript messages (post-compaction view). */
-  messages: AgentMessage[];
-};
-
-async function runAgentTurnAttempt(opts: {
-  appUrl: string;
-  priorMessages: AgentMessage[];
-  sessionId: string;
-  userText: string;
-  composerContent?: AgentComposerContentPart[];
-  attachments?: AgentAttachmentRef[];
-  images: { type: 'image'; data: string; mimeType: string }[];
-  models: Models;
-  picked: ResolvedModel;
-  tools: ReturnType<typeof createTools>;
-  labelByName: Map<string, string>;
-  streamStartDetailsByName: Map<string, StreamStartDetailsSelector>;
-  streamDetailsByName: Map<string, StreamDetailsSelector>;
-  thinkingLevel: ThinkingLevel;
-  signal: AbortSignal;
-  emit: (event: AgentStreamEvent) => void;
-  emitCompact: (
-    reason: AutoCompactReason,
-    phase: AutoCompactPhase,
-    tokensBefore?: number,
-    tokensAfter?: number,
-  ) => void;
-  forceCompact: boolean;
-  skills: Awaited<ReturnType<typeof loadAgentSkills>>;
-  workflowBetaEnabled: boolean;
-}): Promise<TurnAttemptResult> {
-  const {
-    priorMessages,
-    sessionId,
-    userText,
-    signal,
-    emit,
-    emitCompact,
-    models,
-    picked,
-    tools,
-    labelByName,
-    streamStartDetailsByName,
-    streamDetailsByName,
-    thinkingLevel,
-    forceCompact,
+  const thinkingLevel = picked.model.reasoning ? 'medium' : 'off';
+  const systemPrompt = buildSystemPrompt(
+    opts.appUrl,
+    { workflowBetaEnabled },
     skills,
-    workflowBetaEnabled,
-  } = opts;
-
-  const repo = new InMemorySessionRepo();
-  const session = await repo.create({ id: sessionId });
-  for (const message of priorMessages) {
-    await session.appendMessage(message);
-  }
-
-  // Persisted compaction before the turn: history over the input budget is
-  // summarized into a session compaction entry, so buildContext() — and the
-  // transcript reported back — already carries the compressed view.
-  if (forceCompact || isOverCompactThreshold(priorMessages, picked.model)) {
-    const reason: AutoCompactReason = forceCompact ? 'overflow' : 'threshold';
-    const outcome = await compactSessionMessages({
-      session,
-      models,
-      model: picked.model,
-      signal,
-      thinkingLevel,
-      onStart: () => emitCompact(reason, 'start'),
-    });
-    if (outcome.status === 'compacted') {
-      emitCompact(reason, 'done', outcome.tokensBefore, outcome.tokensAfter);
-    } else if (outcome.status === 'failed') {
-      emitCompact(reason, 'failed');
-    }
-  }
-
-  const harness = new AgentHarness({
+  );
+  const compactor = createSessionCompactor({
     session,
     models,
     model: picked.model,
-    tools,
-    resources: { skills },
-    systemPrompt: ({ resources }) =>
-      buildSystemPrompt(
-        opts.appUrl,
-        { workflowBetaEnabled },
-        resources.skills ?? [],
-      ),
-    thinkingLevel,
-  });
-  const toolStartDetailsById = new Map<string, JsonValue | undefined>();
-
-  // Mid-turn compaction: each provider request's context runs through this
-  // transform, so tool output that outgrows the estimate mid-run is replaced
-  // by a summary before the next call. Context-only — the session transcript
-  // keeps full fidelity.
-  const transformContext = createMidTurnCompactor({
-    models,
-    model: picked.model,
     signal,
     thinkingLevel,
-    onEvent: (phase, tokensBefore) =>
-      emitCompact('threshold', phase, tokensBefore),
+    // Every request also carries the system prompt and the tool schemas.
+    overheadTokens: Math.ceil(
+      (systemPrompt.length +
+        JSON.stringify(
+          tools.map((tool) => [tool.name, tool.description, tool.parameters]),
+        ).length) /
+        4,
+    ),
+    onEvent: (reason, phase, tokensBefore, tokensAfter) =>
+      emit({
+        type: 'compact',
+        reason,
+        phase,
+        tokensBefore: Math.round(tokensBefore),
+        ...(tokensAfter === undefined
+          ? {}
+          : { tokensAfter: Math.round(tokensAfter) }),
+      }),
   });
-  const removeContextHook = harness.on('context', async (event) => {
-    const messages = await transformContext(event.messages);
-    return messages === undefined ? undefined : { messages };
+  const compactedContext = async () => (await session.buildContext()).messages;
+
+  const harness = new AgentHarness({
+    session,
+    // A request the provider rejects for context length is compacted and
+    // re-sent in place, so the turn keeps the tool work it already did.
+    models: withOverflowRecovery(models, {
+      contextWindow: picked.model.contextWindow,
+      recover: async () =>
+        (await compactor.compactAfterOverflow())
+          ? compactedContext()
+          : undefined,
+    }),
+    model: picked.model,
+    tools,
+    resources: { skills },
+    systemPrompt,
+    thinkingLevel,
   });
 
-  // Keep the configured max output on every request: pi-ai otherwise shrinks
-  // max_tokens as the context fills, and the compaction trigger already
-  // reserves the output budget up front.
-  const removePayloadHook = harness.on('before_provider_payload', (event) => ({
-    payload: pinMaxOutputTokens(event.payload, picked.model.maxTokens),
-  }));
+  // Every provider request passes through here with the session already
+  // holding the messages it is about to send (the new user message on the
+  // first request, tool results on later ones). Over the threshold, the
+  // session is compacted and the request goes out on the compacted context.
+  const removeContextHook = harness.on('context', async () =>
+    (await compactor.compactIfOverThreshold())
+      ? { messages: await compactedContext() }
+      : undefined,
+  );
+  const toolStartDetailsById = new Map<string, JsonValue | undefined>();
 
   // Persist the path identity selected at tool start even when execution
   // fails. The same hook also marks a non-zero shell exit as an error while
@@ -582,12 +449,15 @@ async function runAgentTurnAttempt(opts: {
     }
   });
 
-  const rawTranscript = async (): Promise<AgentMessage[]> =>
-    (await session.buildContext()).messages;
+  const images = (opts.images ?? []).map((i) => ({
+    type: 'image' as const,
+    data: i.data,
+    mimeType: i.mimeType,
+  }));
 
   const buildTranscript = async (): Promise<JsonValue[]> => {
     const messages = addToolStartDetailsToTranscript(
-      (await rawTranscript()) as unknown as JsonValue[],
+      await transcript.serialize(),
       toolStartDetailsById,
     );
     const attachments = opts.attachments ?? [];
@@ -621,10 +491,9 @@ async function runAgentTurnAttempt(opts: {
   try {
     const assistant = await harness.prompt(
       formatAttachmentPrompt(userText, opts.attachments ?? []),
-      opts.images.length > 0 ? { images: opts.images } : undefined,
+      images.length > 0 ? { images } : undefined,
     );
     const messages = await buildTranscript();
-    const rawMessages = await rawTranscript();
 
     // AgentHarness reports provider/stream failures as a resolved assistant
     // message rather than rejecting prompt(). Propagate those terminal reasons
@@ -634,32 +503,24 @@ async function runAgentTurnAttempt(opts: {
       assistant.stopReason === 'aborted'
     ) {
       return {
-        result: {
-          messages,
-          error:
-            assistant.errorMessage ||
-            (assistant.stopReason === 'aborted'
-              ? 'Agent run was aborted.'
-              : 'Agent run failed.'),
-        },
-        assistant,
-        messages: rawMessages,
+        messages,
+        error:
+          assistant.errorMessage ||
+          (assistant.stopReason === 'aborted'
+            ? 'Agent run was aborted.'
+            : 'Agent run failed.'),
       };
     }
 
-    return { result: { messages }, assistant, messages: rawMessages };
+    return { messages };
   } catch (error) {
     return {
-      result: {
-        messages: await buildTranscript(),
-        error: error instanceof Error ? error.message : String(error),
-      },
-      messages: await rawTranscript(),
+      messages: await buildTranscript(),
+      error: error instanceof Error ? error.message : String(error),
     };
   } finally {
     unsubscribe();
     removeContextHook();
-    removePayloadHook();
     removeToolResultHook();
     signal.removeEventListener('abort', onAbort);
   }

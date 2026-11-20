@@ -178,6 +178,15 @@ function AssistantBlocks({
       out.push(<Markdownish key={index} text={block.text} />);
     } else if (block.type === 'thinking') {
       steps.push(<ThinkingStep key={index} text={block.thinking} />);
+    } else if (block.type === 'compaction') {
+      steps.push(
+        <CompactionStep
+          key={index}
+          status="done"
+          tokensBefore={block.tokensBefore}
+          summary={block.summary}
+        />,
+      );
     } else {
       const result = toolResults?.get(block.id);
       steps.push(
@@ -324,8 +333,8 @@ export function MessageView({
     );
   }
 
-  // Persisted compaction boundary — normally rendered by the chat turn list as
-  // a `compaction` turn; this fallback keeps a bare message render meaningful.
+  // A compaction marker is normally a step of the reply it happened in (see
+  // `groupTurns`); this keeps a bare marker render meaningful.
   if (message.role === 'compactionSummary') {
     return (
       <Box className={classes.steps}>

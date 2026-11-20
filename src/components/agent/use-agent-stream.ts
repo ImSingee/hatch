@@ -318,14 +318,19 @@ export function settleStreamState(
     pendingAsk: undefined,
     pendingEnvRequest: undefined,
     // A tool interrupted by the end of the run no longer runs; render it the
-    // way the persisted transcript does instead of spinning forever.
+    // way the persisted transcript does instead of spinning forever. The same
+    // goes for a compaction the run ended in the middle of.
     blocks: state.blocks.some(
-      (block) => block.kind === 'tool' && !block.tool.done,
+      (block) =>
+        (block.kind === 'tool' && !block.tool.done) ||
+        (block.kind === 'compact' && block.compact.phase === 'start'),
     )
       ? state.blocks.map((block) =>
           block.kind === 'tool' && !block.tool.done
             ? { ...block, tool: { ...block.tool, done: true } }
-            : block,
+            : block.kind === 'compact' && block.compact.phase === 'start'
+              ? { ...block, compact: { ...block.compact, phase: 'failed' } }
+              : block,
         )
       : state.blocks,
     outcome,

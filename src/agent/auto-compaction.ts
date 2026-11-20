@@ -1,33 +1,50 @@
 /**
- * Automatic context compaction for Agent runs. Three cooperating mechanisms,
- * all Runner-side:
+ * Automatic context compaction for Agent runs, all Runner-side.
  *
- * - A threshold trigger: estimated context usage above 80% of the model's
- *   *input* budget (`contextWindow - maxTokens`) compacts the session.
- * - A mid-turn transform for the harness `context` hook, so tool output that
- *   outgrows the estimate mid-run is summarized before the next request.
- * - The payload pin helpers, which keep `max_tokens` at the configured value
- *   (pi-ai otherwise shrinks it as the context fills).
+ * The session transcript stays the canonical, complete history. A compaction
+ * adds a marker at the point where it happened: a `compactionSummary` item
+ * holding the summary and the index of the first message that stays in the
+ * model's context. Nothing is removed, so the chat history and the user-turn
+ * bindings of earlier runs are unaffected; only the model-bound context is
+ * derived from the newest marker (summary + kept tail + everything after).
  *
- * Persisted compaction goes through the pi session tree (`prepareCompaction` +
- * `compact` + `appendCompaction`) so `session.buildContext()` — and therefore
- * the transcript reported back to the platform — already carries the summary.
+ * In the pi session the marker is a native compaction entry, so
+ * `session.buildContext()` yields the compacted view and repeated compactions
+ * update the previous summary instead of re-reading the whole history.
+ *
+ * Three triggers share one mechanism:
+ *
+ * - before the turn, when the stored history is over the threshold;
+ * - before any provider request in the turn (harness `context` hook), when
+ *   tool output grew the context past the threshold;
+ * - after a provider rejected a request for context length: that one request
+ *   is compacted and re-sent in place, so completed tool work is kept.
  */
 import {
   compact,
-  createCompactionSummaryMessage,
+  convertToLlm,
   DEFAULT_COMPACTION_SETTINGS,
   estimateContextTokens,
   estimateTokens,
-  findCutPoint,
-  generateSummary,
+  getLastAssistantUsage,
   prepareCompaction,
   type AgentMessage,
+  type CompactionPreparation,
+  type CompactionSettings,
   type Session,
   type SessionTreeEntry,
   type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
-import type { Api, Model, Models } from '@earendil-works/pi-ai';
+import {
+  createAssistantMessageEventStream,
+  isContextOverflow,
+  type Api,
+  type AssistantMessage,
+  type AssistantMessageEvent,
+  type Model,
+  type Models,
+} from '@earendil-works/pi-ai';
+import type { JsonValue } from '~/db/schema';
 
 /** Fraction of the model's input budget that triggers auto compaction. */
 export const AUTO_COMPACT_RATIO = 0.8;
@@ -36,246 +53,390 @@ export type AutoCompactReason = 'threshold' | 'overflow';
 
 export type AutoCompactPhase = 'start' | 'done' | 'failed';
 
+type ModelBudget = { contextWindow: number; maxTokens: number };
+
 /**
  * Estimated input-token budget the Agent may fill before compaction triggers:
- * 80% of `contextWindow - maxTokens`. The output budget is pinned and reserved,
- * so only the input share is elastic. A `maxTokens >= contextWindow` config is
- * a modeling error; fall back to the full window rather than a non-positive
- * budget that would compact forever without helping.
+ * 80% of `contextWindow - maxTokens`, so the configured output budget stays
+ * available. A `maxTokens >= contextWindow` config is a modeling error; fall
+ * back to the full window rather than a non-positive budget that would compact
+ * forever without helping.
  */
-export function compactionTriggerTokens(model: {
-  contextWindow: number;
-  maxTokens: number;
-}): number {
+export function compactionTriggerTokens(model: ModelBudget): number {
   const inputBudget = model.contextWindow - model.maxTokens;
   const basis = inputBudget > 0 ? inputBudget : model.contextWindow;
   return basis * AUTO_COMPACT_RATIO;
 }
 
-/** Whether the estimated context usage crosses the auto-compact threshold. */
-export function isOverCompactThreshold(
-  messages: AgentMessage[],
-  model: { contextWindow: number; maxTokens: number },
-): boolean {
+/**
+ * Compaction sizes for a model. The pi defaults assume a large window; a
+ * small model would otherwise keep a tail (or request a summary) larger than
+ * its whole budget, and compaction could never bring it under the trigger.
+ */
+export function compactionSettings(model: ModelBudget): CompactionSettings {
+  const share = Math.floor(compactionTriggerTokens(model) / 4);
+  return {
+    enabled: true,
+    reserveTokens: Math.min(DEFAULT_COMPACTION_SETTINGS.reserveTokens, share),
+    keepRecentTokens: Math.min(
+      DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+      share,
+    ),
+  };
+}
+
+const COMPACTION_MARKER_ROLE = 'compactionSummary';
+
+type ParsedMarker = {
+  summary: string;
+  tokensBefore: number;
+  timestamp: number;
+  firstKeptIndex: number;
+  details?: JsonValue;
+};
+
+function hasMarkerRole(value: unknown): boolean {
   return (
-    estimateContextTokens(messages).tokens > compactionTriggerTokens(model)
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (value as { role?: unknown }).role === COMPACTION_MARKER_ROLE
   );
 }
 
-export type SessionCompactionOutcome =
-  | { status: 'compacted'; tokensBefore: number; tokensAfter: number }
-  | { status: 'nothing' }
-  | { status: 'failed' };
+function parseMarker(value: unknown): ParsedMarker | null {
+  const record = value as Record<string, unknown>;
+  const { summary, tokensBefore, timestamp, firstKeptIndex, details } = record;
+  if (
+    typeof summary !== 'string' ||
+    typeof tokensBefore !== 'number' ||
+    typeof timestamp !== 'number' ||
+    typeof firstKeptIndex !== 'number' ||
+    !Number.isSafeInteger(firstKeptIndex) ||
+    firstKeptIndex < 0
+  ) {
+    return null;
+  }
+  return {
+    summary,
+    tokensBefore,
+    timestamp,
+    firstKeptIndex,
+    ...(details === undefined ? {} : { details: details as JsonValue }),
+  };
+}
+
+export type TranscriptSession = {
+  /** The complete transcript: every message plus the compaction markers. */
+  serialize(): Promise<JsonValue[]>;
+};
 
 /**
- * Compact the session's current branch: summarize older history into a
- * compaction entry while keeping the recent tail. Equivalent to
- * `AgentHarness.compact()` but abortable via `signal` and usable while the
- * harness is busy.
+ * Load a stored transcript into a fresh pi session. Messages become message
+ * entries; each compaction marker becomes a compaction entry pointing at the
+ * message it kept from. A marker that does not point at an earlier message is
+ * dropped: without a valid cut it cannot describe any context.
  */
-export async function compactSessionMessages(opts: {
+export async function openTranscriptSession(
+  session: Session,
+  transcript: readonly unknown[],
+): Promise<TranscriptSession> {
+  const messageEntryIds: (string | undefined)[] = [];
+  const markerTimestamps = new Map<string, number>();
+  for (const [index, item] of transcript.entries()) {
+    if (!hasMarkerRole(item)) {
+      messageEntryIds[index] = await session.appendMessage(
+        item as AgentMessage,
+      );
+      continue;
+    }
+    const marker = parseMarker(item);
+    const firstKeptEntryId =
+      marker && marker.firstKeptIndex < index
+        ? messageEntryIds[marker.firstKeptIndex]
+        : undefined;
+    if (!marker || firstKeptEntryId === undefined) continue;
+    const entryId = await session.appendCompaction(
+      marker.summary,
+      firstKeptEntryId,
+      marker.tokensBefore,
+      marker.details,
+    );
+    markerTimestamps.set(entryId, marker.timestamp);
+  }
+
+  return {
+    async serialize() {
+      const items: JsonValue[] = [];
+      const messageIndexByEntryId = new Map<string, number>();
+      for (const entry of await session.getEntries()) {
+        if (entry.type === 'message') {
+          messageIndexByEntryId.set(entry.id, items.length);
+          items.push(entry.message as unknown as JsonValue);
+        } else if (entry.type === 'compaction') {
+          const firstKeptIndex =
+            entry.firstKeptEntryId === undefined
+              ? undefined
+              : messageIndexByEntryId.get(entry.firstKeptEntryId);
+          if (firstKeptIndex === undefined) continue;
+          items.push({
+            role: COMPACTION_MARKER_ROLE,
+            summary: entry.summary,
+            tokensBefore: entry.tokensBefore,
+            // A marker loaded from the transcript keeps its original time.
+            timestamp:
+              markerTimestamps.get(entry.id) ?? Date.parse(entry.timestamp),
+            firstKeptIndex,
+            ...(entry.details === undefined
+              ? {}
+              : { details: entry.details as JsonValue }),
+          });
+        }
+      }
+      return items;
+    },
+  };
+}
+
+/**
+ * Estimated tokens of the context the next request would send.
+ *
+ * pi estimates from the newest assistant `usage` plus the messages after it.
+ * That is only valid while the usage describes the current context: right
+ * after a compaction the newest usage sits in the kept tail and still counts
+ * the history that was just summarized away. Until a reply arrives on the
+ * compacted context, fall back to the per-message heuristic plus
+ * `overheadTokens`: the part of every request that is not a message (system
+ * prompt, tool schemas), which provider usage includes and the heuristic
+ * cannot see.
+ */
+export async function estimateSessionContextTokens(
+  session: Session,
+  overheadTokens = 0,
+): Promise<number> {
+  const branch = await session.getBranch();
+  const messages = (await session.buildContext()).messages;
+  let lastCompaction = branch.length - 1;
+  while (lastCompaction >= 0 && branch[lastCompaction].type !== 'compaction') {
+    lastCompaction -= 1;
+  }
+  if (getLastAssistantUsage(branch.slice(lastCompaction + 1))) {
+    return estimateContextTokens(messages).tokens;
+  }
+  return messages.reduce(
+    (total, message) => total + estimateTokens(message),
+    overheadTokens,
+  );
+}
+
+/**
+ * Pick what to summarize. pi keeps roughly `keepRecentTokens` of tail and can
+ * only cut in front of a user or assistant message, so one tool result larger
+ * than the tail budget leaves it with no cut at all. Widening the tail until a
+ * cut appears still summarizes the history in front of that result.
+ */
+function prepareSummarizableCompaction(
+  branch: SessionTreeEntry[],
+  settings: CompactionSettings,
+  maxKeepRecentTokens: number,
+): CompactionPreparation | undefined {
+  for (
+    let keepRecentTokens = settings.keepRecentTokens;
+    ;
+    keepRecentTokens *= 2
+  ) {
+    const preparation = prepareCompaction(branch, {
+      ...settings,
+      keepRecentTokens,
+    });
+    if (!preparation.ok || !preparation.value) return undefined;
+    if (
+      preparation.value.isSplitTurn ||
+      preparation.value.messagesToSummarize.length > 0
+    ) {
+      return preparation.value;
+    }
+    if (keepRecentTokens >= maxKeepRecentTokens) return undefined;
+  }
+}
+
+export type SessionCompactor = {
+  /** Compact when the estimated context is over the threshold. */
+  compactIfOverThreshold(): Promise<boolean>;
+  /** Compact regardless of the estimate: the provider rejected the context. */
+  compactAfterOverflow(): Promise<boolean>;
+};
+
+/**
+ * Compacts the session's current branch: summarizes the older history into a
+ * compaction entry and keeps the recent tail. Both methods resolve to whether
+ * a compaction entry was added. `onEvent` gets `start` only once a summary is
+ * actually being generated, and every `start` is followed by `done` or
+ * `failed`.
+ */
+export function createSessionCompactor(opts: {
   session: Session;
   models: Models;
   model: Model<Api>;
   signal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
-  /** Fires once a real compaction is about to run — never for `nothing`. */
-  onStart?: () => void;
-}): Promise<SessionCompactionOutcome> {
-  const preparation = prepareCompaction(
-    await opts.session.getBranch(),
-    DEFAULT_COMPACTION_SETTINGS,
-  );
-  if (!preparation.ok) return { status: 'failed' };
-  if (!preparation.value) return { status: 'nothing' };
-  // The retained tail already holds everything summarizable (e.g. one recent
-  // tool result pushed usage over the threshold) — a summary of an empty head
-  // would only add a degenerate compaction entry.
-  if (
-    !preparation.value.isSplitTurn &&
-    preparation.value.messagesToSummarize.length === 0
-  ) {
-    return { status: 'nothing' };
-  }
-  opts.onStart?.();
-  const result = await compact(
-    preparation.value,
-    opts.models,
-    opts.model,
-    undefined,
-    opts.signal,
-    opts.thinkingLevel,
-  );
-  if (!result.ok) return { status: 'failed' };
-  const {
-    summary,
-    firstKeptEntryId,
-    tokensBefore,
-    details,
-    usage,
-    retainedTail,
-  } = result.value;
-  await opts.session.appendCompaction(
-    summary,
-    firstKeptEntryId,
-    tokensBefore,
-    details,
-    false,
-    usage,
-    retainedTail,
-  );
-  const tokensAfter = estimateContextTokens(
-    (await opts.session.buildContext()).messages,
-  ).tokens;
-  return { status: 'compacted', tokensBefore, tokensAfter };
-}
+  /** Estimated tokens of the system prompt and tool schemas. */
+  overheadTokens?: number;
+  onEvent?: (
+    reason: AutoCompactReason,
+    phase: AutoCompactPhase,
+    tokensBefore: number,
+    tokensAfter?: number,
+  ) => void;
+}): SessionCompactor {
+  const { session, models, model, signal, thinkingLevel, onEvent } = opts;
+  const trigger = compactionTriggerTokens(model);
+  const settings = compactionSettings(model);
+  const estimate = () =>
+    estimateSessionContextTokens(session, opts.overheadTokens);
 
-/**
- * Transcript prefix up to (but excluding) the last user message, or undefined
- * when there is none. The overflow retry drops the failed turn's partial work
- * — everything from the last user message on — and re-prompts the same input.
- */
-export function transcriptBeforeLastUserMessage(
-  messages: AgentMessage[],
-): AgentMessage[] | undefined {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    if (messages[index]?.role === 'user') return messages.slice(0, index);
-  }
-  return undefined;
-}
+  const run = async (reason: AutoCompactReason): Promise<boolean> => {
+    if (signal?.aborted) return false;
+    const tokensBefore = await estimate();
+    if (reason === 'threshold' && tokensBefore <= trigger) return false;
+    const preparation = prepareSummarizableCompaction(
+      await session.getBranch(),
+      settings,
+      trigger,
+    );
+    if (!preparation) return false;
 
-type MidTurnCompactionState = {
-  /** Index in the live message list where the retained tail starts. */
-  cutIndex: number;
-  /** Text of the generated summary (reused while the head is unchanged). */
-  summaryText: string;
-  /** The compactionSummary message injected at the head of the context. */
-  message: AgentMessage;
-};
-
-function messageEntries(messages: AgentMessage[]): SessionTreeEntry[] {
-  return messages.map((message, index) => ({
-    type: 'message',
-    id: `m${index}`,
-    parentId: index > 0 ? `m${index - 1}` : null,
-    timestamp: '',
-    message,
-  }));
-}
-
-/**
- * Sticky mid-turn compactor for the harness `context` hook. When the estimated
- * context crosses the threshold, the head of the outgoing context is replaced
- * by a generated summary; the transform then keeps applying while the turn
- * grows, re-summarizing only when the retained tail itself overflows.
- *
- * This only rewrites the provider-bound context — the session transcript keeps
- * full fidelity. Persisted compaction (run start / overflow retry) covers the
- * stored side.
- */
-export function createMidTurnCompactor(opts: {
-  models: Models;
-  model: Model<Api>;
-  signal?: AbortSignal;
-  thinkingLevel?: ThinkingLevel;
-  onEvent?: (phase: AutoCompactPhase, tokensBefore?: number) => void;
-}): (messages: AgentMessage[]) => Promise<AgentMessage[] | undefined> {
-  const trigger = compactionTriggerTokens(opts.model);
-  const { reserveTokens, keepRecentTokens } = DEFAULT_COMPACTION_SETTINGS;
-  let state: MidTurnCompactionState | null = null;
-
-  return async (messages) => {
-    // Sticky: once compacted, keep substituting the summary while the tail
-    // stays under the trigger. Real `usage` on new assistant messages reflects
-    // the compacted request, so re-estimating the raw list would oscillate
-    // between compacted and uncompacted payloads.
-    if (state) {
-      const candidate = [state.message, ...messages.slice(state.cutIndex)];
-      if (estimateContextTokens(candidate).tokens <= trigger) {
-        return candidate;
+    onEvent?.(reason, 'start', tokensBefore);
+    try {
+      const result = await compact(
+        preparation,
+        models,
+        model,
+        undefined,
+        signal,
+        thinkingLevel,
+      );
+      if (!result.ok) {
+        onEvent?.(reason, 'failed', tokensBefore);
+        return false;
       }
-    } else if (estimateContextTokens(messages).tokens <= trigger) {
-      return undefined;
+      await session.appendCompaction(
+        result.value.summary,
+        result.value.firstKeptEntryId,
+        tokensBefore,
+        result.value.details,
+        false,
+        result.value.usage,
+      );
+    } catch {
+      onEvent?.(reason, 'failed', tokensBefore);
+      return false;
     }
+    onEvent?.(reason, 'done', tokensBefore, await estimate());
+    return true;
+  };
 
-    // (Re)compact: pick a cut that keeps roughly keepRecentTokens of tail and
-    // never splits a tool call from its result.
-    const cut = findCutPoint(
-      messageEntries(messages),
-      0,
-      messages.length,
-      keepRecentTokens,
-    );
-    const cutIndex = cut.firstKeptEntryIndex;
-    // Nothing summarizable, or the boundary cannot advance past the previous
-    // summary — compaction cannot shrink this context further. Leave it and
-    // let the provider-side overflow path handle the rejection.
-    if (cutIndex <= (state?.cutIndex ?? 0)) return undefined;
-    const tail = messages.slice(cutIndex);
-    // Even a perfect summary cannot help when the retained tail alone already
-    // exceeds the budget (e.g. one giant tool result). Measure the tail with
-    // the per-message heuristic: estimateContextTokens would reuse the tail's
-    // last assistant usage, which still describes the *uncompacted* request.
-    if (
-      tail.reduce((total, message) => total + estimateTokens(message), 0) >
-      trigger
-    ) {
-      return undefined;
-    }
-
-    const tokensBefore = estimateContextTokens(messages).tokens;
-    opts.onEvent?.('start', tokensBefore);
-    const summaryResult = await generateSummary(
-      messages.slice(0, cutIndex),
-      opts.models,
-      opts.model,
-      reserveTokens,
-      opts.signal,
-      undefined,
-      state?.summaryText,
-      opts.thinkingLevel,
-    );
-    if (!summaryResult.ok) {
-      opts.onEvent?.('failed', tokensBefore);
-      return undefined;
-    }
-    const message = createCompactionSummaryMessage(
-      summaryResult.value,
-      tokensBefore,
-      new Date().toISOString(),
-    );
-    state = { cutIndex, summaryText: summaryResult.value, message };
-    opts.onEvent?.('done', tokensBefore);
-    return [message, ...tail];
+  return {
+    compactIfOverThreshold: () => run('threshold'),
+    compactAfterOverflow: () => run('overflow'),
   };
 }
 
+/** Whether a stream event carries reply content the consumer would render. */
+function hasReplyContent(event: AssistantMessageEvent): boolean {
+  switch (event.type) {
+    case 'text_delta':
+    case 'thinking_delta':
+    case 'toolcall_delta':
+      return Boolean(event.delta);
+    case 'text_end':
+    case 'thinking_end':
+      return Boolean(event.content);
+    case 'toolcall_end':
+      return true;
+    default:
+      return false;
+  }
+}
+
 /**
- * Pin the serialized request's max-output field to the configured value. pi-ai
- * clamps `max_tokens` to the remaining context budget (`clampMaxTokensToContext`),
- * which silently shrinks output as the context fills; the auto-compaction
- * threshold instead reserves `maxTokens` up front so output never degrades.
+ * Wrap `models` so a request the provider rejects for context length is
+ * compacted and re-sent once, inside the same request. The agent loop never
+ * sees the rejection, so the turn continues with its completed tool calls
+ * instead of being replayed.
  *
- * Covers all three provider APIs: Anthropic `max_tokens`, OpenAI completions
- * `max_tokens`/`max_completion_tokens` (compat-selected), Responses
- * `max_output_tokens`.
+ * Only a response that ends before any content is treated as a rejection:
+ * an error, or a `length` stop with no output (providers that truncate the
+ * input instead of failing). `recover` returns the compacted context, or
+ * undefined when nothing could be compacted; the original response is then
+ * passed through unchanged.
  */
-export function pinMaxOutputTokens(
-  payload: unknown,
-  maxTokens: number,
-): unknown {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return payload;
-  }
-  const record = payload as Record<string, unknown>;
-  if (typeof record.max_tokens === 'number') {
-    return { ...record, max_tokens: maxTokens };
-  }
-  if (typeof record.max_completion_tokens === 'number') {
-    return { ...record, max_completion_tokens: maxTokens };
-  }
-  if (typeof record.max_output_tokens === 'number') {
-    return { ...record, max_output_tokens: maxTokens };
-  }
-  return payload;
+export function withOverflowRecovery(
+  models: Models,
+  opts: {
+    contextWindow: number;
+    recover: () => Promise<AgentMessage[] | undefined>;
+  },
+): Models {
+  const streamSimple: Models['streamSimple'] = (model, context, options) => {
+    const output = createAssistantMessageEventStream();
+    void (async () => {
+      let source = models.streamSimple(model, context, options);
+      let recovered = false;
+      for (let resend = true; resend;) {
+        resend = false;
+        const held: AssistantMessageEvent[] = [];
+        let passThrough = false;
+        for await (const event of source) {
+          if (passThrough) {
+            output.push(event);
+            continue;
+          }
+          const ended = event.type === 'error' || event.type === 'done';
+          if (!ended && !hasReplyContent(event)) {
+            held.push(event);
+            continue;
+          }
+          const terminal: AssistantMessage | undefined =
+            event.type === 'error'
+              ? event.error
+              : event.type === 'done'
+                ? event.message
+                : undefined;
+          if (
+            !recovered &&
+            terminal &&
+            isContextOverflow(terminal, opts.contextWindow)
+          ) {
+            recovered = true;
+            const messages = await opts.recover();
+            if (messages) {
+              source = models.streamSimple(
+                model,
+                { ...context, messages: convertToLlm(messages) },
+                options,
+              );
+              resend = true;
+              break;
+            }
+          }
+          for (const heldEvent of held) output.push(heldEvent);
+          output.push(event);
+          passThrough = true;
+        }
+      }
+      output.end();
+    })();
+    return output;
+  };
+
+  return new Proxy(models, {
+    get(target, property) {
+      if (property === 'streamSimple') return streamSimple;
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === 'function'
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
 }

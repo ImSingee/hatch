@@ -89,8 +89,9 @@ export type AgentStreamEvent =
   | {
       /**
        * Auto-compaction lifecycle. `threshold` fired on the estimated context
-       * budget; `overflow` fires after a provider rejected the request for
-       * context length and the run is retrying compacted.
+       * budget; `overflow` fires after a provider rejected a request for
+       * context length, which is then re-sent on the compacted context. Every
+       * `start` is followed by `done` or `failed`.
        */
       type: 'compact';
       reason: 'threshold' | 'overflow';
