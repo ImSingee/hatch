@@ -5,6 +5,7 @@ import {
 } from './agent/runner-constants';
 import { parseBetaFeatures } from './beta-features';
 
+const DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS = 300;
 const DEV_AGENT_RUNNER_TOKEN = 'hatch-dev-runner-token';
 const PRERENDER_ONLY_SECRET =
   'Zp8V4nQ2xR7mL5kC9sT3wH6fD1bG0yE4uA8jN2qP7rX5cM9v';
@@ -34,6 +35,11 @@ export type PlatformEnv = Readonly<{
   agentInternalHost: string;
   agentInternalPort: number;
   runTokenLifetimeSeconds: number;
+  /**
+   * How long a serverless App backend instance may sit without an in-flight
+   * request before the platform stops it.
+   */
+  appBackendIdleTimeoutSeconds: number;
 }>;
 
 /** Immutable startup configuration for the Agent Runner process. */
@@ -105,6 +111,7 @@ function resolvePlatformEnv(): PlatformEnv {
       agentInternalHost: '127.0.0.1',
       agentInternalPort: DEFAULT_INTERNAL_PORT,
       runTokenLifetimeSeconds: 300,
+      appBackendIdleTimeoutSeconds: DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS,
     });
   }
 
@@ -139,8 +146,22 @@ function resolvePlatformEnv(): PlatformEnv {
       'HATCH_RUN_TOKEN_TTL_SECONDS must be an integer between 5 and 300.',
     );
 
+  const appBackendIdleTimeoutSeconds = Number(
+    process.env.HATCH_APP_IDLE_TIMEOUT_SECONDS ??
+      DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS,
+  );
+  if (
+    !Number.isSafeInteger(appBackendIdleTimeoutSeconds) ||
+    appBackendIdleTimeoutSeconds < 1 ||
+    appBackendIdleTimeoutSeconds > 86_400
+  )
+    throw new Error(
+      'HATCH_APP_IDLE_TIMEOUT_SECONDS must be an integer between 1 and 86400.',
+    );
+
   return Object.freeze({
     runTokenLifetimeSeconds,
+    appBackendIdleTimeoutSeconds,
     betaFeatures: parseBetaFeatures(process.env.HATCH_BETA),
     appUrl,
     secret,

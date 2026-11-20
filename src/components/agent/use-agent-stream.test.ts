@@ -398,6 +398,58 @@ describe('reduceStreamState', () => {
     expect(failed.pendingEnvRequest).toBeUndefined();
     expect(failed.terminalError).toBe('Provider unavailable');
   });
+
+  it('tracks compaction lifecycle as a compact block', () => {
+    const events: AgentStreamEvent[] = [
+      {
+        type: 'compact',
+        reason: 'threshold',
+        phase: 'start',
+        tokensBefore: 120000,
+      },
+      { type: 'text', delta: 'Still working.' },
+      {
+        type: 'compact',
+        reason: 'threshold',
+        phase: 'done',
+        tokensAfter: 24000,
+      },
+    ];
+    const state = events.reduce(
+      (current, event) => reduceStreamState(current, event, 1),
+      baseState(),
+    );
+
+    // The done event closes the open block and keeps the start-phase
+    // tokensBefore it did not restate.
+    expect(state.blocks).toEqual([
+      {
+        kind: 'compact',
+        compact: {
+          reason: 'threshold',
+          phase: 'done',
+          tokensBefore: 120000,
+          tokensAfter: 24000,
+        },
+      },
+      { kind: 'text', text: 'Still working.' },
+    ]);
+  });
+
+  it('stops showing a compaction as running once the run has ended', () => {
+    const events: AgentStreamEvent[] = [
+      { type: 'compact', reason: 'threshold', phase: 'start' },
+      { type: 'cancelled' },
+    ];
+    const state = events.reduce(
+      (current, event) => reduceStreamState(current, event, 1),
+      baseState(),
+    );
+
+    expect(state.blocks).toEqual([
+      { kind: 'compact', compact: { reason: 'threshold', phase: 'failed' } },
+    ]);
+  });
 });
 
 describe('sameStreamSeed', () => {

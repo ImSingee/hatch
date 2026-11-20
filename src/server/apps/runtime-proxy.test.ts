@@ -46,16 +46,22 @@ type SeenRequest = {
 };
 
 type RuntimeGlobal = typeof globalThis & {
-  __hatchAppRuntime__?: Map<
+  __hatchAppInstances__?: Map<
     string,
-    {
+    Set<{
+      appId: string;
       proc: ReturnType<typeof spawn>;
       port: number;
       deploymentId: string;
       startedAt: number;
       ready: Promise<void>;
       getLog: () => string;
-    }
+      idleStop: boolean;
+      activeRequests: number;
+      idleTimer: null;
+      drainTimer: null;
+      draining: boolean;
+    }>
   >;
 };
 
@@ -343,20 +349,31 @@ beforeAll(async () => {
 beforeEach(() => {
   seen = undefined;
   waitForMore = Promise.resolve();
-  const backends = ((globalThis as RuntimeGlobal).__hatchAppRuntime__ ??=
+  const backends = ((globalThis as RuntimeGlobal).__hatchAppInstances__ ??=
     new Map());
   const proc = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e9)'], {
     stdio: 'ignore',
   });
   proc.unref();
-  backends.set(APP_ID, {
-    proc,
-    port,
-    deploymentId: DEPLOYMENT_ID,
-    startedAt: Date.now(),
-    ready: Promise.resolve(),
-    getLog: () => '',
-  });
+  backends.set(
+    APP_ID,
+    new Set([
+      {
+        appId: APP_ID,
+        proc,
+        port,
+        deploymentId: DEPLOYMENT_ID,
+        startedAt: Date.now(),
+        ready: Promise.resolve(),
+        getLog: () => '',
+        idleStop: false,
+        activeRequests: 0,
+        idleTimer: null,
+        drainTimer: null,
+        draining: false,
+      },
+    ]),
+  );
 });
 
 afterEach(() => {
@@ -562,6 +579,33 @@ describe('app backend media proxy', () => {
     );
     expect(signed.status).toBe(206);
     expect(Buffer.from(await signed.arrayBuffer()).toString()).toBe('01');
+  });
+
+  it('frames DELETE and OPTIONS bodies on streamed and signed forwards', async () => {
+    const payload = Buffer.from([0, 255, 128, 10]);
+    for (const method of ['DELETE', 'OPTIONS'])
+      for (const sign of [false, true]) {
+        const response = await proxy(
+          hook('/echo-body', { method, body: payload }),
+          { sign },
+        );
+        const forwarded = lastRequest();
+        expect({ method, sign, body: forwarded.body }).toEqual({
+          method,
+          sign,
+          body: payload,
+        });
+        expect(forwarded.headers['x-hatch-signature']).toBe(
+          sign
+            ? hatchSignature(
+                'signing-secret',
+                String(forwarded.headers['x-hatch-timestamp']),
+                payload,
+              )
+            : undefined,
+        );
+        expect(Buffer.from(await response.arrayBuffer())).toEqual(payload);
+      }
   });
 
   it('keeps RPC framing and null-body statuses without opening redirects', async () => {
