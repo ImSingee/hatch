@@ -1,4 +1,16 @@
-/** Server-only: lazy Deno backend process manager + Connect reverse proxy. */
+/**
+ * Server-only: Deno backend instance manager + Connect reverse proxy.
+ *
+ * An app owns a set of backend *instances* (one Deno process each). At most
+ * one instance per app is routable — the one new requests are sent to; any
+ * number of others may be draining, i.e. already retired and on their way
+ * out. A retired instance is never routed to again and never revived: a
+ * request that arrives while one drains boots a fresh instance beside it.
+ *
+ * Serverless backends start on the first request and are retired once they
+ * have had no in-flight request for the idle timeout. Long-running backends
+ * are never idle-stopped and restart automatically after an unexpected exit.
+ */
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs';
 import {
@@ -18,6 +30,7 @@ import {
 } from '~agent/paths';
 import { HATCH_SDK_IMPORT_MAP } from '~agent/hatch-sdk';
 import { db, schema } from '~/db';
+import { getPlatformEnv } from '~/env';
 import {
   effectiveNetworkAllowlist,
   type NetworkPolicy,
@@ -481,22 +494,39 @@ export function backendPortEnv(
   return runtime === 'deno-serve' ? {} : { PORT: String(port) };
 }
 
-type RunningBackend = {
+type BackendInstance = {
+  appId: string;
   proc: ChildProcess;
   port: number;
   deploymentId: string;
   startedAt: number;
   ready: Promise<void>;
   getLog: () => string;
+  /**
+   * Whether this instance is stopped after sitting idle. Fixed at spawn from
+   * the app's backend mode: long-running backends hold in-memory state and
+   * are never idle-stopped, whether or not their keep-alive mark is armed.
+   */
+  idleStop: boolean;
+  /** Requests currently being served, including their streaming bodies. */
+  activeRequests: number;
+  idleTimer: NodeJS.Timeout | null;
+  /**
+   * Retired: no longer routable and expected to exit. Set once, never
+   * cleared — a draining instance is not handed new requests even if it is
+   * still alive, and its exit is neither a crash nor a restart trigger.
+   */
+  draining: boolean;
+  drainTimer: NodeJS.Timeout | null;
 };
 
 type StartingBackend = {
   deploymentId: string | undefined;
-  promise: Promise<number>;
+  promise: Promise<BackendInstance>;
 };
 
 type RuntimeGlobal = typeof globalThis & {
-  __hatchAppRuntime__?: Map<string, RunningBackend>;
+  __hatchAppInstances__?: Map<string, Set<BackendInstance>>;
   __hatchAppStarting__?: Map<string, StartingBackend>;
   __hatchAppStopEpoch__?: Map<string, number>;
   __hatchAppKeepAlive__?: Set<string>;
@@ -504,10 +534,132 @@ type RuntimeGlobal = typeof globalThis & {
   __hatchAppCleanup__?: boolean;
 };
 
-function registry(): Map<string, RunningBackend> {
+/** Every live instance per app: at most one routable, the rest draining. */
+function instanceRegistry(): Map<string, Set<BackendInstance>> {
   const g = globalThis as RuntimeGlobal;
-  g.__hatchAppRuntime__ ??= new Map<string, RunningBackend>();
-  return g.__hatchAppRuntime__;
+  g.__hatchAppInstances__ ??= new Map<string, Set<BackendInstance>>();
+  return g.__hatchAppInstances__;
+}
+
+/** The instance new requests go to, if the app has one. */
+function routableInstance(id: string): BackendInstance | undefined {
+  for (const instance of instanceRegistry().get(id) ?? []) {
+    if (!instance.draining) return instance;
+  }
+  return undefined;
+}
+
+function addInstance(instance: BackendInstance): void {
+  const reg = instanceRegistry();
+  let set = reg.get(instance.appId);
+  if (!set) {
+    set = new Set<BackendInstance>();
+    reg.set(instance.appId, set);
+  }
+  set.add(instance);
+}
+
+function removeInstance(instance: BackendInstance): void {
+  const reg = instanceRegistry();
+  const set = reg.get(instance.appId);
+  if (!set) return;
+  set.delete(instance);
+  if (set.size === 0) reg.delete(instance.appId);
+}
+
+function isLive(instance: BackendInstance): boolean {
+  return instance.proc.exitCode === null && instance.proc.signalCode === null;
+}
+
+function clearInstanceTimers(instance: BackendInstance): void {
+  if (instance.idleTimer) clearTimeout(instance.idleTimer);
+  if (instance.drainTimer) clearTimeout(instance.drainTimer);
+  instance.idleTimer = null;
+  instance.drainTimer = null;
+}
+
+/**
+ * Retire an instance immediately (stop, restart, redeploy). It
+ * leaves the registry at once, so the app can boot a replacement without
+ * waiting for the exit event.
+ */
+function killInstance(instance: BackendInstance): void {
+  instance.draining = true;
+  clearInstanceTimers(instance);
+  try {
+    instance.proc.kill('SIGKILL');
+  } catch {
+    /* best-effort */
+  }
+  removeInstance(instance);
+}
+
+/** How long a draining instance gets to exit on SIGTERM before SIGKILL. */
+const DRAIN_GRACE_MS = 5000;
+
+/**
+ * Retire an idle instance gracefully: SIGTERM, then SIGKILL after the grace
+ * period. Marking it draining is synchronous, so from this point the app has
+ * no routable instance and the next request boots a new one instead of
+ * waiting for (or reviving) this one. The instance stays registered until it
+ * actually exits so platform shutdown still reaps it.
+ */
+function drainInstance(instance: BackendInstance): void {
+  instance.draining = true;
+  clearInstanceTimers(instance);
+  recordBackendStopped(instance.appId, instance.proc.pid ?? null);
+  try {
+    instance.proc.kill('SIGTERM');
+  } catch {
+    /* best-effort */
+  }
+  instance.drainTimer = setTimeout(() => {
+    instance.drainTimer = null;
+    if (!isLive(instance)) return;
+    try {
+      instance.proc.kill('SIGKILL');
+    } catch {
+      /* best-effort */
+    }
+  }, DRAIN_GRACE_MS);
+  instance.drainTimer.unref();
+}
+
+/**
+ * (Re)arm the idle timer of an instance that has nothing in flight. The
+ * timer callback and {@link leaseInstance} both run synchronously on the
+ * event loop, so an instance is either leased or retired, never both.
+ */
+function scheduleIdleStop(instance: BackendInstance): void {
+  if (!instance.idleStop || instance.draining || instance.activeRequests > 0) {
+    return;
+  }
+  if (instance.idleTimer) clearTimeout(instance.idleTimer);
+  instance.idleTimer = setTimeout(() => {
+    instance.idleTimer = null;
+    if (instance.draining || instance.activeRequests > 0) return;
+    drainInstance(instance);
+  }, getPlatformEnv().appBackendIdleTimeoutSeconds * 1000);
+  instance.idleTimer.unref();
+}
+
+/**
+ * Count a request against an instance so it cannot be idle-stopped while the
+ * request is in flight. Returns the (idempotent) release callback.
+ */
+function leaseInstance(instance: BackendInstance): () => void {
+  instance.activeRequests += 1;
+  if (instance.idleTimer) {
+    clearTimeout(instance.idleTimer);
+    instance.idleTimer = null;
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    instance.activeRequests -= 1;
+    scheduleIdleStop(instance);
+  };
 }
 
 /** In-flight cold starts, so concurrent callers coalesce onto one process. */
@@ -626,11 +778,13 @@ function installCleanup(): void {
   if (g.__hatchAppCleanup__) return;
   g.__hatchAppCleanup__ = true;
   const killAll = () => {
-    for (const backend of registry().values()) {
-      try {
-        backend.proc.kill('SIGKILL');
-      } catch {
-        /* best-effort */
+    for (const set of instanceRegistry().values()) {
+      for (const instance of set) {
+        try {
+          instance.proc.kill('SIGKILL');
+        } catch {
+          /* best-effort */
+        }
       }
     }
   };
@@ -691,30 +845,37 @@ export async function ensureAppRunning(
   id: string,
   expectedDeploymentId?: string,
 ): Promise<number> {
-  const reg = registry();
-  const existing = reg.get(id);
+  return (await ensureInstance(id, expectedDeploymentId)).port;
+}
+
+/** Resolve the app's routable instance, booting one when it has none. */
+async function ensureInstance(
+  id: string,
+  expectedDeploymentId?: string,
+): Promise<BackendInstance> {
+  const existing = routableInstance(id);
   if (existing) {
-    if (existing.proc.exitCode === null && !existing.proc.killed) {
+    if (isLive(existing)) {
       if (
         !expectedDeploymentId ||
         existing.deploymentId === expectedDeploymentId
       ) {
         await existing.ready;
-        return existing.port;
+        return existing;
       }
       // Another platform process activated a deployment after this backend was
       // spawned. Preserve keep-alive intent while invalidating only the stale
-      // local process; the replacement below boots the expected artifact.
+      // local instances; the replacement below boots the expected artifact.
       invalidateLocalBackend(id, true);
     } else {
-      reg.delete(id);
+      removeInstance(existing);
     }
   }
 
   // Coalesce concurrent cold starts. Without this, two requests that both find
-  // an empty registry each spawn a backend and the second `reg.set()` orphans
-  // the first process so `stopApp()` can never kill it. The first caller records
-  // a pending-start promise that later callers await instead of starting again.
+  // no routable instance each spawn a backend and the app ends up with two
+  // routable instances. The first caller records a pending-start promise that
+  // later callers await instead of starting again.
   const starting = startingRegistry();
   const pending = starting.get(id);
   if (pending) {
@@ -739,11 +900,32 @@ export async function ensureAppRunning(
   }
 }
 
+/**
+ * Resolve a ready instance and lease it for one request. The lease is taken
+ * in the same tick the instance is confirmed routable, which is what keeps
+ * the idle timer from retiring an instance a request was just routed to.
+ */
+async function acquireInstance(
+  id: string,
+  expectedDeploymentId?: string,
+): Promise<{ port: number; release: () => void }> {
+  for (let attempt = 0; ; attempt += 1) {
+    const instance = await ensureInstance(id, expectedDeploymentId);
+    if (!instance.draining) {
+      return { port: instance.port, release: leaseInstance(instance) };
+    }
+    // Retired between becoming ready and this continuation (a stop or
+    // redeploy landed). Resolve again rather than revive it.
+    if (attempt >= 2) {
+      throw new Error(`App "${id}" backend was stopped while starting.`);
+    }
+  }
+}
+
 async function startBackend(
   id: string,
   expectedDeploymentId?: string,
-): Promise<number> {
-  const reg = registry();
+): Promise<BackendInstance> {
   // Snapshot the stop epoch: if stopApp() runs while we're spawning, we abort
   // instead of registering/serving a build the caller has since superseded.
   const epoch = stopEpoch(id);
@@ -833,6 +1015,7 @@ async function startBackend(
       status: true,
       signingSecret: true,
       capabilities: true,
+      backendMode: true,
       currentDeploymentId: true,
     },
   });
@@ -989,16 +1172,22 @@ async function startBackend(
     throw new Error(`App "${id}" start was superseded by a stop/redeploy.`);
   }
 
-  const backend: RunningBackend = {
+  const backend: BackendInstance = {
+    appId: id,
     proc,
     port,
     deploymentId: backendDeploymentId,
     startedAt: Date.now(),
     ready: Promise.resolve(),
     getLog: () => log,
+    idleStop: appRow.backendMode !== 'long-running',
+    activeRequests: 0,
+    idleTimer: null,
+    drainTimer: null,
+    draining: false,
   };
   backend.ready = Promise.race([waitForPort(port, 20000), spawnFailure]);
-  reg.set(id, backend);
+  addInstance(backend);
   recordBackendSpawn(id, {
     pid: proc.pid ?? null,
     port,
@@ -1006,18 +1195,29 @@ async function startBackend(
   });
   proc.on('exit', (code, signal) => {
     recordBackendExit(id, { pid: proc.pid ?? null, code, signal });
-    if (reg.get(id) === backend) reg.delete(id);
+    // A retired instance exiting is the expected end of its drain, whatever
+    // code its own shutdown handler chose.
+    const retired = backend.draining;
+    clearInstanceTimers(backend);
+    removeInstance(backend);
     const uptimeMs = Date.now() - backend.startedAt;
     // Restart only on an *unexpected* exit. An epoch bump means this process
     // was superseded by an explicit stop/restart/redeploy — its exit event
     // often lands after the caller has already re-armed keep-alive for the
     // replacement, which used to schedule a spurious restart, log a phantom
     // crash, and inflate the auto-restart count.
-    const willRestart = stopEpoch(id) === epoch && keepAliveSet().has(id);
+    const willRestart =
+      !retired && stopEpoch(id) === epoch && keepAliveSet().has(id);
     // A self-exit (no signal) is always unexpected — backends are servers.
     // Signal kills are usually our own stop/redeploy SIGKILL, so don't log
     // those; a keep-alive crash is logged by the restart branch below.
-    if (!willRestart && signal === null && code !== null && code !== 0) {
+    if (
+      !retired &&
+      !willRestart &&
+      signal === null &&
+      code !== null &&
+      code !== 0
+    ) {
       void recordBackendLog(id, 'error', `backend exited with code ${code}`, {
         uptimeMs,
         log: log.slice(-2000),
@@ -1043,7 +1243,7 @@ async function startBackend(
         { uptimeMs, attempt: attempt + 1, log: log.slice(-2000) },
       );
       const timer = setTimeout(() => {
-        if (keepAliveSet().has(id) && !registry().has(id)) {
+        if (keepAliveSet().has(id) && !routableInstance(id)) {
           // Resolve the currently active deployment afresh. Another platform
           // process may have deployed while this backend was running.
           void ensureAppRunning(id).catch(() => {
@@ -1060,12 +1260,16 @@ async function startBackend(
   try {
     await backend.ready;
   } catch (error) {
+    // A failed boot is not a retirement: kill and unregister the process but
+    // leave it un-retired, so the exit of a keep-alive backend that stalled
+    // past the readiness window still schedules its automatic restart.
+    clearInstanceTimers(backend);
     try {
       proc.kill('SIGKILL');
     } catch {
       /* best-effort */
     }
-    if (reg.get(id) === backend) reg.delete(id);
+    removeInstance(backend);
     const message = error instanceof Error ? error.message : String(error);
     // Only record a *real* boot failure. If the epoch moved, an intentional
     // stop/restart/redeploy killed this start mid-boot — the resulting
@@ -1080,17 +1284,15 @@ async function startBackend(
   // Stop/redeploy landed during the readiness wait: drop this stale backend so
   // the next request boots the current build rather than reusing this one.
   if (stopEpoch(id) !== epoch) {
-    try {
-      proc.kill('SIGKILL');
-    } catch {
-      /* best-effort */
-    }
-    if (reg.get(id) === backend) reg.delete(id);
+    killInstance(backend);
     throw new Error(`App "${id}" start was superseded by a stop/redeploy.`);
   }
 
   recordBackendReady(id, proc.pid ?? null);
-  return port;
+  // Covers an instance nobody ends up calling (e.g. an explicit Start); a
+  // request waiting on this boot leases it right after and disarms the timer.
+  scheduleIdleStop(backend);
+  return backend;
 }
 
 /**
@@ -1113,29 +1315,33 @@ export async function callAppBackend(
   init?: RequestInit,
   expectedDeploymentId?: string,
 ): Promise<{ status: number; body: string; contentType: string | null }> {
-  const port = await ensureAppRunning(id, expectedDeploymentId);
-  const path = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
-  const timeout = AbortSignal.timeout(BACKEND_RESPONSE_TIMEOUT_MS);
-  const upstream = await fetch(`http://127.0.0.1:${port}${path}`, {
-    ...init,
-    // A caller signal (e.g. a shorter delivery timeout) can only tighten the
-    // platform-wide backend response limit.
-    signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
-  });
-  const body = await upstream.text();
-  return {
-    status: upstream.status,
-    body,
-    contentType: upstream.headers.get('content-type'),
-  };
+  const { port, release } = await acquireInstance(id, expectedDeploymentId);
+  try {
+    const path = pathAndQuery.startsWith('/')
+      ? pathAndQuery
+      : `/${pathAndQuery}`;
+    const timeout = AbortSignal.timeout(BACKEND_RESPONSE_TIMEOUT_MS);
+    const upstream = await fetch(`http://127.0.0.1:${port}${path}`, {
+      ...init,
+      // A caller signal (e.g. a shorter delivery timeout) can only tighten the
+      // platform-wide backend response limit.
+      signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+    });
+    const body = await upstream.text();
+    return {
+      status: upstream.status,
+      body,
+      contentType: upstream.headers.get('content-type'),
+    };
+  } finally {
+    release();
+  }
 }
 
-/** Whether an app backend process is currently running. */
+/** Whether an app has a live backend instance that accepts new requests. */
 export function isAppRunning(id: string): boolean {
-  const backend = registry().get(id);
-  return Boolean(
-    backend && backend.proc.exitCode === null && !backend.proc.killed,
-  );
+  const backend = routableInstance(id);
+  return Boolean(backend && isLive(backend));
 }
 
 /**
@@ -1163,10 +1369,10 @@ export type BackendRuntimeView = {
 
 export function getBackendRuntimeView(id: string): BackendRuntimeView {
   const snap: BackendRuntimeSnapshot | null = getBackendSnapshot(id);
-  const backend = registry().get(id);
-  const live = Boolean(
-    backend && backend.proc.exitCode === null && !backend.proc.killed,
-  );
+  // Draining instances are deliberately not reported: they are already
+  // retired, so the app is `stopped` (or `starting` its replacement).
+  const backend = routableInstance(id);
+  const live = Boolean(backend && isLive(backend));
   // Check the in-flight start first: a cold start registers its process
   // before the readiness wait completes, so "in registry" alone would report
   // `running` for a backend that isn't reachable yet.
@@ -1230,18 +1436,14 @@ function invalidateLocalBackend(id: string, preserveKeepAlive: boolean): void {
   // build instead of coalescing onto a start for the build we're replacing.
   bumpStopEpoch(id);
   startingRegistry().delete(id);
-  const reg = registry();
-  const backend = reg.get(id);
-  if (!backend) return;
-  try {
-    backend.proc.kill('SIGKILL');
-  } catch {
-    /* best-effort */
-  }
-  reg.delete(id);
+  // Every instance goes, draining ones included: after a stop or redeploy no
+  // process of the previous build may keep running.
+  const instances = [...(instanceRegistry().get(id) ?? [])];
+  const routable = instances.find((instance) => !instance.draining);
+  for (const instance of instances) killInstance(instance);
   // The kill's exit event (matching pid) fills in the exit signal moments
   // later; record the stop itself so the moment is never lost.
-  recordBackendStopped(id);
+  if (routable) recordBackendStopped(id, routable.proc.pid ?? null);
 }
 
 /**
@@ -1430,7 +1632,51 @@ export async function proxyAppRequest(
     expectedDeploymentId?: string;
   } = {},
 ): Promise<Response> {
-  const port = await ensureAppRunning(id, options.expectedDeploymentId);
+  const { port, release } = await acquireInstance(
+    id,
+    options.expectedDeploymentId,
+  );
+  // The lease covers the whole exchange. Once response headers arrive it is
+  // handed to the upstream body, so a streaming response keeps its instance
+  // from being idle-stopped until the stream ends or the client goes away.
+  let leaseHandedOff = false;
+  try {
+    const upstream = await forwardProxiedRequest(
+      port,
+      request,
+      stripPrefix,
+      prependPath,
+      options,
+    );
+    if (upstream instanceof Response) return upstream;
+    upstream.message.once('close', release);
+    leaseHandedOff = true;
+    // Stream the upstream response body through instead of buffering it.
+    return new Response(
+      proxiedResponseBody(request.method, upstream.status, upstream.message),
+      {
+        status: upstream.status,
+        statusText: responseStatusText(upstream.statusText),
+        headers: proxyResponseHeaders(upstream.headers),
+      },
+    );
+  } finally {
+    if (!leaseHandedOff) release();
+  }
+}
+
+/**
+ * Sanitize and forward one proxied request to a backend port. Resolves with
+ * the upstream once its response headers arrive, or with a platform-made
+ * rejection (`Response`) when the request never reaches the backend.
+ */
+async function forwardProxiedRequest(
+  port: number,
+  request: Request,
+  stripPrefix: string,
+  prependPath: string,
+  options: { stripSecretParam?: boolean; signWithSecret?: string },
+): Promise<BackendUpstream | Response> {
   const url = new URL(request.url);
   const stripped = url.pathname.startsWith(stripPrefix)
     ? url.pathname.slice(stripPrefix.length)
@@ -1561,9 +1807,8 @@ export async function proxyAppRequest(
   );
   if (typeof headerTimer.unref === 'function') headerTimer.unref();
   const signal = AbortSignal.any([request.signal, headerTimeout.signal]);
-  let upstream: BackendUpstream;
   try {
-    upstream = await forwardToAppBackend(
+    return await forwardToAppBackend(
       target,
       request.method,
       headers,
@@ -1573,14 +1818,4 @@ export async function proxyAppRequest(
   } finally {
     clearTimeout(headerTimer);
   }
-
-  // Stream the upstream response body through as well instead of buffering it.
-  return new Response(
-    proxiedResponseBody(request.method, upstream.status, upstream.message),
-    {
-      status: upstream.status,
-      statusText: responseStatusText(upstream.statusText),
-      headers: proxyResponseHeaders(upstream.headers),
-    },
-  );
 }

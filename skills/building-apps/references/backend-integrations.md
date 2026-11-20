@@ -481,8 +481,16 @@ like `/__webhook`.
 ## Long-running mode
 
 Set `backendMode: "long-running"` for in-memory state, WebSockets, or background
-loops. Hatch starts it at deploy and restarts it after an exit. The default
-`serverless` mode starts on demand and reuses the process when possible.
+loops. Hatch starts it at deploy and restarts it after an exit.
+
+The default `serverless` mode starts an instance on demand, reuses it while
+requests keep arriving, and stops it once no request has been in flight for the
+idle timeout (5 minutes by default). In-memory state, timers, and background
+work do not survive that stop, so keep state in the database, KV, Data Table,
+or storage. An idle stop sends `SIGTERM` and allows about 5 seconds before
+`SIGKILL`. A request that arrives while an instance is shutting down is served
+by a new instance right away, so two instances of one App can overlap briefly;
+do not assume a single process owns a storage file.
 
 ## Calling top-level Workflows
 

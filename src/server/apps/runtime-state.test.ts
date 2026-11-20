@@ -71,12 +71,16 @@ describe('backend runtime snapshots', () => {
     recordBackendSpawn('a1', { pid: 100, port: 4001, startedAt: 1000 });
     expect(getBackendSnapshot('a1')?.stoppedAt).toBeNull();
 
-    recordBackendStopped('a1');
+    // A superseded instance retiring must not stamp its successor's snapshot.
+    recordBackendStopped('a1', 99);
+    expect(getBackendSnapshot('a1')?.stoppedAt).toBeNull();
+
+    recordBackendStopped('a1', 100);
     expect(getBackendSnapshot('a1')?.stoppedAt).not.toBeNull();
   });
 
   it('stopping an app that never started records nothing', () => {
-    recordBackendStopped('missing');
+    recordBackendStopped('missing', 100);
     expect(getBackendSnapshot('missing')).toBeNull();
   });
 
