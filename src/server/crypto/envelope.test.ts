@@ -4,8 +4,8 @@ import type { EnvelopeContext } from './envelope';
 
 const CONTEXT: EnvelopeContext = {
   label: 'test secret',
-  domain: 'my-space/test-secret/aes-256-gcm/v1',
-  aad: 'my-space/test-secret/v1:demo',
+  domain: 'hatch/test-secret/aes-256-gcm/v1',
+  aad: 'hatch/test-secret/v1:demo',
 };
 
 beforeEach(() => {
