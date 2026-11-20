@@ -581,6 +581,33 @@ describe('app backend media proxy', () => {
     expect(Buffer.from(await signed.arrayBuffer()).toString()).toBe('01');
   });
 
+  it('frames DELETE and OPTIONS bodies on streamed and signed forwards', async () => {
+    const payload = Buffer.from([0, 255, 128, 10]);
+    for (const method of ['DELETE', 'OPTIONS'])
+      for (const sign of [false, true]) {
+        const response = await proxy(
+          hook('/echo-body', { method, body: payload }),
+          { sign },
+        );
+        const forwarded = lastRequest();
+        expect({ method, sign, body: forwarded.body }).toEqual({
+          method,
+          sign,
+          body: payload,
+        });
+        expect(forwarded.headers['x-hatch-signature']).toBe(
+          sign
+            ? hatchSignature(
+                'signing-secret',
+                String(forwarded.headers['x-hatch-timestamp']),
+                payload,
+              )
+            : undefined,
+        );
+        expect(Buffer.from(await response.arrayBuffer())).toEqual(payload);
+      }
+  });
+
   it('keeps RPC framing and null-body statuses without opening redirects', async () => {
     const rpc = await proxy(hook('/rpc'));
     expect(rpc.headers.get('content-type')).toBe('application/grpc-web+proto');
