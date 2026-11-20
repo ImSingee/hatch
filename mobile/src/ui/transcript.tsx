@@ -17,6 +17,24 @@ function record(
     : null;
 }
 
+/**
+ * A reply that completed without a clean `stop`: truncated output or a turn
+ * cut off mid-work. Returns null for normal and failed ends — failures show
+ * their own notice already.
+ */
+function endedEarlyNote(stopReason: unknown): string | null {
+  switch (stopReason) {
+    case 'length':
+      return 'Ended early · the model reached its output limit';
+    case 'toolUse':
+      return 'Ended early · the reply stopped before its tools finished';
+    case 'pending':
+      return 'Ended early · the reply stopped before it finished';
+    default:
+      return null;
+  }
+}
+
 function Speaker({ live }: { live?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -165,6 +183,11 @@ export function TranscriptMessage({ value }: { value: JsonValue }) {
           {message.errorMessage}
         </Text>
       ) : null}
+      {!mine && endedEarlyNote(message.stopReason) ? (
+        <Text style={[type.small, { color: c.inkSoft }]}>
+          {endedEarlyNote(message.stopReason)}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -283,6 +306,11 @@ export function LiveTranscript({
       ) : null}
       {state.error ? (
         <Text style={[type.small, { color: c.danger }]}>{state.error}</Text>
+      ) : null}
+      {endedEarlyNote(state.stopReason) ? (
+        <Text style={[type.small, { color: c.inkSoft }]}>
+          {endedEarlyNote(state.stopReason)}
+        </Text>
       ) : null}
     </View>
   );

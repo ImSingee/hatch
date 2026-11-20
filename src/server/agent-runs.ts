@@ -18,6 +18,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { db, schema, type DB, type TX } from '~/db';
 import type { AgentRunStatus, JsonObject, JsonValue } from '~/db/schema';
+import type { StopReason } from '@earendil-works/pi-ai';
 import type {
   AgentRunStreamEvent,
   AgentStreamEvent,
@@ -1475,7 +1476,12 @@ export async function completeRunFromRunner(
       // Retry of a final report whose ack was lost. A crash between finishRun
       // and appendEvent leaves the run terminal without a terminal event, so
       // SSE clients would treat the closed stream as a disconnect — repair it.
-      await ensureTerminalEvent(message.runId, outcome.status, outcome.error);
+      await ensureTerminalEvent(
+        message.runId,
+        outcome.status,
+        outcome.error,
+        message.messages,
+      );
       return run.sessionId;
     }
 
@@ -1483,17 +1489,59 @@ export async function completeRunFromRunner(
     if (outcome.autoRetryAt) wakeAgentAutoRetryScheduler(outcome.autoRetryAt);
     await appendEvent(
       message.runId,
-      terminalEventForStatus(message.status, message.error),
+      terminalEventForStatus(message.status, message.error, message.messages),
     );
     return run.sessionId;
   });
 }
 
+/**
+ * The last assistant message's terminal stop reason. A completed run whose
+ * reply did not end on a clean `stop` (e.g. `length` after the model hit its
+ * output limit) is still completed, but the live turn needs the reason to
+ * show the same ended-early notice history renders from the transcript.
+ */
+const STOP_REASONS = new Set<StopReason>([
+  'pending',
+  'stop',
+  'length',
+  'toolUse',
+  'error',
+  'aborted',
+]);
+
+function terminalAssistantStopReason(
+  messages: unknown[],
+): StopReason | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      Array.isArray(message) ||
+      (message as { role?: unknown }).role !== 'assistant'
+    ) {
+      continue;
+    }
+    const stopReason = (message as { stopReason?: unknown }).stopReason;
+    return STOP_REASONS.has(stopReason as StopReason)
+      ? (stopReason as StopReason)
+      : undefined;
+  }
+  return undefined;
+}
+
 function terminalEventForStatus(
   status: AgentRunStatus,
   error?: string | null,
+  messages: unknown[] = [],
 ): AgentStreamEvent {
-  if (status === 'completed') return { type: 'done' };
+  if (status === 'completed') {
+    const stopReason = terminalAssistantStopReason(messages);
+    return stopReason && stopReason !== 'stop'
+      ? { type: 'done', stopReason }
+      : { type: 'done' };
+  }
   if (status === 'cancelled') return { type: 'cancelled' };
   return { type: 'error', message: error ?? 'Agent run failed.' };
 }
@@ -1503,12 +1551,16 @@ async function ensureTerminalEvent(
   runId: string,
   status: AgentRunStatus,
   error?: string | null,
+  messages?: unknown[],
 ): Promise<void> {
   const existing = await db.query.agentRunEvents.findFirst({
     where: { runId, type: { in: ['done', 'cancelled', 'error'] } },
   });
   if (existing) return;
-  await appendEvent(runId, terminalEventForStatus(status, error));
+  await appendEvent(
+    runId,
+    terminalEventForStatus(status, error, messages ?? []),
+  );
 }
 
 /** ================== ask / answer ================== */

@@ -96,6 +96,7 @@ function WorkDuration({
 const ENDED_NOTE: Partial<Record<WorkPhase, string>> = {
   failed: 'Failed',
   cancelled: 'Stopped',
+  incomplete: 'Ended early',
 };
 
 export function WorkProcess({

@@ -33,6 +33,8 @@ export type StreamState = {
   pendingEnv: PendingEnv | null;
   terminal: 'done' | 'cancelled' | 'error' | null;
   error: string | null;
+  /** Non-`stop` terminal reason the run reported on `done`, when it ended early. */
+  stopReason: string | null;
 };
 
 /** Keep this whole state in memory across reconnects; on cold start replay from 0. */
@@ -48,6 +50,7 @@ export function initialStreamState(): StreamState {
     pendingEnv: null,
     terminal: null,
     error: null,
+    stopReason: null,
   };
 }
 
@@ -157,6 +160,7 @@ export function reduceStreamEvent(
         ...next,
         terminal: event.type,
         error: event.type === 'error' ? event.message : null,
+        stopReason: event.type === 'done' ? (event.stopReason ?? null) : null,
         pendingAsk: null,
         pendingEnv: null,
       };
@@ -188,9 +192,12 @@ function validEvent(value: unknown): value is AgentStreamEvent {
   switch (value.type) {
     case 'assistant_start':
     case 'turn_end':
-    case 'done':
     case 'cancelled':
       return true;
+    case 'done':
+      return (
+        value.stopReason === undefined || typeof value.stopReason === 'string'
+      );
     case 'text':
     case 'thinking':
       return typeof value.delta === 'string';
