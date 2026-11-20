@@ -140,8 +140,10 @@ export async function runLifecycle(
   )
     throw new CliError('invalid_arguments', 'Paths must not be empty.');
   const timeout = Math.ceil(seconds * 1000);
-  // Fetching source keeps the five-minute allowance local git always had.
-  const transferTimeout = Math.max(timeout, 300000);
+  // Source transfers get five minutes by default; an explicit --timeout is
+  // honored as given.
+  const transferTimeout =
+    values.timeout === undefined ? Math.max(timeout, 300000) : timeout;
   if (
     values.commit !== undefined &&
     !/^[0-9a-f]{40}$/.test(String(values.commit))
@@ -160,6 +162,11 @@ export async function runLifecycle(
     configPath(process.env, values.config as string | undefined),
     values.profile as string | undefined,
   );
+  // Environment credentials need no file; a profile from --config does.
+  const helperConfig =
+    credential.source === 'config' && values.config
+      ? resolve(String(values.config))
+      : undefined;
   const client = platformClient(credential, timeout, signal);
   const api = kind === 'app' ? client.apps : client.workflows;
   const workdir = resolve(String(values.workdir ?? '.'));
@@ -346,7 +353,14 @@ export async function runLifecycle(
             masterCommit: commit,
           };
         }
-        await configureOrigin(stage, credential, kind, metadata.id, signal);
+        await configureOrigin(
+          stage,
+          credential,
+          kind,
+          metadata.id,
+          signal,
+          helperConfig,
+        );
         await saveWorkspace(stage, metadata);
         // Tool checkout associates the App even if source preparation fails.
         const association =
@@ -423,7 +437,14 @@ export async function runLifecycle(
       );
     if (kind === 'app')
       await client.apps.associate({ params: { id: metadata.id }, body: {} });
-    await configureOrigin(root, credential, kind, metadata.id, signal);
+    await configureOrigin(
+      root,
+      credential,
+      kind,
+      metadata.id,
+      signal,
+      helperConfig,
+    );
     // A plain push or a deploy of an already pushed commit never reads the
     // working tree, so uncommitted work does not block it.
     if (operation === 'update' || (operation === 'deploy' && !values.commit))

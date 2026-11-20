@@ -508,6 +508,8 @@ export async function configureOrigin(
   kind: Kind,
   id: string,
   signal: AbortSignal,
+  /** Absolute path of an explicitly selected config file, if any. */
+  config?: string,
 ) {
   if (
     (await git(root, signal, ['remote', 'get-url', 'origin'], true)).code === 0
@@ -515,7 +517,12 @@ export async function configureOrigin(
     return;
   const url = remoteUrl(credential, kind, id);
   const helper = `credential.${credential.url}.helper`;
-  const profile = credential.profile ? `--profile ${credential.profile} ` : '';
+  // Git runs the helper through a shell; plain git must resolve the same
+  // credential source this checkout was created with.
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const selection =
+    (config ? `--config ${quote(config)} ` : '') +
+    (credential.profile ? `--profile ${quote(credential.profile)} ` : '');
   await git(root, signal, ['remote', 'add', 'origin', url]);
   // The empty entry drops helpers inherited from user config, so a keychain
   // cannot store a short-lived token and replay it after it expires.
@@ -524,7 +531,7 @@ export async function configureOrigin(
     'config',
     '--add',
     helper,
-    `!hatch ${profile}git-credential`,
+    `!hatch ${selection}git-credential`,
   ]);
   await git(root, signal, ['config', 'branch.master.remote', 'origin']);
   await git(root, signal, [

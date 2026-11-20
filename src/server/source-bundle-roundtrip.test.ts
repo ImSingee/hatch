@@ -318,6 +318,15 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     await expect(readFile(path.join(built, 'README.md'), 'utf8')).resolves.toBe(
       'v2\n',
     );
+    // A concurrent attempt gets its own checkout and disturbs neither.
+    const concurrent = await platform.prepareDeployCheckout(APP_ID, seedCommit);
+    expect(concurrent).not.toBe(built);
+    await expect(
+      readFile(path.join(concurrent, 'README.md'), 'utf8'),
+    ).resolves.toBe('v1\n');
+    await expect(readFile(path.join(built, 'README.md'), 'utf8')).resolves.toBe(
+      'v2\n',
+    );
     const published = await platform.publishDeploymentSource(
       APP_ID,
       release,

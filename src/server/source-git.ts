@@ -61,10 +61,10 @@ async function pathExists(p: string): Promise<boolean> {
  * do not run hooks, so deploy and rollback are unaffected.
  */
 const PRE_RECEIVE_HOOK = `#!/bin/sh
-# hatch-ref-policy v2
+# hatch-ref-policy v3
 while read oldrev newrev refname; do
   case "$refname" in
-    refs/tags/${DEPLOY_TAG_PREFIX}*)
+    refs/tags/${DEPLOY_TAG_PREFIX.slice(0, -1)}|refs/tags/${DEPLOY_TAG_PREFIX}*)
       echo "Hatch owns ${DEPLOY_TAG_PREFIX}* tags; they are created by deploy." >&2
       exit 1
       ;;
@@ -245,19 +245,29 @@ export function createGitSource(cfg: GitSourceConfig) {
     return commit;
   }
 
-  /** Check out `commit` from the canonical repo into the deploy checkout. */
+  /**
+   * Check out `commit` from the canonical repo into a checkout of its own.
+   * Each deploy attempt gets a fresh directory, so concurrent attempts, also
+   * from other processes, never build each other's source. The caller removes
+   * it when the attempt ends.
+   */
   async function prepareDeployCheckout(
     id: string,
     commit: string,
   ): Promise<string> {
     const repoDir = await ensureRepo(id);
-    const checkout = cfg.deployCheckoutDir(id);
-    await rm(checkout, { recursive: true, force: true });
-    await mkdir(path.dirname(checkout), { recursive: true });
-    await runGit(['clone', '--no-checkout', repoDir, checkout]);
-    await runGit(['checkout', '--detach', commit], { cwd: checkout });
-    await setLocalGitIdentity(checkout);
-    return checkout;
+    const base = cfg.deployCheckoutDir(id);
+    await mkdir(path.dirname(base), { recursive: true });
+    const checkout = await mkdtemp(`${base}-`);
+    try {
+      await runGit(['clone', '--no-checkout', repoDir, checkout]);
+      await runGit(['checkout', '--detach', commit], { cwd: checkout });
+      await setLocalGitIdentity(checkout);
+      return checkout;
+    } catch (error) {
+      await rm(checkout, { recursive: true, force: true });
+      throw error;
+    }
   }
 
   /**

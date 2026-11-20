@@ -196,11 +196,11 @@ const server = createServer(async (request, response) => {
 function run(args: string[], extra: NodeJS.ProcessEnv = {}) {
   const env = {
     ...process.env,
-    ...extra,
     HATCH_CLI_URL: origin,
     HATCH_CLI_TOKEN: token,
     HATCH_CLI_API_KEY: undefined,
     FORCE_COLOR: undefined,
+    ...extra,
   };
   const child = spawn(
     process.execPath,
@@ -255,6 +255,33 @@ async function publish(root: string) {
   master = git(root, 'rev-parse', 'HEAD');
 }
 const remoteMaster = () => git(remote, 'rev-parse', 'refs/heads/master');
+/**
+ * `git push origin master` as a person would run it, with this CLI on PATH as
+ * `hatch`. Asynchronous: the fixture server runs in this process.
+ */
+async function nativePush(root: string, extra: NodeJS.ProcessEnv) {
+  const bin = join(directory, 'bin');
+  await mkdir(bin, { recursive: true });
+  await writeFile(
+    join(bin, 'hatch'),
+    `#!/bin/sh\nexec "${process.execPath}" --import "${import.meta.resolve('tsx')}" "${entry}" "$@"\n`,
+    { mode: 0o755 },
+  );
+  const push = spawn('git', ['push', '--quiet', 'origin', 'master'], {
+    cwd: root,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      HATCH_CLI_API_KEY: undefined,
+      ...extra,
+    } as NodeJS.ProcessEnv,
+  });
+  return new Promise((resolve) => push.once('close', resolve));
+}
 function commit(root: string, message: string) {
   git(root, 'add', '.');
   git(
@@ -547,35 +574,61 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       );
       expect(helper('other.example.test')).toBe('');
 
-      // Plain git reaches the remote through `hatch git-credential`.
-      const bin = join(directory, 'bin');
-      await mkdir(bin);
-      await writeFile(
-        join(bin, 'hatch'),
-        `#!/bin/sh\nexec "${process.execPath}" --import "${import.meta.resolve('tsx')}" "${entry}" "$@"\n`,
-        { mode: 0o755 },
-      );
       await writeFile(join(root, 'native.txt'), 'native');
       commit(root, 'Native');
-      // Asynchronous: the fixture server runs in this process.
-      const push = spawn('git', ['push', '--quiet', 'origin', 'master'], {
-        cwd: root,
-        stdio: 'ignore',
-        env: {
-          ...process.env,
-          PATH: `${bin}${delimiter}${process.env.PATH}`,
-          GIT_TERMINAL_PROMPT: '0',
-          GIT_CONFIG_NOSYSTEM: '1',
-          GIT_CONFIG_GLOBAL: '/dev/null',
+      expect(
+        await nativePush(root, {
           HATCH_CLI_URL: origin,
           HATCH_CLI_TOKEN: token,
-          HATCH_CLI_API_KEY: undefined,
-        } as NodeJS.ProcessEnv,
-      });
-      expect(await new Promise((resolve) => push.once('close', resolve))).toBe(
-        0,
-      );
+        }),
+      ).toBe(0);
       expect(remoteMaster()).toBe(git(root, 'rev-parse', 'HEAD'));
+    },
+  );
+  it.skipIf(process.platform === 'win32')(
+    'lets plain git use the config file and profile the checkout was cloned with',
+    async () => {
+      await publish(await create());
+      // Neither the default config nor the active profile holds this login.
+      const config = join(directory, "team's config.json");
+      await writeFile(
+        config,
+        JSON.stringify({
+          version: 1,
+          activeProfile: 'other',
+          profiles: {
+            staging: { url: origin, token },
+            other: { url: 'https://other.example.test', token: 'other-login' },
+          },
+        }),
+        { mode: 0o600 },
+      );
+      const fileOnly = {
+        HATCH_CLI_URL: undefined,
+        HATCH_CLI_TOKEN: undefined,
+        HOME: directory,
+        XDG_CONFIG_HOME: undefined,
+      };
+      const clone = join(directory, 'clone');
+      const cloned = await run(
+        [
+          'workflow',
+          'clone',
+          'immutable',
+          '--directory',
+          clone,
+          '--config',
+          config,
+          '--profile',
+          'staging',
+        ],
+        fileOnly,
+      ).result;
+      assert.equal(cloned.code, 0, JSON.stringify(cloned));
+      await writeFile(join(clone, 'native.txt'), 'native');
+      commit(clone, 'Native');
+      expect(await nativePush(clone, fileOnly)).toBe(0);
+      expect(remoteMaster()).toBe(git(clone, 'rev-parse', 'HEAD'));
     },
   );
   it('replaces only explicit safe targets after preparation and restores existing work on failure', async () => {

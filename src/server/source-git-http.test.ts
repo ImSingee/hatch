@@ -236,6 +236,10 @@ describe('git smart HTTP', () => {
     expect(tagged.code).not.toBe(0);
     expect(tagged.stderr).toContain('Hatch owns deploy/* tags');
 
+    // A tag named like the namespace itself would block every deploy tag.
+    const parent = await git(['push', 'origin', 'HEAD:refs/tags/deploy'], dir);
+    expect(parent.code).not.toBe(0);
+
     const other = await git(['push', 'origin', 'HEAD:refs/notes/x'], dir);
     expect(other.code).not.toBe(0);
     expect(await remoteMaster('app/app-1')).toBe(master);

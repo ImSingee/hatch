@@ -200,7 +200,8 @@ release. Pushing never deploys.
 Checkouts made by `create` and `clone` have this remote as `origin` and use
 `hatch git-credential` as its only credential helper, so `git fetch`, `git pull`
 and `git push` work with the current login, including a Run credential. `hatch`
-must be on `PATH`. No credential is written to the checkout. A checkout created
+must be on `PATH`. No credential is written to the checkout; the helper entry
+records only the `--config` path and `--profile` the checkout was created with. A checkout created
 by an older CLI gains `origin` on its next `update`, `push` or `deploy`; an
 adopted Agent checkout keeps its own `origin`, and the CLI commands still reach
 the platform.
@@ -287,8 +288,9 @@ inspection. No durable operation service or fake async operation IDs are added.
 stdout; progress/device instructions use stderr. Branch on code, not prose.
 Secrets are redacted; raw exception/auth response diagnostics are not printed.
 Auth timeout defaults: login 600s, status/logout 15s; lifecycle requests 30s,
-push and deploy 600s. `--timeout` accepts at most 3600s; subprocess preparation
-is bounded. Git transfer errors: `non_fast_forward` (6), `git_remote_not_found`
+push and deploy 600s. Git source transfers in `clone` / `update` get 300s by
+default and exactly `--timeout` when it is given. `--timeout` accepts at most
+3600s; subprocess preparation is bounded. Git transfer errors: `non_fast_forward` (6), `git_remote_not_found`
 (5, deleted resource or a platform without Git transport), `git_remote_failed`
 (7) and `UNAUTHORIZED` (3).
 
