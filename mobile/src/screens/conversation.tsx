@@ -67,6 +67,7 @@ import { AskCard } from '../ui/ask-card';
 import { Button, IconButton } from '../ui/button';
 import { Glyph } from '../ui/glyph';
 import { LiveTranscript, TranscriptMessage } from '../ui/transcript';
+import { terminalReplyIndexes } from '../ui/transcript-content';
 import { Busy, Egg, Notice, errorText } from '../ui/primitives';
 import { GlyphTile, Monogram } from '../ui/rows';
 import { Text, type } from '../ui/text';
@@ -294,6 +295,9 @@ function ConversationBody({
     detail?.messages ?? [],
     shownHeldReplies(held, id, detail),
   );
+  // Only the last assistant message of a turn carries its end state;
+  // an intermediate `toolUse` is a normal step while tools run.
+  const terminalReplies = terminalReplyIndexes(detail?.messages ?? []);
   const heldReply = (entry: HeldReply) => (
     <LiveTranscript
       key={entry.runId}
@@ -729,11 +733,17 @@ function ConversationBody({
                 const after = heldShown.after.get(index);
                 return after ? (
                   <View style={{ gap: 18 }}>
-                    <TranscriptMessage value={item} />
+                    <TranscriptMessage
+                      value={item}
+                      terminal={terminalReplies.has(index)}
+                    />
                     {after.map(heldReply)}
                   </View>
                 ) : (
-                  <TranscriptMessage value={item} />
+                  <TranscriptMessage
+                    value={item}
+                    terminal={terminalReplies.has(index)}
+                  />
                 );
               }}
               ListEmptyComponent={

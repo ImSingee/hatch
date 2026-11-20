@@ -27,3 +27,24 @@ export function messageBlocks(message: Record<string, JsonValue>) {
     ...content.filter((part) => record(part)?.type === 'image'),
   ];
 }
+
+/**
+ * The index of the assistant message that ends each turn — the last one
+ * before the next user message (or the transcript's end). Only its
+ * `stopReason` describes how that reply ended: an intermediate `toolUse`
+ * is a normal step in a turn whose tools went on to run.
+ */
+export function terminalReplyIndexes(messages: JsonValue[]): Set<number> {
+  const terminal = new Set<number>();
+  let pending = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const role = record(messages[index])?.role;
+    if (role === 'assistant' && pending === -1) pending = index;
+    if (role === 'user' && pending !== -1) {
+      terminal.add(pending);
+      pending = -1;
+    }
+  }
+  if (pending !== -1) terminal.add(pending);
+  return terminal;
+}

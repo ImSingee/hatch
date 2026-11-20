@@ -44,7 +44,14 @@ function Speaker({ live }: { live?: boolean }) {
   );
 }
 
-export function TranscriptMessage({ value }: { value: JsonValue }) {
+export function TranscriptMessage({
+  value,
+  terminal = false,
+}: {
+  value: JsonValue;
+  /** Whether this message ends its turn — only its stopReason counts. */
+  terminal?: boolean;
+}) {
   const message = record(value);
   if (!message || typeof message.role !== 'string') return null;
   const role = message.role;
@@ -183,7 +190,7 @@ export function TranscriptMessage({ value }: { value: JsonValue }) {
           {message.errorMessage}
         </Text>
       ) : null}
-      {!mine && endedEarlyNote(message.stopReason) ? (
+      {!mine && terminal && endedEarlyNote(message.stopReason) ? (
         <Text style={[type.small, { color: c.inkSoft }]}>
           {endedEarlyNote(message.stopReason)}
         </Text>
