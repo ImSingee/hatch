@@ -319,6 +319,66 @@ function ToolStepBody({
   );
 }
 
+const compactTokenCount = new Intl.NumberFormat('en', {
+  notation: 'compact',
+});
+
+/**
+ * Auto-compaction marker, shared by the live stream (start/done/failed as
+ * events arrive) and the persisted `compactionSummary` transcript boundary.
+ * A persisted boundary can expand into the generated summary text.
+ */
+export function CompactionStep({
+  status,
+  tokensBefore,
+  tokensAfter,
+  summary,
+}: {
+  status: ToolStatus;
+  tokensBefore?: number;
+  tokensAfter?: number;
+  summary?: string;
+}) {
+  const icon =
+    status === 'running' ? (
+      <Loader size={11} color="gray" />
+    ) : status === 'error' ? (
+      <IconAlertTriangle size={14} stroke={1.7} />
+    ) : (
+      <IconCheck size={14} stroke={2} />
+    );
+  const label =
+    status === 'running'
+      ? 'Compacting context…'
+      : status === 'error'
+        ? 'Context compaction failed'
+        : 'Context compacted';
+  const detailValue =
+    tokensBefore !== undefined && tokensAfter !== undefined
+      ? `~${compactTokenCount.format(tokensBefore)} → ~${compactTokenCount.format(tokensAfter)} tokens`
+      : tokensBefore !== undefined
+        ? `~${compactTokenCount.format(tokensBefore)} tokens`
+        : undefined;
+  return (
+    <StepRow
+      icon={icon}
+      label={label}
+      detail={
+        detailValue === undefined
+          ? undefined
+          : { value: detailValue, ellipsis: 'end' }
+      }
+      error={status === 'error'}
+    >
+      {summary === undefined ? undefined : (
+        <Box className={classes.stepBody}>
+          <Box className={classes.stepBodyText}>{summary}</Box>
+        </Box>
+      )}
+    </StepRow>
+  );
+}
+
 export function ThinkingStep({ text }: { text: string }) {
   if (!text.trim()) return null;
   return (

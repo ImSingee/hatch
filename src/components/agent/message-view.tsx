@@ -32,7 +32,7 @@ import {
   WorkflowDeploymentActions,
 } from './deployment-actions';
 import { Markdownish } from './markdownish';
-import { ThinkingStep, ToolStep } from './steps';
+import { CompactionStep, ThinkingStep, ToolStep } from './steps';
 import {
   type AssistantBlock,
   type ChatMessage,
@@ -178,6 +178,15 @@ function AssistantBlocks({
       out.push(<Markdownish key={index} text={block.text} />);
     } else if (block.type === 'thinking') {
       steps.push(<ThinkingStep key={index} text={block.thinking} />);
+    } else if (block.type === 'compaction') {
+      steps.push(
+        <CompactionStep
+          key={index}
+          status="done"
+          tokensBefore={block.tokensBefore}
+          summary={block.summary}
+        />,
+      );
     } else {
       const result = toolResults?.get(block.id);
       steps.push(
@@ -319,6 +328,20 @@ export function MessageView({
             details: message.details,
             isError: message.isError,
           }}
+        />
+      </Box>
+    );
+  }
+
+  // A compaction marker is normally a step of the reply it happened in (see
+  // `groupTurns`); this keeps a bare marker render meaningful.
+  if (message.role === 'compactionSummary') {
+    return (
+      <Box className={classes.steps}>
+        <CompactionStep
+          status="done"
+          tokensBefore={message.tokensBefore}
+          summary={message.summary}
         />
       </Box>
     );

@@ -141,6 +141,14 @@ export type AgentStreamEvent =
       summary?: string;
     }
   | { type: 'turn_end' | 'cancelled' }
+  | {
+      /** Auto-compaction lifecycle. Accepted so the stream keeps advancing. */
+      type: 'compact';
+      reason: 'threshold' | 'overflow';
+      phase: 'start' | 'done' | 'failed';
+      tokensBefore?: number;
+      tokensAfter?: number;
+    }
   // `stopReason` is set when the completed reply did not end on a clean
   // `stop` — the model ended it early, e.g. `length` at its output limit.
   | { type: 'done'; stopReason?: string }

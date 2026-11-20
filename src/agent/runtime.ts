@@ -13,6 +13,11 @@ import {
 import type { Models } from '@earendil-works/pi-ai';
 import { hasBetaFeature, WORKFLOW_BETA_FEATURE } from '~/beta-features';
 import type { JsonValue } from '~/db/schema';
+import {
+  createSessionCompactor,
+  openTranscriptSession,
+  withOverflowRecovery,
+} from './auto-compaction';
 import { formatAttachmentPrompt, type AgentAttachmentRef } from './attachments';
 import type { AgentComposerContentPart } from './composer-content';
 import type { AgentStreamEvent } from './events';
@@ -213,9 +218,9 @@ export async function runAgentTurn(
 
   const repo = new InMemorySessionRepo();
   const session = await repo.create({ id: sessionId });
-  for (const message of priorMessages) {
-    await session.appendMessage(message);
-  }
+  // `priorMessages` is the complete transcript, compaction markers included;
+  // the session derives the (possibly compacted) model context from it.
+  const transcript = await openTranscriptSession(session, priorMessages);
 
   const skills = await loadAgentSkills(env, { workflowBetaEnabled });
   const tools = createTools(env, {
@@ -246,20 +251,67 @@ export async function runAgentTurn(
     }
   }
 
-  const harness = new AgentHarness({
+  const thinkingLevel = picked.model.reasoning ? 'medium' : 'off';
+  const systemPrompt = buildSystemPrompt(
+    opts.appUrl,
+    { workflowBetaEnabled },
+    skills,
+  );
+  const compactor = createSessionCompactor({
     session,
     models,
     model: picked.model,
+    signal,
+    thinkingLevel,
+    // Every request also carries the system prompt and the tool schemas.
+    overheadTokens: Math.ceil(
+      (systemPrompt.length +
+        JSON.stringify(
+          tools.map((tool) => [tool.name, tool.description, tool.parameters]),
+        ).length) /
+        4,
+    ),
+    onEvent: (reason, phase, tokensBefore, tokensAfter) =>
+      emit({
+        type: 'compact',
+        reason,
+        phase,
+        tokensBefore: Math.round(tokensBefore),
+        ...(tokensAfter === undefined
+          ? {}
+          : { tokensAfter: Math.round(tokensAfter) }),
+      }),
+  });
+  const compactedContext = async () => (await session.buildContext()).messages;
+
+  const harness = new AgentHarness({
+    session,
+    // A request the provider rejects for context length is compacted and
+    // re-sent in place, so the turn keeps the tool work it already did.
+    models: withOverflowRecovery(models, {
+      contextWindow: picked.model.contextWindow,
+      signal,
+      recover: async () =>
+        (await compactor.compactAfterOverflow())
+          ? compactedContext()
+          : undefined,
+    }),
+    model: picked.model,
     tools,
     resources: { skills },
-    systemPrompt: ({ resources }) =>
-      buildSystemPrompt(
-        opts.appUrl,
-        { workflowBetaEnabled },
-        resources.skills ?? [],
-      ),
-    thinkingLevel: picked.model.reasoning ? 'medium' : 'off',
+    systemPrompt,
+    thinkingLevel,
   });
+
+  // Every provider request passes through here with the session already
+  // holding the messages it is about to send (the new user message on the
+  // first request, tool results on later ones). Over the threshold, the
+  // session is compacted and the request goes out on the compacted context.
+  const removeContextHook = harness.on('context', async () =>
+    (await compactor.compactIfOverThreshold())
+      ? { messages: await compactedContext() }
+      : undefined,
+  );
   const toolStartDetailsById = new Map<string, JsonValue | undefined>();
 
   // Persist the path identity selected at tool start even when execution
@@ -406,7 +458,7 @@ export async function runAgentTurn(
 
   const buildTranscript = async (): Promise<JsonValue[]> => {
     const messages = addToolStartDetailsToTranscript(
-      (await session.buildContext()).messages as unknown as JsonValue[],
+      await transcript.serialize(),
       toolStartDetailsById,
     );
     const attachments = opts.attachments ?? [];
@@ -469,6 +521,7 @@ export async function runAgentTurn(
     };
   } finally {
     unsubscribe();
+    removeContextHook();
     removeToolResultHook();
     signal.removeEventListener('abort', onAbort);
   }

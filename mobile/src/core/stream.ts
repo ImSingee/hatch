@@ -254,6 +254,13 @@ function validEvent(value: unknown): value is AgentStreamEvent {
         typeof value.isError === 'boolean' &&
         (value.output === undefined || typeof value.output === 'string')
       );
+    case 'compact':
+      return (
+        (value.reason === 'threshold' || value.reason === 'overflow') &&
+        (value.phase === 'start' ||
+          value.phase === 'done' ||
+          value.phase === 'failed')
+      );
     default:
       return false;
   }

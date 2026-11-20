@@ -86,6 +86,21 @@ export type AgentStreamEvent =
       summary?: string;
     }
   | { type: 'turn_end' }
+  | {
+      /**
+       * Auto-compaction lifecycle. `threshold` fired on the estimated context
+       * budget; `overflow` fires after a provider rejected a request for
+       * context length, which is then re-sent on the compacted context. Every
+       * `start` is followed by `done` or `failed`.
+       */
+      type: 'compact';
+      reason: 'threshold' | 'overflow';
+      phase: 'start' | 'done' | 'failed';
+      /** Estimated context tokens before compaction, when known. */
+      tokensBefore?: number;
+      /** Estimated context tokens after compaction, when known. */
+      tokensAfter?: number;
+    }
   | { type: 'cancelled' }
   // The client revalidates the session on `done` (reads the just-persisted
   // messages + title) rather than carrying the whole transcript in the event.

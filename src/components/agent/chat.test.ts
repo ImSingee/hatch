@@ -128,6 +128,44 @@ describe('groupTurns', () => {
     ]);
     expect(nextUserTurn(messages)).toBe(3);
   });
+
+  it('shows a compaction marker as a step of the reply it happened in', () => {
+    // The transcript keeps the whole history; the marker only records where
+    // the model's context was summarized.
+    const messages: ChatMessage[] = [
+      { role: 'user', content: 'First' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Answer.' }] },
+      { role: 'user', content: 'Second' },
+      {
+        role: 'compactionSummary',
+        summary: 'Earlier work condensed.',
+        tokensBefore: 120000,
+        timestamp: 1,
+      },
+      { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
+    ];
+
+    const turns = groupTurns(messages);
+    expect(turns.map((turn) => [turn.kind, turn.userTurn])).toEqual([
+      ['user', 0],
+      ['assistant', 0],
+      ['user', 1],
+      ['assistant', 1],
+    ]);
+    expect(turns[3]).toMatchObject({
+      blocks: [
+        {
+          type: 'compaction',
+          summary: 'Earlier work condensed.',
+          tokensBefore: 120000,
+        },
+        { type: 'text', text: 'Done.' },
+      ],
+    });
+    // The marker is not a user message, so turn numbering stays aligned with
+    // the platform's nextUserTurn count.
+    expect(nextUserTurn(messages)).toBe(2);
+  });
 });
 
 describe('persistedWorkPhase', () => {

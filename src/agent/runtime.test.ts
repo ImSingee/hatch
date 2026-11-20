@@ -10,12 +10,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { createModels } from '@earendil-works/pi-ai';
+import { createModels, type AssistantMessage } from '@earendil-works/pi-ai';
 import {
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
+  type FauxModelDefinition,
   type FauxResponseStep,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
@@ -23,6 +24,7 @@ import type { AgentComposerContentPart } from './composer-content';
 import type { AgentStreamEvent } from './events';
 import type { PlatformClient } from './platform-client';
 import type { ResolvedModel } from './remote-models';
+import { nextUserTurn } from './user-turns';
 import type { EnvBridge } from './tools';
 import { MAX_EDIT_DETAILS_BYTES } from './tools/edit-diff';
 import { MAX_WEB_SEARCH_CONTENT_CHARS } from './tools/web';
@@ -73,9 +75,16 @@ async function runWithResponses(
     userText: string;
     composerContent: AgentComposerContentPart[];
   },
+  modelOptions?: Omit<FauxModelDefinition, 'id'>,
+  signal: AbortSignal = new AbortController().signal,
 ) {
   const providerId = `runtime-test-${sessionId}`;
-  const faux = fauxProvider({ provider: providerId });
+  const faux = fauxProvider({
+    provider: providerId,
+    ...(modelOptions === undefined
+      ? {}
+      : { models: [{ id: 'test-model', ...modelOptions }] }),
+  });
   faux.setResponses(responses);
   const models = createModels();
   models.setProvider(faux.provider);
@@ -98,7 +107,7 @@ async function runWithResponses(
     models,
     picked,
     platform,
-    signal: new AbortController().signal,
+    signal,
     ...(requestEnv ? { requestEnv } : {}),
     emit,
   });
@@ -875,5 +884,430 @@ describe('runAgentTurn terminal outcomes', () => {
     await expect(readFile(path.join(cwd, 'large.js'), 'utf8')).resolves.toBe(
       original.replace('TOKEN', 'DONE'),
     );
+  });
+});
+
+describe('runAgentTurn auto compaction', () => {
+  // Compaction triggers above (400000 - 40000) * 0.8 = 288000 tokens.
+  const model = { contextWindow: 400000, maxTokens: 40000 };
+  const TRIGGER = 288000;
+  const SUMMARY = 'condensed history';
+
+  type ProviderContext = Parameters<
+    Extract<FauxResponseStep, (...args: never[]) => unknown>
+  >[0];
+
+  const isSummaryRequest = (context: ProviderContext) =>
+    context.systemPrompt?.includes('context summarization assistant') === true;
+
+  const contextText = (context: ProviderContext) =>
+    JSON.stringify(context.messages);
+
+  /**
+   * Provider script that answers every summarization request with `SUMMARY`
+   * and hands the agent's own requests to `replies` in order. A compaction
+   * may take one or two summary calls, so the two kinds are not interleaved
+   * by position.
+   */
+  function script(replies: ((context: ProviderContext) => AssistantMessage)[]) {
+    const agentRequests: ProviderContext[] = [];
+    let summaryRequests = 0;
+    const step: FauxResponseStep = (context) => {
+      if (isSummaryRequest(context)) {
+        summaryRequests += 1;
+        return fauxAssistantMessage(SUMMARY);
+      }
+      agentRequests.push(context);
+      const reply = replies[agentRequests.length - 1];
+      if (!reply) throw new Error('Unexpected extra agent request');
+      return reply(context);
+    };
+    return {
+      steps: Array.from({ length: 12 }, () => step),
+      agentRequests,
+      summaryRequests: () => summaryRequests,
+    };
+  }
+
+  /**
+   * Alternating user/assistant history. Each assistant message carries the
+   * provider usage a real run records: the context size up to that reply.
+   */
+  function history(messages: number, chars: number): AgentMessage[] {
+    const result: AgentMessage[] = [];
+    let tokens = 0;
+    for (let index = 0; index < messages; index++) {
+      tokens += Math.ceil(chars / 4);
+      if (index % 2 === 0) {
+        result.push({
+          role: 'user',
+          content: `user-${index} ${'x'.repeat(chars)}`,
+          timestamp: 1,
+        } as AgentMessage);
+      } else {
+        const message = fauxAssistantMessage(
+          `assistant-${index} ${'x'.repeat(chars)}`,
+        );
+        result.push({
+          ...message,
+          usage: { ...message.usage, input: tokens, totalTokens: tokens },
+        });
+      }
+    }
+    return result;
+  }
+
+  type Marker = {
+    role: 'compactionSummary';
+    summary: string;
+    tokensBefore: number;
+    timestamp: number;
+    firstKeptIndex: number;
+  };
+  const roleOf = (message: unknown) => (message as { role?: string }).role;
+  const markersOf = (messages: unknown[]) =>
+    messages.filter(
+      (message): message is Marker => roleOf(message) === 'compactionSummary',
+    );
+  const compactPhases = (events: AgentStreamEvent[]) =>
+    events.flatMap((event) =>
+      event.type === 'compact' ? [[event.reason, event.phase]] : [],
+    );
+
+  it('compacts the model context while the transcript keeps the whole history', async () => {
+    const prior = history(12, 100000); // 300000 tokens by recorded usage
+    const provider = script([() => fauxAssistantMessage('final answer')]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-threshold',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      prior,
+      undefined,
+      model,
+    );
+
+    expect(result.error).toBeUndefined();
+    // Nothing is removed or reordered: earlier turns stay where they were, so
+    // the runs bound to them by user-turn position still match.
+    expect(result.messages.slice(0, prior.length)).toEqual(prior);
+    expect(nextUserTurn(result.messages)).toBe(nextUserTurn(prior) + 1);
+    const [marker] = markersOf(result.messages);
+    expect(markersOf(result.messages)).toHaveLength(1);
+    expect(marker.summary).toContain(SUMMARY);
+    expect(roleOf(result.messages[marker.firstKeptIndex])).not.toBe(
+      'compactionSummary',
+    );
+    expect(marker.firstKeptIndex).toBeGreaterThan(0);
+
+    // The model saw the summary and the kept tail, not the summarized head.
+    const sent = contextText(provider.agentRequests[0]);
+    expect(sent).toContain(SUMMARY);
+    expect(sent).not.toContain('user-0 ');
+    expect(sent).toContain('hello');
+
+    expect(compactPhases(events)).toEqual([
+      ['threshold', 'start'],
+      ['threshold', 'done'],
+    ]);
+    // The usage recorded before the compaction no longer describes the
+    // context: the estimate after it must drop under the trigger.
+    const done = events.find(
+      (event) => event.type === 'compact' && event.phase === 'done',
+    );
+    expect(done).toMatchObject({ tokensBefore: expect.any(Number) });
+    if (done?.type !== 'compact') throw new Error('missing compact done');
+    expect(done.tokensBefore).toBeGreaterThan(TRIGGER);
+    expect(done.tokensAfter).toBeLessThan(TRIGGER);
+  });
+
+  it('continues from a stored compaction marker without compacting again', async () => {
+    // A stored transcript whose head was already summarized: the marker sits
+    // where the compaction happened and keeps the last two messages.
+    // The newest recorded usage (300000 tokens) predates the marker and no
+    // longer describes the context, so it must not trigger another pass.
+    const head = history(12, 100000);
+    const marker: Marker = {
+      role: 'compactionSummary',
+      summary: SUMMARY,
+      tokensBefore: 300000,
+      timestamp: 1234,
+      firstKeptIndex: 10,
+    };
+    const prior = [...head, marker] as unknown as AgentMessage[];
+    const provider = script([() => fauxAssistantMessage('second answer')]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-reload',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      prior,
+      undefined,
+      model,
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(provider.summaryRequests()).toBe(0);
+    expect(compactPhases(events)).toEqual([]);
+    const sent = contextText(provider.agentRequests[0]);
+    expect(sent).toContain(SUMMARY);
+    expect(sent).not.toContain('user-0 ');
+    expect(sent).toContain('user-10 ');
+    // The stored transcript is extended, never rewritten.
+    expect(result.messages.slice(0, prior.length)).toEqual(prior);
+    expect(markersOf(result.messages)).toEqual([marker]);
+  });
+
+  it('leaves under-threshold history untouched', async () => {
+    const provider = script([() => fauxAssistantMessage('done')]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-under',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(2, 400),
+      undefined,
+      model,
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(provider.summaryRequests()).toBe(0);
+    expect(markersOf(result.messages)).toEqual([]);
+    expect(compactPhases(events)).toEqual([]);
+  });
+
+  it('compacts inside the turn once the context grows past the threshold', async () => {
+    const queryAppDataTable = vi
+      .fn<PlatformClient['queryAppDataTable']>()
+      .mockResolvedValue({
+        action: 'query',
+        items: [{ value: 'x'.repeat(30000) }],
+        cursor: null,
+        revision: 1,
+        truncated: false,
+      });
+    // 100000 recorded tokens: under the 150000 trigger of this model when the
+    // turn starts. The usage the provider reports for the first request (the
+    // faux provider counts a first prompt twice, as input and cache write)
+    // puts the context over it before the request that follows the tool call.
+    const prior = history(4, 100000);
+    const provider = script([
+      () =>
+        fauxAssistantMessage(
+          fauxToolCall('query_app_data_table', {
+            id: 'sample-app',
+            action: 'query',
+            table: 'todos',
+          }),
+        ),
+      () => fauxAssistantMessage('final answer'),
+    ]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-mid-turn',
+      (event) => events.push(event),
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      prior,
+      undefined,
+      { contextWindow: 207500, maxTokens: 20000 },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(queryAppDataTable).toHaveBeenCalledTimes(1);
+    // The first request went out whole; the one after the tool result did not.
+    expect(contextText(provider.agentRequests[0])).toContain('user-0 ');
+    const afterTool = contextText(provider.agentRequests[1]);
+    expect(afterTool).toContain(SUMMARY);
+    expect(afterTool).not.toContain('user-0 ');
+    expect(result.messages.slice(0, prior.length)).toEqual(prior);
+    expect(markersOf(result.messages)).toHaveLength(1);
+    expect(result.messages.map(roleOf)).toContain('toolResult');
+    expect(compactPhases(events)).toEqual([
+      ['threshold', 'start'],
+      ['threshold', 'done'],
+    ]);
+  });
+
+  it('recovers from a provider context-length rejection without repeating tool work', async () => {
+    const queryAppDataTable = vi
+      .fn<PlatformClient['queryAppDataTable']>()
+      .mockResolvedValue({
+        action: 'query',
+        items: [{ value: 'small result' }],
+        cursor: null,
+        revision: 1,
+        truncated: false,
+      });
+    // 100000 recorded tokens: the estimate never crosses the trigger, but the
+    // provider rejects the request that follows the tool call anyway.
+    const prior = history(4, 100000);
+    const provider = script([
+      () =>
+        fauxAssistantMessage(
+          fauxToolCall('query_app_data_table', {
+            id: 'sample-app',
+            action: 'query',
+            table: 'todos',
+          }),
+        ),
+      () =>
+        fauxAssistantMessage('', {
+          stopReason: 'error',
+          errorMessage: 'prompt is too long: 99999 tokens > 40000 maximum',
+        }),
+      () => fauxAssistantMessage('recovered answer'),
+    ]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-overflow',
+      (event) => events.push(event),
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      prior,
+      undefined,
+      model,
+    );
+
+    expect(result.error).toBeUndefined();
+    // The tool ran once and its result is still part of the turn.
+    expect(queryAppDataTable).toHaveBeenCalledTimes(1);
+    expect(events.filter((event) => event.type === 'tool_start')).toHaveLength(
+      1,
+    );
+    const resent = contextText(provider.agentRequests[2]);
+    expect(resent).toContain(SUMMARY);
+    expect(resent).toContain('small result');
+    // The rejection never became part of the reply.
+    expect(JSON.stringify(result.messages)).not.toContain('prompt is too long');
+    expect(JSON.stringify(result.messages)).toContain('recovered answer');
+    expect(markersOf(result.messages)).toHaveLength(1);
+    expect(compactPhases(events)).toEqual([
+      ['overflow', 'start'],
+      ['overflow', 'done'],
+    ]);
+  });
+
+  const toolCallReply = () =>
+    fauxAssistantMessage(
+      fauxToolCall('query_app_data_table', {
+        id: 'sample-app',
+        action: 'query',
+        table: 'todos',
+      }),
+    );
+
+  it('starts no model or tool work for a run stopped before its turn began', async () => {
+    const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
+    const controller = new AbortController();
+    controller.abort();
+    const result = await runWithResponses(
+      script([toolCallReply, () => fauxAssistantMessage('never')]).steps,
+      'compact-stopped-early',
+      undefined,
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      history(2, 400),
+      undefined,
+      model,
+      controller.signal,
+    );
+
+    expect(result.error).toMatch(/abort/i);
+    expect(queryAppDataTable).not.toHaveBeenCalled();
+    // The stopped turn's user message is still part of the transcript.
+    expect(nextUserTurn(result.messages)).toBe(2);
+  });
+
+  it('starts no model or tool work for a run stopped during a compaction', async () => {
+    const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
+    const controller = new AbortController();
+    const step: FauxResponseStep = (context) => {
+      if (isSummaryRequest(context)) {
+        controller.abort();
+        return fauxAssistantMessage(SUMMARY);
+      }
+      return toolCallReply();
+    };
+    const events: AgentStreamEvent[] = [];
+    const prior = history(12, 100000);
+    const result = await runWithResponses(
+      Array.from({ length: 6 }, () => step),
+      'compact-stopped-compacting',
+      (event) => events.push(event),
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      prior,
+      undefined,
+      model,
+      controller.signal,
+    );
+
+    expect(result.error).toMatch(/abort/i);
+    expect(queryAppDataTable).not.toHaveBeenCalled();
+    expect(markersOf(result.messages)).toEqual([]);
+    expect(result.messages.slice(0, prior.length)).toEqual(prior);
+    expect(compactPhases(events)).toEqual([
+      ['threshold', 'start'],
+      ['threshold', 'failed'],
+    ]);
+  });
+
+  it('reports the provider rejection when there is nothing left to compact', async () => {
+    const provider = script([
+      () =>
+        fauxAssistantMessage('', {
+          stopReason: 'error',
+          errorMessage: 'prompt is too long: 99999 tokens > 40000 maximum',
+        }),
+    ]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-overflow-nothing',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(2, 400),
+      undefined,
+      model,
+    );
+
+    expect(result.error).toContain('prompt is too long');
+    expect(provider.agentRequests).toHaveLength(1);
+    expect(compactPhases(events)).toEqual([]);
+  });
+
+  it('does not compact on provider errors unrelated to context length', async () => {
+    const provider = script([
+      () =>
+        fauxAssistantMessage('', {
+          stopReason: 'error',
+          errorMessage: 'rate limit exceeded, retry later',
+        }),
+    ]);
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      provider.steps,
+      'compact-no-retry',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(4, 100000),
+      undefined,
+      model,
+    );
+
+    expect(result.error).toContain('rate limit');
+    expect(provider.agentRequests).toHaveLength(1);
+    expect(compactPhases(events)).toEqual([]);
   });
 });

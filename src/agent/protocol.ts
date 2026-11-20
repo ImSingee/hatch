@@ -23,7 +23,7 @@ import { isReservedEnvKey } from './env-keys';
 
 export { DEFAULT_INTERNAL_PORT, RUNNER_WS_PATH } from './runner-constants';
 
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 
 /** How long a run lease stays valid without renewal (heartbeat/events renew). */
 export const RUN_LEASE_TTL_MS = 90_000;
@@ -165,6 +165,13 @@ export const agentStreamEventSchema = z
       summary: z.string().optional(),
     }),
     z.strictObject({ type: z.literal('turn_end') }),
+    z.strictObject({
+      type: z.literal('compact'),
+      reason: z.enum(['threshold', 'overflow']),
+      phase: z.enum(['start', 'done', 'failed']),
+      tokensBefore: z.number().int().nonnegative().optional(),
+      tokensAfter: z.number().int().nonnegative().optional(),
+    }),
     z.strictObject({ type: z.literal('cancelled') }),
     z.strictObject({ type: z.literal('done') }),
     z.strictObject({ type: z.literal('error'), message: z.string() }),
