@@ -2365,3 +2365,31 @@ test('keeps historical Workflow deployment cards bound to IDs after slug reuse',
     .element(screen.getByRole('menuitem', { name: 'Manage workflow' }))
     .toHaveAttribute('href', '/workflow/renamed-daily/manage');
 });
+
+test('shows an ended-early notice for a reply that stopped without a clean end', async () => {
+  const screen = await renderMessage({
+    role: 'assistant',
+    content: [{ type: 'text', text: 'Partial answer' }],
+    stopReason: 'length',
+  });
+
+  await expect.element(screen.getByText('The reply ended early')).toBeVisible();
+  await expect
+    .element(
+      screen.getByText(
+        'The model reached its output limit, so the answer above may be cut off.',
+      ),
+    )
+    .toBeVisible();
+});
+
+test('shows no ended-early notice for a clean reply', async () => {
+  const screen = await renderMessage({
+    role: 'assistant',
+    content: [{ type: 'text', text: 'Done.' }],
+    stopReason: 'stop',
+  });
+
+  await expect.element(screen.getByText('Done.')).toBeVisible();
+  expect(screen.getByText('The reply ended early').query()).toBeNull();
+});

@@ -1004,6 +1004,18 @@ describe('stream replay and recovery', () => {
       pendingEnv: null,
     });
   });
+  it('keeps an abnormal terminal stop reason from a completed run', () => {
+    let state = initialStreamState();
+    state = reduceStreamEvent(state, {
+      seq: 1,
+      event: { type: 'text', delta: 'Partial' },
+    });
+    state = reduceStreamEvent(state, {
+      seq: 2,
+      event: { type: 'done', stopReason: 'length' },
+    });
+    expect(state).toMatchObject({ terminal: 'done', stopReason: 'length' });
+  });
   it('aborts an idle stream, cancels its reader, and does not cancel the server run', async () => {
     const cancelled = vi.fn<() => void>();
     const response = new Response(

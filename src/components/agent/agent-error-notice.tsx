@@ -1,5 +1,6 @@
 import { Alert, Button, Group, Stack, Text } from '@mantine/core';
 import { useInterval } from '@mantine/hooks';
+import type { StopReason } from '@earendil-works/pi-ai';
 import {
   IconAlertTriangle,
   IconPlayerStop,
@@ -136,6 +137,47 @@ export function AgentErrorNotice({
           </Group>
         ) : null}
       </Stack>
+    </Alert>
+  );
+}
+
+/** What the terminal stop reason says about why the reply ended early. */
+function endedEarlyText(stopReason: StopReason | undefined): string {
+  switch (stopReason) {
+    case 'length':
+      return 'The model reached its output limit, so the answer above may be cut off.';
+    case 'toolUse':
+      return 'The model asked to run more tools, but the reply ended first.';
+    default:
+      return 'The model stopped before finishing the reply.';
+  }
+}
+
+/**
+ * A completed reply that did not end normally — truncated output or a turn
+ * that stopped mid-work. Not a failure, so no retry; the notice explains why
+ * the answer may look unfinished.
+ */
+export function EndedEarlyNotice({
+  stopReason,
+  live = false,
+}: {
+  stopReason?: StopReason;
+  /** Announce a newly arrived live end; persisted history stays quiet. */
+  live?: boolean;
+}) {
+  return (
+    <Alert
+      className={classes.agentErrorNotice}
+      color="yellow"
+      variant="light"
+      icon={<IconAlertTriangle size={18} stroke={1.7} aria-hidden />}
+      title="The reply ended early"
+      role={live ? 'alert' : 'note'}
+    >
+      <Text component="div" size="sm" className={classes.agentErrorDetail}>
+        {endedEarlyText(stopReason)}
+      </Text>
     </Alert>
   );
 }

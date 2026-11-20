@@ -20,8 +20,12 @@ import {
 import { formatBytes } from '~lib/format';
 import type { AppListItem } from '~server/apps';
 import type { WorkflowListItem } from '~server/workflows';
-import { AgentErrorNotice, type RetryControls } from './agent-error-notice';
-import { finalTextIndex } from './chat-turns';
+import {
+  AgentErrorNotice,
+  EndedEarlyNotice,
+  type RetryControls,
+} from './agent-error-notice';
+import { finalTextIndex, isIncompleteStopReason } from './chat-turns';
 import { useComposerMessageCopy } from './composer-message-copy';
 import {
   AppDeploymentActions,
@@ -363,6 +367,9 @@ export function MessageView({
           onStopAutoRetry={onStopAutoRetry}
           stoppingAutoRetry={stoppingAutoRetry}
         />
+      ) : null}
+      {isIncompleteStopReason(message.stopReason) ? (
+        <EndedEarlyNotice stopReason={message.stopReason} />
       ) : null}
     </Box>
   );

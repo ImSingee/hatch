@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import type { StopReason } from '@earendil-works/pi-ai';
 import type { ComposerInputPart } from '~agent/composer-content';
 import type {
   AgentRunStreamEvent,
@@ -10,6 +11,7 @@ import type {
 } from '~agent/events';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { JsonValue } from '~/db/schema';
+import { isIncompleteStopReason } from './chat-turns';
 import type { EnvEntry } from './env-form';
 
 export type StreamTool = {
@@ -59,8 +61,12 @@ export type StreamBlock =
   | StreamTextBlock
   | StreamToolBlock;
 
-/** How a live run ended, as observed on its event stream (or a local Stop). */
-export type StreamOutcome = 'completed' | 'cancelled' | 'failed';
+/**
+ * How a live run ended, as observed on its event stream (or a local Stop).
+ * `incomplete` is a completed run whose reply did not end on a clean `stop` —
+ * the model ended it early, e.g. by hitting its output limit.
+ */
+export type StreamOutcome = 'completed' | 'incomplete' | 'cancelled' | 'failed';
 
 export type StreamState = {
   active: boolean;
@@ -80,6 +86,11 @@ export type StreamState = {
   pendingEnvRequest?: PendingEnvRequest;
   /** Terminal failure received from the run SSE stream. */
   terminalError?: string;
+  /**
+   * Terminal stop reason the run reported on `done`; set when it is not a
+   * clean `stop`, so the settled turn can explain the early end.
+   */
+  stopReason?: StopReason;
   /**
    * Set once the run ended. The settled turn stays mounted until the caller
    * `release`s it after the canonical transcript has caught up, so finishing
@@ -430,8 +441,17 @@ export function reduceStreamState(
           details: event.details ?? tool.details,
         })),
       };
-    case 'done':
-      return settleStreamState(state, 'completed', now);
+    case 'done': {
+      const stopReason = event.stopReason;
+      return {
+        ...settleStreamState(
+          state,
+          isIncompleteStopReason(stopReason) ? 'incomplete' : 'completed',
+          now,
+        ),
+        ...(stopReason ? { stopReason } : {}),
+      };
+    }
     case 'cancelled':
       return settleStreamState(state, 'cancelled', now);
     case 'error':
@@ -773,7 +793,9 @@ export function useAgentStream({
           handleSettled(
             source.runId,
             event.type === 'done'
-              ? 'completed'
+              ? isIncompleteStopReason(event.stopReason)
+                ? 'incomplete'
+                : 'completed'
               : event.type === 'cancelled'
                 ? 'cancelled'
                 : 'failed',
