@@ -118,7 +118,10 @@ describe('groupTurns', () => {
     ];
 
     expect(
-      groupTurns(messages).map((turn) => [turn.kind, turn.userTurn]),
+      groupTurns(messages).map((turn) => [
+        turn.kind,
+        turn.kind === 'compaction' ? undefined : turn.userTurn,
+      ]),
     ).toEqual([
       ['user', 0],
       ['user', 1],
@@ -126,5 +129,33 @@ describe('groupTurns', () => {
       ['user', 2],
     ]);
     expect(nextUserTurn(messages)).toBe(3);
+  });
+
+  it('renders a persisted compactionSummary as a boundary marker', () => {
+    const messages: ChatMessage[] = [
+      {
+        role: 'compactionSummary',
+        summary: 'Earlier work condensed.',
+        tokensBefore: 120000,
+        timestamp: 1,
+      },
+      { role: 'user', content: 'Kept tail request' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
+    ];
+
+    const turns = groupTurns(messages);
+    expect(turns.map((turn) => turn.kind)).toEqual([
+      'compaction',
+      'user',
+      'assistant',
+    ]);
+    expect(turns[0]).toMatchObject({
+      kind: 'compaction',
+      tokensBefore: 120000,
+      summary: 'Earlier work condensed.',
+    });
+    // The boundary is not a user message, so turn numbering stays aligned
+    // with the platform's nextUserTurn count.
+    expect(nextUserTurn(messages)).toBe(1);
   });
 });

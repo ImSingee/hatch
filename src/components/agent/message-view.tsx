@@ -28,7 +28,7 @@ import {
   WorkflowDeploymentActions,
 } from './deployment-actions';
 import { Markdownish } from './markdownish';
-import { ThinkingStep, ToolStep } from './steps';
+import { CompactionStep, ThinkingStep, ToolStep } from './steps';
 import {
   type AssistantBlock,
   type ChatMessage,
@@ -315,6 +315,20 @@ export function MessageView({
             details: message.details,
             isError: message.isError,
           }}
+        />
+      </Box>
+    );
+  }
+
+  // Persisted compaction boundary — normally rendered by the chat turn list as
+  // a `compaction` turn; this fallback keeps a bare message render meaningful.
+  if (message.role === 'compactionSummary') {
+    return (
+      <Box className={classes.steps}>
+        <CompactionStep
+          status="done"
+          tokensBefore={message.tokensBefore}
+          summary={message.summary}
         />
       </Box>
     );

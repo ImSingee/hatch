@@ -96,8 +96,8 @@ describe('Workflow creation payload', () => {
 });
 
 describe('runner -> platform messages', () => {
-  it('uses protocol v19 for extra permission read models', () => {
-    expect(PROTOCOL_VERSION).toBe(19);
+  it('uses protocol v20 for auto-compaction stream events', () => {
+    expect(PROTOCOL_VERSION).toBe(20);
   });
 
   it('parses runner.hello', () => {
@@ -129,6 +129,29 @@ describe('runner -> platform messages', () => {
     if (message.type !== 'run.event') throw new Error('wrong type');
     expect(message.runnerSeq).toBe(7);
     expect(message.event).toEqual({ type: 'text', delta: 'hi' });
+  });
+
+  it('parses compact lifecycle events', () => {
+    const message = parseRunnerMessage({
+      type: 'run.event',
+      runId: 'r1',
+      runnerSeq: 9,
+      event: {
+        type: 'compact',
+        reason: 'overflow',
+        phase: 'done',
+        tokensBefore: 120000,
+        tokensAfter: 24000,
+      },
+    });
+    if (message.type !== 'run.event') throw new Error('wrong type');
+    expect(message.event).toEqual({
+      type: 'compact',
+      reason: 'overflow',
+      phase: 'done',
+      tokensBefore: 120000,
+      tokensAfter: 24000,
+    });
   });
 
   it('parses structured details on a tool-start event', () => {

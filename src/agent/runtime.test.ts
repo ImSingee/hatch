@@ -16,6 +16,7 @@ import {
   fauxProvider,
   fauxText,
   fauxToolCall,
+  type FauxModelDefinition,
   type FauxResponseStep,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
@@ -73,9 +74,15 @@ async function runWithResponses(
     userText: string;
     composerContent: AgentComposerContentPart[];
   },
+  modelOptions?: Omit<FauxModelDefinition, 'id'>,
 ) {
   const providerId = `runtime-test-${sessionId}`;
-  const faux = fauxProvider({ provider: providerId });
+  const faux = fauxProvider({
+    provider: providerId,
+    ...(modelOptions === undefined
+      ? {}
+      : { models: [{ id: 'test-model', ...modelOptions }] }),
+  });
   faux.setResponses(responses);
   const models = createModels();
   models.setProvider(faux.provider);
@@ -875,5 +882,219 @@ describe('runAgentTurn terminal outcomes', () => {
     await expect(readFile(path.join(cwd, 'large.js'), 'utf8')).resolves.toBe(
       original.replace('TOKEN', 'DONE'),
     );
+  });
+});
+
+describe('runAgentTurn auto compaction', () => {
+  const historyEntry = (role: 'user' | 'assistant', chars: number) =>
+    role === 'user'
+      ? ({
+          role: 'user',
+          content: 'x'.repeat(chars),
+          timestamp: 1,
+        } as AgentMessage)
+      : fauxAssistantMessage('x'.repeat(chars));
+
+  const history = (messages: number, chars: number): AgentMessage[] =>
+    Array.from({ length: messages }, (_unused, index) =>
+      historyEntry(index % 2 === 0 ? 'user' : 'assistant', chars),
+    );
+
+  const compactEvents = (events: AgentStreamEvent[]) =>
+    events.filter((event) => event.type === 'compact');
+
+  const messageRoles = (result: { messages: unknown[] }) =>
+    result.messages as { role?: string; errorMessage?: string }[];
+
+  it('compacts over-threshold history before the turn and persists the summary', async () => {
+    const events: AgentStreamEvent[] = [];
+    // 12 × ~2750 est. tokens = ~33000 > trigger (40000-4000)*0.8 = 28800.
+    // The retained tail lands on a user boundary (~22000 tokens ≥ the 20000
+    // keepRecent budget), so a single summary call covers the head.
+    const result = await runWithResponses(
+      [
+        fauxAssistantMessage('condensed history'),
+        fauxAssistantMessage('final answer'),
+      ],
+      'compact-threshold',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(12, 11000),
+      undefined,
+      { contextWindow: 40000, maxTokens: 4000 },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(messageRoles(result)[0]?.role).toBe('compactionSummary');
+    expect(
+      compactEvents(events).map((event) =>
+        event.type === 'compact' ? [event.reason, event.phase] : null,
+      ),
+    ).toEqual([
+      ['threshold', 'start'],
+      ['threshold', 'done'],
+    ]);
+    const done = compactEvents(events)[1];
+    expect(done?.type === 'compact' && done.tokensBefore).toBeGreaterThan(
+      28800,
+    );
+  });
+
+  it('leaves under-threshold history untouched', async () => {
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      [fauxAssistantMessage('done')],
+      'compact-under',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(2, 400),
+      undefined,
+      { contextWindow: 40000, maxTokens: 4000 },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(messageRoles(result)[0]?.role).toBe('user');
+    expect(compactEvents(events)).toEqual([]);
+  });
+
+  it('compacts mid-turn when tool output pushes the context over', async () => {
+    const queryAppDataTable = vi
+      .fn<PlatformClient['queryAppDataTable']>()
+      .mockResolvedValue({
+        action: 'query',
+        items: [{ value: 'x'.repeat(30000) }],
+        cursor: null,
+        revision: 1,
+        truncated: false,
+      });
+    let providerMessages: {
+      role?: string;
+      content?: { type?: string; text?: string }[] | string;
+    }[] = [];
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      [
+        fauxAssistantMessage(
+          fauxToolCall('query_app_data_table', {
+            id: 'sample-app',
+            action: 'query',
+            table: 'todos',
+          }),
+        ),
+        fauxAssistantMessage('condensed history'),
+        (context) => {
+          providerMessages = context.messages;
+          return fauxAssistantMessage('final answer');
+        },
+      ],
+      'compact-mid-turn',
+      (event) => events.push(event),
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      // ~24000 est. tokens: under the 28800 trigger until the tool result
+      // (~7500 tokens) lands.
+      history(8, 12000),
+      undefined,
+      { contextWindow: 40000, maxTokens: 4000 },
+    );
+
+    expect(result.error).toBeUndefined();
+    // The request after the tool result carried the compaction summary
+    // (compactionSummary converts to a prefixed user message for the LLM).
+    expect(
+      providerMessages.some(
+        (m) =>
+          m.role === 'user' &&
+          Array.isArray(m.content) &&
+          m.content.some(
+            (block) =>
+              typeof block.text === 'string' &&
+              block.text.includes(
+                'conversation history before this point was compacted',
+              ),
+          ),
+      ),
+    ).toBe(true);
+    // The persisted transcript keeps full fidelity — no summary entry.
+    expect(messageRoles(result)[0]?.role).toBe('user');
+    expect(
+      messageRoles(result).some((m) => m.role === 'compactionSummary'),
+    ).toBe(false);
+    expect(
+      compactEvents(events).map((event) =>
+        event.type === 'compact' ? [event.reason, event.phase] : null,
+      ),
+    ).toEqual([
+      ['threshold', 'start'],
+      ['threshold', 'done'],
+    ]);
+  });
+
+  it('compacts and retries once when the provider rejects on context length', async () => {
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      [
+        fauxAssistantMessage('', {
+          stopReason: 'error',
+          errorMessage: 'prompt is too long: 99999 tokens > 40000 maximum',
+        }),
+        fauxAssistantMessage('condensed history'),
+        fauxAssistantMessage('recovered'),
+      ],
+      'compact-overflow',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      // ~27000 est. tokens: under the 28800 trigger, but the provider still
+      // rejects it — the forced retry compacts the same history.
+      history(9, 12000),
+      undefined,
+      { contextWindow: 40000, maxTokens: 4000 },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(messageRoles(result)[0]?.role).toBe('compactionSummary');
+    // The failed turn's error message is not in the persisted transcript.
+    expect(
+      messageRoles(result).some(
+        (m) =>
+          m.role === 'assistant' &&
+          typeof m.errorMessage === 'string' &&
+          m.errorMessage.includes('prompt is too long'),
+      ),
+    ).toBe(false);
+    expect(
+      compactEvents(events).map((event) =>
+        event.type === 'compact' ? [event.reason, event.phase] : null,
+      ),
+    ).toEqual([
+      ['overflow', 'start'],
+      ['overflow', 'done'],
+    ]);
+  });
+
+  it('does not retry non-overflow provider errors', async () => {
+    const events: AgentStreamEvent[] = [];
+    const result = await runWithResponses(
+      [
+        fauxAssistantMessage('', {
+          stopReason: 'error',
+          errorMessage: 'rate limit exceeded, retry later',
+        }),
+        fauxAssistantMessage('never reached'),
+      ],
+      'compact-no-retry',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(4, 400),
+      undefined,
+      { contextWindow: 40000, maxTokens: 4000 },
+    );
+
+    expect(result.error).toContain('rate limit');
+    expect(compactEvents(events)).toEqual([]);
   });
 });

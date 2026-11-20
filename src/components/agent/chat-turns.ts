@@ -7,6 +7,16 @@ import type { WorkPhase } from './work-process';
 export type RenderTurn =
   | { kind: 'user'; key: string; userTurn: number; message: ChatMessage }
   | {
+      /**
+       * Boundary where earlier history was compacted into a summary. Carries
+       * the compaction's own summary so the row can expand into it.
+       */
+      kind: 'compaction';
+      key: string;
+      tokensBefore: number;
+      summary: string;
+    }
+  | {
       kind: 'assistant';
       key: string;
       /**
@@ -29,7 +39,14 @@ export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
   const turns: RenderTurn[] = [];
   let userTurns = 0;
   messages.forEach((message, index) => {
-    if (message.role === 'user') {
+    if (message.role === 'compactionSummary') {
+      turns.push({
+        kind: 'compaction',
+        key: `m${index}`,
+        tokensBefore: message.tokensBefore,
+        summary: message.summary,
+      });
+    } else if (message.role === 'user') {
       turns.push({
         kind: 'user',
         key: `m${index}`,

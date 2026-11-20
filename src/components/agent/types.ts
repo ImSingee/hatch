@@ -48,6 +48,13 @@ export type ChatMessage =
       /** Structured result data persisted by pi tools. */
       details?: unknown;
       isError?: boolean;
+    }
+  | {
+      /** Persisted auto-compaction boundary written by the Runner. */
+      role: 'compactionSummary';
+      summary: string;
+      tokensBefore: number;
+      timestamp: number;
     };
 
 export type ToolResultMessage = Extract<ChatMessage, { role: 'toolResult' }>;

@@ -7,7 +7,11 @@ import { AskForm } from './ask-form';
 import { finalTextIndex } from './chat-turns';
 import { Markdownish } from './markdownish';
 import { EnvForm, type EnvEntry } from './env-form';
-import { StreamingThinkingStep, StreamingToolStep } from './steps';
+import {
+  CompactionStep,
+  StreamingThinkingStep,
+  StreamingToolStep,
+} from './steps';
 import type { StreamBlock, StreamState } from './use-agent-stream';
 import { type WorkFrame, WorkProcess } from './work-process';
 import classes from './chat.module.css';
@@ -84,6 +88,21 @@ export function StreamingBubble({
             active={index === lastThinkingIndex && state.thinkingActive}
           />,
         );
+      } else if (block.kind === 'compact') {
+        steps.push(
+          <CompactionStep
+            key={index}
+            status={
+              block.compact.phase === 'start'
+                ? 'running'
+                : block.compact.phase === 'failed'
+                  ? 'error'
+                  : 'done'
+            }
+            tokensBefore={block.compact.tokensBefore}
+            tokensAfter={block.compact.tokensAfter}
+          />,
+        );
       } else {
         steps.push(<StreamingToolStep key={index} tool={block.tool} />);
       }
@@ -107,6 +126,9 @@ export function StreamingBubble({
   const anyToolRunning = state.blocks.some(
     (b) => b.kind === 'tool' && !b.tool.done,
   );
+  const anyCompactRunning = state.blocks.some(
+    (b) => b.kind === 'compact' && b.compact.phase === 'start',
+  );
   const lastThinkingBlock = state.blocks[lastThinkingIndex];
   const thinkingVisible =
     state.thinkingActive &&
@@ -119,7 +141,8 @@ export function StreamingBubble({
     !envRequest &&
     !state.textActive &&
     !thinkingVisible &&
-    !anyToolRunning;
+    !anyToolRunning &&
+    !anyCompactRunning;
   const workingIndicator = working ? (
     <Group gap={8} c="dimmed">
       <Loader size="xs" type="dots" />

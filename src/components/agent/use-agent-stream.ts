@@ -46,6 +46,15 @@ export type StreamSeed = {
 export type StreamThinkingBlock = { kind: 'thinking'; text: string };
 export type StreamTextBlock = { kind: 'text'; text: string };
 export type StreamToolBlock = { kind: 'tool'; tool: StreamTool };
+export type StreamCompactBlock = {
+  kind: 'compact';
+  compact: {
+    reason: 'threshold' | 'overflow';
+    phase: 'start' | 'done' | 'failed';
+    tokensBefore?: number;
+    tokensAfter?: number;
+  };
+};
 
 /**
  * An ordered piece of the in-flight assistant turn. Mirroring the persisted
@@ -57,7 +66,8 @@ export type StreamToolBlock = { kind: 'tool'; tool: StreamTool };
 export type StreamBlock =
   | StreamThinkingBlock
   | StreamTextBlock
-  | StreamToolBlock;
+  | StreamToolBlock
+  | StreamCompactBlock;
 
 /** How a live run ended, as observed on its event stream (or a local Stop). */
 export type StreamOutcome = 'completed' | 'cancelled' | 'failed';
@@ -277,7 +287,9 @@ function appendDelta(
 /** Whether a live turn shows any reply content (whitespace renders nothing). */
 export function hasVisibleStreamOutput(blocks: StreamBlock[]): boolean {
   return blocks.some((block) =>
-    block.kind === 'tool' ? true : Boolean(block.text.trim()),
+    block.kind === 'tool' || block.kind === 'compact'
+      ? true
+      : Boolean(block.text.trim()),
   );
 }
 
@@ -430,6 +442,51 @@ export function reduceStreamState(
           details: event.details ?? tool.details,
         })),
       };
+    case 'compact': {
+      // One compact block per compaction pass: `start` opens it, `done`/`failed`
+      // closes the newest open one. Repeated mid-turn compactions stack.
+      if (event.phase !== 'start') {
+        let index = -1;
+        for (let i = state.blocks.length - 1; i >= 0; i--) {
+          const block = state.blocks[i];
+          if (block.kind === 'compact' && block.compact.phase === 'start') {
+            index = i;
+            break;
+          }
+        }
+        if (index === -1) return state;
+        const open = state.blocks[index] as StreamCompactBlock;
+        const tokensBefore = event.tokensBefore ?? open.compact.tokensBefore;
+        const tokensAfter = event.tokensAfter ?? open.compact.tokensAfter;
+        const blocks = [...state.blocks];
+        blocks[index] = {
+          kind: 'compact',
+          compact: {
+            reason: event.reason,
+            phase: event.phase,
+            ...(tokensBefore === undefined ? {} : { tokensBefore }),
+            ...(tokensAfter === undefined ? {} : { tokensAfter }),
+          },
+        };
+        return { ...state, blocks };
+      }
+      return {
+        ...state,
+        blocks: [
+          ...state.blocks,
+          {
+            kind: 'compact',
+            compact: {
+              reason: event.reason,
+              phase: 'start',
+              ...(event.tokensBefore === undefined
+                ? {}
+                : { tokensBefore: event.tokensBefore }),
+            },
+          },
+        ],
+      };
+    }
     case 'done':
       return settleStreamState(state, 'completed', now);
     case 'cancelled':
