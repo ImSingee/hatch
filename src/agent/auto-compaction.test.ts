@@ -98,8 +98,15 @@ describe('createSessionCompactor', () => {
     const summaryPrompts: string[] = [];
     faux.setResponses(
       Array.from({ length: 4 }, () => (context) => {
-        summaryPrompts.push(JSON.stringify(context.messages));
-        return fauxAssistantMessage('second summary');
+        const prompt = JSON.stringify(context.messages);
+        summaryPrompts.push(prompt);
+        // Like a model updating a summary: earlier facts survive only when
+        // the request actually carried them.
+        return fauxAssistantMessage(
+          prompt.includes('FIRST-SUMMARY-FACTS')
+            ? 'FIRST-SUMMARY-FACTS and the current request'
+            : 'the current request only',
+        );
       }),
     );
     const toolRound = (id: string) => [
@@ -141,12 +148,14 @@ describe('createSessionCompactor', () => {
     expect(summaryPrompts).toHaveLength(1);
     expect(summaryPrompts[0]).toContain('FIRST-SUMMARY-FACTS');
     expect(summaryPrompts[0]).toContain('current request');
+    // The context the next request sends still holds the earlier facts.
     const context = (await session.buildContext()).messages;
     expect(context.map((message) => message.role)).toEqual([
       'compactionSummary',
       'assistant',
       'toolResult',
     ]);
+    expect(JSON.stringify(context[0])).toContain('FIRST-SUMMARY-FACTS');
   });
 
   it('summarizes the history in front of a tool result larger than the tail budget', async () => {
