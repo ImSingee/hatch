@@ -203,9 +203,12 @@ describe('compactSessionMessages', () => {
     for (const message of conversation(2, 100)) {
       await session.appendMessage(message);
     }
-    expect(await compactSessionMessages({ session, models, model })).toEqual({
-      status: 'nothing',
-    });
+    const onStart = vi.fn<() => void>();
+    expect(
+      await compactSessionMessages({ session, models, model, onStart }),
+    ).toEqual({ status: 'nothing' });
+    // `start` must never open a compaction step that cannot close.
+    expect(onStart).not.toHaveBeenCalled();
   });
 
   it('persists a compaction entry whose context view leads with a summary', async () => {
@@ -217,8 +220,15 @@ describe('compactSessionMessages', () => {
       await session.appendMessage(message);
     }
 
-    const outcome = await compactSessionMessages({ session, models, model });
+    const onStart = vi.fn<() => void>();
+    const outcome = await compactSessionMessages({
+      session,
+      models,
+      model,
+      onStart,
+    });
     expect(outcome.status).toBe('compacted');
+    expect(onStart).toHaveBeenCalledTimes(1);
     if (outcome.status !== 'compacted') return;
     expect(outcome.tokensBefore).toBeGreaterThan(outcome.tokensAfter);
     expect((await session.buildContext()).messages[0]?.role).toBe(

@@ -959,6 +959,26 @@ describe('runAgentTurn auto compaction', () => {
     expect(compactEvents(events)).toEqual([]);
   });
 
+  it('emits no compact event when over threshold but nothing is summarizable', async () => {
+    const events: AgentStreamEvent[] = [];
+    // One ~30000-token message: over the 28800 trigger, yet the retained tail
+    // swallows the whole branch so the cut point never advances — `nothing`
+    // must not leave an unclosed `start` event behind.
+    const result = await runWithResponses(
+      [fauxAssistantMessage('done')],
+      'compact-nothing',
+      (event) => events.push(event),
+      stubPlatform,
+      undefined,
+      history(1, 120000),
+      undefined,
+      { contextWindow: 40000, maxTokens: 4000 },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(compactEvents(events)).toEqual([]);
+  });
+
   it('compacts mid-turn when tool output pushes the context over', async () => {
     const queryAppDataTable = vi
       .fn<PlatformClient['queryAppDataTable']>()

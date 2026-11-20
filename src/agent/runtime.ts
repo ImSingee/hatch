@@ -391,13 +391,13 @@ async function runAgentTurnAttempt(opts: {
   // transcript reported back — already carries the compressed view.
   if (forceCompact || isOverCompactThreshold(priorMessages, picked.model)) {
     const reason: AutoCompactReason = forceCompact ? 'overflow' : 'threshold';
-    emitCompact(reason, 'start');
     const outcome = await compactSessionMessages({
       session,
       models,
       model: picked.model,
       signal,
       thinkingLevel,
+      onStart: () => emitCompact(reason, 'start'),
     });
     if (outcome.status === 'compacted') {
       emitCompact(reason, 'done', outcome.tokensBefore, outcome.tokensAfter);

@@ -79,6 +79,8 @@ export async function compactSessionMessages(opts: {
   model: Model<Api>;
   signal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
+  /** Fires once a real compaction is about to run — never for `nothing`. */
+  onStart?: () => void;
 }): Promise<SessionCompactionOutcome> {
   const preparation = prepareCompaction(
     await opts.session.getBranch(),
@@ -95,6 +97,7 @@ export async function compactSessionMessages(opts: {
   ) {
     return { status: 'nothing' };
   }
+  opts.onStart?.();
   const result = await compact(
     preparation.value,
     opts.models,

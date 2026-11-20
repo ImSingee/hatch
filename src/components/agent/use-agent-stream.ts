@@ -770,7 +770,8 @@ export function useAgentStream({
         case 'env_stored':
         case 'tool_start':
         case 'tool_update':
-        case 'tool_end': {
+        case 'tool_end':
+        case 'compact': {
           const submission = envSubmissionRef.current;
           if (
             event.type === 'env_request' &&
