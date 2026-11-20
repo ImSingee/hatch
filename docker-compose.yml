@@ -25,9 +25,9 @@ services:
       retries: 12
 
   app:
-    # Set HATCH_IMAGE=ghcr.io/imsingee/my-space:master-full in `.env` to use
+    # Set HATCH_IMAGE=ghcr.io/imsingee/hatch:master-full in `.env` to use
     # the full image with extra tools such as ffmpeg (applies to `agent` too).
-    image: ${HATCH_IMAGE:-ghcr.io/imsingee/my-space:master}
+    image: ${HATCH_IMAGE:-ghcr.io/imsingee/hatch:master}
     pull_policy: always
     restart: unless-stopped
     depends_on:
@@ -90,7 +90,7 @@ services:
   # sessions cannot read one another's files or AGENT_RUNNER_TOKEN from the
   # root Runner process's /proc environment.
   agent:
-    image: ${HATCH_IMAGE:-ghcr.io/imsingee/my-space:master}
+    image: ${HATCH_IMAGE:-ghcr.io/imsingee/hatch:master}
     pull_policy: always
     restart: unless-stopped
     command: ['node', 'dist/runner/main.mjs']

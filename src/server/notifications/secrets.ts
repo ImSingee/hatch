@@ -2,6 +2,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { decryptEnvelope, encryptEnvelope } from '../crypto/envelope';
 
+// The legacy `my-space/` prefix derives keys for stored ciphertext; changing
+// it makes existing secrets undecryptable.
 const WEBHOOK_SECRET_DOMAIN =
   'my-space/notification-webhook-secret/aes-256-gcm/v1';
 const DEVICE_KEY_DOMAIN = 'my-space/notification-device-key/aes-256-gcm/v1';
