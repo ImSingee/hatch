@@ -16,7 +16,7 @@ vi.mock('@tanstack/react-start', () => ({
   createServerOnlyFn: (fn: unknown) => fn,
   createServerFn: () => ({
     handler: (fn: unknown) => fn,
-    inputValidator: (validator: { parse: (data: unknown) => unknown }) => ({
+    validator: (validator: { parse: (data: unknown) => unknown }) => ({
       handler:
         (fn: (input: unknown) => unknown) =>
         async ({ data }: { data: unknown }) =>

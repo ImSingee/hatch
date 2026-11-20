@@ -9,7 +9,7 @@ open in a separate authenticated WebView.
 
 Requirements:
 
-- Node.js 26 (recommended) and the repository's pnpm 12.11.2. Expo also
+- Node.js 26 (recommended) and the repository's pnpm 12.22.0. Expo also
   supports the compatible even-numbered Node 22/24 releases.
 - The Hatch platform **from this branch**, with its normal database, at least one
   enabled provider/model, and a connected Agent Runner. Existing server setup is
@@ -52,13 +52,14 @@ bundle identifier with your own before distribution.
 
 ## SDK 58 compatibility
 
-Expo is pinned to `58.0.12`; the official installer aligns React `19.3.0`,
-React Native `0.88.0`, Router `58.0.21`, `@expo/ui` `58.0.19`, WebView `14.0.1`,
+Expo is pinned to `58.0.26`; the official installer aligns React `19.3.0`,
+React Native `0.88.1`, Router `58.0.32`, `@expo/ui` `58.0.29`, WebView `14.0.1`,
 and their native companions. See the [SDK 58 release notes](https://expo.dev/changelog/sdk-58)
 and [upgrade guide](https://docs.expo.dev/workflow/upgrading-expo-sdk-walkthrough/).
-The lockfile records exact resolutions. Release-age exclusions are limited to
-the exact new Expo package versions selected by the installer; other supply-chain
-checks remain enabled.
+The lockfile records exact resolutions. When the installer selects Expo
+package versions newer than pnpm's minimum release age, add only those exact
+versions to `minimumReleaseAgeExclude` and remove them once they age out; other
+supply-chain checks remain enabled.
 
 Regenerate the ignored iOS/Android projects when upgrading SDKs and rebuild the
 development client. SDK 58 generates `SceneDelegate.swift`; the old

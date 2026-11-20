@@ -14,26 +14,11 @@ allowBuilds:
   prisma: false
   protobufjs: false
 
-minimumReleaseAgeExclude:
-  - '@expo/ui@58.0.19'
-  - '@expo/cli@58.1.10'
-  - '@expo/metro-config@58.0.14'
-  - '@expo/package-manager@1.14.2'
-  - '@expo/prebuild-config@58.0.14'
-  - '@expo/router-server@58.0.14'
-  - babel-preset-expo@58.0.16
-  - expo-asset@58.0.16
-  - expo-modules-core@58.0.20
-  - expo-modules-jsi@58.0.14
-  - expo@58.0.12
-  - expo-glass-effect@58.0.4
-  - expo-router@58.0.21
-
 overrides:
   'protobufjs@7.6.4': 7.6.5
   'seroval@<=1.5.2': ^1.5.3
   'tsyringe>tslib': 2.8.1
 
 patchedDependencies:
-  '@better-auth/api-key@1.7.7': patches/@better-auth__api-key@1.7.7.patch
+  '@better-auth/api-key@1.7.26': patches/@better-auth__api-key@1.7.26.patch
   nitro@3.0.260610-beta: patches/nitro@3.0.260610-beta.patch

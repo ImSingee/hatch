@@ -50,7 +50,8 @@ Hatch publishes `/.well-known/webauthn` without requiring sign-in. Its related
 origins include `APP_URL` and the exact HTTPS origin of the connected Tailscale
 node. Disconnecting or replacing the node updates this declaration immediately;
 the response is not cached. Better Auth's shared trusted-origin checks remain
-enabled, and signed WebAuthn responses must match the requesting browser origin.
+enabled, and a signed WebAuthn response is accepted only when it was signed at
+`APP_URL` or at the currently connected Tailscale address.
 Hatch does not require the browser origin to equal `APP_URL` for passkeys.
 
 Cross-domain use requires a browser supporting WebAuthn Related Origin Requests.
@@ -80,7 +81,7 @@ The Docker image includes a small Go executable using the official
 service, Tailscale client on the host, TUN device, elevated container capability,
 or inbound port forwarding is required. The feature starts disconnected.
 
-For a source installation, use Go 1.27.1 or newer and run:
+For a source installation, use Go 1.27.4 or newer and run:
 
 ```bash
 pnpm tailscale:build
