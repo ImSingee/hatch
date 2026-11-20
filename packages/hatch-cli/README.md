@@ -132,7 +132,9 @@ hatch app adopt <id-or-slug> --directory ./agent-owned-checkout --json
 hatch app associate <id-or-slug> --json
 hatch app update --directory ./notes-copy --json
 # Edit source, then git add / git commit yourself.
+hatch app push --directory ./notes-copy --json
 hatch app deploy --directory ./notes-copy --message 'Release notes' --json
+hatch app deploy --directory ./notes-copy --commit <full-commit-id> --json
 hatch app rollback <id-or-slug> --version 1 --json
 ```
 
@@ -149,8 +151,9 @@ the canonical immutable ID; generation is checked locally and at deployment.
   overwritten. A response/preparation failure retains its recovery workspace
   and journal; inspect the recorded request/ID and remote state before retrying.
   A created draft with metadata can resume preparation using `update`.
-- **Clone:** obtain detail and canonical `master` Git bundle, verify its commit,
-  validate the source tree, then create a new checkout. Empty canonical source
+- **Clone:** obtain detail, fetch platform `master` over Git, validate the
+  source tree, then create a new checkout whose `origin` is the platform
+  remote. Empty canonical source
   initializes an empty Git workspace; missing authored inputs report the failing
   preparation stage and retain that checkout for repair. No template/resource
   is silently created. `--force` requires an explicit directory, rejects roots,
@@ -162,18 +165,58 @@ the canonical immutable ID; generation is checked locally and at deployment.
   metadata. Local HEAD must contain platform master; dirty work and origin are
   preserved. Empty canonical source is ambiguous unless an uncommitted checkout
   belongs to the verified Run's session. Adoption never resets local history.
-- **Update:** require clean source; fetch into `FETCH_HEAD`; merge only when local
-  HEAD is an ancestor of remote master. Local ahead/diverged/dirty work is
-  retained and rejected. Explicitly merge/rebase from `FETCH_HEAD` yourself.
-  Rollback moves platform master to an older release, so an ahead local tree
-  also needs an explicit user source decision, never an automatic reset.
+- **Update:** require clean source; fetch platform `master` and the platform's
+  `deploy/*` tags into `origin/master`; fast-forward only when local HEAD is an
+  ancestor of it. A checkout that is only ahead (unpushed commits, or commits a
+  rollback moved `master` away from) is left as is and reports `state: "ahead"`.
+  Diverged history is rejected with `non_fast_forward`; merge or rebase onto
+  `origin/master` yourself. Nothing is ever reset.
+- **Push:** push committed `HEAD` to platform `master` without releasing it.
+  The platform accepts fast-forwards only; otherwise the command exits with
+  `non_fast_forward`. Uncommitted changes are neither required to be absent nor
+  sent. Output: `{id, commit, masterCommit, state: "pushed" | "up-to-date"}`.
 - **Deploy:** require clean committed source, validate tracked managed paths,
-  upload a real `HEAD` Git bundle with the recorded generation. Platform
-  manifest ID/compatibility, build, fast-forward and migration policies remain
-  authoritative. No compatibility/protocol bump or source defaults are added.
+  push `HEAD` exactly as `push` does, then release that commit with the recorded
+  generation. `--commit <full-commit-id>` skips the push and releases a commit
+  that is already on platform `master` (its tip or an ancestor); any other
+  commit is rejected. A failed build leaves the pushed commit on `master`
+  unreleased. Platform manifest ID/compatibility, build and migration policies
+  remain authoritative. No compatibility/protocol bump or source defaults are
+  added.
 - **Rollback:** synchronous API call with a real release version; display the
   returned compatibility object and App `dataSchemaMismatch`. Data schema and
   contents are forward-only; rollback does not undo a destructive migration.
+  Platform `master` moves back to the restored release. Checkouts are not
+  touched: later commits stay local and return with the next push or deploy.
+
+### Plain Git
+
+Source moves over Git smart HTTP at
+`<platform-url>/api/git/{app|workflow}/<id-or-slug>.git`. `master` is the source
+line: it only fast-forwards and cannot be deleted. Other branches and tags are
+ordinary Git refs, except `deploy/*` tags, which the platform creates for each
+release. Pushing never deploys.
+
+Checkouts made by `create` and `clone` have this remote as `origin` and use
+`hatch git-credential` as its only credential helper, so `git fetch`, `git pull`
+and `git push` work with the current login, including a Run credential. `hatch`
+must be on `PATH`. No credential is written to the checkout; the helper entry
+records only the `--config` path and `--profile` the checkout was created with. A checkout created
+by an older CLI gains `origin` on its next `update`, `push` or `deploy`; an
+adopted Agent checkout keeps its own `origin`, and the CLI commands still reach
+the platform.
+
+Without the CLI, any valid credential works as the HTTP Basic password (any
+username), or as `Authorization: Bearer` / `X-API-Key`:
+
+```sh
+git clone https://hatch:<api-key>@platform.example/api/git/app/<id>.git
+```
+
+`hatch git-credential get` implements the Git credential-helper protocol: it
+reads the request from stdin and prints the current credential to stdout, only
+when the requested host is the logged-in platform. `store` and `erase` do
+nothing. It exists for Git to call.
 
 SDK preparation uses authenticated `hatch.platform.v1.SdkService/GetSdk`: compiled
 `@hatch/app`, legacy `@hatch/data`, or `@hatch/workflow` payloads and import maps
@@ -229,6 +272,9 @@ hatch app deploy --directory notes-copy --reconcile --json
 hatch app deploy --directory notes-copy --retry-after-confirming '<pending-commit>' --json
 ```
 
+`--reconcile` reports `source-matches-pending` when the resource's released
+commit (`currentSourceCommit`) equals the pending commit, otherwise
+`outcome-unresolved`. The push that precedes a release is safe to repeat.
 Matching source is evidence, not proof of a deployment version or completion.
 The explicit retry confirmation is recorded locally; it is not server-side
 idempotency. Cancellation does not cancel a platform build already in flight.
@@ -242,7 +288,11 @@ inspection. No durable operation service or fake async operation IDs are added.
 stdout; progress/device instructions use stderr. Branch on code, not prose.
 Secrets are redacted; raw exception/auth response diagnostics are not printed.
 Auth timeout defaults: login 600s, status/logout 15s; lifecycle requests 30s,
-deploy 600s. `--timeout` accepts at most 3600s; subprocess preparation is bounded.
+push and deploy 600s. Git source transfers in `clone` / `update` get 300s by
+default and exactly `--timeout` when it is given. `--timeout` accepts at most
+3600s; subprocess preparation is bounded. Git transfer errors: `non_fast_forward` (6), `git_remote_not_found`
+(5, deleted resource or a platform without Git transport), `git_remote_failed`
+(7) and `UNAUTHORIZED` (3).
 
 | Exit | Meaning                                              |
 | ---- | ---------------------------------------------------- |

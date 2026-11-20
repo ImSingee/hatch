@@ -24,14 +24,14 @@ import { deployApp } from '~server/apps/deploy';
 import {
   appMasterCommit,
   exportAppMasterBundle,
-  stageAppBundleCheckout,
+  importAppBundleToMaster,
 } from '~server/apps/git';
 import { rollbackAppToVersion } from '~server/apps/manage';
 import { createApp } from '~server/apps/scaffold';
 import { deployWorkflow } from '~server/workflows/deploy';
 import {
   exportWorkflowMasterBundle,
-  stageWorkflowBundleCheckout,
+  importWorkflowBundleToMaster,
   workflowMasterCommit,
 } from '~server/workflows/git';
 import { rollbackWorkflowToVersion } from '~server/workflows/manage';
@@ -199,9 +199,27 @@ function lifecycle(kind: Kind) {
           ? await getAppDetailForAgent(row.id)
           : await getWorkflowDetailForAgent(row.id);
       if (!detail) throw publicApiError('NOT_FOUND');
+      // Apps already report the released commit; add it for Workflows so
+      // clients can tell which pushed commit is live.
+      const released =
+        kind === 'apps'
+          ? {}
+          : {
+              currentSourceCommit:
+                (
+                  await db.query.workflows.findFirst({
+                    where: { id: row.id },
+                    columns: { currentSourceCommit: true },
+                  })
+                )?.currentSourceCommit ?? null,
+            };
       const view = (
         kind === 'apps' ? appDetailSchema : workflowDetailSchema
-      ).parse({ ...detail, updatedAt: row.updatedAt.toISOString() });
+      ).parse({
+        ...detail,
+        ...released,
+        updatedAt: row.updatedAt.toISOString(),
+      });
       return { resource: { ...project(row), view: jsonValue(view) } };
     },
     source: async (input: { id: string }) => ({
@@ -212,7 +230,8 @@ function lifecycle(kind: Kind) {
         id: string;
         message: string;
         generation: string;
-        bundle: Uint8Array;
+        bundle?: Uint8Array;
+        commit?: string;
         allowDestructiveDataMigration?: boolean;
         dataMigrationApprovalToken?: string;
       },
@@ -222,57 +241,58 @@ function lifecycle(kind: Kind) {
       if (kind === 'apps') await associate(row.id, context);
       if (input.generation !== row.createdAt.toISOString())
         throw publicApiError('RESOURCE_GENERATION_CONFLICT');
-      const staged =
-        kind === 'apps'
-          ? await stageAppBundleCheckout(row.id, Buffer.from(input.bundle))
-          : await stageWorkflowBundleCheckout(
+      // Deprecated bundle transport: push the uploaded HEAD to master first.
+      // Current clients push over Git and name the commit to release.
+      if (input.bundle?.length && input.commit)
+        throw publicApiError('BAD_REQUEST');
+      const pushed = input.bundle?.length
+        ? kind === 'apps'
+          ? await importAppBundleToMaster(row.id, Buffer.from(input.bundle))
+          : await importWorkflowBundleToMaster(
               row.id,
               Buffer.from(input.bundle),
+            )
+        : undefined;
+      const options = {
+        message: input.message,
+        allowDestructiveDataMigration: input.allowDestructiveDataMigration,
+        dataMigrationApprovalToken: input.dataMigrationApprovalToken,
+        commit: pushed ?? input.commit,
+        expectedGeneration: input.generation,
+      };
+      const result =
+        kind === 'apps'
+          ? await deployApp(row.id, options)
+          : await deployWorkflow(row.id, options);
+      const released = await find(kind, row.id);
+      const normalized =
+        kind === 'apps'
+          ? appManifestViewSchema.parse(
+              projectAppManifestUrls(
+                result.normalized as Parameters<
+                  typeof projectAppManifestUrls
+                >[0],
+                row.id,
+                released.slug,
+              ),
+            )
+          : workflowManifestViewSchema.parse(
+              projectWorkflowManifestUrls(
+                result.normalized as Parameters<
+                  typeof projectWorkflowManifestUrls
+                >[0],
+                row.id,
+              ),
             );
-      try {
-        const options = {
-          message: input.message,
-          allowDestructiveDataMigration: input.allowDestructiveDataMigration,
-          dataMigrationApprovalToken: input.dataMigrationApprovalToken,
-          sourceDir: staged.dir,
-          expectedGeneration: input.generation,
-        };
-        const result =
-          kind === 'apps'
-            ? await deployApp(row.id, options)
-            : await deployWorkflow(row.id, options);
-        const released = await find(kind, row.id);
-        const normalized =
-          kind === 'apps'
-            ? appManifestViewSchema.parse(
-                projectAppManifestUrls(
-                  result.normalized as Parameters<
-                    typeof projectAppManifestUrls
-                  >[0],
-                  row.id,
-                  released.slug,
-                ),
-              )
-            : workflowManifestViewSchema.parse(
-                projectWorkflowManifestUrls(
-                  result.normalized as Parameters<
-                    typeof projectWorkflowManifestUrls
-                  >[0],
-                  row.id,
-                ),
-              );
-        return {
-          deployment: {
-            deploymentId: result.deploymentId,
-            version: result.version,
-            compatibilityVersion: result.compatibilityVersion,
-            slug: kind === 'apps' ? released.slug : undefined,
-            normalized: jsonValue(normalized),
-          },
-        };
-      } finally {
-        await staged.cleanup();
-      }
+      return {
+        deployment: {
+          deploymentId: result.deploymentId,
+          version: result.version,
+          compatibilityVersion: result.compatibilityVersion,
+          slug: kind === 'apps' ? released.slug : undefined,
+          normalized: jsonValue(normalized),
+        },
+      };
     },
     rollback: async (
       input: { id: string; version: number },

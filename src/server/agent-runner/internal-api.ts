@@ -47,7 +47,7 @@ import { createApp } from '~server/apps/scaffold';
 import {
   appMasterCommit,
   exportAppMasterBundle,
-  stageAppBundleCheckout,
+  importAppBundleToMaster,
 } from '~server/apps/git';
 import { deployApp } from '~server/apps/deploy';
 import { appSlug } from '~server/apps/access';
@@ -63,7 +63,7 @@ import { createWorkflow } from '~server/workflows/scaffold';
 import {
   workflowMasterCommit,
   exportWorkflowMasterBundle,
-  stageWorkflowBundleCheckout,
+  importWorkflowBundleToMaster,
 } from '~server/workflows/git';
 import { deployWorkflow } from '~server/workflows/deploy';
 import { rollbackWorkflowToVersion } from '~server/workflows/manage';
@@ -324,31 +324,29 @@ async function handleApps(
       body.generation,
       await requireAppGeneration(id),
     );
-    const staged = await stageAppBundleCheckout(
+    // The bundle transport pushes and deploys in one request: fast-forward
+    // master to the uploaded HEAD, then release that commit.
+    const commit = await importAppBundleToMaster(
       id,
       Buffer.from(body.bundleBase64, 'base64'),
     );
-    try {
-      const result = await deployApp(id, {
-        sourceDir: staged.dir,
-        message: body.message,
-        allowDestructiveDataMigration: body.allowDestructiveDataMigration,
-        dataMigrationApprovalToken: body.dataMigrationApprovalToken,
-      });
-      const slug = await appSlug(id);
-      if (!slug) {
-        throw new AppError(`App "${id}" not found after deployment.`, 500);
-      }
-      json(res, 200, {
-        deploymentId: result.deploymentId,
-        version: result.version,
-        compatibilityVersion: result.compatibilityVersion,
-        slug,
-        normalized: projectAppManifestUrls(result.normalized, id, slug),
-      });
-    } finally {
-      await staged.cleanup();
+    const result = await deployApp(id, {
+      commit,
+      message: body.message,
+      allowDestructiveDataMigration: body.allowDestructiveDataMigration,
+      dataMigrationApprovalToken: body.dataMigrationApprovalToken,
+    });
+    const slug = await appSlug(id);
+    if (!slug) {
+      throw new AppError(`App "${id}" not found after deployment.`, 500);
     }
+    json(res, 200, {
+      deploymentId: result.deploymentId,
+      version: result.version,
+      compatibilityVersion: result.compatibilityVersion,
+      slug,
+      normalized: projectAppManifestUrls(result.normalized, id, slug),
+    });
     return;
   }
 
@@ -465,25 +463,21 @@ async function handleWorkflows(
       body.generation,
       workflow.generation,
     );
-    const staged = await stageWorkflowBundleCheckout(
+    const commit = await importWorkflowBundleToMaster(
       workflowId,
       Buffer.from(body.bundleBase64, 'base64'),
     );
-    try {
-      const result = await deployWorkflow(workflowId, {
-        sourceDir: staged.dir,
-        message: body.message,
-        expectedGeneration: body.generation,
-      });
-      json(res, 200, {
-        deploymentId: result.deploymentId,
-        version: result.version,
-        compatibilityVersion: result.compatibilityVersion,
-        normalized: result.normalized,
-      });
-    } finally {
-      await staged.cleanup();
-    }
+    const result = await deployWorkflow(workflowId, {
+      commit,
+      message: body.message,
+      expectedGeneration: body.generation,
+    });
+    json(res, 200, {
+      deploymentId: result.deploymentId,
+      version: result.version,
+      compatibilityVersion: result.compatibilityVersion,
+      normalized: result.normalized,
+    });
     return;
   }
 

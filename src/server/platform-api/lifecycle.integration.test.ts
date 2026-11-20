@@ -433,7 +433,7 @@ describe.runIf(Boolean(databaseUrl))(
             headers,
             deployBody,
           );
-          expect(first.response.status).toBe(200);
+          assert.equal(first.response.status, 200, JSON.stringify(first.data));
           expect(first.data.version).toBe(1);
           expect(Object.keys(first.data).sort()).toEqual([
             'compatibilityVersion',
@@ -547,9 +547,10 @@ describe.runIf(Boolean(databaseUrl))(
           ...body,
           bundleBase64: divergent,
         });
-        expect(denied.response.status).toBe(500);
-        expect(denied.data.code).toBe('INTERNAL_SERVER_ERROR');
-        expect(denied.data.message).not.toContain('git');
+        expect(denied.response.status).toBe(409);
+        expect(denied.data.code).toBe('CONFLICT');
+        expect(denied.data.message).toContain('master advanced');
+        expect(denied.data.message).not.toContain(root);
         expect(
           (await api(`${collection}/${id}/source`, credentials[0])).data
             .masterCommit,
@@ -731,8 +732,12 @@ describe.runIf(Boolean(databaseUrl))(
         credentials[2],
       );
       expect(wrong.code).toBe(6);
+      // The rejected commit was pushed, so it is on master, but not released.
       expect(
         (await api(`apps/${id}/source`, credentials[0])).data.masterCommit,
+      ).toBe(git(dir, 'rev-parse', 'HEAD'));
+      expect(
+        (await api(`apps/${id}`, credentials[0])).data.currentSourceCommit,
       ).not.toBe(git(dir, 'rev-parse', 'HEAD'));
       expect(
         await database.db.query.deployments.findMany({ where: { appId: id } }),
@@ -1078,6 +1083,96 @@ describe.runIf(Boolean(databaseUrl))(
               )
             ).data.masterCommit,
           ).toBe(git(clone, 'rev-parse', 'HEAD'));
+          // Rollback moved master back; the newer local commit stays local
+          // and an ordinary push puts it on master again without releasing.
+          const collection = kind === 'app' ? 'apps' : 'workflows';
+          const secondCommit = git(clone, 'rev-parse', 'HEAD');
+          const thirdCommit = git(directory, 'rev-parse', 'HEAD');
+          const ahead = await cliInvoke(
+            [kind, 'update', '--directory', directory],
+            headers,
+          );
+          assert.equal(ahead.code, 0, JSON.stringify(ahead));
+          expect(ahead.data).toMatchObject({
+            state: 'ahead',
+            headCommit: thirdCommit,
+          });
+          const pushed = await cliInvoke(
+            [kind, 'push', '--directory', directory],
+            headers,
+          );
+          assert.equal(pushed.code, 0, JSON.stringify(pushed));
+          expect(pushed.data).toMatchObject({
+            commit: thirdCommit,
+            state: 'pushed',
+          });
+          // Every credential also works as the Basic secret of plain git.
+          const basic = headers.authorization?.slice(7) ?? headers['x-api-key'];
+          expect(
+            execFileSync(
+              'git',
+              [
+                'ls-remote',
+                `${origin.replace('//', `//hatch:${basic}@`)}/api/git/${kind}/${id}.git`,
+                'refs/heads/master',
+              ],
+              {
+                encoding: 'utf8',
+                env: {
+                  PATH: process.env.PATH,
+                  GIT_TERMINAL_PROMPT: '0',
+                  GIT_CONFIG_NOSYSTEM: '1',
+                  GIT_CONFIG_GLOBAL: os.devNull,
+                },
+              },
+            ).split(/\s/)[0],
+          ).toBe(thirdCommit);
+          const live = async () =>
+            (await api(`${collection}/${id}`, headers)).data
+              .currentSourceCommit;
+          expect(await live()).toBe(secondCommit);
+          // A commit already on master is released by id, with no push.
+          const firstCommit = git(clone, 'rev-parse', 'HEAD~1');
+          const older = await cliInvoke(
+            [kind, 'deploy', '--directory', directory, '--commit', firstCommit],
+            headers,
+          );
+          assert.equal(older.code, 0, JSON.stringify(older));
+          expect(older.data).toMatchObject({
+            version: 4,
+            sourceCommit: firstCommit,
+          });
+          expect(await live()).toBe(firstCommit);
+          expect(
+            (await api(`${collection}/${id}/source`, headers)).data
+              .masterCommit,
+          ).toBe(thirdCommit);
+          // A commit that never reached master cannot be released.
+          await writeFile(path.join(clone, 'unpushed.txt'), 'unpushed');
+          git(clone, 'add', '.');
+          git(
+            clone,
+            '-c',
+            'user.name=CLI integration',
+            '-c',
+            'user.email=fixture@example.test',
+            'commit',
+            '-m',
+            'Unpushed',
+          );
+          const unpushed = await cliInvoke(
+            [
+              kind,
+              'deploy',
+              '--directory',
+              clone,
+              '--commit',
+              git(clone, 'rev-parse', 'HEAD'),
+            ],
+            headers,
+          );
+          expect(unpushed.code).toBe(6);
+          expect(unpushed.data.error.message).toContain('is not on master');
           await writeFile(path.join(directory, 'local-only.txt'), 'keep');
           expect(
             (
@@ -1228,7 +1323,9 @@ describe.runIf(Boolean(databaseUrl))(
           credentials[3],
         );
         expect(rolled.code).toBe(0);
-        expect(rolled.data.sourceRecovery).toContain('ahead/diverged');
+        expect(rolled.data.sourceRecovery).toContain(
+          'pushed or deployed again',
+        );
         const toolRolled = await execute(`rollback_${kind}`, {
           id: created.id,
           version: 1,

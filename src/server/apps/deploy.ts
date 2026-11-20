@@ -24,10 +24,10 @@ import {
   liveBuildMatchesDeployment,
 } from './build-identity';
 import {
-  assertDeployableWorktree,
   deleteDeploymentTag,
   prepareDeployCheckout,
   publishDeploymentSource,
+  resolveDeployCommit,
 } from './git';
 import type { NormalizedManifest } from './manifest';
 import {
@@ -56,7 +56,8 @@ export type DeployResult = {
 export type DeployAppOptions = {
   /** Reject if the immutable ID belongs to a recreated resource. */
   expectedGeneration?: string;
-  sourceDir?: string;
+  /** Commit to release; must be on master. Defaults to the master tip. */
+  commit?: string;
   /** Required release note recorded on the deployment (e.g. what changed). */
   message: string;
   /** Explicit acknowledgement required for destructive Data Table migrations. */
@@ -510,8 +511,8 @@ async function deployAppInner(
   // existed before this deploy so a later failure cannot unarchive the app.
   let statusBeforeBuild = app.status;
 
-  const sourceDir = options.sourceDir ?? (await prepareDeployCheckout(id));
-  await assertDeployableWorktree(id, sourceDir);
+  const sourceCommit = await resolveDeployCommit(id, options.commit);
+  const sourceDir = await prepareDeployCheckout(id, sourceCommit);
 
   // A deployment row records a *successful* release, so we don't write one until
   // the build passes — a failed attempt leaves no history entry and burns no
@@ -884,7 +885,11 @@ async function deployAppInner(
         });
         version = (last?.version ?? 0) + 1;
 
-        const published = await publishDeploymentSource(id, sourceDir, version);
+        const published = await publishDeploymentSource(
+          id,
+          sourceCommit,
+          version,
+        );
         publishedTag = published.tag;
 
         // Record the release first, then swap the live build dir as the LAST
@@ -1145,5 +1150,7 @@ async function deployAppInner(
   } finally {
     await appDatabaseLease?.release();
     await fs.rm(path.dirname(tempBuild), { recursive: true, force: true });
+    // The source checkout is only an input to this build.
+    await fs.rm(sourceDir, { recursive: true, force: true });
   }
 }

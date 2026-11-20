@@ -335,7 +335,10 @@ replace platform validation of paths, cross-field requirements, or serializabili
    publishes the clean commit, tags `deploy/v<version>`, records the artifact,
    and reloads the cron schedule.
 
-Do not push branches or tags — the platform Git server rejects Agent pushes. If
+Do not `git push` from this checkout: its `origin` is a local read-only
+bundle, and `deploy_workflow` uploads the commit. Never create `deploy/*` tags;
+the platform owns them. A failed deploy leaves the commit on platform `master`
+unreleased, so fix it with a new commit on top. If
 deploy says `master` advanced, call `checkout_workflow` with the same
 `source_path` and `clone: false` to refresh its origin bundle, then `git fetch
 origin master`, rebase, resolve, and deploy again.

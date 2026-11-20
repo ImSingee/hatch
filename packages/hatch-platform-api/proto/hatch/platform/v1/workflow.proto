@@ -68,9 +68,14 @@ message DeployWorkflowRequest {
   }];
   string message = 2 [(buf.validate.field).string.min_len = 1];
   string generation = 3 [(buf.validate.field).string.min_len = 1];
-  bytes bundle = 4 [(buf.validate.field).bytes.min_len = 1];
+  // Deprecated bundle transport: a Git bundle whose HEAD is fast-forwarded onto
+  // master and then released. Clients now push over Git smart HTTP and set
+  // `commit`. Setting both is rejected.
+  optional bytes bundle = 4;
   optional bool allow_destructive_data_migration = 5;
   optional string data_migration_approval_token = 6 [(buf.validate.field).string.min_len = 1];
+  // Commit on master to release. Defaults to the master tip.
+  optional string commit = 7 [(buf.validate.field).string.pattern = "^[0-9a-f]{40}$"];
 }
 
 message DeployWorkflowResponse {

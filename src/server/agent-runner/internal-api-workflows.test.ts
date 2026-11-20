@@ -24,13 +24,8 @@ const mocks = vi.hoisted(() => ({
   workflowMasterCommit: vi.fn<(workflowId: string) => Promise<string | null>>(),
   exportWorkflowMasterBundle:
     vi.fn<(workflowId: string) => Promise<Buffer | null>>(),
-  stageWorkflowBundleCheckout:
-    vi.fn<
-      (
-        workflowId: string,
-        bundle: Buffer,
-      ) => Promise<{ dir: string; cleanup: () => Promise<void> | void }>
-    >(),
+  importWorkflowBundleToMaster:
+    vi.fn<(workflowId: string, bundle: Buffer) => Promise<string>>(),
   deployWorkflow:
     vi.fn<(workflowId: string, options: unknown) => Promise<unknown>>(),
   rollbackWorkflowToVersion:
@@ -59,7 +54,7 @@ vi.mock('~server/workflows/scaffold', () => ({
 vi.mock('~server/workflows/git', () => ({
   workflowMasterCommit: mocks.workflowMasterCommit,
   exportWorkflowMasterBundle: mocks.exportWorkflowMasterBundle,
-  stageWorkflowBundleCheckout: mocks.stageWorkflowBundleCheckout,
+  importWorkflowBundleToMaster: mocks.importWorkflowBundleToMaster,
 }));
 
 vi.mock('~server/workflows/deploy', () => ({
@@ -139,10 +134,7 @@ beforeEach(() => {
   );
   mocks.workflowMasterCommit.mockResolvedValue('master-commit');
   mocks.exportWorkflowMasterBundle.mockResolvedValue(Buffer.from('bundle'));
-  mocks.stageWorkflowBundleCheckout.mockResolvedValue({
-    dir: '/tmp/staged-workflow',
-    cleanup: vi.fn<() => void>(),
-  });
+  mocks.importWorkflowBundleToMaster.mockResolvedValue('pushed-commit');
   mocks.deployWorkflow.mockResolvedValue({
     deploymentId: 'deployment-one',
     version: 1,
@@ -226,7 +218,7 @@ const workflowRouteCases = [
       bundleBase64: Buffer.from('bundle').toString('base64'),
     },
     assertId: () =>
-      expect(mocks.stageWorkflowBundleCheckout).toHaveBeenCalledWith(
+      expect(mocks.importWorkflowBundleToMaster).toHaveBeenCalledWith(
         '01immutableworkflow',
         Buffer.from('bundle'),
       ),

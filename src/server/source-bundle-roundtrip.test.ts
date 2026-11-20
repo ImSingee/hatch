@@ -2,8 +2,8 @@
  * Full platform <-> runner source transfer round-trip over git bundles:
  *
  *   platform exportMasterBundle -> runner checkoutFromBundle -> agent
- *   commits -> runner bundleWorktreeForDeploy -> platform stageBundleCheckout
- *   -> publishDeploymentSource (fast-forward master).
+ *   commits -> runner bundleWorktreeForDeploy -> platform importBundleToMaster
+ *   (fast-forward master) -> publishDeploymentSource (deploy tag).
  *
  * Everything runs against throwaway temp dirs; HATCH_DATA_DIR is pointed at a
  * temp root before the modules under test are imported (their path constants
@@ -38,7 +38,6 @@ const { createGitSource } = await import('~server/source-git');
 
 const platform = createGitSource({
   noun: 'app',
-  deployTool: 'deploy_app',
   repoDir: (id) => path.join(root, 'repos', `${id}.git`),
   deployCheckoutDir: (id) => path.join(root, 'checkouts', id),
 });
@@ -109,6 +108,19 @@ async function commitAll(
   return runGit(['rev-parse', 'HEAD']);
 }
 
+/** Push a plain worktree's HEAD to platform master and tag it as released. */
+async function pushAndRelease(
+  id: string,
+  worktree: string,
+  version: number,
+): Promise<string> {
+  const file = path.join(root, `push-${id}-${version}.bundle`);
+  await git(['bundle', 'create', file, 'HEAD'], worktree);
+  const commit = await platform.importBundleToMaster(id, await readFile(file));
+  await platform.publishDeploymentSource(id, commit, version);
+  return commit;
+}
+
 async function seedPlatformSource(
   id: string,
   contents = 'v1\n',
@@ -120,7 +132,7 @@ async function seedPlatformSource(
   await git(['config', 'user.name', 't'], seed);
   await writeFile(path.join(seed, 'README.md'), contents);
   const commit = await commitAll(seed, `seed ${id}`);
-  await platform.publishDeploymentSource(id, seed, 1);
+  await pushAndRelease(id, seed, 1);
   return commit;
 }
 
@@ -157,15 +169,11 @@ async function publishAgentChange(options: {
     source.id,
     checkout.absolutePath,
   );
-  const staged = await platform.stageBundleCheckout(
+  const pushed = await platform.importBundleToMaster(
     source.id,
     Buffer.from(deploy.bundleBase64, 'base64'),
   );
-  try {
-    await platform.publishDeploymentSource(source.id, staged.dir, version);
-  } finally {
-    await staged.cleanup();
-  }
+  await platform.publishDeploymentSource(source.id, pushed, version);
   return commit;
 }
 
@@ -258,7 +266,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     await git(['config', 'user.name', 't'], seed);
     await writeFile(path.join(seed, 'README.md'), 'v1\n');
     const seedCommit = await commitAll(seed, 'seed v1');
-    await platform.publishDeploymentSource(APP_ID, seed, 1);
+    await pushAndRelease(APP_ID, seed, 1);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(seedCommit);
 
     // -- Platform -> runner: export master, sync a local checkout. ----------
@@ -296,23 +304,49 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     );
     expect(deploy.headCommit).toBe(localCommit);
 
-    const staged = await platform.stageBundleCheckout(
+    const pushed = await platform.importBundleToMaster(
       APP_ID,
       Buffer.from(deploy.bundleBase64, 'base64'),
     );
-    try {
-      await expect(
-        readFile(path.join(staged.dir, 'README.md'), 'utf8'),
-      ).resolves.toBe('v2\n');
-      const published = await platform.publishDeploymentSource(
-        APP_ID,
-        staged.dir,
-        2,
-      );
-      expect(published.commit).toBe(localCommit);
-    } finally {
-      await staged.cleanup();
-    }
+    expect(pushed).toBe(localCommit);
+    await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
+
+    // The deploy pipeline builds the pushed commit from a fresh checkout.
+    const release = await platform.resolveDeployCommit(APP_ID);
+    expect(release).toBe(localCommit);
+    const built = await platform.prepareDeployCheckout(APP_ID, release);
+    await expect(readFile(path.join(built, 'README.md'), 'utf8')).resolves.toBe(
+      'v2\n',
+    );
+    // A concurrent attempt gets its own checkout and disturbs neither.
+    const concurrent = await platform.prepareDeployCheckout(APP_ID, seedCommit);
+    expect(concurrent).not.toBe(built);
+    await expect(
+      readFile(path.join(concurrent, 'README.md'), 'utf8'),
+    ).resolves.toBe('v1\n');
+    await expect(readFile(path.join(built, 'README.md'), 'utf8')).resolves.toBe(
+      'v2\n',
+    );
+    const published = await platform.publishDeploymentSource(
+      APP_ID,
+      release,
+      2,
+    );
+    expect(published).toMatchObject({ commit: localCommit, tag: 'deploy/v2' });
+
+    // An earlier commit on master can be released again; one that never
+    // reached master cannot, and neither moves master.
+    await expect(
+      platform.resolveDeployCommit(APP_ID, seedCommit),
+    ).resolves.toBe(seedCommit);
+    await writeFile(path.join(seed, 'README.md'), 'never pushed\n');
+    const unpushed = await commitAll(seed, 'never pushed');
+    await expect(
+      platform.resolveDeployCommit(APP_ID, unpushed),
+    ).rejects.toThrow(/is not on master/);
+    await expect(
+      platform.publishDeploymentSource(APP_ID, unpushed, 9),
+    ).rejects.toThrow(/is not on master/);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
   }, 15_000);
 
@@ -561,29 +595,20 @@ describe('git bundle round-trip (platform <-> runner)', () => {
       APP_ID,
       winner.absolutePath,
     );
-    const stagedWinner = await platform.stageBundleCheckout(
+    const winnerCommit = await platform.importBundleToMaster(
       APP_ID,
       Buffer.from(winnerBundle.bundleBase64, 'base64'),
     );
-    try {
-      await platform.publishDeploymentSource(APP_ID, stagedWinner.dir, 3);
-    } finally {
-      await stagedWinner.cleanup();
-    }
 
-    // The stale bundle still stages (self-contained history) but the deploy
-    // pipeline's fast-forward check rejects it, same as worktree deploys.
-    const stagedStale = await platform.stageBundleCheckout(
-      APP_ID,
-      Buffer.from(staleBundle.bundleBase64, 'base64'),
-    );
-    try {
-      await expect(
-        platform.publishDeploymentSource(APP_ID, stagedStale.dir, 4),
-      ).rejects.toThrow(/master advanced/);
-    } finally {
-      await stagedStale.cleanup();
-    }
+    // The stale bundle is self-contained history, but it is not a
+    // fast-forward of master, so the push is refused and master stays put.
+    await expect(
+      platform.importBundleToMaster(
+        APP_ID,
+        Buffer.from(staleBundle.bundleBase64, 'base64'),
+      ),
+    ).rejects.toThrow(/master advanced/);
+    await expect(platform.masterCommit(APP_ID)).resolves.toBe(winnerCommit);
   });
 
   it('deploys an explicit old checkout after the same id is recreated', async () => {
@@ -614,20 +639,12 @@ describe('git bundle round-trip (platform <-> runner)', () => {
       id,
       oldCheckout.absolutePath,
     );
-    const staged = await platform.stageBundleCheckout(
-      id,
-      Buffer.from(upload.bundleBase64, 'base64'),
-    );
-    try {
-      const published = await platform.publishDeploymentSource(
+    await expect(
+      platform.importBundleToMaster(
         id,
-        staged.dir,
-        1,
-      );
-      expect(published.commit).toBe(restoredCommit);
-    } finally {
-      await staged.cleanup();
-    }
+        Buffer.from(upload.bundleBase64, 'base64'),
+      ),
+    ).resolves.toBe(restoredCommit);
     await expect(platform.masterCommit(id)).resolves.toBe(restoredCommit);
   });
 

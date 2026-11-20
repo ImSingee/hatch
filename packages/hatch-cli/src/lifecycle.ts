@@ -10,13 +10,14 @@ import {
   checkoutView,
   canonicalTarget,
   clean,
+  configureOrigin,
+  fetchRemote,
   git,
-  importBundle,
   installSdk,
+  pushHead,
   safeTree,
   saveWorkspace,
   writeFiles,
-  sourceBundle,
   withWorkspaceLock,
   workspace,
 } from './workspace';
@@ -25,6 +26,7 @@ import { readInput } from './input';
 import { isValidAppSlug } from '../../hatch-manifest/src/app-schema.js';
 import { isValidWorkflowSlug } from '../../hatch-manifest/src/workflow-schema.js';
 import { adopt } from './adopt';
+import { refreshRunEnvironment } from './run-credential';
 
 export async function runLifecycle(
   args: readonly string[],
@@ -44,6 +46,7 @@ export async function runLifecycle(
     'create',
     'clone',
     'update',
+    'push',
     'deploy',
     'rollback',
     'associate',
@@ -61,7 +64,10 @@ export async function runLifecycle(
   const extra: Record<string, { type: 'string' | 'boolean' }> =
     operation === 'create'
       ? { file: { type: 'string' }, directory: { type: 'string' } }
-      : operation === 'clone' || operation === 'update' || operation === 'adopt'
+      : operation === 'clone' ||
+          operation === 'update' ||
+          operation === 'push' ||
+          operation === 'adopt'
         ? {
             directory: { type: 'string' },
             ...(operation === 'clone'
@@ -72,6 +78,7 @@ export async function runLifecycle(
           ? {
               directory: { type: 'string' },
               message: { type: 'string' },
+              commit: { type: 'string' },
               'allow-destructive-data-migration': { type: 'boolean' },
               'data-migration-approval-token': { type: 'string' },
               reconcile: { type: 'boolean' },
@@ -112,7 +119,7 @@ export async function runLifecycle(
     );
   const seconds =
     values.timeout === undefined
-      ? operation === 'deploy'
+      ? operation === 'deploy' || operation === 'push'
         ? 600
         : 30
       : Number(values.timeout);
@@ -133,11 +140,33 @@ export async function runLifecycle(
   )
     throw new CliError('invalid_arguments', 'Paths must not be empty.');
   const timeout = Math.ceil(seconds * 1000);
+  // Source transfers get five minutes by default; an explicit --timeout is
+  // honored as given.
+  const transferTimeout =
+    values.timeout === undefined ? Math.max(timeout, 300000) : timeout;
+  if (
+    values.commit !== undefined &&
+    !/^[0-9a-f]{40}$/.test(String(values.commit))
+  )
+    throw new CliError(
+      'invalid_arguments',
+      '--commit must be a full 40-character lowercase commit id.',
+    );
+  if (values.commit !== undefined && values.reconcile)
+    throw new CliError(
+      'invalid_arguments',
+      '--commit cannot be combined with --reconcile.',
+    );
   const credential = await resolveCredential(
     process.env,
     configPath(process.env, values.config as string | undefined),
     values.profile as string | undefined,
   );
+  // Environment credentials need no file; a profile from --config does.
+  const helperConfig =
+    credential.source === 'config' && values.config
+      ? resolve(String(values.config))
+      : undefined;
   const client = platformClient(credential, timeout, signal);
   const api = kind === 'app' ? client.apps : client.workflows;
   const workdir = resolve(String(values.workdir ?? '.'));
@@ -207,7 +236,7 @@ export async function runLifecycle(
           : []),
       ],
       sourceRecovery:
-        'Existing checkouts are unchanged. Run update on a clean master that can fast-forward; preserve ahead/diverged work by merging explicitly, or clone --force --directory <exact-path> to discard it.',
+        'Platform master now points at the restored version. Existing checkouts are unchanged: commits made after that version stay local and can be pushed or deployed again, or reverted first if they should not return.',
     });
     return;
   }
@@ -297,14 +326,14 @@ export async function runLifecycle(
             masterCommit: null,
           };
         } else {
-          const source = await api.source({ id: detail!.id });
-          if (source.id !== detail!.id)
-            throw new CliError(
-              'resource_changed',
-              'Resource identity changed.',
-              6,
-            );
-          const commit = await importBundle(stage, source, signal);
+          const commit = await fetchRemote(
+            stage,
+            credential,
+            kind,
+            detail!.id,
+            transferTimeout,
+            signal,
+          );
           if (
             (await api.get({ id: detail!.id })).createdAt !== detail!.createdAt
           )
@@ -324,6 +353,14 @@ export async function runLifecycle(
             masterCommit: commit,
           };
         }
+        await configureOrigin(
+          stage,
+          credential,
+          kind,
+          metadata.id,
+          signal,
+          helperConfig,
+        );
         await saveWorkspace(stage, metadata);
         // Tool checkout associates the App even if source preparation fails.
         const association =
@@ -400,7 +437,18 @@ export async function runLifecycle(
       );
     if (kind === 'app')
       await client.apps.associate({ params: { id: metadata.id }, body: {} });
-    await clean(root, signal);
+    await configureOrigin(
+      root,
+      credential,
+      kind,
+      metadata.id,
+      signal,
+      helperConfig,
+    );
+    // A plain push or a deploy of an already pushed commit never reads the
+    // working tree, so uncommitted work does not block it.
+    if (operation === 'update' || (operation === 'deploy' && !values.commit))
+      await clean(root, signal);
     const localHead = await git(
       root,
       signal,
@@ -410,7 +458,14 @@ export async function runLifecycle(
     const head = localHead.code === 0 ? localHead.stdout : null;
     if (head) await safeTree(root, signal);
     if (operation === 'update') {
-      const source = await api.source({ id: metadata.id });
+      const remote = await fetchRemote(
+        root,
+        credential,
+        kind,
+        metadata.id,
+        transferTimeout,
+        signal,
+      );
       if (
         (await api.get({ id: metadata.id })).createdAt !== metadata.generation
       )
@@ -419,7 +474,7 @@ export async function runLifecycle(
           'Resource generation changed during update; local source was preserved.',
           6,
         );
-      if (!source.masterCommit && metadata.masterCommit === null) {
+      if (!remote && metadata.masterCommit === null) {
         await installSdk(root, kind, credential, timeout, signal);
         output(
           await checkoutView(root, metadata, signal, {
@@ -429,7 +484,6 @@ export async function runLifecycle(
         );
         return;
       }
-      const remote = await importBundle(root, source, signal);
       if (!remote)
         throw new CliError(
           'source_empty',
@@ -445,20 +499,23 @@ export async function runLifecycle(
           'Update requires local master; source was preserved.',
           6,
         );
-      if (head && head !== remote) {
-        if (
-          (
-            await git(
-              root,
-              signal,
-              ['merge-base', '--is-ancestor', head, remote],
-              true,
-            )
-          ).code !== 0
-        )
+      const contains = async (ancestor: string, descendant: string) =>
+        (
+          await git(
+            root,
+            signal,
+            ['merge-base', '--is-ancestor', ancestor, descendant],
+            true,
+          )
+        ).code === 0;
+      // Local commits on top of platform master are unpushed work, or work a
+      // rollback moved master away from. Nothing to merge; push when ready.
+      const ahead = !!head && head !== remote && (await contains(remote, head));
+      if (head && head !== remote && !ahead) {
+        if (!(await contains(head, remote)))
           throw new CliError(
             'non_fast_forward',
-            'Local history is ahead or diverged. Remote history was fetched into FETCH_HEAD; explicitly merge/rebase your work before retrying. No source was reset.',
+            'Local and platform history diverged. Platform history was fetched into origin/master; explicitly merge/rebase your work before retrying. No source was reset.',
             6,
           );
         await git(root, signal, ['merge', '--ff-only', remote]);
@@ -469,10 +526,31 @@ export async function runLifecycle(
       await installSdk(root, kind, credential, timeout, signal);
       output(
         await checkoutView(root, metadata, signal, {
-          state: head === remote ? 'current' : 'fast-forwarded',
+          state:
+            head === remote ? 'current' : ahead ? 'ahead' : 'fast-forwarded',
           synchronizedExisting: true,
         }),
       );
+      return;
+    }
+    const push = async (commit: string) => {
+      const state = await pushHead(
+        root,
+        credential,
+        kind,
+        metadata.id,
+        timeout,
+        signal,
+      );
+      metadata.masterCommit = commit;
+      await saveWorkspace(root, metadata);
+      return state;
+    };
+    if (operation === 'push') {
+      if (!head)
+        throw new CliError('source_empty', 'Commit source before pushing.', 6);
+      const state = await push(head);
+      output({ id: metadata.id, commit: head, masterCommit: head, state });
       return;
     }
     if (metadata.pending && values['retry-after-confirming']) {
@@ -496,9 +574,10 @@ export async function runLifecycle(
       await saveWorkspace(root, metadata);
     }
     if (metadata.pending) {
-      const source = await api.source({ id: metadata.id });
       if (values.reconcile) {
-        const observed = source.masterCommit;
+        const released = (detail as { currentSourceCommit?: unknown })
+          .currentSourceCommit;
+        const observed = typeof released === 'string' ? released : null;
         output({
           id: metadata.id,
           state:
@@ -506,8 +585,8 @@ export async function runLifecycle(
               ? 'source-matches-pending'
               : 'outcome-unresolved',
           pending: metadata.pending,
-          masterCommit: observed,
-          note: 'Source equality does not prove a deployment version or that an earlier request has finished. Inspect platform release history before another deploy.',
+          currentSourceCommit: observed,
+          note: 'A released commit equal to the pending one does not prove which deployment version released it or that an earlier request has finished. Inspect platform release history before another deploy.',
         });
         return;
       }
@@ -532,22 +611,40 @@ export async function runLifecycle(
         'invalid_approval',
         'App destructive approval requires both --allow-destructive-data-migration and the exact --data-migration-approval-token.',
       );
-    if (!head)
+    const requested =
+      values.commit === undefined ? null : String(values.commit);
+    if (!requested && !head)
       throw new CliError('source_empty', 'Commit source before deployment.', 6);
-    const upload = await sourceBundle(root, signal);
+    // Deploy is push plus release. --commit releases a commit that is already
+    // on platform master, so nothing is pushed.
+    const commit = requested ?? head!;
+    const pushed = requested ? null : await push(commit);
+    // A long push can outlive a Run token; take a fresh one for the release.
+    await refreshRunEnvironment(process.env, signal);
+    const releaseClient = platformClient(
+      await resolveCredential(
+        process.env,
+        configPath(process.env, values.config as string | undefined),
+        values.profile as string | undefined,
+      ),
+      timeout,
+      signal,
+    );
     metadata.pending = {
       command: 'deploy',
-      commit: head,
+      commit,
       startedAt: new Date().toISOString(),
     };
     await saveWorkspace(root, metadata);
     try {
-      const result = await api.deploy({
+      const result = await (
+        kind === 'app' ? releaseClient.apps : releaseClient.workflows
+      ).deploy({
         params: { id: metadata.id },
         body: {
           message: String(values.message ?? 'Deploy from Hatch CLI'),
           generation: metadata.generation,
-          bundleBase64: upload,
+          commit,
           ...(approved
             ? {
                 allowDestructiveDataMigration: true,
@@ -556,11 +653,15 @@ export async function runLifecycle(
             : {}),
         },
       });
-      metadata.masterCommit = head;
       metadata.lastDeployment = result;
       delete metadata.pending;
       await saveWorkspace(root, metadata);
-      output({ ...result, id: metadata.id, sourceCommit: head });
+      output({
+        ...result,
+        id: metadata.id,
+        sourceCommit: commit,
+        ...(pushed ? { pushState: pushed } : {}),
+      });
     } catch (error) {
       // A definite 4xx response is a rejected deployment, and is safe to fix/retry.
       if (isRejected(error)) {

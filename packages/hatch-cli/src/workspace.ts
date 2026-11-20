@@ -6,7 +6,6 @@ import {
   mkdir,
   mkdtemp,
   open,
-  readFile,
   readdir,
   realpath,
   rename,
@@ -39,7 +38,7 @@ export type Workspace = {
   pending?: { command: string; commit: string; startedAt: string };
   lastDeployment?: { version: number; deploymentId: string };
 };
-import { command, git } from './process';
+import { childEnvironment, command, git } from './process';
 export { command, git, childEnvironment } from './process';
 
 export async function canonicalTarget(target: string) {
@@ -444,14 +443,163 @@ export async function installSdk(
     await rm(stage, { recursive: true, force: true });
   }
 }
-export async function sourceBundle(root: string, signal: AbortSignal) {
-  const file = join(root, '.git', `hatch-deploy-${randomUUID()}.bundle`);
-  try {
-    await git(root, signal, ['bundle', 'create', file, 'HEAD']);
-    return (await readFile(file)).toString('base64');
-  } finally {
-    await rm(file, { force: true });
-  }
+/** Git smart HTTP remote of a resource; IDs are stable, slugs are not. */
+export function remoteUrl(credential: Profile, kind: Kind, id: string) {
+  return `${credential.url}/api/git/${kind}/${id}.git`;
+}
+/**
+ * Run git against the platform remote. The credential travels in the child
+ * environment, scoped to this instance, so it never appears in argv or in the
+ * checkout's config. Credential helpers and prompts are disabled.
+ */
+async function remoteGit(
+  root: string,
+  credential: Profile,
+  timeoutMs: number,
+  signal: AbortSignal,
+  args: string[],
+) {
+  const header = credential.apiKey
+    ? `X-API-Key: ${credential.apiKey}`
+    : `Authorization: Bearer ${credential.token}`;
+  const config = [
+    [`http.${credential.url}/.extraHeader`, header],
+    ['http.followRedirects', 'false'],
+    ['credential.helper', ''],
+  ];
+  const env = childEnvironment();
+  env.GIT_TERMINAL_PROMPT = '0';
+  env.GIT_CONFIG_COUNT = String(config.length);
+  config.forEach(([key, value], index) => {
+    env[`GIT_CONFIG_KEY_${index}`] = key;
+    env[`GIT_CONFIG_VALUE_${index}`] = value;
+  });
+  const result = await git(root, signal, args, true, { env, timeoutMs });
+  if (result.code === 0 || args[0] === 'push') return result;
+  throw remoteFailure(result.stderr);
+}
+function remoteFailure(stderr: string) {
+  if (/\b401\b|Authentication failed/i.test(stderr))
+    return new CliError(
+      'UNAUTHORIZED',
+      'The platform rejected the credential for Git access. Run hatch auth login.',
+      3,
+    );
+  if (/\b404\b|not found/i.test(stderr))
+    return new CliError(
+      'git_remote_not_found',
+      'The platform has no Git remote for this resource. The resource was deleted, or the platform predates Git transport and must be upgraded.',
+      5,
+    );
+  return new CliError(
+    'git_remote_failed',
+    'Git could not reach the platform remote. Local source was preserved; retry.',
+    7,
+  );
+}
+/**
+ * Give a CLI checkout an `origin` that plain git can use: the platform remote,
+ * with this CLI as the only credential helper for it. A checkout whose origin
+ * points elsewhere (an adopted Agent checkout) is left alone.
+ */
+export async function configureOrigin(
+  root: string,
+  credential: Profile & { profile?: string },
+  kind: Kind,
+  id: string,
+  signal: AbortSignal,
+  /** Absolute path of an explicitly selected config file, if any. */
+  config?: string,
+) {
+  if (
+    (await git(root, signal, ['remote', 'get-url', 'origin'], true)).code === 0
+  )
+    return;
+  const url = remoteUrl(credential, kind, id);
+  const helper = `credential.${credential.url}.helper`;
+  // Git runs the helper through a shell; plain git must resolve the same
+  // credential source this checkout was created with.
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const selection =
+    (config ? `--config ${quote(config)} ` : '') +
+    (credential.profile ? `--profile ${quote(credential.profile)} ` : '');
+  await git(root, signal, ['remote', 'add', 'origin', url]);
+  // The empty entry drops helpers inherited from user config, so a keychain
+  // cannot store a short-lived token and replay it after it expires.
+  await git(root, signal, ['config', '--replace-all', helper, '']);
+  await git(root, signal, [
+    'config',
+    '--add',
+    helper,
+    `!hatch ${selection}git-credential`,
+  ]);
+  await git(root, signal, ['config', 'branch.master.remote', 'origin']);
+  await git(root, signal, [
+    'config',
+    'branch.master.merge',
+    'refs/heads/master',
+  ]);
+}
+/**
+ * Fetch platform master and the platform's deploy tags. Returns the master
+ * commit, now also at `origin/master`, or null while the remote is empty.
+ */
+export async function fetchRemote(
+  root: string,
+  credential: Profile,
+  kind: Kind,
+  id: string,
+  timeoutMs: number,
+  signal: AbortSignal,
+) {
+  const url = remoteUrl(credential, kind, id);
+  const listed = await remoteGit(root, credential, timeoutMs, signal, [
+    'ls-remote',
+    url,
+    'refs/heads/master',
+  ]);
+  if (!listed.stdout) return null;
+  // Forced: a rollback moves platform master backwards.
+  await remoteGit(root, credential, timeoutMs, signal, [
+    'fetch',
+    '--no-tags',
+    url,
+    '+refs/heads/master:refs/remotes/origin/master',
+    '+refs/tags/deploy/*:refs/tags/deploy/*',
+  ]);
+  const commit = (
+    await git(root, signal, ['rev-parse', 'refs/remotes/origin/master'])
+  ).stdout;
+  await safeTree(root, signal, commit);
+  return commit;
+}
+/** Push HEAD to platform master; the platform accepts fast-forwards only. */
+export async function pushHead(
+  root: string,
+  credential: Profile,
+  kind: Kind,
+  id: string,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<'pushed' | 'up-to-date'> {
+  const result = await remoteGit(root, credential, timeoutMs, signal, [
+    'push',
+    '--porcelain',
+    remoteUrl(credential, kind, id),
+    'HEAD:refs/heads/master',
+  ]);
+  const status = result.stdout
+    .split('\n')
+    .find((line) => line.includes('\tHEAD:refs/heads/master\t'));
+  if (result.code === 0 && status)
+    return status.startsWith('=') ? 'up-to-date' : 'pushed';
+  if (status?.startsWith('!'))
+    throw new CliError(
+      'non_fast_forward',
+      'Platform master has commits this checkout lacks, so the push was rejected. Run update, merge or rebase onto origin/master, then retry. No source was reset.',
+      6,
+    );
+  throw remoteFailure(result.stderr);
 }
 export async function importBundle(
   root: string,

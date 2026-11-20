@@ -13,7 +13,6 @@ export type { PublishedSource };
 
 const core = createGitSource({
   noun: 'app',
-  deployTool: 'deploy_app',
   repoDir: appRepoDir,
   deployCheckoutDir: appDeployCheckoutDir,
 });
@@ -21,9 +20,9 @@ const core = createGitSource({
 export const ensureAppRepo = core.ensureRepo;
 export const appMasterCommit = core.masterCommit;
 export const prepareDeployCheckout = core.prepareDeployCheckout;
-export const assertDeployableWorktree = core.assertDeployableWorktree;
+export const resolveDeployCommit = core.resolveDeployCommit;
 export const publishDeploymentSource = core.publishDeploymentSource;
 export const deleteDeploymentTag = core.deleteDeploymentTag;
 export const moveMasterToDeploymentTag = core.moveMasterToDeploymentTag;
 export const exportAppMasterBundle = core.exportMasterBundle;
-export const stageAppBundleCheckout = core.stageBundleCheckout;
+export const importAppBundleToMaster = core.importBundleToMaster;

@@ -3,6 +3,7 @@ import { buildInfo } from '../../../src/build-info';
 import { commandDefinitions, globalOptions } from './commands';
 import { runAuth } from './auth';
 import { runLifecycle } from './lifecycle';
+import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
@@ -96,6 +97,8 @@ try {
       { version: manifest.version, ...buildInfo },
       `${manifest.version}\nCommit: ${buildInfo.commit?.slice(0, 12) ?? 'Unknown'}\nCommit time: ${buildInfo.commitTime ?? 'Unknown'}`,
     );
+  } else if (name === 'git-credential') {
+    await runGitCredential(args, offset, controller.signal);
   } else if (name === 'auth') {
     await runAuth(args, offset, controller.signal);
   } else if (name === 'app' && operation === 'invoke') {

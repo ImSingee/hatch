@@ -3,13 +3,16 @@
  *
  * Apps and workflows store canonical source identically: a bare repo per
  * entity, deploy tags owned by the Platform, and temporary deploy checkouts.
- * Conversation worktrees live on the Runner and reach this storage only via
- * source bundles.
+ * Clients push and fetch over Git smart HTTP (source-git-http.ts); Agent Tool
+ * worktrees on the Runner still exchange source bundles. Pushing source and
+ * deploying it are separate steps: a deploy releases a commit that is already
+ * on master.
  */
 import { spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
 import {
   access,
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -18,9 +21,12 @@ import {
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { AppError } from './errors';
 
 export const SOURCE_BRANCH = 'master';
 export const DEPLOY_TAG_PREFIX = 'deploy/';
+/** Largest pack a single push may send; matches the deploy RPC body cap. */
+export const MAX_PUSH_BYTES = 256 * 1024 * 1024;
 
 type CommandResult = {
   exitCode: number;
@@ -37,8 +43,6 @@ export type PublishedSource = {
 export type GitSourceConfig = {
   /** Noun used in error messages ("app" / "workflow"). */
   noun: string;
-  /** Agent tool name mentioned by the push-blocking server hook. */
-  deployTool: string;
   repoDir: (id: string) => string;
   deployCheckoutDir: (id: string) => string;
 };
@@ -51,6 +55,45 @@ async function pathExists(p: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Ref policy for pushes. The Platform's own local fetch/update-ref/tag calls
+ * do not run hooks, so deploy and rollback are unaffected.
+ */
+const PRE_RECEIVE_HOOK = `#!/bin/sh
+# hatch-ref-policy v3
+while read oldrev newrev refname; do
+  case "$refname" in
+    refs/tags/${DEPLOY_TAG_PREFIX.slice(0, -1)}|refs/tags/${DEPLOY_TAG_PREFIX}*)
+      echo "Hatch owns ${DEPLOY_TAG_PREFIX}* tags; they are created by deploy." >&2
+      exit 1
+      ;;
+    refs/heads/${SOURCE_BRANCH})
+      case "$newrev" in
+        *[!0]*) ;;
+        *)
+          echo "${SOURCE_BRANCH} cannot be deleted." >&2
+          exit 1
+          ;;
+      esac
+      case "$oldrev" in
+        *[!0]*)
+          if ! git merge-base --is-ancestor "$oldrev" "$newrev"; then
+            echo "${SOURCE_BRANCH} only accepts fast-forward pushes; fetch and rebase first." >&2
+            exit 1
+          fi
+          ;;
+      esac
+      ;;
+    refs/heads/*|refs/tags/*) ;;
+    *)
+      echo "Unsupported ref update: $refname" >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
+`;
 
 function git(
   args: string[],
@@ -101,46 +144,33 @@ async function refCommit(repoDir: string, ref: string): Promise<string | null> {
   return result.stdout.trim();
 }
 
-async function worktreeHead(worktree: string): Promise<string | null> {
-  const result = await runGit(['rev-parse', '--verify', 'HEAD'], {
-    cwd: worktree,
-    allowFailure: true,
-  });
-  if (result.exitCode !== 0) return null;
-  return result.stdout.trim();
-}
-
-async function worktreeStatus(worktree: string): Promise<string> {
-  const result = await runGit(['status', '--short'], { cwd: worktree });
-  return result.stdout.trim();
-}
-
 export function createGitSource(cfg: GitSourceConfig) {
-  async function installServerHooks(repoDir: string): Promise<void> {
+  /**
+   * Install the push policy. Skipped when the current hook is already in
+   * place, so repositories created before the policy changed are upgraded the
+   * next time they are used.
+   */
+  async function installServerPolicy(repoDir: string): Promise<void> {
     const hook = path.join(repoDir, 'hooks', 'pre-receive');
-    await writeFile(
-      hook,
-      `#!/bin/sh
-while read oldrev newrev refname; do
-  case "$refname" in
-    refs/tags/*)
-      echo "Hatch deploy owns tags; call ${cfg.deployTool} instead of pushing tags." >&2
-      exit 1
-      ;;
-    refs/heads/*)
-      echo "Hatch deploy owns branches; commit locally, rebase if needed, then call ${cfg.deployTool}." >&2
-      exit 1
-      ;;
-    *)
-      echo "Unsupported ref update: $refname" >&2
-      exit 1
-      ;;
-  esac
-done
-exit 0
-`,
-      { mode: 0o755 },
-    );
+    const current = await readFile(hook, 'utf8').catch(() => null);
+    if (current === PRE_RECEIVE_HOOK) return;
+    await runGit([
+      '--git-dir',
+      repoDir,
+      'config',
+      'receive.maxInputSize',
+      String(MAX_PUSH_BYTES),
+    ]);
+    await runGit([
+      '--git-dir',
+      repoDir,
+      'config',
+      'receive.fsckObjects',
+      'true',
+    ]);
+    await mkdir(path.dirname(hook), { recursive: true });
+    await writeFile(hook, PRE_RECEIVE_HOOK, { mode: 0o755 });
+    await chmod(hook, 0o755);
   }
 
   async function ensureRepo(id: string): Promise<string> {
@@ -155,7 +185,7 @@ exit 0
         repoDir,
       ]);
     }
-    await installServerHooks(repoDir);
+    await installServerPolicy(repoDir);
     return repoDir;
   }
 
@@ -163,70 +193,95 @@ exit 0
     return refCommit(cfg.repoDir(id), `refs/heads/${SOURCE_BRANCH}`);
   }
 
-  async function prepareDeployCheckout(id: string): Promise<string> {
+  function notOnMaster(id: string, commit: string): AppError {
+    return new AppError(
+      `Cannot deploy ${cfg.noun} "${id}": commit ${commit} is not on ` +
+        `${SOURCE_BRANCH}. Push it to ${SOURCE_BRANCH} first.`,
+      409,
+    );
+  }
+
+  /** True when `commit` is the master tip or one of its ancestors. */
+  async function isOnMaster(repoDir: string, commit: string): Promise<boolean> {
+    const result = await runGit(
+      [
+        '--git-dir',
+        repoDir,
+        'merge-base',
+        '--is-ancestor',
+        commit,
+        `refs/heads/${SOURCE_BRANCH}`,
+      ],
+      { allowFailure: true },
+    );
+    return result.exitCode === 0;
+  }
+
+  /**
+   * Resolve the commit a deploy releases: the requested commit, or the master
+   * tip when none is given. Only commits on master can be deployed.
+   */
+  async function resolveDeployCommit(
+    id: string,
+    requested?: string,
+  ): Promise<string> {
     const repoDir = await ensureRepo(id);
     const master = await masterCommit(id);
     if (!master) {
-      throw new Error(
-        `${capitalize(cfg.noun)} "${id}" has no committed source on master yet.`,
+      throw new AppError(
+        `${capitalize(cfg.noun)} "${id}" has no committed source on ` +
+          `${SOURCE_BRANCH} yet. Commit and push first.`,
+        409,
       );
     }
-    const checkout = cfg.deployCheckoutDir(id);
-    await rm(checkout, { recursive: true, force: true });
-    await mkdir(path.dirname(checkout), { recursive: true });
-    await runGit(['clone', repoDir, checkout]);
-    await setLocalGitIdentity(checkout);
-    return checkout;
-  }
-
-  async function assertDeployableWorktree(
-    id: string,
-    worktree: string,
-  ): Promise<string> {
-    await ensureRepo(id);
-    const status = await worktreeStatus(worktree);
-    if (status) {
-      throw new Error(
-        `Cannot deploy ${cfg.noun} "${id}" because the worktree is dirty.\n` +
-          'Commit or discard these changes first:\n' +
-          status,
-      );
+    if (!requested) return master;
+    if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(requested)) {
+      throw new AppError('Deploy commit must be a full commit id.', 400);
     }
-    const commit = await worktreeHead(worktree);
-    if (!commit) {
-      throw new Error(
-        `Cannot deploy ${cfg.noun} "${id}" because the worktree has no ` +
-          'commits yet. Run git add and git commit first.',
-      );
+    const commit = await refCommit(repoDir, `${requested}^{commit}`);
+    if (!commit || !(await isOnMaster(repoDir, commit))) {
+      throw notOnMaster(id, requested);
     }
     return commit;
   }
 
+  /**
+   * Check out `commit` from the canonical repo into a checkout of its own.
+   * Each deploy attempt gets a fresh directory, so concurrent attempts, also
+   * from other processes, never build each other's source. The caller removes
+   * it when the attempt ends.
+   */
+  async function prepareDeployCheckout(
+    id: string,
+    commit: string,
+  ): Promise<string> {
+    const repoDir = await ensureRepo(id);
+    const base = cfg.deployCheckoutDir(id);
+    await mkdir(path.dirname(base), { recursive: true });
+    const checkout = await mkdtemp(`${base}-`);
+    try {
+      await runGit(['clone', '--no-checkout', repoDir, checkout]);
+      await runGit(['checkout', '--detach', commit], { cwd: checkout });
+      await setLocalGitIdentity(checkout);
+      return checkout;
+    } catch (error) {
+      await rm(checkout, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  /**
+   * Tag the released commit. Master is not moved: the commit got there by a
+   * push. Called under the deploy lock that rollback shares, so the commit is
+   * re-checked against master in case a rollback rewound it meanwhile.
+   */
   async function publishDeploymentSource(
     id: string,
-    worktree: string,
+    commit: string,
     version: number,
   ): Promise<PublishedSource> {
     const repoDir = await ensureRepo(id);
-    const commit = await assertDeployableWorktree(id, worktree);
-    await runGit(['fetch', 'origin', SOURCE_BRANCH], {
-      cwd: worktree,
-      allowFailure: true,
-    });
-    const master = await masterCommit(id);
-    if (master) {
-      const ff = await runGit(['merge-base', '--is-ancestor', master, commit], {
-        cwd: worktree,
-        allowFailure: true,
-      });
-      if (ff.exitCode !== 0) {
-        throw new Error(
-          `Cannot deploy ${cfg.noun} "${id}" because ${SOURCE_BRANCH} ` +
-            `advanced. Run "git fetch origin ${SOURCE_BRANCH}" and rebase ` +
-            'your work before deploying.',
-        );
-      }
-    }
+    if (!(await isOnMaster(repoDir, commit))) throw notOnMaster(id, commit);
 
     // Tags are named by release version (deploy/v1, deploy/v2, ...). The
     // version is assigned from successful-deployment history, so any
@@ -234,14 +289,6 @@ exit 0
     // attempt whose cleanup didn't run (e.g. the process was killed).
     // Force-move it onto the new commit rather than failing the deploy.
     const tag = `${DEPLOY_TAG_PREFIX}v${version}`;
-
-    await runGit([
-      '--git-dir',
-      repoDir,
-      'fetch',
-      worktree,
-      `HEAD:refs/heads/${SOURCE_BRANCH}`,
-    ]);
     await runGit(['--git-dir', repoDir, 'tag', '-f', tag, commit]);
     return { commit, tag, repoPath: repoDir };
   }
@@ -287,47 +334,79 @@ exit 0
   }
 
   /**
-   * Stage a runner-uploaded bundle as a temporary deploy checkout: verify the
-   * bundle, clone it, and point `origin` at the canonical repo. The result
-   * plugs into the existing deploy pipeline (`deployApp(sourceDir)`), which
-   * re-runs the clean/fast-forward checks and only advances master AFTER the
-   * build succeeds — identical semantics to deploying from an agent worktree.
+   * Push an uploaded bundle's HEAD to master, as a fast-forward only. This is
+   * the bundle transport's equivalent of `git push`, used by Agent Tool
+   * deploys and by CLI versions that predate the Git endpoint. Returns the
+   * pushed commit.
    */
-  async function stageBundleCheckout(
+  async function importBundleToMaster(
     id: string,
     bundle: Buffer,
-  ): Promise<{ dir: string; cleanup: () => Promise<void> }> {
+  ): Promise<string> {
     const repoDir = await ensureRepo(id);
-    const tmp = await mkdtemp(path.join(os.tmpdir(), 'hatch-deploy-'));
-    const cleanup = () => rm(tmp, { recursive: true, force: true });
+    const tmp = await mkdtemp(path.join(os.tmpdir(), 'hatch-push-'));
     try {
       const bundleFile = path.join(tmp, 'incoming.bundle');
-      const dir = path.join(tmp, 'src');
       await writeFile(bundleFile, bundle);
       const verify = await runGit(
         ['--git-dir', repoDir, 'bundle', 'verify', bundleFile],
         { allowFailure: true },
       );
       // A bundle with prerequisites missing from the canonical repo fails
-      // verify — the runner's checkout is based on history this repo doesn't
-      // have. Same guidance as the worktree path's "master advanced" error.
+      // verify: the checkout is based on history this repo doesn't have.
       if (verify.exitCode !== 0) {
-        throw new Error(
+        throw new AppError(
           `Cannot deploy ${cfg.noun} "${id}": the uploaded source bundle ` +
             `does not apply to the canonical repository. Run checkout again ` +
-            `to sync with ${SOURCE_BRANCH}, rebase your work, then retry.\n` +
-            (verify.stderr || verify.stdout).trim(),
+            `to sync with ${SOURCE_BRANCH}, rebase your work, then retry.`,
+          409,
         );
       }
-      await runGit(['clone', bundleFile, dir]);
-      // Point origin at the canonical repo so the deploy pipeline's
-      // fetch + fast-forward check compare against the real master.
-      await runGit(['remote', 'set-url', 'origin', repoDir], { cwd: dir });
-      await setLocalGitIdentity(dir);
-      return { dir, cleanup };
-    } catch (error) {
-      await cleanup();
-      throw error;
+      // A worktree bundle names HEAD; a bundle exported from this repository
+      // names only the branch.
+      const heads = new Map(
+        (await runGit(['bundle', 'list-heads', bundleFile])).stdout
+          .trim()
+          .split('\n')
+          .map((line) => line.split(' '))
+          .map(([sha, ref]) => [ref, sha] as const),
+      );
+      const ref = heads.has('HEAD') ? 'HEAD' : `refs/heads/${SOURCE_BRANCH}`;
+      const commit = heads.get(ref);
+      if (!commit) {
+        throw new AppError(
+          `Cannot deploy ${cfg.noun} "${id}": the uploaded source bundle ` +
+            `has neither HEAD nor ${SOURCE_BRANCH}.`,
+          400,
+        );
+      }
+      // Without a leading "+", fetch refuses anything but a fast-forward. A
+      // concurrent upload of the same commit can win the ref lock instead; that
+      // push has then already happened, so retry once and accept master
+      // sitting exactly on this commit.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const pushed = await runGit(
+          [
+            '--git-dir',
+            repoDir,
+            'fetch',
+            '--no-tags',
+            bundleFile,
+            `${ref}:refs/heads/${SOURCE_BRANCH}`,
+          ],
+          { allowFailure: true },
+        );
+        if (pushed.exitCode === 0 || (await masterCommit(id)) === commit)
+          return commit;
+      }
+      throw new AppError(
+        `Cannot deploy ${cfg.noun} "${id}" because ${SOURCE_BRANCH} ` +
+          `advanced. Run "git fetch origin ${SOURCE_BRANCH}" and rebase ` +
+          'your work before deploying.',
+        409,
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
     }
   }
 
@@ -354,13 +433,13 @@ exit 0
   return {
     ensureRepo,
     masterCommit,
+    resolveDeployCommit,
     prepareDeployCheckout,
-    assertDeployableWorktree,
     publishDeploymentSource,
     deleteDeploymentTag,
     moveMasterToDeploymentTag,
     exportMasterBundle,
-    stageBundleCheckout,
+    importBundleToMaster,
   };
 }
 

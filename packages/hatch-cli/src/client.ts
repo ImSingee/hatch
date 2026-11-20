@@ -127,7 +127,7 @@ type DeployInput = {
   body: {
     message: string;
     generation: string;
-    bundleBase64: string;
+    commit: string;
     allowDestructiveDataMigration?: boolean;
     dataMigrationApprovalToken?: string;
   };
@@ -176,7 +176,7 @@ export function cliClient(transport: Transport) {
       id: string;
       message: string;
       generation: string;
-      bundle: Uint8Array;
+      commit?: string;
       allowDestructiveDataMigration?: boolean;
       dataMigrationApprovalToken?: string;
     }) => Promise<{ deployment?: Deployment }>;
@@ -216,7 +216,6 @@ export function cliClient(transport: Transport) {
               await client.deploy({
                 id: input.params.id,
                 ...input.body,
-                bundle: Buffer.from(input.body.bundleBase64, 'base64'),
               })
             ).deployment,
           ),
