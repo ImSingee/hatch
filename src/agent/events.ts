@@ -1,4 +1,5 @@
 /** Stream event protocol between the Agent SSE endpoint and the chat UI. */
+import type { StopReason } from '@earendil-works/pi-ai';
 import type { JsonValue } from '~/db/schema';
 
 /** A selectable option for an Agent `ask` question. */
@@ -102,7 +103,10 @@ export type AgentStreamEvent =
   | { type: 'cancelled' }
   // The client revalidates the session on `done` (reads the just-persisted
   // messages + title) rather than carrying the whole transcript in the event.
-  | { type: 'done' }
+  // `stopReason` is set when the reply's persisted terminal stop reason is not
+  // a clean `stop` — the run still completed, but the model ended the reply
+  // early (e.g. `length` when it hit its output limit).
+  | { type: 'done'; stopReason?: StopReason }
   | { type: 'error'; message: string };
 
 export type AgentRunStreamEvent = {

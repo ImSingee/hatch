@@ -140,7 +140,10 @@ export type AgentStreamEvent =
       details?: JsonValue;
       summary?: string;
     }
-  | { type: 'turn_end' | 'cancelled' | 'done' }
+  | { type: 'turn_end' | 'cancelled' }
+  // `stopReason` is set when the completed reply did not end on a clean
+  // `stop` — the model ended it early, e.g. `length` at its output limit.
+  | { type: 'done'; stopReason?: string }
   | { type: 'error'; message: string };
 export type RunStreamEvent = { seq: number; event: AgentStreamEvent };
 

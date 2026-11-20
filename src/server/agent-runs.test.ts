@@ -196,6 +196,54 @@ describe('Runner text persistence', () => {
     expect(report.messages[0]?.content[0]?.text).toBe(output);
   });
 
+  it('carries an abnormal terminal stop reason on the done event', async () => {
+    await seedEnvRun('run-truncated');
+    await completeRunFromRunner('runner-test', {
+      runId: 'run-truncated',
+      status: 'completed',
+      messages: [
+        { role: 'user', content: 'Write it.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Partial answer' }],
+          stopReason: 'length',
+          rawStopReason: 'incomplete',
+        },
+      ],
+    });
+
+    const run = await db.query.agentRuns.findFirst({
+      where: { id: 'run-truncated' },
+    });
+    // Still a completed run: the reply ended early, nothing failed.
+    expect(run?.status).toBe('completed');
+    const terminal = await db.query.agentRunEvents.findFirst({
+      where: { runId: 'run-truncated', type: 'done' },
+    });
+    expect(terminal?.payload).toMatchObject({ stopReason: 'length' });
+  });
+
+  it('omits the stop reason on a clean done event', async () => {
+    await seedEnvRun('run-clean');
+    await completeRunFromRunner('runner-test', {
+      runId: 'run-clean',
+      status: 'completed',
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Done.' }],
+          stopReason: 'stop',
+        },
+      ],
+    });
+
+    const terminal = await db.query.agentRunEvents.findFirst({
+      where: { runId: 'run-clean', type: 'done' },
+    });
+    expect(terminal?.payload).toMatchObject({ type: 'done' });
+    expect(terminal?.payload).not.toHaveProperty('stopReason');
+  });
+
   it('terminalizes failures even when their provider error contains unsupported text', async () => {
     await seedEnvRun('run-binary-error');
     await completeRunFromRunner('runner-test', {

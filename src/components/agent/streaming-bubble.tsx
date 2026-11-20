@@ -2,7 +2,11 @@
 import { Box, Group, Loader, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
 import type { AskAnswer } from '~agent/events';
-import { AgentErrorNotice, type RetryControls } from './agent-error-notice';
+import {
+  AgentErrorNotice,
+  EndedEarlyNotice,
+  type RetryControls,
+} from './agent-error-notice';
 import { AskForm } from './ask-form';
 import { finalTextIndex } from './chat-turns';
 import { Markdownish } from './markdownish';
@@ -184,6 +188,9 @@ export function StreamingBubble({
       ) : null}
       {state.terminalError ? (
         <AgentErrorNotice message={state.terminalError} live {...retry} />
+      ) : null}
+      {state.outcome === 'incomplete' ? (
+        <EndedEarlyNotice stopReason={state.stopReason} live />
       ) : null}
       {work ? null : workingIndicator}
     </Box>

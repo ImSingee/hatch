@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { nextUserTurn } from '~agent/user-turns';
-import { groupTurns } from './chat-turns';
+import type { SessionRunTiming } from '~server/agent-runs';
+import { groupTurns, persistedWorkPhase } from './chat-turns';
 import {
   type AssistantBlock,
   type ChatMessage,
@@ -157,5 +158,34 @@ describe('groupTurns', () => {
     // The boundary is not a user message, so turn numbering stays aligned
     // with the platform's nextUserTurn count.
     expect(nextUserTurn(messages)).toBe(1);
+  });
+});
+
+describe('persistedWorkPhase', () => {
+  const completedRun: SessionRunTiming = {
+    id: 'run_1',
+    status: 'completed',
+    userTurn: 0,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    completedAt: '2026-01-01T00:00:30.000Z',
+    error: null,
+  };
+
+  it('marks a completed reply that ended early as incomplete', () => {
+    expect(persistedWorkPhase(completedRun, 'length')).toBe('incomplete');
+    expect(persistedWorkPhase(completedRun, 'toolUse')).toBe('incomplete');
+    expect(persistedWorkPhase(completedRun, 'pending')).toBe('incomplete');
+  });
+
+  it('keeps clean, failed and cancelled ends ahead of the transcript', () => {
+    expect(persistedWorkPhase(completedRun, 'stop')).toBe('completed');
+    expect(persistedWorkPhase(completedRun, 'error')).toBe('failed');
+    expect(persistedWorkPhase(completedRun, 'aborted')).toBe('cancelled');
+    expect(
+      persistedWorkPhase({ ...completedRun, status: 'cancelled' }, 'length'),
+    ).toBe('cancelled');
+    expect(
+      persistedWorkPhase({ ...completedRun, status: 'failed' }, 'length'),
+    ).toBe('failed');
   });
 });

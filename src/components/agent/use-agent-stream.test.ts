@@ -48,6 +48,33 @@ describe('reduceStreamState', () => {
     expect(state.outcome).toBe('completed');
   });
 
+  it('settles a done run that ended on a clean stop as completed', () => {
+    const state = reduceStreamState(baseState(), {
+      type: 'done',
+      stopReason: 'stop',
+    });
+
+    expect(state.outcome).toBe('completed');
+    expect(state.stopReason).toBe('stop');
+  });
+
+  it('settles a done run whose reply ended early as incomplete', () => {
+    const state = reduceStreamState(
+      {
+        ...baseState(),
+        blocks: [{ kind: 'text', text: 'Partial answer' }],
+      },
+      { type: 'done', stopReason: 'length' },
+    );
+
+    // The run itself completed; only the reply's end was abnormal, so the
+    // partial text stays visible beside the ended-early notice.
+    expect(state.outcome).toBe('incomplete');
+    expect(state.stopReason).toBe('length');
+    expect(state.blocks).toEqual([{ kind: 'text', text: 'Partial answer' }]);
+    expect(state.terminalError).toBeUndefined();
+  });
+
   it('shows an env request and replaces an existing ask', () => {
     const state = reduceStreamState(
       {

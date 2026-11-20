@@ -96,6 +96,22 @@ export function isActiveRunStatus(status: AgentRunStatus): boolean {
 }
 
 /**
+ * Terminal stop reasons that mean the reply did not end normally even though
+ * nothing failed: `length` when the model hit its output limit, `toolUse` or
+ * `pending` when the transcript ends before the model finished. (`error` and
+ * `aborted` already surface through the run's own status.)
+ */
+export function isIncompleteStopReason(
+  stopReason: StopReason | undefined,
+): boolean {
+  return (
+    stopReason === 'length' ||
+    stopReason === 'toolUse' ||
+    stopReason === 'pending'
+  );
+}
+
+/**
  * How a persisted reply ended. The transcript's own stop reason wins; the run
  * status covers ends the transcript cannot express (interrupted, stopped
  * before any output). Unbound legacy replies read as finished.
@@ -111,6 +127,7 @@ export function persistedWorkPhase(
   if (run?.status === 'failed' || run?.status === 'interrupted') {
     return 'failed';
   }
+  if (isIncompleteStopReason(stopReason)) return 'incomplete';
   return 'completed';
 }
 
