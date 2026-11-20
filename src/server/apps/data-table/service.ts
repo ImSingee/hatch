@@ -1,7 +1,10 @@
 /** Query, mutation, inspection, and validation for managed Data Tables. */
 import { createHash } from 'node:crypto';
-import pg, { type Client as PgClient, type ResultBuilder } from 'pg';
-import postgres, { type TransactionSql } from 'postgres';
+import postgres, {
+  type ReservedSql,
+  type Sql,
+  type TransactionSql,
+} from 'postgres';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { db } from '~/db';
@@ -388,22 +391,14 @@ function encodeCursor(
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
-type DataReadGuardClient = TransactionSql | Pick<PgClient, 'query'>;
+/** A transaction, or a reserved connection inside an explicit transaction. */
+type DataReadGuardClient = TransactionSql | ReservedSql;
 
 async function acquireReadLock(tx: DataReadGuardClient): Promise<void> {
-  const ok =
-    typeof tx === 'function'
-      ? (
-          await tx<{ ok: boolean }[]>`
-            select pg_try_advisory_xact_lock_shared(${DATA_MIGRATION_LOCK_KEY}) as ok
-          `
-        )[0]?.ok
-      : (
-          await tx.query<{ ok: boolean }>(
-            'select pg_try_advisory_xact_lock_shared($1) as ok',
-            [DATA_MIGRATION_LOCK_KEY],
-          )
-        ).rows[0]?.ok;
+  const [row] = await tx<{ ok: boolean }[]>`
+    select pg_try_advisory_xact_lock_shared(${DATA_MIGRATION_LOCK_KEY}) as ok
+  `;
+  const ok = row?.ok;
   if (!ok) {
     throw new AppError(
       'Data Table migration is in progress. Retry shortly.',
@@ -736,6 +731,8 @@ export async function queryDataTable(
 }
 
 const RAW_SQL_ROW_LIMIT = 100;
+/** Upper bound on waiting for a stopped statement before closing its socket. */
+const RAW_SQL_TEARDOWN_GRACE_MS = 5_000;
 const RAW_SQL_PREVIEW_FIELD = '__hatch_preview';
 const RAW_SQL_PREVIEW_NOTICE_FIELD = '__hatch_preview_notice';
 const RAW_SQL_PREVIEW_NOTICE =
@@ -924,26 +921,38 @@ function presentRawSqlResults(
   return { results, truncated };
 }
 
-function executeBoundedRawSql(
-  client: PgClient,
-  statement: string,
-): Promise<DataRawSqlResult> {
-  return new Promise((resolve, reject) => {
-    const query = new pg.Query<Record<string, unknown>>(statement);
-    const sourceRows = new Map<
-      ResultBuilder<Record<string, unknown>>,
-      Record<string, unknown>[]
-    >();
-    let emittedRows = 0;
-    let outputBudgetReached = false;
-    let rowLimitReached = false;
-    let rowProcessingFailed = false;
-    let rowProcessingError: unknown;
+type RawSqlStatementResult = {
+  command?: string | null;
+  count?: number | null;
+};
 
-    query.on('row', (row, result) => {
-      if (!result || outputBudgetReached || rowProcessingFailed) {
-        return;
-      }
+/**
+ * Stream one simple-protocol query, keeping only rows that fit the Agent
+ * output budget. postgres.js calls back with each statement's own result
+ * object, so rows stay grouped per statement without collecting the full
+ * result in memory.
+ */
+async function executeBoundedRawSql(
+  connection: ReservedSql,
+  statement: string,
+  signal: AbortSignal,
+): Promise<DataRawSqlResult> {
+  const sourceRows = new Map<
+    RawSqlStatementResult,
+    Record<string, unknown>[]
+  >();
+  let emittedRows = 0;
+  let outputBudgetReached = false;
+  let rowLimitReached = false;
+  let rowProcessingFailed = false;
+  let rowProcessingError: unknown;
+
+  const raw = await connection
+    .unsafe<Record<string, unknown>[]>(statement)
+    .simple()
+    .signal(signal)
+    .forEach((row, result: RawSqlStatementResult) => {
+      if (outputBudgetReached || rowProcessingFailed) return;
       try {
         if (emittedRows >= RAW_SQL_ROW_LIMIT) {
           rowLimitReached = true;
@@ -983,83 +992,31 @@ function executeBoundedRawSql(
           outputBudgetReached = true;
         }
       } catch (error) {
-        // A row event runs inside node-postgres' socket event stack. Never let
-        // normalization or budget failures escape that callback: consume the
-        // protocol, then reject so the surrounding transaction can roll back.
+        // Let the driver read the rest of the protocol response, then reject
+        // so the surrounding transaction rolls back with this exact error.
         rowProcessingFailed = true;
         rowProcessingError = error;
       }
     });
-    query.once('error', reject);
-    query.once('end', (raw) => {
-      if (rowProcessingFailed) {
-        reject(rowProcessingError);
-        return;
-      }
-      try {
-        const source = (Array.isArray(raw) ? raw : [raw]).map((result) => ({
-          command: result.command || null,
-          rowCount: result.rowCount,
-          rows: sourceRows.get(result) ?? [],
-        }));
-        const presented = presentRawSqlResults(source);
-        resolve({
-          ...presented,
-          truncated:
-            presented.truncated || outputBudgetReached || rowLimitReached,
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-    client.query(query);
-  });
-}
+  if (rowProcessingFailed) throw rowProcessingError;
 
-function rawSqlConnectionString(
-  url: string,
-  options: { disableSsl?: boolean } = {},
-): string {
-  const parsed = new URL(url);
-  if (options.disableSsl) {
-    parsed.searchParams.set('sslmode', 'disable');
-    parsed.searchParams.delete('uselibpqcompat');
-    return parsed.toString();
-  }
-  if (parsed.searchParams.get('sslrootcert') === 'system') {
-    // postgres.js treats this libpq sentinel as the host trust store. pg's
-    // connection-string parser instead interprets it as a filename, so omit
-    // the sentinel and retain certificate + hostname verification explicitly.
-    parsed.searchParams.delete('sslrootcert');
-    parsed.searchParams.set('sslmode', 'verify-full');
-    parsed.searchParams.delete('uselibpqcompat');
-    return parsed.toString();
-  }
-  const sslMode = parsed.searchParams.get('sslmode');
-  if (sslMode && ['allow', 'prefer', 'require'].includes(sslMode)) {
-    // postgres.js enables TLS without certificate verification for these
-    // modes. pg's no-verify spelling preserves that behavior even when the
-    // URL also carries a root certificate. sslmode=prefer gets an explicit
-    // plaintext retry below when the server reports no TLS support.
-    parsed.searchParams.set('sslmode', 'no-verify');
-    parsed.searchParams.delete('uselibpqcompat');
-  }
-  return parsed.toString();
-}
-
-function rawSqlTlsPreference(url: string): 'prefer' | 'fixed' {
-  const params = new URL(url).searchParams;
-  return params.get('sslrootcert') !== 'system' &&
-    params.get('sslmode') === 'prefer'
-    ? 'prefer'
-    : 'fixed';
-}
-
-function rawSqlServerHasNoTls(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message === 'The server does not support SSL connections'
+  // A single statement resolves with its own result; several statements
+  // resolve with one result per statement, in order.
+  const results: RawSqlStatementResult[] =
+    (raw as RawSqlStatementResult).command === undefined
+      ? (raw as unknown as RawSqlStatementResult[])
+      : [raw as RawSqlStatementResult];
+  const presented = presentRawSqlResults(
+    results.map((result) => ({
+      command: result.command || null,
+      rowCount: result.count ?? null,
+      rows: sourceRows.get(result) ?? [],
+    })),
   );
+  return {
+    ...presented,
+    truncated: presented.truncated || outputBudgetReached || rowLimitReached,
+  };
 }
 
 function rawSqlAbortError(signal: AbortSignal): Error {
@@ -1141,9 +1098,11 @@ export async function executeDataTableRawSql(
   if (signal?.aborted) throw rawSqlAbortError(signal);
 
   const deadline = Date.now() + timeoutMs;
-  let client: PgClient | undefined;
-  let databaseUrl: string | undefined;
+  let client: Sql | undefined;
   let clientEndPromise: Promise<void> | undefined;
+  // Settles when the statement currently on the wire has finished, so a
+  // cancellation can reach PostgreSQL before the connection is closed.
+  let inFlight: Promise<unknown> = Promise.resolve();
   let commitPhase: 'before_commit' | 'commit_in_flight' | 'commit_confirmed' =
     'before_commit';
   let stopError: Error | null = null;
@@ -1151,9 +1110,10 @@ export async function executeDataTableRawSql(
   const stopped = new Promise<never>((_resolve, reject) => {
     rejectStop = reject;
   });
+  const cancellation = new AbortController();
   const endClient = (): Promise<void> => {
     if (!client) return Promise.resolve();
-    clientEndPromise ??= client.end().catch(() => {});
+    clientEndPromise ??= client.end({ timeout: 0 }).catch(() => {});
     return clientEndPromise;
   };
   const stop = (error: Error) => {
@@ -1162,27 +1122,23 @@ export async function executeDataTableRawSql(
       commitPhase === 'commit_in_flight'
         ? rawSqlOutcomeUnknownError(error)
         : error;
-    // Socket close is insufficient: PostgreSQL may keep executing until its
-    // next write. Cancel this role's backend while its connection is still
-    // alive, then close it. No broader database authority is required.
-    const pid = (client as (PgClient & { processID?: number }) | undefined)
-      ?.processID;
-    if (pid && databaseUrl) {
-      const cancellation = postgres(databaseUrl, {
-        max: 1,
-        connect_timeout: 2,
-        connection: { statement_timeout: 1000 },
-      });
-      void cancellation
-        .unsafe('select pg_cancel_backend($1)', [pid])
-        .catch(() => {})
-        .finally(async () => {
-          await cancellation.end({ timeout: 0 }).catch(() => {});
-          await endClient();
-        });
-    } else {
+    // Socket close is insufficient: PostgreSQL keeps executing a statement
+    // until its next write. Cancel the running statement with a protocol
+    // CancelRequest first, and close the connection once it has stopped.
+    // postgres.js closes a connection whose cancel is not answered within
+    // its cancel_timeout; COMMIT cannot be canceled, so bound that wait too.
+    cancellation.abort(stopError);
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    void Promise.race([
+      inFlight,
+      new Promise<void>((resolve) => {
+        grace = setTimeout(resolve, RAW_SQL_TEARDOWN_GRACE_MS);
+        grace.unref?.();
+      }),
+    ]).finally(() => {
+      clearTimeout(grace);
       void endClient();
-    }
+    });
     rejectStop(stopError);
   };
   const timer = setTimeout(() => {
@@ -1194,76 +1150,51 @@ export async function executeDataTableRawSql(
   if (signal?.aborted) onAbort();
 
   const execute = async () => {
-    databaseUrl = await resolveAppDataDatabaseUrl(id);
-    const connect = async (disableSsl = false): Promise<PgClient> => {
-      const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) throw rawSqlTimeoutError(timeoutMs);
-      const candidate = new pg.Client({
-        connectionString: rawSqlConnectionString(databaseUrl!, { disableSsl }),
-        connectionTimeoutMillis: remainingMs,
-        statement_timeout: timeoutMs,
-      });
-      // node-postgres emits connection-level failures on Client even when no
-      // query is active. Always consume that event and route it through the
-      // same timeout/commit-outcome state machine instead of letting an
-      // unhandled EventEmitter error terminate the process.
-      candidate.on('error', (error) => {
-        if (client === candidate) stop(error);
-      });
-      client = candidate;
-      clientEndPromise = undefined;
-      if (stopError) {
-        void endClient();
-        throw stopError;
-      }
-      try {
-        await candidate.connect();
-      } catch (error) {
-        void endClient();
-        throw error;
-      }
-      if (stopError) {
-        void endClient();
-        throw stopError;
-      }
-      return candidate;
+    const databaseUrl = await resolveAppDataDatabaseUrl(id);
+    if (stopError) throw stopError;
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw rawSqlTimeoutError(timeoutMs);
+    client = postgres(databaseUrl, {
+      max: 1,
+      // Seconds; the deadline timer above still bounds the whole operation.
+      connect_timeout: Math.max(1, Math.ceil(remainingMs / 1000)),
+      connection: { statement_timeout: timeoutMs },
+      onnotice: () => {},
+    });
+    const connection = await client.reserve();
+    if (stopError) throw stopError;
+    const run = <T>(query: PromiseLike<T>): Promise<T> => {
+      const pending = Promise.resolve(query);
+      inFlight = pending.catch(() => {});
+      return pending;
     };
 
-    let dataClient: PgClient;
-    try {
-      dataClient = await connect();
-    } catch (error) {
-      if (
-        rawSqlTlsPreference(databaseUrl!) !== 'prefer' ||
-        !rawSqlServerHasNoTls(error) ||
-        stopError
-      ) {
-        throw error;
-      }
-      // Match postgres.js/libpq sslmode=prefer: only retry without TLS when
-      // the server explicitly reports that it has no SSL support.
-      dataClient = await connect(true);
-    }
     let transactionOpen = false;
     try {
-      await dataClient.query('begin');
+      await run(connection`begin`.signal(cancellation.signal));
       transactionOpen = true;
-      await acquireDataReadGuard(dataClient, id, {});
-      await dataClient.query(`set local statement_timeout = ${timeoutMs}`);
-      await dataClient.query('set local search_path = data, public');
-      const presented = await executeBoundedRawSql(dataClient, statement);
+      await acquireDataReadGuard(connection, id, {});
+      await run(
+        connection
+          .unsafe(`set local statement_timeout = ${timeoutMs}`)
+          .signal(cancellation.signal),
+      );
+      await run(
+        connection
+          .unsafe('set local search_path = data, public')
+          .signal(cancellation.signal),
+      );
+      const presented = await run(
+        executeBoundedRawSql(connection, statement, cancellation.signal),
+      );
       if (stopError) throw stopError;
-      if (signal?.aborted) {
-        stop(rawSqlAbortError(signal));
-        throw stopError!;
-      }
       if (Date.now() >= deadline) {
         stop(rawSqlTimeoutError(timeoutMs));
         throw stopError!;
       }
       commitPhase = 'commit_in_flight';
       try {
-        await dataClient.query('commit');
+        await run(connection`commit`);
       } catch (error) {
         throw stopError ?? rawSqlOutcomeUnknownError(error);
       }
@@ -1272,7 +1203,7 @@ export async function executeDataTableRawSql(
       return presented;
     } catch (error) {
       if (transactionOpen && commitPhase === 'before_commit' && !stopError) {
-        await dataClient.query('rollback').catch(() => {});
+        await connection`rollback`.catch(() => {});
         transactionOpen = false;
       }
       if ((error as { code?: unknown }).code === '57014') {

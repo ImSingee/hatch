@@ -410,8 +410,21 @@ await db.query.agentRuns.findMany({
 });
 ```
 
+RQB filters reject `undefined` values at runtime, and the types do not catch
+it. When a filter is optional by design, pass `EmptyFilter` (from
+`drizzle-orm/relations`) instead, for example `{ userId: userId ?? EmptyFilter }`.
+A relation filter with no conditions (`{ posts: {} }`) is skipped; use `true`
+or `false` to filter by a relation's presence or absence.
+
 The core SQL query builder is separate from RQB and continues to use SQL
 expressions, for example `db.select().from(table).where(eq(table.id, id))`.
+
+PostgreSQL access goes through postgres.js 4 only: Drizzle's `postgres-js`
+driver, and `postgres` directly where Drizzle cannot express the operation
+(managed App databases, LISTEN/NOTIFY, advisory locks, raw multi-statement
+SQL). Do not add another PostgreSQL driver. postgres.js 4 lets the server
+decide each parameter's type, so cast a parameter whose type the query does
+not decide (`${date}::timestamptz`, `${ids}::int[]`); `sql.array()` is gone.
 
 Commands:
 
