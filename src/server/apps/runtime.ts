@@ -579,7 +579,7 @@ function clearInstanceTimers(instance: BackendInstance): void {
 }
 
 /**
- * Retire an instance immediately (stop, restart, redeploy, failed boot). It
+ * Retire an instance immediately (stop, restart, redeploy). It
  * leaves the registry at once, so the app can boot a replacement without
  * waiting for the exit event.
  */
@@ -1260,7 +1260,16 @@ async function startBackend(
   try {
     await backend.ready;
   } catch (error) {
-    killInstance(backend);
+    // A failed boot is not a retirement: kill and unregister the process but
+    // leave it un-retired, so the exit of a keep-alive backend that stalled
+    // past the readiness window still schedules its automatic restart.
+    clearInstanceTimers(backend);
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      /* best-effort */
+    }
+    removeInstance(backend);
     const message = error instanceof Error ? error.message : String(error);
     // Only record a *real* boot failure. If the epoch moved, an intentional
     // stop/restart/redeploy killed this start mid-boot — the resulting
