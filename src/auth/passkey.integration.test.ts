@@ -342,7 +342,7 @@ test('the browser rejects an origin missing from the related-origin declaration'
   await expect(db.select().from(schema.session)).resolves.toEqual([]);
 }, 20_000);
 
-test.each(['disconnected', 'mismatched signed origin'])(
+test.each(['disconnected', 'relayed after disconnect'])(
   'rejects cross-domain authentication when %s without creating a session',
   async (failure) => {
     await enrollAndOpenLogin();
@@ -350,11 +350,10 @@ test.each(['disconnected', 'mismatched signed origin'])(
     await page.waitForFunction('window.ready === true');
     const sessionsBefore = await db.select().from(schema.session);
     await page.route('**/passkey/verify-authentication', async (route) => {
-      if (failure === 'disconnected') {
-        fixture.tailscaleOrigin = null;
-        return route.continue();
-      }
-      // Both origins are trusted, but the signature was produced on Tailscale.
+      fixture.tailscaleOrigin = null;
+      if (failure === 'disconnected') return route.continue();
+      // The signature was produced on a Tailscale origin that is no longer
+      // trusted; relaying it through the canonical origin must not sign in.
       const response = await handleAuth(
         new Request(route.request().url(), {
           method: 'POST',

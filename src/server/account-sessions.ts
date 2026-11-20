@@ -32,7 +32,7 @@ export const listAccountSessions = createServerFn({ method: 'GET' }).handler(
 );
 
 export const revokeAccountSession = createServerFn({ method: 'POST' })
-  .inputValidator(z.object({ sessionId: z.string().min(1).max(255) }))
+  .validator(z.object({ sessionId: z.string().min(1).max(255) }))
   .handler(async ({ data: { sessionId } }) => {
     const current = await requireSession();
     if (sessionId === current.session.id) {
