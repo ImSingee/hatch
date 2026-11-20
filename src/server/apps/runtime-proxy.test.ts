@@ -46,16 +46,22 @@ type SeenRequest = {
 };
 
 type RuntimeGlobal = typeof globalThis & {
-  __hatchAppRuntime__?: Map<
+  __hatchAppInstances__?: Map<
     string,
-    {
+    Set<{
+      appId: string;
       proc: ReturnType<typeof spawn>;
       port: number;
       deploymentId: string;
       startedAt: number;
       ready: Promise<void>;
       getLog: () => string;
-    }
+      idleStop: boolean;
+      activeRequests: number;
+      idleTimer: null;
+      drainTimer: null;
+      draining: boolean;
+    }>
   >;
 };
 
@@ -343,20 +349,31 @@ beforeAll(async () => {
 beforeEach(() => {
   seen = undefined;
   waitForMore = Promise.resolve();
-  const backends = ((globalThis as RuntimeGlobal).__hatchAppRuntime__ ??=
+  const backends = ((globalThis as RuntimeGlobal).__hatchAppInstances__ ??=
     new Map());
   const proc = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e9)'], {
     stdio: 'ignore',
   });
   proc.unref();
-  backends.set(APP_ID, {
-    proc,
-    port,
-    deploymentId: DEPLOYMENT_ID,
-    startedAt: Date.now(),
-    ready: Promise.resolve(),
-    getLog: () => '',
-  });
+  backends.set(
+    APP_ID,
+    new Set([
+      {
+        appId: APP_ID,
+        proc,
+        port,
+        deploymentId: DEPLOYMENT_ID,
+        startedAt: Date.now(),
+        ready: Promise.resolve(),
+        getLog: () => '',
+        idleStop: false,
+        activeRequests: 0,
+        idleTimer: null,
+        drainTimer: null,
+        draining: false,
+      },
+    ]),
+  );
 });
 
 afterEach(() => {

@@ -96,7 +96,7 @@ function BackendSection({
       <Text size="xs" c="dimmed">
         {mode === 'long-running'
           ? 'Kept warm by the platform and restarted automatically if it exits.'
-          : 'Started on demand, then reused by later requests in this platform process; not kept warm.'}
+          : 'Started on demand and stopped once it has been idle for a while; the next request starts a fresh instance.'}
       </Text>
       <RuntimeFact label="Network">
         <NetworkAccessDetails access={backend.network} appPlatformChannels />

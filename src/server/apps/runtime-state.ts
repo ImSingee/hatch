@@ -106,13 +106,14 @@ export function recordBackendExit(
 }
 
 /**
- * A manual/programmatic stop killed the running process. The exit event will
- * usually land right after (matching pid) and fill in the exit signal; this
- * records the stop moment even if it never does.
+ * The platform retired the process: a manual/programmatic stop killed it, or
+ * it was idle-stopped. The exit event will usually land right after (matching
+ * pid) and fill in the exit signal; this records the stop moment even if it
+ * never does. Applied only when `pid` matches the most recent spawn.
  */
-export function recordBackendStopped(id: string): void {
+export function recordBackendStopped(id: string, pid: number | null): void {
   const snap = snapshots().get(id);
-  if (!snap) return;
+  if (!snap || snap.pid !== pid) return;
   snap.stoppedAt = Date.now();
 }
 

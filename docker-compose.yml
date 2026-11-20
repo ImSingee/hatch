@@ -61,6 +61,9 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-${SECRET}}
       # Optional comma-separated beta features distributed to Agent Runners.
       HATCH_BETA: ${HATCH_BETA:-}
+      # Optional: seconds a serverless App backend may sit idle before it is
+      # stopped (1-86400). Defaults to 300.
+      HATCH_APP_IDLE_TIMEOUT_SECONDS: ${HATCH_APP_IDLE_TIMEOUT_SECONDS:-300}
       # Optional: own APNs credentials for a self-built iOS app. Leave unset to
       # use the built-in keys of the official app (docs/notifications.md).
       HATCH_APNS_TEAM_ID: ${HATCH_APNS_TEAM_ID:-}
