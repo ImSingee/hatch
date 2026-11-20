@@ -76,6 +76,7 @@ async function runWithResponses(
     composerContent: AgentComposerContentPart[];
   },
   modelOptions?: Omit<FauxModelDefinition, 'id'>,
+  signal: AbortSignal = new AbortController().signal,
 ) {
   const providerId = `runtime-test-${sessionId}`;
   const faux = fauxProvider({
@@ -106,7 +107,7 @@ async function runWithResponses(
     models,
     picked,
     platform,
-    signal: new AbortController().signal,
+    signal,
     ...(requestEnv ? { requestEnv } : {}),
     emit,
   });
@@ -1192,6 +1193,71 @@ describe('runAgentTurn auto compaction', () => {
     expect(compactPhases(events)).toEqual([
       ['overflow', 'start'],
       ['overflow', 'done'],
+    ]);
+  });
+
+  const toolCallReply = () =>
+    fauxAssistantMessage(
+      fauxToolCall('query_app_data_table', {
+        id: 'sample-app',
+        action: 'query',
+        table: 'todos',
+      }),
+    );
+
+  it('starts no model or tool work for a run stopped before its turn began', async () => {
+    const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
+    const controller = new AbortController();
+    controller.abort();
+    const result = await runWithResponses(
+      script([toolCallReply, () => fauxAssistantMessage('never')]).steps,
+      'compact-stopped-early',
+      undefined,
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      history(2, 400),
+      undefined,
+      model,
+      controller.signal,
+    );
+
+    expect(result.error).toMatch(/abort/i);
+    expect(queryAppDataTable).not.toHaveBeenCalled();
+    // The stopped turn's user message is still part of the transcript.
+    expect(nextUserTurn(result.messages)).toBe(2);
+  });
+
+  it('starts no model or tool work for a run stopped during a compaction', async () => {
+    const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
+    const controller = new AbortController();
+    const step: FauxResponseStep = (context) => {
+      if (isSummaryRequest(context)) {
+        controller.abort();
+        return fauxAssistantMessage(SUMMARY);
+      }
+      return toolCallReply();
+    };
+    const events: AgentStreamEvent[] = [];
+    const prior = history(12, 100000);
+    const result = await runWithResponses(
+      Array.from({ length: 6 }, () => step),
+      'compact-stopped-compacting',
+      (event) => events.push(event),
+      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
+      prior,
+      undefined,
+      model,
+      controller.signal,
+    );
+
+    expect(result.error).toMatch(/abort/i);
+    expect(queryAppDataTable).not.toHaveBeenCalled();
+    expect(markersOf(result.messages)).toEqual([]);
+    expect(result.messages.slice(0, prior.length)).toEqual(prior);
+    expect(compactPhases(events)).toEqual([
+      ['threshold', 'start'],
+      ['threshold', 'failed'],
     ]);
   });
 

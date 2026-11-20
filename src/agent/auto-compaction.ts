@@ -383,15 +383,27 @@ function hasReplyContent(event: AssistantMessageEvent): boolean {
  * input instead of failing). `recover` returns the compacted context, or
  * undefined when nothing could be compacted; the original response is then
  * passed through unchanged.
+ *
+ * Every request also observes `signal`, the run's own cancellation. The
+ * harness only aborts the controller of a turn that is already running, so a
+ * stop that lands earlier (or while a compaction is in flight) would otherwise
+ * not reach the provider call that follows.
  */
 export function withOverflowRecovery(
   models: Models,
   opts: {
     contextWindow: number;
+    signal: AbortSignal;
     recover: () => Promise<AgentMessage[] | undefined>;
   },
 ): Models {
-  const streamSimple: Models['streamSimple'] = (model, context, options) => {
+  const streamSimple: Models['streamSimple'] = (model, context, request) => {
+    const options = {
+      ...request,
+      signal: request?.signal
+        ? AbortSignal.any([request.signal, opts.signal])
+        : opts.signal,
+    };
     const output = createAssistantMessageEventStream();
     void (async () => {
       let source = models.streamSimple(model, context, options);

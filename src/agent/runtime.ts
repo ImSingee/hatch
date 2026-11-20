@@ -290,6 +290,7 @@ export async function runAgentTurn(
     // re-sent in place, so the turn keeps the tool work it already did.
     models: withOverflowRecovery(models, {
       contextWindow: picked.model.contextWindow,
+      signal,
       recover: async () =>
         (await compactor.compactAfterOverflow())
           ? compactedContext()
