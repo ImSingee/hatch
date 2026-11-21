@@ -96,6 +96,14 @@ summary:focus-visible {
 
 /* ---- Links -------------------------------------------------------------- */
 
+/* A link with no colour of its own (a row, a wrapper around a status badge)
+ * takes its surroundings' ink, never the browser's blue or visited purple.
+ * Zero specificity, so every component and module rule still wins. */
+:where(a),
+:where(a:visited) {
+  color: inherit;
+}
+
 /* Browsers recolour followed links. In-app navigation (card titles, table
  * rows, sidebar rows) is styled to match its surroundings, so pin the colour
  * across states here instead of in each component. */
@@ -372,4 +380,25 @@ a.mantine-Text-root:not(.mantine-Anchor-root):active {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ---- Search palette ------------------------------------------------------ */
+
+.mantine-Spotlight-content {
+  border-radius: var(--radius-window);
+}
+
+.mantine-Spotlight-action {
+  border-radius: var(--mantine-radius-md);
+}
+
+.mantine-Spotlight-action[data-selected] {
+  background: var(--surface-hover);
+  color: var(--mantine-color-text);
+}
+
+.mantine-Spotlight-action mark {
+  background: transparent;
+  color: inherit;
+  font-weight: var(--font-weight-heading);
 }

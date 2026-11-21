@@ -15,7 +15,7 @@ import {
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { EmptyState } from '~components/page/page';
 import { useEventCallback } from '~hooks/use-latest-committed';
@@ -68,6 +68,7 @@ export function WidgetCard({
   onMove?: (dx: number, dy: number) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const frameFocused = useFrameFocused(frameRef);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading',
   );
@@ -388,10 +389,14 @@ export function WidgetCard({
       {/* The iframe stays laid out under any loading/error overlay so the
           widget's in-frame ResizeObserver measures its real pixel size from the
           first mount (a display:none frame would report 0x0 until shown). */}
-      <div className={classes.frameContainer}>
+      <div
+        className={classes.frameContainer}
+        data-focused={frameFocused || undefined}
+      >
         <iframe
           ref={frameRef}
-          title={item.name}
+          // Several Apps can offer a widget of the same name.
+          title={`${item.name} from ${item.appName}`}
           // allow-scripts + allow-same-origin: scripts run and the widget keeps
           // the same-origin session its Connect client needs, while the
           // omitted tokens still block top-navigation and popups. See
@@ -447,4 +452,37 @@ export function WidgetCard({
       </div>
     </article>
   );
+}
+
+/**
+ * Whether keyboard focus is inside the frame. The parent document matches no
+ * focus pseudo-class on a frame whose content has focus, so this follows the
+ * document's active element: focus entering a frame blurs this window, and
+ * focus coming back raises `focusin` here.
+ */
+function useFrameFocused(frameRef: RefObject<HTMLIFrameElement | null>) {
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = () =>
+      setFocused(
+        frameRef.current !== null &&
+          document.activeElement === frameRef.current,
+      );
+    // The active element changes just after the window's blur event.
+    const onBlur = () => {
+      clearTimeout(timer);
+      timer = setTimeout(update, 0);
+    };
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', update);
+    document.addEventListener('focusin', update);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', update);
+      document.removeEventListener('focusin', update);
+    };
+  }, [frameRef]);
+  return focused;
 }

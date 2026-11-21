@@ -16,12 +16,31 @@ import { StandaloneWindow } from '~components/page/standalone-window';
  * the surrounding layout instead of bubbling to the router's global boundary
  * and replacing the whole app shell.
  */
+/**
+ * What the page says about a failure. The server's own text is written for
+ * logs, not for the person using the page, so it is never shown; a request
+ * that never reached the server gets its own line because the fix differs.
+ */
+export function routeErrorMessage(error: unknown): string {
+  const offline =
+    (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+    (error instanceof TypeError && /fetch|network/i.test(error.message));
+  return offline
+    ? 'Hatch could not be reached. Check your connection, then try again.'
+    : 'Something went wrong while loading this page. Try again; if it keeps failing, reload Hatch.';
+}
+
 export function RouteError({ error }: ErrorComponentProps) {
   const router = useRouter();
   const queryErrorResetBoundary = useQueryErrorResetBoundary();
   const [retrying, setRetrying] = useState(false);
   const insideShell = useInsideDeskShell();
   const insideWindow = useInsideWindow();
+
+  useEffect(() => {
+    // The details stay available to whoever debugs it.
+    console.error(error);
+  }, [error]);
 
   useEffect(() => {
     // Let suspense queries that failed under this boundary refetch on retry.
@@ -54,9 +73,7 @@ export function RouteError({ error }: ErrorComponentProps) {
         </Button>
       }
     >
-      {error instanceof Error && error.message
-        ? error.message
-        : 'Something went wrong while loading this page.'}
+      {routeErrorMessage(error)}
     </EmptyState>
   );
 

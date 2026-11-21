@@ -1,3 +1,4 @@
+import { routeErrorMessage } from '~components/system/route-error';
 import { Button, Skeleton, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import {
@@ -317,6 +318,9 @@ function DeskSkeleton() {
 /** The desk could not be read: say so on the desk and offer a retry. */
 function DeskError({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
+  useEffect(() => {
+    console.error(error);
+  }, [error]);
   return (
     <div className={classes.state}>
       <div className={classes.errorPanel} role="alert">
@@ -325,9 +329,7 @@ function DeskError({ error, reset }: ErrorComponentProps) {
         </span>
         <h1 className={classes.errorTitle}>The desk didn’t load</h1>
         <Text c="dimmed" ta="center" maw={420}>
-          {error instanceof Error && error.message
-            ? error.message
-            : 'Something went wrong while reading this dashboard.'}
+          {routeErrorMessage(error)}
         </Text>
         <Button
           type="button"

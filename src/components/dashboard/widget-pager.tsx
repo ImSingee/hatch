@@ -1,5 +1,5 @@
 import { UnstyledButton } from '@mantine/core';
-import { useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { DashboardItem } from '~server/dashboards';
 import type { DashboardLayouts } from '~/lib/dashboard-layout';
 import { WIDGET_ROW_HEIGHT, WIDGET_ROW_GAP } from './dashboard-grid';
@@ -46,13 +46,36 @@ export function WidgetPager({
     element.scrollTo({ left: index * element.clientWidth, behavior: 'smooth' });
   };
 
+  // Left and right arrows move between the dots, as in a tab list.
+  const dots = useRef<(HTMLButtonElement | null)[]>([]);
+  const onDotKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const step =
+      event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    const target =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? order.length - 1
+          : step
+            ? Math.min(order.length - 1, Math.max(0, page + step))
+            : null;
+    if (target === null) return;
+    event.preventDefault();
+    goTo(target);
+    dots.current[target]?.focus();
+  };
+
   return (
     <div className={classes.root}>
       <div ref={track} className={classes.track}>
-        {order.map(({ item, geometry }) => (
+        {order.map(({ item, geometry }, index) => (
           <div
             key={item.id}
             className={classes.page}
+            // Tabbing into a widget off to the side brings its page in view.
+            onFocus={() => {
+              if (index !== page) goTo(index);
+            }}
             style={{
               height: Math.max(
                 240,
@@ -77,10 +100,16 @@ export function WidgetPager({
             {order.map(({ item }, index) => (
               <UnstyledButton
                 key={item.id}
+                ref={(element) => {
+                  dots.current[index] = element;
+                }}
                 className={classes.dot}
-                aria-label={`Show ${item.name}`}
+                aria-label={`Widget ${index + 1} of ${order.length}: ${item.name} from ${item.appName}`}
                 aria-current={index === page || undefined}
+                // One stop in the tab order; the arrows reach the others.
+                tabIndex={index === page ? 0 : -1}
                 onClick={() => goTo(index)}
+                onKeyDown={onDotKey}
               />
             ))}
           </div>

@@ -182,7 +182,9 @@ every transition and animation.
 
 Every focusable control shows a 2 px ink (`light.ring`) outline, offset 2 px,
 on keyboard focus. A field also turns its border to ink. The ring is the same
-on the ground, on a sheet and on an accent fill.
+on the ground, on a sheet and on an accent fill. A widget frame draws the ring
+inside its panel, inset 2 px, whenever it has focus: browsers do not report
+keyboard focus on a frame separately.
 
 ## CSS variables
 

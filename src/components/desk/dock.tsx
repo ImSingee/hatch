@@ -83,10 +83,23 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const queryClient = useQueryClient();
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
-  const [editTarget, setEditTarget] = useState<{
+  const [editTarget, setEditTargetState] = useState<{
     id: string;
     appId: string;
   } | null>(null);
+  // Whether the edited pin has been seen in the live pins since the dialog
+  // opened: a pin just added may not be in the list yet, and only a pin that
+  // was there and is now missing was removed elsewhere.
+  const [editSeen, setEditSeen] = useState(false);
+  const setEditTarget = (target: typeof editTarget) => {
+    setEditTargetState(target);
+    setEditSeen(false);
+  };
+  const editedPinPresent = Boolean(
+    editTarget && pins?.some((item) => item.id === editTarget.id),
+  );
+  if (editedPinPresent && !editSeen) setEditSeen(true);
+  const editGone = editTarget !== null && editSeen && !editedPinPresent;
   const [editLabel, setEditLabel] = useState('');
   const [editHash, setEditHash] = useState('');
   const editedAppId = editTarget?.appId ?? '';
@@ -156,6 +169,13 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
     onMutate: (orderedIds) => {
       queryClient.setQueryData(sidebarItemsQueryOptions.queryKey, (old) =>
         sortByIds(old, orderedIds),
+      );
+    },
+    // The server names the stale pin by id, which means nothing here.
+    meta: { errorToast: false },
+    onError: () => {
+      toast.error(
+        'The dock changed while you were moving that pin. It now shows the current order; try again.',
       );
     },
     onSettled: () => void invalidate(),
@@ -299,38 +319,52 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
         title="Edit pin"
         centered
       >
-        <Stack gap="sm">
-          <TextInput
-            data-autofocus
-            label="Name"
-            value={editLabel}
-            onChange={(e) => setEditLabel(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                submitEdit();
-              }
-            }}
-          />
-          <AppRouteAutocomplete
-            routes={editedManifest?.app?.routes ?? []}
-            label="Entry point"
-            description="Open the app at a specific page. Leave blank for the app home."
-            placeholder="/settings"
-            value={editHash}
-            onChange={setEditHash}
-          />
-          <Group justify="flex-end">
-            <Button
-              type="button"
-              loading={update.isPending}
-              disabled={!editLabel.trim()}
-              onClick={submitEdit}
-            >
-              Save
-            </Button>
-          </Group>
-        </Stack>
+        {editGone ? (
+          <Stack gap="sm">
+            <Text size="sm">
+              This pin was removed from the dock elsewhere, so there is nothing
+              left to edit.
+            </Text>
+            <Group justify="flex-end">
+              <Button type="button" onClick={() => setEditTarget(null)}>
+                Close
+              </Button>
+            </Group>
+          </Stack>
+        ) : (
+          <Stack gap="sm">
+            <TextInput
+              data-autofocus
+              label="Name"
+              value={editLabel}
+              onChange={(e) => setEditLabel(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitEdit();
+                }
+              }}
+            />
+            <AppRouteAutocomplete
+              routes={editedManifest?.app?.routes ?? []}
+              label="Entry point"
+              description="Open the app at a specific page. Leave blank for the app home."
+              placeholder="/settings"
+              value={editHash}
+              onChange={setEditHash}
+            />
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                loading={update.isPending}
+                disabled={!editLabel.trim()}
+                onClick={submitEdit}
+              >
+                Save
+              </Button>
+            </Group>
+          </Stack>
+        )}
       </Modal>
     </div>
   );

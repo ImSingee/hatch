@@ -4,6 +4,9 @@ import { IconBell, IconMenu2 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 import { AccountMenu } from './account-menu';
 import { Brand } from './brand';
+import { CommandPalette } from './command-palette';
+import { RunnerStatus } from './runner-status';
+import { SpaceMenu } from './space-menu';
 import { DESK_HOME } from './paths';
 import classes from './menu-bar.module.css';
 
@@ -18,9 +21,10 @@ function isUnder(pathname: string, to: string) {
 }
 
 /**
- * The bar across the top of the desk: brand, primary navigation,
- * notifications and the account. Below 768 wide the navigation folds into a
- * menu and the bar shows which section is open instead.
+ * The bar across the top of the desk: brand, space, primary navigation,
+ * runner status, search, notifications, date and the account. Below 768
+ * wide the navigation folds into a menu and the bar shows which section is
+ * open instead; the space name and the runner's words give way to icons.
  */
 export function MenuBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -58,6 +62,8 @@ export function MenuBar() {
           <Brand size="xs" />
         </Link>
 
+        <SpaceMenu />
+
         <span aria-hidden className={classes.divider} />
 
         <nav aria-label="Primary" className={classes.nav}>
@@ -81,6 +87,8 @@ export function MenuBar() {
       </div>
 
       <div className={classes.side}>
+        <RunnerStatus />
+        <CommandPalette />
         <Link
           to="/notifications"
           className={`${classes.item} ${classes.icon}`}

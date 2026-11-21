@@ -79,6 +79,89 @@
   background: var(--border-hairline);
 }
 
+.space {
+  gap: 4px;
+  max-width: 200px;
+  color: var(--mantine-color-gray-7);
+}
+
+.spaceName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Runner status: a dot that carries the state and a few words. */
+.runner {
+  gap: 7px;
+  margin-right: 4px;
+  padding: 0 10px 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.runner[data-state='connected'] {
+  background: var(--mantine-color-green-light);
+  color: var(--mantine-color-green-light-color);
+}
+
+.runner[data-state='offline'] {
+  background: var(--surface-hover);
+  color: var(--mantine-color-gray-7);
+}
+
+.runner[data-state='attention'] {
+  background: var(--mantine-color-amber-light);
+  color: var(--mantine-color-amber-light-color);
+}
+
+.runner:hover {
+  filter: brightness(0.96);
+}
+
+.runnerDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.runnerLabel {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search {
+  gap: 6px;
+  color: var(--mantine-color-gray-7);
+}
+
+.kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-xs);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.paletteIcon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--surface-hover);
+  color: var(--mantine-color-text);
+}
+
+.paletteIcon > svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+}
+
 /* Shown in place of the navigation once it folds into the menu. */
 .fold,
 .section {
@@ -143,8 +226,19 @@
   }
 
   .nav,
-  .date {
+  .date,
+  .space,
+  .kbd,
+  .runnerLabel {
     display: none;
+  }
+
+  .runner,
+  .runner[data-state] {
+    min-width: 36px;
+    margin-right: 0;
+    padding: 0;
+    background: transparent;
   }
 
   /* Without a section label there is nothing for the divider to separate. */

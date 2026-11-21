@@ -547,9 +547,13 @@ button.stepHeader:hover {
 /* The panel fills whatever container holds it (desktop rail or mobile drawer). */
 .sessions {
   display: flex;
+  flex: 1;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  /* In the drawer the panel is a flex item: without this a long chat title
+   * widens it past the drawer and pushes the New chat button out. */
+  min-width: 0;
 }
 
 /* Desktop-only fixed rail; on mobile the panel moves into a drawer. */
@@ -713,6 +717,33 @@ button.stepHeader:hover {
   min-height: 60px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--border-hairline);
+}
+
+.chatHeadText {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.chatMeta {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatMetaLink {
+  color: inherit;
+  font-weight: var(--font-weight-label);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hairline);
+  text-underline-offset: 0.15em;
+}
+
+.chatMetaLink:hover {
+  color: var(--mantine-color-text);
 }
 
 .chatTitle {

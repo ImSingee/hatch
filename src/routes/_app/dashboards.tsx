@@ -130,6 +130,13 @@ function DashboardsManagePage() {
         (old) => sortByIds(old, orderedIds),
       );
     },
+    // The server names the stale dashboard by id, which means nothing here.
+    meta: { errorToast: false },
+    onError: () => {
+      toast.error(
+        'The dashboards changed while you were moving one. The list now shows the current order; try again.',
+      );
+    },
     onSettled: () => void invalidate(),
   });
 

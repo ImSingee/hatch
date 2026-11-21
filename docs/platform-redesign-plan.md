@@ -43,6 +43,13 @@ Out of scope **[decision, confirmed by the user where noted]**:
   time, as today; the shell must still not assume that a page can only ever
   hold one App (section 3.3).
 - Serving Apps from a separate origin.
+- The brand mark (waiting on the user). The artboards draw an egg-shaped
+  mark; the web keeps the current logo until the user decides whether to
+  change the brand.
+- "Pin to desk" on the App detail panel (waiting on a decision). The desk
+  already lists every App that is not in the dock, so pins have no separate
+  desk target; the button needs a meaning first, such as placing the App's
+  widget on the open dashboard.
 - Changing App frontends, the App SDK or the Agent.
 - Translating the UI. The canvas is drawn in Chinese; product copy stays
   English, as today.
@@ -217,6 +224,23 @@ Widths follow the canvas: at 768 the window fills the stage; at 560 the menu
 bar collapses and the dock becomes the four-item tab bar; 2560 widens the desk
 grid.
 
+**[decision]** The space name is a label, not a setting: an instance is one
+shared space, so every user sees the same name, taken from the first account
+("Robin's space"). Its menu leads to the shared settings (AI providers,
+Users, Agent Runner). A stored, editable name would be a new capability with
+its own RPC and CLI command; it is not part of this redesign.
+
+**[decision]** The runner status chip reads the Agent Runner status the
+settings page shows and links to it: the runner id when one runner is
+online, a count when several are, "Runner offline" or "Runner needs
+attention" otherwise. Below 768 only its coloured dot stays.
+
+**[decision]** Search (`⌘K` / `Ctrl+K`, or the menu bar button) is a command
+palette over the shell's places, every App and every Workflow, built on
+`@mantine/spotlight`. It searches what the client already has; there is no
+search RPC. While focus is inside an App or widget frame the shortcut goes
+to that frame, not to the shell.
+
 **[decision]** `AppSurface` is the only component that knows how an App is
 rendered, and it hosts exactly one running App inside a Desk window. Today it
 mounts the iframe that `/app/$appSlug` mounts now; later it mounts an NSH
@@ -292,6 +316,15 @@ New RPCs, each calling the same domain service as the Web UI:
 CLI: `hatch theme get | set --accent <name>`;
 `hatch pin list | add | update | remove | reorder`;
 `hatch dashboard list | get | widget add | widget remove | widget layout`.
+
+`ListPins` and `ListDashboards` take an optional `cursor` and `limit`
+(1–100) and return `next_cursor` while more entries follow; without a limit
+they return every entry, so existing clients are unchanged. `ListPins` pages
+one sequence: App pins, then Workflows, then dashboards. The cursor is an
+offset, because these lists are short and ordered by the user.
+`hatch pin list` and `hatch dashboard list` take `--limit` and `--cursor`.
+`AgentService.GetSession` gains an optional `runner_id`, the runner whose
+workspace holds the chat; the session header shows it.
 
 The pin and dashboard commands close a gap that exists today; the redesign
 changes both surfaces, so they ship with it. There is no CLI exception: the

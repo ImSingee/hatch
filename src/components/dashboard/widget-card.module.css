@@ -271,3 +271,16 @@
     transition-duration: 0.01ms;
   }
 }
+
+/* Focus inside the widget's frame: the shared ring, drawn inside the panel
+ * because the container clips anything outside it. The parent page cannot
+ * tell keyboard from pointer focus in a frame, so a click into the widget
+ * shows it too, which says where the keys now go. */
+.frameContainer[data-focused]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--mantine-radius-lg);
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+  pointer-events: none;
+}

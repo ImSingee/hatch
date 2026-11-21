@@ -35,6 +35,7 @@ import { MessageView } from './message-view';
 import { useLastSelectedModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
+import { SessionHeader } from './session-header';
 import { resolveEffectiveModel, splitModelValue } from './model-value';
 import { StreamingBubble } from './streaming-bubble';
 import { type ChatMessage, pairToolResults } from './types';
@@ -258,6 +259,15 @@ export function Chat({ sessionId }: { sessionId: string }) {
     session?.providerId && session?.modelId
       ? `${session.providerId}:${session.modelId}`
       : null;
+  // The model the chat last ran with, by name when the catalog still has it.
+  const sessionModelName = session?.modelId
+    ? (groups
+        .flatMap((group) => group.items)
+        .find((item) => item.value === sessionModel)?.label ?? session.modelId)
+    : null;
+  const sessionApps = (appsQuery.data ?? [])
+    .filter((app) => session?.appIds.includes(app.id))
+    .sort((left, right) => left.name.localeCompare(right.name));
   const effectiveModel = resolveEffectiveModel(
     model,
     sessionModel,
@@ -944,9 +954,12 @@ export function Chat({ sessionId }: { sessionId: string }) {
         >
           {envAnnouncement}
         </Text>
-        <Box className={classes.chatHead}>
-          <h2 className={classes.chatTitle}>{session?.title ?? 'Chat'}</h2>
-        </Box>
+        <SessionHeader
+          title={session?.title ?? 'Chat'}
+          model={sessionModelName}
+          runnerId={session?.runnerId ?? null}
+          apps={sessionApps}
+        />
 
         <ScrollArea className={classes.messages} viewportRef={viewportRef}>
           <Box className={classes.messagesInner} ref={messagesInnerRef}>

@@ -29,11 +29,39 @@ const fixtures = vi.hoisted(() => ({
     slug: string;
     name: string;
     pinned: boolean;
+    status?: string;
+  }[],
+  apps: [] as {
+    id: string;
+    slug: string;
+    name: string;
+    description: string | null;
+    status: string;
+    capabilities: { frontend: boolean } | null;
   }[],
 }));
 
+vi.mock('~queries/users', () => ({
+  spaceQueryOptions: {
+    queryKey: ['test-space'],
+    queryFn: async () => ({ name: 'Robin’s space' }),
+  },
+}));
+vi.mock('~queries/agent', () => ({
+  agentRunnerStatusQueryOptions: {
+    queryKey: ['test-runner-status'],
+    queryFn: async () => ({
+      state: 'connected',
+      runners: [{ runnerId: 'runner-1' }],
+    }),
+  },
+}));
+
 vi.mock('~queries/apps', () => ({
-  appsQueryOptions: { queryKey: ['test-apps'], queryFn: async () => [] },
+  appsQueryOptions: {
+    queryKey: ['test-apps'],
+    queryFn: async () => fixtures.apps,
+  },
   normalizedManifestQueryOptions: (appId: string) => ({
     queryKey: ['test-app-manifest', appId],
     queryFn: async () => ({ app: { routes: [] } }),
@@ -165,12 +193,13 @@ async function renderDesk(initialEntry: string) {
     </MantineProvider>,
   );
   const path = () => router.state.location.pathname;
-  return { router, screen, path };
+  return { router, screen, path, queryClient };
 }
 
 beforeEach(() => {
   fixtures.pins = [];
   fixtures.workflows = [];
+  fixtures.apps = [];
 });
 
 test('every destination of the shell is reachable from the menu bar', async () => {
@@ -333,4 +362,81 @@ test('the dock lists pins and marks the one whose window is open', async () => {
   await expect
     .element(screen.getByRole('menuitem', { name: 'Manage' }))
     .toHaveAttribute('href', '/app/notes/manage');
+});
+
+test('the menu bar names the space and the runner, and ⌘K searches', async () => {
+  fixtures.apps = [
+    {
+      id: 'app-1',
+      slug: 'water-log',
+      name: 'Water Log',
+      description: null,
+      status: 'deployed',
+      capabilities: { frontend: true },
+    },
+  ];
+  fixtures.workflows = [
+    {
+      id: 'wf-1',
+      slug: 'morning-digest',
+      name: 'Morning Digest',
+      pinned: false,
+    },
+  ];
+  const { screen, path } = await renderDesk('/dashboard/home');
+
+  await expect
+    .element(screen.getByRole('button', { name: /Robin’s space/ }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole('link', { name: /runner-1 online/ }))
+    .toHaveAttribute('href', '/settings/agent-runner');
+
+  await userEvent.keyboard('{Control>}k{/Control}');
+  const search = screen.getByRole('textbox', {
+    name: 'Search apps, workflows and pages',
+  });
+  await expect.element(search).toBeVisible();
+  await userEvent.type(search, 'morning');
+  await screen.getByRole('button', { name: 'Morning Digest' }).click();
+  await vi.waitFor(() => expect(path()).toBe('/workflow/morning-digest'));
+
+  await screen
+    .getByRole('button', { name: 'Search apps, workflows and pages' })
+    .click();
+  await userEvent.fill(search, 'water');
+  await screen.getByRole('button', { name: 'Water Log' }).click();
+  await vi.waitFor(() => expect(path()).toBe('/app/water-log'));
+});
+
+test('a pin removed elsewhere turns its open edit dialog into a notice', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-notes',
+      appId: 'app-2',
+      appSlug: 'notes',
+      label: 'Notes',
+      entryHash: null,
+    },
+  ];
+  const { screen, queryClient } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  await dock.getByRole('button', { name: 'Notes options' }).click();
+  await screen.getByRole('menuitem', { name: 'Edit' }).click();
+  const dialog = screen.getByRole('dialog', { name: 'Edit pin' });
+  await expect
+    .element(dialog.getByRole('textbox', { name: 'Name' }))
+    .toHaveValue('Notes');
+
+  // What a pins.updated event does: the live pins no longer hold it.
+  fixtures.pins = [];
+  await queryClient.invalidateQueries({ queryKey: ['test-pins'] });
+  await expect
+    .element(dialog.getByText(/This pin was removed from the dock elsewhere/))
+    .toBeVisible();
+  await expect
+    .element(dialog.getByRole('button', { name: 'Save' }))
+    .not.toBeInTheDocument();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect.element(dialog).not.toBeInTheDocument();
 });
