@@ -1,4 +1,5 @@
 import { NativeTabs } from 'expo-router/native-tabs';
+import { Platform } from 'react-native';
 import { useNavigationPreferences } from '../../src/state/navigation';
 import { useAccent } from '../../src/ui/accent';
 import { meTab, tabDetails } from '../../src/ui/navigation';
@@ -18,6 +19,16 @@ export default function TabLayout() {
         selected: { fontWeight: weights.label, color: accent.fill },
       }}
       minimizeBehavior="onScrollDown"
+      // iOS keeps the system's glass bar. Android's navigation bar is drawn
+      // from the tokens: a sunken bar, an accent-tint pill under the open tab.
+      {...(Platform.OS === 'android'
+        ? {
+            backgroundColor: c.sunken,
+            indicatorColor: accent.tint,
+            rippleColor: c.pressed,
+            labelVisibilityMode: 'labeled' as const,
+          }
+        : null)}
     >
       {preferences.order.map((id) => (
         <NativeTabs.Trigger
