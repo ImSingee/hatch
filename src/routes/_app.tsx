@@ -9,6 +9,8 @@ import { useMemo } from 'react';
 import { DeskShell } from '~components/desk/desk-shell';
 import type { DockOpenItem } from '~components/desk/dock-item';
 import { LivePins } from '~components/desk/use-live-pins';
+import { DesktopShell } from '~components/desktop-host/desktop-shell';
+import { isDesktopHost } from '~components/desktop-host/host';
 import { PlatformEventsProvider } from '~components/system/platform-events';
 import { hasActiveSession } from '~server/auth';
 
@@ -27,6 +29,9 @@ export const Route = createFileRoute('/_app')({
   },
   component: AppLayout,
 });
+
+/** Inside the macOS app the sidebar layout replaces the desk's bars. */
+const DESKTOP_HOST = isDesktopHost();
 
 /** Windows that keep the tab bar below 560 wide: the tab destinations. */
 const TAB_DESTINATIONS = ['/apps', '/settings'];
@@ -48,15 +53,21 @@ function AppLayout() {
   return (
     <PlatformEventsProvider>
       <LivePins />
-      <DeskShell
-        view={dashboardId ? 'home' : 'window'}
-        tabDestination={TAB_DESTINATIONS.some(
-          (to) => pathname === to || pathname.startsWith(`${to}/`),
-        )}
-        openItems={openItems}
-      >
-        <Outlet />
-      </DeskShell>
+      {DESKTOP_HOST ? (
+        <DesktopShell openItems={openItems}>
+          <Outlet />
+        </DesktopShell>
+      ) : (
+        <DeskShell
+          view={dashboardId ? 'home' : 'window'}
+          tabDestination={TAB_DESTINATIONS.some(
+            (to) => pathname === to || pathname.startsWith(`${to}/`),
+          )}
+          openItems={openItems}
+        >
+          <Outlet />
+        </DeskShell>
+      )}
     </PlatformEventsProvider>
   );
 }
