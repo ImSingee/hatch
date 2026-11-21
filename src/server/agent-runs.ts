@@ -322,14 +322,13 @@ async function persistEvent(
   runnerSeq?: number,
 ): Promise<AgentRunStreamEvent | null> {
   const safeEvent = storageSafeJson(event);
-  const payload = JSON.stringify(safeEvent);
   const seq = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${runId}))`);
     const rows = await tx.execute<{ seq: number }>(sql`
       insert into agent_run_events (id, run_id, seq, runner_seq, type, payload)
       select ${ulid().toLowerCase()}, ${runId},
              coalesce(max(seq), 0) + 1, ${runnerSeq ?? null},
-             ${event.type}, ${payload}::jsonb
+             ${event.type}, ${safeEvent}::jsonb
       from agent_run_events where run_id = ${runId}
       on conflict (run_id, runner_seq) do nothing
       returning seq
