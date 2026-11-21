@@ -181,3 +181,11 @@ commands and remove the session-only gate in `src/server/platform-api/router.ts`
 together, so Run credentials gain the same authority. `AuthService.CreateHandoff`
 stays session-only because it exchanges the caller's native login session for
 a browser session.
+
+The desk menu bar shows two read-only facts without a CLI command of their
+own, pending a decision. The space name ("Robin's space") is derived from the
+first account's name and is not stored, so there is nothing to set; no RPC
+returns it yet. The runner status chip reads the same Agent Runner status as
+`/settings/agent-runner`, which has no CLI command either. The
+`runner_id` that the session header shows is returned by
+`AgentService.GetSession`.

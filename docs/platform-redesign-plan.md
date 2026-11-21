@@ -238,8 +238,8 @@ attention" otherwise. Below 768 only its coloured dot stays.
 **[decision]** Search (`⌘K` / `Ctrl+K`, or the menu bar button) is a command
 palette over the shell's places, every App and every Workflow, built on
 `@mantine/spotlight`. It searches what the client already has; there is no
-search RPC. While focus is inside an App or widget frame the shortcut goes
-to that frame, not to the shell.
+search RPC. The shortcut also works from text fields. While focus is inside
+an App or widget frame, the key press goes to that frame, not to the shell.
 
 **[decision]** `AppSurface` is the only component that knows how an App is
 rendered, and it hosts exactly one running App inside a Desk window. Today it

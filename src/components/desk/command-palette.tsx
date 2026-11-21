@@ -161,6 +161,10 @@ export function CommandPalette() {
       <Spotlight
         actions={actions}
         shortcut={['mod + K']}
+        // Nothing in the shell uses ⌘K inside a field, so the palette opens
+        // from search boxes and the Agent composer too.
+        tagsToIgnore={[]}
+        triggerOnContentEditable
         nothingFound="Nothing matches. Try an App, Workflow or page name."
         highlightQuery
         scrollable
