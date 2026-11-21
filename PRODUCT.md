@@ -48,7 +48,7 @@ gentle borders, and color used sparingly and on purpose.
    true white; warmth lives in the terracotta accent, stone ink, and serif
    display.
 2. **Calm by default, color on purpose.** Neutral surfaces carry the work;
-   the ember accent marks the one thing that matters on a screen.
+   the accent marks the one thing that matters on a screen.
 3. **Editorial hierarchy.** Serif display for large titles, a clean sans for
    everything else; size and weight do the work before color does.
 4. **Flat, honest surfaces.** Hairline borders over heavy shadows; no nested
@@ -60,7 +60,7 @@ gentle borders, and color used sparingly and on purpose.
 
 - Target WCAG AA: body text ≥ 4.5:1, large text ≥ 3:1; placeholders meet body
   contrast, not muted-gray.
-- Visible keyboard focus ring (the ember theme enables `focusRing: 'auto'`).
+- Visible keyboard focus ring (a 2 px ink ring on every control; see `DESIGN.md`).
 - Every animation has a `prefers-reduced-motion` fallback.
 - Hatch is light-only; supported light surfaces meet the contrast targets, and
   color never conveys state alone.
