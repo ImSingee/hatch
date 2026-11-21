@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": ["app"],
     "category": "public.app-category.productivity",
     "shortDescription": "Hatch for macOS",
     "icon": [

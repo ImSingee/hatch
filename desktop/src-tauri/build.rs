@@ -5,7 +5,6 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "get_screen",
             "connect",
-            "sign_in_here",
             "sign_in_with_browser",
             "cancel_sign_in",
             "change_instance",

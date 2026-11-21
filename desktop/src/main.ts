@@ -186,11 +186,9 @@ function render({ screen, accent }: Payload) {
           ),
           el('p', {
             className: 'hint',
-            textContent: 'Use your browser for passkeys and saved passwords.',
+            textContent:
+              'Your browser signs you in with your passkey, saved password or the session it already has, then brings you back here.',
           }),
-          button('Sign in with password here', 'secondary', () =>
-            invoke('sign_in_here'),
-          ),
           button('Use another instance', 'link', () =>
             invoke('change_instance'),
           ),

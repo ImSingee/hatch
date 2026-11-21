@@ -27,6 +27,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &separator()?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
             &separator()?,
+            &item("sign-in", "Sign In with Browser…", None)?,
             &item("switch-instance", "Switch Instance…", None)?,
             &item("sign-out", "Sign Out", None)?,
             &separator()?,

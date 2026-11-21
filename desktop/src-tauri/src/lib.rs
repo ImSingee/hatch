@@ -288,52 +288,49 @@ async fn refresh_accent(app: AppHandle, origin: String, token: String) {
     }
 }
 
-/// After a page of the instance loads: keep the Keychain in step with the
-/// window's session. Signing in on the instance's own sign-in page stores
-/// that session; signing out there removes it.
-async fn sync_session(app: AppHandle, origin: String, path: String) {
-    let Some(window) = main_window(&app) else {
+/// The window reached the instance's own sign-in page: the web session
+/// ended (signed out in the page, or expired). Signing in happens in the
+/// browser, so the app shows its own sign-in screen instead, after checking
+/// whether the saved session still works.
+async fn session_ended(app: AppHandle, origin: String) {
+    if !matches!(*shared(&app).screen.lock().unwrap(), Screen::Instance) {
         return;
-    };
-    let Ok(origin_url) = Url::parse(&origin) else {
-        return;
-    };
-    // WebKit answers cookie requests on the main thread, so this runs on a
-    // worker (see Tauri's notes on `Webview::cookies`).
-    let cookie = window.cookies_for_url(origin_url).ok().and_then(|cookies| {
-        cookies
-            .into_iter()
-            .find(|cookie| cookie.name().ends_with("better-auth.session_token"))
-            .map(|cookie| {
-                percent_encoding::percent_decode_str(cookie.value())
-                    .decode_utf8_lossy()
-                    .into_owned()
-            })
-    });
-    let saved = keychain::get(&origin).ok().flatten();
-    let http = shared(&app).http.clone();
-    let instance = Instance {
-        http: &http,
-        origin: &origin,
-    };
-    match cookie {
-        Some(token) if api::valid_token(&token) && saved.as_deref() != Some(&token) => {
-            if instance.status(&token).await.is_ok() {
-                if let Err(error) = keychain::set(&origin, &token) {
-                    eprintln!("hatch: {error}");
-                }
-                refresh_accent(app, origin, token).await;
-            }
-        }
-        None if path.starts_with("/login") => {
-            if let Some(saved) = saved {
-                if let Err(ApiError::Unauthorized) = instance.status(&saved).await {
-                    let _ = keychain::remove(&origin);
-                }
-            }
-        }
-        _ => {}
     }
+    let saved = keychain::get(&origin).ok().flatten();
+    if let Some(token) = saved {
+        let http = shared(&app).http.clone();
+        match (Instance {
+            http: &http,
+            origin: &origin,
+        })
+        .status(&token)
+        .await
+        {
+            // The window lost its cookie but the session lives: sign the
+            // window in again.
+            Ok(_) => return restore(app, origin, token).await,
+            Err(ApiError::Unauthorized) => {
+                let _ = keychain::remove(&origin);
+            }
+            Err(error) => {
+                set_screen(
+                    &app,
+                    Screen::Offline {
+                        instance: origin,
+                        error: error.message(),
+                    },
+                );
+                return;
+            }
+        }
+    }
+    set_screen(
+        &app,
+        Screen::SignIn {
+            instance: origin,
+            error: None,
+        },
+    );
 }
 
 fn on_page_load(window: &WebviewWindow, url: &Url) {
@@ -350,14 +347,24 @@ fn on_page_load(window: &WebviewWindow, url: &Url) {
             *shared(&app).completion.lock().unwrap() = None;
             // Replace, so the sign-in pages never enter the page's history.
             let _ = window.eval(format!("location.replace({})", json!(destination.as_str())));
-            return;
         }
     }
-    if url.path().starts_with("/api/") {
+}
+
+/// The page's address changed (a load or a history push). Sign-out and an
+/// expired session both end on `/login`, often through the router alone.
+fn on_url_change(app: &AppHandle, raw: &str) {
+    let Some(origin) = instance_origin(app) else {
+        return;
+    };
+    let Ok(url) = Url::parse(raw) else { return };
+    if !policy::on_instance(&origin, &url) || url.path().starts_with("/api/") {
         return;
     }
-    *shared(&app).screen.lock().unwrap() = Screen::Instance;
-    tauri::async_runtime::spawn(sync_session(app, origin, url.path().to_owned()));
+    let path = url.path();
+    if path == "/login" || path.starts_with("/login/") || path.starts_with("/cli/") {
+        tauri::async_runtime::spawn(session_ended(app.clone(), origin));
+    }
 }
 
 async fn sign_out(app: AppHandle) {
@@ -444,28 +451,6 @@ async fn connect(app: AppHandle, address: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Sign in on the instance's own sign-in page, inside the window.
-#[tauri::command]
-fn sign_in_here(app: AppHandle) -> Result<(), String> {
-    let origin = instance_origin(&app).ok_or("Choose an instance first.")?;
-    let next = shared(&app)
-        .pending_path
-        .lock()
-        .unwrap()
-        .take()
-        .unwrap_or_else(|| START_PATH.to_owned());
-    let mut url = Url::parse(&origin)
-        .map_err(|e| e.to_string())?
-        .join("/login")
-        .unwrap();
-    url.query_pairs_mut().append_pair("redirect", &next);
-    *shared(&app).screen.lock().unwrap() = Screen::Instance;
-    main_window(&app)
-        .ok_or("No window.")?
-        .navigate(url)
-        .map_err(|e| e.to_string())
-}
-
 /// Sign in in the default browser (passkeys, password managers, SSO), the
 /// way the CLI and the phone app do: a device login the person approves.
 #[tauri::command]
@@ -514,6 +499,8 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
     let deadline = tokio::time::Instant::now() + grant.expires_in;
     let mut interval = grant.interval;
     while tokio::time::Instant::now() < deadline {
+        // Polling sooner than the server's interval earns `slow_down` and a
+        // longer wait, so `hatch://` from the browser does not shorten it.
         tokio::time::sleep(interval).await;
         if !current(&app) {
             return Ok(());
@@ -524,6 +511,10 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
             Ok(DevicePoll::Approved(token)) => {
                 if !current(&app) {
                     return Ok(());
+                }
+                if let Some(window) = main_window(&app) {
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
                 if let Err(error) = keychain::set(&origin, &token) {
                     fail(&app, error);
@@ -620,7 +611,13 @@ fn handle_deep_link(app: &AppHandle, raw: &str) {
             return;
         }
     }
-    let showing_instance = matches!(*shared(app).screen.lock().unwrap(), Screen::Instance);
+    let screen = shared(app).screen.lock().unwrap().clone();
+    // `hatch://` alone names the start page. The approval page uses it to
+    // send the person back from the browser; it only brings the app forward.
+    if link.path == "/" && !matches!(screen, Screen::Instance) {
+        return;
+    }
+    let showing_instance = matches!(screen, Screen::Instance);
     match (origin, showing_instance, main_window(app)) {
         (Some(origin), true, Some(window)) => {
             if let Ok(url) = Url::parse(&origin).and_then(|base| base.join(&link.path)) {
@@ -686,6 +683,12 @@ fn on_menu(app: &AppHandle, id: &str) {
             }
         }
         "help-instance" => open_instance_in_browser(app.clone()),
+        "sign-in" => {
+            let signed_out = matches!(*shared(app).screen.lock().unwrap(), Screen::SignIn { .. });
+            if signed_out {
+                tauri::async_runtime::spawn(sign_in_with_browser(app.clone()));
+            }
+        }
         "sign-out" => {
             tauri::async_runtime::spawn(sign_out(app.clone()));
         }
@@ -720,6 +723,10 @@ fn on_menu(app: &AppHandle, id: &str) {
 
 /// The policy for the window's own page (see `policy`), with its effects.
 fn decide_navigation(app: &AppHandle, navigation: &webkit::Navigation) -> bool {
+    if navigation.new_window {
+        // Tauri's `on_new_window` decides (see `create_window`).
+        return true;
+    }
     if !navigation.main_frame {
         return policy::allow_subframe(&navigation.url);
     }
@@ -815,9 +822,14 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 
     let app = app.clone();
     window.with_webview(move |webview| unsafe {
+        let for_proxy = app.clone();
         webkit::install_navigation_proxy(
             webview.inner(),
-            Box::new(move |navigation| decide_navigation(&app, navigation)),
+            Box::new(move |navigation| decide_navigation(&for_proxy, navigation)),
+        );
+        webkit::observe_url(
+            webview.inner(),
+            Box::new(move |url| on_url_change(&app, &url)),
         );
     })?;
     Ok(window)
@@ -831,7 +843,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_screen,
             connect,
-            sign_in_here,
             sign_in_with_browser,
             cancel_sign_in,
             change_instance,

@@ -10,7 +10,6 @@
     "core:window:allow-start-dragging",
     "allow-get-screen",
     "allow-connect",
-    "allow-sign-in-here",
     "allow-sign-in-with-browser",
     "allow-cancel-sign-in",
     "allow-change-instance",
