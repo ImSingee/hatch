@@ -1,0 +1,135 @@
+.panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-window);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-window);
+}
+
+.titleBar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--surface-muted);
+}
+
+.titleTile {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--mantine-color-primary-filled);
+  color: var(--mantine-color-white);
+}
+
+.title {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--font-weight-heading);
+}
+
+.recent {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 10px 10px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.recentHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 6px;
+}
+
+.label {
+  color: var(--mantine-color-dimmed);
+  font-size: 11px;
+  font-weight: var(--font-weight-heading);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--mantine-radius-lg);
+  color: var(--mantine-color-text);
+  text-decoration: none;
+  transition: background-color var(--transition-fast);
+}
+
+.session:hover {
+  background: var(--surface-hover);
+}
+
+.session strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session span {
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-strong);
+}
+
+.prompt {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 0;
+  padding: 20px 32px;
+  text-align: center;
+}
+
+.promptTile {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  background: var(--surface-muted);
+  color: var(--mantine-color-primary-filled);
+}
+
+.promptTitle {
+  margin: 6px 0 0;
+  font-size: 20px;
+  font-weight: var(--font-weight-heading);
+}
+
+.composer {
+  flex: none;
+  padding: 0 16px 16px;
+}
+
+.guard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1.5px dashed var(--border-hairline);
+  border-radius: var(--mantine-radius-xl);
+  text-align: center;
+}

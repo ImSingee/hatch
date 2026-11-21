@@ -1,77 +1,221 @@
+/* A Desk widget panel: translucent white over the ground, the widget radius,
+   a white edge and the card shadow (DESIGN.md, Widget panel). */
 .card {
+  position: relative;
   display: flex;
   height: 100%;
   flex-direction: column;
-  overflow: hidden;
+  gap: 10px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--mantine-color-white);
+  border-radius: var(--radius-widget);
+  background: var(--surface-widget);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
   transition:
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    border-color var(--transition-fast),
+    box-shadow var(--transition-base),
+    transform var(--transition-base);
 }
 
+/* Edit state: a dashed accent outline marks every widget as movable, and the
+   panel lifts on hover so the one under the pointer is clear. */
 .card[data-editing] {
-  background: var(--surface-muted);
+  border: 2px dashed var(--mantine-color-primary-filled);
+  padding: 12px 17px 17px;
 }
 
-/* Lift the card while it is actively dragged or resized. */
+.card[data-editing]:hover,
+.card[data-editing]:focus-within {
+  border-style: solid;
+  box-shadow: var(--shadow-dock);
+}
+
+/* Lift the panel while it is dragged or resized. */
 :global(.react-grid-item.react-draggable-dragging) .card,
 :global(.react-grid-item.react-grid-item--resizing) .card {
+  border-style: solid;
   box-shadow: var(--shadow-window);
 }
 
-/* Quiet at rest; the destructive tint appears on intent. */
-.removeAction:not(:disabled):hover {
-  color: var(--mantine-color-red-light-color);
-  background-color: var(--mantine-color-red-light);
+.remove {
+  position: absolute;
+  top: -11px;
+  right: -11px;
+  z-index: 2;
+  border: 2px solid var(--mantine-color-white);
+  box-shadow: var(--shadow-dock);
 }
 
-.dragHeader,
-.dragHeader * {
-  cursor: grab;
+.remove:not(:disabled):hover {
+  background: var(--mantine-color-red-filled);
 }
 
-.dragHeader:active,
-.dragHeader:active *,
-:global(.react-draggable-dragging) .dragHeader,
-:global(.react-draggable-dragging) .dragHeader * {
-  cursor: grabbing;
-}
-
-.dragHeader .actions,
-.dragHeader .actions * {
-  cursor: pointer;
-}
-
-.dragHeader {
-  margin-top: calc(-1 * var(--mantine-spacing-sm));
-  margin-inline: calc(-1 * var(--mantine-spacing-sm));
-  padding: var(--mantine-spacing-sm) var(--mantine-spacing-sm) 6px;
+.editBar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border-hairline);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
+.editBar,
+.editBar * {
+  cursor: grab;
+}
+
+.editBar:active,
+.editBar:active *,
+:global(.react-draggable-dragging) .editBar,
+:global(.react-draggable-dragging) .editBar * {
+  cursor: grabbing;
+}
+
 .grip {
-  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-hover);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  transition: background-color var(--transition-fast);
+}
+
+.grip:hover {
+  background: var(--surface-pressed);
+}
+
+.sizes {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-sunken);
+}
+
+.sizes,
+.sizes * {
+  cursor: pointer;
+}
+
+.size {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+  font-weight: var(--font-weight-heading);
+}
+
+.size:hover {
+  color: var(--mantine-color-text);
+}
+
+.size[aria-pressed='true'] {
+  background: var(--mantine-color-white);
+  color: var(--mantine-color-text);
+  box-shadow: var(--shadow-card);
+}
+
+.sizeReadout {
   color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  min-width: 0;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: var(--font-weight-heading);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  flex: none;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
 }
 
 .actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 50%;
+}
+
+/* Refresh is a secondary action: quiet until the panel is pointed at. */
+.refresh {
   opacity: 0;
-  pointer-events: none;
   transition: opacity var(--transition-fast);
 }
 
-.card:hover .actions,
-.card:focus-within .actions,
-.actions[data-visible] {
+.card:hover .refresh,
+.card:focus-within .refresh,
+.refresh[aria-busy='true'] {
   opacity: 1;
-  pointer-events: auto;
+}
+
+.appLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 4px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  text-decoration: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.appLink:hover {
+  background: var(--surface-hover);
+  color: var(--mantine-color-text);
+}
+
+.appName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .frameContainer {
   position: relative;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .frame {
@@ -89,18 +233,53 @@
 .overlay {
   position: absolute;
   inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.skeletonLines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: 1.5px dashed var(--border-hairline);
+  border-radius: var(--mantine-radius-lg);
+  color: var(--mantine-color-red-text);
+  text-align: center;
+}
+
+.error :global(.mantine-Text-root) {
+  color: var(--mantine-color-text);
 }
 
 @media (hover: none) {
-  .actions {
+  .refresh {
     opacity: 1;
-    pointer-events: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .actions {
+  .grip,
+  .refresh,
+  .appLink {
     transition-duration: 0.01ms;
   }
 }

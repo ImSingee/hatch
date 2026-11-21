@@ -1,32 +1,58 @@
-import { Box, Group, Stack, Text, Title } from '@mantine/core';
+import { Box } from '@mantine/core';
 import dayjs from 'dayjs';
 import { type ReactNode, useEffect, useRef } from 'react';
-import { DeskPins } from './desk-pins';
 import classes from './desk-home.module.css';
 
 type DeskHomeProps = {
+  /** The page heading: the greeting. */
   title: ReactNode;
+  /** Shown above the heading; defaults to today's date. */
+  eyebrow?: ReactNode;
+  /** One line under the heading. */
   description?: ReactNode;
+  /** Actions beside the heading (new App, all Apps). */
   actions?: ReactNode;
-  /** Widest the desk content grows, in px. */
-  size?: number;
-  /** Hide the heading for task-focused modes such as the layout editor. */
-  hideHeader?: boolean;
+  /** The widget toolbar: dashboard, refresh, edit. */
+  toolbar?: ReactNode;
+  /** While editing, the editor heading replaces the heading and toolbar. */
+  editor?: ReactNode;
+  /** While editing, the panel beside the widgets (add widgets, refresh). */
+  editorPanel?: ReactNode;
+  editing?: boolean;
+  /** The App tiles under the widgets. */
+  tiles?: ReactNode;
+  /** The ultrawide desk's left column, under the heading. */
+  today?: ReactNode;
+  /** The ultrawide desk's right column. */
+  companion?: ReactNode;
   /** The desk widgets. */
   children: ReactNode;
 };
 
 /**
- * The desk with no window open: the heading and the region desk widgets sit
- * in, straight on the ground. Below 560 wide, where the dock gives way to the
- * tab bar, the pinned Apps and Workflows are listed here instead.
+ * The desk with no window open, straight on the ground. One DOM tree serves
+ * every width; CSS places the parts:
+ *
+ * - default: heading and toolbar in a row, then widgets, then App tiles;
+ * - ultrawide: a today column, the widgets and a companion column;
+ * - editing: the editor heading and widgets, with the editor panel beside
+ *   them or, when narrow, below.
+ *
+ * The widgets keep the same parent in every arrangement, so switching modes
+ * or widths never reloads a running widget.
  */
 export function DeskHome({
   title,
+  eyebrow,
   description,
   actions,
-  size = 1180,
-  hideHeader = false,
+  toolbar,
+  editor,
+  editorPanel,
+  editing = false,
+  tiles,
+  today,
+  companion,
   children,
 }: DeskHomeProps) {
   const root = useRef<HTMLDivElement>(null);
@@ -46,40 +72,43 @@ export function DeskHome({
       ref={root}
       tabIndex={-1}
       className={classes.root}
-      data-headerless={hideHeader || undefined}
+      data-editing={editing || undefined}
+      data-companion={companion ? 'true' : undefined}
     >
-      <Box className={classes.inner} style={{ maxWidth: size }}>
-        {hideHeader ? null : (
-          <Group
-            justify="space-between"
-            align="flex-end"
-            wrap="wrap"
-            gap="md"
-            className={classes.header}
-          >
-            <Stack gap={2} className={classes.titleBlock}>
-              <Text className={classes.date}>
-                {dayjs().format('dddd, MMMM D')}
-              </Text>
-              <Title order={1} className={classes.title}>
-                {title}
-              </Title>
+      <div className={classes.layout}>
+        {editing ? (
+          <div className={classes.editor}>{editor}</div>
+        ) : (
+          <>
+            <header className={classes.heading}>
+              <span className={classes.eyebrow}>
+                {eyebrow ?? dayjs().format('dddd, MMMM D')}
+              </span>
+              <h1 className={classes.title}>{title}</h1>
               {description ? (
-                <Text c="dimmed" size="sm" className={classes.description}>
-                  {description}
-                </Text>
+                <p className={classes.description}>{description}</p>
               ) : null}
-            </Stack>
-            {actions ? (
-              <Group gap="xs" wrap="wrap" className={classes.actions}>
-                {actions}
-              </Group>
-            ) : null}
-          </Group>
+              {actions ? (
+                <div className={classes.headingActions}>{actions}</div>
+              ) : null}
+            </header>
+            {toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
+            {today ? <div className={classes.today}>{today}</div> : null}
+          </>
         )}
-        {hideHeader ? null : <DeskPins />}
-        <Box className={classes.widgets}>{children}</Box>
-      </Box>
+        <section aria-label="Widgets" className={classes.widgets}>
+          {children}
+        </section>
+        {!editing && tiles ? (
+          <div className={classes.tiles}>{tiles}</div>
+        ) : null}
+        {!editing && companion ? (
+          <div className={classes.companion}>{companion}</div>
+        ) : null}
+        {editing && editorPanel ? (
+          <div className={classes.panel}>{editorPanel}</div>
+        ) : null}
+      </div>
     </Box>
   );
 }
