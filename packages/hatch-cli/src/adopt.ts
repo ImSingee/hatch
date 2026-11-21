@@ -119,12 +119,11 @@ export async function adopt(
       async () => (await client.sdk.get({ kind })).tooling,
     );
   } catch (error) {
-    // Validation can install dependencies; a cancelled run or a missing tool
-    // says nothing about the manifest and keeps its own exit code.
-    if (
-      error instanceof CliError &&
-      (error.code === 'cancelled' || error.code === 'tool_unavailable')
-    )
+    // Validation can install dependencies and ask the platform for tool
+    // versions. Only a failed local command or an invalid source says
+    // something about the manifest; a cancelled run, a missing tool or a
+    // failed request keeps its own code and exit status.
+    if (error instanceof CliError && error.code !== 'local_command_failed')
       throw error;
     throw new CliError(
       'manifest_mismatch',

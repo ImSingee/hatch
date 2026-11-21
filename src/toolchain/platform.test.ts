@@ -2,15 +2,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolchainCommand } from '../source-toolchain';
 
-const sandbox = vi.hoisted(() => ({ confined: false }));
+// What the sandbox wraps a command in: nothing, the macOS file profile (same
+// identity), or setpriv (another identity).
+const sandbox = vi.hoisted(() => ({
+  wrapper: undefined as 'sandbox-exec' | 'setpriv' | undefined,
+}));
 const spawned = vi.hoisted(() => ({ calls: [] as [string, string[]][] }));
 
 vi.mock('../agent/shell-sandbox', () => ({
+  sandboxSwitchesIdentity: () => sandbox.wrapper === 'setpriv',
   sandboxSpawn: ([command, ...args]: [string, ...string[]]) =>
-    sandbox.confined
+    sandbox.wrapper
       ? {
-          command: '/usr/bin/setpriv',
-          args: ['--reuid=sandbox', '--', command, ...args],
+          command: `/usr/bin/${sandbox.wrapper}`,
+          args: ['--', command, ...args],
         }
       : { command, args },
 }));
@@ -38,29 +43,29 @@ afterEach(() => {
 });
 
 describe('platform toolchain runner', () => {
-  it('refuses to evaluate authored code in production when it cannot leave its own identity', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    sandbox.confined = false;
+  it.each([undefined, 'sandbox-exec'] as const)(
+    'refuses to evaluate authored code in production under its own identity (wrapper: %s)',
+    async (wrapper) => {
+      vi.stubEnv('NODE_ENV', 'production');
+      sandbox.wrapper = wrapper;
 
-    await expect((await context()).run(EVALUATION)).rejects.toThrow(
-      /cannot switch to the sandbox identity/,
-    );
-    expect(spawned.calls).toEqual([]);
-  });
+      await expect((await context()).run(EVALUATION)).rejects.toThrow(
+        /cannot switch to the sandbox identity/,
+      );
+      expect(spawned.calls).toEqual([]);
+    },
+  );
 
   it('evaluates authored code through the sandbox identity and other tools directly', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    sandbox.confined = true;
+    sandbox.wrapper = 'setpriv';
     const { run } = await context();
 
     await run(EVALUATION);
     await run({ tool: 'pnpm', args: ['fetch'], step: 'install' });
 
     expect(spawned.calls).toEqual([
-      [
-        '/usr/bin/setpriv',
-        ['--reuid=sandbox', '--', process.execPath, ...EVALUATION.args],
-      ],
+      ['/usr/bin/setpriv', ['--', process.execPath, ...EVALUATION.args]],
       ['pnpm', ['fetch']],
     ]);
   });

@@ -1,7 +1,7 @@
 /** How the platform process runs toolchain commands during a deploy build. */
 import path from 'node:path';
 import { REPO_ROOT } from '../agent/paths';
-import { sandboxSpawn } from '../agent/shell-sandbox';
+import { sandboxSpawn, sandboxSwitchesIdentity } from '../agent/shell-sandbox';
 import { subprocessSandboxEnv } from '../server/sandbox-env';
 import { run } from '../server/subprocess';
 import type {
@@ -21,17 +21,14 @@ const TSC = path.join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
  * identity may signal neither, so production refuses to evaluate without it.
  */
 function evaluationCommand(args: string[]): [string, string[]] {
-  const spawned = sandboxSpawn([process.execPath, ...args]);
-  if (
-    spawned.command === process.execPath &&
-    process.env.NODE_ENV === 'production'
-  ) {
+  if (process.env.NODE_ENV === 'production' && !sandboxSwitchesIdentity()) {
     throw new Error(
       'Cannot evaluate pnpm-toolchain source: the platform cannot switch to ' +
         'the sandbox identity. Run it as root on Linux with setpriv, as the ' +
         'published image does.',
     );
   }
+  const spawned = sandboxSpawn([process.execPath, ...args]);
   return [spawned.command, spawned.args];
 }
 
