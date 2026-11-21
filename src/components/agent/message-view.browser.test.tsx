@@ -2393,3 +2393,49 @@ test('shows no ended-early notice for a clean reply', async () => {
   await expect.element(screen.getByText('Done.')).toBeVisible();
   expect(screen.getByText('The reply ended early').query()).toBeNull();
 });
+
+test('shows the absolute path for files two or more levels above the root', async () => {
+  const toolResult = (
+    id: string,
+    relativePath: string,
+    absolutePath: string,
+  ): [string, ToolResultMessage] => [
+    id,
+    {
+      role: 'toolResult',
+      toolName: 'read_file',
+      content: [{ type: 'text', text: 'file contents' }],
+      details: { relativePath, absolutePath },
+    },
+  ];
+  const screen = await renderMessage(
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'toolCall',
+          id: 'read-near',
+          name: 'read_file',
+          arguments: { path: '../near.txt' },
+        },
+        {
+          type: 'toolCall',
+          id: 'read-far',
+          name: 'read_file',
+          arguments: { path: '/etc/hosts' },
+        },
+      ],
+    },
+    {
+      toolResults: new Map([
+        toolResult('read-near', '../near.txt', '/workspace/near.txt'),
+        toolResult('read-far', '../../../etc/hosts', '/etc/hosts'),
+      ]),
+    },
+  );
+
+  const headers = screen.getByRole('button', { name: /Read file/ });
+  await expect.element(headers.nth(1)).toBeVisible();
+  expectPathDetail(headers.nth(0).element(), '../near.txt');
+  expectPathDetail(headers.nth(1).element(), '/etc/hosts');
+});
