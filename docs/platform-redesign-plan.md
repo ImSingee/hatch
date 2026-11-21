@@ -16,9 +16,9 @@ Goals:
    the canvas: desk background, menu bar, dock, windows, widgets.
 2. One token file is the source for every platform, in the shape the App theme
    will use later.
-3. The shell runs several Apps at once and switches between them without
-   losing their state, so the later NSH change replaces what is inside an App
-   window and nothing around it.
+3. An App runs inside a Desk window through one component, `AppSurface`, so
+   the later NSH change replaces what is inside an App window and nothing
+   around it.
 4. The accent colour is a stored setting, changeable from the UI and the CLI.
 
 In scope: every existing platform page on web and mobile; a macOS desktop app
@@ -36,6 +36,12 @@ Out of scope **[decision, confirmed by the user where noted]**:
 - Home-screen widgets on iOS/Android, the macOS menu-bar popover, the Windows
   app and its taskbar panel. Home-screen widgets cannot render the current
   HTML widgets and wait for native widgets.
+- Several Apps running at the same time on the web (user): keeping Apps
+  alive in the background, a limit and eviction, side-by-side App windows and
+  an "update available" notice for background Apps. This moves to the NSH work
+  in [native-app-ui-plan.md](native-app-ui-plan.md). One App is open at a
+  time, as today; the shell must still not assume that a page can only ever
+  hold one App (section 3.3).
 - Serving Apps from a separate origin.
 - Changing App frontends, the App SDK or the Agent.
 - Translating the UI. The canvas is drawn in Chinese; product copy stays
@@ -45,8 +51,8 @@ Done when:
 
 - Each web artboard matches the running page at 1440, 2560, 1024, 768 and 560
   wide, checked by screenshot.
-- Three Apps are open on the web at once; switching, minimising and restoring
-  keeps an unsaved input in each.
+- An App opens inside the Desk window through `AppSurface`; reload, open in
+  a new tab and Manage work from its title bar.
 - `hatch theme set --accent teal` changes web, mobile and desktop without a
   rebuild.
 - The mobile app has no colour or radius literal outside the token file.
@@ -85,12 +91,13 @@ Done when:
   user-orderable (`navigation-preferences`).
 - Desktop **[fact]**: none.
 - Several Apps in one page **[fact]**: three iframes, one App each, ran side by
-  side in the spike with independent state.
+  side in the spike with independent state. This plan does not build on it
+  (see out of scope); it is why the shell is designed not to rule it out.
 
 Assumptions to validate before the dependent step:
 
 - **B1** A native NSH view can be added to a Tauri 2 window on macOS. Decides
-  the desktop host (section 3.6).
+  the desktop host (section 3.5).
 - **B2** Passkey sign-in works in the desktop webview for a self-hosted
   origin. If not, the desktop app signs in through the system browser with the
   existing device-login flow.
@@ -154,11 +161,11 @@ would add a build step and a second copy of every value for no gain while the
 only consumer is TypeScript that can import JSON. The package is a plain
 directory, not a workspace package. Fonts are self-hosted through
 `@fontsource-variable/nunito` and `@fontsource-variable/jetbrains-mono`; no
-CJK font is bundled. Step 6 decides how the mobile app reads the same file
+CJK font is bundled. Step 5 decides how the mobile app reads the same file
 (a direct JSON import is expected to work there too).
 
 The four old web themes are deleted, not kept beside the new one; the mobile
-palette goes in step 6. `DESIGN.md` is rewritten around the tokens and gains a
+palette goes in step 5. `DESIGN.md` is rewritten around the tokens and gains a
 component specification (button, field, card, list row, window, dock tile,
 empty state: sizes, states, radii). That specification is what `@hatch/ui`
 implements later; platform React components are not reused by NSH Apps.
@@ -179,7 +186,7 @@ Replaces `AppShell` in `src/routes/_app.tsx` with three parts under
 - **Menu bar**: brand menu, space name, primary navigation (Desk, Agent, All
   apps), runner status, search (`⌘K`), date, account menu.
 - **Dock**: pinned Apps and Workflows from the existing pins, a marker under
-  each running App, and an add button that opens the pin picker.
+  the open App, and an add button that opens the pin picker.
 - **Window**: the frame every page except the desk renders inside (title bar,
   minimise, close, optional section list on the left). Routes stay as they
   are; the window is a layout component, so deep links and the back button
@@ -187,36 +194,25 @@ Replaces `AppShell` in `src/routes/_app.tsx` with three parts under
 
 Widths follow the canvas: at 768 the window fills the stage; at 560 the menu
 bar collapses and the dock becomes the four-item tab bar; 2560 widens the desk
-grid and allows three App windows side by side.
+grid.
 
-### 3.4 Running Apps
-
-**[decision]** An `AppSurface` component is the only thing that knows how an
-App is rendered. Today it mounts the iframe; later it mounts an NSH player.
-The shell talks to it through a fixed interface (`load`, `visible`, `route`,
-`title`, `reload`, `close`) and to the App only by `postMessage`, never by
-reaching into the frame.
-
-A client-side store keeps the set of running Apps. Their surfaces are mounted
-in a layer owned by the `_app` layout, so navigating elsewhere hides them
-instead of destroying them. `/app/$appSlug` focuses that App, starting it if
-needed.
-
-Behaviour, designed here because the canvas does not draw it **[decision]**:
+**[decision]** `AppSurface` is the only component that knows how an App is
+rendered, and it hosts exactly one running App inside a Desk window. Today it
+mounts the iframe that `/app/$appSlug` mounts now; later it mounts an NSH
+player. The shell talks to it through a fixed interface (`load`, `visible`,
+`route`, `title`, `reload`, `close`) and to the App only by `postMessage`,
+never by reaching into the frame.
 
 - An App window has the standard title bar plus reload, open in a new tab and
-  Manage. Minimise hides it and keeps it running; close stops it.
-- Up to six Apps run at once on the web. Opening a seventh stops the least
-  recently used one that is not visible and reopens it at its last route when
-  selected again.
-- From 1280 wide two App windows can sit side by side; from 2560, three. Below
-  1280 one is visible and the dock switches between them.
-- A new deployment marks the running window "update available" instead of
-  reloading it.
+  Manage.
+- One App is open at a time. Leaving `/app/$appSlug` unmounts it, as today;
+  nothing keeps an App running in the background.
+- Nothing in the shell assumes there is only one surface: the dock marker,
+  the window frame and the route take the App they refer to as input and hold
+  no "the current App" global, so the NSH work can mount several surfaces
+  without changing them.
 
-Running state is per browser tab and is not stored on the server.
-
-### 3.5 Pages
+### 3.4 Pages
 
 Every route moves into the new shell. Pages the canvas does not draw follow
 the nearest drawn pattern **[decision]**:
@@ -230,7 +226,7 @@ the nearest drawn pattern **[decision]**:
 | One execution                          | Workflow detail window with a step timeline           |
 | CLI authorize, 404                     | Login card on the desk background                     |
 
-### 3.6 Mobile and desktop
+### 3.5 Mobile and desktop
 
 Mobile: screens are rebuilt on the tokens with the canvas structure
 (home with widget pager and pinned grid; Apps; Agent; Me). iOS and Android
@@ -266,9 +262,9 @@ CLI: `hatch theme get | set --accent <name> | accents`;
 `hatch dashboard list | get | widget add | widget remove | widget layout`.
 
 The pin and dashboard commands close a gap that exists today; the redesign
-changes both surfaces, so they ship with it. Exception: the set of running App
-windows is state of one browser tab or device and has no CLI.
-`PROTOCOL_VERSION` is unchanged.
+changes both surfaces, so they ship with it. There is no CLI exception: the
+redesign adds no capability bound to a device or browser. `PROTOCOL_VERSION`
+is unchanged.
 
 ## 6. App/Workflow package contracts and compatibility
 
@@ -285,10 +281,9 @@ None. Existing Apps open in the new window unchanged.
 
 ## 9. Security and permissions
 
-- Several same-origin App iframes can reach each other and the shell. This is
-  today's trust model with more Apps on screen at once, not a new boundary; a
-  separate origin stays a follow-up, and `AppSurface` using only `postMessage`
-  keeps that change local.
+- An App iframe is same-origin with the shell and can reach it. This is
+  today's trust model, unchanged; a separate origin stays a follow-up, and
+  `AppSurface` using only `postMessage` keeps that change local.
 - The desktop app keeps the session in the webview's cookie store, loads only
   the configured instance origin, and opens other links in the system browser.
 - Theme and pin RPCs accept every valid credential, as required for public
@@ -296,9 +291,9 @@ None. Existing Apps open in the new window unchanged.
 
 ## 10. Tests and acceptance
 
-- Durable: the running-Apps store (limit,
-  eviction order, restore route); `AppSurface` keeps an App alive across
-  navigation; CLI argument mapping and input rejection for the new commands.
+- Durable: `AppSurface` loads an App, reloads it and reports its title and
+  route through the fixed interface; CLI argument mapping and input rejection
+  for the new commands.
 - Acceptance: the completion criteria in section 1, by screenshot against the
   artboards at the five widths; iOS simulator and Android emulator runs;
   macOS app run; each new CLI command against a local instance.
@@ -306,29 +301,53 @@ None. Existing Apps open in the new window unchanged.
 
 ## 11. Order and recovery
 
-Each step is one PR and leaves the product usable.
+**[decision, user]** The redesign ships as three pull requests. The steps
+below are ordered work items, not pull requests.
 
-1. Tokens, the Mantine theme built from them, fonts, `DESIGN.md`. Every page changes
-   colour and type at once; layout is untouched.
-2. Accent setting with RPC and CLI.
-3. Web shell: menu bar, dock, window frame, the five widths.
-4. `AppSurface` and running Apps.
-5. Pages, in order: desk and dashboard editing (with the pin and dashboard
-   CLI), Agent, All apps and App manage, Workflows, Settings, Notifications,
-   Login and the remaining pages.
-6. Mobile: tokens first, then screens.
-7. Validate B1 and B2, then the macOS app.
+| PR  | Base            | Steps | Content                                                  |
+| --- | --------------- | ----- | -------------------------------------------------------- |
+| 1   | `master`        | 1–4   | Design and web: tokens, accent setting, web shell, pages |
+| 2   | the PR 1 branch | 5     | Mobile                                                   |
+| 3   | the PR 1 branch | 6     | The macOS desktop app                                    |
 
-Nothing is irreversible: there is no schema or data change, and each step
-reverts by reverting its PR.
+Tokens alone cannot be accepted visually, so PR 1 is accepted on the complete
+web UI. PR 2 and PR 3 are independent of each other.
+
+1. Tokens, the Mantine theme built from them, fonts, `DESIGN.md`. Every page
+   changes colour and type at once; layout is untouched.
+2. Accent setting: `ui.theme`, `ThemeService`, `hatch theme`.
+3. Web shell: menu bar, dock, window frame, `AppSurface`, the five widths,
+   and the pin RPCs with `hatch pin`.
+4. Pages, in order: desk and dashboard editing (with the dashboard RPCs and
+   `hatch dashboard`), Agent, All apps and App manage, Workflows, Settings,
+   Notifications, Login and the remaining pages.
+5. Mobile: tokens first, then screens.
+6. Validate B1 and B2, then the macOS app.
+
+Branches:
+
+- `claude/desk-tokens-theme-ea9322` is the integration branch of PR 1. Steps
+  2 to 4 are built on branches cut from it and merged back into it. It is
+  rebased onto `master` regularly, so conflicts are resolved while they are
+  small. PR 1 is opened when steps 1 to 4 are done and the web completion
+  criteria in section 1 hold.
+- The mobile and desktop branches are cut from the integration branch and
+  rebased whenever it moves. Each is opened as a pull request against the
+  integration branch and retargeted to `master` once PR 1 merges.
+
+Nothing is irreversible: there is no schema or data change. Before a merge, a
+step is undone by reverting its merge on the integration branch; after, by
+reverting the pull request. PR 2 and PR 3 revert on their own; reverting PR 1
+requires reverting whichever of them has merged first.
 
 ## 12. Documentation, skills, prompts, templates
 
 - `DESIGN.md` rewritten; `src/ui/theme/README.md` updated.
 - `docs/cli-tool-parity.md` and `packages/hatch-cli/README.md` gain the new
-  commands and the running-windows exception.
+  commands.
 - `docs/mobile-workspace.md` updated; a new `docs/desktop.md`.
-- `docs/native-app-ui-plan.md`: theme storage, the web multi-App shell and the
-  desktop host now come from this plan; its phases 2 and 5 shrink accordingly.
+- `docs/native-app-ui-plan.md`: theme storage, `AppSurface` and the desktop
+  host now come from this plan; several Apps running at once on the web stays
+  in that plan.
 - `README.md` changes, if any, are proposed separately for approval.
 - No change to `skills/`, the system prompt or the App templates.
