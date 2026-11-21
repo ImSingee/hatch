@@ -54,7 +54,7 @@ export function ImageModelPanel() {
     <Paper withBorder radius="md" p="md" mt="xl">
       <Stack gap="sm">
         <Stack gap={2}>
-          <Text fw={600}>Image model</Text>
+          <Text fw={700}>Image model</Text>
           <Text size="sm" c="dimmed">
             Lets the Agent generate images, such as app icons. Uses the API key
             of the provider you pick.

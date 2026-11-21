@@ -232,11 +232,17 @@ Text input, textarea, select and number input share one well.
   radius 12.
 - Table header: 12 / 700 muted ink, height 34; body cells 38 high.
 
-### Monogram tile
+### App tile
 
-A rounded square with the first character of a name, white 800 on one of
-`tiles`, chosen by a stable hash of the id. Sizes: 22 (radius 6, text 12), 38
-(radius 9, text 18), 44 (radius 12, text 21).
+A rounded square. Sizes: 22 (radius 6), 38 (radius 9), 44 (radius 12).
+
+- With an icon: the App's stored icon image, cropped to cover the square. No
+  border, shadow or background of its own.
+- Without one (and for Workflows, which have no icons): a monogram, the first
+  character of the name, white 800 on one of `tiles`, chosen by a stable hash
+  of the id. Text 12 / 18 / 21 for the three sizes.
+
+An icon shown inline in a chat message is 96 square with the window radius.
 
 ### Status chip and badge
 

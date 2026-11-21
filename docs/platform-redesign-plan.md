@@ -27,8 +27,12 @@ with one main window.
 Out of scope **[decision, confirmed by the user where noted]**:
 
 - Dark mode (user). Tokens keep a `dark` slot that stays empty.
-- Per-App icons and colours (user). Apps keep the current monogram tile,
-  re-tinted from the new palette.
+- Changing how App icons are made or stored. Apps already have icons: an
+  image model setting, Agent-generated or uploaded icon images, and the
+  `hatch` icon commands. The redesign only restyles how the tile is displayed:
+  the icon image takes the Desk tile's size and radius, and an App without an
+  icon keeps the monogram tile, tinted from the new palette. Per-App colours
+  stay out of scope (user).
 - Home-screen widgets on iOS/Android, the macOS menu-bar popover, the Windows
   app and its taskbar panel. Home-screen widgets cannot render the current
   HTML widgets and wait for native widgets.
@@ -67,8 +71,9 @@ Done when:
   with `sortOrder`. The CLI has no command to list, add, remove or reorder
   pins, and none to edit a dashboard's widgets.
 - App icons **[fact]**: `src/components/apps/app-glyph.tsx` is a custom
-  monogram tile (first letter, tint hashed from the App id), not a Mantine
-  component.
+  tile, not a Mantine component. It shows the App's stored icon image when
+  there is one and otherwise a monogram (first letter, tint hashed from the
+  App id). Workflows share the tile and have no icons.
 - App page **[fact]**: `src/routes/_app/app/$appSlug/index.tsx` mounts one
   same-origin iframe keyed by its URL; leaving the route destroys it.
 - Dashboards **[fact]**: layouts are stored per `desktop`, `tablet` and
