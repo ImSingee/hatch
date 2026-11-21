@@ -28,11 +28,13 @@ App/Workflow compatibility bump or protocol-18 wire change is required.
 The capabilities below have no Agent Tool; the CLI is their only Agent
 interface.
 
-| Capability       | CLI                           | Public API / shared behavior                                                                            |
-| ---------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| App icon         | app icon get / set / clear    | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded  |
-| Image model      | image-model get / set / clear | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed |
-| Image generation | image generate                | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap  |
+| Capability       | CLI                                        | Public API / shared behavior                                                                             |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| App icon         | app icon get / set / clear                 | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded   |
+| Image model      | image-model get / set / clear              | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed  |
+| Image generation | image generate                             | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap   |
+| Instance theme   | theme get / set                            | ThemeService/GetTheme, SetTheme; accent names come from the design tokens, clients recolour live         |
+| Navigation pins  | pin list / add / update / remove / reorder | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order |
 
 Not covered by the CLI: providers and their chat models (create, edit, API
 keys) remain Web-only as before this change. `image-model set` selects among
@@ -104,6 +106,39 @@ including when the content is unchanged or no content flags are supplied.
 `--silent` maps to `UpdateNotification.silent` and only changes content; it
 requires at least one content flag. SDK and Channel updates use the same
 domain service and `silent: true` option. No Agent Tool is added.
+
+## Theme and pins: CLI only, no Agent Tool
+
+`hatch theme get | set --accent <name>` calls `ThemeService`, which reads and
+writes the `ui.theme` platform setting through `src/server/theme-settings.ts`,
+the same service as the Appearance settings page. The accent list is
+`packages/hatch-design-tokens/tokens.json`; the CLI validates `--accent`
+against the copy it was built with and the platform validates again. A change
+is published as the `theme.updated` platform event.
+
+`hatch pin ...` calls `PinService`, backed by `src/server/pins.ts`, which the
+Web UI Server Functions in `sidebar.ts`, `workflows.ts` and `dashboards.ts`
+also call. Web operation to command:
+
+| Web UI                                        | CLI                                          | RPC                |
+| --------------------------------------------- | -------------------------------------------- | ------------------ |
+| Sidebar pins, pinned Workflows and dashboards | pin list                                     | ListPins           |
+| Pin an App again (sidebar)                    | pin add --app                                | PinApp             |
+| App page pin toggle, on                       | pin add --app --if-absent                    | PinApp (if_absent) |
+| Rename a pin, set its entry point             | pin update --label / --entry / --clear-entry | UpdateAppPin       |
+| Remove one pin                                | pin remove --pin                             | UnpinApp (pin_id)  |
+| App page pin toggle, off                      | pin remove --app                             | UnpinApp (app)     |
+| Drag App pins                                 | pin reorder --pin                            | ReorderAppPins     |
+| Pin or unpin a Workflow                       | pin add / remove --workflow                  | SetWorkflowPinned  |
+| Pin or unpin a dashboard                      | pin add / remove --dashboard                 | SetDashboardPinned |
+| Drag dashboards                               | pin reorder --dashboard                      | ReorderDashboards  |
+
+Both services accept sessions, API keys and Run JWTs alike; neither has a
+device- or browser-bound operation, so there is no CLI exception. Pins record
+no actor, so a Run needs no attribution. Reordering moves the listed ids to
+the front and keeps the rest in their relative order; unknown or repeated ids
+are rejected, for the Web UI as well. Creating, renaming and deleting
+dashboards and editing their widgets remain Web-only until `hatch dashboard`.
 
 ## Known gaps
 

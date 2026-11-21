@@ -15,8 +15,12 @@ import {
 } from '@mantine/core';
 import type { MantineColorsTuple, MantineThemeOverride } from '@mantine/core';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
-
-export type AccentName = keyof typeof tokens.accents;
+import {
+  ACCENT_COLORS,
+  ACCENT_NAMES,
+  DEFAULT_ACCENT,
+  type AccentName,
+} from './accents';
 
 /**
  * Build the ten-step ramp Mantine needs from one token colour. The colour
@@ -40,7 +44,7 @@ export function colorRamp(base: string): MantineColorsTuple {
 
 /** The `primary` ramp for one of the accents the user can choose. */
 export function accentRamp(accent: AccentName): MantineColorsTuple {
-  return colorRamp(tokens.accents[accent]);
+  return colorRamp(ACCENT_COLORS[accent]);
 }
 
 const neutralRamp = tokens.neutral as unknown as MantineColorsTuple;
@@ -85,117 +89,141 @@ const CONTAINER_SIZES: Record<string, string> = {
 const sansStack = `'${tokens.fonts.sans} Variable', '${tokens.fonts.sans}', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', 'Noto Sans SC', 'Segoe UI', Roboto, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji'`;
 const monoStack = `'${tokens.fonts.mono} Variable', '${tokens.fonts.mono}', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
 
-export const deskTheme: MantineThemeOverride = createTheme({
-  white: tokens.light.card,
-  black: tokens.light.foreground,
-  colors: {
-    primary: accentRamp(tokens.defaultAccent as AccentName),
-    gray: neutralRamp,
-    dark: neutralRamp,
-    ...(Object.fromEntries(
-      Object.entries(HUE_BY_COLOR_NAME).map(([name, hue]) => [
-        name,
-        colorRamp(hue),
-      ]),
-    ) as Record<keyof typeof HUE_BY_COLOR_NAME, MantineColorsTuple>),
-  },
-  primaryColor: 'primary',
-  primaryShade: 6,
-  autoContrast: true,
-  luminanceThreshold: 0.3,
-  focusRing: 'auto',
-  cursorType: 'pointer',
-  fontFamily: sansStack,
-  fontFamilyMonospace: monoStack,
-  radius: {
-    xs: rem(tokens.radius.xs),
-    sm: rem(tokens.radius.sm),
-    md: rem(tokens.radius.md),
-    lg: rem(tokens.radius.lg),
-    xl: rem(tokens.radius.xl),
-  },
-  defaultRadius: 'md',
-  spacing: {
-    '4xs': rem(2),
-    '3xs': rem(4),
-    '2xs': rem(8),
-    xs: rem(10),
-    sm: rem(12),
-    md: rem(16),
-    lg: rem(20),
-    xl: rem(24),
-    '2xl': rem(28),
-    '3xl': rem(32),
-    '4xl': rem(40),
-  },
-  fontSizes: {
-    xs: rem(12),
-    sm: rem(14),
-    md: rem(16),
-    lg: rem(18),
-    xl: rem(20),
-    '2xl': rem(24),
-    '3xl': rem(30),
-    '4xl': rem(36),
-    '5xl': rem(48),
-  },
-  lineHeights: {
-    xs: rem(18),
-    sm: rem(20),
-    md: rem(24),
-    lg: rem(28),
-  },
-  headings: {
-    fontWeight: String(tokens.fontWeights.heading),
-    sizes: {
-      h1: { fontSize: rem(30), lineHeight: rem(38) },
-      h2: { fontSize: rem(24), lineHeight: rem(32) },
-      h3: { fontSize: rem(20), lineHeight: rem(28) },
-      h4: { fontSize: rem(17), lineHeight: rem(24) },
+const buildDeskTheme = (accent: AccentName): MantineThemeOverride =>
+  createTheme({
+    white: tokens.light.card,
+    black: tokens.light.foreground,
+    colors: {
+      primary: accentRamp(accent),
+      gray: neutralRamp,
+      dark: neutralRamp,
+      ...(Object.fromEntries(
+        Object.entries(HUE_BY_COLOR_NAME).map(([name, hue]) => [
+          name,
+          colorRamp(hue),
+        ]),
+      ) as Record<keyof typeof HUE_BY_COLOR_NAME, MantineColorsTuple>),
     },
-  },
-  shadows: {
-    xs: tokens.shadows.card,
-    sm: tokens.shadows.card,
-    md: tokens.shadows.dock,
-    lg: tokens.shadows.dock,
-    xl: tokens.shadows.window,
-  },
-  components: {
-    Container: Container.extend({
-      vars: (_, { size, fluid }) => ({
-        root: {
-          '--container-size': fluid
-            ? '100%'
-            : size !== undefined && size in CONTAINER_SIZES
-              ? CONTAINER_SIZES[size]
-              : rem(size),
-        },
+    primaryColor: 'primary',
+    primaryShade: 6,
+    autoContrast: true,
+    luminanceThreshold: 0.3,
+    focusRing: 'auto',
+    cursorType: 'pointer',
+    fontFamily: sansStack,
+    fontFamilyMonospace: monoStack,
+    radius: {
+      xs: rem(tokens.radius.xs),
+      sm: rem(tokens.radius.sm),
+      md: rem(tokens.radius.md),
+      lg: rem(tokens.radius.lg),
+      xl: rem(tokens.radius.xl),
+    },
+    defaultRadius: 'md',
+    spacing: {
+      '4xs': rem(2),
+      '3xs': rem(4),
+      '2xs': rem(8),
+      xs: rem(10),
+      sm: rem(12),
+      md: rem(16),
+      lg: rem(20),
+      xl: rem(24),
+      '2xl': rem(28),
+      '3xl': rem(32),
+      '4xl': rem(40),
+    },
+    fontSizes: {
+      xs: rem(12),
+      sm: rem(14),
+      md: rem(16),
+      lg: rem(18),
+      xl: rem(20),
+      '2xl': rem(24),
+      '3xl': rem(30),
+      '4xl': rem(36),
+      '5xl': rem(48),
+    },
+    lineHeights: {
+      xs: rem(18),
+      sm: rem(20),
+      md: rem(24),
+      lg: rem(28),
+    },
+    headings: {
+      fontWeight: String(tokens.fontWeights.heading),
+      sizes: {
+        h1: { fontSize: rem(30), lineHeight: rem(38) },
+        h2: { fontSize: rem(24), lineHeight: rem(32) },
+        h3: { fontSize: rem(20), lineHeight: rem(28) },
+        h4: { fontSize: rem(17), lineHeight: rem(24) },
+      },
+    },
+    shadows: {
+      xs: tokens.shadows.card,
+      sm: tokens.shadows.card,
+      md: tokens.shadows.dock,
+      lg: tokens.shadows.dock,
+      xl: tokens.shadows.window,
+    },
+    components: {
+      Container: Container.extend({
+        vars: (_, { size, fluid }) => ({
+          root: {
+            '--container-size': fluid
+              ? '100%'
+              : size !== undefined && size in CONTAINER_SIZES
+                ? CONTAINER_SIZES[size]
+                : rem(size),
+          },
+        }),
       }),
-    }),
-    Select: Select.extend({
-      defaultProps: { checkIconPosition: 'right' },
-    }),
-    Anchor: Anchor.extend({
-      defaultProps: { underline: 'always' },
-    }),
-    Card: Card.extend({
-      defaultProps: { p: 'xl', radius: 'xl', shadow: 'sm' },
-    }),
-    Modal: Modal.extend({
-      defaultProps: { radius: rem(tokens.radius.window), shadow: 'xl' },
-    }),
-    Menu: Menu.extend({
-      defaultProps: { radius: 'lg', shadow: 'md' },
-    }),
-    Popover: Popover.extend({
-      defaultProps: { radius: 'lg', shadow: 'md' },
-    }),
-    HoverCard: HoverCard.extend({
-      defaultProps: { radius: 'lg', shadow: 'md' },
-    }),
-    Tooltip: Tooltip.extend({
-      defaultProps: { radius: 'sm' },
-    }),
-  },
-});
+      Select: Select.extend({
+        defaultProps: { checkIconPosition: 'right' },
+      }),
+      Anchor: Anchor.extend({
+        defaultProps: { underline: 'always' },
+      }),
+      Card: Card.extend({
+        defaultProps: { p: 'xl', radius: 'xl', shadow: 'sm' },
+      }),
+      Modal: Modal.extend({
+        defaultProps: { radius: rem(tokens.radius.window), shadow: 'xl' },
+      }),
+      Menu: Menu.extend({
+        defaultProps: { radius: 'lg', shadow: 'md' },
+      }),
+      Popover: Popover.extend({
+        defaultProps: { radius: 'lg', shadow: 'md' },
+      }),
+      HoverCard: HoverCard.extend({
+        defaultProps: { radius: 'lg', shadow: 'md' },
+      }),
+      Tooltip: Tooltip.extend({
+        defaultProps: { radius: 'sm' },
+      }),
+    },
+  });
+
+const THEMES = Object.fromEntries(
+  ACCENT_NAMES.map((accent) => [accent, buildDeskTheme(accent)]),
+) as Record<AccentName, MantineThemeOverride>;
+
+/** The Desk theme with `primary` built from the given accent. */
+export function deskThemeFor(accent: AccentName): MantineThemeOverride {
+  return THEMES[accent];
+}
+
+export const deskTheme: MantineThemeOverride = THEMES[DEFAULT_ACCENT];
+
+/**
+ * Rules that give `primary` its ramp from `<html data-accent>`. They are part
+ * of the prerendered shell, so a cached accent applies before the first paint
+ * instead of after hydration.
+ */
+export const ACCENT_CSS: string = ACCENT_NAMES.map(
+  (accent) =>
+    `:root[data-accent="${accent}"]{${accentRamp(accent)
+      .map((color, shade) => `--mantine-color-primary-${shade}:${color};`)
+      .join('')}}`,
+).join('');

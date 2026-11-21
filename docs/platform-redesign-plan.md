@@ -251,13 +251,16 @@ None. Pins and dashboards use existing tables; the accent uses
 
 New RPCs, each calling the same domain service as the Web UI:
 
-- `ThemeService.GetTheme`, `SetTheme`, `ListAccents`.
-- `WorkspaceService.ListPins`, `PinApp`, `UpdatePin`, `Unpin`,
-  `SetPinned` (workflow or dashboard), `ReorderPins`.
+- `ThemeService.GetTheme`, `SetTheme`. `GetTheme` also returns the accents
+  that can be chosen, so there is no separate list call.
+- `PinService.ListPins`, `PinApp`, `UpdateAppPin`, `UnpinApp`,
+  `ReorderAppPins`, `ReorderDashboards`, `SetWorkflowPinned`,
+  `SetDashboardPinned`. A service of its own because `WorkspaceService` is
+  still limited to user sessions.
 - `WorkspaceService.ListDashboards`, `GetDashboard`, `AddWidget`,
   `RemoveWidget`, `SetWidgetLayout`.
 
-CLI: `hatch theme get | set --accent <name> | accents`;
+CLI: `hatch theme get | set --accent <name>`;
 `hatch pin list | add | update | remove | reorder`;
 `hatch dashboard list | get | widget add | widget remove | widget layout`.
 

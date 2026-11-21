@@ -1,4 +1,6 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { themeQueryOptions } from '~queries/theme';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { PlatformEvent } from '~server/platform-events';
 
@@ -50,6 +52,11 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       if (!notificationId || !deliveryId) return null;
       return { type, notificationId, deliveryId } satisfies PlatformEvent;
     }
+    if (type === 'theme.updated') {
+      const accent = stringField(value, 'accent');
+      if (!accent) return null;
+      return { type, accent } satisfies PlatformEvent;
+    }
     return null;
   } catch {
     return null;
@@ -64,6 +71,7 @@ export function PlatformEventsProvider({
 }) {
   const listeners = useRef(new Set<PlatformEventListener>());
   const resyncListeners = useRef(new Set<ResyncListener>());
+  const queryClient = useQueryClient();
   const context = useMemo<PlatformEventsContextValue>(
     () => ({
       subscribe(listener) {
@@ -83,9 +91,18 @@ export function PlatformEventsProvider({
     const onPlatformEvent = (rawEvent: Event) => {
       const event = parsePlatformEvent(rawEvent as MessageEvent<string>);
       if (!event) return;
+      // The theme is applied above every route, outside this provider, so it
+      // is refreshed here instead of through a subscriber.
+      if (event.type === 'theme.updated')
+        void queryClient.invalidateQueries({
+          queryKey: themeQueryOptions.queryKey,
+        });
       for (const listener of listeners.current) listener(event);
     };
     const onResync = () => {
+      void queryClient.invalidateQueries({
+        queryKey: themeQueryOptions.queryKey,
+      });
       for (const listener of resyncListeners.current) listener();
     };
 
@@ -97,7 +114,7 @@ export function PlatformEventsProvider({
       source.removeEventListener('resync', onResync);
       source.close();
     };
-  }, []);
+  }, [queryClient]);
 
   return (
     <PlatformEventsContext.Provider value={context}>

@@ -210,6 +210,51 @@ const definitions: readonly CliCommandDefinition[] = [
       'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. Prints each candidate id and authenticated path; candidates expire after one day. --glyph-tile expects a white glyph on black and lays it on a solid 512px tile of that colour. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
   },
   {
+    path: ['theme', 'get'],
+    usage: 'theme get',
+    description:
+      'Show the instance theme: the chosen accent, the default accent and every accent that can be chosen with its #RRGGBB colour.',
+  },
+  {
+    path: ['theme', 'set'],
+    usage: 'theme set --accent <name>',
+    description:
+      'Choose the accent colour of the whole instance, replacing the previous choice. Every signed-in web, mobile and desktop client recolours without a reload. Names come from theme get.',
+  },
+  {
+    path: ['pin', 'list'],
+    usage: 'pin list',
+    description:
+      'List navigation pins: App pins in order (pin id, App id and slug, label, entry point, App status), pinned Workflows and pinned dashboards.',
+  },
+  {
+    path: ['pin', 'add'],
+    usage:
+      'pin add (--app <id-or-slug> [--label <text>] [--entry <fragment>] [--if-absent] | --workflow <id-or-slug> | --dashboard <id>)',
+    description:
+      'Pin an App, Workflow or dashboard. --app always adds another pin (an App can have several, each with its own label and entry fragment such as /settings) and prints its pin id; --if-absent instead returns the existing pin when the App already has one. The label defaults to the App name. Pinning a Workflow or dashboard that is already pinned succeeds.',
+  },
+  {
+    path: ['pin', 'update'],
+    usage:
+      'pin update <pin-id> [--label <text>] [--entry <fragment> | --clear-entry]',
+    description:
+      'Change an App pin. Omitted fields stay unchanged; --clear-entry makes the pin open the App root.',
+  },
+  {
+    path: ['pin', 'remove'],
+    usage:
+      'pin remove (--pin <pin-id> | --app <id-or-slug> | --workflow <id-or-slug> | --dashboard <id>)',
+    description:
+      'Unpin. --pin deletes that one App pin; --app deletes every pin of the App and prints the removed pin ids. --workflow and --dashboard clear the pinned flag; the Workflow or dashboard itself is kept.',
+  },
+  {
+    path: ['pin', 'reorder'],
+    usage: 'pin reorder (--pin <pin-id>... | --dashboard <id>...)',
+    description:
+      'Reorder App pins or dashboards. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order. Pinned Workflows are ordered by last update and cannot be reordered.',
+  },
+  {
     path: ['notification', 'list'],
     usage:
       'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',

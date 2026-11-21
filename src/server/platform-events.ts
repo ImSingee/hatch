@@ -14,7 +14,9 @@ export type PlatformEvent =
       type: 'notification.delivery.updated';
       notificationId: string;
       deliveryId: string;
-    };
+    }
+  /** The instance theme changed; clients re-read it. */
+  | { type: 'theme.updated'; accent: string };
 
 export type PlatformEventSubscriber = (event: PlatformEvent) => void;
 

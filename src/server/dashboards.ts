@@ -17,7 +17,10 @@ import {
 } from '~/lib/dashboard-widget';
 import { liveAppManifests } from './apps/access';
 import { authMiddleware } from './auth';
-import { persistSortOrder } from './sort-order';
+import {
+  reorderDashboards as reorderDashboardOrder,
+  setDashboardPinned,
+} from './pins';
 import { readDashboards, type Dashboard } from './workspace-read';
 import { idListSchema, idSchema, nameSchema } from './validation';
 
@@ -72,10 +75,7 @@ export const setDashboardPin = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, pinned: z.boolean() }).parse(input),
   )
   .handler(async ({ data }) => {
-    await db
-      .update(schema.dashboards)
-      .set({ pinned: data.pinned })
-      .where(eq(schema.dashboards.id, data.id));
+    await setDashboardPinned(data.id, data.pinned);
     return { ok: true };
   });
 
@@ -141,7 +141,7 @@ export const reorderDashboards = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((orderedIds: string[]) => idListSchema.parse(orderedIds))
   .handler(async ({ data: orderedIds }) => {
-    await persistSortOrder(schema.dashboards, orderedIds);
+    await reorderDashboardOrder(orderedIds);
     return { ok: true };
   });
 

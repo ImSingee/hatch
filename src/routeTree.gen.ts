@@ -32,6 +32,7 @@ import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/ind
 import { Route as AppSettingsAboutRouteImport } from './routes/_app/settings/about'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsAgentRunnerRouteImport } from './routes/_app/settings/agent-runner'
+import { Route as AppSettingsAppearanceRouteImport } from './routes/_app/settings/appearance'
 import { Route as AppSettingsBackendsRouteImport } from './routes/_app/settings/backends'
 import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsProvidersRouteImport } from './routes/_app/settings/providers'
@@ -190,6 +191,11 @@ const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
 const AppSettingsAgentRunnerRoute = AppSettingsAgentRunnerRouteImport.update({
   id: '/agent-runner',
   path: '/agent-runner',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAppearanceRoute = AppSettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppSettingsBackendsRoute = AppSettingsBackendsRouteImport.update({
@@ -449,6 +455,7 @@ export interface FileRoutesByFullPath {
   '/settings/about': typeof AppSettingsAboutRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
+  '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/backends': typeof AppSettingsBackendsRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/providers': typeof AppSettingsProvidersRoute
@@ -515,6 +522,7 @@ export interface FileRoutesByTo {
   '/settings/about': typeof AppSettingsAboutRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
+  '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/backends': typeof AppSettingsBackendsRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/providers': typeof AppSettingsProvidersRoute
@@ -585,6 +593,7 @@ export interface FileRoutesById {
   '/_app/settings/about': typeof AppSettingsAboutRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
+  '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
   '/_app/settings/backends': typeof AppSettingsBackendsRoute
   '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/providers': typeof AppSettingsProvidersRoute
@@ -655,6 +664,7 @@ export interface FileRouteTypes {
     | '/settings/about'
     | '/settings/account'
     | '/settings/agent-runner'
+    | '/settings/appearance'
     | '/settings/backends'
     | '/settings/notifications'
     | '/settings/providers'
@@ -721,6 +731,7 @@ export interface FileRouteTypes {
     | '/settings/about'
     | '/settings/account'
     | '/settings/agent-runner'
+    | '/settings/appearance'
     | '/settings/backends'
     | '/settings/notifications'
     | '/settings/providers'
@@ -790,6 +801,7 @@ export interface FileRouteTypes {
     | '/_app/settings/about'
     | '/_app/settings/account'
     | '/_app/settings/agent-runner'
+    | '/_app/settings/appearance'
     | '/_app/settings/backends'
     | '/_app/settings/notifications'
     | '/_app/settings/providers'
@@ -1039,6 +1051,13 @@ declare module '@tanstack/react-router' {
       path: '/agent-runner'
       fullPath: '/settings/agent-runner'
       preLoaderRoute: typeof AppSettingsAgentRunnerRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/appearance': {
+      id: '/_app/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof AppSettingsAppearanceRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/_app/settings/backends': {
@@ -1370,6 +1389,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAboutRoute: typeof AppSettingsAboutRoute
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
   AppSettingsAgentRunnerRoute: typeof AppSettingsAgentRunnerRoute
+  AppSettingsAppearanceRoute: typeof AppSettingsAppearanceRoute
   AppSettingsBackendsRoute: typeof AppSettingsBackendsRoute
   AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsProvidersRoute: typeof AppSettingsProvidersRoute
@@ -1382,6 +1402,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAboutRoute: AppSettingsAboutRoute,
   AppSettingsAccountRoute: AppSettingsAccountRoute,
   AppSettingsAgentRunnerRoute: AppSettingsAgentRunnerRoute,
+  AppSettingsAppearanceRoute: AppSettingsAppearanceRoute,
   AppSettingsBackendsRoute: AppSettingsBackendsRoute,
   AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsProvidersRoute: AppSettingsProvidersRoute,
