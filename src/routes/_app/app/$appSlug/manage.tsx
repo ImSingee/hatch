@@ -43,6 +43,7 @@ import { Page } from '~components/app-shell/page';
 import { ApiPanel } from '~components/apps/api-panel';
 import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notice';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { AppIconSettings } from '~components/apps/app-icon-settings';
 import { DeploymentHistory } from '~components/apps/deployment-history';
 import { OperationsPanel } from '~components/apps/operations-panel';
 import { Field } from '~components/system/field';
@@ -253,6 +254,12 @@ function AppDetailPage() {
               runtimeSupported={runtimeSupported}
             />
             <Field label="App ID" value={app.id} mono copyValue={app.id} />
+            <Group gap="md" wrap="nowrap" align="center">
+              <Text size="sm" c="dimmed" style={{ width: 96, flex: 'none' }}>
+                Icon
+              </Text>
+              <AppIconSettings appId={app.id} appName={app.name} />
+            </Group>
             <Field
               label="Updated"
               value={dayjs(app.updatedAt).format('YYYY-MM-DD HH:mm')}

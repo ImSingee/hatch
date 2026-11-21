@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import classes from './app-glyph.module.css';
+import { appIconUrl, useAppIconKey, useHasAppIcons } from './use-app-icon';
 
 /**
  * A small rounded monogram tile for an app, giving each app a stable visual
@@ -23,16 +24,47 @@ function initialOf(name: string): string {
   return Array.from(trimmed)[0].toUpperCase();
 }
 
-export function AppGlyph({
-  name,
-  seed,
-  size = 'md',
-}: {
+type GlyphProps = {
   name: string;
   /** Stable identifier for the tint; defaults to the name. */
   seed?: string;
   size?: 'sm' | 'md' | 'lg';
-}) {
+};
+
+/**
+ * An App's tile: its stored icon when it has one, else the monogram. `seed`
+ * is looked up as an App id; pass `icon={false}` for anything that is not an
+ * App (Workflows share this tile but have no icons).
+ */
+export function AppGlyph({
+  icon = true,
+  ...props
+}: GlyphProps & { icon?: boolean }) {
+  const available = useHasAppIcons();
+  return icon && available && props.seed ? (
+    <AppIconGlyph {...props} />
+  ) : (
+    <Monogram {...props} />
+  );
+}
+
+function AppIconGlyph(props: GlyphProps) {
+  const key = useAppIconKey(props.seed);
+  const size = props.size ?? 'md';
+  if (!key || !props.seed) return <Monogram {...props} />;
+  return (
+    <img
+      className={classes.glyph}
+      data-size={size}
+      src={appIconUrl(props.seed, key, size === 'sm' ? 64 : 128)}
+      alt=""
+      aria-hidden
+      draggable={false}
+    />
+  );
+}
+
+function Monogram({ name, seed, size = 'md' }: GlyphProps) {
   const tint = TINTS[hash(seed ?? name) % TINTS.length];
   return (
     <span

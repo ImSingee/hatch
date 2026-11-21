@@ -1052,3 +1052,14 @@ button.stepHeader:hover {
   white-space: nowrap;
   border: 0;
 }
+
+/* Platform-stored images the Agent shows inline (icon candidates). */
+.markdownImage {
+  display: inline-block;
+  width: 96px;
+  height: 96px;
+  margin: 2px 6px 2px 0;
+  border-radius: 28px;
+  object-fit: cover;
+  vertical-align: middle;
+}

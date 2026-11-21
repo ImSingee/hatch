@@ -8,6 +8,7 @@ export * from './gen/hatch/platform/v1/error_pb.js';
 export * from './gen/hatch/platform/v1/agent_pb.js';
 export * from './gen/hatch/platform/v1/workspace_pb.js';
 export * from './gen/hatch/platform/v1/notification_pb.js';
+export * from './gen/hatch/platform/v1/image_pb.js';
 export * from './dashboard-refresh.js';
 export * from './deep-link.js';
 export * from './notification-reply.js';

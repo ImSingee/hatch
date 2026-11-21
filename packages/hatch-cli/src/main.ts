@@ -8,6 +8,7 @@ import { runData } from './data';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { runNotification } from './notifications';
+import { runImage } from './image';
 import { publicError } from './client';
 import { refreshRunEnvironment } from './run-credential';
 import { CliError } from './error';
@@ -66,6 +67,7 @@ try {
               ...(operation && !operation.startsWith('--') ? [operation] : []),
               ...([
                 'invoke',
+                'icon',
                 'kv',
                 'data-table',
                 'db',
@@ -111,7 +113,13 @@ try {
         'invalid_arguments',
         'Use hatch app invoke backend or hatch app invoke webhook.',
       );
-  } else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
+  } else if (
+    name === 'image-model' ||
+    name === 'image' ||
+    (name === 'app' && operation === 'icon')
+  )
+    await runImage(args, offset, controller.signal);
+  else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
     await runData(args, offset, controller.signal);
   else if (['app', 'workflow'].includes(name))
     await runLifecycle(args, offset, controller.signal);

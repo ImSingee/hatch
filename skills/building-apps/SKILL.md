@@ -61,6 +61,8 @@ Do not import generated files or execution modules from the manifest.
    deploy leaves that commit on `master` unreleased: fix the failure, validate
    again, commit on top, and redeploy.
 7. Call `get_app` to confirm the deployed state, then explain how to open it.
+8. After the first successful deployment of a new App, offer once to design
+   its icon and follow the `app-icon` Skill if the user agrees.
 
 If deploy says `master` advanced, refresh the same checkout, run
 `git fetch origin master`, rebase onto `origin/master`, resolve conflicts, and

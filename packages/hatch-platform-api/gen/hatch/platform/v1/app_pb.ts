@@ -32,7 +32,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_app: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2UiLQoTR2V0QXBwU291cmNlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJBChRHZXRBcHBTb3VyY2VSZXNwb25zZRIpCgZzb3VyY2UYASABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5Tb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCTK7BwoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJfCgxHZXRBcHBTb3VyY2USJi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBTb3VyY2VSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwU291cmNlUmVzcG9uc2USVgoJRGVwbG95QXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkRlcGxveUFwcFJlc3BvbnNlElwKC1JvbGxiYWNrQXBwEiUuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXNwb25zZRJZCgpRdWVyeUFwcEt2EiQuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBLdlJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVzcG9uc2USbgoRUXVlcnlBcHBEYXRhVGFibGUSKy5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlc3BvbnNlElkKClF1ZXJ5QXBwRGISJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERiUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXNwb25zZRJ0ChNBc3NvY2lhdGVBcHBTZXNzaW9uEi0uaGF0Y2gucGxhdGZvcm0udjEuQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVzcG9uc2ViBnByb3RvMw',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2UiLQoTR2V0QXBwU291cmNlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJBChRHZXRBcHBTb3VyY2VSZXNwb25zZRIpCgZzb3VyY2UYASABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5Tb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbjLSCQoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJfCgxHZXRBcHBTb3VyY2USJi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBTb3VyY2VSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwU291cmNlUmVzcG9uc2USVgoJRGVwbG95QXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkRlcGxveUFwcFJlc3BvbnNlElwKC1JvbGxiYWNrQXBwEiUuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXNwb25zZRJZCgpRdWVyeUFwcEt2EiQuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBLdlJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVzcG9uc2USbgoRUXVlcnlBcHBEYXRhVGFibGUSKy5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlc3BvbnNlElkKClF1ZXJ5QXBwRGISJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERiUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXNwb25zZRJ0ChNBc3NvY2lhdGVBcHBTZXNzaW9uEi0uaGF0Y2gucGxhdGZvcm0udjEuQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVzcG9uc2USWQoKR2V0QXBwSWNvbhIkLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEljb25SZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwSWNvblJlc3BvbnNlElkKClNldEFwcEljb24SJC5oYXRjaC5wbGF0Zm9ybS52MS5TZXRBcHBJY29uUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEljb25SZXNwb25zZRJfCgxDbGVhckFwcEljb24SJi5oYXRjaC5wbGF0Zm9ybS52MS5DbGVhckFwcEljb25SZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuQ2xlYXJBcHBJY29uUmVzcG9uc2ViBnByb3RvMw',
     [
       file_buf_validate_validate,
       file_google_protobuf_struct,
@@ -512,6 +512,178 @@ export const AssociateAppSessionResponseSchema: GenMessage<AssociateAppSessionRe
   messageDesc(file_hatch_platform_v1_app, 19);
 
 /**
+ * The stored icon of an App; every field is unset while it shows a monogram.
+ *
+ * @generated from message hatch.platform.v1.AppIcon
+ */
+export type AppIcon = Message<'hatch.platform.v1.AppIcon'> & {
+  /**
+   * Changes whenever the icon is replaced.
+   *
+   * @generated from field: optional string key = 1;
+   */
+  key?: string | undefined;
+
+  /**
+   * Authenticated platform path of the PNG; append `&size=<n>` for one of sizes.
+   *
+   * @generated from field: optional string path = 2;
+   */
+  path?: string | undefined;
+
+  /**
+   * @generated from field: repeated uint32 sizes = 3;
+   */
+  sizes: number[];
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppIcon.
+ * Use `create(AppIconSchema)` to create a new message.
+ */
+export const AppIconSchema: GenMessage<AppIcon> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 20);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppIconRequest
+ */
+export type GetAppIconRequest =
+  Message<'hatch.platform.v1.GetAppIconRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetAppIconRequest.
+ * Use `create(GetAppIconRequestSchema)` to create a new message.
+ */
+export const GetAppIconRequestSchema: GenMessage<GetAppIconRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 21);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppIconResponse
+ */
+export type GetAppIconResponse =
+  Message<'hatch.platform.v1.GetAppIconResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppIcon icon = 1;
+     */
+    icon?: AppIcon | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetAppIconResponse.
+ * Use `create(GetAppIconResponseSchema)` to create a new message.
+ */
+export const GetAppIconResponseSchema: GenMessage<GetAppIconResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 22);
+
+/**
+ * @generated from message hatch.platform.v1.SetAppIconRequest
+ */
+export type SetAppIconRequest =
+  Message<'hatch.platform.v1.SetAppIconRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from oneof hatch.platform.v1.SetAppIconRequest.source
+     */
+    source:
+      | {
+          /**
+           * PNG, JPEG or WebP bytes; validated and re-encoded by the platform.
+           *
+           * @generated from field: bytes image = 2;
+           */
+          value: Uint8Array;
+          case: 'image';
+        }
+      | {
+          /**
+           * An unexpired candidate from ImageService/GenerateImages.
+           *
+           * @generated from field: string candidate_id = 3;
+           */
+          value: string;
+          case: 'candidateId';
+        }
+      | { case: undefined; value?: undefined };
+  };
+
+/**
+ * Describes the message hatch.platform.v1.SetAppIconRequest.
+ * Use `create(SetAppIconRequestSchema)` to create a new message.
+ */
+export const SetAppIconRequestSchema: GenMessage<SetAppIconRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 23);
+
+/**
+ * @generated from message hatch.platform.v1.SetAppIconResponse
+ */
+export type SetAppIconResponse =
+  Message<'hatch.platform.v1.SetAppIconResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppIcon icon = 1;
+     */
+    icon?: AppIcon | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.SetAppIconResponse.
+ * Use `create(SetAppIconResponseSchema)` to create a new message.
+ */
+export const SetAppIconResponseSchema: GenMessage<SetAppIconResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 24);
+
+/**
+ * @generated from message hatch.platform.v1.ClearAppIconRequest
+ */
+export type ClearAppIconRequest =
+  Message<'hatch.platform.v1.ClearAppIconRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ClearAppIconRequest.
+ * Use `create(ClearAppIconRequestSchema)` to create a new message.
+ */
+export const ClearAppIconRequestSchema: GenMessage<ClearAppIconRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 25);
+
+/**
+ * @generated from message hatch.platform.v1.ClearAppIconResponse
+ */
+export type ClearAppIconResponse =
+  Message<'hatch.platform.v1.ClearAppIconResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppIcon icon = 1;
+     */
+    icon?: AppIcon | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ClearAppIconResponse.
+ * Use `create(ClearAppIconResponseSchema)` to create a new message.
+ */
+export const ClearAppIconResponseSchema: GenMessage<ClearAppIconResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 26);
+
+/**
  * Public API for CLI and native clients. Platform Web UI uses Server Functions.
  *
  * @generated from service hatch.platform.v1.AppService
@@ -596,5 +768,29 @@ export const AppService: GenService<{
     methodKind: 'unary';
     input: typeof AssociateAppSessionRequestSchema;
     output: typeof AssociateAppSessionResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.GetAppIcon
+   */
+  getAppIcon: {
+    methodKind: 'unary';
+    input: typeof GetAppIconRequestSchema;
+    output: typeof GetAppIconResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.SetAppIcon
+   */
+  setAppIcon: {
+    methodKind: 'unary';
+    input: typeof SetAppIconRequestSchema;
+    output: typeof SetAppIconResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.ClearAppIcon
+   */
+  clearAppIcon: {
+    methodKind: 'unary';
+    input: typeof ClearAppIconRequestSchema;
+    output: typeof ClearAppIconResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_app, 0);
