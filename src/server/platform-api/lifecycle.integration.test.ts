@@ -192,6 +192,9 @@ describe.runIf(Boolean(databaseUrl))(
         env: {
           ...process.env,
           NODE_ENV: 'production',
+          // Not the published image: this host cannot switch to the sandbox
+          // identity that production requires to evaluate authored source.
+          HATCH_ALLOW_UNSANDBOXED: 'true',
           HOST: '127.0.0.1',
           PORT: String(port),
           AGENT_INTERNAL_PORT: String(internalPort),
@@ -388,7 +391,7 @@ describe.runIf(Boolean(databaseUrl))(
           await mkdir(dir);
           git(dir, 'init', '-b', 'master');
           for (const file of created.data.files) {
-            if (['package.json', 'deno.json', 'deno.lock'].includes(file.path))
+            if (['package.json', 'pnpm-lock.yaml'].includes(file.path))
               await writeFile(
                 path.join(dir, file.path),
                 Buffer.from(file.contentBase64, 'base64'),
@@ -976,16 +979,19 @@ describe.runIf(Boolean(databaseUrl))(
               (row: { id: string }) => row.id === id,
             ),
           ).toBe(true);
+          // The prepared scaffold type-checks as a whole with the platform
+          // compiler and the configuration delivered with the SDK.
           const check = execFileSync(
-            'deno',
+            process.execPath,
             [
-              'check',
-              '--import-map',
-              '.hatch/import-map.json',
-              'manifest.ts',
-              ...(kind === 'workflow'
-                ? ['workflow.ts']
-                : ['app/main.tsx', 'backend/main.ts']),
+              fileURLToPath(
+                new URL(
+                  '../../../node_modules/typescript/bin/tsc',
+                  import.meta.url,
+                ),
+              ),
+              '-p',
+              '.hatch/tsconfig.json',
             ],
             {
               cwd: directory,
@@ -1291,7 +1297,7 @@ describe.runIf(Boolean(databaseUrl))(
           'origin',
         );
         const lockBefore = await readFile(
-          path.join(checkout.absolutePath, 'deno.lock'),
+          path.join(checkout.absolutePath, 'pnpm-lock.yaml'),
           'utf8',
         );
         if (process.platform !== 'win32')
@@ -1304,7 +1310,10 @@ describe.runIf(Boolean(databaseUrl))(
         if (process.platform !== 'win32')
           await chmod(path.join(checkout.absolutePath, '.hatch'), 0o755);
         expect(
-          await readFile(path.join(checkout.absolutePath, 'deno.lock'), 'utf8'),
+          await readFile(
+            path.join(checkout.absolutePath, 'pnpm-lock.yaml'),
+            'utf8',
+          ),
         ).toBe(lockBefore);
         expect(adopted.data.dirty).toBe(true);
         expect(git(checkout.absolutePath, 'remote', 'get-url', 'origin')).toBe(
@@ -2151,6 +2160,25 @@ describe.runIf(Boolean(databaseUrl))(
         ),
       ).toBe(true);
       expect(sdk.data.tooling.bufVersion).toMatch(/^\d+\.\d+\.\d+$/);
+      // Clients build pnpm-lockfile sources with the platform's own tool
+      // versions and the generated configuration it delivers, for both kinds.
+      for (const kind of ['app', 'workflow']) {
+        const payload = await api(`sdk/${kind}`, { cookie });
+        expect(
+          payload.data.files.map((file: { path: string }) => file.path),
+        ).toEqual(
+          expect.arrayContaining([
+            'tsconfig.json',
+            'tsconfig.manifest.json',
+            'types/deno.d.ts',
+          ]),
+        );
+        expect(payload.data.tooling).toMatchObject({
+          typescriptVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+          esbuildVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+          pnpmVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+        });
+      }
     });
 
     it('keeps deployed App Connect independent from Platform RPC', async () => {

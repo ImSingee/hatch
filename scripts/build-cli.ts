@@ -18,9 +18,17 @@ const result = await build({
   outfile: output,
   bundle: true,
   platform: 'node',
-  target: 'node22',
+  target: 'node26',
   format: 'esm',
-  banner: { js: '#!/usr/bin/env node' },
+  banner: {
+    // Bundled CommonJS dependencies require Node built-ins; an ES module has
+    // no `require` of its own.
+    js: [
+      '#!/usr/bin/env node',
+      "import { createRequire as __hatchCreateRequire } from 'node:module';",
+      'const require = __hatchCreateRequire(import.meta.url);',
+    ].join('\n'),
+  },
   logLevel: 'info',
 });
 await chmod(output, 0o755);

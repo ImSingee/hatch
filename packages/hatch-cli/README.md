@@ -1,11 +1,13 @@
 # Hatch CLI
 
 Authentication, App/Workflow source lifecycles and App data operations, over the
-public Connect RPC contract at `/api/rpc`. Requires Node >=22.19, Git and pnpm.
-Deno is
-needed to check/run authored App/Workflow code locally. No platform repository
-checkout, current-working-directory dependency, or runtime npm dependencies
-are needed by the CLI executable.
+public Connect RPC contract at `/api/rpc`. Requires Node >=26, Git and pnpm.
+A source that builds with the pnpm toolchain (`pnpm-lock.yaml`) needs pnpm of
+the same major version as the platform's, currently 12. Deno is needed to
+prepare a Deno-toolchain source (`deno.json` + `deno.lock`) and to run or test
+authored App/Workflow code locally. No platform repository checkout,
+current-working-directory dependency, or runtime npm dependencies are needed by
+the CLI executable.
 
 ## Build and install
 
@@ -219,25 +221,70 @@ when the requested host is the logged-in platform. `store` and `erase` do
 nothing. It exists for Git to call.
 
 SDK preparation uses authenticated `hatch.platform.v1.SdkService/GetSdk`: compiled
-`@hatch/app`, legacy `@hatch/data`, or `@hatch/workflow` payloads and import maps
-from the **running platform build**. Install into generated `.hatch/` atomically;
-never commit it. Apps validate the shared dependency policy and run
-`deno install --no-config --package-json --node-modules-dir=auto --lock=deno.lock --frozen`,
-then validate the source manifest with permissions denied. App lifecycle-script
-dependencies remain unsupported; authored lockfiles are never rewritten.
-Workflow SDK preparation retains `pnpm install --ignore-scripts --lockfile=false`.
+`@hatch/app`, legacy `@hatch/data`, or `@hatch/workflow` payloads, import maps,
+the platform-generated TypeScript configuration and the versions of the tools
+the platform builds with, all from the **running platform build**. Install into
+generated `.hatch/` atomically; never commit it.
+
+The committed lockfile selects the build toolchain, exactly as it does on the
+platform: `pnpm-lock.yaml` with no `deno.json`/`deno.lock` selects pnpm,
+`deno.json` + `deno.lock` with no `pnpm-lock.yaml` selects Deno. A source with
+files of both families, or an App with neither, fails preparation with a
+message naming the files to remove.
+Authored lockfiles are never rewritten, and dependency lifecycle scripts are
+never run for either toolchain.
+
+- **pnpm toolchain (Apps and Workflows).** Validate `package.json` and
+  `pnpm-lock.yaml` with the platform's dependency policy, then run the two pnpm
+  steps the platform runs at deploy: `pnpm fetch`, then an offline frozen
+  install. The registry is fixed to `https://registry.npmjs.org/`; project,
+  user and global pnpm/npm configuration, install hooks and
+  `pnpm-workspace.yaml` are ignored. Apps then fetch the platform's pinned
+  `typescript` and `esbuild` with `pnpm dlx`, check the import graph and types
+  of `manifest.ts`, bundle it, and evaluate the bundle with this machine's Node
+  under `--permission` with no grants: no file, network, subprocess or worker
+  access. An older Node that cannot deny network fails preparation. Node's
+  permission model does not cover signals, so an evaluated manifest can still
+  signal other processes of the same OS user; prepare source you do not trust
+  under a separate user or in a container. Adopt evaluates a `manifest.ts`
+  of either kind the same way, installing first; a `manifest.json` is parsed
+  without installing anything. A pnpm of another major version fails
+  preparation with a message naming the required one.
+- **Deno toolchain.** Apps validate the shared dependency policy and run
+  `deno install --no-config --package-json --node-modules-dir=auto --lock=deno.lock --frozen`,
+  then validate the source manifest with permissions denied. Workflow SDK
+  preparation retains `pnpm install --ignore-scripts --lockfile=false`.
+
+A CLI that predates the pnpm toolchain fails App preparation on a
+`pnpm-lock.yaml` source with a missing-`deno.json` message; upgrade the CLI. A
+platform that predates it delivers no toolchain versions, and preparation
+reports that the platform does not provide the pnpm build toolchain. Both
+surface as `app_preparation_failed` or `workflow_preparation_failed` with the
+stage in the message.
+
+A failure that says nothing about the source keeps its own code and exit 7,
+during preparation and during adopt alike: `tool_unavailable` when a local tool
+(`pnpm`, `deno`, `git`) cannot be run, and `local_command_timeout` when a local
+command is stopped at its 300s limit. Fix the environment and retry; the source
+was not judged. A Git transfer that runs out of time stays `git_remote_failed`.
+
 App Connect codegen uses
 platform-pinned Buf/protoc-gen-es through pnpm dlx and the platform-owned
-`.hatch/buf.gen.yaml`, not an authored plugin configuration. Generated `gen/`
-and dependencies are Git-excluded. Commands receive a limited child environment,
+`.hatch/buf.gen.yaml`, not an authored plugin configuration. Generated `gen/`,
+dependencies and a pnpm-written `pnpm-workspace.yaml` are Git-excluded. Commands receive a limited child environment,
 including no CLI, fleet, database or provider secrets. This is not a same-UID
 sandbox: local dependency/source tooling still runs as the invoking user.
 
 ```sh
 cd notes-copy
-# Check/run with the materialized import map, outside the platform repository.
+# pnpm toolchain: type-check with the platform-generated configuration, using
+# the TypeScript major the platform runs. Outside the platform repository.
+pnpm dlx --package typescript@7 tsc -p .hatch/tsconfig.json
+# Run tests on the Deno runtime without writing a deno.lock.
+deno test --no-lock --node-modules-dir=manual --import-map=.hatch/import-map.json
+# Deno toolchain: check with the materialized import map.
 deno check --import-map .hatch/import-map.json manifest.ts app/main.tsx
-# Workflow:
+# Deno-toolchain Workflow:
 deno check --import-map .hatch/import-map.json manifest.ts workflow.ts
 ```
 

@@ -285,6 +285,15 @@ function canSetpriv(): boolean {
   return setprivUsable;
 }
 
+/**
+ * Whether `sandboxSpawn` runs a command under another OS identity. The macOS
+ * profile confines files only: the command keeps the caller's identity and
+ * may signal the caller's processes.
+ */
+export function sandboxSwitchesIdentity(): boolean {
+  return canSetpriv();
+}
+
 let warnedFallback = false;
 
 function warnUnconfined(reason: string): void {

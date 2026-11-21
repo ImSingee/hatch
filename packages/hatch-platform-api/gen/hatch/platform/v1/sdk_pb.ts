@@ -23,7 +23,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_sdk: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9zZGsucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIjMKDUdldFNka1JlcXVlc3QSIgoEa2luZBgBIAEoCUIUukgRcg9SA2FwcFIId29ya2Zsb3ciPQoHVG9vbGluZxITCgtidWZfdmVyc2lvbhgBIAEoCRIdChVwcm90b2NfZ2VuX2VzX3ZlcnNpb24YAiABKAkidgoOR2V0U2RrUmVzcG9uc2USJgoFZmlsZXMYASADKAsyFy5oYXRjaC5wbGF0Zm9ybS52MS5GaWxlEjAKB3Rvb2xpbmcYAiABKAsyGi5oYXRjaC5wbGF0Zm9ybS52MS5Ub29saW5nSACIAQFCCgoIX3Rvb2xpbmcyWwoKU2RrU2VydmljZRJNCgZHZXRTZGsSIC5oYXRjaC5wbGF0Zm9ybS52MS5HZXRTZGtSZXF1ZXN0GiEuaGF0Y2gucGxhdGZvcm0udjEuR2V0U2RrUmVzcG9uc2ViBnByb3RvMw',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9zZGsucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIjMKDUdldFNka1JlcXVlc3QSIgoEa2luZBgBIAEoCUIUukgRcg9SA2FwcFIId29ya2Zsb3ciiAEKB1Rvb2xpbmcSEwoLYnVmX3ZlcnNpb24YASABKAkSHQoVcHJvdG9jX2dlbl9lc192ZXJzaW9uGAIgASgJEhoKEnR5cGVzY3JpcHRfdmVyc2lvbhgDIAEoCRIXCg9lc2J1aWxkX3ZlcnNpb24YBCABKAkSFAoMcG5wbV92ZXJzaW9uGAUgASgJInYKDkdldFNka1Jlc3BvbnNlEiYKBWZpbGVzGAEgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZRIwCgd0b29saW5nGAIgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuVG9vbGluZ0gAiAEBQgoKCF90b29saW5nMlsKClNka1NlcnZpY2USTQoGR2V0U2RrEiAuaGF0Y2gucGxhdGZvcm0udjEuR2V0U2RrUmVxdWVzdBohLmhhdGNoLnBsYXRmb3JtLnYxLkdldFNka1Jlc3BvbnNlYgZwcm90bzM',
     [file_buf_validate_validate, file_hatch_platform_v1_file],
   );
 
@@ -46,6 +46,9 @@ export const GetSdkRequestSchema: GenMessage<GetSdkRequest> =
   messageDesc(file_hatch_platform_v1_sdk, 0);
 
 /**
+ * Versions of the tools this platform builds sources with. A client that
+ * prepares a source locally runs the same versions.
+ *
  * @generated from message hatch.platform.v1.Tooling
  */
 export type Tooling = Message<'hatch.platform.v1.Tooling'> & {
@@ -58,6 +61,23 @@ export type Tooling = Message<'hatch.platform.v1.Tooling'> & {
    * @generated from field: string protoc_gen_es_version = 2;
    */
   protocGenEsVersion: string;
+
+  /**
+   * Node build toolchain. Empty on a platform that predates it.
+   *
+   * @generated from field: string typescript_version = 3;
+   */
+  typescriptVersion: string;
+
+  /**
+   * @generated from field: string esbuild_version = 4;
+   */
+  esbuildVersion: string;
+
+  /**
+   * @generated from field: string pnpm_version = 5;
+   */
+  pnpmVersion: string;
 };
 
 /**

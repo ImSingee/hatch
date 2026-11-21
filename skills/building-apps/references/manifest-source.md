@@ -62,11 +62,11 @@ locked dependencies, run this from the App or Workflow source root before
 codegen or entry checks:
 
 ```sh
-deno check --config=deno.json --no-remote --node-modules-dir=manual \
-  --import-map=.hatch/import-map.json --lock=deno.lock --frozen ./manifest.ts
+tsc -p .hatch/tsconfig.manifest.json
 ```
 
-Fix any errors before continuing. This explicitly checks the manifest and its
+A source whose lockfile is `deno.lock` uses the manifest check in its building
+Skill's Deno toolchain reference instead. Fix any errors before continuing. This explicitly checks the manifest and its
 imports even when no execution entry imports them. For `manifest.json`, skip
 this TS-only command without converting the file; the platform still parses
 and validates JSON against its manifest schema.
@@ -78,9 +78,10 @@ schemas continue to live in `workflow.ts`.
 
 The default export must be a plain JSON configuration object, not a factory or
 Promise. Imports may use local source and locked pure dependencies. Evaluation
-cannot access environment variables, network, file writes, subprocesses or FFI.
-Its permissions are independent of the declared backend/Workflow network policy.
-Imports cannot escape the source root or use remote modules. Evaluation has a
+has no file, network, subprocess, worker or FFI access and sees no platform
+secrets, so a manifest and the modules it imports must not call Deno or Node
+APIs. Its permissions are independent of the declared backend/Workflow network
+policy. Imports cannot escape the source root or use remote modules. Evaluation has a
 30-second timeout and a 1 MB output limit.
 
 Omit optional properties instead of assigning `undefined`. Functions, BigInt,

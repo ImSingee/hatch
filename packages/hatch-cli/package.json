@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Hatch authentication and App/Workflow lifecycle CLI.",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=26.0.0"
   },
   "bin": {
     "hatch": "dist/main.mjs"

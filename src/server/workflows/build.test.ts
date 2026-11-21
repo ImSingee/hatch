@@ -18,7 +18,7 @@ async function makeWorkflowSource(options?: {
   tempDirs.push(root);
   const sourceDir = path.join(root, 'src');
   const outputDir = path.join(root, 'out');
-  const templateDir = path.resolve('templates/default-workflow');
+  const templateDir = path.resolve('src/test-fixtures/deno-toolchain/workflow');
   await fs.mkdir(path.join(sourceDir, '.HATCH'), { recursive: true });
   await Promise.all([
     fs.writeFile(

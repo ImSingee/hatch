@@ -265,9 +265,9 @@ export function createAppTools(options: {
       'checkout in place. Set clone: true to create a fresh checkout at ' +
       'source_path or apps/<slug>. Set clone: false and provide source_path to ' +
       'update that exact checkout; update never creates or replaces a path. ' +
-      'Before returning, it reproduces frozen dependencies, generates Connect ' +
-      'stubs, and materializes the platform-owned Hatch SDK. App dependencies ' +
-      'that require npm lifecycle scripts are rejected.',
+      'Before returning, it reproduces frozen dependencies from the committed ' +
+      'lockfile, generates Connect stubs, and materializes the platform-owned ' +
+      'Hatch SDK. Dependency lifecycle scripts never run.',
     executionMode: 'sequential',
     parameters: Type.Object({
       id: Type.String({
@@ -371,10 +371,11 @@ export function createAppTools(options: {
     label: 'Create app',
     description:
       "Scaffold a new app from the platform template in this chat's " +
-      'worktree with manifest, proto, Deno backend, React app, and a sample ' +
-      'widget. Before returning, it reproduces frozen dependencies, generates ' +
-      'Connect stubs, and materializes the platform-owned Hatch SDK. App ' +
-      'dependencies that require npm lifecycle scripts are rejected.',
+      'worktree with manifest, proto, Deno backend, React app, a sample ' +
+      'widget, package.json, and pnpm-lock.yaml. Before returning, it ' +
+      'reproduces frozen dependencies, generates Connect stubs, and ' +
+      'materializes the platform-owned Hatch SDK. Dependency lifecycle ' +
+      'scripts never run.',
     executionMode: 'sequential',
     parameters: Type.Object({
       slug: Type.String({
@@ -482,12 +483,13 @@ export function createAppTools(options: {
     label: 'Deploy app',
     description:
       'Validate and deploy a committed app so it becomes live. Deploy uses ' +
-      'trusted Connect codegen, a frozen dependency install, source-level Deno ' +
+      'trusted Connect codegen, a frozen dependency install, source-level type ' +
       'checks for every enabled manifest entry, and production bundles before ' +
-      'database migration or release activation. Requires package.json, ' +
-      'deno.json, and a committed deno.lock; load the building-apps Skill to ' +
-      'repair validation errors. Reports the user-facing App URL plus ' +
-      'widget/RPC URLs.',
+      'database migration or release activation. Requires package.json and a ' +
+      'committed lockfile: pnpm-lock.yaml, or deno.json plus deno.lock for an ' +
+      'existing Deno-toolchain source, never both. Load the building-apps ' +
+      'Skill to repair validation errors. Reports the user-facing App URL ' +
+      'plus widget/RPC URLs.',
     executionMode: 'sequential',
     parameters: Type.Object({
       id: Type.String({

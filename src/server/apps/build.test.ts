@@ -71,7 +71,7 @@ async function makeAppSource(
 
 async function useDefaultDependencyFiles(sourceDir: string): Promise<void> {
   const templateRoot = new URL(
-    '../../../templates/default-app/',
+    '../../test-fixtures/deno-toolchain/app/',
     import.meta.url,
   );
   const packageJson = (

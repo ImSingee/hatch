@@ -1,2 +1,5 @@
-# Installed locally with Deno; never committed.
+# Installed locally with pnpm; never committed.
 node_modules/
+
+# Written by pnpm itself; builds ignore it.
+pnpm-workspace.yaml

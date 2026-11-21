@@ -1,7 +1,11 @@
-# Installed locally with Deno; never committed.
+# Installed locally with pnpm; never committed.
 node_modules/
 
-# Platform-owned SDK and import map (regenerated on checkout and deploy).
+# Written by pnpm itself; builds ignore it.
+pnpm-workspace.yaml
+
+# Platform-owned SDK, type-check configuration and import map (regenerated on
+# checkout and deploy).
 .hatch/
 
 # Connect codegen output (regenerated from proto/ by the platform on build).

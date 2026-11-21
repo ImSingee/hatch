@@ -72,6 +72,54 @@ above.
 - Compatibility v2 and later will no longer accept the retired top-level
   `version` field. Remove it before targeting v2.
 
+## Moving from deno.lock to pnpm-lock.yaml
+
+The lockfile committed with a Workflow selects its build toolchain, as
+`building-workflows` describes under Build toolchain. Moving a source from the Deno
+toolchain (`deno.json` + `deno.lock`) to the pnpm toolchain (`package.json` +
+`pnpm-lock.yaml`) is optional. It changes only how the source is installed,
+checked, and bundled. It does not change `compatibilityVersion`, the runtime,
+or the manifest, and a Deno-toolchain source keeps deploying without it. Do it
+only when the user asks.
+
+A Workflow whose `deno.json` `allowScripts` is non-empty must stay on the Deno
+toolchain: the pnpm toolchain never runs dependency lifecycle scripts.
+
+1. Confirm the source builds as it is: run the Deno toolchain's Local
+   validation from `building-workflows`.
+2. Move every inline `npm:` import into `package.json` `dependencies` and
+   import the package by its name.
+3. Make `package.json` conform to the pnpm toolchain rules in
+   `building-workflows`: `"type": "module"`, registry versions or ranges only,
+   and no `packageManager`, `scripts`, or other field outside the allowed
+   list.
+4. Delete `deno.json` and `deno.lock`. The compiler options `deno.json` fixed
+   come from the platform-generated `.hatch/tsconfig.json`.
+5. From the source root, generate the lockfile:
+
+   ```bash
+   pnpm install --ignore-workspace --ignore-scripts
+   ```
+
+6. Type-check and fix what it reports:
+
+   ```bash
+   tsc -p .hatch/tsconfig.json
+   ```
+
+   Common findings: a `node:*` import needs `@types/node` in
+   `devDependencies`; a dependency that relied on a lifecycle script or native
+   addon must be replaced; a remote (`http:`, `https:`, `jsr:`) import must
+   become a `package.json` dependency.
+
+7. Run the remaining Local validation from `building-workflows`, commit
+   `package.json`, `pnpm-lock.yaml`, and the two deletions, and call
+   `deploy_workflow`.
+
+Rollback to an earlier deployment keeps working: deployment artifacts do not
+record a toolchain. Rolling back restores the earlier source, including its
+`deno.json` and `deno.lock`.
+
 ## Handling compatibility versions
 
 - When the user only asks about version differences, explain the relevant

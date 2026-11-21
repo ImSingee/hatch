@@ -16,9 +16,15 @@ message GetSdkRequest {
   ];
 }
 
+// Versions of the tools this platform builds sources with. A client that
+// prepares a source locally runs the same versions.
 message Tooling {
   string buf_version = 1;
   string protoc_gen_es_version = 2;
+  // Node build toolchain. Empty on a platform that predates it.
+  string typescript_version = 3;
+  string esbuild_version = 4;
+  string pnpm_version = 5;
 }
 
 message GetSdkResponse {

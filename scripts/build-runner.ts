@@ -32,7 +32,7 @@ await build({
   outfile: path.join(root, 'dist/runner/main.mjs'),
   bundle: true,
   platform: 'node',
-  target: 'node22',
+  target: 'node26',
   format: 'esm',
   packages: 'external',
   sourcemap: true,

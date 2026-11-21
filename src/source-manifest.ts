@@ -100,9 +100,11 @@ function manifestBundleBoundary(
   root: string,
   kind: SourceKind,
   read: ManifestReader,
+  subject: string,
 ): Plugin {
   const imports =
     kind === 'app' ? APP_HATCH_SDK_IMPORTS : WORKFLOW_HATCH_SDK_IMPORTS;
+  const escapes = `${subject[0].toUpperCase()}${subject.slice(1)} import escapes source root`;
   return {
     name: 'manifest-source-boundary',
     setup(plugin) {
@@ -115,7 +117,7 @@ function manifestBundleBoundary(
           (/^[a-z][a-z\d+.-]*:/i.test(specifier) ||
             specifier.startsWith('@hatch/'))
         ) {
-          throw new Error(`Unsupported manifest import: ${args.path}`);
+          throw new Error(`Unsupported ${subject} import: ${args.path}`);
         }
         const resolved = await plugin.resolve(specifier, {
           kind: args.kind,
@@ -124,20 +126,20 @@ function manifestBundleBoundary(
         });
         if (resolved.errors.length) return resolved;
         if (resolved.external || !inside(root, resolved.path))
-          throw new Error(`Manifest import escapes source root: ${args.path}`);
+          throw new Error(`${escapes}: ${args.path}`);
         const canonical = await fs.realpath(resolved.path);
         if (!inside(root, canonical))
-          throw new Error(`Manifest import escapes source root: ${args.path}`);
+          throw new Error(`${escapes}: ${args.path}`);
         return { path: canonical };
       });
       plugin.onLoad({ filter: /\.[cm]?[jt]sx?$|\.json$/ }, async (args) => {
         if (!inside(root, args.path))
-          throw new Error(`Manifest import escapes source root: ${args.path}`);
+          throw new Error(`${escapes}: ${args.path}`);
         const contents = await read(
           path.relative(root, args.path).split(path.sep).join('/'),
         );
         if (contents === null)
-          throw new Error(`Missing manifest module: ${args.path}`);
+          throw new Error(`Missing ${subject} module: ${args.path}`);
         const extension = path.extname(args.path);
         const loader =
           extension === '.json'
@@ -155,6 +157,169 @@ function manifestBundleBoundary(
   };
 }
 
+/**
+ * Bundle a trusted evaluator entry and everything it imports into one module
+ * with no imports left. Authored files are read through `read`, and every
+ * resolved module must stay inside the source root.
+ */
+export async function bundleEvaluationModule(options: {
+  /** Canonical source root. */
+  root: string;
+  kind: SourceKind;
+  read: ManifestReader;
+  /** Trusted entry that imports the authored module. */
+  contents: string;
+  /** Resolution conditions of the runtime that evaluates the bundle. */
+  conditions: string[];
+  /**
+   * Package whose automatic JSX runtime the bundle uses, matching the
+   * toolchain's type check. Omitted, JSX compiles to `React.createElement`.
+   */
+  jsxImportSource?: string;
+  /** Lower-case noun used in error messages, e.g. `manifest`. */
+  subject: string;
+}): Promise<string> {
+  const label = `${options.subject[0].toUpperCase()}${options.subject.slice(1)}`;
+  const bundled = await build({
+    absWorkingDir: options.root,
+    stdin: {
+      contents: options.contents,
+      resolveDir: options.root,
+      sourcefile: `${options.subject}-evaluator.js`,
+    },
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'neutral',
+    mainFields: ['module', 'main'],
+    conditions: options.conditions,
+    target: 'esnext',
+    tsconfigRaw: {},
+    ...(options.jsxImportSource
+      ? { jsx: 'automatic', jsxImportSource: options.jsxImportSource }
+      : {}),
+    logLevel: 'silent',
+    metafile: true,
+    plugins: [
+      manifestBundleBoundary(
+        options.root,
+        options.kind,
+        options.read,
+        options.subject,
+      ),
+    ],
+  });
+  if (
+    Object.values(bundled.metafile.outputs).some(
+      (output) => output.imports.length,
+    )
+  )
+    throw new Error(`${label} bundle must not contain external imports.`);
+  const source = bundled.outputFiles[0]?.text;
+  if (!source) throw new Error(`${label} bundle is empty.`);
+  return source;
+}
+
+/**
+ * The toolchain-specific half of manifest evaluation. Bundling is shared; a
+ * toolchain supplies the import-graph check, the type check and the process
+ * that evaluates the bundle without host access.
+ */
+export type ManifestEvaluationSteps = {
+  /** Resolution conditions of the runtime that evaluates the bundle. */
+  conditions: string[];
+  /**
+   * Package whose automatic JSX runtime the bundle uses, matching the
+   * toolchain's type check. Omitted, JSX compiles to `React.createElement`.
+   */
+  jsxImportSource?: string;
+  /** Verify the full import graph, including type-only imports. */
+  graph(file: ManifestFile): Promise<void>;
+  check(file: ManifestFile): Promise<void>;
+  /** Evaluate the serializer plus bundle read from stdin; return stdout. */
+  evaluate(input: string): Promise<string>;
+};
+
+function denoManifestSteps(options: {
+  root: string;
+  canonicalRoot: string;
+  execute: ManifestRunner;
+  logs?: string[];
+  evaluationTimeoutMs?: number;
+}): ManifestEvaluationSteps {
+  const { root, canonicalRoot, execute } = options;
+  const invoke = async (
+    args: string[],
+    extra: { input?: string; timeoutMs?: number } = {},
+  ) => {
+    const result = await execute(args, extra);
+    if (result.stdout.length > 1_000_000 || result.stderr.length > 1_000_000)
+      throw new Error('Manifest command output exceeded the 1 MB limit.');
+    if (args[0] !== 'info')
+      options.logs?.push(`$ deno ${args.join(' ')}\n${result.output.trim()}`);
+    if (result.code !== 0)
+      throw new Error(result.output || 'manifest command failed');
+    return result;
+  };
+  const flags = [
+    '--config=deno.json',
+    '--no-remote',
+    '--node-modules-dir=manual',
+    `--import-map=${hatchImportMapPath(root)}`,
+    '--lock=deno.lock',
+    '--frozen',
+  ];
+  return {
+    conditions: ['deno', 'import', 'default'],
+    async graph(file) {
+      // The graph includes type-only imports that a JS bundler would discard.
+      const graph = await invoke(['info', '--json', ...flags, file]);
+      const info = JSON.parse(graph.stdout) as {
+        modules?: { specifier: string; error?: string }[];
+      };
+      if (!info.modules)
+        throw new Error('Manifest dependency graph is missing.');
+      for (const module of info.modules) {
+        if (module.specifier.startsWith('file:')) {
+          const target = fileURLToPath(module.specifier);
+          if (
+            !inside(path.resolve(root), target) &&
+            !inside(canonicalRoot, target)
+          )
+            throw new Error(
+              `Manifest import escapes source root: ${module.specifier}`,
+            );
+          if (!inside(canonicalRoot, await fs.realpath(target)))
+            throw new Error(
+              `Manifest import escapes source root: ${module.specifier}`,
+            );
+        } else if (!module.specifier.startsWith('npm:')) {
+          throw new Error(`Unsupported manifest import: ${module.specifier}`);
+        }
+        if (module.error) throw new Error(module.error);
+      }
+    },
+    async check(file) {
+      await invoke(['check', ...flags, file]);
+    },
+    async evaluate(input) {
+      const evaluated = await invoke(
+        [
+          'run',
+          '--no-config',
+          '--no-lock',
+          '--no-npm',
+          '--no-remote',
+          '--no-prompt',
+          '-',
+        ],
+        { input, timeoutMs: options.evaluationTimeoutMs ?? 30_000 },
+      );
+      return evaluated.stdout;
+    },
+  };
+}
+
 export async function loadSourceManifest<T>(
   root: string,
   options: {
@@ -164,6 +329,8 @@ export async function loadSourceManifest<T>(
     read?: ManifestReader;
     logs?: string[];
     evaluationTimeoutMs?: number;
+    /** Defaults to the Deno toolchain driven through `run`. */
+    steps?: ManifestEvaluationSteps;
   },
 ): Promise<{ manifest: T; file: ManifestFile }> {
   const reader = options.read ?? ((file) => readManifestFile(root, file));
@@ -176,97 +343,28 @@ export async function loadSourceManifest<T>(
       };
     }
     const canonicalRoot = await fs.realpath(root);
-    const execute = options.run ?? manifestRunner(root);
-    const invoke = async (
-      args: string[],
-      extra: { input?: string; timeoutMs?: number } = {},
-    ) => {
-      const result = await execute(args, extra);
-      if (result.stdout.length > 1_000_000 || result.stderr.length > 1_000_000)
-        throw new Error('Manifest command output exceeded the 1 MB limit.');
-      if (args[0] !== 'info')
-        options.logs?.push(`$ deno ${args.join(' ')}\n${result.output.trim()}`);
-      if (result.code !== 0)
-        throw new Error(result.output || 'manifest command failed');
-      return result;
-    };
-    const flags = [
-      '--config=deno.json',
-      '--no-remote',
-      '--node-modules-dir=manual',
-      `--import-map=${hatchImportMapPath(root)}`,
-      '--lock=deno.lock',
-      '--frozen',
-    ];
-    // The graph includes type-only imports that a JS bundler would discard.
-    const graph = await invoke(['info', '--json', ...flags, file]);
-    const info = JSON.parse(graph.stdout) as {
-      modules?: { specifier: string; error?: string }[];
-    };
-    if (!info.modules) throw new Error('Manifest dependency graph is missing.');
-    for (const module of info.modules) {
-      if (module.specifier.startsWith('file:')) {
-        const target = fileURLToPath(module.specifier);
-        if (
-          !inside(path.resolve(root), target) &&
-          !inside(canonicalRoot, target)
-        )
-          throw new Error(
-            `Manifest import escapes source root: ${module.specifier}`,
-          );
-        if (!inside(canonicalRoot, await fs.realpath(target)))
-          throw new Error(
-            `Manifest import escapes source root: ${module.specifier}`,
-          );
-      } else if (!module.specifier.startsWith('npm:')) {
-        throw new Error(`Unsupported manifest import: ${module.specifier}`);
-      }
-      if (module.error) throw new Error(module.error);
-    }
-    const bundled = await build({
-      absWorkingDir: canonicalRoot,
-      stdin: {
-        contents: `import manifest from './manifest.ts';\n__hatchSerialize(manifest);`,
-        resolveDir: canonicalRoot,
-        sourcefile: 'manifest-evaluator.js',
-      },
-      bundle: true,
-      write: false,
-      format: 'esm',
-      platform: 'neutral',
-      mainFields: ['module', 'main'],
-      conditions: ['deno', 'import', 'default'],
-      target: 'esnext',
-      tsconfigRaw: {},
-      logLevel: 'silent',
-      metafile: true,
-      plugins: [manifestBundleBoundary(canonicalRoot, options.kind, reader)],
+    const steps =
+      options.steps ??
+      denoManifestSteps({
+        root,
+        canonicalRoot,
+        execute: options.run ?? manifestRunner(root),
+        logs: options.logs,
+        evaluationTimeoutMs: options.evaluationTimeoutMs,
+      });
+    await steps.graph(file);
+    const source = await bundleEvaluationModule({
+      root: canonicalRoot,
+      kind: options.kind,
+      read: reader,
+      contents: `import manifest from './manifest.ts';\n__hatchSerialize(manifest);`,
+      conditions: steps.conditions,
+      jsxImportSource: steps.jsxImportSource,
+      subject: 'manifest',
     });
-    if (
-      Object.values(bundled.metafile.outputs).some(
-        (output) => output.imports.length,
-      )
-    )
-      throw new Error('Manifest bundle must not contain external imports.');
-    await invoke(['check', ...flags, file]);
-    const source = bundled.outputFiles[0]?.text;
-    if (!source) throw new Error('Manifest bundle is empty.');
-    const evaluated = await invoke(
-      [
-        'run',
-        '--no-config',
-        '--no-lock',
-        '--no-npm',
-        '--no-remote',
-        '--no-prompt',
-        '-',
-      ],
-      {
-        input: `${SERIALIZER}\n${source}\n`,
-        timeoutMs: options.evaluationTimeoutMs ?? 30_000,
-      },
-    );
-    const records = evaluated.stdout
+    await steps.check(file);
+    const stdout = await steps.evaluate(`${SERIALIZER}\n${source}\n`);
+    const records = stdout
       .split('\n')
       .filter((line) => line.startsWith(RESULT));
     if (records.length !== 1)

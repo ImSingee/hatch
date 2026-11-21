@@ -361,6 +361,11 @@ export function cliClient(transport: Transport) {
                 tooling: {
                   bufVersion: result.tooling.bufVersion,
                   protocGenEsVersion: result.tooling.protocGenEsVersion,
+                  // Empty on a platform without the pnpm build toolchain.
+                  typescriptVersion:
+                    result.tooling.typescriptVersion || undefined,
+                  esbuildVersion: result.tooling.esbuildVersion || undefined,
+                  pnpmVersion: result.tooling.pnpmVersion || undefined,
                 },
               }
             : {}),
