@@ -62,7 +62,7 @@
 .dot[aria-current]::after {
   width: 18px;
   border-radius: 999px;
-  background: var(--mantine-color-primary-filled);
+  background: var(--mantine-primary-color-filled);
 }
 
 .dot[aria-current] {

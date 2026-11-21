@@ -13,8 +13,8 @@
 
 /* Drop placeholder shown while dragging/resizing. */
 .grid :global(.react-grid-placeholder) {
-  background-color: var(--mantine-color-primary-light);
-  border: 2px dashed var(--mantine-color-primary-filled);
+  background-color: var(--mantine-primary-color-light);
+  border: 2px dashed var(--mantine-primary-color-filled);
   border-radius: var(--radius-widget);
   opacity: 0.6;
 }
@@ -57,8 +57,8 @@
   height: 10px;
   right: 10px;
   bottom: 10px;
-  border-right: 2.5px solid var(--mantine-color-primary-filled);
-  border-bottom: 2.5px solid var(--mantine-color-primary-filled);
+  border-right: 2.5px solid var(--mantine-primary-color-filled);
+  border-bottom: 2.5px solid var(--mantine-primary-color-filled);
   border-bottom-right-radius: 3px;
 }
 

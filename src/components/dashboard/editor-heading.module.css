@@ -36,7 +36,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--mantine-color-primary-text);
+  color: var(--mantine-primary-color-7);
   font-size: 12px;
   font-weight: var(--font-weight-heading);
   letter-spacing: 0.06em;

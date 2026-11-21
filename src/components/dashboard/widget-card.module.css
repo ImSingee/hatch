@@ -21,7 +21,7 @@
 /* Edit state: a dashed accent outline marks every widget as movable, and the
    panel lifts on hover so the one under the pointer is clear. */
 .card[data-editing] {
-  border: 2px dashed var(--mantine-color-primary-filled);
+  border: 2px dashed var(--mantine-primary-color-filled);
   padding: 12px 17px 17px;
 }
 
@@ -40,6 +40,7 @@
 
 .remove {
   position: absolute;
+  cursor: pointer;
   top: -11px;
   right: -11px;
   z-index: 2;

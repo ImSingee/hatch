@@ -41,7 +41,10 @@ import {
   dashboardsQueryOptions,
 } from '~queries/dashboards';
 import { setDashboardAutoRefresh } from '~server/dashboards';
-import type { DashboardBreakpoint } from '~/lib/dashboard-layout';
+import {
+  dashboardBreakpointForWidth,
+  type DashboardBreakpoint,
+} from '~/lib/dashboard-layout';
 import classes from './dashboard.module.css';
 
 export const Route = createFileRoute('/_app/dashboard/$dashboardId')({
@@ -159,7 +162,10 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
 
   const beginEditing = () => {
     editor.reset(dashboardData);
-    setPreviewBreakpoint(phone ? 'mobile' : 'desktop');
+    // Start on the layout the current width shows, so the preview fits.
+    setPreviewBreakpoint(
+      dashboardBreakpointForWidth(Math.min(window.innerWidth, 1200) - 40),
+    );
     setEditing(true);
   };
   const finish = (saved: boolean) => {

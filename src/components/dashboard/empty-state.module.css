@@ -36,8 +36,8 @@
 }
 
 .tile[data-tone='accent'] {
-  background: var(--mantine-color-primary-light);
-  color: var(--mantine-color-primary-light-color);
+  background: var(--mantine-primary-color-light);
+  color: var(--mantine-primary-color-light-color);
 }
 
 .title {

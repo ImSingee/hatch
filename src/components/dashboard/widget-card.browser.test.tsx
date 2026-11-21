@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { userEvent } from 'vitest/browser';
 import { useState } from 'react';
 import type { DashboardItem } from '~server/dashboards';
 import { WidgetCard } from './widget-card';
@@ -204,7 +205,7 @@ test('open app link uses the current slug instead of the app id', async () => {
   });
 
   await expect
-    .element(screen.getByRole('link', { name: 'Open app' }))
+    .element(screen.getByRole('link', { name: 'Open App open-link' }))
     .toHaveAttribute('href', '/app/slug-open-link');
 });
 
@@ -242,7 +243,7 @@ test('widget without onRefresh hides refresh and global refresh does not reload 
   }
 });
 
-test('edit mode shields the iframe and exposes only the remove action', async () => {
+test('edit mode marks the widget, shields the iframe and keeps only edit controls', async () => {
   const item = dashboardItem('editing');
   const screen = await renderDashboard(
     [item],
@@ -267,51 +268,41 @@ test('edit mode shields the iframe and exposes only the remove action', async ()
   expect(dragHandle).toBeTruthy();
   expect(remove).toBeTruthy();
   expect(card).toBeTruthy();
-  const grip = dragHandle!.querySelector<SVGElement>('svg');
-  const glyph = dragHandle!.querySelector<HTMLElement>('[aria-hidden="true"]');
-  const title = dragHandle!.querySelector<HTMLElement>('p');
-  expect(grip).toBeTruthy();
-  expect(glyph).toBeTruthy();
-  expect(title).toBeTruthy();
+
+  // The whole edit bar starts a drag; the remove button does not.
+  const grip = screen.getByRole('button', { name: 'Move Widget editing' });
   expect(window.getComputedStyle(dragHandle!).cursor).toBe('grab');
-  expect(window.getComputedStyle(grip!).cursor).toBe('grab');
-  expect(window.getComputedStyle(glyph!).cursor).toBe('grab');
-  expect(window.getComputedStyle(title!).cursor).toBe('grab');
+  expect(window.getComputedStyle(grip.element()).cursor).toBe('grab');
   expect(window.getComputedStyle(remove!).cursor).toBe('pointer');
   expect(window.getComputedStyle(iframe!.parentElement!).cursor).toBe('auto');
-
-  const headerRect = dragHandle!.getBoundingClientRect();
-  const titleRect = title!.getBoundingClientRect();
-  const headerHitPoints = [
-    { x: titleRect.left, y: headerRect.top + 3 },
-    { x: headerRect.left + 3, y: titleRect.top + titleRect.height / 2 },
-    { x: titleRect.left, y: headerRect.bottom - 3 },
-  ];
-  for (const point of headerHitPoints) {
+  const barRect = dragHandle!.getBoundingClientRect();
+  for (const point of [
+    { x: barRect.left + 3, y: barRect.top + barRect.height / 2 },
+    { x: barRect.right - 3, y: barRect.top + barRect.height / 2 },
+  ]) {
     const target = document.elementFromPoint(point.x, point.y);
     expect(target?.closest('.widget-drag-handle')).toBe(dragHandle);
     expect(window.getComputedStyle(target!).cursor).toBe('grab');
   }
-
   const gridItem = card!.parentElement!;
   gridItem.classList.add('react-draggable-dragging');
   expect(window.getComputedStyle(dragHandle!).cursor).toBe('grabbing');
-  expect(window.getComputedStyle(grip!).cursor).toBe('grabbing');
-  expect(window.getComputedStyle(glyph!).cursor).toBe('grabbing');
-  expect(window.getComputedStyle(title!).cursor).toBe('grabbing');
-  expect(window.getComputedStyle(remove!).cursor).toBe('pointer');
   gridItem.classList.remove('react-draggable-dragging');
 
-  const cardStyle = window.getComputedStyle(card!);
-  const defaultBorderProbe = document.createElement('span');
-  defaultBorderProbe.style.color = 'var(--mantine-color-default-border)';
-  card!.append(defaultBorderProbe);
-  expect(cardStyle.borderTopColor).toBe(
-    window.getComputedStyle(defaultBorderProbe).color,
+  // A widget being edited reads differently from one at rest: a dashed
+  // outline that turns solid under the pointer.
+  const editing = window.getComputedStyle(card!);
+  expect(editing.borderTopStyle).toBe('dashed');
+  expect(Number.parseFloat(editing.borderTopWidth)).toBeGreaterThan(1);
+  await userEvent.hover(dragHandle!);
+  await vi.waitFor(() =>
+    expect(window.getComputedStyle(card!).borderTopStyle).toBe('solid'),
   );
-  defaultBorderProbe.remove();
+
   expect(window.getComputedStyle(iframe!).pointerEvents).toBe('none');
-  expect(screen.container.querySelector('[aria-label="Open app"]')).toBeNull();
+  expect(
+    screen.container.querySelector('[aria-label="Open App editing"]'),
+  ).toBeNull();
   expect(
     screen.container.querySelector('[aria-label="Refresh widget"]'),
   ).toBeNull();
