@@ -58,8 +58,8 @@ export default function NavigationSettings() {
           accessibilityLabel={`Tab bar: ${starts.map((s) => s.label).join(', ')}`}
           style={{
             flexDirection: 'row',
-            backgroundColor: c.card,
-            borderRadius: pill,
+            backgroundColor: c.dock,
+            borderRadius: radii.dock,
             boxShadow: shadows.dock,
             padding: 6,
             gap: 2,

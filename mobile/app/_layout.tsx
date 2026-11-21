@@ -1,8 +1,9 @@
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { Appearance } from 'react-native';
 import { useEffect, type PropsWithChildren } from 'react';
-import { AccentProvider, useAccent } from '../src/ui/accent';
-import { defaultAccent, fonts, palette as c, weights } from '../src/ui/theme';
+import { InstanceAccent } from '../src/state/accent';
+import { useAccent } from '../src/ui/accent';
+import { fonts, palette as c, weights } from '../src/ui/theme';
 import { SessionProvider, useSession } from '../src/state/session';
 import { useDeepLinkLifecycle } from '../src/state/deep-links';
 import { usePushLifecycle } from '../src/state/push';
@@ -50,6 +51,7 @@ function Navigation() {
         <Stack.Screen name="chat/[id]" options={{ title: 'Conversation' }} />
         <Stack.Screen name="apps/[id]" options={{ title: 'App' }} />
         <Stack.Screen name="manage/[id]" options={{ title: '' }} />
+        <Stack.Screen name="pin" options={{ title: '' }} />
         <Stack.Screen name="notifications/index" options={{ title: '' }} />
         <Stack.Screen name="notifications/settings" options={{ title: '' }} />
         <Stack.Screen name="notifications/[id]" options={{ title: '' }} />
@@ -89,18 +91,16 @@ export default function RootLayout() {
     return () => Appearance.setColorScheme('auto');
   }, []);
   return (
-    // The accent is the theme's one input. Follow-up: read the instance's
-    // `ui.theme` accent (the ThemeService RPC of the platform redesign) once
-    // signed in and pass its name here; until then every instance shows the
-    // token default.
-    <AccentProvider name={defaultAccent}>
-      <Themed>
-        <NavigationProvider>
-          <SessionProvider>
+    // The accent is the theme's one input: InstanceAccent provides the
+    // instance's `ui.theme` accent, or the token default while signed out.
+    <NavigationProvider>
+      <SessionProvider>
+        <InstanceAccent>
+          <Themed>
             <Navigation />
-          </SessionProvider>
-        </NavigationProvider>
-      </Themed>
-    </AccentProvider>
+          </Themed>
+        </InstanceAccent>
+      </SessionProvider>
+    </NavigationProvider>
   );
 }

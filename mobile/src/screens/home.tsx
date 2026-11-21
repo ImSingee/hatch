@@ -1,22 +1,22 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useNavigationPreferences } from '../state/navigation';
-import { openSection } from '../state/open-section';
 import { useSession } from '../state/session';
+import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
 import { useAccent } from '../ui/accent';
 import { FoldContainer, TileGrid, useFoldSplit } from '../ui/columns';
 import { Glyph } from '../ui/glyph';
-import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
-import { AppTile, ShortcutTile } from '../ui/rows';
+import { Busy, Notice, errorText } from '../ui/primitives';
+import { AddTile, AppTile, ShortcutTile } from '../ui/rows';
 import {
   Masthead,
   PageRoot,
@@ -56,7 +56,8 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const accent = useAccent();
   const focused = useIsFocused();
   const { fontScale } = useWindowDimensions();
-  const { preferences } = useNavigationPreferences();
+  const queryClient = useQueryClient();
+  const lifetime = useLifetimeSignal();
   const board = useDashboards(focused);
   const { onLayout, onFolds, split, width } = useFoldSplit({
     minColumn: 320,
@@ -70,41 +71,49 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     queryFn: ({ signal }) => api!.apps(signal),
     enabled: Boolean(api),
   });
-  const workflows = useQuery({
-    queryKey: [origin, 'workflows'],
-    queryFn: ({ signal }) => api!.workflows(signal),
+  const pinned = useQuery({
+    queryKey: [origin, 'pins'],
+    queryFn: ({ signal }) => api!.pins(signal),
     enabled: Boolean(api),
   });
   const workspace = board.workspace;
   const pull = usePullToRefresh(focused, () => {
     board.refreshWidgets();
-    return Promise.all([
-      workspace.refetch(),
-      apps.refetch(),
-      workflows.refetch(),
-    ]);
+    return Promise.all([workspace.refetch(), apps.refetch(), pinned.refetch()]);
   });
-  const appById = new Map(
-    (apps.data ?? [])
-      .filter((item) => item.status !== 'archived')
-      .map((item) => [item.id, item]),
+  const appById = new Map((apps.data ?? []).map((item) => [item.id, item]));
+  const pins = (pinned.data?.apps ?? []).filter(
+    (pin) => pin.appStatus !== 'archived',
   );
-  const pins = (workspace.data?.appPins ?? []).filter((pin) =>
-    appById.has(pin.appId),
-  );
-  const workflowById = new Map(
-    (workflows.data ?? [])
-      .filter((item) => item.status !== 'archived')
-      .map((item) => [item.id, item]),
-  );
-  const pinnedWorkflows = (workspace.data?.pinnedWorkflowIds ?? []).flatMap(
-    (id) => {
-      const item = workflowById.get(id);
-      return item ? [item] : [];
-    },
-  );
-  const pending = workspace.isPending || apps.isPending || workflows.isPending;
-  const failure = workspace.error ?? apps.error ?? workflows.error;
+  const pinnedWorkflows = pinned.data?.workflows ?? [];
+  // Pins are shared by every client: a change re-reads them, and the lists
+  // that mark pinned rows.
+  const changed = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [origin, 'pins'] }),
+      queryClient.invalidateQueries({ queryKey: [origin, 'workspace'] }),
+    ]);
+  const unpin = useMutation({
+    mutationFn: (target: { pinId: string } | { workflowId: string }) =>
+      'pinId' in target
+        ? api!.unpinApp(target.pinId, lifetime())
+        : api!.setWorkflowPinned(target.workflowId, false, lifetime()),
+    onSettled: changed,
+  });
+  const askUnpin = (
+    name: string,
+    target: { pinId: string } | { workflowId: string },
+  ) =>
+    Alert.alert(`Unpin ${name}?`, 'It stays in Apps and can be pinned again.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Unpin',
+        style: 'destructive',
+        onPress: () => unpin.mutate(target),
+      },
+    ]);
+  const pending = pinned.isPending;
+  const failure = pinned.error ?? unpin.error;
   // Dated by the last read of the workspace, so the greeting follows the
   // clock on every refresh without reading it while rendering.
   const now = new Date(workspace.dataUpdatedAt || opened);
@@ -177,39 +186,52 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     </View>
   );
 
+  type Slot<T> = { key: string; item: T | null };
+  const withAdd = <T extends { id: string }>(items: T[]): Slot<T>[] => [
+    ...items.map((item) => ({ key: item.id, item })),
+    { key: 'add', item: null },
+  ];
   const shortcuts = (
     <View style={split ? { paddingTop: nested ? 4 : 14 } : undefined}>
       {failure ? (
         <View style={{ marginTop: 12 }}>
           <Notice
             tone="danger"
-            title="Couldn’t refresh"
+            title={unpin.error ? 'Couldn’t unpin' : 'Couldn’t load your pins'}
             detail={errorText(failure)}
             action={{ label: 'Try again', onPress: pull.onRefresh }}
           />
         </View>
       ) : null}
       {pending && !failure ? <Busy label="Gathering your pins" /> : null}
-      {!pending && !failure && !pins.length && !pinnedWorkflows.length ? (
-        <EmptyState
-          glyph="pin"
-          title="Keep your regulars here"
-          detail="Pin Apps and Workflows in Hatch on the web. Each pin keeps its own name and starting point."
-          action={{
-            label: 'Browse all apps',
-            onPress: () => openSection('apps', preferences),
-          }}
-        />
-      ) : null}
-      {pins.length ? (
+      {pinned.data ? (
         <>
           <SectionLabel>Apps</SectionLabel>
           <TileGrid
-            items={pins}
-            keyOf={(pin) => pin.id}
+            items={withAdd(pins)}
+            keyOf={(slot) => slot.key}
             minTile={tile.minTile}
             gap={tile.gap}
-            render={(pin, tileWidth) => {
+            render={({ item: pin }, tileWidth) => {
+              if (!pin)
+                return (
+                  <View style={{ width: tileWidth, paddingBottom: 12 }}>
+                    <ShortcutTile
+                      muted
+                      width={tileWidth}
+                      label="Add"
+                      accessibilityLabel="Pin an App to the home screen"
+                      onPress={() =>
+                        router.push({
+                          pathname: '/pin',
+                          params: { kind: 'apps' },
+                        })
+                      }
+                    >
+                      <AddTile size={TILE} />
+                    </ShortcutTile>
+                  </View>
+                );
               const app = appById.get(pin.appId);
               return (
                 <View style={{ width: tileWidth, paddingBottom: 12 }}>
@@ -223,6 +245,8 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                     ]
                       .filter(Boolean)
                       .join(', ')}
+                    accessibilityHint="Touch and hold to unpin"
+                    onLongPress={() => askUnpin(pin.label, { pinId: pin.id })}
                     onPress={() =>
                       router.push({
                         pathname: '/apps/[id]',
@@ -247,37 +271,54 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
               );
             }}
           />
-        </>
-      ) : null}
-      {pinnedWorkflows.length ? (
-        <>
           <SectionLabel>Workflows</SectionLabel>
           <TileGrid
-            items={pinnedWorkflows}
-            keyOf={(item) => item.id}
+            items={withAdd(pinnedWorkflows)}
+            keyOf={(slot) => slot.key}
             minTile={tile.minTile}
             gap={tile.gap}
-            render={(item, tileWidth) => (
+            render={({ item }, tileWidth) => (
               <View style={{ width: tileWidth, paddingBottom: 12 }}>
-                <ShortcutTile
-                  width={tileWidth}
-                  label={item.name}
-                  accessibilityLabel={`${item.name}, workflow`}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/workflows/[id]',
-                      params: { id: item.id },
-                    })
-                  }
-                >
-                  <AppTile
-                    name={item.name}
-                    seed={item.id}
-                    size={TILE}
-                    workflow
-                    lifted
-                  />
-                </ShortcutTile>
+                {item ? (
+                  <ShortcutTile
+                    width={tileWidth}
+                    label={item.name}
+                    accessibilityLabel={`${item.name}, workflow`}
+                    accessibilityHint="Touch and hold to unpin"
+                    onLongPress={() =>
+                      askUnpin(item.name, { workflowId: item.id })
+                    }
+                    onPress={() =>
+                      router.push({
+                        pathname: '/workflows/[id]',
+                        params: { id: item.id },
+                      })
+                    }
+                  >
+                    <AppTile
+                      name={item.name}
+                      seed={item.id}
+                      size={TILE}
+                      workflow
+                      lifted
+                    />
+                  </ShortcutTile>
+                ) : (
+                  <ShortcutTile
+                    muted
+                    width={tileWidth}
+                    label="Add"
+                    accessibilityLabel="Pin a Workflow to the home screen"
+                    onPress={() =>
+                      router.push({
+                        pathname: '/pin',
+                        params: { kind: 'workflows' },
+                      })
+                    }
+                  >
+                    <AddTile size={TILE} workflow />
+                  </ShortcutTile>
+                )}
               </View>
             )}
           />

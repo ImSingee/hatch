@@ -1095,7 +1095,7 @@ function ConversationBody({
             marginBottom: keyboardShown ? 10 : Math.max(insets.bottom, 12),
             padding: 12,
             backgroundColor: c.card,
-            borderRadius: radii.window,
+            borderRadius: radii.dock,
             boxShadow: shadows.dock,
             gap: 8,
             flexShrink: 1,

@@ -247,18 +247,27 @@ export function ShortcutTile({
   accessibilityLabel,
   width,
   onPress,
+  onLongPress,
+  accessibilityHint,
+  muted = false,
   children,
 }: PropsWithChildren<{
   label: string;
   accessibilityLabel: string;
   width: number;
   onPress: () => void;
+  onLongPress?: () => void;
+  accessibilityHint?: string;
+  /** A quieter label, for a tile that is an action and not a shortcut. */
+  muted?: boolean;
 }>) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => ({
         width,
         minHeight: 44,
@@ -271,11 +280,41 @@ export function ShortcutTile({
       <Text
         numberOfLines={1}
         maxFontSizeMultiplier={1.3}
-        style={[type.caption, { color: c.ink, maxWidth: width }]}
+        style={[
+          type.caption,
+          { color: muted ? c.inkSoft : c.ink, maxWidth: width },
+        ]}
       >
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** The dashed "add" outline in the shape of the tiles beside it. */
+export function AddTile({
+  size = 44,
+  workflow = false,
+}: {
+  size?: number;
+  workflow?: boolean;
+}) {
+  return (
+    <View
+      accessible={false}
+      style={{
+        width: size,
+        height: size,
+        ...tileShape(size, workflow),
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        borderColor: c.outline,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Glyph name="plus" size={size * 0.34} color={c.inkSoft} />
+    </View>
   );
 }
 

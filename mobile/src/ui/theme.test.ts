@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { accentNames, accentOf, palette as c, status, tiles } from './theme';
+import {
+  accentNames,
+  accentOf,
+  defaultAccent,
+  knownAccent,
+  palette as c,
+  status,
+  tiles,
+} from './theme';
 
 function luminance(hex: string) {
   const [r, g, b] = [1, 3, 5].map((start) => {
@@ -36,6 +44,22 @@ describe('mobile readable color contract', () => {
     // Links and quiet buttons on every surface, and labels on the tint.
     for (const surface of [c.ground, c.card, c.muted, accent.tint])
       expect(contrast(accent.ink, surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(accentNames)(
+    'keeps text readable on the ground shapes with %s',
+    (name) => {
+      // Page titles, dates and tile labels lie directly on the shapes.
+      for (const shape of [accentOf(name).ground, c.groundWarm, c.groundFresh])
+        for (const ink of [c.ink, c.inkSoft, accentOf(name).ink])
+          expect(contrast(ink, shape)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it('falls back to the default for an accent this build does not define', () => {
+    expect(knownAccent(accentNames.at(-1))).toBe(accentNames.at(-1));
+    for (const value of ['magenta', '', undefined, null, 7, 'toString'])
+      expect(knownAccent(value)).toBe(defaultAccent);
   });
 
   it.each(Object.entries(status))('keeps %s chips readable', (_name, hue) => {

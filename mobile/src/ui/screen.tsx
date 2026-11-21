@@ -1,6 +1,7 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Platform, ScrollView, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ground } from './ground';
 import { Text, type } from './text';
 import { palette as c } from './theme';
 
@@ -35,6 +36,7 @@ export function PageRoot({
       }
     >
       {children}
+      <Ground />
     </SafeAreaView>
   );
 }
@@ -64,6 +66,7 @@ export function Screen({
         nested={nested}
       />
       {children}
+      <Ground />
     </SafeAreaView>
   );
 }

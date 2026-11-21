@@ -37,7 +37,19 @@ function ramp(fill: string) {
     pressed: mix(fill, 0, 0.16),
     ink: mix(fill, 0, 0.32),
     onFill: tokens.light['primary-foreground'],
+    /** The accent's ground shape: a faint tint of it on white. */
+    ground: mix(fill, 255, 1 - tokens.ground.accentTint / 100),
   } as const;
+}
+
+/**
+ * The accent an instance names, if this build's tokens define it. An instance
+ * newer than the app may name one it does not know: that is the default.
+ */
+export function knownAccent(value: unknown): AccentName {
+  return accentNames.includes(value as AccentName)
+    ? (value as AccentName)
+    : defaultAccent;
 }
 
 export type Accent = ReturnType<typeof ramp>;
@@ -70,6 +82,9 @@ export const palette = {
   /** Dashed outlines of "add" tiles; decoration, never text. */
   outline: tokens.neutral[5],
   onFill: tokens.light['primary-foreground'],
+  dock: tokens.surfaces.dock,
+  groundWarm: tokens.ground.warm,
+  groundFresh: tokens.ground.fresh,
   danger: tokens.light.destructive,
   dangerSoft: mix(tokens.light.destructive, 255, 0.86),
 } as const;
@@ -94,6 +109,7 @@ export function tileFor(seed: string): string {
 }
 
 export const radii = tokens.radius;
+export const sizes = tokens.sizes;
 /** Fully rounded ends; geometry, not a palette value. */
 export const pill = 999;
 

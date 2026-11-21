@@ -15,6 +15,7 @@ import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
 import { AppTile, Group, ListRow } from '../ui/rows';
 import { ScopeTabs } from '../ui/scope-tabs';
 import { ScrollScreen, SectionLabel } from '../ui/screen';
+import { sizes } from '../ui/theme';
 
 type Order = 'name' | 'recent';
 type Kind = 'apps' | 'workflows';
@@ -196,7 +197,7 @@ export function ResourcesScreen({
                                   seed={item.id}
                                   iconPath={item.iconPath}
                                   workflow={section.kind === 'workflows'}
-                                  size={40}
+                                  size={sizes.dockTile}
                                 />
                               }
                               onPress={() => open(item, section.kind)}
