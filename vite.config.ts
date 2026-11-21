@@ -34,7 +34,14 @@ const config = defineConfig(({ mode, isPreview }) => ({
       // interrupts the live agent stream (losing the half-streamed reply). These
       // are runtime data, not source, so keep them out of the dev file watcher.
       // (Vite appends this to its built-in ignores like node_modules and .git.)
-      ignored: ['**/workspace/**', path.join(dataDir, '**')],
+      // Building the macOS app (`desktop/`) writes HTML into its dist and
+      // Cargo target folders, which would reload the page the same way.
+      ignored: [
+        '**/workspace/**',
+        path.join(dataDir, '**'),
+        '**/desktop/dist/**',
+        '**/desktop/src-tauri/target/**',
+      ],
     },
   },
   preview: {
