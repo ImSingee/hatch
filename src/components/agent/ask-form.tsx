@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   Checkbox,
   Group,
@@ -12,6 +13,7 @@ import { IconHelpCircle } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { AskAnswer, AskQuestion } from '~agent/events';
 import classes from './chat.module.css';
+import { Markdownish } from './markdownish';
 
 const OTHER = '__other__';
 
@@ -77,9 +79,11 @@ export function AskForm({
           const showOther = st.ids.includes(OTHER);
           return (
             <Stack key={q.id} gap={8}>
-              <Text fw={600} size="sm">
-                {q.prompt}
-              </Text>
+              {/* Markdown, so a question can show what it asks about (for
+                  example generated image candidates). */}
+              <Box fw={600}>
+                <Markdownish text={q.prompt} />
+              </Box>
               {q.allowMultiple ? (
                 <Checkbox.Group
                   value={st.ids}

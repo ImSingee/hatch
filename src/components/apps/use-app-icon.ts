@@ -1,6 +1,25 @@
-import { QueryClientContext, useQuery } from '@tanstack/react-query';
+import {
+  QueryClientContext,
+  queryOptions,
+  useQuery,
+} from '@tanstack/react-query';
 import { useContext } from 'react';
-import { appIconsQueryOptions } from '~queries/app-icons';
+
+/**
+ * Icon key per App id; Apps without an icon are absent. Fetched over plain
+ * HTTP so the App tile, rendered all over the UI, imports no server module.
+ */
+export const appIconsQueryOptions = queryOptions({
+  queryKey: ['apps', 'icons'],
+  queryFn: async ({ signal }): Promise<Record<string, string>> => {
+    const response = await fetch('/api/images/app-icons', { signal });
+    if (!response.ok) throw new Error('Could not load app icons.');
+    return (await response.json()) as Record<string, string>;
+  },
+  staleTime: 30_000,
+  // A missing icon list only means monograms; never worth a retry storm.
+  retry: false,
+});
 
 /** Stored size to request for a rendered side, covering 3x displays. */
 export function appIconUrl(

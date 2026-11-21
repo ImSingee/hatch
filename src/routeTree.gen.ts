@@ -41,6 +41,7 @@ import { Route as AppWorkflowsIndexRouteImport } from './routes/_app/workflows/i
 import { Route as ApiAgentRunsRouteImport } from './routes/api/agent/runs'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiGitSplatRouteImport } from './routes/api/git/$'
+import { Route as ApiImagesAppIconsRouteImport } from './routes/api/images/app-icons'
 import { Route as ApiNotificationsDeviceResponseRouteImport } from './routes/api/notifications/device-response'
 import { Route as ApiRpcSplatRouteImport } from './routes/api/rpc/$'
 import { Route as MobileDashboardDashboardIdRouteImport } from './routes/mobile/dashboard/$dashboardId'
@@ -235,6 +236,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiGitSplatRoute = ApiGitSplatRouteImport.update({
   id: '/api/git/$',
   path: '/api/git/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImagesAppIconsRoute = ApiImagesAppIconsRouteImport.update({
+  id: '/api/images/app-icons',
+  path: '/api/images/app-icons',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiNotificationsDeviceResponseRoute =
@@ -451,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/api/agent/runs': typeof ApiAgentRunsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/git/$': typeof ApiGitSplatRoute
+  '/api/images/app-icons': typeof ApiImagesAppIconsRoute
   '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
@@ -516,6 +523,7 @@ export interface FileRoutesByTo {
   '/api/agent/runs': typeof ApiAgentRunsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/git/$': typeof ApiGitSplatRoute
+  '/api/images/app-icons': typeof ApiImagesAppIconsRoute
   '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
@@ -585,6 +593,7 @@ export interface FileRoutesById {
   '/api/agent/runs': typeof ApiAgentRunsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/git/$': typeof ApiGitSplatRoute
+  '/api/images/app-icons': typeof ApiImagesAppIconsRoute
   '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
@@ -654,6 +663,7 @@ export interface FileRouteTypes {
     | '/api/agent/runs'
     | '/api/auth/$'
     | '/api/git/$'
+    | '/api/images/app-icons'
     | '/api/notifications/device-response'
     | '/api/rpc/$'
     | '/mobile/dashboard/$dashboardId'
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/api/agent/runs'
     | '/api/auth/$'
     | '/api/git/$'
+    | '/api/images/app-icons'
     | '/api/notifications/device-response'
     | '/api/rpc/$'
     | '/mobile/dashboard/$dashboardId'
@@ -787,6 +798,7 @@ export interface FileRouteTypes {
     | '/api/agent/runs'
     | '/api/auth/$'
     | '/api/git/$'
+    | '/api/images/app-icons'
     | '/api/notifications/device-response'
     | '/api/rpc/$'
     | '/mobile/dashboard/$dashboardId'
@@ -841,6 +853,7 @@ export interface RootRouteChildren {
   ApiAgentRunsRoute: typeof ApiAgentRunsRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiGitSplatRoute: typeof ApiGitSplatRoute
+  ApiImagesAppIconsRoute: typeof ApiImagesAppIconsRoute
   ApiNotificationsDeviceResponseRoute: typeof ApiNotificationsDeviceResponseRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
   MobileDashboardDashboardIdRoute: typeof MobileDashboardDashboardIdRoute
@@ -1089,6 +1102,13 @@ declare module '@tanstack/react-router' {
       path: '/api/git/$'
       fullPath: '/api/git/$'
       preLoaderRoute: typeof ApiGitSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/images/app-icons': {
+      id: '/api/images/app-icons'
+      path: '/api/images/app-icons'
+      fullPath: '/api/images/app-icons'
+      preLoaderRoute: typeof ApiImagesAppIconsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/notifications/device-response': {
@@ -1475,6 +1495,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAgentRunsRoute: ApiAgentRunsRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiGitSplatRoute: ApiGitSplatRoute,
+  ApiImagesAppIconsRoute: ApiImagesAppIconsRoute,
   ApiNotificationsDeviceResponseRoute: ApiNotificationsDeviceResponseRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
   MobileDashboardDashboardIdRoute: MobileDashboardDashboardIdRoute,

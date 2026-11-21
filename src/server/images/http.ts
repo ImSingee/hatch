@@ -10,6 +10,7 @@ import {
   CredentialError,
 } from '~server/auth/credentials';
 import { RunTokenError } from '~server/agent-runner/run-auth';
+import { db } from '~/db';
 import { readCandidate } from './candidates';
 
 const plain = (message: string, status: number) =>
@@ -90,4 +91,27 @@ export async function handleImageCandidateRequest({
   if (!id || !body) return plain('Not found', 404);
   // Content under an id never changes, but it expires within a day.
   return png(body, 'private, max-age=3600, immutable', `"${id}"`);
+}
+
+/**
+ * `GET /api/images/app-icons`: icon key per App id, for Apps that have one.
+ * Plain HTTP rather than a Server Function so the App tile component, used
+ * all over the UI, depends on no server module.
+ */
+export async function handleAppIconIndexRequest({
+  request,
+}: {
+  request: Request;
+}): Promise<Response> {
+  const rejected = await denied(request);
+  if (rejected) return rejected;
+  const rows = await db.query.apps.findMany({
+    columns: { id: true, icon: true },
+  });
+  return Response.json(
+    Object.fromEntries(
+      rows.flatMap((row) => (row.icon ? [[row.id, row.icon]] : [])),
+    ),
+    { headers: { 'cache-control': 'private, no-store' } },
+  );
 }

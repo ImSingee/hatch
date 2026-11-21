@@ -240,6 +240,16 @@ revocation available. Historical SDK58/generic-v1 native acceptance does not
 verify this Connect migration; its checks are unit/contracts, type checks and
 builds only.
 
+### App icons and images
+
+`AppService` adds `GetAppIcon`, `SetAppIcon` and `ClearAppIcon`;
+`ImageService` adds `GetImageModel`, `SetImageModel`, `ClearImageModel` and
+`GenerateImages`. All accept every credential type. `SetAppIcon` takes either
+image bytes (its own 4 MiB message ceiling) or a candidate id. `Resource`
+gains the optional `icon_path` for Apps with an icon. Image bytes are fetched
+over plain authenticated HTTP, not RPC. See [App icons](app-icons.md).
+`TOO_MANY_REQUESTS` (logical status 429) is a new public error code.
+
 ## Errors and recovery
 
 Errors use the standard Connect envelope and canonical codes. Protovalidate

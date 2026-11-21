@@ -3,7 +3,7 @@ import { IconPhotoUp, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { appIconsQueryOptions } from '~queries/app-icons';
+import { appIconsQueryOptions } from '~components/apps/use-app-icon';
 import { clearAppIconFn, uploadAppIconFn } from '~server/app-icons';
 
 const MAX_BYTES = 4 * 1024 * 1024;

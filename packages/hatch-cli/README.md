@@ -365,6 +365,41 @@ See [the 15-tool comparison](../../../docs/cli-tool-parity.md). Platform and CLI
 contracts/SDKs are built and released together; strict DTO validation does not
 promise compatibility with older CLI binaries.
 
+## App icons and image generation
+
+```sh
+hatch image-model get --json
+hatch image-model set --provider <provider-id> --model gpt-image-1-mini
+hatch image generate --prompt-file prompt.txt --count 3 --glyph-tile '#3E63DD' --json
+hatch app icon set my-app --candidate <candidate-id>
+hatch app icon set my-app --file icon.png
+hatch app icon get my-app --json
+hatch app icon clear my-app
+hatch image-model clear
+```
+
+`image-model get` lists the providers that can generate images with suggested
+model ids; `set` replaces the single selection and uses that provider's stored
+API key. `image generate` costs provider credit and prints one candidate
+`id` and authenticated `path` per image; candidates expire after one day.
+`--glyph-tile` expects the model to draw a white glyph on black and returns a
+finished 512 px tile in that colour. `--output-dir` also writes `<id>.png`.
+`app icon set` takes exactly one of `--file` (PNG, JPEG or WebP, at most 4 MB,
+sides 64 to 4096 px; `-` reads stdin) and `--candidate`; the platform crops to
+a centred square, re-encodes and deletes the previous icon. `clear` succeeds
+when there is no icon.
+
+Local rejections exit 2: `invalid_arguments` (missing or contradictory flags,
+`--count` outside 1 to 4, malformed colour, model or candidate id),
+`invalid_input` (not an image, empty or over-long prompt), `input_too_large`.
+Platform errors: `CONFLICT` (6) when no usable image model is selected,
+`BAD_REQUEST` (2) carrying the image provider's reason or an image that cannot
+be decoded, `TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
+`NOT_FOUND` (5) for an unknown App, provider or expired candidate,
+`SERVICE_UNAVAILABLE` (7) when the provider is unreachable, and
+`download_failed` (7) when a generated candidate could not be saved to
+`--output-dir` (it stays available by id).
+
 ## Notifications
 
 `hatch notification ...` manages the notification center with a user session,

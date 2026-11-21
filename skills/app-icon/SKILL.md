@@ -39,14 +39,18 @@ other work on an icon.
 
    Each candidate has an `id` and a `path`. Candidates expire after one day.
 
-4. Show the candidates in your reply as Markdown images using each `path`
-   exactly as returned, labelled A, B, C:
+4. Call `ask` with one question whose text shows the candidates as Markdown
+   images, using each `path` exactly as returned and a letter label:
 
    ```markdown
-   A ![A](/api/images/candidates/<id-a>) B ![B](/api/images/candidates/<id-b>)
+   Which icon do you prefer?
+
+   A ![A](/api/images/candidates/<id-a>) B ![B](/api/images/candidates/<id-b>) C ![C](/api/images/candidates/<id-c>)
    ```
 
-   Then call `ask` with one option per candidate plus "Try a different idea".
+   Offer one option per candidate ("A", "B", "C") plus "Try a different
+   idea". Only these platform paths render as images; never link an external
+   image.
 
 5. Set the chosen one: `hatch app icon set <app-id> --candidate <id> --json`.
    For "Try a different idea", change the subject (not the style rules) and
