@@ -238,3 +238,22 @@ test('the verified mobile client identity is displayed before approval', async (
     .toBeDisabled();
   expect(calls.map((call) => call.action)).toEqual(['claim']);
 });
+
+test('approving the desktop app sends the browser back to it', async () => {
+  replies.claim = Response.json({ ...claimed, client_id: 'hatch-desktop' });
+  replies.approve = Response.json({ success: true });
+  const screen = await renderPage();
+  await screen.getByRole('button', { name: 'Review request' }).click();
+  await expect
+    .element(screen.getByRole('heading', { name: 'Approve Hatch for Mac?' }))
+    .toBeVisible();
+  await screen.getByRole('checkbox').click();
+  await screen.getByRole('button', { name: 'Approve' }).click();
+  await expect
+    .element(screen.getByRole('heading', { name: 'Device approved' }))
+    .toBeVisible();
+  // The link only brings the app forward; it carries no code or session.
+  await expect
+    .element(screen.getByRole('link', { name: 'Open Hatch for Mac' }))
+    .toHaveAttribute('href', 'hatch://');
+});

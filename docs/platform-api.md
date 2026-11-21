@@ -182,7 +182,12 @@ WebView themselves. See [migration and rollout impact](browser-handoffs.md#remov
 
 Login/device/logout retain Better Auth's existing HTTP contract. Native callers
 use `/api/auth/device/code` and `/api/auth/device/token` with
-`client_id: "hatch-mobile"`; `/cli/authorize` labels the request **Hatch Mobile**.
+`client_id: "hatch-mobile"` or, for the macOS app, `"hatch-desktop"`;
+`/cli/authorize` labels the request **Hatch Mobile** or **Hatch for Mac**
+(`src/auth/device-clients.ts` lists the accepted clients). After approving a
+`hatch-desktop` request the page opens `hatch://` to bring the app back to the
+front; the link carries nothing, and the app still receives its session by
+polling.
 Open only the same-instance verification URL in the system browser, honor polling
 intervals and pending/slow-down/denied/expired results, and keep the returned
 session token in secure storage scoped to the exact instance origin.

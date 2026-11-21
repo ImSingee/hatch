@@ -29,7 +29,10 @@ export function RequestReview({
 
   return (
     <>
-      <ViewHeader title={`Approve ${DEVICE_CLIENTS[request.clientId]}?`} focus>
+      <ViewHeader
+        title={`Approve ${DEVICE_CLIENTS[request.clientId].name}?`}
+        focus
+      >
         Signing in as{' '}
         <Text span inherit fw={600} c="var(--mantine-color-text)">
           {account ?? 'your account'}
