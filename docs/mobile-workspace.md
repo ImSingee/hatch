@@ -66,11 +66,26 @@ monogram: the first character of the name on a `tiles` colour chosen by the
 same hash of the id as the web `AppGlyph`, so an App has one tint everywhere.
 Icons are kept in memory only.
 
-### Accent
+### Pins
 
-The accent is the theme's single input (`AccentProvider` in
-`mobile/app/_layout.tsx`). It is the token default today; reading the
-instance's accent setting is a planned follow-up.
+The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
+(`ifAbsent`), `UnpinApp` (by pin id) and `SetWorkflowPinned`. An "Add" tile
+after each grid opens a picker of what is not pinned yet; touching and holding
+a tile offers to unpin it. Pins are shared by every client, so a change
+re-reads the pins and the lists that mark pinned rows. Reordering pins is not
+offered on the phone yet (`ReorderAppPins` exists).
+
+### Accent and ground
+
+The accent is the theme's single input. The app reads the instance's
+`ui.theme` accent through `ThemeService.GetTheme` after sign-in and again each
+time it returns to the foreground, and keeps the last value per instance on the
+phone so a cold start draws it from the first frame. An accent name the build's
+tokens do not define falls back to the default. The app does not consume the
+platform event stream, so a change made elsewhere shows on the next foreground.
+
+Every page draws the Desk ground shapes (`DESIGN.md`, "Ground shapes") from the
+`ground` tokens; the circle follows the accent.
 
 ## Browser session and dashboard canvas
 
