@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# --- Deno binary (used to run each app's backend) -------------------------
+# --- Deno binary (runs App backends and Workflows; builds Deno-toolchain
+# sources) ---------------------------------------------------------------
 FROM denoland/deno:bin-2.9.8 AS deno
 
 # Private in-panel Tailscale node (userspace, no TUN or privileged container).
@@ -12,6 +13,8 @@ COPY packages/tailscale/*.go ./
 RUN CGO_ENABLED=0 go build -trimpath -o /hatch-tailscale .
 
 # --- Base image with pnpm ----------------------------------------------------
+# pnpm installs the platform itself and, at deploy time, the dependencies of
+# pnpm-lockfile Apps and Workflows. The version matches `packageManager`.
 FROM node:26-slim AS base
 WORKDIR /app
 RUN npm install --global pnpm@12.22.0
@@ -48,6 +51,9 @@ ENV AGENT_INTERNAL_HOST=0.0.0.0
 ENV AGENT_INTERNAL_PORT=3701
 # Deno caches npm: dependencies here (mount /cache to persist across restarts).
 ENV DENO_DIR=/cache/deno
+# Deploy builds of pnpm-lockfile sources share one package store on the same
+# volume. Files are copied out of it, so builds never share inodes with it.
+ENV HATCH_PNPM_STORE_DIR=/cache/pnpm-store
 
 # Runtime tools used by the platform and Agent Runner. git backs canonical
 # app/workflow repos and local worktrees; the remaining tools are available to
@@ -78,8 +84,9 @@ RUN useradd --system --user-group --no-create-home hatch-sandbox
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=tailscale /hatch-tailscale /app/bin/hatch-tailscale
 
-# Runtime needs: the built server, the full dependency tree (esbuild bundling +
-# buf/protoc-gen-es codegen happen on every deploy), the scaffold template, the
+# Runtime needs: the built server, the full dependency tree (esbuild bundling,
+# tsc type checks and buf/protoc-gen-es codegen happen on every deploy, and
+# @types/deno is copied into each source's .hatch/), the scaffold template, the
 # agent skills, the built-in Hatch SDK, and SQL migrations applied on startup.
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
@@ -101,7 +108,7 @@ COPY --from=build /app/sdk-internal/workflow/package.json ./sdk-internal/workflo
 COPY --from=build /app/sdk-internal/workflow/dist ./sdk-internal/workflow/dist
 
 # Runtime data lives in /app/workspace; dependency/tool caches live in /cache.
-RUN mkdir -p /app/workspace /cache/deno
+RUN mkdir -p /app/workspace /cache/deno /cache/pnpm-store
 
 EXPOSE 3700
 # Platform (default). The Agent Runner runs the same image with

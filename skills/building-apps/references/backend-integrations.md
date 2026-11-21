@@ -72,7 +72,7 @@ To switch to Fetch, replace the self-listening adapter with the default export
 above and select `backend.runtime: "deno-serve"` in the same source change.
 Preserve `compatibilityVersion`. Register `compressionGzip` and
 `compressionBrotli` as shown to retain compressed Connect and gRPC-Web traffic,
-refresh `deno.lock` when dependencies change, validate, and redeploy. Upgrade
+refresh the lockfile when dependencies change, validate, and redeploy. Upgrade
 all serving platform processes before deploying Apps using the new mode;
 older platform releases always invoke `deno run`.
 

@@ -1,6 +1,6 @@
 ---
 name: building-workflows
-description: How to design, build, and deploy a Hatch workflow end to end — a single-file Deno program defined with defineWorkflow, a zod v4 input schema, observable retried steps, Deno-installed npm dependencies, and manual/cron/webhook triggers. Use this whenever you create or modify a workflow.
+description: How to design, build, and deploy a Hatch workflow end to end — a single-file Deno program defined with defineWorkflow, a zod v4 input schema, observable retried steps, npm dependencies, and manual/cron/webhook triggers. Use this whenever you create or modify a workflow.
 ---
 
 # Building a Hatch workflow
@@ -8,7 +8,7 @@ description: How to design, build, and deploy a Hatch workflow end to end — a 
 A **workflow** is a co-equal sibling of an app, but for periodic/repetitive
 background tasks. Unlike an app it has **no custom UI or API** — the platform
 gives every workflow the same fixed UI for triggering and auditing runs. A
-workflow is pure code: a single Deno program (npm imports allowed) that the
+workflow is pure code: a single Deno program (npm packages allowed) that the
 platform **bundles into one file** at deploy time and runs on each trigger.
 
 Call `checkout_workflow` before modifying an existing workflow; the source
@@ -37,16 +37,35 @@ Do not import generated files or execution modules from the manifest.
 workflows/<slug>/
   manifest.ts          declares id, name, compatibilityVersion, entry, network, triggers
   workflow.ts          your workflow: defineWorkflow({ input, run })
-  package.json         npm dependencies (installed only with Deno)
-  deno.json            reviewed npm lifecycle-script allowlist
-  deno.lock            Deno dependency lock (commit this file)
-  .hatch/              generated platform SDK + import map — DO NOT COMMIT
+  package.json         npm dependencies
+  pnpm-lock.yaml       dependency lock (commit this file)
+  .hatch/              generated platform SDK, import map + TypeScript
+                       configuration — DO NOT COMMIT
 ```
 
 `create_workflow` and `checkout_workflow` materialize `.hatch/` before returning.
 They also add the generated paths to the repository-local Git exclude file, so
 the authored tree stays clean without changing `.gitignore`. Read the exact
 files before editing.
+
+### Build toolchain
+
+The committed lockfile selects the build toolchain before anything in the
+source is evaluated:
+
+- `pnpm-lock.yaml`, with no `deno.json` or `deno.lock`: the pnpm toolchain.
+  `create_workflow` scaffolds it, and this Skill describes it.
+- `deno.json` and `deno.lock`, with no `pnpm-lock.yaml`: the Deno toolchain. It
+  stays fully supported for existing Workflows. For such a Workflow, read
+  [Deno toolchain](references/deno-toolchain.md) and follow it in place of
+  Dependencies and Local validation below.
+- Files of both families together, or no lockfile at all: deploy rejects the
+  source and names the files to remove.
+
+Check which lockfile an existing Workflow has before editing it, and never mix
+the two. Do not move a Workflow from one toolchain to the other unless the user
+asks; `workflow-compatibility` has the procedure. The toolchain only builds the
+Workflow: it runs on Deno either way and uses `Deno.*` APIs.
 
 ## The workflow program
 
@@ -107,75 +126,71 @@ export default defineWorkflow({
   copy instead of accepting SDK bytes from workflow source. Legacy source-owned
   `hatch/workflow.ts` is unsupported.
 - Extra npm deps go in `package.json` `dependencies`, then use a bare import such
-  as `import dayjs from 'dayjs'`. Never add `@hatch/*` to `package.json`,
-  `deno.json`, or `deno.lock`, or map them in source-owned import maps. Local
-  Deno tooling resolves `@hatch/workflow` through the generated
-  `.hatch/import-map.json`.
+  as `import dayjs from 'dayjs'`. Never add `@hatch/*` to `package.json` or the
+  lockfile, or map them in source-owned import maps. `tsc` and local Deno
+  commands resolve `@hatch/workflow` through the generated
+  `.hatch/tsconfig.json` and `.hatch/import-map.json`.
 - Use `@hatch/workflow/manifest` for `defineWorkflowManifest` and its input
   type. Both public entrypoints use the declaration exports in
   `.hatch/sdk/@hatch/workflow/package.json`; do not import private generated
   files or repository implementation paths.
 
-### Dependencies and lifecycle scripts
+### Dependencies
 
-**Deno is the only package manager.** Never run `npm install`, `pnpm install`,
-or generate npm/pnpm lock files. After every dependency change, run this in the
-workflow source root:
-
-```bash
-deno install --package-json --node-modules-dir=auto --lock=deno.lock
-```
-
-Commit `package.json`, `deno.json`, and the resulting `deno.lock`; never commit
-`node_modules`. `deploy_workflow` repeats the install with `--frozen`. Missing or
-stale files fail deploy. If deploy reports a legacy deno.json-only source, load
-this Skill, move every `npm:` import into `package.json`, run the command above,
-and commit all three files before deploying again.
-
-For local Deno commands that load workflow source, always select the generated
-import map explicitly:
+pnpm is the Workflow package manager. Declare npm registry versions or ranges
+in `package.json` and import each package by its name. From the workflow
+source root, add a package with:
 
 ```bash
-deno check --config=deno.json --node-modules-dir=auto \
-  --import-map=.hatch/import-map.json --lock=deno.lock --frozen ./workflow.ts
-deno test --import-map=.hatch/import-map.json
-deno run --import-map=.hatch/import-map.json <local-harness.ts>
+pnpm add --ignore-workspace --ignore-scripts <package>
 ```
 
-Run the source check before committing, replacing `./workflow.ts` with the
-manifest's entry path when different. It checks that entry and its transitive
-imports. `deploy_workflow` repeats this check with the committed dependencies
-and a fresh platform SDK before bundling, describe-mode execution, or artifact
-publication. Type errors fail deploy and must be fixed in authored source and
-committed before retrying; bundling and input-schema extraction do not replace
-type checking.
+After editing `package.json` directly, and after `create_workflow` or
+`checkout_workflow` (they do not install dependencies), install from the
+lockfile and refresh it:
+
+```bash
+pnpm install --ignore-workspace --ignore-scripts
+```
+
+Commit `package.json` and `pnpm-lock.yaml`; never commit `node_modules`.
+`deploy_workflow` repeats the install frozen and offline from the committed
+lockfile, so a missing or out-of-date lockfile fails the deploy.
+
+Hatch owns package-manager, registry, and compiler configuration:
+
+- `package.json` declares `"type": "module"` and may contain only `name`,
+  `version`, `private`, `description`, `license`, `type`, `dependencies`,
+  `devDependencies`, and `optionalDependencies`. Every other field is rejected,
+  including `packageManager` (`pnpm init` adds it; remove it), `devEngines`,
+  `engines`, `scripts`, `pnpm`, `workspaces`, `overrides`, and
+  `peerDependencies`.
+- Dependency specifiers are npm registry versions or ranges. `file:`, `link:`,
+  `workspace:`, `catalog:`, git, URL, `jsr:`, and `npm:` alias specifiers,
+  local paths, and `@jsr/*` packages are rejected.
+- `npm:`, `jsr:`, `http:`, and `https:` import specifiers in source are not
+  supported: add the package to `package.json` and import it by name.
+- Do not create any of these root files: `.npmrc` in any casing,
+  `package.json5`, `package.yaml`, `.pnpmfile.cjs`, `.pnpmfile.mjs`, a misnamed
+  workspace file such as `pnpm-workspace.yml` or `pnpm-workspaces.yaml`,
+  `tsconfig.json`, `jsconfig.json`, or `deno.jsonc`. pnpm may write a root
+  `pnpm-workspace.yaml`; builds ignore it and Git ignores it, so never rely on
+  it or commit it.
+- The lockfile is the single-document file pnpm writes with default settings.
+  Every locked package must resolve by registry integrity; tarball URLs, git
+  sources, directories, patched dependencies, and overrides are not accepted.
+
+Dependency lifecycle scripts (`preinstall`, `install`, `postinstall`) never
+run. A dependency that needs one, or an npm native addon, cannot be used:
+choose another dependency. FFI through `Deno.dlopen` and host
+commands/sidecars require necessary, explicitly authorized `extraPermissions`
+as described below, plus separately available reviewed host libraries or
+binaries. A Workflow that already depends on a reviewed lifecycle script stays
+on the Deno toolchain.
 
 If `.hatch/` is missing or stale, run `create_workflow` or `checkout_workflow`
-again for the same source path. Do not recreate the SDK or import map yourself.
-
-Deno skips npm `preinstall`, `install`, and `postinstall` scripts by default. If
-it reports a skipped lifecycle script, do not enable it blindly:
-
-1. Find the exact resolved version in `deno.lock`; inspect the package's
-   lifecycle command and every local script it invokes.
-2. Choose another dependency if it downloads or executes unreviewed remote
-   code, reads credentials/project-external files, writes outside the package or
-   project, changes global configuration, elevates privileges, is obfuscated or
-   dynamic, or cannot be fully traced.
-3. Reject npm native addons and generated runtime files that cannot be
-   carried by the single-file Workflow bundle. FFI through `Deno.dlopen` and
-   host commands/sidecars require necessary, explicitly authorized
-   `extraPermissions` as described below, plus separately available reviewed
-   host libraries or binaries.
-4. Only after confirming the exact command is safe, add the exact locked version
-   to `deno.json`—never `true`, a tag, wildcard, or range:
-
-   ```json
-   { "allowScripts": ["npm:trusted-package@1.2.3"] }
-   ```
-
-5. Run Deno install again, verify the output and Workflow, then commit
-   `deno.json` and `deno.lock`. Review transitive packages independently.
+again for the same source path. Do not recreate the SDK, import map, or
+TypeScript configuration yourself.
 
 ## Manifest & triggers
 
@@ -281,31 +296,57 @@ user authorization are mandatory before writing it or deploying it.
 
 ## Local validation
 
-After create/checkout has prepared `.hatch/` and locked dependencies (and after
-installing any dependency changes), run from the Workflow root. If the selected
-source is `manifest.ts`, check it independently before the execution entry:
+After create/checkout has prepared `.hatch/` and the dependencies are installed
+(see Dependencies), run from the Workflow root. If the selected source is
+`manifest.ts`, check it independently before the execution entry:
 
 ```bash
-deno check --config=deno.json --no-remote --node-modules-dir=manual \
-  --import-map=.hatch/import-map.json --lock=deno.lock --frozen ./manifest.ts
+tsc -p .hatch/tsconfig.manifest.json
 ```
 
 This checks the manifest's own import graph, which checking `workflow.ts` may
 never reach. Fix failures before continuing. For `manifest.json`, skip only
 this TS check and retain JSON source; platform manifest validation still
-applies. Then check the manifest's declared entry (replace `workflow.ts` below
-if different) and run relevant tests with the generated import map:
+applies. Then type-check the whole Workflow:
 
 ```bash
-deno check --config=deno.json --node-modules-dir=auto \
-  --import-map=.hatch/import-map.json --lock=deno.lock --frozen ./workflow.ts
-deno test --import-map=.hatch/import-map.json <test paths...>
+tsc -p .hatch/tsconfig.json
 ```
 
-`deploy_workflow` repeats TS manifest checking, validates the evaluated
-configuration, and checks the execution entry and its transitive imports before
-bundling or describe-mode execution. A successful TypeScript check does not
-replace platform validation of paths, cross-field requirements, or serializability.
+`tsc` is the platform's compiler and `.hatch/tsconfig.json` is its only
+configuration: `strict`, `noImplicitOverride`, the `Deno` namespace from
+`.hatch/types/deno.d.ts`, and the `@hatch/*` SDK mappings. Workflow source
+carries no compiler configuration of its own. Relative imports state their
+`.ts` extension. Types for Node built-ins (`node:*` imports) need `@types/node`
+in `devDependencies`; `@types/*` packages listed in the Workflow's own
+`package.json` are loaded automatically.
+
+Run tests and local harnesses on the Deno runtime, always with these three
+flags plus the `--allow-*` flags the code needs:
+
+```bash
+deno test --no-lock --node-modules-dir=manual \
+  --import-map=.hatch/import-map.json <test paths...>
+deno run --no-lock --node-modules-dir=manual \
+  --import-map=.hatch/import-map.json <local-harness.ts>
+```
+
+Never drop `--no-lock`. A `deno.lock` or `deno.json` written beside
+`pnpm-lock.yaml` makes the toolchain ambiguous, and deploy fails until the file
+is removed.
+
+`deploy_workflow` repeats the install and the TS manifest check, evaluates
+`manifest.ts` in a Node process that has no file, network, subprocess, or
+worker access, validates the evaluated configuration, and type-checks the
+execution entry and its transitive imports before bundling or describe-mode
+execution. Keep `manifest.ts` a pure declaration: it may import only local
+source modules, `@hatch/workflow/manifest`, and packages from `package.json`,
+and must not call Node or Deno APIs. The bundle carries every dependency; an import left
+unresolved, remote URLs included, fails the deploy, and Workflow code may
+import Node built-ins as `node:*`. A successful TypeScript check does not
+replace platform validation of paths, cross-field requirements, or
+serializability. Type errors must be fixed in authored source and committed
+before retrying.
 
 ## Git workflow
 

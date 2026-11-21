@@ -48,9 +48,9 @@ Do not import generated files or execution modules from the manifest.
    current contents of that exact target.
 3. Read the actual source tree before editing. Keep the source manifest (`manifest.ts` or `manifest.json`), proto,
    backend, frontend, widgets, and capabilities synchronized.
-4. If dependencies changed, update the lockfile with the Deno command below.
+4. If dependencies changed, refresh the lockfile as described in Dependencies.
    Follow Local validation: check `manifest.ts` when selected, generate RPC
-   code, check enabled source entries, and run relevant tests.
+   code, type-check the source, and run relevant tests.
 5. In the returned worktree, inspect `git status`, stage only intended authored
    files, and commit. Do not `git push` from it: its `origin` is a local
    read-only bundle, and `deploy_app` uploads the commit. Never create
@@ -79,39 +79,64 @@ app/index.html         SPA host
 app/main.tsx           React SPA entry
 data/schema.ts         managed Data Table schema
 widgets/counter.tsx    default demo widget
-package.json           npm dependencies resolved by Deno
-deno.json              compiler and lifecycle-script deny policy
-deno.lock              committed dependency lock
+package.json           npm dependencies
+pnpm-lock.yaml         committed dependency lock
 buf.yaml
 buf.gen.yaml
 gen/service_pb.ts      generated and ignored
-.hatch/                platform-owned SDK and import map; generated and ignored
+.hatch/                platform-owned SDK, import map, and TypeScript
+                       configuration; generated and ignored
 ```
+
+### Build toolchain
+
+The committed lockfile selects the build toolchain before anything in the
+source is evaluated, independently of `backend.runtime`:
+
+- `pnpm-lock.yaml`, with no `deno.json` or `deno.lock`: the pnpm toolchain.
+  `create_app` scaffolds it, and this Skill describes it.
+- `deno.json` and `deno.lock`, with no `pnpm-lock.yaml`: the Deno toolchain. It
+  stays fully supported for existing Apps. For such an App, read
+  [Deno toolchain](references/deno-toolchain.md) and follow it in place of the
+  dependency-file rules below, Dependencies, and Local validation.
+- Files of both families together, or no lockfile at all: checkout and deploy
+  reject the source and name the files to remove.
+
+Check which lockfile an existing App has before editing it, and never mix the
+two. Do not move an App from one toolchain to the other unless the user asks;
+`app-compatibility` has the procedure. The toolchain only builds the App: the
+backend runs on Deno either way and uses `Deno.*` APIs.
 
 Create and checkout prepare dependencies, run trusted Buf codegen, and
 materialize `.hatch/` before returning. Treat the `.hatch` path segment as
 reserved case-insensitively; never create spelling variants such as `.HATCH`.
 Never edit or commit `.hatch/`, `gen/`, or `node_modules/`. Do not place an App
-entry inside `.hatch/`. Do not create a root `.npmrc` in any casing; Hatch owns
-App registry configuration. Use only the canonical root `deno.json`; do not
-create `deno.jsonc`, `tsconfig.json`, or `jsconfig.json`.
+entry inside `.hatch/`.
 
-Keep the App module and compiler contract fixed: `package.json` declares
-`"type": "module"`; `deno.json` sets `compilerOptions.strict` to `true`,
-`compilerOptions.jsx` to `"react-jsx"`, and `compilerOptions.jsxImportSource`
-to `"react"`. Do not add `imports`, `scopes`, `importMap`, or `workspace` to
-`deno.json`. Use explicit relative imports and registry dependencies from
-`package.json` instead.
+Hatch owns package-manager, registry, and compiler configuration. Do not create
+any of these root files: `.npmrc` in any casing, `package.json5`,
+`package.yaml`, `.pnpmfile.cjs`, `.pnpmfile.mjs`, a misnamed workspace file
+such as `pnpm-workspace.yml` or `pnpm-workspaces.yaml`, `tsconfig.json`,
+`jsconfig.json`, or `deno.jsonc`. pnpm may write a root `pnpm-workspace.yaml`;
+builds ignore it and Git ignores it, so never rely on it or commit it.
 
-Never exclude `.hatch/` or any of its files in the top-level `deno.json`
-`exclude` array, including via glob patterns. Such exclusions can skip the
-platform-generated Fetch backend contract check even when its file is explicitly
-passed to `deno check`.
+Keep the App module and compiler contract fixed. `package.json` declares
+`"type": "module"` and may contain only `name`, `version`, `private`,
+`description`, `license`, `type`, `dependencies`, `devDependencies`, and
+`optionalDependencies`. Every other field is rejected, including
+`packageManager` (`pnpm init` adds it; remove it), `devEngines`, `engines`,
+`scripts`, `pnpm`, `workspaces`, `overrides`, and `peerDependencies`. The
+platform-generated `.hatch/tsconfig.json` fixes the compiler options: `strict`,
+`noImplicitOverride`, `jsx: "react-jsx"`, `jsxImportSource: "react"`, the DOM
+and ESNext libraries, the `Deno` namespace from `.hatch/types/deno.d.ts`, and
+the `@hatch/*` SDK mappings. App source carries no compiler configuration of
+its own.
 
-The public SDK mappings are generated in `.hatch/import-map.json`. Do not add
-`@hatch/*` packages to `package.json` or `deno.lock`; Hatch owns their version
-and materialization. The authoritative declaration entry for `@hatch/app/data` is
-the `exports` map in `.hatch/sdk/@hatch/app/package.json`.
+The public SDK mappings are generated in `.hatch/import-map.json` and
+`.hatch/tsconfig.json`. Do not add `@hatch/*` packages to `package.json` or the
+lockfile; Hatch owns their version and materialization. The authoritative
+declaration entry for `@hatch/app/data` is the `exports` map in
+`.hatch/sdk/@hatch/app/package.json`.
 
 Use `@hatch/app` for `defineAppManifest`, `@hatch/app/data` for Data Tables,
 `@hatch/app/data/react` for the React adapter, and `@hatch/app/storage` (with
@@ -130,8 +155,6 @@ generated RPC code. Every relative TypeScript import must state its `.ts` or
 import { TodoService } from '../gen/service_pb.ts';
 import schema from '../data/schema.ts';
 ```
-
-Do not enable unstable Deno import resolution.
 
 Deploy bundles each enabled entry and its static imports. Source files,
 dependency metadata, installed modules, `.hatch/`, and `gen/` do not become
@@ -306,46 +329,59 @@ rules above before it may be written or deployed:
 
 ## Dependencies
 
-Deno is the only App package manager. Add normal semver dependencies to
-`package.json`; never run npm or pnpm. After every dependency change, run from
-the App root:
-
-Apps deploy as standalone source trees. Do not use package/deno workspaces or
-`file:`, `link:`, `workspace:`, absolute-path, or parent-directory dependencies;
-publish or select a registry package version instead.
-Use registry npm dependencies declared in `package.json`; do not import
-`http:`, `https:`, or `jsr:` modules from App source.
+pnpm is the App package manager. Declare npm registry versions or ranges in
+`package.json` and import each package by its name. From the App root, add a
+package with:
 
 ```bash
-deno install --package-json --node-modules-dir=auto --lock=deno.lock
+pnpm add --ignore-workspace --ignore-scripts <package>
 ```
 
-Commit `package.json`, `deno.json`, and `deno.lock`. Deploy repeats installation
-with `--frozen` and rejects stale dependency state.
+After editing `package.json` directly, refresh the lockfile and `node_modules`:
 
-Deno skips npm lifecycle scripts by default. App preparation and deploy do not
+```bash
+pnpm install --ignore-workspace --ignore-scripts
+```
+
+Commit `package.json` and `pnpm-lock.yaml`. Preparation and deploy repeat the
+install frozen and offline from the committed lockfile, so an out-of-date
+lockfile fails the deploy.
+
+Apps deploy as standalone source trees that resolve every package from the npm
+registry. These are rejected:
+
+- `file:`, `link:`, `workspace:`, `catalog:`, git, URL, `jsr:`, and `npm:`
+  alias specifiers, and local paths, in `package.json`;
+- `@hatch/*` and `@jsr/*` packages;
+- `npm:`, `jsr:`, `http:`, and `https:` import specifiers in App source: add
+  the package to `package.json` and import it by name;
+- a lockfile other than the single-document file pnpm writes with default
+  settings. Every locked package must resolve by registry integrity; tarball
+  URLs, git sources, directories, patched dependencies, and overrides are not
+  accepted.
+
+Dependency lifecycle scripts never run. App preparation and deploy do not
 execute package `preinstall`, `install`, or `postinstall` code, even when a
-package version has been audited. Keep `deno.json` `allowScripts` empty. If a
-dependency needs a lifecycle script or npm native addon, replace it with a
-compatible dependency: bundle-v1 bundles dependencies, so npm native addons
-remain unsupported. `Deno.dlopen` can load a separately supplied library with
-an authorized `--allow-ffi` declaration. Host commands or sidecars require an
-authorized `--allow-run` declaration; supply reviewed binaries as backend
-assets or use existing host installations, never an npm lifecycle download.
+package version has been audited. If a dependency needs a lifecycle script or
+an npm native addon, replace it with a compatible dependency: bundle-v1 bundles
+dependencies, so npm native addons remain unsupported. `Deno.dlopen` can load a
+separately supplied library with an authorized `--allow-ffi` declaration. Host
+commands or sidecars require an authorized `--allow-run` declaration; supply
+reviewed binaries as backend assets or use existing host installations, never
+an npm lifecycle download.
 
 ## Local validation
 
 After create/checkout has prepared `.hatch/` and locked dependencies (and after
 installing any dependency changes), run from the App root. If the selected
-source is `manifest.ts`, type-check it separately before RPC codegen and entry
-checks:
+source is `manifest.ts`, type-check it separately before RPC codegen and the
+source check:
 
 ```bash
-deno check --config=deno.json --no-remote --node-modules-dir=manual \
-  --import-map=.hatch/import-map.json --lock=deno.lock --frozen ./manifest.ts
+tsc -p .hatch/tsconfig.manifest.json
 ```
 
-This checks the manifest's own import graph, which entry checks may never
+This checks the manifest's own import graph, which the App entries may never
 reach. Fix failures before continuing. For `manifest.json`, skip only this TS
 check and retain JSON source; platform manifest validation still applies.
 
@@ -357,44 +393,47 @@ it from the App root with Hatch's platform-owned template. Do not run bare
 buf generate --template .hatch/buf.gen.yaml
 ```
 
-Then type-check every enabled entry from the source manifest (`manifest.ts` or `manifest.json`), plus `data/schema.ts`
-when Data Tables are enabled:
+Then type-check the whole App:
 
 ```bash
-deno check --config=deno.json --no-remote --node-modules-dir=auto \
-  --import-map=.hatch/import-map.json \
-  --lock=deno.lock --frozen \
-  app/main.tsx backend/main.ts widgets/counter.tsx data/schema.ts
+tsc -p .hatch/tsconfig.json
 ```
 
-Adjust the final entry list to the manifest and omit disabled or absent entries.
-Run relevant tests after the check. Do not use a different import map for local
-checks.
+`tsc` is the platform's compiler and `.hatch/tsconfig.json` is its only
+configuration. The check covers every authored `.ts` and `.tsx` file,
+including `data/schema.ts` and `gen/`. Relative imports keep their `.ts` or
+`.tsx` extension. Types for Node built-ins (`node:*` imports) need
+`@types/node` in `devDependencies`; `@types/*` packages listed in the App's own
+`package.json` are loaded automatically.
 
-Other Deno commands that resolve App execution entries must use the same SDK,
-automatic node-modules, and frozen-lock contract as the entry check. The
-manifest check above uses manual node-modules to match the restricted loader.
-Include authorized `backend.extraPermissions` in local execution and test
-commands, using the merge rules above rather than appending conflicting flags.
-For example:
+Run tests and local executions on the Deno runtime. Always pass these three
+flags, and include authorized `backend.extraPermissions` using the merge rules
+above rather than appending conflicting flags:
 
 ```bash
-deno test --config=deno.json --no-remote --node-modules-dir=auto \
+deno test --no-lock --node-modules-dir=manual \
   --import-map=.hatch/import-map.json \
-  --lock=deno.lock --frozen <merged platform and authorized extraPermissions flags...> <test paths...>
-deno run --config=deno.json --no-remote --node-modules-dir=auto \
+  <merged platform and authorized extraPermissions flags...> <test paths...>
+deno run --no-lock --node-modules-dir=manual \
   --import-map=.hatch/import-map.json \
-  --lock=deno.lock --frozen <merged platform and authorized extraPermissions flags...> <entry.ts>
-deno cache --config=deno.json --no-remote --node-modules-dir=auto \
-  --import-map=.hatch/import-map.json \
-  --lock=deno.lock --frozen <entries...>
+  <merged platform and authorized extraPermissions flags...> <entry.ts>
 ```
 
-`deploy_app` performs the same source check before schema evaluation, production
-bundling, database migration, artifact persistence, or live-release activation.
-Its later bundle check verifies the emitted artifact and does not replace the
-source check. A failed source check must be fixed in authored source and
-committed before retrying deploy.
+Never drop `--no-lock`. A `deno.lock` or `deno.json` written beside
+`pnpm-lock.yaml` makes the toolchain ambiguous, and preparation and deploy fail
+until the file is removed.
+
+`deploy_app` repeats the install, type-checks every enabled manifest entry
+with `tsc`, and evaluates `manifest.ts` and `data/schema.ts` in a Node process
+that has no file, network, subprocess, or worker access. Keep both files pure
+declarations: they may import only local source modules, `@hatch/*`, and
+packages from `package.json`, and must not call Node or Deno APIs at module
+scope. Deploy then bundles the
+frontend, widgets, and backend, and rejects any import left unresolved, remote
+URLs included; backend code may import Node built-ins as `node:*`. All of this
+happens before database migration, artifact persistence, or live-release
+activation. A failed check must be fixed in authored source and committed
+before retrying deploy.
 
 ## Managed Data Tables
 

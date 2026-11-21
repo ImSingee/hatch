@@ -47,6 +47,13 @@ the complete result. CLI adopts only proven Agent checkout identity/history and
 never modifies the original origin or resets dirty source. Empty canonical
 source creates a recoverable empty Git checkout, never a second resource.
 
+Preparation covers both build toolchains, selected by the committed lockfile
+as on the platform: a `pnpm-lock.yaml` source is reproduced with the same
+frozen pnpm install and the platform's pinned `typescript`/`esbuild` versions
+from `SdkService/GetSdk`; a `deno.json` + `deno.lock` source keeps the Deno
+preparation. The pnpm toolchain adds no command, Agent Tool, public RPC method
+or CLI exception; `GetSdk` only gains tool versions and generated files.
+
 The production HTTP/PostgreSQL suite in
 `src/server/platform-api/lifecycle.integration.test.ts` calls all fifteen actual
 Tools through the internal REST client and compares public CLI outputs and
