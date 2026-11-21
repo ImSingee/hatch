@@ -1,21 +1,16 @@
 import { Button, Center, Loader } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Link,
-  createFileRoute,
-  notFound,
-  useNavigate,
-} from '@tanstack/react-router';
-import { IconArrowLeft, IconTrash } from '@tabler/icons-react';
+import { createFileRoute, notFound, useNavigate } from '@tanstack/react-router';
+import { IconTrash } from '@tabler/icons-react';
 import { Suspense, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { WindowPage } from '~components/desk/window-page';
+import classes from '~components/notifications/notifications-window.module.css';
+import { WindowBody } from '~components/page/page';
 import { NotificationDetail } from '~components/notifications/notification-detail';
 import {
   notificationDeletedToastId,
   useDeleteNotification,
 } from '~components/notifications/use-delete-notification';
-import { useLiveNotifications } from '~components/notifications/use-live-notifications';
 import { usePlatformEvent } from '~components/system/platform-events';
 import { notificationDetailQueryOptions } from '~queries/notifications';
 
@@ -42,7 +37,6 @@ function NotificationDetailPage() {
   // The header follows edits; the loader's copy covers the first render.
   const notification =
     useQuery(notificationDetailQueryOptions(notificationId)).data ?? loaded;
-  useLiveNotifications();
   // The page stays mounted when it switches to another notification, so a
   // late delete success checks which one is shown before leaving.
   const shownId = useRef(notificationId);
@@ -64,43 +58,35 @@ function NotificationDetailPage() {
     leave();
   });
   return (
-    <WindowPage
-      title={notification.title}
-      closeTo={{ link: { to: '/notifications' }, label: 'Notifications' }}
-      description={`${notification.kindName} from ${notification.sourceName}`}
-      size={960}
-      actions={
-        <>
-          <Button
-            component={Link}
-            to="/notifications"
-            variant="default"
-            leftSection={<IconArrowLeft size={16} stroke={1.6} />}
-          >
-            All notifications
-          </Button>
-          <Button
-            variant="default"
-            color="red"
-            c="red.7"
-            leftSection={<IconTrash size={16} stroke={1.6} />}
-            loading={isPending}
-            onClick={() => confirmDelete(notification)}
-          >
-            Delete
-          </Button>
-        </>
-      }
-    >
-      <Suspense
-        fallback={
-          <Center py="xl">
-            <Loader />
-          </Center>
-        }
-      >
-        <NotificationDetail id={notificationId} />
-      </Suspense>
-    </WindowPage>
+    <>
+      <header className={classes.detailHead}>
+        <div className={classes.detailTitle}>
+          <h2>{notification.title}</h2>
+          <span className={classes.detailMeta}>
+            {notification.kindName} from {notification.sourceName}
+          </span>
+        </div>
+        <Button
+          variant="default"
+          c="red.7"
+          leftSection={<IconTrash size={16} stroke={1.6} />}
+          loading={isPending}
+          onClick={() => confirmDelete(notification)}
+        >
+          Delete
+        </Button>
+      </header>
+      <WindowBody tone="sheet" size={920}>
+        <Suspense
+          fallback={
+            <Center py="xl">
+              <Loader />
+            </Center>
+          }
+        >
+          <NotificationDetail id={notificationId} />
+        </Suspense>
+      </WindowBody>
+    </>
   );
 }

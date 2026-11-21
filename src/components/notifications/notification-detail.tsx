@@ -202,27 +202,29 @@ function DeliveryTable({
   deliveries: DeliveryView[];
 }) {
   return (
-    <Table verticalSpacing="sm" layout="fixed">
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Destination</Table.Th>
-          <Table.Th w={130}>Status</Table.Th>
-          <Table.Th w={80}>Attempts</Table.Th>
-          <Table.Th>Outcome</Table.Th>
-          <Table.Th w={110} aria-label="Actions" />
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {deliveries.map((delivery) => (
-          <DeliveryRow
-            key={delivery.id}
-            notificationId={notificationId}
-            revision={revision}
-            delivery={delivery}
-          />
-        ))}
-      </Table.Tbody>
-    </Table>
+    <Table.ScrollContainer minWidth={620} type="native">
+      <Table verticalSpacing="sm" layout="fixed">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Destination</Table.Th>
+            <Table.Th w={130}>Status</Table.Th>
+            <Table.Th w={80}>Attempts</Table.Th>
+            <Table.Th>Outcome</Table.Th>
+            <Table.Th w={110} aria-label="Actions" />
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {deliveries.map((delivery) => (
+            <DeliveryRow
+              key={delivery.id}
+              notificationId={notificationId}
+              revision={revision}
+              delivery={delivery}
+            />
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }
 

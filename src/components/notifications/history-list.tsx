@@ -1,23 +1,17 @@
 import {
   ActionIcon,
-  Box,
   Button,
   Center,
-  Group,
   Loader,
   Menu,
   Select,
-  Stack,
-  Table,
-  Text,
-  ThemeIcon,
   Tooltip,
-  VisuallyHidden,
 } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { IconBell, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+import { EmptyState } from '~components/page/page';
 import { formatExact, formatRelative } from '~lib/format';
 import {
   notificationHistoryQueryOptions,
@@ -38,6 +32,7 @@ import {
   SourceTypeIcon,
 } from './status';
 import { useDeleteNotification } from './use-delete-notification';
+import classes from './notifications-window.module.css';
 
 function parseSource(
   value: string | null,
@@ -51,8 +46,16 @@ function parseSource(
   };
 }
 
-export function NotificationHistory() {
-  const navigate = useNavigate();
+/**
+ * The list half of the Notifications window: filters, then every
+ * notification as a row that opens it on the right.
+ */
+export function NotificationHistory({
+  selected,
+}: {
+  /** The open notification's id. */
+  selected?: string;
+}) {
   const [source, setSource] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [status, setStatus] = useState<NotificationStatus | null>(null);
@@ -138,8 +141,8 @@ export function NotificationHistory() {
   const filtered = Boolean(source || kind || status || replyState);
 
   return (
-    <Stack gap="md">
-      <Group gap="sm" wrap="wrap">
+    <>
+      <div className={classes.filters}>
         <Select
           placeholder="All sources"
           aria-label="Filter by source"
@@ -151,7 +154,7 @@ export function NotificationHistory() {
           }}
           clearable
           searchable
-          w={220}
+          comboboxProps={{ width: 260, position: 'bottom-start' }}
         />
         <Select
           placeholder="All kinds"
@@ -162,7 +165,7 @@ export function NotificationHistory() {
           clearable
           searchable
           disabled={kindOptions.length === 0}
-          w={240}
+          comboboxProps={{ width: 280, position: 'bottom-end' }}
         />
         <Select
           placeholder="Any status"
@@ -171,7 +174,7 @@ export function NotificationHistory() {
           value={status}
           onChange={(value) => setStatus(value as NotificationStatus | null)}
           clearable
-          w={180}
+          comboboxProps={{ width: 220, position: 'bottom-start' }}
         />
         <Select
           placeholder="Any reply state"
@@ -182,97 +185,69 @@ export function NotificationHistory() {
             setReplyState(value as NotificationReplyState | null)
           }
           clearable
-          w={180}
+          comboboxProps={{ width: 220, position: 'bottom-end' }}
         />
-      </Group>
+      </div>
 
-      {history.isLoading ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
-      ) : items.length === 0 ? (
-        <Stack align="center" gap="xs" py={80} px="md">
-          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
-            <IconBell size={26} stroke={1.5} />
-          </ThemeIcon>
-          <Text fw={700} mt="xs">
-            {filtered ? 'No matching notifications' : 'No notifications yet'}
-          </Text>
-          <Text size="sm" c="dimmed" ta="center" maw={480}>
+      <div className={classes.scroll}>
+        {history.isLoading ? (
+          <Center py="xl">
+            <Loader />
+          </Center>
+        ) : items.length === 0 ? (
+          <EmptyState
+            variant="dashed"
+            icon={<IconBell size={20} stroke={1.8} />}
+            title={
+              filtered ? 'No matching notifications' : 'No notifications yet'
+            }
+            actions={
+              !filtered ? (
+                <Button
+                  component={Link}
+                  to="/settings/notifications"
+                  variant="default"
+                >
+                  Set up delivery
+                </Button>
+              ) : undefined
+            }
+          >
             {filtered
               ? 'Try clearing a filter.'
               : 'Notifications pushed by Apps and Channels show up here, with where each one was delivered.'}
-          </Text>
-          {!filtered ? (
-            <Button
-              component={Link}
-              to="/settings/notifications"
-              variant="default"
-              mt="sm"
-            >
-              Set up delivery
-            </Button>
-          ) : null}
-        </Stack>
-      ) : (
-        <Box component="section">
-          <Table highlightOnHover verticalSpacing="sm" layout="fixed">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Notification</Table.Th>
-                <Table.Th w={200}>Source</Table.Th>
-                <Table.Th w={150}>Status</Table.Th>
-                <Table.Th w={140}>Received</Table.Th>
-                <Table.Th w={48}>
-                  <VisuallyHidden>Actions</VisuallyHidden>
-                </Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
+          </EmptyState>
+        ) : (
+          <>
+            <ul className={classes.rows} aria-label="Notifications">
               {items.map((item) => (
-                <Table.Tr
+                <li
                   key={item.id}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() =>
-                    navigate({
-                      to: '/notifications/$notificationId',
-                      params: { notificationId: item.id },
-                    })
-                  }
+                  className={classes.row}
+                  data-current={item.id === selected || undefined}
                 >
-                  <Table.Td>
-                    <Stack
-                      gap={2}
-                      miw={0}
-                      style={{ color: 'inherit', textDecoration: 'none' }}
-                      renderRoot={(props) => (
-                        <Link
-                          {...props}
-                          to="/notifications/$notificationId"
-                          params={{ notificationId: item.id }}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      )}
-                    >
-                      <Text size="sm" fw={600} truncate>
-                        {item.title}
-                      </Text>
-                      <Text size="xs" c="dimmed" truncate>
-                        {item.kindName}
+                  <Link
+                    to="/notifications/$notificationId"
+                    params={{ notificationId: item.id }}
+                    className={classes.link}
+                    aria-current={item.id === selected ? 'page' : undefined}
+                  >
+                    <span className={classes.titleLine}>
+                      <span className={classes.title}>{item.title}</span>
+                      <Tooltip label={formatExact(item.createdAt)} withArrow>
+                        <span className={classes.time}>
+                          {formatRelative(item.createdAt)}
+                        </span>
+                      </Tooltip>
+                    </span>
+                    <span className={classes.meta}>
+                      <SourceTypeIcon type={item.sourceType} size={14} />
+                      <span className={classes.metaText}>
+                        {item.sourceName} · {item.kindName}
                         {item.body ? ` · ${item.body}` : ''}
-                      </Text>
-                    </Stack>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap" c="dimmed">
-                      <SourceTypeIcon type={item.sourceType} size={15} />
-                      <Text size="sm" c="dimmed" truncate>
-                        {item.sourceName}
-                      </Text>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={6} wrap="wrap">
+                      </span>
+                    </span>
+                    <span className={classes.badges}>
                       <NotificationStatusBadge status={item.status} />
                       <NotificationPriorityBadge priority={item.priority} />
                       <NotificationRevisionBadge
@@ -284,25 +259,18 @@ export function NotificationHistory() {
                         respondedAt={item.respondedAt}
                         recalledAt={item.recalledAt}
                       />
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Tooltip label={formatExact(item.createdAt)} withArrow>
-                      <Text size="sm" c="dimmed" w="fit-content">
-                        {formatRelative(item.createdAt)}
-                      </Text>
-                    </Tooltip>
-                  </Table.Td>
-                  {/* Menu clicks bubble through the portal; keep them off the row. */}
-                  <Table.Td onClick={(event) => event.stopPropagation()}>
+                    </span>
+                  </Link>
+                  <div className={classes.menu}>
                     <Menu position="bottom-end" withinPortal>
                       <Menu.Target>
                         <ActionIcon
                           variant="subtle"
                           color="gray"
+                          size="sm"
                           aria-label={`Actions for ${item.title}`}
                         >
-                          <IconDotsVertical size={16} stroke={1.6} />
+                          <IconDotsVertical size={15} stroke={1.8} />
                         </ActionIcon>
                       </Menu.Target>
                       <Menu.Dropdown>
@@ -315,24 +283,24 @@ export function NotificationHistory() {
                         </Menu.Item>
                       </Menu.Dropdown>
                     </Menu>
-                  </Table.Td>
-                </Table.Tr>
+                  </div>
+                </li>
               ))}
-            </Table.Tbody>
-          </Table>
-          {history.hasNextPage ? (
-            <Center mt="md">
-              <Button
-                variant="default"
-                loading={history.isFetchingNextPage}
-                onClick={() => void history.fetchNextPage()}
-              >
-                Load more
-              </Button>
-            </Center>
-          ) : null}
-        </Box>
-      )}
-    </Stack>
+            </ul>
+            {history.hasNextPage ? (
+              <div className={classes.more}>
+                <Button
+                  variant="default"
+                  loading={history.isFetchingNextPage}
+                  onClick={() => void history.fetchNextPage()}
+                >
+                  Load more
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    </>
   );
 }
