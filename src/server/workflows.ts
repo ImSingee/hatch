@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { db, schema } from '~/db';
+import { db } from '~/db';
 import type { JsonObject, WorkflowStatus } from '~/db/schema';
 import {
   type NetworkAccessView,
@@ -16,6 +16,7 @@ import {
   workflowCompatibility,
 } from '~/workflow-compatibility';
 import { authMiddleware } from './auth';
+import { setWorkflowPinned } from './pins';
 import { idAndDeploymentSchema, idSchema } from './validation';
 import {
   workflowNetworkPolicyFromManifest,
@@ -33,7 +34,6 @@ import {
   setWorkflowArchived,
   workflowDeploymentBuildLog,
 } from './workflows/manage';
-import { eq } from 'drizzle-orm';
 import {
   ensureWorkflowScheduler,
   listWorkflowCronJobs,
@@ -188,11 +188,8 @@ export const setWorkflowPinFn = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, pinned: z.boolean() }).parse(input),
   )
   .handler(async ({ data }) => {
-    await db
-      .update(schema.workflows)
-      .set({ pinned: data.pinned })
-      .where(eq(schema.workflows.id, data.id));
-    return { pinned: data.pinned };
+    const result = await setWorkflowPinned(data.id, data.pinned);
+    return { pinned: result.pinned };
   });
 
 export const setWorkflowSlugFn = createServerFn({ method: 'POST' })

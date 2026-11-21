@@ -9,6 +9,8 @@ import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { runNotification } from './notifications';
 import { runImage } from './image';
+import { runTheme } from './theme';
+import { runPin } from './pin';
 import { publicError } from './client';
 import { refreshRunEnvironment } from './run-credential';
 import { CliError } from './error';
@@ -125,6 +127,8 @@ try {
     await runLifecycle(args, offset, controller.signal);
   else if (name === 'notification')
     await runNotification(args, offset, controller.signal);
+  else if (name === 'theme') await runTheme(args, offset, controller.signal);
+  else if (name === 'pin') await runPin(args, offset, controller.signal);
   else
     throw new CliError(
       'unknown_command',

@@ -34,6 +34,14 @@ import {
   ImageService,
   type ImageModelState,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/image_pb';
+import {
+  ThemeService,
+  type ThemeState,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import {
+  PinService,
+  type PinnedApp,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import { type AppIcon } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
@@ -128,6 +136,28 @@ const icon = (app: string, value: AppIcon | undefined) => ({
   path: required(value).path ?? null,
   sizes: required(value).sizes,
 });
+const theme = (value: ThemeState | undefined) => {
+  const state = required(value);
+  return {
+    accent: state.accent,
+    defaultAccent: state.defaultAccent,
+    accents: state.accents.map((accent) => ({
+      name: accent.name,
+      color: accent.color,
+    })),
+  };
+};
+const appPin = (value: PinnedApp | undefined) => {
+  const pin = required(value);
+  return {
+    id: pin.id,
+    appId: pin.appId,
+    appSlug: pin.appSlug,
+    label: pin.label,
+    entryHash: pin.entryHash ?? null,
+    appStatus: pin.appStatus,
+  };
+};
 const imageModel = (value: ImageModelState | undefined) => {
   const state = required(value);
   return {
@@ -271,7 +301,100 @@ export function cliClient(transport: Transport) {
   const auth = createClient(AuthService, transport);
   const sdk = createClient(SdkService, transport);
   const images = createClient(ImageService, transport);
+  const themes = createClient(ThemeService, transport);
+  const pins = createClient(PinService, transport);
   return {
+    theme: {
+      get: async () => theme((await themes.getTheme({})).theme),
+      set: async (input: { accent: string }) =>
+        theme((await themes.setTheme(input)).theme),
+    },
+    pins: {
+      list: async () => {
+        const result = await pins.listPins({});
+        return {
+          appPins: result.appPins.map(appPin),
+          workflows: result.workflows.map((workflow) => ({
+            id: workflow.id,
+            slug: workflow.slug,
+            name: workflow.name,
+          })),
+          dashboards: result.dashboards.map((dashboard) => ({
+            id: dashboard.id,
+            name: dashboard.name,
+          })),
+        };
+      },
+      pinApp: async (input: {
+        app: string;
+        label?: string;
+        entryHash?: string;
+        ifAbsent: boolean;
+      }) => {
+        const result = await pins.pinApp({
+          app: input.app,
+          label: input.label,
+          entryHash: input.entryHash,
+          ifAbsent: input.ifAbsent,
+        });
+        return { pin: appPin(result.pin), created: result.created };
+      },
+      updateAppPin: async (input: {
+        id: string;
+        label?: string;
+        entryHash?: string;
+      }) => ({
+        pin: appPin(
+          (
+            await pins.updateAppPin({
+              id: input.id,
+              label: input.label,
+              entryHash: input.entryHash,
+            })
+          ).pin,
+        ),
+      }),
+      unpinApp: async (input: { pinId: string } | { app: string }) => ({
+        removedPinIds: (
+          await pins.unpinApp({
+            target:
+              'pinId' in input
+                ? { case: 'pinId', value: input.pinId }
+                : { case: 'app', value: input.app },
+          })
+        ).removedPinIds,
+      }),
+      reorderAppPins: async (input: { pinIds: string[] }) => ({
+        appPins: (
+          await pins.reorderAppPins({ pinIds: input.pinIds })
+        ).appPins.map(appPin),
+      }),
+      reorderDashboards: async (input: { dashboardIds: string[] }) => ({
+        dashboardIds: (
+          await pins.reorderDashboards({ dashboardIds: input.dashboardIds })
+        ).dashboardIds,
+      }),
+      setWorkflowPinned: async (input: {
+        workflow: string;
+        pinned: boolean;
+      }) => {
+        const result = await pins.setWorkflowPinned({
+          workflow: input.workflow,
+          pinned: input.pinned,
+        });
+        return { workflowId: result.id, pinned: result.pinned };
+      },
+      setDashboardPinned: async (input: {
+        dashboardId: string;
+        pinned: boolean;
+      }) => {
+        const result = await pins.setDashboardPinned({
+          dashboardId: input.dashboardId,
+          pinned: input.pinned,
+        });
+        return { dashboardId: result.id, pinned: result.pinned };
+      },
+    },
     images: {
       model: async () => imageModel((await images.getImageModel({})).state),
       setModel: async (input: { providerId: string; modelId: string }) =>

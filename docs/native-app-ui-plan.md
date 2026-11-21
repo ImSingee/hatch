@@ -317,8 +317,11 @@ Per shell:
 
 A theme is `{ name, radius, fonts?, light: {...}, dark: {...} }` over a fixed
 list of token names. Stored instance-wide under `platformConfig` key
-`apps.theme` **[decision]**: Hatch is a single-tenant shared workspace, so
-one theme per instance matches how dashboards and pins already work.
+`ui.theme` **[decision]**: Hatch is a single-tenant shared workspace, so
+one theme per instance matches how dashboards and pins already work. The key
+already holds the platform accent (`{ accent }`, see
+[platform-redesign-plan.md](platform-redesign-plan.md) section 3.2); the App
+theme extends that value instead of adding a second key.
 
 Built-in presets (`ember`, matching `DESIGN.md`, is the default) plus a
 custom token set. Shells force the light appearance for now, matching the

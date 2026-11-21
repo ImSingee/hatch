@@ -452,6 +452,45 @@ be decoded, `TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
 `modelId` and every candidate with `id` and `path`, plus `file` for the ones
 that were saved, so no image has to be generated again.
 
+## Theme and pins
+
+```sh
+hatch theme get --json
+hatch theme set --accent teal
+hatch pin list --json
+hatch pin add --app my-app --label Inbox --entry /inbox
+hatch pin add --app my-app --if-absent
+hatch pin update <pin-id> --label 'Inbox' --clear-entry
+hatch pin reorder --pin <pin-id> --pin <pin-id>
+hatch pin remove --pin <pin-id>
+hatch pin add --workflow my-workflow
+hatch pin remove --dashboard <dashboard-id>
+```
+
+`theme get` prints the chosen `accent`, the `defaultAccent` and every accent
+with its colour; `theme set` replaces the accent for the whole instance and
+signed-in clients recolour without a reload.
+
+`pin list` prints App pins in navigation order (`id` is the pin id, which
+`update`, `remove --pin` and `reorder --pin` take), pinned Workflows and pinned
+dashboards. An App can have several pins: `pin add --app` always adds one and
+`--if-absent` returns the existing pin instead (`created: false`). `--entry`
+is the fragment the pin opens, with or without `#`. `pin update` leaves
+omitted fields unchanged and `--clear-entry` makes the pin open the App root.
+`pin remove --app` deletes every pin of the App and prints `removedPinIds`.
+`--workflow` and `--dashboard` only set the pinned flag. `pin reorder` moves
+the listed ids to the front in the order given, keeps unlisted ones in their
+relative order after them, and prints the complete new order; `--dashboard`
+orders all dashboards, pinned or not.
+
+Local rejections exit 2 with `invalid_arguments`: an `--accent` the tokens do
+not define, no target or more than one of `--app`, `--workflow`, `--dashboard`
+and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
+`--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`,
+`--entry` with `--clear-entry`, `pin update` with nothing to change, and a
+repeated id in `pin reorder`. Platform errors: `NOT_FOUND` (5) for an unknown
+App, Workflow, dashboard or pin id, and `BAD_REQUEST` (2).
+
 ## Notifications
 
 `hatch notification ...` manages the notification center with a user session,

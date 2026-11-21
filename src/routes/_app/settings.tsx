@@ -9,6 +9,7 @@ import {
   IconUsers,
   IconNetwork,
   IconInfoCircle,
+  IconPalette,
 } from '@tabler/icons-react';
 import { Fragment } from 'react';
 import { Page } from '~components/app-shell/page';
@@ -31,6 +32,7 @@ const GROUPS = [
         icon: IconBell,
       },
       { to: '/settings/tailscale', label: 'Tailscale', icon: IconNetwork },
+      { to: '/settings/appearance', label: 'Appearance', icon: IconPalette },
     ],
   },
   {

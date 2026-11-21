@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// The instance-wide look that the web, mobile and desktop clients apply.
+service ThemeService {
+  rpc GetTheme(GetThemeRequest) returns (GetThemeResponse);
+  rpc SetTheme(SetThemeRequest) returns (SetThemeResponse);
+}
+
+// One accent the instance can choose.
+message Accent {
+  string name = 1;
+  // Base colour as #RRGGBB.
+  string color = 2;
+}
+
+message ThemeState {
+  // Name of the chosen accent.
+  string accent = 1;
+  // The accent used while none has been chosen.
+  string default_accent = 2;
+  // Every accent that SetTheme accepts.
+  repeated Accent accents = 3;
+}
+
+message GetThemeRequest {}
+
+message GetThemeResponse {
+  ThemeState theme = 1;
+}
+
+message SetThemeRequest {
+  // One of the names in ThemeState.accents; the platform checks membership.
+  string accent = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 32
+    pattern: "^[a-z][a-z0-9-]*$"
+  }];
+}
+
+message SetThemeResponse {
+  ThemeState theme = 1;
+}

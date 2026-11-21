@@ -80,6 +80,21 @@ import {
   type ImageModelState,
 } from '~server/images/model';
 
+import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import { getThemeState, setThemeAccent } from '~server/theme-settings';
+import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
+import {
+  listPins,
+  pinApp,
+  reorderAppPins,
+  reorderDashboards,
+  setDashboardPinned,
+  setWorkflowPinned,
+  unpinApp,
+  updateAppPin,
+} from '~server/pins';
+import type { SidebarItem } from '~server/workspace-read';
+
 export { publicApiContext };
 const columns = {
   id: true,
@@ -145,6 +160,14 @@ const iconMessage = (icon: AppIconView) => ({
 });
 const imageModelMessage = (state: ImageModelState) => ({
   state: { ...state, selected: state.selected ?? undefined },
+});
+const pinMessage = (pin: SidebarItem) => ({
+  id: pin.id,
+  appId: pin.appId,
+  appSlug: pin.appSlug,
+  label: pin.label,
+  entryHash: pin.entryHash ?? undefined,
+  appStatus: pin.status,
 });
 const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
 async function associate(id: string, context: HandlerContext) {
@@ -555,6 +578,47 @@ export function registerPlatformApi(
       );
       return { modelId: result.model, candidates: result.images };
     },
+  });
+  router.service(ThemeService, {
+    getTheme: async () => ({ theme: await getThemeState() }),
+    setTheme: async (input) => ({ theme: await setThemeAccent(input.accent) }),
+  });
+  router.service(PinService, {
+    listPins: async () => {
+      const pins = await listPins();
+      return { ...pins, appPins: pins.appPins.map(pinMessage) };
+    },
+    pinApp: async (input) => {
+      const result = await pinApp(input);
+      return { pin: pinMessage(result.pin), created: result.created };
+    },
+    updateAppPin: async (input) => ({
+      pin: pinMessage(
+        await updateAppPin(input.id, {
+          label: input.label,
+          // Present but empty clears the entry point.
+          entryHash:
+            input.entryHash === undefined ? undefined : input.entryHash || null,
+        }),
+      ),
+    }),
+    unpinApp: async (input) => {
+      if (input.target.case === 'pinId')
+        return { removedPinIds: await unpinApp({ pinId: input.target.value }) };
+      if (input.target.case === 'app')
+        return { removedPinIds: await unpinApp({ app: input.target.value }) };
+      throw publicApiError('BAD_REQUEST');
+    },
+    reorderAppPins: async (input) => ({
+      appPins: (await reorderAppPins(input.pinIds)).map(pinMessage),
+    }),
+    reorderDashboards: async (input) => ({
+      dashboardIds: await reorderDashboards(input.dashboardIds),
+    }),
+    setWorkflowPinned: (input) =>
+      setWorkflowPinned(input.workflow, input.pinned),
+    setDashboardPinned: (input) =>
+      setDashboardPinned(input.dashboardId, input.pinned),
   });
   router.rpc(AppService.method.listApps, apps.list);
   router.rpc(AppService.method.createApp, apps.create);
