@@ -179,10 +179,6 @@
   overflow-x: auto;
 }
 
-.group[data-padded] :where(table) {
-  min-width: 460px;
-}
-
 .group[id] {
   scroll-margin-top: 16px;
 }
@@ -584,4 +580,49 @@ a.item:focus-visible {
   .toolbarSearch {
     flex-basis: 100%;
   }
+}
+
+/* ---- Link tabs ---------------------------------------------------------- */
+
+/* Sections that are pages of their own, drawn as a segmented control: a
+   sunken track with the current page as a white chip. */
+.tabsScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--mantine-radius-lg);
+  background: var(--surface-sunken);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-gray-7);
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.tab:hover {
+  color: var(--mantine-color-text);
+}
+
+.tab[data-current] {
+  background: var(--surface-raised);
+  color: var(--mantine-color-text);
+  box-shadow: var(--shadow-card);
 }

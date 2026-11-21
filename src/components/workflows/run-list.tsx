@@ -1,16 +1,25 @@
-import { Box, Center, Group, Loader, Table, Text } from '@mantine/core';
+import { Anchor, Center, Loader, Table, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { formatDuration, formatRelative } from '~lib/format';
 import { workflowRunsQueryOptions } from '~queries/workflows';
+import {
+  EmptyLine,
+  GroupCard,
+  Section,
+  TableCard,
+} from '~components/page/page';
 import { RunStatusBadge } from './run-status';
 
 export function WorkflowRunList({
   workflowId,
   workflowSlug,
+  limit,
 }: {
   workflowId: string;
   workflowSlug: string;
+  /** Show only the latest runs, with a link to all of them. */
+  limit?: number;
 }) {
   const navigate = useNavigate();
   const query = useQuery({
@@ -28,38 +37,52 @@ export function WorkflowRunList({
     },
   });
 
-  const runs = query.data ?? [];
+  const allRuns = query.data ?? [];
+  const runs = limit ? allRuns.slice(0, limit) : allRuns;
 
   return (
-    <Box component="section">
-      <Group gap={8} mb="md" align="baseline">
-        <Text fw={700} fz="lg">
-          Executions
-        </Text>
-        {runs.length > 0 ? (
-          <Text size="sm" c="dimmed">
-            {runs.length}
-          </Text>
-        ) : null}
-      </Group>
-
+    <Section
+      title={limit ? 'Recent executions' : 'Executions'}
+      meta={allRuns.length > 0 ? String(allRuns.length) : undefined}
+      aside={
+        limit && allRuns.length > 0 ? (
+          <Anchor
+            size="sm"
+            underline="never"
+            renderRoot={(props) => (
+              <Link
+                to="/workflow/$workflowSlug/executions"
+                params={{ workflowSlug }}
+                {...props}
+              />
+            )}
+          >
+            All executions ›
+          </Anchor>
+        ) : undefined
+      }
+    >
       {query.isLoading ? (
-        <Center py="lg">
-          <Loader size="sm" />
-        </Center>
+        <GroupCard>
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
+        </GroupCard>
       ) : runs.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No executions yet. Trigger this workflow to see its history here.
-        </Text>
+        <GroupCard>
+          <EmptyLine>
+            No executions yet. Trigger this workflow to see its history here.
+          </EmptyLine>
+        </GroupCard>
       ) : (
-        <Table highlightOnHover verticalSpacing="sm" layout="fixed">
+        <TableCard>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Status</Table.Th>
-              <Table.Th w={110}>Trigger</Table.Th>
-              <Table.Th w={80}>Steps</Table.Th>
-              <Table.Th w={110}>Duration</Table.Th>
-              <Table.Th w={150}>Started</Table.Th>
+              <Table.Th>Trigger</Table.Th>
+              <Table.Th>Steps</Table.Th>
+              <Table.Th>Duration</Table.Th>
+              <Table.Th>Started</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -111,8 +134,8 @@ export function WorkflowRunList({
               </Table.Tr>
             ))}
           </Table.Tbody>
-        </Table>
+        </TableCard>
       )}
-    </Box>
+    </Section>
   );
 }

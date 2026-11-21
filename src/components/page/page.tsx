@@ -381,3 +381,33 @@ export function ToolbarSearch({
     />
   );
 }
+
+export type LinkTab = {
+  key: string;
+  label: string;
+  icon?: ReactNode;
+  link: LinkProps;
+  current: boolean;
+};
+
+/** Sibling pages shown as a segmented control. */
+export function LinkTabs({ label, tabs }: { label: string; tabs: LinkTab[] }) {
+  return (
+    <div className={classes.tabsScroll}>
+      <nav aria-label={label} className={classes.tabs}>
+        {tabs.map((tab) => (
+          <Link
+            key={tab.key}
+            {...tab.link}
+            className={classes.tab}
+            data-current={tab.current || undefined}
+            aria-current={tab.current ? 'page' : undefined}
+          >
+            {tab.icon}
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}

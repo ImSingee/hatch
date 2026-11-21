@@ -1,20 +1,27 @@
 import {
+  Anchor,
   Badge,
-  Box,
   Button,
   Code,
-  Divider,
   Group,
-  Stack,
   Text,
   Timeline,
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, notFound } from '@tanstack/react-router';
-import { IconArrowLeft, IconPlayerStop } from '@tabler/icons-react';
+import { IconPlayerStop } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { WindowPage } from '~components/desk/window-page';
+import { DeskWindow } from '~components/desk/window';
+import {
+  Column,
+  Columns,
+  GroupCard,
+  Row,
+  Section,
+  Toolbar,
+  WindowBody,
+} from '~components/page/page';
 import {
   RunStatusBadge,
   RunStatusBullet,
@@ -30,6 +37,7 @@ import {
   getWorkflowRun,
 } from '~server/workflows';
 import type { WorkflowRunStepView } from '~server/workflows/manage';
+import classes from './execution.module.css';
 
 export const Route = createFileRoute(
   '/_app/workflow/$workflowSlug/execution/$runId',
@@ -94,23 +102,6 @@ function StepItem({ step }: { step: WorkflowRunStepView }) {
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Box component="section">
-      <Text fw={700} fz="lg" mb="md">
-        {title}
-      </Text>
-      {children}
-    </Box>
-  );
-}
-
 function WorkflowExecutionPage() {
   const initial = Route.useLoaderData();
   const { runId } = Route.useParams();
@@ -138,12 +129,14 @@ function WorkflowExecutionPage() {
   });
 
   return (
-    <WindowPage
-      size={920}
+    <DeskWindow
+      fill
+      maxWidth={1180}
       title={`${workflow.name} · Execution`}
       tile={
         <AppGlyph
           icon={false}
+          shape="workflow"
           name={workflow.name}
           seed={workflow.id}
           size="sm"
@@ -157,29 +150,25 @@ function WorkflowExecutionPage() {
         },
         label: "this workflow's executions",
       }}
-      description={
-        <>
-          {run.trigger} trigger
-          {run.version != null ? ` · v${run.version}` : ''} ·{' '}
-          {formatExact(run.startedAt ?? run.createdAt)} ·{' '}
-          {formatDuration(run.durationMs)}
-        </>
-      }
-      actions={
-        <>
-          <Button
-            renderRoot={(props) => (
-              <Link
-                to="/workflow/$workflowSlug/executions"
-                params={{ workflowSlug: workflow.slug }}
-                {...props}
-              />
-            )}
-            variant="default"
-            leftSection={<IconArrowLeft size={16} stroke={1.8} />}
-          >
-            Back
-          </Button>
+    >
+      <WindowBody>
+        <Toolbar
+          lead={
+            <Anchor
+              size="sm"
+              underline="never"
+              renderRoot={(props) => (
+                <Link
+                  to="/workflow/$workflowSlug/executions"
+                  params={{ workflowSlug: workflow.slug }}
+                  {...props}
+                />
+              )}
+            >
+              ‹ All executions of {workflow.name}
+            </Anchor>
+          }
+        >
           {active ? (
             <Button
               color="red"
@@ -191,70 +180,85 @@ function WorkflowExecutionPage() {
               Cancel
             </Button>
           ) : null}
-        </>
-      }
-    >
-      <Stack gap="xl">
-        {run.output != null ? (
-          <>
-            <Section title="Output">
-              <Code block>{pretty(run.output)}</Code>
+        </Toolbar>
+        <Columns>
+          <Column grow basis={420}>
+            <Section title="Steps" meta={`${run.steps.length}`}>
+              <GroupCard padded>
+                {run.steps.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    {active
+                      ? 'Waiting for the first step…'
+                      : 'This execution recorded no steps.'}
+                  </Text>
+                ) : (
+                  <Timeline
+                    bulletSize={20}
+                    lineWidth={2}
+                    active={-1}
+                    color="gray"
+                    styles={{
+                      itemBody: { paddingBottom: 'var(--mantine-spacing-md)' },
+                    }}
+                  >
+                    {run.steps.map((step) => (
+                      <StepItem
+                        key={`${step.seq}-${step.attempt}`}
+                        step={step}
+                      />
+                    ))}
+                  </Timeline>
+                )}
+              </GroupCard>
             </Section>
-            <Divider />
-          </>
-        ) : null}
-
-        <Section title="Input">
-          <Code block>{pretty(run.input ?? {})}</Code>
-        </Section>
-
-        <Divider />
-        <Section title="Steps">
-          {run.steps.length === 0 ? (
-            <Text size="sm" c="dimmed">
-              {active
-                ? 'Waiting for the first step…'
-                : 'This execution recorded no steps.'}
-            </Text>
-          ) : (
-            <Timeline
-              bulletSize={20}
-              lineWidth={2}
-              active={-1}
-              color="gray"
-              styles={{
-                itemBody: { paddingBottom: 'var(--mantine-spacing-md)' },
-              }}
-            >
-              {run.steps.map((step) => (
-                <StepItem key={`${step.seq}-${step.attempt}`} step={step} />
-              ))}
-            </Timeline>
-          )}
-        </Section>
-
-        {run.error ? (
-          <>
-            <Divider />
-            <Section title="Error">
-              <Code block style={{ color: 'var(--mantine-color-red-7)' }}>
-                {run.error}
+            {run.error ? (
+              <Section title="Error">
+                <Code block className={classes.error}>
+                  {run.error}
+                </Code>
+              </Section>
+            ) : null}
+            {run.log ? (
+              <Section title="Log">
+                <Code block className={classes.log}>
+                  {run.log}
+                </Code>
+              </Section>
+            ) : null}
+          </Column>
+          <Column basis={340}>
+            <Section title="Summary">
+              <GroupCard>
+                <Row label="Status">
+                  <RunStatusBadge status={run.status} />
+                </Row>
+                <Row label="Trigger">
+                  <span className={classes.capitalize}>{run.trigger}</span>
+                </Row>
+                {run.version != null ? (
+                  <Row label="Version">v{run.version}</Row>
+                ) : null}
+                <Row label="Started">
+                  {formatExact(run.startedAt ?? run.createdAt)}
+                </Row>
+                <Row label="Duration">{formatDuration(run.durationMs)}</Row>
+              </GroupCard>
+            </Section>
+            {run.output != null ? (
+              <Section title="Output">
+                <Code block className={classes.code}>
+                  {pretty(run.output)}
+                </Code>
+              </Section>
+            ) : null}
+            <Section title="Input">
+              <Code block className={classes.code}>
+                {pretty(run.input ?? {})}
               </Code>
             </Section>
-          </>
-        ) : null}
-
-        {run.log ? (
-          <>
-            <Divider />
-            <Section title="Log">
-              <Code block style={{ whiteSpace: 'pre-wrap' }}>
-                {run.log}
-              </Code>
-            </Section>
-          </>
-        ) : null}
-      </Stack>
-    </WindowPage>
+          </Column>
+        </Columns>
+      </WindowBody>
+    </DeskWindow>
   );
 }
