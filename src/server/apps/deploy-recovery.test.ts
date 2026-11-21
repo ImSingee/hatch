@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => ({
     >(),
   applyDataMigration: vi.fn<(options: unknown) => Promise<unknown>>(),
   recoverCurrentDataSchema: vi.fn<(id: string) => Promise<unknown>>(),
-  stopApp: vi.fn<(id: string) => void>(),
+  stopApp: vi.fn<(id: string, opts?: { keepDeploymentId?: string }) => void>(),
   ensureAppRunning:
     vi.fn<(id: string, deploymentId: string) => Promise<number>>(),
   setKeepAlive: vi.fn<(id: string, keepAlive: boolean) => void>(),
@@ -761,7 +761,9 @@ describe('App deployment activation recovery', () => {
     await reconcilePendingAppActivations();
 
     expect(app.dataActivationId).toBeNull();
-    expect(mocks.stopApp).toHaveBeenCalledWith('committed');
+    expect(mocks.stopApp).toHaveBeenCalledWith('committed', {
+      keepDeploymentId: expect.any(String),
+    });
     expect(mocks.publishPlatformEvent).toHaveBeenCalledOnce();
     expect(mocks.publishPlatformEvent).toHaveBeenCalledWith({
       type: 'app.deployment.activated',
@@ -895,7 +897,9 @@ describe('App deployment activation recovery', () => {
       currentId,
     );
     expect(mocks.recoverCurrentDataSchema).toHaveBeenCalledWith(id);
-    expect(mocks.stopApp).toHaveBeenCalledWith(id);
+    expect(mocks.stopApp).toHaveBeenCalledWith(id, {
+      keepDeploymentId: expect.any(String),
+    });
     expect(app).toMatchObject({
       currentDeploymentId: currentId,
       dataActivationId: null,
@@ -954,7 +958,9 @@ describe('App deployment activation recovery', () => {
 
     await reconcilePendingAppActivations();
 
-    expect(mocks.stopApp).toHaveBeenCalledWith(id);
+    expect(mocks.stopApp).toHaveBeenCalledWith(id, {
+      keepDeploymentId: expect.any(String),
+    });
     expect(mocks.setKeepAlive).toHaveBeenCalledWith(id, true);
     expect(mocks.ensureAppRunning).toHaveBeenCalledWith(id, currentId);
     expect(app.dataActivationId).toBeNull();
@@ -1001,7 +1007,9 @@ describe('App deployment activation recovery', () => {
 
     await reconcilePendingAppActivations();
 
-    expect(mocks.stopApp).toHaveBeenCalledWith(id);
+    expect(mocks.stopApp).toHaveBeenCalledWith(id, {
+      keepDeploymentId: expect.any(String),
+    });
     expect(mocks.setKeepAlive).toHaveBeenCalledWith(id, true);
     expect(mocks.ensureAppRunning).toHaveBeenCalledWith(id, currentId);
     expect(console.error).toHaveBeenCalledWith(

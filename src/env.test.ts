@@ -15,6 +15,8 @@ const ENV_KEYS = [
   'HATCH_RUNNER_ID',
   'HATCH_BETA',
   'HATCH_ALLOW_UNSANDBOXED',
+  'HATCH_APP_IDLE_TIMEOUT_SECONDS',
+  'HATCH_APP_DRAIN_TIMEOUT_SECONDS',
   'TAVILY_API_KEY',
   'TSS_PRERENDERING',
 ] as const;
@@ -135,6 +137,32 @@ describe('getPlatformEnv', () => {
       });
     },
   );
+
+  it('drains by default, disables draining only for an explicit 0, and treats empty as unset', async () => {
+    vi.stubEnv('SECRET', 'platform-secret');
+    const read = async (value: string | undefined) => {
+      vi.resetModules();
+      vi.stubEnv('HATCH_APP_DRAIN_TIMEOUT_SECONDS', value);
+      vi.stubEnv('HATCH_APP_IDLE_TIMEOUT_SECONDS', value === '0' ? '' : value);
+      const { getPlatformEnv } = await import('./env');
+      const env = getPlatformEnv();
+      return [
+        env.appBackendDrainTimeoutSeconds,
+        env.appBackendIdleTimeoutSeconds,
+      ];
+    };
+
+    expect(await read(undefined)).toEqual([300, 300]);
+    expect(await read('')).toEqual([300, 300]);
+    expect(await read('0')).toEqual([0, 300]);
+    expect(await read('45')).toEqual([45, 45]);
+    await expect(read('-1')).rejects.toThrow('HATCH_APP_IDLE_TIMEOUT_SECONDS');
+    vi.stubEnv('HATCH_APP_IDLE_TIMEOUT_SECONDS', undefined);
+    vi.resetModules();
+    vi.stubEnv('HATCH_APP_DRAIN_TIMEOUT_SECONDS', '1.5');
+    const { getPlatformEnv } = await import('./env');
+    expect(() => getPlatformEnv()).toThrow('HATCH_APP_DRAIN_TIMEOUT_SECONDS');
+  });
 
   it('preserves an explicitly configured Better Auth secret', async () => {
     vi.stubEnv('SECRET', 'platform-secret');

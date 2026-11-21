@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { ZodError } from 'zod';
 import {
   appCompatibilityRuntimeMessage,
@@ -10,6 +11,7 @@ import {
   mutateDataTable,
   queryDataTable,
 } from '~server/apps/data-table/service';
+import { supersededDeploymentSharesDataSchema } from '~server/apps/data-table/deployment-access';
 import { subscribeDataChanges } from '~server/apps/data-table/realtime';
 import { AppError, errorResponse } from '~server/errors';
 import {
@@ -22,6 +24,15 @@ import { readDeploymentCompatibility } from '../compatibility';
 import { readCappedText } from '~server/http-body';
 
 const DATA_DEPLOYMENT_HEADER = 'x-hatch-data-deployment';
+
+/**
+ * How long a query or mutation waits for a deployment's activation fence to
+ * clear before answering 503. A deploy holds the fence only while it migrates
+ * and commits, so a request already in flight (in a browser, or in a backend
+ * instance that is draining) rides through the cutover instead of failing.
+ */
+const DATA_ACTIVATION_WAIT_MS = 10_000;
+const DATA_ACTIVATION_POLL_MS = 100;
 
 const DATA_CONFLICT_SQLSTATES = new Set(['23503', '23505', '23P01']);
 const DATA_INVALID_SQLSTATES = new Set([
@@ -42,31 +53,34 @@ function parse(request: Request): { id: string; action: string } | null {
   return { id: parsed.id, action: match[1] ?? '' };
 }
 
+/** Who is calling: a signed-in browser, or the App's own backend. */
 async function authorize(
   request: Request,
   id: string,
   rawBody: string,
-): Promise<boolean> {
+): Promise<'session' | 'backend' | null> {
   const session = await auth.api.getSession({ headers: request.headers });
   if (session) {
     const origin = request.headers.get('origin');
     if (request.method !== 'GET' && origin) {
       const expected = new URL(request.url).origin;
-      if (origin !== expected) return false;
+      if (origin !== expected) return null;
     }
-    return true;
+    return 'session';
   }
   const app = await db.query.apps.findFirst({
     where: { id },
     columns: { signingSecret: true },
   });
-  if (!app?.signingSecret) return false;
+  if (!app?.signingSecret) return null;
   return verifyHatchSignature({
     secret: app.signingSecret,
     timestamp: request.headers.get(HATCH_TIMESTAMP_HEADER),
     signature: request.headers.get(HATCH_SIGNATURE_HEADER),
     payload: rawBody,
-  });
+  })
+    ? 'backend'
+    : null;
 }
 
 async function liveDataAppState(
@@ -75,7 +89,7 @@ async function liveDataAppState(
 ): Promise<
   | 'missing'
   | 'activating'
-  | 'stale'
+  | { state: 'stale'; dataSchemaHash: string | null }
   | 'live'
   | { state: 'unsupported'; compatibility: AppCompatibility | null }
 > {
@@ -86,6 +100,7 @@ async function liveDataAppState(
       currentDeploymentId: true,
       capabilities: true,
       dataActivationId: true,
+      dataSchemaHash: true,
     },
   });
   if (
@@ -97,7 +112,9 @@ async function liveDataAppState(
     return 'missing';
   }
   if (app.dataActivationId) return 'activating';
-  if (expectedDeploymentId !== app.currentDeploymentId) return 'stale';
+  if (expectedDeploymentId !== app.currentDeploymentId) {
+    return { state: 'stale', dataSchemaHash: app.dataSchemaHash ?? null };
+  }
   const compatibility = await readDeploymentCompatibility(
     app.currentDeploymentId,
   );
@@ -110,6 +127,7 @@ function eventStream(
   request: Request,
   id: string,
   expectedDeploymentId: string,
+  acceptSupersededDeployment: boolean,
 ): Response {
   const url = new URL(request.url);
   const rawSince = url.searchParams.get('since');
@@ -152,6 +170,7 @@ function eventStream(
         since,
         table,
         expectedDeploymentId,
+        acceptSupersededDeployment,
         send(event) {
           if (closed) return;
           if ('reset' in event) {
@@ -242,7 +261,18 @@ export async function handleDataRequest({
   if (!parsed) return new Response('Not found', { status: 404 });
   const expectedDeploymentId =
     request.headers.get(DATA_DEPLOYMENT_HEADER) ?? '';
-  const state = await liveDataAppState(parsed.id, expectedDeploymentId);
+  let state = await liveDataAppState(parsed.id, expectedDeploymentId);
+  if (state === 'activating' && request.method === 'POST') {
+    const deadline = Date.now() + DATA_ACTIVATION_WAIT_MS;
+    while (
+      state === 'activating' &&
+      Date.now() < deadline &&
+      !request.signal.aborted
+    ) {
+      await delay(DATA_ACTIVATION_POLL_MS);
+      state = await liveDataAppState(parsed.id, expectedDeploymentId);
+    }
+  }
   if (state === 'missing') {
     return new Response('Not found', { status: 404 });
   }
@@ -252,11 +282,17 @@ export async function handleDataRequest({
       headers: { 'retry-after': '1' },
     });
   }
-  if (state === 'stale') {
-    return new Response(
+  const staleResponse = () =>
+    new Response(
       'This Data client belongs to an inactive deployment. Reload or restart it.',
       { status: 409 },
     );
+  const stale = typeof state === 'object' && state.state === 'stale';
+  // Only an App backend may outlive its deployment (a retired instance
+  // finishing in-flight requests), and backends always sign. Anything else
+  // is rejected before its body is read, as before.
+  if (stale && !request.headers.has(HATCH_SIGNATURE_HEADER)) {
+    return staleResponse();
   }
   if (typeof state === 'object' && state.state === 'unsupported') {
     return new Response(appCompatibilityRuntimeMessage(state.compatibility), {
@@ -270,13 +306,35 @@ export async function handleDataRequest({
       : await readCappedText(request, DATA_REQUEST_MAX_BYTES);
   if (rawBody === null)
     return new Response('Payload too large', { status: 413 });
-  if (!(await authorize(request, parsed.id, rawBody))) {
+  const caller = await authorize(request, parsed.id, rawBody);
+  if (!caller) {
     return new Response('Unauthorized', { status: 401 });
   }
+  const acceptSupersededDeployment = caller === 'backend';
+  if (
+    typeof state === 'object' &&
+    state.state === 'stale' &&
+    !(
+      acceptSupersededDeployment &&
+      (await supersededDeploymentSharesDataSchema(
+        parsed.id,
+        expectedDeploymentId,
+        state.dataSchemaHash,
+      ))
+    )
+  ) {
+    return staleResponse();
+  }
+  const access = { expectedDeploymentId, acceptSupersededDeployment };
 
   try {
     if (request.method === 'GET' && parsed.action === 'events') {
-      return eventStream(request, parsed.id, expectedDeploymentId);
+      return eventStream(
+        request,
+        parsed.id,
+        expectedDeploymentId,
+        acceptSupersededDeployment,
+      );
     }
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 });
@@ -288,14 +346,10 @@ export async function handleDataRequest({
       return new Response('Invalid JSON body', { status: 400 });
     }
     if (parsed.action === 'query') {
-      return Response.json(
-        await queryDataTable(parsed.id, body, { expectedDeploymentId }),
-      );
+      return Response.json(await queryDataTable(parsed.id, body, access));
     }
     if (parsed.action === 'mutate') {
-      return Response.json(
-        await mutateDataTable(parsed.id, body, { expectedDeploymentId }),
-      );
+      return Response.json(await mutateDataTable(parsed.id, body, access));
     }
     return new Response('Not found', { status: 404 });
   } catch (error) {

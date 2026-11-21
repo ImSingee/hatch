@@ -105,6 +105,18 @@ including when the content is unchanged or no content flags are supplied.
 requires at least one content flag. SDK and Channel updates use the same
 domain service and `silent: true` option. No Agent Tool is added.
 
+## App backend runtime: CLI only, no Agent Tool
+
+`hatch app backend list|status|start|stop|restart` calls
+`AppService/ListAppBackends`, `GetAppBackend`, `StartAppBackend`,
+`StopAppBackend` and `RestartAppBackend`, which use the same
+`src/server/apps/backends.ts` service as the Backends page and the App
+Operations panel. Sessions, API keys and Run JWTs have the same authority, and
+no operation is bound to a device or browser. The CLI covers every Web UI
+action, including the force stop the UI offers for draining instances
+(`stop --force`), and additionally offers `restart --force`. No Agent Tool is
+added.
+
 ## Known gaps
 
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`

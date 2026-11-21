@@ -5,6 +5,7 @@ import { runAuth } from './auth';
 import { runLifecycle } from './lifecycle';
 import { runGitCredential } from './git-credential';
 import { runData } from './data';
+import { runBackend } from './backend';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { runNotification } from './notifications';
@@ -67,6 +68,7 @@ try {
               ...(operation && !operation.startsWith('--') ? [operation] : []),
               ...([
                 'invoke',
+                'backend',
                 'icon',
                 'kv',
                 'data-table',
@@ -113,7 +115,9 @@ try {
         'invalid_arguments',
         'Use hatch app invoke backend or hatch app invoke webhook.',
       );
-  } else if (
+  } else if (name === 'app' && operation === 'backend')
+    await runBackend(args, offset, controller.signal);
+  else if (
     name === 'image-model' ||
     name === 'image' ||
     (name === 'app' && operation === 'icon')

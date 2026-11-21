@@ -8,7 +8,10 @@ import { getTailscaleManager } from '~server/tailscale-manager';
 import { parseAppApiPath } from './path';
 import { db } from '~/db';
 import { assertSupportedDeployment } from '~server/apps/compatibility';
-import { proxyAppRequest } from '~server/apps/runtime';
+import {
+  BackendDeploymentChangedError,
+  proxyAppRequest,
+} from '~server/apps/runtime';
 
 /** Route-owned failures use Connect JSON, without management error envelopes. */
 function rpcError(status: number, code: string, message: string) {
@@ -18,11 +21,10 @@ function rpcError(status: number, code: string, message: string) {
   );
 }
 
-export async function handleRpcRequest({
-  request,
-}: {
-  request: Request;
-}): Promise<Response> {
+export async function handleRpcRequest(
+  { request }: { request: Request },
+  retried = false,
+): Promise<Response> {
   const headers = request.headers;
   const origin = headers.get('origin');
   if (
@@ -82,7 +84,13 @@ export async function handleRpcRequest({
       signWithSecret: app.signingSecret ?? undefined,
       expectedDeploymentId: app.currentDeploymentId,
     });
-  } catch {
+  } catch (error) {
+    // A deploy or rollback committed after the app row was read. Nothing
+    // reached a backend yet, so serve the request from the new deployment
+    // instead of failing it.
+    if (error instanceof BackendDeploymentChangedError && !retried) {
+      return handleRpcRequest({ request }, true);
+    }
     return rpcError(502, 'unavailable', 'App backend unavailable.');
   }
 }

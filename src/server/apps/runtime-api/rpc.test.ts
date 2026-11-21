@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
         options: unknown,
       ) => Promise<Response>
     >(),
+  BackendDeploymentChangedError: class extends Error {},
 }));
 
 vi.mock('~server/auth/credentials', () => ({
@@ -29,6 +30,7 @@ vi.mock('~/db', () => ({
   },
 }));
 vi.mock('~server/apps/runtime', () => ({
+  BackendDeploymentChangedError: mocks.BackendDeploymentChangedError,
   proxyAppRequest: mocks.proxyAppRequest,
 }));
 
@@ -74,6 +76,54 @@ describe('public app RPC route', () => {
         expectedDeploymentId: 'deployment-1',
       },
     );
+  });
+
+  it('serves a call that raced a deploy from the newly active deployment', async () => {
+    // The app row was read just before the cutover committed.
+    mocks.findApp
+      .mockResolvedValueOnce({
+        status: 'deployed',
+        currentDeploymentId: 'deployment-1',
+        capabilities: { backend: true },
+        signingSecret: 'signing-secret',
+      })
+      .mockResolvedValue({
+        status: 'deployed',
+        currentDeploymentId: 'deployment-2',
+        capabilities: { backend: true },
+        signingSecret: 'signing-secret',
+      });
+    mocks.proxyAppRequest
+      .mockRejectedValueOnce(new mocks.BackendDeploymentChangedError())
+      .mockResolvedValue(new Response('proxied'));
+
+    const response = await handleRpcRequest({
+      request: new Request('https://hatch.test/api/app/app-id/rpc/todos.list', {
+        method: 'POST',
+        body: '{}',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.proxyAppRequest).toHaveBeenLastCalledWith(
+      'app-id',
+      expect.any(Request),
+      '/api/app/app-id/rpc',
+      '',
+      {
+        signWithSecret: 'signing-secret',
+        expectedDeploymentId: 'deployment-2',
+      },
+    );
+
+    // A second change in a row is reported instead of looping.
+    mocks.proxyAppRequest.mockRejectedValue(
+      new mocks.BackendDeploymentChangedError(),
+    );
+    const unavailable = await handleRpcRequest({
+      request: new Request('https://hatch.test/api/app/app-id/rpc/todos.list'),
+    });
+    expect(unavailable.status).toBe(502);
   });
 
   it('rejects an authenticated RPC call below the compatibility minimum', async () => {

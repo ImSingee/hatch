@@ -32,7 +32,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_app: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2UiLQoTR2V0QXBwU291cmNlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJBChRHZXRBcHBTb3VyY2VSZXNwb25zZRIpCgZzb3VyY2UYASABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5Tb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbjLSCQoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJfCgxHZXRBcHBTb3VyY2USJi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBTb3VyY2VSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwU291cmNlUmVzcG9uc2USVgoJRGVwbG95QXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkRlcGxveUFwcFJlc3BvbnNlElwKC1JvbGxiYWNrQXBwEiUuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXNwb25zZRJZCgpRdWVyeUFwcEt2EiQuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBLdlJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVzcG9uc2USbgoRUXVlcnlBcHBEYXRhVGFibGUSKy5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlc3BvbnNlElkKClF1ZXJ5QXBwRGISJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERiUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXNwb25zZRJ0ChNBc3NvY2lhdGVBcHBTZXNzaW9uEi0uaGF0Y2gucGxhdGZvcm0udjEuQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVzcG9uc2USWQoKR2V0QXBwSWNvbhIkLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEljb25SZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwSWNvblJlc3BvbnNlElkKClNldEFwcEljb24SJC5oYXRjaC5wbGF0Zm9ybS52MS5TZXRBcHBJY29uUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEljb25SZXNwb25zZRJfCgxDbGVhckFwcEljb24SJi5oYXRjaC5wbGF0Zm9ybS52MS5DbGVhckFwcEljb25SZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuQ2xlYXJBcHBJY29uUmVzcG9uc2ViBnByb3RvMw',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2UiLQoTR2V0QXBwU291cmNlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJBChRHZXRBcHBTb3VyY2VSZXNwb25zZRIpCgZzb3VyY2UYASABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5Tb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSL7AgoRQXBwQmFja2VuZFJ1bnRpbWUSDQoFc3RhdGUYASABKAkSEAoDcGlkGAIgASgNSACIAQESEQoEcG9ydBgDIAEoDUgBiAEBEhcKCnN0YXJ0ZWRfYXQYBCABKAlIAogBARIXCgpzdG9wcGVkX2F0GAUgASgJSAOIAQESGwoObGFzdF9leGl0X2NvZGUYBiABKAVIBIgBARIdChBsYXN0X2V4aXRfc2lnbmFsGAcgASgJSAWIAQESFwoKbGFzdF9lcnJvchgIIAEoCUgGiAEBEhUKDXJlc3RhcnRfY291bnQYCSABKA0SEgoKa2VlcF9hbGl2ZRgKIAEoCBIaChJkcmFpbmluZ19pbnN0YW5jZXMYCyABKA1CBgoEX3BpZEIHCgVfcG9ydEINCgtfc3RhcnRlZF9hdEINCgtfc3RvcHBlZF9hdEIRCg9fbGFzdF9leGl0X2NvZGVCEwoRX2xhc3RfZXhpdF9zaWduYWxCDQoLX2xhc3RfZXJyb3IilAEKCkFwcEJhY2tlbmQSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEgwKBG1vZGUYBCABKAkSGQoRcnVudGltZV9zdXBwb3J0ZWQYBSABKAgSNQoHcnVudGltZRgGIAEoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmRSdW50aW1lIm0KFkxpc3RBcHBCYWNrZW5kc1JlcXVlc3QSHQoFbGltaXQYASABKA1CCbpIBioEGGQoAUgAiAEBEh8KBmN1cnNvchgCIAEoCUIKukgHcgUQARi/AUgBiAEBQggKBl9saW1pdEIJCgdfY3Vyc29yInQKF0xpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEi8KCGJhY2tlbmRzGAEgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZBIYCgtuZXh0X2N1cnNvchgCIAEoCUgAiAEBQg4KDF9uZXh0X2N1cnNvciIuChRHZXRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJHChVHZXRBcHBCYWNrZW5kUmVzcG9uc2USLgoHYmFja2VuZBgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmQiMAoWU3RhcnRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJJChdTdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCI+ChVTdG9wQXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSAoWU3RvcEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJBChhSZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSwoZUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbjLhDQoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJfCgxHZXRBcHBTb3VyY2USJi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBTb3VyY2VSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwU291cmNlUmVzcG9uc2USVgoJRGVwbG95QXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkRlcGxveUFwcFJlc3BvbnNlElwKC1JvbGxiYWNrQXBwEiUuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXNwb25zZRJZCgpRdWVyeUFwcEt2EiQuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBLdlJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVzcG9uc2USbgoRUXVlcnlBcHBEYXRhVGFibGUSKy5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlc3BvbnNlElkKClF1ZXJ5QXBwRGISJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERiUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXNwb25zZRJ0ChNBc3NvY2lhdGVBcHBTZXNzaW9uEi0uaGF0Y2gucGxhdGZvcm0udjEuQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVzcG9uc2USaAoPTGlzdEFwcEJhY2tlbmRzEikuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcEJhY2tlbmRzUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEmIKDUdldEFwcEJhY2tlbmQSJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBCYWNrZW5kUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEJhY2tlbmRSZXNwb25zZRJoCg9TdGFydEFwcEJhY2tlbmQSKS5oYXRjaC5wbGF0Zm9ybS52MS5TdGFydEFwcEJhY2tlbmRSZXF1ZXN0GiouaGF0Y2gucGxhdGZvcm0udjEuU3RhcnRBcHBCYWNrZW5kUmVzcG9uc2USZQoOU3RvcEFwcEJhY2tlbmQSKC5oYXRjaC5wbGF0Zm9ybS52MS5TdG9wQXBwQmFja2VuZFJlcXVlc3QaKS5oYXRjaC5wbGF0Zm9ybS52MS5TdG9wQXBwQmFja2VuZFJlc3BvbnNlEm4KEVJlc3RhcnRBcHBCYWNrZW5kEisuaGF0Y2gucGxhdGZvcm0udjEuUmVzdGFydEFwcEJhY2tlbmRSZXF1ZXN0GiwuaGF0Y2gucGxhdGZvcm0udjEuUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRJZCgpHZXRBcHBJY29uEiQuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwSWNvblJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBJY29uUmVzcG9uc2USWQoKU2V0QXBwSWNvbhIkLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEljb25SZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwSWNvblJlc3BvbnNlEl8KDENsZWFyQXBwSWNvbhImLmhhdGNoLnBsYXRmb3JtLnYxLkNsZWFyQXBwSWNvblJlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5DbGVhckFwcEljb25SZXNwb25zZWIGcHJvdG8z',
     [
       file_buf_validate_validate,
       file_google_protobuf_struct,
@@ -512,6 +512,354 @@ export const AssociateAppSessionResponseSchema: GenMessage<AssociateAppSessionRe
   messageDesc(file_hatch_platform_v1_app, 19);
 
 /**
+ * Runtime facts describe the answering platform process and are not persisted.
+ *
+ * @generated from message hatch.platform.v1.AppBackendRuntime
+ */
+export type AppBackendRuntime =
+  Message<'hatch.platform.v1.AppBackendRuntime'> & {
+    /**
+     * running | starting | stopped
+     *
+     * @generated from field: string state = 1;
+     */
+    state: string;
+
+    /**
+     * @generated from field: optional uint32 pid = 2;
+     */
+    pid?: number | undefined;
+
+    /**
+     * @generated from field: optional uint32 port = 3;
+     */
+    port?: number | undefined;
+
+    /**
+     * @generated from field: optional string started_at = 4;
+     */
+    startedAt?: string | undefined;
+
+    /**
+     * @generated from field: optional string stopped_at = 5;
+     */
+    stoppedAt?: string | undefined;
+
+    /**
+     * @generated from field: optional int32 last_exit_code = 6;
+     */
+    lastExitCode?: number | undefined;
+
+    /**
+     * @generated from field: optional string last_exit_signal = 7;
+     */
+    lastExitSignal?: string | undefined;
+
+    /**
+     * @generated from field: optional string last_error = 8;
+     */
+    lastError?: string | undefined;
+
+    /**
+     * @generated from field: uint32 restart_count = 9;
+     */
+    restartCount: number;
+
+    /**
+     * Whether the platform restarts this backend automatically after an exit.
+     *
+     * @generated from field: bool keep_alive = 10;
+     */
+    keepAlive: boolean;
+
+    /**
+     * Retired instances still finishing the requests they hold after a deploy,
+     * rollback or stop. They receive no new requests.
+     *
+     * @generated from field: uint32 draining_instances = 11;
+     */
+    drainingInstances: number;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.AppBackendRuntime.
+ * Use `create(AppBackendRuntimeSchema)` to create a new message.
+ */
+export const AppBackendRuntimeSchema: GenMessage<AppBackendRuntime> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 20);
+
+/**
+ * @generated from message hatch.platform.v1.AppBackend
+ */
+export type AppBackend = Message<'hatch.platform.v1.AppBackend'> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string slug = 2;
+   */
+  slug: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * serverless | long-running
+   *
+   * @generated from field: string mode = 4;
+   */
+  mode: string;
+
+  /**
+   * False when the active deployment cannot run on this platform version.
+   *
+   * @generated from field: bool runtime_supported = 5;
+   */
+  runtimeSupported: boolean;
+
+  /**
+   * @generated from field: hatch.platform.v1.AppBackendRuntime runtime = 6;
+   */
+  runtime?: AppBackendRuntime | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppBackend.
+ * Use `create(AppBackendSchema)` to create a new message.
+ */
+export const AppBackendSchema: GenMessage<AppBackend> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 21);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppBackendsRequest
+ */
+export type ListAppBackendsRequest =
+  Message<'hatch.platform.v1.ListAppBackendsRequest'> & {
+    /**
+     * Page size; defaults to 50.
+     *
+     * @generated from field: optional uint32 limit = 1;
+     */
+    limit?: number | undefined;
+
+    /**
+     * next_cursor of the previous page.
+     *
+     * @generated from field: optional string cursor = 2;
+     */
+    cursor?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppBackendsRequest.
+ * Use `create(ListAppBackendsRequestSchema)` to create a new message.
+ */
+export const ListAppBackendsRequestSchema: GenMessage<ListAppBackendsRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 22);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppBackendsResponse
+ */
+export type ListAppBackendsResponse =
+  Message<'hatch.platform.v1.ListAppBackendsResponse'> & {
+    /**
+     * Ordered by App id.
+     *
+     * @generated from field: repeated hatch.platform.v1.AppBackend backends = 1;
+     */
+    backends: AppBackend[];
+
+    /**
+     * Absent on the last page.
+     *
+     * @generated from field: optional string next_cursor = 2;
+     */
+    nextCursor?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppBackendsResponse.
+ * Use `create(ListAppBackendsResponseSchema)` to create a new message.
+ */
+export const ListAppBackendsResponseSchema: GenMessage<ListAppBackendsResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 23);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppBackendRequest
+ */
+export type GetAppBackendRequest =
+  Message<'hatch.platform.v1.GetAppBackendRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetAppBackendRequest.
+ * Use `create(GetAppBackendRequestSchema)` to create a new message.
+ */
+export const GetAppBackendRequestSchema: GenMessage<GetAppBackendRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 24);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppBackendResponse
+ */
+export type GetAppBackendResponse =
+  Message<'hatch.platform.v1.GetAppBackendResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppBackend backend = 1;
+     */
+    backend?: AppBackend | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetAppBackendResponse.
+ * Use `create(GetAppBackendResponseSchema)` to create a new message.
+ */
+export const GetAppBackendResponseSchema: GenMessage<GetAppBackendResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 25);
+
+/**
+ * @generated from message hatch.platform.v1.StartAppBackendRequest
+ */
+export type StartAppBackendRequest =
+  Message<'hatch.platform.v1.StartAppBackendRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.StartAppBackendRequest.
+ * Use `create(StartAppBackendRequestSchema)` to create a new message.
+ */
+export const StartAppBackendRequestSchema: GenMessage<StartAppBackendRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 26);
+
+/**
+ * @generated from message hatch.platform.v1.StartAppBackendResponse
+ */
+export type StartAppBackendResponse =
+  Message<'hatch.platform.v1.StartAppBackendResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppBackend backend = 1;
+     */
+    backend?: AppBackend | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.StartAppBackendResponse.
+ * Use `create(StartAppBackendResponseSchema)` to create a new message.
+ */
+export const StartAppBackendResponseSchema: GenMessage<StartAppBackendResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 27);
+
+/**
+ * @generated from message hatch.platform.v1.StopAppBackendRequest
+ */
+export type StopAppBackendRequest =
+  Message<'hatch.platform.v1.StopAppBackendRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * Kill every instance at once, draining ones and their in-flight requests
+     * included.
+     *
+     * @generated from field: bool force = 2;
+     */
+    force: boolean;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.StopAppBackendRequest.
+ * Use `create(StopAppBackendRequestSchema)` to create a new message.
+ */
+export const StopAppBackendRequestSchema: GenMessage<StopAppBackendRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 28);
+
+/**
+ * @generated from message hatch.platform.v1.StopAppBackendResponse
+ */
+export type StopAppBackendResponse =
+  Message<'hatch.platform.v1.StopAppBackendResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppBackend backend = 1;
+     */
+    backend?: AppBackend | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.StopAppBackendResponse.
+ * Use `create(StopAppBackendResponseSchema)` to create a new message.
+ */
+export const StopAppBackendResponseSchema: GenMessage<StopAppBackendResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 29);
+
+/**
+ * @generated from message hatch.platform.v1.RestartAppBackendRequest
+ */
+export type RestartAppBackendRequest =
+  Message<'hatch.platform.v1.RestartAppBackendRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * Kill the previous instance instead of letting it drain.
+     *
+     * @generated from field: bool force = 2;
+     */
+    force: boolean;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.RestartAppBackendRequest.
+ * Use `create(RestartAppBackendRequestSchema)` to create a new message.
+ */
+export const RestartAppBackendRequestSchema: GenMessage<RestartAppBackendRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 30);
+
+/**
+ * @generated from message hatch.platform.v1.RestartAppBackendResponse
+ */
+export type RestartAppBackendResponse =
+  Message<'hatch.platform.v1.RestartAppBackendResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppBackend backend = 1;
+     */
+    backend?: AppBackend | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.RestartAppBackendResponse.
+ * Use `create(RestartAppBackendResponseSchema)` to create a new message.
+ */
+export const RestartAppBackendResponseSchema: GenMessage<RestartAppBackendResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 31);
+
+/**
  * The stored icon of an App; every field is unset while it shows a monogram.
  *
  * @generated from message hatch.platform.v1.AppIcon
@@ -543,7 +891,7 @@ export type AppIcon = Message<'hatch.platform.v1.AppIcon'> & {
  */
 export const AppIconSchema: GenMessage<AppIcon> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 20);
+  messageDesc(file_hatch_platform_v1_app, 32);
 
 /**
  * @generated from message hatch.platform.v1.GetAppIconRequest
@@ -562,7 +910,7 @@ export type GetAppIconRequest =
  */
 export const GetAppIconRequestSchema: GenMessage<GetAppIconRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 21);
+  messageDesc(file_hatch_platform_v1_app, 33);
 
 /**
  * @generated from message hatch.platform.v1.GetAppIconResponse
@@ -581,7 +929,7 @@ export type GetAppIconResponse =
  */
 export const GetAppIconResponseSchema: GenMessage<GetAppIconResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 22);
+  messageDesc(file_hatch_platform_v1_app, 34);
 
 /**
  * @generated from message hatch.platform.v1.SetAppIconRequest
@@ -624,7 +972,7 @@ export type SetAppIconRequest =
  */
 export const SetAppIconRequestSchema: GenMessage<SetAppIconRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 23);
+  messageDesc(file_hatch_platform_v1_app, 35);
 
 /**
  * @generated from message hatch.platform.v1.SetAppIconResponse
@@ -643,7 +991,7 @@ export type SetAppIconResponse =
  */
 export const SetAppIconResponseSchema: GenMessage<SetAppIconResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 24);
+  messageDesc(file_hatch_platform_v1_app, 36);
 
 /**
  * @generated from message hatch.platform.v1.ClearAppIconRequest
@@ -662,7 +1010,7 @@ export type ClearAppIconRequest =
  */
 export const ClearAppIconRequestSchema: GenMessage<ClearAppIconRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 25);
+  messageDesc(file_hatch_platform_v1_app, 37);
 
 /**
  * @generated from message hatch.platform.v1.ClearAppIconResponse
@@ -681,7 +1029,7 @@ export type ClearAppIconResponse =
  */
 export const ClearAppIconResponseSchema: GenMessage<ClearAppIconResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_app, 26);
+  messageDesc(file_hatch_platform_v1_app, 38);
 
 /**
  * Public API for CLI and native clients. Platform Web UI uses Server Functions.
@@ -768,6 +1116,49 @@ export const AppService: GenService<{
     methodKind: 'unary';
     input: typeof AssociateAppSessionRequestSchema;
     output: typeof AssociateAppSessionResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.ListAppBackends
+   */
+  listAppBackends: {
+    methodKind: 'unary';
+    input: typeof ListAppBackendsRequestSchema;
+    output: typeof ListAppBackendsResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.GetAppBackend
+   */
+  getAppBackend: {
+    methodKind: 'unary';
+    input: typeof GetAppBackendRequestSchema;
+    output: typeof GetAppBackendResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.StartAppBackend
+   */
+  startAppBackend: {
+    methodKind: 'unary';
+    input: typeof StartAppBackendRequestSchema;
+    output: typeof StartAppBackendResponseSchema;
+  };
+  /**
+   * Graceful by default: no instance receives another request, and each exits
+   * once the requests it already holds finish or the drain timeout elapses.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.StopAppBackend
+   */
+  stopAppBackend: {
+    methodKind: 'unary';
+    input: typeof StopAppBackendRequestSchema;
+    output: typeof StopAppBackendResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.RestartAppBackend
+   */
+  restartAppBackend: {
+    methodKind: 'unary';
+    input: typeof RestartAppBackendRequestSchema;
+    output: typeof RestartAppBackendResponseSchema;
   };
   /**
    * @generated from rpc hatch.platform.v1.AppService.GetAppIcon

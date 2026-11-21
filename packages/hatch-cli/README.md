@@ -403,6 +403,39 @@ SIGINT/HTTP timeout abort SQL connections; possibly mutating requests are never
 retried automatically. A cancellation around commit still requires inspecting
 platform data before retrying.
 
+## App backend runtime
+
+```sh
+hatch app backend list --limit 50 --cursor '<nextCursor>' --json
+hatch app backend status <id-or-slug> --json
+hatch app backend start <id-or-slug> --json
+hatch app backend stop <id-or-slug> [--force] --json
+hatch app backend restart <id-or-slug> [--force] --json
+```
+
+Every command prints the backend view: `id`, `slug`, `name`, `mode`
+(`serverless` or `long-running`), `runtimeSupported` and `runtime` (`state`
+`running`/`starting`/`stopped`, `pid`, `port`, `startedAt`, `stoppedAt`,
+`lastExitCode`, `lastExitSignal`, `lastError`, `restartCount`, `keepAlive`,
+`drainingInstances`). Absent facts are `null`. Runtime facts describe the
+answering platform process and are not persisted. `list` prints
+`{ backends, nextCursor }` in App id order, 50 per page by default (`--limit`
+1–100); pass `nextCursor` as `--cursor` for the next page. It is `null` on the
+last page.
+
+Deploy, rollback, `stop` and `restart` are graceful: the previous instance
+receives no further requests and finishes the ones it holds. It is then sent
+`SIGTERM` and killed 5 seconds later if it has not exited. Requests still open
+when the platform drain timeout (`HATCH_APP_DRAIN_TIMEOUT_SECONDS`, default 300) elapses are ended the same way; a timeout of 0 kills retired instances at
+once. `drainingInstances` counts instances in that state.
+`stop` clears the keep-alive mark, so a long-running backend stays down until
+it is started or deployed again; a serverless backend starts on its next
+request. `--force` kills every instance at once, draining ones included, and
+fails their in-flight requests; it is accepted only by `stop` and `restart`.
+`start` waits until the backend is reachable; when the boot fails the command
+exits 6 with code `CONFLICT` and `status` shows the reason in `lastError`. The
+HTTP `--timeout` defaults to 60 seconds.
+
 Run-authenticated App create/clone/update/deploy/rollback associate with the
 verified current Agent session; `app associate` is idempotent. Ordinary sessions
 and keys return `not-applicable` and create no relation. A caller cannot supply

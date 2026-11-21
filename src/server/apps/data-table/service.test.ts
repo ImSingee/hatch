@@ -310,6 +310,36 @@ describe('managed Data Table service', () => {
     expect(unsafe).not.toHaveBeenCalled();
   });
 
+  it('accepts a superseded deployment only for a backend built for the live schema', async () => {
+    mocks.findApp.mockResolvedValue(liveApp({ dataSchemaHash: 'schema-a' }));
+    const access = {
+      expectedDeploymentId: 'superseded-deployment',
+      acceptSupersededDeployment: true,
+    };
+
+    mocks.findDeployment.mockResolvedValue({
+      dataSchemaHash: 'schema-a',
+      compatibilityVersion: null,
+    });
+    await expect(
+      assertDataTableAccess(APP_ID, access),
+    ).resolves.toBeUndefined();
+    // The same superseded deployment without the backend allowance is stale.
+    await expect(
+      assertDataTableAccess(APP_ID, {
+        expectedDeploymentId: 'superseded-deployment',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+
+    mocks.findDeployment.mockResolvedValue({
+      dataSchemaHash: 'schema-before-migration',
+      compatibilityVersion: null,
+    });
+    await expect(assertDataTableAccess(APP_ID, access)).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
   it('blocks App Data access below the minimum but keeps management access', async () => {
     mocks.findApp.mockResolvedValue(liveApp());
     mocks.findDeployment.mockResolvedValue({ compatibilityVersion: 0 });

@@ -116,6 +116,36 @@ const definitions: readonly CliCommandDefinition[] = [
       'Invoke an App backend using Connect unary JSON (default request: {}). No streaming or native gRPC.',
   },
   {
+    path: ['app', 'backend', 'list'],
+    usage: 'app backend list [--limit <1-100>] [--cursor <id>] [--json]',
+    description:
+      'List runnable App backends in App id order, 50 per page by default; pass the printed nextCursor as --cursor for the next page (nextCursor is null on the last one). Each entry carries its runtime state: id, slug, mode (serverless or long-running), state (running, starting or stopped), pid, keep-alive mark and the number of draining instances. Runtime facts describe the answering platform process and are not persisted.',
+  },
+  {
+    path: ['app', 'backend', 'status'],
+    usage: 'app backend status <id-or-slug> [--json]',
+    description:
+      'Show one App backend. drainingInstances counts retired instances that still finish in-flight requests after a deploy, rollback or stop; they receive no new requests and exit on their own. lastError holds the most recent start failure.',
+  },
+  {
+    path: ['app', 'backend', 'start'],
+    usage: 'app backend start <id-or-slug> [--json]',
+    description:
+      'Start the backend of the active deployment and wait until it is reachable. A long-running backend is marked keep-alive, so the platform restarts it after an unexpected exit. No-op when already running.',
+  },
+  {
+    path: ['app', 'backend', 'stop'],
+    usage: 'app backend stop <id-or-slug> [--force] [--json]',
+    description:
+      'Stop the backend gracefully and clear its keep-alive mark: no instance receives another request, and each is sent SIGTERM (then SIGKILL 5 seconds later) once its in-flight requests finish or the platform drain timeout elapses. A serverless backend starts again on the next request. --force kills every instance at once, draining ones included, and fails their in-flight requests. Idempotent.',
+  },
+  {
+    path: ['app', 'backend', 'restart'],
+    usage: 'app backend restart <id-or-slug> [--force] [--json]',
+    description:
+      'Start a fresh instance and retire the previous one, which finishes its in-flight requests beside the new instance. --force kills the previous instance instead and fails its in-flight requests.',
+  },
+  {
     path: ['app', 'kv', 'list'],
     usage:
       'app kv list <app-id> [--cursor <key>] [--limit <count>] [--reveal-secrets]',
