@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { dashboardWidgetKey } from '~/lib/dashboard-widget';
 import { authMiddleware } from './auth';
 import {
+  addDashboardWidget as placeDashboardWidget,
   createDashboard as createDashboardRecord,
   deleteDashboard as deleteDashboardRecord,
   getDashboardData,
@@ -170,3 +171,24 @@ export const saveDashboardDraft = createServerFn({ method: 'POST' })
       .parse(input),
   )
   .handler(({ data }) => commitDashboardDraft(data));
+
+/**
+ * Place one App widget on a dashboard at its default size below the others,
+ * as the editor adds it. Already placed is a 409; the change is published as
+ * `dashboards.updated`, so an open desk shows it without a reload.
+ */
+export const addDashboardWidget = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator(
+    (input: { dashboardId: string; appId: string; widgetId: string }) =>
+      z
+        .object({ dashboardId: idSchema, appId: idSchema, widgetId: idSchema })
+        .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { placementId } = await placeDashboardWidget(data.dashboardId, {
+      app: data.appId,
+      widgetId: data.widgetId,
+    });
+    return { placementId };
+  });

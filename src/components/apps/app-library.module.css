@@ -182,6 +182,20 @@
   gap: 8px;
 }
 
+/* Dock and desk: full width, since the labels do not fit side by side in
+ * the detail column. */
+.pinActions {
+  display: grid;
+  gap: 8px;
+}
+
+.actionNote {
+  margin: -6px 0 0;
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 /* No room for the detail beside the grid: it opens as a sheet instead. */
 @media (max-width: 50em) {
   .layout > .detail {

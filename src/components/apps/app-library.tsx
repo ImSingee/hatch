@@ -9,7 +9,7 @@ import {
   IconStack2,
 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import {
   EmptyState,
@@ -25,6 +25,7 @@ import type { AppListItem } from '~server/apps';
 import { setSidebarPin } from '~server/sidebar';
 import { setWorkflowPinFn, type WorkflowListItem } from '~server/workflows';
 import { AppGlyph } from './app-glyph';
+import { usePinToDesk } from './pin-to-desk';
 import classes from './app-library.module.css';
 
 type Entry = {
@@ -410,16 +411,51 @@ function EntryDetail({ entry, inline }: { entry: Entry; inline?: boolean }) {
           </>
         )}
       </div>
-      <Button
-        variant="default"
-        loading={pin.isPending}
-        onClick={() => pin.mutate(!entry.pinned)}
-      >
-        {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
-      </Button>
+      {isApp ? (
+        <AppPinActions
+          appId={entry.id}
+          dockButton={
+            <Button
+              variant="default"
+              loading={pin.isPending}
+              onClick={() => pin.mutate(!entry.pinned)}
+            >
+              {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
+            </Button>
+          }
+        />
+      ) : (
+        <Button
+          variant="default"
+          loading={pin.isPending}
+          onClick={() => pin.mutate(!entry.pinned)}
+        >
+          {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
+        </Button>
+      )}
       <Anchor component={Link} to="/agent" size="sm">
         Continue editing with the Agent ›
       </Anchor>
     </aside>
+  );
+}
+
+/** The dock pin beside "Pin to desk", and why the latter is unavailable. */
+function AppPinActions({
+  appId,
+  dockButton,
+}: {
+  appId: string;
+  dockButton: ReactNode;
+}) {
+  const desk = usePinToDesk(appId);
+  return (
+    <>
+      <div className={classes.pinActions}>
+        {dockButton}
+        {desk.control}
+      </div>
+      {desk.reason ? <p className={classes.actionNote}>{desk.reason}</p> : null}
+    </>
   );
 }

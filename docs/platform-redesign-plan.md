@@ -46,10 +46,6 @@ Out of scope **[decision, confirmed by the user where noted]**:
 - The brand mark (waiting on the user). The artboards draw an egg-shaped
   mark; the web keeps the current logo until the user decides whether to
   change the brand.
-- "Pin to desk" on the App detail panel (waiting on a decision). The desk
-  already lists every App that is not in the dock, so pins have no separate
-  desk target; the button needs a meaning first, such as placing the App's
-  widget on the open dashboard.
 - Changing App frontends, the App SDK or the Agent.
 - Translating the UI. The canvas is drawn in Chinese; product copy stays
   English, as today.
@@ -234,6 +230,16 @@ its own RPC and CLI command; it is not part of this redesign.
 settings page shows and links to it: the runner id when one runner is
 online, a count when several are, "Runner offline" or "Runner needs
 attention" otherwise. Below 768 only its coloured dot stays.
+
+**[decision]** The App detail panel in All apps has two pin actions. "Pin to
+dock" / "Remove from dock" is the App pin (`PinService`). "Pin to desk" puts
+the App's widget on the current dashboard through the same domain call as
+`hatch dashboard widget add`: default size, below the other widgets, and
+published as `dashboards.updated` so an open desk updates. The current
+dashboard is the one this browser showed last, else the first. An App with
+several widgets offers a choice. The button is disabled, with the reason
+under it, when the App has no widget or its widgets are all on that
+dashboard already.
 
 **[decision]** Search (`⌘K` / `Ctrl+K`, or the menu bar button) is a command
 palette over the shell's places, every App and every Workflow, built on
