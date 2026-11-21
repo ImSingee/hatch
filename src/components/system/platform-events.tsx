@@ -58,6 +58,11 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       return { type, accent } satisfies PlatformEvent;
     }
     if (type === 'pins.updated') return { type } satisfies PlatformEvent;
+    if (type === 'dashboards.updated')
+      return {
+        type,
+        dashboardId: stringField(value, 'dashboardId') ?? undefined,
+      } satisfies PlatformEvent;
     return null;
   } catch {
     return null;

@@ -42,6 +42,14 @@ import {
   PinService,
   type PinnedApp,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/pin_pb';
+import {
+  DashboardService,
+  type AvailableWidget,
+  type Dashboard,
+  type DashboardDetail,
+  type WidgetLayout,
+  type WidgetSize,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/dashboard_pb';
 import { type AppIcon } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
@@ -157,6 +165,65 @@ const appPin = (value: PinnedApp | undefined) => {
     entryHash: pin.entryHash ?? null,
     appStatus: pin.appStatus,
   };
+};
+const dashboardView = (value: Dashboard | undefined) => {
+  const dashboard = required(value);
+  return {
+    id: dashboard.id,
+    name: dashboard.name,
+    description: dashboard.description ?? null,
+    pinned: dashboard.pinned,
+    autoRefreshSeconds: dashboard.autoRefreshSeconds,
+  };
+};
+const widgetSize = (size: WidgetSize | undefined) => {
+  const value = required(size);
+  return { w: value.w, h: value.h };
+};
+const widgetLayout = (item: WidgetLayout) => ({
+  id: item.id,
+  x: item.x,
+  y: item.y,
+  w: item.w,
+  h: item.h,
+});
+const dashboardDetailView = (value: DashboardDetail | undefined) => {
+  const detail = required(value);
+  return {
+    dashboard: dashboardView(detail.dashboard),
+    revision: detail.revision,
+    widgets: detail.widgets.map((widget) => ({
+      id: widget.id,
+      appId: widget.appId,
+      appSlug: widget.appSlug,
+      appName: widget.appName,
+      widgetId: widget.widgetId,
+      name: widget.name,
+      defaultSize: widgetSize(widget.defaultSize),
+      supportedSizes: widget.supportedSizes.map(widgetSize),
+    })),
+    layouts: {
+      desktop: (detail.layouts?.desktop ?? []).map(widgetLayout),
+      tablet: (detail.layouts?.tablet ?? []).map(widgetLayout),
+      mobile: (detail.layouts?.mobile ?? []).map(widgetLayout),
+    },
+  };
+};
+const availableWidgetView = (widget: AvailableWidget) => ({
+  appId: widget.appId,
+  appSlug: widget.appSlug,
+  appName: widget.appName,
+  widgetId: widget.widgetId,
+  name: widget.name,
+  defaultSize: widgetSize(widget.defaultSize),
+  supportedSizes: widget.supportedSizes.map(widgetSize),
+});
+type WidgetPositionInput = {
+  breakpoint: string;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
 };
 const imageModel = (value: ImageModelState | undefined) => {
   const state = required(value);
@@ -303,7 +370,97 @@ export function cliClient(transport: Transport) {
   const images = createClient(ImageService, transport);
   const themes = createClient(ThemeService, transport);
   const pins = createClient(PinService, transport);
+  const dashboards = createClient(DashboardService, transport);
   return {
+    dashboards: {
+      list: async () => ({
+        dashboards: (await dashboards.listDashboards({})).dashboards.map(
+          dashboardView,
+        ),
+      }),
+      get: async (id: string) =>
+        dashboardDetailView((await dashboards.getDashboard({ id })).detail),
+      create: async (input: { name: string; description?: string }) => ({
+        dashboard: dashboardView(
+          (
+            await dashboards.createDashboard({
+              name: input.name,
+              description: input.description,
+            })
+          ).dashboard,
+        ),
+      }),
+      update: async (input: {
+        id: string;
+        name?: string;
+        description?: string;
+        autoRefreshSeconds?: number;
+      }) => ({
+        dashboard: dashboardView(
+          (
+            await dashboards.updateDashboard({
+              id: input.id,
+              name: input.name,
+              description: input.description,
+              autoRefreshSeconds: input.autoRefreshSeconds,
+            })
+          ).dashboard,
+        ),
+      }),
+      delete: async (id: string) => ({
+        deletedDashboardId: (await dashboards.deleteDashboard({ id })).id,
+      }),
+      availableWidgets: async () => ({
+        widgets: (await dashboards.listAvailableWidgets({})).widgets.map(
+          availableWidgetView,
+        ),
+      }),
+      addWidget: async (input: {
+        dashboardId: string;
+        app: string;
+        widgetId: string;
+        position?: WidgetPositionInput;
+      }) => {
+        const result = await dashboards.addDashboardWidget({
+          dashboardId: input.dashboardId,
+          app: input.app,
+          widgetId: input.widgetId,
+          position: input.position,
+        });
+        return {
+          placementId: result.placementId,
+          ...dashboardDetailView(result.detail),
+        };
+      },
+      setWidgetLayout: async (input: {
+        dashboardId: string;
+        placementId: string;
+        position: WidgetPositionInput;
+      }) =>
+        dashboardDetailView(
+          (
+            await dashboards.setDashboardWidgetLayout({
+              dashboardId: input.dashboardId,
+              placementId: input.placementId,
+              position: input.position,
+            })
+          ).detail,
+        ),
+      removeWidget: async (input: {
+        dashboardId: string;
+        placementId: string;
+      }) => ({
+        removedPlacementId: input.placementId,
+        ...dashboardDetailView(
+          (
+            await dashboards.removeDashboardWidget({
+              dashboardId: input.dashboardId,
+              placementId: input.placementId,
+            })
+          ).detail,
+        ),
+      }),
+    },
     theme: {
       get: async () => theme((await themes.getTheme({})).theme),
       set: async (input: { accent: string }) =>

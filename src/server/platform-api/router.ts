@@ -94,8 +94,67 @@ import {
   updateAppPin,
 } from '~server/pins';
 import type { SidebarItem } from '~server/workspace-read';
+import { DashboardService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/dashboard_pb';
+import {
+  addDashboardWidget,
+  createDashboard,
+  deleteDashboard,
+  getDashboardData,
+  listAvailableWidgets,
+  listDashboards,
+  removeDashboardWidget,
+  setDashboardWidgetLayout,
+  updateDashboard,
+  type Dashboard,
+  type DashboardData,
+} from '~server/dashboard-service';
+import type { DashboardBreakpoint } from '~/lib/dashboard-layout';
 
 export { publicApiContext };
+const dashboardMessage = (dashboard: Dashboard) => ({
+  id: dashboard.id,
+  name: dashboard.name,
+  description: dashboard.description ?? undefined,
+  pinned: dashboard.pinned,
+  autoRefreshSeconds: dashboard.autoRefreshSeconds,
+});
+
+async function dashboardDetail(id: string, data?: DashboardData) {
+  const [dashboards, current] = await Promise.all([
+    listDashboards(),
+    data ?? getDashboardData(id),
+  ]);
+  const dashboard = dashboards.find((item) => item.id === id);
+  if (!dashboard) throw publicApiError('NOT_FOUND', 'Dashboard not found.');
+  return {
+    dashboard: dashboardMessage(dashboard),
+    widgets: current.widgets.map((widget) => ({
+      id: widget.id,
+      appId: widget.appId,
+      appSlug: widget.appSlug,
+      appName: widget.appName,
+      widgetId: widget.widgetId,
+      name: widget.name,
+      defaultSize: widget.defaultSize,
+      supportedSizes: widget.supportedSizes,
+    })),
+    layouts: current.layouts,
+    revision: current.revision,
+  };
+}
+
+const widgetPosition = (position: {
+  breakpoint: string;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+}) => ({
+  ...position,
+  // Protovalidate has already limited this to the three breakpoints.
+  breakpoint: position.breakpoint as DashboardBreakpoint,
+});
+
 const columns = {
   id: true,
   slug: true,
@@ -619,6 +678,71 @@ export function registerPlatformApi(
       setWorkflowPinned(input.workflow, input.pinned),
     setDashboardPinned: (input) =>
       setDashboardPinned(input.dashboardId, input.pinned),
+  });
+  router.service(DashboardService, {
+    listDashboards: async () => ({
+      dashboards: (await listDashboards()).map(dashboardMessage),
+    }),
+    getDashboard: async (input) => ({
+      detail: await dashboardDetail(input.id),
+    }),
+    createDashboard: async (input) => ({
+      dashboard: dashboardMessage(await createDashboard(input)),
+    }),
+    updateDashboard: async (input) => ({
+      dashboard: dashboardMessage(
+        await updateDashboard(input.id, {
+          name: input.name,
+          description: input.description,
+          autoRefreshSeconds: input.autoRefreshSeconds,
+        }),
+      ),
+    }),
+    deleteDashboard: async (input) => {
+      await deleteDashboard(input.id);
+      return { id: input.id };
+    },
+    listAvailableWidgets: async () => ({
+      widgets: (await listAvailableWidgets()).map((widget) => ({
+        appId: widget.appId,
+        appSlug: widget.appSlug,
+        appName: widget.appName,
+        widgetId: widget.widgetId,
+        name: widget.name,
+        defaultSize: widget.defaultSize,
+        supportedSizes: widget.supportedSizes,
+      })),
+    }),
+    addDashboardWidget: async (input) => {
+      const result = await addDashboardWidget(input.dashboardId, {
+        app: input.app,
+        widgetId: input.widgetId,
+        position: input.position && widgetPosition(input.position),
+      });
+      return {
+        detail: await dashboardDetail(input.dashboardId, result.data),
+        placementId: result.placementId,
+      };
+    },
+    setDashboardWidgetLayout: async (input) => {
+      if (!input.position) throw publicApiError('BAD_REQUEST');
+      return {
+        detail: await dashboardDetail(
+          input.dashboardId,
+          await setDashboardWidgetLayout(
+            input.dashboardId,
+            input.placementId,
+            widgetPosition(input.position),
+          ),
+        ),
+      };
+    },
+    removeDashboardWidget: async (input) => ({
+      detail: await dashboardDetail(
+        input.dashboardId,
+        await removeDashboardWidget(input.dashboardId, input.placementId),
+      ),
+    }),
   });
   router.rpc(AppService.method.listApps, apps.list);
   router.rpc(AppService.method.createApp, apps.create);

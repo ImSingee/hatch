@@ -491,6 +491,44 @@ and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
 repeated id in `pin reorder`. Platform errors: `NOT_FOUND` (5) for an unknown
 App, Workflow, dashboard or pin id, and `BAD_REQUEST` (2).
 
+## Dashboards
+
+```sh
+hatch dashboard list --json
+hatch dashboard get <dashboard-id> --json
+hatch dashboard create --name 'Morning' --description 'What I check first'
+hatch dashboard update <dashboard-id> --name 'Mornings' --auto-refresh 60
+hatch dashboard update <dashboard-id> --clear-description --no-auto-refresh
+hatch dashboard delete <dashboard-id> --yes
+hatch dashboard widget available --json
+hatch dashboard widget add <dashboard-id> --app my-app --widget summary
+hatch dashboard widget layout <dashboard-id> <placement-id> --x 6 --w 6
+hatch dashboard widget layout <dashboard-id> <placement-id> --breakpoint mobile --h 3
+hatch dashboard widget remove <dashboard-id> <placement-id>
+```
+
+`dashboard get` prints the settings, the placed widgets and their `x`, `y`,
+`w`, `h` in grid units for each breakpoint: `desktop` has 12 columns,
+`tablet` 8 and `mobile` 4. A widget's `id` there is its placement id, which
+`widget layout` and `widget remove` take. `supportedSizes` lists the only
+footprints a widget accepts; empty means any size from 2×2 up. `widget add`
+places a widget below the others at its default size and prints the new
+`placementId`; position flags place it at one breakpoint instead, and the
+other breakpoints follow. `widget layout` changes one breakpoint (desktop
+unless `--breakpoint` is given) and keeps omitted numbers; widgets under the
+new position move down and empty rows close up, so read the printed layouts.
+`update` leaves omitted fields unchanged; `--auto-refresh` takes seconds
+(1 to 3600). Pin, unpin and reorder dashboards with `hatch pin`.
+
+Local rejections exit 2 with `invalid_arguments`: no field to change, a blank
+`--name` or `--description`, `--description` with `--clear-description`,
+`--auto-refresh` with `--no-auto-refresh`, a number outside the grid of the
+breakpoint, `--breakpoint` without a number, and `delete` without `--yes`.
+Platform errors: `NOT_FOUND` (5) for an unknown dashboard, App, widget or
+placement; `BAD_REQUEST` (2) for a size the widget does not support, named in
+the message; `CONFLICT` (6) for a widget that is already on the dashboard or
+deleting the last dashboard.
+
 ## Notifications
 
 `hatch notification ...` manages the notification center with a user session,
