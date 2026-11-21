@@ -1,7 +1,7 @@
 # Hatch CLI
 
 Authentication, App/Workflow source lifecycles and App data operations, over the
-public Connect RPC contract at `/api/rpc`. Requires Node >=22.19, Git and pnpm.
+public Connect RPC contract at `/api/rpc`. Requires Node >=24, Git and pnpm.
 A source that builds with the pnpm toolchain (`pnpm-lock.yaml`) needs pnpm of
 the same major version as the platform's, currently 12. Deno is needed to
 prepare a Deno-toolchain source (`deno.json` + `deno.lock`) and to run or test
@@ -243,8 +243,8 @@ never run for either toolchain.
   `typescript` and `esbuild` with `pnpm dlx`, check the import graph and types
   of `manifest.ts`, bundle it, and evaluate the bundle with this machine's Node
   under `--permission` with no grants: no file, subprocess or worker access.
-  Node denies network to such a process only from version 25; on Node 22 and
-  24 manifest evaluation can reach the network. Adopt evaluates the manifest
+  Node denies network to such a process only from version 25; on Node 24
+  manifest evaluation can reach the network. Adopt evaluates the manifest
   of either kind the same way, installing first. A pnpm of another major
   version fails preparation with a message naming the required one.
 - **Deno toolchain.** Apps validate the shared dependency policy and run
