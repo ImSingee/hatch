@@ -208,6 +208,27 @@ describe('OpenAI image driver', () => {
     });
   });
 
+  it('stops reading a provider response larger than one image', async () => {
+    const chunk = new Uint8Array(1024 * 1024).fill(0x41);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => new Response(body)),
+    );
+
+    await expect(driver.generate(provider, request)).rejects.toMatchObject({
+      status: 503,
+    });
+    // An endless body is abandoned shortly after the limit, not drained.
+    expect(sent).toBeLessThan(40);
+  });
+
   it('offers no driver for providers that cannot generate images', () => {
     expect(imageDriverFor('anthropic-messages')).toBeNull();
   });

@@ -29,7 +29,8 @@ export function candidatePath(id: string): string {
 
 const file = (id: string) => path.join(IMAGE_CANDIDATES_DIR, `${id}.png`);
 
-async function sweepExpired(now: number): Promise<void> {
+/** Delete expired candidates; safe to run at any time. */
+export async function sweepExpiredCandidates(now = Date.now()): Promise<void> {
   const names = await readdir(IMAGE_CANDIDATES_DIR).catch(() => []);
   await Promise.all(
     names.map(async (name) => {
@@ -43,7 +44,7 @@ async function sweepExpired(now: number): Promise<void> {
 
 export async function saveCandidate(png: Buffer): Promise<string> {
   await mkdir(IMAGE_CANDIDATES_DIR, { recursive: true });
-  await sweepExpired(Date.now());
+  await sweepExpiredCandidates();
   const id = randomBytes(16).toString('hex');
   await writeFile(file(id), png, { flag: 'wx' });
   return id;

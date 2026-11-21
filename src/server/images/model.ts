@@ -1,7 +1,11 @@
 /** Server-only: the instance's selected image-generation model. */
 import { db } from '~/db';
 import { AppError } from '~server/errors';
-import { getPlatformConfig, setPlatformConfig } from '~server/platform-config';
+import {
+  clearPlatformConfig,
+  getPlatformConfig,
+  setPlatformConfig,
+} from '~server/platform-config';
 import {
   imageDriverFor,
   type ImageDriver,
@@ -83,7 +87,8 @@ export async function setImageModel(input: {
 }
 
 export async function clearImageModel(): Promise<ImageModelState> {
-  await setPlatformConfig('image.model', null);
+  // The value column is NOT NULL; no row means no selection.
+  await clearPlatformConfig('image.model');
   return getImageModelState();
 }
 

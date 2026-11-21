@@ -7,6 +7,7 @@
  * everything older is deleted in one daily sweep.
  */
 import { sql } from 'drizzle-orm';
+import { sweepExpiredCandidates } from '~server/images/candidates';
 import { db } from '~/db';
 import {
   pruneOrphanedAgentAttachmentSessions,
@@ -115,6 +116,11 @@ export function ensureRetentionSweep(): void {
   const sweep = () => {
     void pruneHistory().catch((error) => {
       console.error('[retention] prune failed:', error);
+    });
+    // Generated image candidates expire after a day whether or not anyone
+    // generates again.
+    void sweepExpiredCandidates().catch((error) => {
+      console.error('[retention] image candidate sweep failed:', error);
     });
   };
   sweep();

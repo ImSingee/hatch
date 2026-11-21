@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { type CSSProperties, useState } from 'react';
 import classes from './app-glyph.module.css';
 import { appIconUrl, useAppIconKey, useHasAppIcons } from './use-app-icon';
 
@@ -51,12 +51,18 @@ export function AppGlyph({
 function AppIconGlyph(props: GlyphProps) {
   const key = useAppIconKey(props.seed);
   const size = props.size ?? 'md';
+  // The key can be stale (icon removed elsewhere since the index loaded):
+  // remember the URL that failed and show the monogram until it changes.
+  const [failed, setFailed] = useState<string | null>(null);
   if (!key || !props.seed) return <Monogram {...props} />;
+  const src = appIconUrl(props.seed, key, size === 'sm' ? 64 : 128);
+  if (failed === src) return <Monogram {...props} />;
   return (
     <img
       className={classes.glyph}
       data-size={size}
-      src={appIconUrl(props.seed, key, size === 'sm' ? 64 : 128)}
+      src={src}
+      onError={() => setFailed(src)}
       alt=""
       aria-hidden
       draggable={false}

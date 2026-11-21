@@ -152,6 +152,9 @@ try {
       ...(known instanceof BackendInvocationError
         ? { response: known.response }
         : {}),
+      ...(known instanceof CliError && known.details !== undefined
+        ? { details: known.details }
+        : {}),
     };
     process.stdout.write(`${JSON.stringify({ ok: false, error: detail })}\n`);
   } else process.stderr.write(`${message}\n`);

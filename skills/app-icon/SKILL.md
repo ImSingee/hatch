@@ -25,6 +25,10 @@ other work on an icon.
 
 ## Workflow
 
+Uploading a file the user supplies (`hatch app icon set <app> --file <path>`)
+and removing the icon (`hatch app icon clear <app>`) need no image model: run
+those commands directly. The steps below are for designing a new icon.
+
 1. Run `hatch image-model get --json`. If `selected` is null or
    `selected.usable` is false, tell the user to choose an image model under
    Settings → AI Providers (or with `hatch image-model set`) and stop.

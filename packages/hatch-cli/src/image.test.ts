@@ -43,6 +43,10 @@ describe('image command arguments', () => {
       glyphTile: '#3E63DD',
       outputDir: 'out',
     });
+    // The limit counts code points, like the public API.
+    expect(
+      command('image', 'generate', '--prompt', '\u{1F600}'.repeat(4000)),
+    ).toMatchObject({ kind: 'generate' });
     expect(command('image', 'generate', '--prompt', 'a ring')).toMatchObject({
       prompt: 'a ring',
       count: 1,

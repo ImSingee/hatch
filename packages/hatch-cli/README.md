@@ -390,15 +390,20 @@ a centred square, re-encodes and deletes the previous icon. `clear` succeeds
 when there is no icon.
 
 Local rejections exit 2: `invalid_arguments` (missing or contradictory flags,
-`--count` outside 1 to 4, malformed colour, model or candidate id),
-`invalid_input` (not an image, empty or over-long prompt), `input_too_large`.
+an empty or over-long `--prompt`, `--count` outside 1 to 4, malformed colour,
+model or candidate id), `invalid_input` (not an image, or a `--prompt-file`
+whose content is empty or over-long), `input_too_large`, and
+`output_unwritable` when `--output-dir` cannot be created, which is checked
+before any image is generated. Prompts are limited to 4000 Unicode code points.
 Platform errors: `CONFLICT` (6) when no usable image model is selected,
 `BAD_REQUEST` (2) carrying the image provider's reason or an image that cannot
 be decoded, `TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
 `NOT_FOUND` (5) for an unknown App, provider or expired candidate,
 `SERVICE_UNAVAILABLE` (7) when the provider is unreachable, and
 `download_failed` (7) when a generated candidate could not be saved to
-`--output-dir` (it stays available by id).
+`--output-dir`. With `--json` its `error.details` is the normal result:
+`modelId` and every candidate with `id` and `path`, plus `file` for the ones
+that were saved, so no image has to be generated again.
 
 ## Notifications
 

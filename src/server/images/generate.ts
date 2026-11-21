@@ -46,7 +46,8 @@ export async function generateImages(
   signal?: AbortSignal,
 ): Promise<GeneratedImages> {
   const prompt = input.prompt.trim();
-  if (!prompt || prompt.length > MAX_PROMPT_LENGTH)
+  // Code points, matching the Protovalidate limit on the public request.
+  if (!prompt || Array.from(prompt).length > MAX_PROMPT_LENGTH)
     throw new AppError(
       `Prompt must be 1 to ${MAX_PROMPT_LENGTH} characters.`,
       400,

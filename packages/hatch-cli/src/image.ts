@@ -77,6 +77,11 @@ function text(flags: Flags, name: string): string | undefined {
   return value;
 }
 
+/** Unicode code points, the unit the public API limits prompts in. */
+function promptLength(prompt: string): number {
+  return Array.from(prompt).length;
+}
+
 /** Map argv to one command; rejects anything ambiguous before any RPC. */
 export function parseImageCommand(
   args: readonly string[],
@@ -126,7 +131,7 @@ export function parseImageCommand(
     const promptFile = text(flags, 'prompt-file');
     if ((prompt === undefined) === (promptFile === undefined))
       throw invalid('Supply exactly one of --prompt and --prompt-file.');
-    if (prompt !== undefined && prompt.length > MAX_PROMPT_LENGTH)
+    if (prompt !== undefined && promptLength(prompt) > MAX_PROMPT_LENGTH)
       throw invalid(`--prompt exceeds ${MAX_PROMPT_LENGTH} characters.`);
     const countText = text(flags, 'count');
     const count = countText === undefined ? 1 : Number(countText);
@@ -305,11 +310,21 @@ export async function runImage(
         signal,
         MAX_PROMPT_LENGTH * 4,
       ));
-    if (!prompt.trim() || prompt.length > MAX_PROMPT_LENGTH)
+    if (!prompt.trim() || promptLength(prompt) > MAX_PROMPT_LENGTH)
       throw new CliError(
         'invalid_input',
         `The prompt must be 1 to ${MAX_PROMPT_LENGTH} characters.`,
       );
+    // Prepare the directory before spending provider credit on images that
+    // could not be saved.
+    const directory =
+      command.outputDir === undefined
+        ? undefined
+        : resolve(workdir, command.outputDir);
+    if (directory)
+      await mkdir(directory, { recursive: true }).catch(() => {
+        throw new CliError('output_unwritable', 'Cannot create --output-dir.');
+      });
     process.stderr.write('Generating images; this can take a minute.\n');
     const generated = await client.images.generate({
       prompt,
@@ -318,32 +333,41 @@ export async function runImage(
       glyphTile: command.glyphTile,
     });
     const candidates: { id: string; path: string; file?: string }[] = [];
-    const directory =
-      command.outputDir === undefined
-        ? undefined
-        : resolve(workdir, command.outputDir);
-    if (directory) await mkdir(directory, { recursive: true });
+    const unsaved: string[] = [];
     for (const candidate of generated.candidates) {
       if (!directory) {
         candidates.push(candidate);
         continue;
       }
-      const response = await fetch(`${credential.url}${candidate.path}`, {
+      const file = resolve(directory, `${candidate.id}.png`);
+      const saved = await fetch(`${credential.url}${candidate.path}`, {
         headers: credentialHeaders(credential),
         redirect: 'error',
         signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
-      }).catch(() => null);
-      if (!response?.ok)
-        throw new CliError(
-          'download_failed',
-          `Generated candidate ${candidate.id} but could not download it. Candidates stay available for one day.`,
-          7,
-        );
-      const file = resolve(directory, `${candidate.id}.png`);
-      await writeFile(file, Buffer.from(await response.arrayBuffer()));
-      candidates.push({ ...candidate, file });
+      })
+        .then(async (response) => {
+          if (!response.ok) return false;
+          await writeFile(file, Buffer.from(await response.arrayBuffer()));
+          return true;
+        })
+        .catch(() => false);
+      if (saved) candidates.push({ ...candidate, file });
+      else {
+        candidates.push(candidate);
+        unsaved.push(candidate.id);
+      }
     }
     result = { modelId: generated.modelId, candidates };
+    // The images exist and were paid for: report every candidate so the
+    // caller can use them by id instead of generating again.
+    if (unsaved.length)
+      throw new CliError(
+        'download_failed',
+        `Generated candidates ${candidates.map((item) => item.id).join(', ')} but could not save ${unsaved.join(', ')} to --output-dir. All of them stay available by id for one day; do not generate again.`,
+        7,
+        undefined,
+        result,
+      );
   }
   process.stdout.write(
     `${JSON.stringify(result, null, flags.json ? undefined : 2)}\n`,

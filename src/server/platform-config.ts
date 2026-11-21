@@ -14,6 +14,7 @@
  * reachable from `src/auth/server.ts`, which the Better Auth CLI loads
  * directly and cannot resolve the `~` path alias for.
  */
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
 import { db, schema } from '../db';
@@ -101,6 +102,15 @@ export async function getPlatformConfig<K extends PlatformConfigKey>(
     return (entry.invalidFallback ?? entry.fallback) as PlatformConfigValue<K>;
   }
   return parsed.data as PlatformConfigValue<K>;
+}
+
+/** Remove a stored setting so its fallback applies again. */
+export async function clearPlatformConfig(
+  key: PlatformConfigKey,
+): Promise<void> {
+  await db
+    .delete(schema.platformConfig)
+    .where(eq(schema.platformConfig.key, key));
 }
 
 /**

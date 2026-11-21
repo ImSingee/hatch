@@ -40,6 +40,42 @@ function providerMessage(body: unknown, apiKey: string): string {
 }
 
 /**
+ * Read a provider response as JSON without buffering more than one image's
+ * worth of base64 plus envelope. Returns null when it is not JSON; throws when
+ * the body exceeds the limit.
+ */
+async function readJsonBody(response: Response): Promise<unknown> {
+  const limit = Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 64 * 1024;
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel().catch(() => undefined);
+        throw new AppError(
+          'The image provider returned an oversized response.',
+          503,
+        );
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    return null;
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * OpenAI Images API (`POST {baseUrl}/images/generations`). GPT image models
  * always answer with base64 PNG data, so no response format is requested.
  */
@@ -76,7 +112,7 @@ const openai: ImageDriver = {
     } catch {
       throw new AppError('The image provider could not be reached.', 503);
     }
-    const body: unknown = await response.json().catch(() => null);
+    const body = await readJsonBody(response);
     if (!response.ok) {
       // Provider 4xx is actionable (bad model id, blocked prompt, unverified
       // organisation); anything else is an outage from the caller's view.
