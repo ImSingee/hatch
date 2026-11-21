@@ -506,7 +506,7 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
             return Ok(());
         }
         match instance.device_poll(&grant.device_code).await {
-            Ok(DevicePoll::Pending) => {}
+            Ok(DevicePoll::Pending | DevicePoll::Unavailable) => {}
             Ok(DevicePoll::SlowDown) => interval += std::time::Duration::from_secs(5),
             Ok(DevicePoll::Approved(token)) => {
                 if !current(&app) {

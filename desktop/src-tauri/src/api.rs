@@ -64,9 +64,13 @@ pub struct DeviceGrant {
     pub interval: Duration,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum DevicePoll {
     Pending,
     SlowDown,
+    /// No usable answer (network, a 5xx, an unreadable body): ask again at
+    /// the next interval. Only the grant's own answers end a sign-in.
+    Unavailable,
     Approved(String),
     Denied,
     Expired,
@@ -308,7 +312,7 @@ impl Instance<'_> {
     }
 
     pub async fn device_poll(&self, device_code: &str) -> Result<DevicePoll, ApiError> {
-        let response = self
+        let sent = self
             .http
             .post(format!("{}/api/auth/device/token", self.origin))
             .json(&json!({
@@ -317,32 +321,40 @@ impl Instance<'_> {
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
             }))
             .send()
-            .await
-            .map_err(network)?;
+            .await;
+        let Ok(response) = sent else {
+            return Ok(DevicePoll::Unavailable);
+        };
         let status = response.status().as_u16();
         let value: Value = response.json().await.unwrap_or(Value::Null);
-        if let Some(token) = value.get("access_token").and_then(Value::as_str) {
-            return if valid_token(token) {
-                Ok(DevicePoll::Approved(token.to_owned()))
-            } else {
-                Err(ApiError::Failed(
-                    "The instance returned an invalid session.".into(),
-                ))
-            };
-        }
-        Ok(match value.get("error").and_then(Value::as_str) {
-            Some("authorization_pending") => DevicePoll::Pending,
-            Some("slow_down") => DevicePoll::SlowDown,
-            _ if status == 429 => DevicePoll::SlowDown,
-            Some("access_denied") => DevicePoll::Denied,
-            Some("expired_token") => DevicePoll::Expired,
-            _ => {
-                return Err(ApiError::Failed(
-                    "Browser sign-in failed. Start again.".into(),
-                ))
-            }
-        })
+        classify_poll(status, &value)
     }
+}
+
+/// Reads one answer of Better Auth's device token endpoint (RFC 8628).
+fn classify_poll(status: u16, value: &Value) -> Result<DevicePoll, ApiError> {
+    if let Some(token) = value.get("access_token").and_then(Value::as_str) {
+        return if valid_token(token) {
+            Ok(DevicePoll::Approved(token.to_owned()))
+        } else {
+            Err(ApiError::Failed(
+                "The instance returned an invalid session.".into(),
+            ))
+        };
+    }
+    Ok(match value.get("error").and_then(Value::as_str) {
+        Some("authorization_pending") => DevicePoll::Pending,
+        Some("slow_down") => DevicePoll::SlowDown,
+        Some("access_denied") => DevicePoll::Denied,
+        Some("expired_token") => DevicePoll::Expired,
+        _ if status == 429 => DevicePoll::SlowDown,
+        _ if status >= 500 || value.is_null() => DevicePoll::Unavailable,
+        _ => {
+            return Err(ApiError::Failed(
+                "Browser sign-in failed. Start again.".into(),
+            ));
+        }
+    })
 }
 
 #[cfg(test)]
@@ -371,6 +383,43 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn only_the_grant_ends_a_browser_sign_in() {
+        let poll = |status, body: &str| {
+            classify_poll(status, &serde_json::from_str(body).unwrap_or(Value::Null))
+        };
+        assert_eq!(
+            poll(400, r#"{"error":"authorization_pending"}"#).ok(),
+            Some(DevicePoll::Pending)
+        );
+        assert_eq!(
+            poll(400, r#"{"error":"slow_down"}"#).ok(),
+            Some(DevicePoll::SlowDown)
+        );
+        assert_eq!(poll(429, "{}").ok(), Some(DevicePoll::SlowDown));
+        assert_eq!(
+            poll(400, r#"{"error":"access_denied"}"#).ok(),
+            Some(DevicePoll::Denied)
+        );
+        assert_eq!(
+            poll(400, r#"{"error":"expired_token"}"#).ok(),
+            Some(DevicePoll::Expired)
+        );
+        assert_eq!(
+            poll(200, r#"{"access_token":"abc.def"}"#).ok(),
+            Some(DevicePoll::Approved("abc.def".into()))
+        );
+        // A restarting or overloaded server is not an answer.
+        assert_eq!(
+            poll(500, "Internal server error").ok(),
+            Some(DevicePoll::Unavailable)
+        );
+        assert_eq!(poll(502, "{}").ok(), Some(DevicePoll::Unavailable));
+        assert_eq!(poll(200, "<html>").ok(), Some(DevicePoll::Unavailable));
+        assert!(poll(400, r#"{"error":"invalid_grant"}"#).is_err());
+        assert!(poll(200, r#"{"access_token":"a b"}"#).is_err());
     }
 
     #[test]

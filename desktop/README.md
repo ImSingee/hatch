@@ -59,6 +59,14 @@ in the browser.
   browser would, but never the bundled page or local files.
 - New windows (`target=_blank`, `window.open`) open in the default browser.
 
+Tauri's `freezePrototype` option stays off. It freezes `Object.prototype` in
+every page the window loads, including the instance's, and the web UI then
+fails at startup: dayjs assigns `valueOf` on its own prototype, which throws
+once the inherited `Object.prototype.valueOf` is frozen (JavaScript's
+"override mistake"). Agent-built Apps use arbitrary libraries with the same
+pattern. The option guards the IPC bridge against prototype pollution, and
+the instance's pages can only ask for window dragging.
+
 The instance's pages can call one app command: window dragging. The bundled
 page can call only the sign-in commands it uses
 (`src-tauri/capabilities/bundled.json`). There is no shell, filesystem or
