@@ -11,6 +11,7 @@ export {
 } from './accents';
 export type { AccentName } from './accents';
 export { ACCENT_BOOT_SCRIPT, applyAccent, useAccent } from './accent-store';
+export { NATIVE_HOST_BOOT_SCRIPT, useNativeHostDocument } from './native-host';
 
 export const appTheme: MantineThemeOverride = deskTheme;
 export const appCssVariablesResolver: CSSVariablesResolver =

@@ -21,6 +21,7 @@ import { themeQueryOptions } from '~queries/theme';
 import {
   ACCENT_BOOT_SCRIPT,
   ACCENT_CSS,
+  NATIVE_HOST_BOOT_SCRIPT,
   appCssVariablesResolver,
   applyAccent,
   deskThemeFor,
@@ -109,6 +110,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <ColorSchemeScript forceColorScheme="light" />
         <style dangerouslySetInnerHTML={{ __html: ACCENT_CSS }} />
         <script dangerouslySetInnerHTML={{ __html: ACCENT_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: NATIVE_HOST_BOOT_SCRIPT }} />
       </head>
       <body>
         <MantineProvider

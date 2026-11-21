@@ -17,6 +17,13 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
+import {
+  EmptyLine,
+  EmptyState,
+  GroupCard,
+  Item,
+  Section,
+} from '~components/page/page';
 import type { AppListItem } from '~server/apps';
 import type { AvailableWidget, DashboardItem } from '~server/dashboards';
 import { dashboardWidgetKey } from '~/lib/dashboard-widget';
@@ -105,18 +112,14 @@ export function AddWidgetPanel({
       </div>
 
       <div className={classes.body}>
-        <section
-          aria-labelledby="add-widgets-available"
-          className={classes.group}
-        >
-          <div className={classes.groupHead}>
-            <h3 id="add-widgets-available" className={classes.groupTitle}>
-              Widgets you can add
-            </h3>
+        <Section
+          title="Widgets you can add"
+          aside={
             <span className={classes.count}>
               {addedCount} of {available.length} added
             </span>
-          </div>
+          }
+        >
           {available.length > SEARCH_THRESHOLD ? (
             <TextInput
               value={search}
@@ -127,114 +130,104 @@ export function AddWidgetPanel({
             />
           ) : null}
           {available.length === 0 ? (
-            <div className={classes.none}>
-              <IconPuzzle size={20} stroke={1.7} aria-hidden />
-              <Text size="sm" fw={700}>
-                No App offers a widget yet
-              </Text>
-              <Text size="xs" c="dimmed">
-                Ask the Agent to add one to an App you use.
-              </Text>
-            </div>
+            <EmptyState
+              variant="dashed"
+              icon={<IconPuzzle size={20} stroke={1.7} />}
+              title="No App offers a widget yet"
+            >
+              Ask the Agent to add one to an App you use.
+            </EmptyState>
           ) : filtered.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" py="md">
-              No matching widgets
-            </Text>
+            <EmptyLine>No matching widgets</EmptyLine>
           ) : (
-            <ul className={classes.list}>
+            <GroupCard component="ul">
               {filtered.map((widget) => {
                 const added = placedKeys.has(dashboardWidgetKey(widget));
                 return (
-                  <li key={dashboardWidgetKey(widget)} className={classes.row}>
-                    <AppGlyph
-                      name={widget.appName}
-                      seed={widget.appId}
-                      size="md"
-                    />
-                    <div className={classes.rowText}>
-                      <strong className={classes.rowName}>{widget.name}</strong>
-                      <span className={classes.rowMeta}>
-                        From {widget.appName}
-                      </span>
-                    </div>
-                    {added ? (
-                      <span className={classes.added}>
-                        <IconCheck size={13} stroke={2.6} aria-hidden />
-                        Added
-                      </span>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="compact-sm"
-                        variant="default"
-                        leftSection={<IconPlus size={13} stroke={2.4} />}
-                        disabled={disabled}
-                        aria-label={`Add ${widget.name}`}
-                        onClick={() => onAdd(widget)}
-                      >
-                        Add
-                      </Button>
-                    )}
-                  </li>
+                  <Item
+                    key={dashboardWidgetKey(widget)}
+                    component="li"
+                    lead={
+                      <AppGlyph
+                        name={widget.appName}
+                        seed={widget.appId}
+                        size="md"
+                      />
+                    }
+                    title={widget.name}
+                    meta={`From ${widget.appName}`}
+                    trailing={
+                      added ? (
+                        <span className={classes.added}>
+                          <IconCheck size={13} stroke={2.6} aria-hidden />
+                          Added
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="compact-sm"
+                          variant="default"
+                          leftSection={<IconPlus size={13} stroke={2.4} />}
+                          disabled={disabled}
+                          aria-label={`Add ${widget.name}`}
+                          onClick={() => onAdd(widget)}
+                        >
+                          Add
+                        </Button>
+                      )
+                    }
+                  />
                 );
               })}
-            </ul>
+            </GroupCard>
           )}
-        </section>
+        </Section>
 
         {withoutWidgets.length > 0 ? (
-          <section
-            aria-labelledby="add-widgets-others"
-            className={classes.group}
-          >
-            <div className={classes.groupHead}>
-              <h3 id="add-widgets-others" className={classes.groupTitle}>
-                Other apps
-              </h3>
+          <Section
+            title="Other apps"
+            aside={
               <span className={classes.count}>{withoutWidgets.length}</span>
-            </div>
-            <div className={classes.others}>
-              <Text size="sm" fw={700}>
-                These apps have no widget yet
-              </Text>
-              <ul className={classes.otherList}>
-                {withoutWidgets.map((app) => (
-                  <li key={app.id} className={classes.otherItem}>
-                    <AppGlyph name={app.name} seed={app.id} size="sm" />
-                    <span className={classes.otherName}>{app.name}</span>
-                  </li>
-                ))}
-              </ul>
-              <Anchor
-                size="sm"
-                renderRoot={(props) => (
-                  <Link
-                    to="/agent"
-                    search={{ prompt: 'Add a dashboard widget to ' }}
-                    {...props}
-                  />
-                )}
-              >
-                Ask the Agent to make a widget ›
-              </Anchor>
-            </div>
-          </section>
+            }
+          >
+            <GroupCard padded dashed>
+              <div className={classes.others}>
+                <Text size="sm" fw={700}>
+                  These apps have no widget yet
+                </Text>
+                <ul className={classes.otherList}>
+                  {withoutWidgets.map((app) => (
+                    <li key={app.id} className={classes.otherItem}>
+                      <AppGlyph name={app.name} seed={app.id} size="sm" />
+                      <span className={classes.otherName}>{app.name}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Anchor
+                  size="sm"
+                  renderRoot={(props) => (
+                    <Link
+                      to="/agent"
+                      search={{ prompt: 'Add a dashboard widget to ' }}
+                      {...props}
+                    />
+                  )}
+                >
+                  Ask the Agent to make a widget ›
+                </Anchor>
+              </div>
+            </GroupCard>
+          </Section>
         ) : null}
 
-        <section
-          aria-labelledby="add-widgets-refresh"
-          className={classes.group}
-        >
-          <h3 id="add-widgets-refresh" className={classes.groupTitle}>
-            Auto refresh
-          </h3>
-          <div className={classes.refresh}>
+        <Section title="Auto refresh">
+          <GroupCard padded>
             <SegmentedControl
               fullWidth
               size="xs"
               value={String(autoRefreshSeconds)}
               onChange={(value) => onAutoRefreshChange(Number(value))}
-              aria-labelledby="add-widgets-refresh"
+              aria-label="Auto refresh"
               data={intervals.map((seconds) => ({
                 value: String(seconds),
                 label:
@@ -248,8 +241,8 @@ export function AddWidgetPanel({
               {refreshText(autoRefreshSeconds)}. Applies to every widget on this
               dashboard and is saved right away.
             </Text>
-          </div>
-        </section>
+          </GroupCard>
+        </Section>
 
         <div className={classes.footer}>
           <Button

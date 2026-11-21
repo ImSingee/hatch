@@ -135,7 +135,7 @@
   padding: 10px 14px;
   border-radius: var(--mantine-radius-xl) var(--mantine-radius-xl)
     var(--mantine-radius-xl) var(--mantine-radius-xs);
-  background: var(--mantine-color-gray-1);
+  background: var(--surface-bubble);
   font-size: var(--mantine-font-size-sm);
 }
 
@@ -218,7 +218,7 @@
   min-height: 28px;
   padding: 0 12px;
   border-radius: 999px;
-  background: var(--mantine-color-gray-1);
+  background: var(--surface-bubble);
   font-size: var(--mantine-font-size-xs);
   color: var(--mantine-color-gray-7);
   text-align: left;
@@ -765,7 +765,7 @@ button.stepHeader:hover {
 /* ---------- composer card (LobeHub / cursor-style) ---------- */
 
 .composerCard {
-  border: 1.5px solid var(--mantine-color-gray-3);
+  border: 1.5px solid var(--border-composer);
   border-radius: var(--mantine-radius-xl);
   background-color: var(--surface-raised);
   padding: 0;

@@ -28,6 +28,13 @@ p {
   scrollbar-color: var(--mantine-color-gray-4) transparent;
 }
 
+/* A page embedded by the native app sits over the app's own ground and
+ * shapes, so it paints no background (see `native-host.ts`). */
+:root[data-host='native'],
+:root[data-host='native'] body {
+  background: transparent;
+}
+
 /* ---- Focus -------------------------------------------------------------- */
 
 /* One ring everywhere: ink, two pixels, offset from the control so it reads

@@ -44,6 +44,9 @@ later.
 | Panel           | `surfaces.panel`            | white 72%    | Translucent chrome over the ground: the menu bar           |
 | Dock panel      | `surfaces.dock`             | white 82%    | The dock and the tab bar, which sit over the ground shapes |
 | Widget panel    | `surfaces.widget`           | white 80%    | Desk widget panels and the desk's own panels on the ground |
+| Window body     | `surfaces.window`           | `#FAF9F6`    | The pale body of a window that grouped cards sit on        |
+| Bubble          | `surfaces.bubble`           | `#F3F2EE`    | The Agent's chat bubble and the work pill                  |
+| Composer border | `surfaces.composerBorder`   | `#DEDBD3`    | The 1.5 px outline of the Agent composer                   |
 | Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet           |
 | Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                          |
 | Hover / pressed | `surfaces.hover`, `pressed` | ink 6% / 10% | Hover wash, neutral tint, skeletons                        |
@@ -144,9 +147,10 @@ use `text-wrap: pretty`.
 | `sm`     | 9   | Menu items, tooltips, medium tile               |
 | `md`     | 12  | Controls: buttons, fields, nav rows, large tile |
 | `lg`     | 16  | Menus, popovers, suggestion chips               |
+| `tile`   | 18  | Desk home tile (60) and launcher tile (56)      |
 | `xl`     | 20  | Cards, the composer                             |
 | `window` | 24  | Windows, modals, the sign-in card               |
-| `widget` | 26  | Desk widget panels                              |
+| `panel`  | 26  | Desk widget panels, the sign-in hero tile       |
 | `dock`   | 28  | The dock and the tab bar                        |
 
 Pills (badges, status chips) are fully rounded. Apart from pills, widget
@@ -184,9 +188,10 @@ on the ground, on a sheet and on an accent fill.
 
 Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 
-`--surface-panel`, `--surface-dock`, `--surface-widget`, `--radius-widget`, `--ground-shape-accent`,
+`--surface-panel`, `--surface-dock`, `--surface-widget`, `--radius-panel`, `--ground-shape-accent`,
 `--ground-shape-warm`, `--ground-shape-fresh`, `--radius-dock`,
-`--size-dock-tile`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
+`--size-dock-tile`, `--size-desk-tile`, `--size-widget-icon`, `--radius-tile`,
+`--surface-window`, `--surface-bubble`, `--border-composer`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
 `--surface-hover`, `--surface-pressed`, `--surface-scrim`, `--border-hairline`,
 `--border-input`, `--focus-ring`, `--radius-window`, `--shadow-card`,
 `--shadow-dock`, `--shadow-window`, `--font-weight-body`,
@@ -259,13 +264,16 @@ Text input, textarea, select and number input share one well.
 
 ### App tile
 
-A rounded square. Sizes: 22 (radius 6), 38 (radius 9), 44 (radius 12).
+A rounded square. Sizes: 22 (radius 6), 26 widget header (radius 9,
+`sizes.widgetIcon`), 38 (radius 9), 40 dock (radius 12, `sizes.dockTile`), 44
+(radius 12), 56 launcher (radius 18), 60 desk home (radius 18,
+`sizes.deskTile`), 72 hero (radius 20).
 
 - With an icon: the App's stored icon image, cropped to cover the square. No
   border, shadow or background of its own.
 - Without one (and for Workflows, which have no icons): a monogram, the first
   character of the name, white 800 on one of `tiles`, chosen by a stable hash
-  of the id. Text 12 / 18 / 21 for the three sizes.
+  of the id. Text from 12 at 22 up to 26 at 72.
 
 An icon shown inline in a chat message is 96 square with the window radius.
 
@@ -315,8 +323,8 @@ A widget on the desk, and any panel of the desk's own (the today column, an
 empty desk).
 
 - `surfaces.widget` fill with a 12 px backdrop blur, 1 px white border,
-  radius 26 (`radius.widget`), `card` shadow; padding 16 18 18.
-- Header: a 22 tile, the name 15 / 800 with ellipsis, and on the right the
+  radius 26 (`radius.panel`), `card` shadow; padding 16 18 18.
+- Header: a 26 tile (`sizes.widgetIcon`), the name 15 / 800 with ellipsis, and on the right the
   App it comes from as a 12 / 700 muted link ("Plant Care ›"). A refresh
   button appears on hover when the widget supports it.
 - Loading: "Loading…" in the header and a skeleton (a circle and three

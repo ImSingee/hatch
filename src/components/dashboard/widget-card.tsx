@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { EmptyState } from '~components/page/page';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { DashboardLayoutItem } from '~/lib/dashboard-layout';
 import type { GridSize } from '~server/apps/manifest';
@@ -334,7 +335,7 @@ export function WidgetCard({
       ) : null}
 
       <header className={classes.header}>
-        <AppGlyph name={item.appName} seed={item.appId} size="sm" />
+        <AppGlyph name={item.appName} seed={item.appId} size="widget" />
         <h2 className={classes.title}>{item.name}</h2>
         {effectiveStatus === 'loading' ? (
           <Text component="span" className={classes.meta}>
@@ -418,27 +419,28 @@ export function WidgetCard({
         ) : null}
         {effectiveStatus === 'error' ? (
           <div className={classes.overlay} role="alert">
-            <div className={classes.error}>
-              <IconAlertTriangle size={22} stroke={1.8} aria-hidden />
-              <Text fw={700} size="sm">
-                This widget didn’t load
-              </Text>
-              <Text size="xs" c="dimmed" ta="center">
-                Try again, or redeploy {item.appName} if it keeps failing.
-              </Text>
-              {!editing ? (
-                <Button
-                  type="button"
-                  size="compact-sm"
-                  variant="default"
-                  leftSection={<IconRefresh size={14} stroke={2} />}
-                  className="widget-no-drag"
-                  onClick={retry}
-                >
-                  Try again
-                </Button>
-              ) : null}
-            </div>
+            <EmptyState
+              variant="dashed"
+              tone="danger"
+              icon={<IconAlertTriangle size={20} stroke={1.8} />}
+              title="This widget didn’t load"
+              actions={
+                editing ? null : (
+                  <Button
+                    type="button"
+                    size="compact-sm"
+                    variant="default"
+                    leftSection={<IconRefresh size={14} stroke={2} />}
+                    className="widget-no-drag"
+                    onClick={retry}
+                  >
+                    Try again
+                  </Button>
+                )
+              }
+            >
+              Try again, or redeploy {item.appName} if it keeps failing.
+            </EmptyState>
           </div>
         ) : null}
       </div>

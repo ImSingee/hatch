@@ -84,9 +84,9 @@
 .tile {
   display: grid;
   place-items: center;
-  width: var(--size-dock-tile);
-  height: var(--size-dock-tile);
-  border-radius: var(--mantine-radius-md);
+  width: var(--size-desk-tile);
+  height: var(--size-desk-tile);
+  border-radius: var(--radius-tile);
   box-shadow: var(--shadow-card);
   transition: transform var(--transition-base);
 }
@@ -97,22 +97,21 @@
 
 .item[data-shape='workflow'] .tile,
 .item[data-shape='workflow'] .tile > * {
-  border-radius: var(--mantine-radius-md) var(--mantine-radius-md)
-    var(--mantine-radius-md) 3px;
+  border-radius: var(--radius-tile) var(--radius-tile) var(--radius-tile) 4px;
 }
 
 .allApps {
-  grid-template-columns: repeat(2, 11px);
-  gap: 4px;
+  grid-template-columns: repeat(2, 14px);
+  gap: 5px;
   place-content: center;
   border: 1px solid var(--mantine-color-white);
   background: var(--surface-widget);
 }
 
 .allApps > span {
-  width: 11px;
-  height: 11px;
-  border-radius: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--mantine-radius-xs);
 }
 
 .allApps > span:nth-child(1) {

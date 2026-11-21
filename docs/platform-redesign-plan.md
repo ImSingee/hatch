@@ -122,11 +122,13 @@ colour, radius, font, weight, shadow or motion value is written. Its shape
     "sm": 9,
     "md": 12,
     "lg": 16,
+    "tile": 18,
     "xl": 20,
     "window": 24,
+    "panel": 26,
     "dock": 28
   },
-  "sizes": { "dockTile": 40 },
+  "sizes": { "widgetIcon": 26, "dockTile": 40, "deskTile": 60 },
   "accents": {
     "indigo": "#3F51C7",
     "teal": "#0F766E",
@@ -148,7 +150,16 @@ colour, radius, font, weight, shadow or motion value is written. Its shape
     "ring": "#1E2230"
   },
   "dark": null,
-  "surfaces": { "panel": "…", "dock": "…", "sunken": "…", "hairline": "…" },
+  "surfaces": {
+    "panel": "…",
+    "dock": "…",
+    "widget": "…",
+    "window": "#FAF9F6",
+    "bubble": "#F3F2EE",
+    "composerBorder": "#DEDBD3",
+    "sunken": "…",
+    "hairline": "…"
+  },
   "ground": { "accentTint": 18, "warm": "#F1DFD3", "fresh": "#DCEADF" },
   "shadows": { "card": "…", "dock": "…", "window": "…" },
   "motion": { "easing": "…", "fast": 120, "base": 180 }

@@ -6,6 +6,8 @@ import {
   IconSparkles,
   IconStack2,
 } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
+import { EmptyState } from '~components/page/page';
 import classes from './empty-state.module.css';
 
 const STARTER_IDEAS = [
@@ -23,7 +25,9 @@ export type DashboardEmptyStateKind =
 
 /**
  * What the widget area shows with no widget on it. Each case says why it is
- * empty and offers the one next step that fills it.
+ * empty and offers the one next step that fills it. The content is the
+ * shared `EmptyState`; on the desk it sits in a widget panel so the desk
+ * keeps its shape, and in the editor it is a dashed drop zone.
  */
 export function DashboardEmptyState({
   state,
@@ -34,86 +38,89 @@ export function DashboardEmptyState({
 }) {
   if (state === 'editing')
     return (
-      <div className={classes.root} data-variant="dashed">
-        <strong className={classes.title}>No widgets on this desk yet</strong>
-        <p className={classes.body}>
+      <div className={classes.dropZone}>
+        <EmptyState variant="dashed" title="No widgets on this desk yet">
           Pick one from Add widgets to place it here.
-        </p>
+        </EmptyState>
       </div>
     );
 
   if (state === 'empty-dashboard')
     return (
-      <div className={classes.root}>
-        <span className={classes.tile} aria-hidden>
-          <IconLayoutGrid size={26} stroke={1.6} />
-        </span>
-        <h2 className={classes.title}>A clean desk</h2>
-        <p className={classes.body}>
+      <Panel>
+        <EmptyState
+          icon={<IconLayoutGrid size={26} stroke={1.6} />}
+          title="A clean desk"
+          actions={
+            onAddWidget ? (
+              <Button
+                type="button"
+                leftSection={<IconPlus size={16} stroke={2} />}
+                onClick={onAddWidget}
+              >
+                Add widget
+              </Button>
+            ) : null
+          }
+        >
           Add a widget from one of your Apps and shape this dashboard around
           what you check every day.
-        </p>
-        {onAddWidget ? (
-          <Button
-            type="button"
-            leftSection={<IconPlus size={16} stroke={2} />}
-            onClick={onAddWidget}
-          >
-            Add widget
-          </Button>
-        ) : null}
-      </div>
+        </EmptyState>
+      </Panel>
     );
 
   if (state === 'no-widgets')
     return (
-      <div className={classes.root}>
-        <span className={classes.tile} aria-hidden>
-          <IconStack2 size={26} stroke={1.6} />
-        </span>
-        <h2 className={classes.title}>No widgets to add yet</h2>
-        <p className={classes.body}>
+      <Panel>
+        <EmptyState
+          icon={<IconStack2 size={26} stroke={1.6} />}
+          title="No widgets to add yet"
+          actions={
+            <>
+              <Button component={Link} to="/apps" variant="default">
+                Browse apps
+              </Button>
+              <Button
+                renderRoot={(props) => (
+                  <Link
+                    to="/agent"
+                    search={{ prompt: 'Add a dashboard widget to ' }}
+                    {...props}
+                  />
+                )}
+                leftSection={<IconSparkles size={16} stroke={1.8} />}
+              >
+                Ask the Agent
+              </Button>
+            </>
+          }
+        >
           None of your Apps offers a widget. Ask the Agent to add one to an App
           you use.
-        </p>
-        <Group gap="sm" justify="center">
-          <Button component={Link} to="/apps" variant="default">
-            Browse apps
-          </Button>
-          <Button
-            renderRoot={(props) => (
-              <Link
-                to="/agent"
-                search={{ prompt: 'Add a dashboard widget to ' }}
-                {...props}
-              />
-            )}
-            leftSection={<IconSparkles size={16} stroke={1.8} />}
-          >
-            Ask the Agent
-          </Button>
-        </Group>
-      </div>
+        </EmptyState>
+      </Panel>
     );
 
   return (
-    <div className={classes.root}>
-      <span className={classes.tile} data-tone="accent" aria-hidden>
-        <IconSparkles size={26} stroke={1.6} />
-      </span>
-      <h2 className={classes.title}>Welcome to Hatch</h2>
-      <p className={classes.body}>
+    <Panel>
+      <EmptyState
+        icon={<IconSparkles size={26} stroke={1.6} />}
+        tone="accent"
+        title="Welcome to Hatch"
+        actions={
+          <Button
+            component={Link}
+            to="/agent"
+            size="md"
+            leftSection={<IconSparkles size={18} stroke={1.8} />}
+          >
+            Build your first app
+          </Button>
+        }
+      >
         Describe an App in plain language and the Agent builds and deploys it.
         Your Apps then live in the dock, and their widgets on this desk.
-      </p>
-      <Button
-        component={Link}
-        to="/agent"
-        size="md"
-        leftSection={<IconSparkles size={18} stroke={1.8} />}
-      >
-        Build your first app
-      </Button>
+      </EmptyState>
       <div className={classes.ideas}>
         <span className={classes.ideasLabel}>Try starting with</span>
         <Group gap="xs" justify="center">
@@ -132,6 +139,11 @@ export function DashboardEmptyState({
           ))}
         </Group>
       </div>
-    </div>
+    </Panel>
   );
+}
+
+/** A widget panel on the desk that holds an empty state. */
+function Panel({ children }: { children: ReactNode }) {
+  return <div className={classes.panel}>{children}</div>;
 }

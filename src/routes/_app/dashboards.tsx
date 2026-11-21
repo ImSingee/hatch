@@ -1,13 +1,4 @@
-import {
-  ActionIcon,
-  Button,
-  Group,
-  Stack,
-  Switch,
-  Text,
-  ThemeIcon,
-  Tooltip,
-} from '@mantine/core';
+import { ActionIcon, Button, Switch, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -20,8 +11,15 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { WindowPage } from '~components/desk/window-page';
 import { SortableList, sortByIds } from '~components/desk/sortable-list';
+import { DeskWindow } from '~components/desk/window';
+import {
+  GroupCard,
+  Item,
+  LeadTile,
+  PageHeading,
+  WindowBody,
+} from '~components/page/page';
 import { openTextPromptModal } from '~components/system/text-prompt-modal';
 import { dashboardsQueryOptions } from '~queries/dashboards';
 import {
@@ -151,100 +149,102 @@ function DashboardsManagePage() {
     });
 
   return (
-    <WindowPage
-      title="Dashboards"
-      description="Create, organize, and pin the dashboards you use most."
-      actions={
-        <Button
-          leftSection={<IconPlus size={16} stroke={1.8} />}
-          color="primary"
-          loading={create.isPending}
-          onClick={() => create.mutate()}
-        >
-          New dashboard
-        </Button>
-      }
-    >
-      <Stack gap={0}>
-        <SortableList
-          items={list}
-          onReorder={(ids) => reorder.mutate(ids)}
-          renderItem={(d) => (
-            <div className={classes.row}>
-              <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-                <IconGripVertical
-                  size={18}
-                  stroke={1.6}
-                  style={{
-                    cursor: 'grab',
-                    color: 'var(--mantine-color-dimmed)',
-                  }}
-                />
-                <ThemeIcon
-                  variant="light"
-                  color="primary"
-                  radius="md"
-                  size={34}
-                >
-                  <IconLayoutDashboard size={18} stroke={1.6} />
-                </ThemeIcon>
-                <Text fw={700} truncate>
-                  {d.name}
-                </Text>
-              </Group>
-              <Group gap={4} wrap="nowrap">
-                <Tooltip label={d.pinned ? 'Pinned' : 'Not pinned'} withArrow>
-                  <Switch
-                    size="sm"
-                    checked={d.pinned}
-                    onChange={(e) =>
-                      setPin.mutate({
-                        id: d.id,
-                        pinned: e.currentTarget.checked,
-                      })
-                    }
-                    aria-label="Pin"
-                  />
-                </Tooltip>
-                <Tooltip label="Rename" withArrow>
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={() => openRename(d)}
-                    aria-label="Rename dashboard"
-                  >
-                    <IconPencil size={17} stroke={1.7} />
-                  </ActionIcon>
-                </Tooltip>
-                <Tooltip label="Delete" withArrow>
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    disabled={list.length <= 1}
-                    onClick={() => confirmDelete(d)}
-                    aria-label="Delete dashboard"
-                  >
-                    <IconTrash size={17} stroke={1.7} />
-                  </ActionIcon>
-                </Tooltip>
-                <Button
-                  variant="light"
-                  size="xs"
-                  rightSection={<IconArrowRight size={15} stroke={1.8} />}
-                  onClick={() =>
-                    navigate({
-                      to: '/dashboard/$dashboardId',
-                      params: { dashboardId: d.id },
-                    })
-                  }
-                >
-                  Open
-                </Button>
-              </Group>
-            </div>
-          )}
+    <DeskWindow title="Dashboards" maxWidth={880}>
+      <WindowBody size={760}>
+        <PageHeading
+          description="Create, organize, and pin the dashboards you use most."
+          actions={
+            <Button
+              leftSection={<IconPlus size={16} stroke={1.8} />}
+              loading={create.isPending}
+              onClick={() => create.mutate()}
+            >
+              New dashboard
+            </Button>
+          }
         />
-      </Stack>
-    </WindowPage>
+        <GroupCard>
+          <div className={classes.list}>
+            <SortableList
+              items={list}
+              onReorder={(ids) => reorder.mutate(ids)}
+              renderItem={(d) => (
+                <Item
+                  wrap
+                  lead={
+                    <>
+                      <IconGripVertical
+                        size={18}
+                        stroke={1.6}
+                        className={classes.grip}
+                        aria-hidden
+                      />
+                      <LeadTile>
+                        <IconLayoutDashboard size={18} stroke={1.6} />
+                      </LeadTile>
+                    </>
+                  }
+                  title={d.name}
+                  trailing={
+                    <>
+                      <Tooltip
+                        label={d.pinned ? 'Pinned' : 'Not pinned'}
+                        withArrow
+                      >
+                        <Switch
+                          size="sm"
+                          checked={d.pinned}
+                          onChange={(e) =>
+                            setPin.mutate({
+                              id: d.id,
+                              pinned: e.currentTarget.checked,
+                            })
+                          }
+                          aria-label="Pin"
+                        />
+                      </Tooltip>
+                      <Tooltip label="Rename" withArrow>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          onClick={() => openRename(d)}
+                          aria-label="Rename dashboard"
+                        >
+                          <IconPencil size={17} stroke={1.7} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label="Delete" withArrow>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          disabled={list.length <= 1}
+                          onClick={() => confirmDelete(d)}
+                          aria-label="Delete dashboard"
+                        >
+                          <IconTrash size={17} stroke={1.7} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Button
+                        variant="light"
+                        size="xs"
+                        rightSection={<IconArrowRight size={15} stroke={1.8} />}
+                        onClick={() =>
+                          navigate({
+                            to: '/dashboard/$dashboardId',
+                            params: { dashboardId: d.id },
+                          })
+                        }
+                      >
+                        Open
+                      </Button>
+                    </>
+                  }
+                />
+              )}
+            />
+          </div>
+        </GroupCard>
+      </WindowBody>
+    </DeskWindow>
   );
 }

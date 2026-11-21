@@ -60,7 +60,7 @@ export function DeskTiles() {
                   className={classes.item}
                 >
                   <span className={classes.tile}>
-                    <AppGlyph name={app.name} seed={app.id} size="dock" />
+                    <AppGlyph name={app.name} seed={app.id} size="desk" />
                   </span>
                   <span className={classes.name}>{app.name}</span>
                 </Link>
@@ -104,7 +104,7 @@ export function DeskTiles() {
                   className={classes.item}
                 >
                   <span className={classes.tile}>
-                    <AppGlyph name={pin.label} seed={pin.appId} size="dock" />
+                    <AppGlyph name={pin.label} seed={pin.appId} size="desk" />
                   </span>
                   <span className={classes.name}>{pin.label}</span>
                 </Link>
@@ -144,7 +144,7 @@ export function DeskTiles() {
                       icon={false}
                       name={w.name}
                       seed={w.id}
-                      size="dock"
+                      size="desk"
                     />
                   </span>
                   <span className={classes.name}>{w.name}</span>

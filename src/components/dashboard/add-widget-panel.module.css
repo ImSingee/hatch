@@ -24,7 +24,7 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 7px;
+  border-radius: var(--mantine-radius-xs);
   background: var(--mantine-primary-color-filled);
   color: var(--mantine-color-white);
 }
@@ -41,83 +41,13 @@
   flex-direction: column;
   gap: 20px;
   padding: 18px 16px;
-  background: var(--mantine-color-gray-0);
-}
-
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.groupHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.groupTitle {
-  margin: 0;
-  padding: 0 4px;
-  color: var(--mantine-color-dimmed);
-  font-size: 11px;
-  font-weight: var(--font-weight-heading);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  background: var(--surface-window);
 }
 
 .count {
   color: var(--mantine-color-dimmed);
   font-size: 12px;
   font-weight: var(--font-weight-label);
-}
-
-.list {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--mantine-radius-lg);
-  background: var(--surface-raised);
-  list-style: none;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 60px;
-  padding: 8px 12px 8px 14px;
-}
-
-.row + .row {
-  border-top: 1px solid var(--border-hairline);
-}
-
-.rowText {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.rowName {
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: var(--font-weight-heading);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rowMeta {
-  overflow: hidden;
-  color: var(--mantine-color-dimmed);
-  font-size: 12px;
-  font-weight: var(--font-weight-strong);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .added {
@@ -133,21 +63,10 @@
   font-weight: var(--font-weight-heading);
 }
 
-.none,
 .others {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
-  border: 1.5px dashed var(--border-hairline);
-  border-radius: var(--mantine-radius-lg);
-  background: var(--surface-widget);
-}
-
-.none {
-  align-items: center;
-  gap: 4px;
-  text-align: center;
 }
 
 .otherList {
@@ -173,16 +92,6 @@
   font-weight: var(--font-weight-label);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.refresh {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--mantine-radius-lg);
-  background: var(--surface-raised);
 }
 
 .footer {
