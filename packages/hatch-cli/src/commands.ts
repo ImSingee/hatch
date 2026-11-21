@@ -255,6 +255,63 @@ const definitions: readonly CliCommandDefinition[] = [
       'Reorder App pins or dashboards. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order. Pinned Workflows are ordered by last update and cannot be reordered.',
   },
   {
+    path: ['dashboard', 'list'],
+    usage: 'dashboard list',
+    description:
+      'List every dashboard in order: id, name, description, pinned and autoRefreshSeconds (0 is off). Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard.',
+  },
+  {
+    path: ['dashboard', 'get'],
+    usage: 'dashboard get <dashboard-id>',
+    description:
+      'Show one dashboard: its settings, the widgets placed on it (id is the placement id that widget layout and widget remove take; supportedSizes lists the only footprints the widget accepts, empty means any) and their x, y, w, h in grid units at each breakpoint (desktop 12 columns, tablet 8, mobile 4).',
+  },
+  {
+    path: ['dashboard', 'create'],
+    usage: 'dashboard create --name <text> [--description <text>]',
+    description:
+      'Create an empty dashboard and print its id. It is pinned and placed last.',
+  },
+  {
+    path: ['dashboard', 'update'],
+    usage:
+      'dashboard update <dashboard-id> [--name <text>] [--description <text> | --clear-description] [--auto-refresh <1-3600> | --no-auto-refresh]',
+    description:
+      'Rename a dashboard, change its description or set how often, in seconds, its widgets refresh on an open desk. Omitted fields stay unchanged.',
+  },
+  {
+    path: ['dashboard', 'delete'],
+    usage: 'dashboard delete <dashboard-id> --yes',
+    description:
+      'Permanently delete a dashboard and its widget placements; cannot be undone, so --yes is required. Apps and their widgets are kept. The last dashboard cannot be deleted.',
+  },
+  {
+    path: ['dashboard', 'widget', 'available'],
+    usage: 'dashboard widget available',
+    description:
+      'List the widgets deployed Apps offer: appId, appSlug, widgetId, name, defaultSize and supportedSizes.',
+  },
+  {
+    path: ['dashboard', 'widget', 'add'],
+    usage:
+      'dashboard widget add <dashboard-id> --app <id-or-slug> --widget <widget-id> [--breakpoint desktop|tablet|mobile] [--x <n>] [--y <n>] [--w <n>] [--h <n>]',
+    description:
+      'Place a widget on a dashboard and print its placementId with the new layouts. Without position flags it goes below the others at its default size. Position flags apply to one breakpoint (desktop unless --breakpoint is given) and the other breakpoints follow. A widget can be on a dashboard once.',
+  },
+  {
+    path: ['dashboard', 'widget', 'layout'],
+    usage:
+      'dashboard widget layout <dashboard-id> <placement-id> [--breakpoint desktop|tablet|mobile] [--x <n>] [--y <n>] [--w <n>] [--h <n>]',
+    description:
+      'Move a placed widget (--x, --y) or resize it (--w, --h) at one breakpoint, desktop unless --breakpoint is given; omitted numbers stay unchanged. Widgets under the new position move down and empty rows close up, so read the printed layouts for the result. A size the widget does not support is rejected with the sizes it does.',
+  },
+  {
+    path: ['dashboard', 'widget', 'remove'],
+    usage: 'dashboard widget remove <dashboard-id> <placement-id>',
+    description:
+      'Take a widget off a dashboard. The App and its widget stay available and can be added again.',
+  },
+  {
     path: ['notification', 'list'],
     usage:
       'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',

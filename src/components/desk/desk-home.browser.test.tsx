@@ -7,22 +7,9 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import { useState } from 'react';
-import { expect, test, vi } from 'vitest';
+import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { DeskHome } from './desk-home';
-
-vi.mock('~queries/sidebar', () => ({
-  sidebarItemsQueryOptions: {
-    queryKey: ['test-pins'],
-    queryFn: async () => [],
-  },
-}));
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [],
-  },
-}));
 
 function Harness() {
   const [editing, setEditing] = useState(false);
@@ -33,9 +20,12 @@ function Harness() {
       </button>
       <DeskHome
         title="My desk"
-        description="Desk description"
         actions={<button type="button">Desk action</button>}
-        hideHeader={editing}
+        toolbar={<button type="button">Edit widgets</button>}
+        editing={editing}
+        editor={<h1>Edit desk layout</h1>}
+        editorPanel={<aside>Add widgets</aside>}
+        tiles={<p>Desk tiles</p>}
       >
         <iframe title="Widget runtime" srcDoc="<p>Widget content</p>" />
       </DeskHome>
@@ -43,9 +33,9 @@ function Harness() {
   );
 }
 
-// The layout editor hides the heading; widgets are frames with running
-// state, so entering and leaving the editor must not load them again.
-test('hides the heading without remounting the widgets', async () => {
+// Widgets are frames with running state, so entering and leaving the layout
+// editor swaps everything around them but must not load them again.
+test('swaps the heading for the editor without remounting the widgets', async () => {
   const router = createRouter({
     routeTree: createRootRoute({ component: Harness }),
     history: createMemoryHistory({ initialEntries: ['/'] }),
@@ -64,11 +54,15 @@ test('hides the heading without remounting the widgets', async () => {
 
   await screen.getByRole('button', { name: 'Toggle editor' }).click();
   await expect
+    .element(screen.getByRole('heading', { name: 'Edit desk layout' }))
+    .toBeVisible();
+  await expect
     .element(screen.getByRole('heading', { name: 'My desk' }))
     .not.toBeInTheDocument();
   await expect
-    .element(screen.getByRole('button', { name: 'Desk action' }))
+    .element(screen.getByRole('button', { name: 'Edit widgets' }))
     .not.toBeInTheDocument();
+  await expect.element(screen.getByText('Add widgets')).toBeVisible();
   expect(screen.container.querySelector('iframe')).toBe(widget);
 
   await screen.getByRole('button', { name: 'Toggle editor' }).click();

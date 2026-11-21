@@ -43,6 +43,7 @@ later.
 | Sunken          | `surfaces.sunken`           | `#E4E2DC`    | Segmented-control track                                    |
 | Panel           | `surfaces.panel`            | white 72%    | Translucent chrome over the ground: the menu bar           |
 | Dock panel      | `surfaces.dock`             | white 82%    | The dock and the tab bar, which sit over the ground shapes |
+| Widget panel    | `surfaces.widget`           | white 80%    | Desk widget panels and the desk's own panels on the ground |
 | Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet           |
 | Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                          |
 | Hover / pressed | `surfaces.hover`, `pressed` | ink 6% / 10% | Hover wash, neutral tint, skeletons                        |
@@ -145,10 +146,11 @@ use `text-wrap: pretty`.
 | `lg`     | 16  | Menus, popovers, suggestion chips               |
 | `xl`     | 20  | Cards, the composer                             |
 | `window` | 24  | Windows, modals, the sign-in card               |
+| `widget` | 26  | Desk widget panels                              |
 | `dock`   | 28  | The dock and the tab bar                        |
 
-Pills (badges, status chips) are fully rounded. Apart from pills, the dock
-bar and the ground shapes, a radius never exceeds 24.
+Pills (badges, status chips) are fully rounded. Apart from pills, widget
+panels, the dock bar and the ground shapes, a radius never exceeds 24.
 
 ## Elevation
 
@@ -182,7 +184,7 @@ on the ground, on a sheet and on an accent fill.
 
 Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 
-`--surface-panel`, `--surface-dock`, `--ground-shape-accent`,
+`--surface-panel`, `--surface-dock`, `--surface-widget`, `--radius-widget`, `--ground-shape-accent`,
 `--ground-shape-warm`, `--ground-shape-fresh`, `--radius-dock`,
 `--size-dock-tile`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
 `--surface-hover`, `--surface-pressed`, `--surface-scrim`, `--border-hairline`,
@@ -306,6 +308,28 @@ wide the two buttons become one back button at the start of the title bar.
 - The dock itself: `surfaces.dock` fill with blur, 1 px white border, radius
   28 (`radius.dock`), `dock` shadow, padding 10 18 12. The tab bar that
   replaces it below 560 wide uses the same fill, border, radius and shadow.
+
+### Widget panel
+
+A widget on the desk, and any panel of the desk's own (the today column, an
+empty desk).
+
+- `surfaces.widget` fill with a 12 px backdrop blur, 1 px white border,
+  radius 26 (`radius.widget`), `card` shadow; padding 16 18 18.
+- Header: a 22 tile, the name 15 / 800 with ellipsis, and on the right the
+  App it comes from as a 12 / 700 muted link ("Plant Care ›"). A refresh
+  button appears on hover when the widget supports it.
+- Loading: "Loading…" in the header and a skeleton (a circle and three
+  lines). Failed: a dashed well with a warning icon, one sentence and Try
+  again.
+- Editing: a 2 px dashed accent border that turns solid on hover, focus or
+  drag (with the `window` shadow while dragged). An edit bar above the
+  header holds the Drag handle (arrow keys move by one cell) and the size
+  buttons when the widget declares several sizes, else its size as text. A
+  30 round ink Remove button sits on the top-right corner, red on hover.
+
+On the desk, App tiles use the dock tile (40); below 560 widgets become a
+pager with page dots and "All widgets".
 
 ### Empty state
 

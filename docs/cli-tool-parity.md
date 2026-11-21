@@ -28,13 +28,14 @@ App/Workflow compatibility bump or protocol-18 wire change is required.
 The capabilities below have no Agent Tool; the CLI is their only Agent
 interface.
 
-| Capability       | CLI                                        | Public API / shared behavior                                                                             |
-| ---------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| App icon         | app icon get / set / clear                 | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded   |
-| Image model      | image-model get / set / clear              | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed  |
-| Image generation | image generate                             | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap   |
-| Instance theme   | theme get / set                            | ThemeService/GetTheme, SetTheme; accent names come from the design tokens, clients recolour live         |
-| Navigation pins  | pin list / add / update / remove / reorder | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order |
+| Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
+| Image model      | image-model get / set / clear                                                                       | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed          |
+| Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap           |
+| Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent names come from the design tokens, clients recolour live                 |
+| Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
+| Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
 
 Not covered by the CLI: providers and their chat models (create, edit, API
 keys) remain Web-only as before this change. `image-model set` selects among
@@ -139,8 +140,37 @@ Both services accept sessions, API keys and Run JWTs alike; neither has a
 device- or browser-bound operation, so there is no CLI exception. Pins record
 no actor, so a Run needs no attribution. Reordering moves the listed ids to
 the front and keeps the rest in their relative order; unknown or repeated ids
-are rejected, for the Web UI as well. Creating, renaming and deleting
-dashboards and editing their widgets remain Web-only until `hatch dashboard`.
+are rejected, for the Web UI as well.
+
+## Dashboards: CLI only, no Agent Tool
+
+`hatch dashboard ...` calls `DashboardService`, backed by
+`src/server/dashboard-service.ts`, which the desk's Server Functions in
+`src/server/dashboards.ts` also call. The layout editor saves a whole draft
+at once; the CLI changes one widget at a time and commits through the same
+path and lock, so both leave the same normalized layouts. Every change, from
+either surface, is published as `dashboards.updated`, so an open desk
+refetches without a reload. Web operation to command:
+
+| Web UI                                         | CLI                                    | RPC                      |
+| ---------------------------------------------- | -------------------------------------- | ------------------------ |
+| Dashboard switcher, Manage dashboards          | dashboard list                         | ListDashboards           |
+| The desk: widgets and their layout             | dashboard get                          | GetDashboard             |
+| New dashboard                                  | dashboard create                       | CreateDashboard          |
+| Rename, edit description, auto-refresh menu    | dashboard update                       | UpdateDashboard          |
+| Delete dashboard                               | dashboard delete --yes                 | DeleteDashboard          |
+| Add widget panel: widgets on offer             | dashboard widget available             | ListAvailableWidgets     |
+| Add widget                                     | dashboard widget add                   | AddDashboardWidget       |
+| Drag, resize or size buttons, per layout width | dashboard widget layout --breakpoint … | SetDashboardWidgetLayout |
+| Remove widget                                  | dashboard widget remove                | RemoveDashboardWidget    |
+| Pin, unpin, reorder dashboards                 | pin add / remove / reorder --dashboard | PinService               |
+
+The editor snaps a drag to the nearest valid footprint; the CLI instead
+rejects a size the widget does not declare and names the sizes it does.
+`DashboardService` accepts sessions, API keys and Run JWTs alike and has no
+device- or browser-bound operation, so there is no CLI exception.
+`WorkspaceService.SetDashboardAutoRefresh` stays for the mobile client and
+calls the same service.
 
 ## Known gaps
 

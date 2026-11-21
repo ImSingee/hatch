@@ -13,10 +13,10 @@
 
 /* Drop placeholder shown while dragging/resizing. */
 .grid :global(.react-grid-placeholder) {
-  background-color: var(--mantine-color-primary-light);
-  border: 1px dashed var(--mantine-color-primary-filled);
-  border-radius: var(--mantine-radius-md);
-  opacity: 0.5;
+  background-color: var(--mantine-primary-color-light);
+  border: 2px dashed var(--mantine-primary-color-filled);
+  border-radius: var(--radius-widget);
+  opacity: 0.6;
 }
 
 /* Smooth movement for non-dragged items. */
@@ -53,13 +53,13 @@
 .grid :global(.react-resizable-handle)::after {
   content: '';
   position: absolute;
-  right: 6px;
-  bottom: 6px;
   width: 10px;
   height: 10px;
-  border-right: 2px solid var(--mantine-color-dimmed);
-  border-bottom: 2px solid var(--mantine-color-dimmed);
-  opacity: 0.75;
+  right: 10px;
+  bottom: 10px;
+  border-right: 2.5px solid var(--mantine-primary-color-filled);
+  border-bottom: 2.5px solid var(--mantine-primary-color-filled);
+  border-bottom-right-radius: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

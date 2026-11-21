@@ -1,0 +1,246 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// Dashboards are the boards of widgets shown on the desk. A widget comes from
+// a deployed App; placing it creates a placement, which has one position and
+// size per breakpoint (desktop: 12 columns, tablet: 8, mobile: 4).
+//
+// Pinning and ordering dashboards are PinService.SetDashboardPinned and
+// PinService.ReorderDashboards.
+service DashboardService {
+  rpc ListDashboards(ListDashboardsRequest) returns (ListDashboardsResponse);
+  rpc GetDashboard(GetDashboardRequest) returns (GetDashboardResponse);
+  rpc CreateDashboard(CreateDashboardRequest) returns (CreateDashboardResponse);
+  rpc UpdateDashboard(UpdateDashboardRequest) returns (UpdateDashboardResponse);
+  rpc DeleteDashboard(DeleteDashboardRequest) returns (DeleteDashboardResponse);
+  rpc ListAvailableWidgets(ListAvailableWidgetsRequest) returns (ListAvailableWidgetsResponse);
+  rpc AddDashboardWidget(AddDashboardWidgetRequest) returns (AddDashboardWidgetResponse);
+  rpc SetDashboardWidgetLayout(SetDashboardWidgetLayoutRequest) returns (SetDashboardWidgetLayoutResponse);
+  rpc RemoveDashboardWidget(RemoveDashboardWidgetRequest) returns (RemoveDashboardWidgetResponse);
+}
+
+message Dashboard {
+  string id = 1;
+  string name = 2;
+  // Unset when the dashboard has no description.
+  optional string description = 3;
+  bool pinned = 4;
+  // Seconds between automatic widget refreshes; 0 means off.
+  uint32 auto_refresh_seconds = 5;
+}
+
+// A footprint in grid units.
+message WidgetSize {
+  uint32 w = 1;
+  uint32 h = 2;
+}
+
+// A widget placed on a dashboard.
+message DashboardWidget {
+  // Placement id: what the layout and remove calls take.
+  string id = 1;
+  string app_id = 2;
+  string app_slug = 3;
+  string app_name = 4;
+  // The widget's id inside its App.
+  string widget_id = 5;
+  string name = 6;
+  WidgetSize default_size = 7;
+  // The only footprints the widget accepts; empty means any size.
+  repeated WidgetSize supported_sizes = 8;
+}
+
+// Where one placement sits at one breakpoint, in grid units.
+message WidgetLayout {
+  // Placement id.
+  string id = 1;
+  uint32 x = 2;
+  uint32 y = 3;
+  uint32 w = 4;
+  uint32 h = 5;
+}
+
+message DashboardLayouts {
+  repeated WidgetLayout desktop = 1;
+  repeated WidgetLayout tablet = 2;
+  repeated WidgetLayout mobile = 3;
+}
+
+message DashboardDetail {
+  Dashboard dashboard = 1;
+  // In reading order of the desktop layout. Placements whose App is archived
+  // or no longer offers the widget are left out.
+  repeated DashboardWidget widgets = 2;
+  // Every listed widget appears once per breakpoint.
+  DashboardLayouts layouts = 3;
+  // Grows by one with every change to the widgets or their layouts.
+  uint32 revision = 4;
+}
+
+// A widget a deployed App offers.
+message AvailableWidget {
+  string app_id = 1;
+  string app_slug = 2;
+  string app_name = 3;
+  string widget_id = 4;
+  string name = 5;
+  WidgetSize default_size = 6;
+  // The only footprints the widget accepts; empty means any size.
+  repeated WidgetSize supported_sizes = 7;
+}
+
+message ListDashboardsRequest {}
+
+message ListDashboardsResponse {
+  // In dashboard order, pinned or not.
+  repeated Dashboard dashboards = 1;
+}
+
+message GetDashboardRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+message GetDashboardResponse {
+  DashboardDetail detail = 1;
+}
+
+message CreateDashboardRequest {
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  optional string description = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 4000
+  }];
+}
+
+message CreateDashboardResponse {
+  // The new dashboard is pinned, last in order and has no widgets.
+  Dashboard dashboard = 1;
+}
+
+message UpdateDashboardRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Unset leaves the name unchanged.
+  optional string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  // Unset leaves the description unchanged; empty clears it.
+  optional string description = 3 [(buf.validate.field).string.max_len = 4000];
+  // Unset leaves the interval unchanged; 0 turns automatic refresh off.
+  optional uint32 auto_refresh_seconds = 4 [(buf.validate.field).uint32.lte = 3600];
+}
+
+message UpdateDashboardResponse {
+  Dashboard dashboard = 1;
+}
+
+message DeleteDashboardRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+message DeleteDashboardResponse {
+  // Id of the dashboard that was deleted, with its placements.
+  string id = 1;
+}
+
+message ListAvailableWidgetsRequest {}
+
+message ListAvailableWidgetsResponse {
+  repeated AvailableWidget widgets = 1;
+}
+
+// A position and size at one breakpoint. Unset numbers keep their current
+// value, or the default when the widget is being added.
+message WidgetPosition {
+  string breakpoint = 1 [(buf.validate.field).string = {
+    in: [
+      "desktop",
+      "tablet",
+      "mobile"
+    ]
+  }];
+  optional uint32 x = 2 [(buf.validate.field).uint32.lte = 11];
+  optional uint32 y = 3 [(buf.validate.field).uint32.lte = 10000];
+  optional uint32 w = 4 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 12
+  }];
+  optional uint32 h = 5 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100
+  }];
+}
+
+message AddDashboardWidgetRequest {
+  string dashboard_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // App id or slug.
+  string app = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // The widget's id inside the App, from ListAvailableWidgets.
+  string widget_id = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Unset places the widget below everything else at its default size. Set,
+  // it applies to that breakpoint and the other breakpoints follow from it.
+  optional WidgetPosition position = 4;
+}
+
+message AddDashboardWidgetResponse {
+  DashboardDetail detail = 1;
+  // Id of the new placement.
+  string placement_id = 2;
+}
+
+message SetDashboardWidgetLayoutRequest {
+  string dashboard_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  string placement_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Changes this breakpoint only. Widgets under the new position move down
+  // and empty rows close up.
+  WidgetPosition position = 3 [(buf.validate.field).required = true];
+}
+
+message SetDashboardWidgetLayoutResponse {
+  DashboardDetail detail = 1;
+}
+
+message RemoveDashboardWidgetRequest {
+  string dashboard_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  string placement_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+message RemoveDashboardWidgetResponse {
+  DashboardDetail detail = 1;
+}
