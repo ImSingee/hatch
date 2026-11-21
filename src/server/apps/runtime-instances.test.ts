@@ -13,8 +13,14 @@ const IDLE_TIMEOUT_MS = 1000;
 /** How long the fixture backend lingers after SIGTERM before exiting. */
 const DRAIN_LINGER_MS = 2500;
 
-/** How long a retired instance may keep finishing in-flight requests. */
-const DRAIN_TIMEOUT_MS = 2000;
+/**
+ * How long a retired instance may keep finishing in-flight requests. Long
+ * enough that a replacement cold start on a loaded machine stays well inside
+ * it, so only the drain-timeout case ever reaches it.
+ */
+const DRAIN_TIMEOUT_MS = 6000;
+/** Upper bound a gated stream waits for its release before closing anyway. */
+const GATE_MAX_WAIT_MS = 30_000;
 
 const mocks = vi.hoisted(() => ({
   backendMode: 'serverless' as 'serverless' | 'long-running',
@@ -74,11 +80,28 @@ export default {
     const url = new URL(request.url);
     if (url.pathname !== '/stream') return new Response(String(Deno.pid));
     const holdMs = Number(url.searchParams.get('ms'));
+    const gate = url.searchParams.get('gate');
     return new Response(
       new ReadableStream({
         start(controller) {
           controller.enqueue(new TextEncoder().encode(String(Deno.pid)));
-          setTimeout(() => controller.close(), holdMs);
+          if (!gate) {
+            setTimeout(() => controller.close(), holdMs);
+            return;
+          }
+          // Stay in flight until the test creates the gate file in this
+          // deployment's read-only assets directory.
+          const deadline = Date.now() + ${GATE_MAX_WAIT_MS};
+          const poll = () => {
+            try {
+              Deno.statSync(Deno.env.get('HATCH_ASSETS_DIR') + '/' + gate);
+              controller.close();
+              return;
+            } catch {}
+            if (Date.now() > deadline) controller.close();
+            else setTimeout(poll, 25);
+          };
+          poll();
         },
       }),
     );
@@ -111,17 +134,34 @@ async function callPid(expectedDeploymentId?: string): Promise<number> {
   return pid;
 }
 
-/** Open a request whose response body stays in flight for `holdMs`. */
-async function openStream(holdMs: number) {
+/**
+ * Open a request whose response body stays in flight for `holdMs`, or, given
+ * a gate name, until {@link releaseGate} opens that gate.
+ */
+async function openStream(holdMs: number, gate?: string) {
+  const query = gate ? `gate=${gate}` : `ms=${holdMs}`;
   const response = await proxyAppRequest(
     appId,
-    new Request(`http://platform.test/rpc/stream?ms=${holdMs}`),
+    new Request(`http://platform.test/rpc/stream?${query}`),
     '/rpc',
   );
   const reader = response.body!.getReader();
   const pid = Number(new TextDecoder().decode((await reader.read()).value));
   spawnedPids.add(pid);
   return { pid, reader };
+}
+
+/** Let a gated stream served by `deploymentId` finish. */
+function releaseGate(deploymentId: string, gate: string): void {
+  writeFileSync(
+    path.join(
+      deploymentArtifactDir(appId, deploymentId),
+      'backend',
+      'assets',
+      gate,
+    ),
+    '',
+  );
 }
 
 /** Make the next deployment the active one, as a committed deploy does. */
@@ -147,7 +187,7 @@ beforeEach(() => {
   appId = `instances-app-${appCounter}`;
   for (const deploymentId of [DEPLOYMENT_ID, NEXT_DEPLOYMENT_ID]) {
     const dir = deploymentArtifactDir(appId, deploymentId);
-    mkdirSync(path.join(dir, 'backend'), { recursive: true });
+    mkdirSync(path.join(dir, 'backend', 'assets'), { recursive: true });
     writeFileSync(path.join(dir, 'backend', 'main.bundle.js'), BACKEND_SOURCE);
     writeFileSync(
       path.join(dir, 'deployment.json'),
@@ -259,9 +299,7 @@ it('never idle-stops a long-running backend', async () => {
 it('lets a request in flight across a deploy finish while the new deployment serves new requests', async () => {
   // Long-running, so the idle timer never retires the instances under test.
   mocks.backendMode = 'long-running';
-  const holdMs = 1500;
-  const inFlight = await openStream(holdMs);
-  const openedAt = Date.now();
+  const inFlight = await openStream(0, 'deploy');
 
   // The deploy commits, then retires every instance of the previous build.
   activateNextDeployment();
@@ -281,9 +319,13 @@ it('lets a request in flight across a deploy finish while the new deployment ser
     drainingInstances: 1,
   });
 
-  // The old request runs to its natural end instead of being cut off.
+  // Nothing of the old instance was cut off while all of that happened.
+  expect(isAlive(inFlight.pid)).toBe(true);
+  expect(getBackendRuntimeView(appId).drainingInstances).toBe(1);
+
+  // The old request then runs to its natural end.
+  releaseGate(DEPLOYMENT_ID, 'deploy');
   expect((await inFlight.reader.read()).done).toBe(true);
-  expect(Date.now() - openedAt).toBeGreaterThanOrEqual(holdMs - 200);
 
   // A later finalization of the same deploy leaves the new instance alone.
   stopApp(appId, { keepDeploymentId: NEXT_DEPLOYMENT_ID });
@@ -308,6 +350,78 @@ it('terminates a stopped instance whose request outlives the drain timeout', asy
 
   await waitUntil(() => !isAlive(inFlight.pid), 500 + DRAIN_LINGER_MS + 2000);
   await inFlight.reader.cancel().catch(() => {});
+}, 20_000);
+
+/** Make `deploymentId` boot but stay unreachable until its `ready` gate opens. */
+function holdReadiness(deploymentId: string): void {
+  writeFileSync(
+    path.join(
+      deploymentArtifactDir(appId, deploymentId),
+      'backend',
+      'main.bundle.js',
+    ),
+    `const gate = Deno.env.get('HATCH_ASSETS_DIR') + '/ready';
+const deadline = Date.now() + ${GATE_MAX_WAIT_MS};
+while (Date.now() < deadline) {
+  try {
+    Deno.statSync(gate);
+    break;
+  } catch {}
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+${BACKEND_SOURCE}`,
+  );
+}
+
+/** Wait until a boot has spawned its process and is waiting for readiness. */
+async function waitForBootInProgress(): Promise<void> {
+  await waitUntil(
+    () => getBackendRuntimeView(appId).state === 'starting',
+    2000,
+  );
+  // The process is spawned and registered right after a few in-memory
+  // reads; this margin only has to cover that, not the boot itself.
+  await delay(500);
+}
+
+it('serves every request that joined a boot a deploy cancelled from the new deployment', async () => {
+  mocks.backendMode = 'long-running';
+  holdReadiness(DEPLOYMENT_ID);
+  const starter = callPid();
+  await waitForBootInProgress();
+  const joiner = callPid();
+
+  activateNextDeployment();
+  stopApp(appId, { keepDeploymentId: NEXT_DEPLOYMENT_ID });
+
+  const [started, joined] = await Promise.all([starter, joiner]);
+  expect(joined).toBe(started);
+  expect(getBackendRuntimeView(appId)).toMatchObject({
+    state: 'running',
+    pid: started,
+  });
+  expect(await callPid(NEXT_DEPLOYMENT_ID)).toBe(started);
+});
+
+it('keeps a boot of the deployment a deploy activated while the deploy finalizes', async () => {
+  mocks.backendMode = 'long-running';
+  activateNextDeployment();
+  holdReadiness(NEXT_DEPLOYMENT_ID);
+  // An automatic restart boots without naming a deployment.
+  const boot = ensureAppRunning(appId);
+  await waitForBootInProgress();
+
+  stopApp(appId, { keepDeploymentId: NEXT_DEPLOYMENT_ID });
+  releaseGate(NEXT_DEPLOYMENT_ID, 'ready');
+
+  const port = await boot;
+  const pid = await callPid(NEXT_DEPLOYMENT_ID);
+  expect(getBackendRuntimeView(appId)).toMatchObject({
+    state: 'running',
+    pid,
+    port,
+    drainingInstances: 0,
+  });
 });
 
 it('does not take down the active instance for a caller holding a superseded deployment', async () => {

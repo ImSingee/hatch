@@ -531,6 +531,11 @@ type BackendInstance = {
 };
 
 type StartingBackend = {
+  /**
+   * The deployment being booted: the caller's expectation at first, then the
+   * one the start resolved from the platform row. Undefined only while a
+   * start without an expectation (an automatic restart) has not resolved it.
+   */
   deploymentId: string | undefined;
   promise: Promise<BackendInstance>;
 };
@@ -607,7 +612,12 @@ function killInstance(instance: BackendInstance): void {
 /** How long a draining instance gets to exit on SIGTERM before SIGKILL. */
 const DRAIN_GRACE_MS = 5000;
 
-/** Ask a drained instance to exit: SIGTERM, then SIGKILL after the grace. */
+/**
+ * Ask an instance with nothing left to serve to exit: SIGTERM, then SIGKILL
+ * after the grace. Every graceful shutdown ends this way, including one whose
+ * drain timeout elapsed, so a backend's SIGTERM handler always gets the
+ * chance to stop background work and release what it holds.
+ */
 function terminateInstance(instance: BackendInstance): void {
   if (instance.terminating) return;
   instance.terminating = true;
@@ -630,25 +640,29 @@ function terminateInstance(instance: BackendInstance): void {
 }
 
 /**
- * Retire an instance gracefully. Marking it draining is synchronous, so from
- * this point the app has no routable instance and the next request boots a
- * new one instead of waiting for (or reviving) this one. Requests it already
- * holds run to completion: the exit signal is sent only once nothing is in
- * flight, or when the drain timeout elapses for requests that never end
- * (long-lived streams). The instance stays registered until it actually exits
- * so platform shutdown still reaps it.
+ * Retire an instance gracefully (deploy, rollback, stop, restart). Marking it
+ * draining is synchronous, so from this point the app has no routable
+ * instance and the next request boots a new one instead of waiting for (or
+ * reviving) this one. Requests it already holds run to completion: the
+ * instance is terminated once nothing is in flight, or when the drain timeout
+ * elapses for requests that never end (long-lived streams). The instance
+ * stays registered until it actually exits so platform shutdown still reaps
+ * it.
+ *
+ * A drain timeout of 0 opts out of draining altogether and kills the instance
+ * at once, as the platform did before graceful retirement.
  */
 function retireInstance(instance: BackendInstance): void {
   if (instance.draining) return;
+  const drainTimeoutMs = getPlatformEnv().appBackendDrainTimeoutSeconds * 1000;
+  if (drainTimeoutMs === 0) {
+    killInstance(instance);
+    return;
+  }
   instance.draining = true;
   clearInstanceTimers(instance);
   if (instance.activeRequests === 0) {
     terminateInstance(instance);
-    return;
-  }
-  const drainTimeoutMs = getPlatformEnv().appBackendDrainTimeoutSeconds * 1000;
-  if (drainTimeoutMs === 0) {
-    killInstance(instance);
     return;
   }
   instance.drainTimer = setTimeout(() => {
@@ -671,8 +685,10 @@ function scheduleIdleStop(instance: BackendInstance): void {
   instance.idleTimer = setTimeout(() => {
     instance.idleTimer = null;
     if (instance.draining || instance.activeRequests > 0) return;
+    // An idle instance has nothing to drain, whatever the drain timeout.
     recordBackendStopped(instance.appId, instance.proc.pid ?? null);
-    retireInstance(instance);
+    instance.draining = true;
+    terminateInstance(instance);
   }, getPlatformEnv().appBackendIdleTimeoutSeconds * 1000);
   instance.idleTimer.unref();
 }
@@ -946,7 +962,15 @@ async function ensureInstance(
         !expectedDeploymentId ||
         existing.deploymentId === expectedDeploymentId
       ) {
-        await existing.ready;
+        try {
+          await existing.ready;
+        } catch (error) {
+          // A stop or deploy retired this instance before it became ready,
+          // which is what failed its readiness. The request is still wanted:
+          // resolve again, as the caller that started the boot does.
+          if (existing.draining) continue;
+          throw error;
+        }
         return existing;
       }
       // Never retire an instance on a caller's word alone: a request that
@@ -982,8 +1006,15 @@ async function ensureInstance(
       continue;
     }
 
-    const startPromise = startBackend(id, expectedDeploymentId);
-    const start = { deploymentId: expectedDeploymentId, promise: startPromise };
+    const start: StartingBackend = {
+      deploymentId: expectedDeploymentId,
+      // startBackend resolves the deployment only after its first await, by
+      // which point `start` is assigned.
+      promise: startBackend(id, expectedDeploymentId, (resolved) => {
+        start.deploymentId = resolved;
+      }),
+    };
+    const startPromise = start.promise;
     starting.set(id, start);
     try {
       return await startPromise;
@@ -1028,7 +1059,8 @@ async function acquireInstance(
 
 async function startBackend(
   id: string,
-  expectedDeploymentId?: string,
+  expectedDeploymentId: string | undefined,
+  onDeploymentResolved: (deploymentId: string) => void,
 ): Promise<BackendInstance> {
   // Snapshot the stop epoch: if stopApp() runs while we're spawning, we abort
   // instead of registering/serving a build the caller has since superseded.
@@ -1056,6 +1088,9 @@ async function startBackend(
   if (expectedDeploymentId && targetDeploymentId !== expectedDeploymentId) {
     throw new BackendDeploymentChangedError(id);
   }
+  // From here a deploy that keeps this deployment (its finalization, which
+  // retires only replaced builds) no longer cancels this start.
+  onDeploymentResolved(targetDeploymentId);
   try {
     await assertSupportedDeployment(targetDeploymentId);
   } catch (error) {
@@ -1578,6 +1613,8 @@ function invalidateLocalBackend(
   // Invalidate any in-flight cold start so a subsequent ensureAppRunning() (e.g.
   // the long-running warm start right after a deploy/rollback) boots the current
   // build instead of coalescing onto a start for the build we're replacing.
+  // A start that has not resolved its deployment yet is cancelled too: it may
+  // be booting the replaced build, and its caller retries.
   const starting = startingRegistry();
   if (!keep || starting.get(id)?.deploymentId !== keep) {
     bumpStopEpoch(id);

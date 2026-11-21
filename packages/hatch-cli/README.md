@@ -424,9 +424,10 @@ answering platform process and are not persisted. `list` prints
 last page.
 
 Deploy, rollback, `stop` and `restart` are graceful: the previous instance
-receives no further requests, finishes the ones it holds and exits, at the
-latest when the platform drain timeout (`HATCH_APP_DRAIN_TIMEOUT_SECONDS`,
-default 300) elapses. `drainingInstances` counts instances in that state.
+receives no further requests and finishes the ones it holds. It is then sent
+`SIGTERM` and killed 5 seconds later if it has not exited. Requests still open
+when the platform drain timeout (`HATCH_APP_DRAIN_TIMEOUT_SECONDS`, default 300) elapses are ended the same way; a timeout of 0 kills retired instances at
+once. `drainingInstances` counts instances in that state.
 `stop` clears the keep-alive mark, so a long-running backend stays down until
 it is started or deployed again; a serverless backend starts on its next
 request. `--force` kills every instance at once, draining ones included, and

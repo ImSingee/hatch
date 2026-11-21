@@ -43,8 +43,9 @@ export type PlatformEnv = Readonly<{
   appBackendIdleTimeoutSeconds: number;
   /**
    * How long a retired App backend instance (after a deploy, rollback or
-   * stop) may keep finishing in-flight requests before it is terminated.
-   * 0 terminates it immediately.
+   * stop) may keep finishing in-flight requests before it is terminated
+   * (SIGTERM, then SIGKILL after a 5-second grace). 0 disables draining and
+   * kills retired instances at once.
    */
   appBackendDrainTimeoutSeconds: number;
 }>;
@@ -154,8 +155,10 @@ function resolvePlatformEnv(): PlatformEnv {
       'HATCH_RUN_TOKEN_TTL_SECONDS must be an integer between 5 and 300.',
     );
 
+  // An empty value (VAR= in a shell or env file) means unset, as in
+  // docker-compose.yml, rather than Number('') === 0.
   const appBackendIdleTimeoutSeconds = Number(
-    process.env.HATCH_APP_IDLE_TIMEOUT_SECONDS ??
+    process.env.HATCH_APP_IDLE_TIMEOUT_SECONDS ||
       DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS,
   );
   if (
@@ -167,8 +170,9 @@ function resolvePlatformEnv(): PlatformEnv {
       'HATCH_APP_IDLE_TIMEOUT_SECONDS must be an integer between 1 and 86400.',
     );
 
+  // Empty means unset; only an explicit 0 disables draining.
   const appBackendDrainTimeoutSeconds = Number(
-    process.env.HATCH_APP_DRAIN_TIMEOUT_SECONDS ??
+    process.env.HATCH_APP_DRAIN_TIMEOUT_SECONDS ||
       DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS,
   );
   if (

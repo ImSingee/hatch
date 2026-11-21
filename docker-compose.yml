@@ -65,8 +65,8 @@ services:
       # stopped (1-86400). Defaults to 300.
       HATCH_APP_IDLE_TIMEOUT_SECONDS: ${HATCH_APP_IDLE_TIMEOUT_SECONDS:-300}
       # Optional: seconds a retired App backend instance may keep finishing
-      # in-flight requests after a deploy, rollback or stop (0-86400).
-      # Defaults to 300.
+      # in-flight requests after a deploy, rollback or stop (0-86400); 0 kills
+      # it at once. Defaults to 300.
       HATCH_APP_DRAIN_TIMEOUT_SECONDS: ${HATCH_APP_DRAIN_TIMEOUT_SECONDS:-300}
       # Optional: own APNs credentials for a self-built iOS app. Leave unset to
       # use the built-in keys of the official app (docs/notifications.md).

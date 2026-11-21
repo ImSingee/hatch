@@ -497,8 +497,9 @@ do not assume a single process owns a storage file.
 A deploy, rollback, restart, or stop retires the running instance instead of
 killing it. In both modes the retired instance receives no further requests,
 finishes the ones it already holds, and then gets `SIGTERM` (about 5 seconds
-before `SIGKILL`). Requests still open after the platform drain timeout
-(5 minutes by default) are ended. New requests go to an instance of the new
+before `SIGKILL`). Requests still open when the platform drain timeout
+(5 minutes by default) elapses are ended the same way: `SIGTERM` first, so
+shutdown code still runs. New requests go to an instance of the new
 deployment right away. Archiving or deleting an App, and a forced stop, kill
 every instance at once.
 

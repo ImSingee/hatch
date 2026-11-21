@@ -137,7 +137,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['app', 'backend', 'stop'],
     usage: 'app backend stop <id-or-slug> [--force] [--json]',
     description:
-      'Stop the backend gracefully and clear its keep-alive mark: no instance receives another request, and each exits once its in-flight requests finish or the platform drain timeout elapses. A serverless backend starts again on the next request. --force kills every instance at once, draining ones included, and fails their in-flight requests. Idempotent.',
+      'Stop the backend gracefully and clear its keep-alive mark: no instance receives another request, and each is sent SIGTERM (then SIGKILL 5 seconds later) once its in-flight requests finish or the platform drain timeout elapses. A serverless backend starts again on the next request. --force kills every instance at once, draining ones included, and fails their in-flight requests. Idempotent.',
   },
   {
     path: ['app', 'backend', 'restart'],
