@@ -24,7 +24,7 @@ function tileRadius(size: number) {
       : size <= 48
         ? radii.md
         : size <= 64
-          ? radii.lg
+          ? radii.tile
           : radii.xl;
 }
 

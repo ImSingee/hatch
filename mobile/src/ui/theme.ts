@@ -83,6 +83,8 @@ export const palette = {
   outline: tokens.neutral[5],
   onFill: tokens.light['primary-foreground'],
   dock: tokens.surfaces.dock,
+  /** Widget cards: white at 80% over the ground. */
+  widget: tokens.surfaces.widget,
   groundWarm: tokens.ground.warm,
   groundFresh: tokens.ground.fresh,
   danger: tokens.light.destructive,

@@ -71,6 +71,7 @@ export function SecureSurface({
   dashboardRefresh,
   onReady,
   onHistoryBack,
+  transparent = false,
   ref,
 }: {
   origin: string;
@@ -86,6 +87,13 @@ export function SecureSurface({
    * to step back through, and turns on WKWebView's back swipe while it does.
    */
   onHistoryBack?: (canGoBack: boolean) => void;
+  /**
+   * For pages that leave their background to the app (the `/mobile/` pages):
+   * the view paints nothing, so the desk ground shows through. The view stays
+   * hidden until the requested page has loaded, because the sign-in pages
+   * before it are plain white documents.
+   */
+  transparent?: boolean;
   ref?: Ref<SurfaceHandle>;
 }) {
   const [problem, setProblem] = useState<string | null>(null);
@@ -182,8 +190,10 @@ export function SecureSurface({
   };
   // The source never changes: switching it would push a history entry.
   const source = webViewHandoffSource(origin, handoff);
+  const shown = loadedPath === target;
+  const paint = transparent ? 'transparent' : palette.card;
   return (
-    <View style={{ flex: 1, backgroundColor: palette.card }}>
+    <View style={{ flex: 1, backgroundColor: paint }}>
       <SurfaceWebView
         ref={view}
         source={source}
@@ -259,12 +269,14 @@ export function SecureSurface({
         // good, so it signs in afresh.
         onContentProcessDidTerminate={retry}
         onRenderProcessGone={retry}
-        style={{ flex: 1, backgroundColor: palette.card }}
+        style={{
+          flex: 1,
+          backgroundColor: paint,
+          opacity: transparent && !shown ? 0 : 1,
+        }}
       />
-      {loadedPath !== target ? (
-        <View
-          style={[StyleSheet.absoluteFill, { backgroundColor: palette.card }]}
-        >
+      {!shown ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: paint }]}>
           <Busy label={signedIn ? 'Opening' : 'Signing in securely'} />
         </View>
       ) : null}

@@ -241,12 +241,12 @@ export function WidgetSheet({
   return (
     <View
       style={[
-        { borderRadius: radii.xl },
-        !canvas && { backgroundColor: c.card, boxShadow: shadows.card },
+        { borderRadius: radii.widget },
+        !canvas && { backgroundColor: c.widget, boxShadow: shadows.card },
         style,
       ]}
     >
-      <View style={{ flex: 1, borderRadius: radii.xl, overflow: 'hidden' }}>
+      <View style={{ flex: 1, borderRadius: radii.widget, overflow: 'hidden' }}>
         {failed ? (
           <View style={{ padding: 12 }}>
             <Notice
@@ -361,6 +361,9 @@ function DashboardSurface({
       dashboardRefresh={dashboardRefresh}
       onReady={onReady}
       onRoute={openSurfaceLink}
+      // The canvas page is transparent under the native host mark; the
+      // ground shapes are drawn by this app behind it.
+      transparent
     />
   );
 }

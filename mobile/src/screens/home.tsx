@@ -24,6 +24,7 @@ import {
   pageScrollProps,
 } from '../ui/screen';
 import { Text, type } from '../ui/text';
+import { sizes } from '../ui/theme';
 import {
   DashboardNotices,
   DashboardPager,
@@ -32,7 +33,7 @@ import {
   useDashboards,
 } from './dashboard';
 
-const TILE = 60;
+const TILE = sizes.deskTile;
 const GUTTER = 20;
 
 function greeting(hour: number) {
