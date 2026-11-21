@@ -292,7 +292,8 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
         opened={narrow && sheetOpen && selected !== null}
         onClose={() => setSheetOpen(false)}
         position="bottom"
-        size="auto"
+        size={460}
+        classNames={{ content: classes.sheet }}
         title={selected?.kind === 'workflow' ? 'Workflow' : 'App'}
       >
         {selected ? <EntryDetail entry={selected} inline /> : null}

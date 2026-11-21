@@ -194,3 +194,9 @@
     transform: none;
   }
 }
+
+/* The detail as a sheet from the bottom of a narrow window. */
+.sheet {
+  border-start-start-radius: var(--radius-window);
+  border-start-end-radius: var(--radius-window);
+}

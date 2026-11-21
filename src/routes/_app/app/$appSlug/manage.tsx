@@ -191,7 +191,7 @@ function AppDetailPage() {
       disabled={app.status !== 'deployed' || !runtimeSupported}
       leftSection={<IconExternalLink size={16} stroke={1.8} />}
     >
-      Open {app.name}
+      Open app
     </Button>
   ) : null;
 
