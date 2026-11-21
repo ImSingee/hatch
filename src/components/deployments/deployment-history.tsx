@@ -29,6 +29,7 @@ import copy from 'copy-to-clipboard';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { formatRelative } from '~lib/format';
+import { GroupCard, Section } from '~components/page/page';
 import classes from './deployment-history.module.css';
 
 /**
@@ -354,49 +355,50 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
   ) => ReactNode;
 }) {
   return (
-    <Box component="section">
-      <Group gap={8} mb="md" align="baseline">
-        <Text fw={700} fz="lg">
-          Deployment history
-        </Text>
-        {deployments.length > 0 ? (
+    <Section
+      id="deployments"
+      title="Deployments"
+      meta={
+        deployments.length > 0
+          ? `${deployments.length} version${deployments.length === 1 ? '' : 's'}`
+          : undefined
+      }
+    >
+      <GroupCard padded>
+        {isLoading ? (
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
+        ) : deployments.length === 0 ? (
           <Text size="sm" c="dimmed">
-            {deployments.length}
+            No deployments yet. Deploy this {emptyNoun} to create the first
+            version.
           </Text>
-        ) : null}
-      </Group>
-
-      {isLoading ? (
-        <Center py="lg">
-          <Loader size="sm" />
-        </Center>
-      ) : deployments.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No deployments yet. Deploy this {emptyNoun} to create the first
-          version.
-        </Text>
-      ) : (
-        <Timeline
-          bulletSize={20}
-          lineWidth={2}
-          active={-1}
-          color="gray"
-          styles={{ itemBody: { paddingBottom: 'var(--mantine-spacing-md)' } }}
-        >
-          {deployments.map((deployment) => (
-            <DeploymentItem
-              key={deployment.id}
-              deployment={deployment}
-              onRollback={onRollback}
-              rolling={rollingId === deployment.id}
-              renderArtifact={renderArtifact}
-              renderBuildLog={renderBuildLog}
-              renderVersionMeta={renderVersionMeta}
-              renderRollbackAction={renderRollbackAction}
-            />
-          ))}
-        </Timeline>
-      )}
-    </Box>
+        ) : (
+          <Timeline
+            bulletSize={20}
+            lineWidth={2}
+            active={-1}
+            color="gray"
+            styles={{
+              itemBody: { paddingBottom: 'var(--mantine-spacing-md)' },
+            }}
+          >
+            {deployments.map((deployment) => (
+              <DeploymentItem
+                key={deployment.id}
+                deployment={deployment}
+                onRollback={onRollback}
+                rolling={rollingId === deployment.id}
+                renderArtifact={renderArtifact}
+                renderBuildLog={renderBuildLog}
+                renderVersionMeta={renderVersionMeta}
+                renderRollbackAction={renderRollbackAction}
+              />
+            ))}
+          </Timeline>
+        )}
+      </GroupCard>
+    </Section>
   );
 }

@@ -1,15 +1,13 @@
 import {
   ActionIcon,
   Anchor,
-  Box,
   Button,
-  Divider,
   Group,
   Menu,
-  Stack,
   Text,
   TextInput,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,34 +17,57 @@ import {
   notFound,
   useNavigate,
   useRouter,
+  useRouterState,
 } from '@tanstack/react-router';
 import {
+  IconApi,
   IconArchive,
   IconArchiveOff,
-  IconArrowLeft,
+  IconBell,
   IconCheck,
-  IconDotsVertical,
+  IconClock,
+  IconDatabase,
+  IconDots,
   IconExternalLink,
   IconFileZip,
+  IconFolder,
   IconGitBranch,
+  IconHistory,
+  IconKey,
+  IconLayoutDashboard,
   IconPencil,
   IconPin,
   IconPinnedOff,
+  IconServerBolt,
+  IconSparkles,
+  IconTable,
   IconTrash,
+  IconWebhook,
   IconX,
 } from '@tabler/icons-react';
+import copy from 'copy-to-clipboard';
 import dayjs from 'dayjs';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { APP_SLUG_MAX_LENGTH } from '~/app-identity';
-import { WindowPage } from '~components/desk/window-page';
+import { DeskWindow } from '~components/desk/window';
+import {
+  Column,
+  Columns,
+  GroupCard,
+  GroupFooter,
+  PageHeading,
+  Row,
+  Section,
+  WindowBody,
+} from '~components/page/page';
+import { Rail, RailIdentity, WindowSplit } from '~components/page/split';
 import { ApiPanel } from '~components/apps/api-panel';
 import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notice';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { AppIconSettings } from '~components/apps/app-icon-settings';
 import { DeploymentHistory } from '~components/apps/deployment-history';
 import { OperationsPanel } from '~components/apps/operations-panel';
-import { Field } from '~components/system/field';
 import { StatusBadge } from '~components/system/status-badge';
 import {
   appOpsQueryOptions,
@@ -143,155 +164,308 @@ function AppDetailPage() {
       onConfirm: () => remove.mutate(),
     });
 
+  const sections = useManageSections(app.id, Boolean(capabilities?.backend));
+  const hash = useRouterState({ select: (state) => state.location.hash });
+  const current = sections.some((section) => section.key === hash)
+    ? hash
+    : 'overview';
+
+  // The rail links to anchors in one scrolling page; bring the section into
+  // view when the hash changes (the window body, not the page, scrolls).
+  // The sections after the overview appear once the App's operations load.
+  const loadedSections = sections.length;
+  useEffect(() => {
+    if (!hash) return;
+    document
+      .getElementById(hash)
+      ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [hash, loadedSections]);
+
+  const openApp = hasFrontend ? (
+    <Button
+      fullWidth
+      variant="default"
+      renderRoot={(props) => (
+        <Link to="/app/$appSlug" params={{ appSlug: app.slug }} {...props} />
+      )}
+      disabled={app.status !== 'deployed' || !runtimeSupported}
+      leftSection={<IconExternalLink size={16} stroke={1.8} />}
+    >
+      Open {app.name}
+    </Button>
+  ) : null;
+
+  const moreMenu = (
+    <Menu position="bottom-end" withinPortal>
+      <Menu.Target>
+        <ActionIcon
+          variant="light"
+          color="gray"
+          size={30}
+          radius="sm"
+          aria-label="More actions"
+        >
+          <IconDots size={16} stroke={2} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>Download</Menu.Label>
+        <Menu.Item
+          leftSection={<IconFileZip size={16} />}
+          component="a"
+          href={`/api/app/${app.id}/download?mode=source`}
+          download
+          disabled={!hasSource}
+        >
+          Latest source (.zip)
+        </Menu.Item>
+        <Menu.Item
+          leftSection={<IconGitBranch size={16} />}
+          component="a"
+          href={`/api/app/${app.id}/download?mode=repo`}
+          download
+          disabled={!hasSource}
+        >
+          Full repo (.tar.gz)
+        </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item
+          leftSection={
+            isPinned ? <IconPinnedOff size={16} /> : <IconPin size={16} />
+          }
+          onClick={() => pin.mutate(!isPinned)}
+        >
+          {isPinned ? 'Remove from dock' : 'Pin to dock'}
+        </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item
+          leftSection={
+            isArchived ? (
+              <IconArchiveOff size={16} />
+            ) : (
+              <IconArchive size={16} />
+            )
+          }
+          onClick={() => archive.mutate(!isArchived)}
+        >
+          {isArchived ? 'Restore from archive' : 'Archive'}
+        </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item
+          color="red"
+          leftSection={<IconTrash size={16} />}
+          onClick={confirmDelete}
+        >
+          Delete app
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
+
   return (
-    <WindowPage
+    <DeskWindow
+      fill
       title={`${app.name} · Manage`}
       tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
       badge={<StatusBadge status={app.status} />}
+      toolbar={moreMenu}
       closeTo={{ link: { to: '/apps' }, label: 'All apps' }}
-      description={app.description || `App · ${app.slug}`}
-      actions={
-        <>
-          <Button
-            component={Link}
-            to="/apps"
-            variant="default"
-            leftSection={<IconArrowLeft size={16} stroke={1.8} />}
-          >
-            Back
-          </Button>
-          {hasFrontend ? (
-            <Button
-              renderRoot={(props) => (
-                <Link
-                  to="/app/$appSlug"
-                  params={{ appSlug: app.slug }}
-                  {...props}
-                />
-              )}
-              disabled={app.status !== 'deployed' || !runtimeSupported}
-              leftSection={<IconExternalLink size={16} stroke={1.8} />}
-            >
-              Open app
-            </Button>
-          ) : null}
-          <Menu position="bottom-end" withinPortal>
-            <Menu.Target>
-              <ActionIcon variant="default" size="lg" aria-label="More actions">
-                <IconDotsVertical size={18} stroke={1.8} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Label>Download</Menu.Label>
-              <Menu.Item
-                leftSection={<IconFileZip size={16} />}
-                component="a"
-                href={`/api/app/${app.id}/download?mode=source`}
-                download
-                disabled={!hasSource}
-              >
-                Latest source (.zip)
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconGitBranch size={16} />}
-                component="a"
-                href={`/api/app/${app.id}/download?mode=repo`}
-                download
-                disabled={!hasSource}
-              >
-                Full repo (.tar.gz)
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                leftSection={
-                  isPinned ? <IconPinnedOff size={16} /> : <IconPin size={16} />
-                }
-                onClick={() => pin.mutate(!isPinned)}
-              >
-                {isPinned ? 'Remove from dock' : 'Pin to dock'}
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                leftSection={
-                  isArchived ? (
-                    <IconArchiveOff size={16} />
-                  ) : (
-                    <IconArchive size={16} />
-                  )
-                }
-                onClick={() => archive.mutate(!isArchived)}
-              >
-                {isArchived ? 'Restore from archive' : 'Archive'}
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                color="red"
-                leftSection={<IconTrash size={16} />}
-                onClick={confirmDelete}
-              >
-                Delete app
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </>
-      }
     >
-      <Stack gap="xl">
-        <AppCompatibilityNotice compatibility={app.compatibility} />
+      <WindowSplit
+        rail={
+          <Rail
+            label="Manage sections"
+            searchLabel="Search sections"
+            identity={
+              <RailIdentity
+                tile={<AppGlyph name={app.name} seed={app.id} size="lg" />}
+                name={app.name}
+                meta={`/${app.slug}`}
+              />
+            }
+            groups={[
+              {
+                items: sections.map((section) => ({
+                  key: section.key,
+                  label: section.label,
+                  icon: section.icon,
+                  color: section.color,
+                  link: { to: '.', hash: section.key, replace: true },
+                  current: section.key === current,
+                })),
+              },
+            ]}
+            footer={
+              <>
+                {openApp}
+                <Button
+                  fullWidth
+                  variant="default"
+                  component={Link}
+                  to="/agent"
+                  leftSection={<IconSparkles size={16} stroke={1.8} />}
+                >
+                  Edit with the Agent
+                </Button>
+              </>
+            }
+          />
+        }
+      >
+        <WindowBody>
+          <AppCompatibilityNotice compatibility={app.compatibility} />
+          {app.description ? (
+            <PageHeading description={app.description} />
+          ) : null}
+          <Columns>
+            <Column grow basis={440}>
+              <Section id="overview" title="Overview">
+                <GroupCard>
+                  <Row label="Name">
+                    <strong>{app.name}</strong>
+                  </Row>
+                  <SlugField
+                    appId={app.id}
+                    slug={app.slug}
+                    runtimeSupported={runtimeSupported}
+                  />
+                  <Row label="App ID" mono>
+                    <CopyValue value={app.id} />
+                  </Row>
+                  <Row label="Icon" stack>
+                    <AppIconSettings appId={app.id} appName={app.name} />
+                  </Row>
+                  <Row label="Updated">
+                    {dayjs(app.updatedAt).format('YYYY-MM-DD HH:mm')}
+                  </Row>
+                  <GroupFooter>
+                    <span>
+                      Continue editing this app from the{' '}
+                      <Anchor component={Link} to="/agent" size="sm">
+                        Agent
+                      </Anchor>
+                      .
+                    </span>
+                  </GroupFooter>
+                </GroupCard>
+              </Section>
 
-        <Box component="section">
-          <Text fw={700} fz="lg" mb="md">
-            Overview
-          </Text>
+              <OperationsPanel
+                appId={app.id}
+                appName={app.name}
+                runtimeSupported={runtimeSupported}
+              />
 
-          <Stack gap="sm">
-            <SlugField
-              appId={app.id}
-              slug={app.slug}
-              runtimeSupported={runtimeSupported}
-            />
-            <Field label="App ID" value={app.id} mono copyValue={app.id} />
-            <Group gap="md" wrap="nowrap" align="center">
-              <Text size="sm" c="dimmed" style={{ width: 96, flex: 'none' }}>
-                Icon
-              </Text>
-              <AppIconSettings appId={app.id} appName={app.name} />
-            </Group>
-            <Field
-              label="Updated"
-              value={dayjs(app.updatedAt).format('YYYY-MM-DD HH:mm')}
-            />
-          </Stack>
+              {capabilities?.backend ? <ApiPanel appId={app.id} /> : null}
+            </Column>
+            <Column basis={360}>
+              <DeploymentHistory appId={app.id} />
+            </Column>
+          </Columns>
+        </WindowBody>
+      </WindowSplit>
+    </DeskWindow>
+  );
+}
 
-          <Text size="sm" c="dimmed" mt="lg">
-            Continue editing this app from the{' '}
-            <Anchor component={Link} to="/agent">
-              Agent
-            </Anchor>
-            .
-          </Text>
-        </Box>
+type ManageSection = {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  color: string;
+};
 
-        <Divider />
+/** The rail's sections: the overview, each operation the App has, its API
+ * and its deployments, in page order. */
+function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
+  const { data: ops } = useQuery(appOpsQueryOptions(appId));
+  const { data: manifest } = useQuery(normalizedManifestQueryOptions(appId));
+  const icon = (Icon: typeof IconLayoutDashboard) => (
+    <Icon size={15} stroke={2} />
+  );
+  const sections: (ManageSection | false | undefined)[] = [
+    {
+      key: 'overview',
+      label: 'Overview',
+      icon: icon(IconLayoutDashboard),
+      color: 'primary',
+    },
+    ops?.backend.capable && {
+      key: 'backend',
+      label: 'Backend',
+      icon: icon(IconServerBolt),
+      color: 'dark',
+    },
+    (ops?.database.enabled || Boolean(ops?.database.dbName)) && {
+      key: 'database',
+      label: 'Database',
+      icon: icon(IconDatabase),
+      color: 'blue',
+    },
+    ops?.storage.enabled && {
+      key: 'storage',
+      label: 'Storage',
+      icon: icon(IconFolder),
+      color: 'gray',
+    },
+    (ops?.dataTable.enabled || Boolean(ops?.dataTable.dbName)) && {
+      key: 'data-tables',
+      label: 'Data tables',
+      icon: icon(IconTable),
+      color: 'teal',
+    },
+    ops?.cron.enabled && {
+      key: 'schedules',
+      label: 'Schedules',
+      icon: icon(IconClock),
+      color: 'amber',
+    },
+    ops?.webhook.enabled && {
+      key: 'webhook',
+      label: 'Webhook',
+      icon: icon(IconWebhook),
+      color: 'violet',
+    },
+    ops?.kv.enabled && {
+      key: 'kv',
+      label: 'Key-value store',
+      icon: icon(IconKey),
+      color: 'indigo',
+    },
+    Boolean(manifest?.notifications) && {
+      key: 'notifications',
+      label: 'Notifications',
+      icon: icon(IconBell),
+      color: 'pink',
+    },
+    hasApi && { key: 'api', label: 'API', icon: icon(IconApi), color: 'blue' },
+    {
+      key: 'deployments',
+      label: 'Deployments',
+      icon: icon(IconHistory),
+      color: 'dark',
+    },
+  ];
+  return sections.filter((section): section is ManageSection =>
+    Boolean(section),
+  );
+}
 
-        <OperationsPanel
-          appId={app.id}
-          appName={app.name}
-          runtimeSupported={runtimeSupported}
-        />
-
-        {capabilities?.backend ? (
-          <>
-            <Divider />
-            <ApiPanel appId={app.id} />
-          </>
-        ) : null}
-
-        <Divider />
-
-        <DeploymentHistory appId={app.id} />
-      </Stack>
-    </WindowPage>
+/** A value that copies itself when clicked. */
+function CopyValue({ value }: { value: string }) {
+  return (
+    <Tooltip label="Copy" withArrow position="top">
+      <UnstyledButton
+        onClick={() => {
+          copy(value);
+          toast.success('Copied');
+        }}
+        ff="monospace"
+        fz="xs"
+      >
+        {value}
+      </UnstyledButton>
+    </Tooltip>
   );
 }
 
@@ -363,10 +537,7 @@ function SlugField({
   };
 
   return (
-    <Group gap="md" wrap="nowrap" align="center">
-      <Text size="sm" c="dimmed" style={{ width: 96, flex: 'none' }}>
-        URL slug
-      </Text>
+    <Row label="URL slug">
       {editing ? (
         <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
           <TextInput
@@ -384,7 +555,7 @@ function SlugField({
             size="xs"
             disabled={save.isPending}
             styles={{ input: { fontFamily: 'monospace' } }}
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 160 }}
           />
           <Tooltip label="Save" withArrow position="top">
             <ActionIcon
@@ -461,6 +632,6 @@ function SlugField({
           </Tooltip>
         </Group>
       )}
-    </Group>
+    </Row>
   );
 }

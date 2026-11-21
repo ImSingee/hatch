@@ -152,12 +152,17 @@ export function CronSection({
             {cron.jobs.map((job) => (
               <Table.Tr key={job.name}>
                 <Table.Td>
-                  <Text size="sm" fw={600}>
+                  <Text size="sm" fw={600} style={{ whiteSpace: 'nowrap' }}>
                     {job.name}
                   </Text>
                 </Table.Td>
-                <Table.Td w={120}>
-                  <Text size="xs" c="dimmed" ff="monospace">
+                <Table.Td>
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    ff="monospace"
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
                     {job.schedule}
                   </Text>
                 </Table.Td>
@@ -167,6 +172,7 @@ export function CronSection({
                       size="xs"
                       variant="light"
                       color={job.method ? 'blue' : 'gray'}
+                      style={{ flex: 'none' }}
                     >
                       {job.method ? 'rpc' : 'path'}
                     </Badge>

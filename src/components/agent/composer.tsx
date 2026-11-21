@@ -1,12 +1,4 @@
-import {
-  ActionIcon,
-  Box,
-  CloseButton,
-  Group,
-  Image,
-  Text,
-  Tooltip,
-} from '@mantine/core';
+import { Button, Box, CloseButton, Group, Image, Text } from '@mantine/core';
 import {
   IconArrowUp,
   IconFile,
@@ -382,50 +374,38 @@ export function Composer({
         justify="space-between"
         wrap="nowrap"
       >
-        <Group gap={4} wrap="nowrap">
-          <Tooltip label="Attach files" withArrow>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              radius="xl"
-              size="lg"
-              aria-label="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <IconPaperclip size={18} stroke={1.7} />
-            </ActionIcon>
-          </Tooltip>
+        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
+          <Button
+            variant="default"
+            size="sm"
+            aria-label="Attach files"
+            leftSection={<IconPaperclip size={16} stroke={1.8} />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Attach
+          </Button>
+          {modelControl}
         </Group>
 
-        <Group gap="xs" wrap="nowrap">
-          {modelControl}
-          {busy ? (
-            <Tooltip label="Stop" withArrow>
-              <ActionIcon
-                variant="filled"
-                color="red"
-                radius="xl"
-                size="lg"
-                aria-label="Stop"
-                onClick={onStop}
-              >
-                <IconPlayerStopFilled size={16} />
-              </ActionIcon>
-            </Tooltip>
-          ) : (
-            <ActionIcon
-              variant="filled"
-              color="primary"
-              radius="xl"
-              size="lg"
-              aria-label="Send"
-              disabled={!canSend}
-              onClick={() => void submit()}
-            >
-              <IconArrowUp size={18} stroke={2} />
-            </ActionIcon>
-          )}
-        </Group>
+        {busy ? (
+          <Button
+            color="red"
+            size="sm"
+            leftSection={<IconPlayerStopFilled size={14} />}
+            onClick={onStop}
+          >
+            Stop
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            disabled={!canSend}
+            rightSection={<IconArrowUp size={16} stroke={2.2} />}
+            onClick={() => void submit()}
+          >
+            Send
+          </Button>
+        )}
       </Group>
     </Box>
   );

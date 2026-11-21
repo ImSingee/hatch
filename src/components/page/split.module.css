@@ -46,6 +46,13 @@
   box-shadow: var(--shadow-card);
 }
 
+.identityTile:not([data-monogram]) {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  box-shadow: none;
+}
+
 .identityTile[data-monogram] {
   background: var(--mantine-color-primary-filled);
   color: var(--mantine-color-white);
@@ -207,5 +214,21 @@
     flex-direction: row;
     margin: 0;
     padding: 0;
+  }
+}
+
+/* A phone-wide window: the rail's actions get a row of their own. */
+@media (max-width: 35em) {
+  .rail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'identity'
+      'footer'
+      'nav';
+  }
+
+  .footer > * {
+    flex: 1 1 0;
+    min-width: 0;
   }
 }

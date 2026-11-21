@@ -84,6 +84,7 @@
 /* ---- Section ------------------------------------------------------------ */
 
 .section {
+  scroll-margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -173,6 +174,17 @@
 
 .group[data-padded] {
   padding: 16px;
+  /* A table or code block wider than a narrow window scrolls inside the
+     group instead of being squeezed. */
+  overflow-x: auto;
+}
+
+.group[data-padded] :where(table) {
+  min-width: 460px;
+}
+
+.group[id] {
+  scroll-margin-top: 16px;
 }
 
 .group[data-dashed] {

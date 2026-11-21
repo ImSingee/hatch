@@ -66,7 +66,7 @@ export function AskForm({
   };
 
   return (
-    <Paper className={classes.askCard} radius="md" p="md" withBorder>
+    <Paper className={classes.askCard} radius="xl" p="md" withBorder>
       <Group gap={6} mb="xs">
         <IconHelpCircle size={16} className={classes.askIcon} />
         <Text size="xs" fw={700} c="primary" tt="uppercase">
