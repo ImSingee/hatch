@@ -1,5 +1,6 @@
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
+import { EmptyFilter } from 'drizzle-orm/relations';
 import { AgentService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/agent_pb';
 import { getAgentModelCatalog } from '~server/agent-model-catalog';
 import { createHandoff } from '~server/handoffs';
@@ -140,7 +141,7 @@ async function list(kind: Kind) {
 /** Icon path per App id, for Apps that have a stored icon. */
 async function appIconPaths(id?: string): Promise<Map<string, string>> {
   const rows = await db.query.apps.findMany({
-    where: id === undefined ? undefined : { id },
+    where: { id: id ?? EmptyFilter },
     columns: { id: true, icon: true },
   });
   return new Map(
