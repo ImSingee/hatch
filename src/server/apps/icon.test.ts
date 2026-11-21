@@ -97,6 +97,24 @@ describe('App icon storage', () => {
     expect(isPng(served!.body)).toBe(true);
   });
 
+  it('keeps the files of whichever concurrent replacement wins', async () => {
+    const source = await image(128, 128, 'png');
+    await Promise.all([
+      setAppIcon(APP_ID, source),
+      setAppIcon(APP_ID, source),
+      setAppIcon(APP_ID, source),
+      clearAppIcon(APP_ID),
+    ]);
+
+    const current = await getAppIcon(APP_ID);
+    const names = await readdir(appIconDir(APP_ID)).catch(() => []);
+    expect(names.sort()).toEqual(
+      current.key
+        ? APP_ICON_SIZES.map((size) => `${current.key}-${size}.png`).sort()
+        : [],
+    );
+  });
+
   it('clears the icon and its files', async () => {
     await setAppIcon(APP_ID, await image(128, 128, 'png'));
 

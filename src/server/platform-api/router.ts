@@ -527,8 +527,13 @@ export function registerPlatformApi(
         );
       throw publicApiError('BAD_REQUEST');
     },
-    // Room for the largest accepted image plus message framing.
-    { readMaxBytes: MAX_APP_ICON_BYTES + ORDINARY_FRAMING_BYTES },
+    // Room for the largest accepted image plus message framing. Connect's
+    // JSON encoding carries `bytes` as base64, four characters per three
+    // bytes; the decoded image is still capped by the domain service.
+    {
+      readMaxBytes:
+        Math.ceil(MAX_APP_ICON_BYTES / 3) * 4 + ORDINARY_FRAMING_BYTES,
+    },
   );
   router.rpc(AppService.method.clearAppIcon, async (input) =>
     iconMessage(await clearAppIcon((await find('apps', input.id)).id)),

@@ -8,9 +8,9 @@
 import {
   mkdir,
   readFile,
-  readdir,
   rename,
   rm,
+  rmdir,
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
@@ -116,6 +116,46 @@ export async function getAppIcon(id: string): Promise<AppIconView> {
   return appIconView(app.id, app.icon);
 }
 
+/**
+ * Point the App at `key` (or at no icon) and return the key it replaces.
+ *
+ * The row lock makes concurrent set/clear calls agree on one order, so each
+ * caller learns exactly which key it superseded and removes only those files.
+ * Returns `undefined` when the App no longer exists.
+ */
+async function swapIconKey(
+  id: string,
+  key: string | null,
+): Promise<string | null | undefined> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ icon: schema.apps.icon })
+      .from(schema.apps)
+      .where(eq(schema.apps.id, id))
+      .for('update');
+    if (!current) return undefined;
+    await tx
+      .update(schema.apps)
+      .set({ icon: key })
+      .where(eq(schema.apps.id, id));
+    return current.icon;
+  });
+}
+
+/** Remove the files of one icon key; other keys in the directory are kept. */
+async function removeIconKeyFiles(id: string, key: string | null) {
+  if (!key || !KEY_RE.test(key)) return;
+  const dir = appIconDir(id);
+  await Promise.all(
+    APP_ICON_SIZES.map((size) =>
+      rm(path.join(dir, `${key}-${size}.png`), { force: true }),
+    ),
+  );
+  // Drop the directory once nothing is left in it; a concurrent write that
+  // repopulated it makes this fail, which is the wanted outcome.
+  await rmdir(dir).catch(() => undefined);
+}
+
 export async function setAppIcon(
   id: string,
   bytes: Buffer,
@@ -130,22 +170,13 @@ export async function setAppIcon(
     await writeFile(`${target}.tmp`, png);
     await rename(`${target}.tmp`, target);
   }
-  const updated = await db
-    .update(schema.apps)
-    .set({ icon: key })
-    .where(eq(schema.apps.id, app.id))
-    .returning({ id: schema.apps.id });
-  if (!updated.length) {
+  const previous = await swapIconKey(app.id, key);
+  if (previous === undefined) {
     // The App was deleted meanwhile; leave nothing behind.
-    await rm(dir, { recursive: true, force: true });
+    await removeIconKeyFiles(app.id, key);
     throw new AppError('App not found.', 404);
   }
-  const names = await readdir(dir).catch(() => []);
-  await Promise.all(
-    names
-      .filter((name) => !name.startsWith(`${key}-`))
-      .map((name) => rm(path.join(dir, name), { force: true })),
-  );
+  await removeIconKeyFiles(app.id, previous);
   return appIconView(app.id, key);
 }
 
@@ -160,11 +191,9 @@ export async function setAppIconFromCandidate(
 
 export async function clearAppIcon(id: string): Promise<AppIconView> {
   const app = await requireApp(id);
-  await db
-    .update(schema.apps)
-    .set({ icon: null })
-    .where(eq(schema.apps.id, app.id));
-  await removeAppIconFiles(app.id);
+  const previous = await swapIconKey(app.id, null);
+  if (previous === undefined) throw new AppError('App not found.', 404);
+  await removeIconKeyFiles(app.id, previous);
   return appIconView(app.id, null);
 }
 
