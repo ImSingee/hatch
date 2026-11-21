@@ -891,6 +891,30 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       ['--pm-on-fail=ignore', '--version'],
     ]);
   });
+  it.skipIf(process.platform === 'win32')(
+    'reports a missing pnpm as a tool failure, not as a source conflict',
+    async () => {
+      scaffoldFiles = { 'pnpm-lock.yaml': PNPM_LOCKFILE };
+      sdkTooling = NODE_TOOLING;
+      // A PATH that holds git and nothing else.
+      const bin = join(directory, 'bin');
+      await mkdir(bin);
+      await symlink(
+        execFileSync('which', ['git'], { encoding: 'utf8' }).trim(),
+        join(bin, 'git'),
+      );
+
+      const result = await createWorkflow({ PATH: bin });
+
+      expect(result.code).toBe(7);
+      expect(result.data.error).toMatchObject({
+        code: 'tool_unavailable',
+        message: expect.stringContaining(
+          'Workflow preparation failed during dependency install',
+        ),
+      });
+    },
+  );
   it.each([
     [
       'mixes pnpm-lock.yaml with deno.lock',

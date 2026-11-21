@@ -121,8 +121,8 @@ export async function adopt(
   } catch (error) {
     // Validation can install dependencies and ask the platform for tool
     // versions. Only a failed local command or an invalid source says
-    // something about the manifest; a cancelled run, a missing tool or a
-    // failed request keeps its own code and exit status.
+    // something about the manifest; a cancelled run, a missing tool, a
+    // timeout or a failed request keeps its own code and exit status.
     if (error instanceof CliError && error.code !== 'local_command_failed')
       throw error;
     throw new CliError(

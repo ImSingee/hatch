@@ -21,7 +21,7 @@ import {
   relative,
   isAbsolute,
 } from 'node:path';
-import { CliError } from './error';
+import { CliError, preparationFailure } from './error';
 import type { Profile } from './config';
 import { platformClient } from './client';
 import { pnpmInvocation } from './pnpm';
@@ -436,10 +436,11 @@ export async function installSdk(
         await detectSourceToolchain(sourceToolchainReader(root));
         await prepareNodeWorkflow(root, signal, payload.tooling);
       } catch (error) {
-        throw new CliError(
+        throw preparationFailure(
           'workflow_preparation_failed',
           `Workflow preparation failed during dependency install: ${error instanceof Error ? error.message : 'Invalid source.'}`,
-          signal.aborted ? 130 : 6,
+          error,
+          signal,
         );
       }
       return;
@@ -453,10 +454,11 @@ export async function installSdk(
         signal,
       );
     } catch (error) {
-      throw new CliError(
+      throw preparationFailure(
         'workflow_preparation_failed',
         `Workflow preparation failed during dependency install: ${error instanceof CliError ? error.message : 'Invalid source.'}`,
-        signal.aborted ? 130 : 6,
+        error,
+        signal,
       );
     }
   } finally {
@@ -494,7 +496,14 @@ async function remoteGit(
     env[`GIT_CONFIG_KEY_${index}`] = key;
     env[`GIT_CONFIG_VALUE_${index}`] = value;
   });
-  const result = await git(root, signal, args, true, { env, timeoutMs });
+  const result = await git(root, signal, args, true, { env, timeoutMs }).catch(
+    (error) => {
+      // A transfer that runs out of time is a remote failure like any other.
+      throw error instanceof CliError && error.code === 'local_command_timeout'
+        ? remoteFailure('')
+        : error;
+    },
+  );
   if (result.code === 0 || args[0] === 'push') return result;
   throw remoteFailure(result.stderr);
 }

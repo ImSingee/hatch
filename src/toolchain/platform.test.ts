@@ -47,6 +47,7 @@ describe('platform toolchain runner', () => {
     'refuses to evaluate authored code in production under its own identity (wrapper: %s)',
     async (wrapper) => {
       vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('HATCH_ALLOW_UNSANDBOXED', '');
       sandbox.wrapper = wrapper;
 
       await expect((await context()).run(EVALUATION)).rejects.toThrow(
@@ -55,6 +56,16 @@ describe('platform toolchain runner', () => {
       expect(spawned.calls).toEqual([]);
     },
   );
+
+  it('evaluates under its own identity in production once the operator accepts unsandboxed subprocesses', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('HATCH_ALLOW_UNSANDBOXED', 'true');
+    sandbox.wrapper = undefined;
+
+    await (await context()).run(EVALUATION);
+
+    expect(spawned.calls).toEqual([[process.execPath, EVALUATION.args]]);
+  });
 
   it('evaluates authored code through the sandbox identity and other tools directly', async () => {
     vi.stubEnv('NODE_ENV', 'production');

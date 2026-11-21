@@ -37,7 +37,7 @@ import {
   detectSourceToolchain,
   sourceToolchainReader,
 } from '../../../src/source-toolchain';
-import { CliError } from './error';
+import { CliError, preparationFailure } from './error';
 import { command, childEnvironment } from './process';
 import type { Kind } from './workspace';
 import { pnpmInvocation } from './pnpm';
@@ -398,10 +398,11 @@ export async function prepareApp(
         : error instanceof Error
           ? error.message
           : 'Invalid source.';
-    throw new CliError(
+    throw preparationFailure(
       'app_preparation_failed',
       `App preparation failed during ${stage}: ${detail}`,
-      signal.aborted ? 130 : 6,
+      error,
+      signal,
     );
   }
 }

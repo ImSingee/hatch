@@ -262,6 +262,12 @@ reports that the platform does not provide the pnpm build toolchain. Both
 surface as `app_preparation_failed` or `workflow_preparation_failed` with the
 stage in the message.
 
+A failure that says nothing about the source keeps its own code and exit 7,
+during preparation and during adopt alike: `tool_unavailable` when a local tool
+(`pnpm`, `deno`, `git`) cannot be run, and `local_command_timeout` when a local
+command is stopped at its 300s limit. Fix the environment and retry; the source
+was not judged. A Git transfer that runs out of time stays `git_remote_failed`.
+
 App Connect codegen uses
 platform-pinned Buf/protoc-gen-es through pnpm dlx and the platform-owned
 `.hatch/buf.gen.yaml`, not an authored plugin configuration. Generated `gen/`,

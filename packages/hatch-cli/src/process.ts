@@ -56,7 +56,12 @@ export async function command(
       }
     };
     signal.addEventListener('abort', kill, { once: true });
-    const timer = setTimeout(kill, options.timeoutMs ?? 300000);
+    const timeoutMs = options.timeoutMs ?? 300000;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      kill();
+    }, timeoutMs);
     timer.unref();
     if (signal.aborted) kill();
     child.stdin.on('error', () => {});
@@ -93,6 +98,16 @@ export async function command(
       if (signal.aborted)
         reject(
           new CliError('cancelled', 'Cancelled; workspace retained.', 130),
+        );
+      // Running out of time is not an exit status: it says nothing about the
+      // source, so no caller may read it as the command's own answer.
+      else if (timedOut)
+        reject(
+          new CliError(
+            'local_command_timeout',
+            `${executable} did not finish within ${Math.ceil(timeoutMs / 1000)} seconds and was stopped. Source was retained; retry.`,
+            7,
+          ),
         );
       else if ((code ?? 1) !== 0 && !allowFailure)
         reject(

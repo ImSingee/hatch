@@ -192,6 +192,9 @@ describe.runIf(Boolean(databaseUrl))(
         env: {
           ...process.env,
           NODE_ENV: 'production',
+          // Not the published image: this host cannot switch to the sandbox
+          // identity that production requires to evaluate authored source.
+          HATCH_ALLOW_UNSANDBOXED: 'true',
           HOST: '127.0.0.1',
           PORT: String(port),
           AGENT_INTERNAL_PORT: String(internalPort),
