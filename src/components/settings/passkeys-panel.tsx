@@ -145,10 +145,9 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
       <Group
         justify="space-between"
         align="flex-start"
-        wrap="nowrap"
         className={classes.header}
       >
-        <Stack gap={2}>
+        <Stack gap={2} style={{ flex: '1 1 220px' }}>
           <Text fw={700}>Passkeys</Text>
           <Text size="sm" c="dimmed">
             Sign in with your device, password manager, or a security key.

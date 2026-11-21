@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { GroupCard } from '~components/page/page';
 import { AgentRunnerPanel } from '~components/settings/agent-runner-panel';
 import { SectionHead } from '~components/settings/section-head';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
@@ -22,12 +23,14 @@ function AgentRunnerRoute() {
         title="Agent Runner"
         description="Whether the Agent Runner service is online, which runners are connected, and the agent runs they are carrying. Refreshes every 5 seconds while open."
       />
-      <AgentRunnerPanel
-        snapshot={query.data}
-        isLoading={query.isPending}
-        error={query.error}
-        onRefresh={() => query.refetch()}
-      />
+      <GroupCard padded>
+        <AgentRunnerPanel
+          snapshot={query.data}
+          isLoading={query.isPending}
+          error={query.error}
+          onRefresh={() => query.refetch()}
+        />
+      </GroupCard>
     </>
   );
 }

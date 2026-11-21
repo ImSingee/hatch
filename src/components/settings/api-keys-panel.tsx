@@ -145,10 +145,9 @@ export function ApiKeysPanel() {
       <Group
         justify="space-between"
         align="flex-start"
-        wrap="nowrap"
         className={classes.header}
       >
-        <Stack gap={2}>
+        <Stack gap={2} style={{ flex: '1 1 220px' }}>
           <Text fw={700}>API keys</Text>
           <Text size="sm" c="dimmed">
             Let the Hatch CLI and your scripts build and manage Apps and

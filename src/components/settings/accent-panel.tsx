@@ -1,4 +1,4 @@
-import { Paper, Stack, Text } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
 import {
   useMutation,
@@ -30,7 +30,7 @@ export function AccentPanel() {
   const selected = save.isPending ? save.variables : theme.accent;
 
   return (
-    <Paper withBorder radius="md" p="md">
+    <div>
       <Stack gap="sm">
         <Stack gap={2}>
           <Text fw={700} id="accent-label">
@@ -68,6 +68,6 @@ export function AccentPanel() {
           ))}
         </div>
       </Stack>
-    </Paper>
+    </div>
   );
 }

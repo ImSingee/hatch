@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { GroupCard } from '~components/page/page';
 import { AccentPanel } from '~components/settings/accent-panel';
 import { SectionHead } from '~components/settings/section-head';
 import { themeQueryOptions } from '~queries/theme';
@@ -12,7 +13,9 @@ export const Route = createFileRoute('/_app/settings/appearance')({
         title="Appearance"
         description="How Hatch looks for everyone on this instance, on the web and in the apps."
       />
-      <AccentPanel />
+      <GroupCard padded>
+        <AccentPanel />
+      </GroupCard>
     </>
   ),
 });
