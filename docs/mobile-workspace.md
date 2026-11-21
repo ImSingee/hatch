@@ -56,6 +56,12 @@ With room for two columns (an unfolded iPhone Duo, landscape), Home puts the
 widgets in the leading column and the pins in the trailing one, and Agent shows
 the list beside the conversation. Columns split on the fold when there is one.
 
+The dashboard canvas is shown in a transparent WebView, so the ground shapes
+run behind the widgets; the `/mobile/` pages paint no background of their own
+under the native-host mark. The view stays hidden until the requested page has
+loaded, so the sign-in pages before it never show. App screens keep an opaque
+white surface.
+
 ### App icons
 
 `ListApps` and `GetApp` return `iconPath` for an App with a stored icon. Append

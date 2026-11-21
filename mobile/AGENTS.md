@@ -20,6 +20,10 @@ to the monogram; Workflows pass `workflow`. Keep every text/surface pair at
 4.5:1 or better; `theme.test.ts` guards the pairings. Respect Reduce Motion
 for the egg loader.
 
+Web surfaces are opaque white by default. Only pages that leave their
+background to the app, the `/mobile/` pages, pass `transparent` to
+`SecureSurface`, so the desk ground shows through; App surfaces stay opaque.
+
 The tab bar is the system one: Home, Apps, Agent and Me by default, with
 Workflows hidden. Which sections sit in it, their order and the start page
 stay the user's choice (Tabs & start page); never hard-code four tabs. The
