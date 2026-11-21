@@ -1,0 +1,65 @@
+.root {
+  height: 100%;
+  overflow-y: auto;
+  padding: 28px clamp(16px, 3vw, 40px) 24px;
+}
+
+.root:focus {
+  outline: none;
+}
+
+.root[data-headerless] {
+  padding-top: 0;
+}
+
+.inner {
+  margin: 0 auto;
+}
+
+.titleBlock {
+  min-width: 0;
+}
+
+.date {
+  color: var(--mantine-color-dimmed);
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+}
+
+.description {
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+
+.widgets {
+  margin-top: 28px;
+}
+
+.root[data-headerless] .widgets {
+  margin-top: 0;
+}
+
+@media (max-width: 48em) {
+  .root {
+    padding: 24px 16px 16px;
+  }
+
+  .widgets {
+    margin-top: 20px;
+  }
+}
+
+@media (max-width: 35em) {
+  .root {
+    padding: 20px 20px 16px;
+  }
+
+  .header {
+    align-items: flex-start;
+  }
+
+  .titleBlock,
+  .actions {
+    width: 100%;
+  }
+}

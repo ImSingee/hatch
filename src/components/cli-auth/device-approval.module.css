@@ -1,20 +1,6 @@
-/* Device approval: the same quiet, single-column surface as /login. One sheet
-   carries the decision; everything secondary is collapsed or in a footnote.
-   Colors come from Mantine variables so the page follows the color scheme. */
-
-.root {
-  min-height: 100dvh;
-  display: flex;
-  justify-content: center;
-  padding: 56px 20px 48px;
-  background:
-    radial-gradient(
-      72% 48% at 50% -8%,
-      var(--mantine-color-primary-light) 0%,
-      transparent 64%
-    ),
-    var(--mantine-color-body);
-}
+/* Device approval: the same quiet, single-column surface as /login, on the
+   desk ground. One sheet carries the decision; everything secondary is
+   collapsed or in a footnote. Colors come from Mantine variables. */
 
 .column {
   width: 100%;

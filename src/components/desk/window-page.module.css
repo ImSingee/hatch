@@ -1,0 +1,28 @@
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px clamp(16px, 2.4vw, 48px) 40px;
+}
+
+.header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.description {
+  flex: 1 1 320px;
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+
+.header + .body {
+  margin-top: 24px;
+}
+
+@media (max-width: 47.99em) {
+  .description,
+  .actions {
+    flex-basis: 100%;
+  }
+}

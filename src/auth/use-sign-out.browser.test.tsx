@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { UserMenu } from '~components/app-shell/sidebar/user-menu';
+import { AccountMenu } from '~components/desk/account-menu';
 import { useSignOut } from './use-sign-out';
 
 const mocks = vi.hoisted(() => ({
@@ -70,7 +70,7 @@ function OtherExit() {
   );
 }
 
-async function renderSidebar({ withOtherExit = false } = {}) {
+async function renderAccountMenu({ withOtherExit = false } = {}) {
   const client = new QueryClient({
     // Mirrors the app router's global mutation error toast.
     mutationCache: new MutationCache({
@@ -84,7 +84,7 @@ async function renderSidebar({ withOtherExit = false } = {}) {
       component: () => (
         <>
           {withOtherExit && <OtherExit />}
-          <UserMenu />
+          <AccountMenu />
         </>
       ),
     }),
@@ -118,7 +118,7 @@ function signOutRequests() {
     );
 }
 
-test('the sidebar signs out once, stays disabled, and replaces the page with login', async () => {
+test('the account menu signs out once, stays disabled, and replaces the page with login', async () => {
   let respond!: (value: Response) => void;
   vi.spyOn(window, 'fetch').mockImplementation(
     () =>
@@ -126,7 +126,7 @@ test('the sidebar signs out once, stays disabled, and replaces the page with log
         respond = resolve;
       }),
   );
-  const screen = await renderSidebar();
+  const screen = await renderAccountMenu();
 
   await (await screen.openMenu()).click();
   const item = await screen.openMenu();
@@ -151,7 +151,7 @@ test('failed sign-outs keep the page, report an error, and can be retried', asyn
     )
     .mockRejectedValueOnce(new TypeError('Failed to fetch'))
     .mockResolvedValueOnce(Response.json({ success: true }));
-  const screen = await renderSidebar();
+  const screen = await renderAccountMenu();
 
   await (await screen.openMenu()).click();
   await expect.poll(() => mocks.toastError).toHaveBeenCalledWith(FAILED);
@@ -182,7 +182,7 @@ test('every exit control shares one pending request and its outcome', async () =
         }),
     )
     .mockResolvedValueOnce(Response.json({ success: true }));
-  const screen = await renderSidebar({ withOtherExit: true });
+  const screen = await renderAccountMenu({ withOtherExit: true });
   const otherExit = screen.getByRole('button', { name: 'Other exit' });
 
   await otherExit.click();

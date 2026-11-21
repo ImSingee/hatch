@@ -1,17 +1,18 @@
 import { Stack, Text, Title, VisuallyHidden } from '@mantine/core';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Brand } from '~components/app-shell/brand';
+import { Brand } from '~components/desk/brand';
+import { DeskStandalone } from '~components/desk/desk-standalone';
 import { USER_CODE_LENGTH } from './device-api';
 import classes from './device-approval.module.css';
 
 export function DeviceLayout({ children }: { children: ReactNode }) {
   return (
-    <div className={classes.root}>
-      <main className={classes.column}>
+    <DeskStandalone align="start">
+      <div className={classes.column}>
         <Brand size="lg" withWordmark={false} />
         {children}
-      </main>
-    </div>
+      </div>
+    </DeskStandalone>
   );
 }
 

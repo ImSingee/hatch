@@ -1,7 +1,7 @@
-import { Alert, Group, Stack } from '@mantine/core';
+import { Alert, Stack } from '@mantine/core';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { IconInfoCircle } from '@tabler/icons-react';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { StatusBadge } from '~components/system/status-badge';
 import { TriggerForm } from '~components/workflows/trigger-form';
@@ -28,20 +28,19 @@ export function WorkflowRunPage() {
   const runtimeSupported = workflow.compatibility?.isSupported === true;
 
   return (
-    <Page
+    <WindowPage
       size={680}
-      title={
-        <Group gap="sm" align="center" wrap="nowrap">
-          <AppGlyph
-            icon={false}
-            name={workflow.name}
-            seed={workflow.id}
-            size="md"
-          />
-          {workflow.name}
-          <StatusBadge status={workflow.status} />
-        </Group>
+      title={workflow.name}
+      tile={
+        <AppGlyph
+          icon={false}
+          name={workflow.name}
+          seed={workflow.id}
+          size="sm"
+        />
       }
+      badge={<StatusBadge status={workflow.status} />}
+      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
       description={workflow.description || `Workflow · ${workflow.slug}`}
       actions={<WorkflowTabs slug={workflow.slug} active="run" />}
     >
@@ -75,6 +74,6 @@ export function WorkflowRunPage() {
           enable manual, cron, and webhook triggers.
         </Alert>
       )}
-    </Page>
+    </WindowPage>
   );
 }

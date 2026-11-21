@@ -14,7 +14,8 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '~auth/client';
 import { browserSupportsPasskeys } from '~auth/passkey-browser';
-import { Brand } from '~components/app-shell/brand';
+import { Brand } from '~components/desk/brand';
+import { DeskStandalone } from '~components/desk/desk-standalone';
 import { PasskeySignIn } from '~components/auth/passkey-sign-in';
 import { hasActiveSession } from '~server/auth';
 import { getSignupConfig } from '~server/users';
@@ -109,7 +110,7 @@ function LoginPage() {
   });
 
   return (
-    <div className={classes.root}>
+    <DeskStandalone>
       <div className={classes.panel}>
         <Stack gap="xl">
           <Stack gap="md" align="center">
@@ -186,6 +187,6 @@ function LoginPage() {
           </Text>
         </Stack>
       </div>
-    </div>
+    </DeskStandalone>
   );
 }

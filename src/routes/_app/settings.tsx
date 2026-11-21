@@ -11,7 +11,7 @@ import {
   IconInfoCircle,
 } from '@tabler/icons-react';
 import { Fragment } from 'react';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import classes from './settings.module.css';
 
 export const Route = createFileRoute('/_app/settings')({
@@ -45,10 +45,11 @@ const GROUPS = [
 
 function SettingsLayout() {
   return (
-    <Page
+    <WindowPage
       title="Settings"
       description="Manage your account, providers, users, private access, and runtime status."
       size={1040}
+      fill
     >
       <Box className={classes.layout}>
         <Box component="nav" className={classes.nav}>
@@ -78,6 +79,6 @@ function SettingsLayout() {
           <Outlet />
         </Box>
       </Box>
-    </Page>
+    </WindowPage>
   );
 }

@@ -113,8 +113,8 @@ export function DashboardEmptyState({
           </Title>
           <Text c="dimmed" ta="center" maw={440}>
             Describe an app in plain language and the Agent builds and deploys
-            it for you. Your apps then live in the sidebar and on dashboards
-            like this one.
+            it for you. Your apps then live in the dock and on dashboards like
+            this one.
           </Text>
         </Stack>
         <Button

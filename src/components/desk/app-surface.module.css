@@ -1,0 +1,26 @@
+.surface {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.surface[hidden] {
+  display: none;
+}
+
+.frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-raised);
+}

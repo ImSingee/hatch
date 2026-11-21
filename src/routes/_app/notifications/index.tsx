@@ -1,7 +1,7 @@
 import { Button } from '@mantine/core';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { IconSettings } from '@tabler/icons-react';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { NotificationHistory } from '~components/notifications/history-list';
 import { useLiveNotifications } from '~components/notifications/use-live-notifications';
 import {
@@ -24,7 +24,7 @@ export const Route = createFileRoute('/_app/notifications/')({
 function NotificationsPage() {
   useLiveNotifications();
   return (
-    <Page
+    <WindowPage
       title="Notifications"
       description="Everything Apps and Channels pushed, and where each notification was delivered."
       actions={
@@ -39,6 +39,6 @@ function NotificationsPage() {
       }
     >
       <NotificationHistory />
-    </Page>
+    </WindowPage>
   );
 }

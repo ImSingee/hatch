@@ -30,7 +30,8 @@ import {
 } from '@tabler/icons-react';
 import { Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Page } from '~components/app-shell/page';
+import { DashboardSwitcher } from '~components/desk/dashboard-switcher';
+import { DeskHome } from '~components/desk/desk-home';
 import { AddWidgetPicker } from '~components/dashboard/add-widget-picker';
 import { DashboardGrid } from '~components/dashboard/dashboard-grid';
 import { DashboardGridStage } from '~components/dashboard/dashboard-grid-stage';
@@ -204,8 +205,8 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
     );
 
   return (
-    <Page
-      title={current?.name ?? 'Dashboard'}
+    <DeskHome
+      title={<DashboardSwitcher current={current} />}
       description={description}
       size={editing ? 1360 : 1180}
       hideHeader={editing}
@@ -297,7 +298,7 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
           {renderGrid}
         </DashboardGridStage>
       </Box>
-    </Page>
+    </DeskHome>
   );
 }
 

@@ -1,0 +1,177 @@
+import { Link, type LinkProps, useRouter } from '@tanstack/react-router';
+import {
+  IconAppWindow,
+  IconChevronLeft,
+  IconMinus,
+  IconX,
+} from '@tabler/icons-react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+} from 'react';
+import { DESK_HOME } from './paths';
+import classes from './window.module.css';
+
+/** Where a window button leads: the route and what to call it. */
+export type WindowTarget = {
+  link: LinkProps;
+  /** Completes "Close window, back to …". */
+  label: string;
+};
+
+const DESK: WindowTarget = { link: { to: DESK_HOME }, label: 'the desk' };
+
+export type DeskWindowProps = {
+  title: string;
+  /** A 22 px tile shown before the title. Defaults to a neutral window tile. */
+  tile?: ReactNode;
+  /** Shown after the title, for a status chip. */
+  badge?: ReactNode;
+  /** Controls of this window, placed before minimise and close. */
+  toolbar?: ReactNode;
+  /** Where closing leads. Defaults to the desk; minimise always goes there. */
+  closeTo?: WindowTarget;
+  /** Fill the stage instead of fitting the content. */
+  fill?: boolean;
+  /** Widest the window grows, in px. */
+  maxWidth?: number;
+  children: ReactNode;
+};
+
+/**
+ * Layers that sit above a window and answer Escape themselves. A closed
+ * modal keeps its empty root mounted, so match what only an open one renders.
+ */
+const LAYERS = [
+  '.mantine-Modal-content',
+  '.mantine-Drawer-content',
+  '.mantine-Popover-dropdown',
+  '.mantine-Menu-dropdown',
+  '.mantine-Combobox-dropdown',
+].join(',');
+
+function layerOpen() {
+  return Array.from(document.querySelectorAll(LAYERS)).some(
+    (element) => element.checkVisibility?.() ?? true,
+  );
+}
+
+function isEditing(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.closest('input, textarea, select, [role="textbox"]') !== null)
+  );
+}
+
+/**
+ * The frame every page is shown in. The window is a layout component and
+ * holds no state of its own: which window is open is the URL, so closing and
+ * minimising are links, and reload, deep links and the back button work as
+ * for any page.
+ *
+ * Keyboard: opening a window moves focus into it unless the page already
+ * placed focus, and Escape closes it when nothing above it (a menu, a modal)
+ * or inside it (a field being edited) wants the key.
+ */
+export function DeskWindow({
+  title,
+  tile,
+  badge,
+  toolbar,
+  closeTo = DESK,
+  fill = false,
+  maxWidth = 1320,
+  children,
+}: DeskWindowProps) {
+  const titleId = useId();
+  const frame = useRef<HTMLElement>(null);
+  const router = useRouter();
+  const close = useEffectEvent(() => {
+    void router.navigate(closeTo.link as never);
+  });
+
+  useEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const active = document.activeElement;
+    if (active && element.contains(active)) return;
+    element.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
+    // A layer closes itself during the same event, so note whether one was
+    // open before any handler ran.
+    let layerWasOpen = false;
+    const capture = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') layerWasOpen = layerOpen();
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.isComposing || event.repeat) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey)
+        return;
+      if (layerWasOpen || isEditing(event.target)) return;
+      close();
+    };
+    window.addEventListener('keydown', capture, true);
+    window.addEventListener('keydown', onEscape);
+    return () => {
+      window.removeEventListener('keydown', capture, true);
+      window.removeEventListener('keydown', onEscape);
+    };
+  }, []);
+
+  return (
+    <section
+      ref={frame}
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      className={classes.window}
+      data-fill={fill || undefined}
+      style={{ '--window-max-width': `${maxWidth}px` } as CSSProperties}
+    >
+      <header className={classes.titleBar}>
+        <Link
+          {...closeTo.link}
+          className={`${classes.button} ${classes.back}`}
+          aria-label={`Back to ${closeTo.label}`}
+        >
+          <IconChevronLeft size={18} stroke={2.4} aria-hidden />
+        </Link>
+        <span className={classes.tile} aria-hidden>
+          {tile ?? (
+            <span className={classes.defaultTile}>
+              <IconAppWindow size={13} stroke={2.4} />
+            </span>
+          )}
+        </span>
+        <h1 id={titleId} className={classes.title}>
+          {title}
+        </h1>
+        {badge ? <span className={classes.badge}>{badge}</span> : null}
+        <span className={classes.spacer} />
+        {toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
+        <Link
+          to={DESK_HOME}
+          className={`${classes.button} ${classes.wide}`}
+          aria-label="Minimise window, back to the desk"
+        >
+          <IconMinus size={14} stroke={2.4} aria-hidden />
+        </Link>
+        <Link
+          {...closeTo.link}
+          className={`${classes.button} ${classes.wide}`}
+          aria-label={`Close window, back to ${closeTo.label}`}
+        >
+          <IconX size={14} stroke={2.4} aria-hidden />
+        </Link>
+      </header>
+      <div className={classes.body}>{children}</div>
+    </section>
+  );
+}

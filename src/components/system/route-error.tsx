@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react';
 import { useQueryErrorResetBoundary } from '@tanstack/react-query';
 import { type ErrorComponentProps, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { useInsideDeskShell } from '~components/desk/desk-context';
 
 /**
  * Router-wide error state. Registering it as the default error component gives
@@ -14,6 +15,7 @@ export function RouteError({ error }: ErrorComponentProps) {
   const router = useRouter();
   const queryErrorResetBoundary = useQueryErrorResetBoundary();
   const [retrying, setRetrying] = useState(false);
+  const insideShell = useInsideDeskShell();
 
   useEffect(() => {
     // Let suspense queries that failed under this boundary refetch on retry.
@@ -31,9 +33,13 @@ export function RouteError({ error }: ErrorComponentProps) {
   };
 
   return (
-    // Fill the viewport below the app header when one is present; a shell
-    // that itself failed to load leaves the full viewport.
-    <Center mih="calc(100dvh - var(--app-shell-header-offset, 0rem))" p="md">
+    // Fill the desk's stage when the shell is there; a shell that itself
+    // failed to load leaves the full viewport.
+    <Center
+      mih={insideShell ? '100%' : '100dvh'}
+      h={insideShell ? '100%' : undefined}
+      p="md"
+    >
       <Stack align="center" gap="xs" maw={440}>
         <ThemeIcon size={52} radius="xl" variant="light" color="red">
           <IconAlertTriangle size={26} stroke={1.5} />

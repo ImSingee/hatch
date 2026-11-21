@@ -39,7 +39,7 @@ import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { APP_SLUG_MAX_LENGTH } from '~/app-identity';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { ApiPanel } from '~components/apps/api-panel';
 import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notice';
 import { AppGlyph } from '~components/apps/app-glyph';
@@ -122,7 +122,7 @@ function AppDetailPage() {
     mutationFn: (pinned: boolean) =>
       setSidebarPin({ data: { appId: app.id, pinned } }),
     onSuccess: (_result, pinned) => {
-      toast.success(pinned ? 'Pinned to sidebar' : 'Removed from sidebar');
+      toast.success(pinned ? 'Pinned to the dock' : 'Removed from the dock');
       void queryClient.invalidateQueries({
         queryKey: sidebarItemsQueryOptions.queryKey,
       });
@@ -144,14 +144,11 @@ function AppDetailPage() {
     });
 
   return (
-    <Page
-      title={
-        <Group gap="sm" align="center" wrap="nowrap">
-          <AppGlyph name={app.name} seed={app.id} size="md" />
-          {app.name}
-          <StatusBadge status={app.status} />
-        </Group>
-      }
+    <WindowPage
+      title={`${app.name} · Manage`}
+      tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
+      badge={<StatusBadge status={app.status} />}
+      closeTo={{ link: { to: '/apps' }, label: 'All apps' }}
       description={app.description || `App · ${app.slug}`}
       actions={
         <>
@@ -211,7 +208,7 @@ function AppDetailPage() {
                 }
                 onClick={() => pin.mutate(!isPinned)}
               >
-                {isPinned ? 'Remove from sidebar' : 'Pin to sidebar'}
+                {isPinned ? 'Remove from dock' : 'Pin to dock'}
               </Menu.Item>
               <Menu.Divider />
               <Menu.Item
@@ -294,7 +291,7 @@ function AppDetailPage() {
 
         <DeploymentHistory appId={app.id} />
       </Stack>
-    </Page>
+    </WindowPage>
   );
 }
 

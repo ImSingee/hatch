@@ -52,7 +52,7 @@ export function NewChat({
   const [model, setModel] = useLastSelectedModel();
   const [creating, setCreating] = useState(false);
   // Reuse a session created by a failed first attempt so a retry doesn't leave
-  // a trail of empty "New chat" shells in the sidebar.
+  // a trail of empty "New chat" shells in the chat list.
   const createdSessionRef = useRef<string | null>(null);
   const [seed, setSeed] = useState({
     text: initialPrompt ?? '',
@@ -114,7 +114,7 @@ export function NewChat({
           </Title>
           <Text c="dimmed" ta="center" maw={440}>
             Describe an app in plain language. The Agent scaffolds, builds, and
-            deploys it for you — then it lives in your sidebar and dashboards.
+            deploys it for you — then it lives in your dock and dashboards.
           </Text>
         </Stack>
 

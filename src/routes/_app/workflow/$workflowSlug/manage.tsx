@@ -35,7 +35,7 @@ import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { WORKFLOW_SLUG_MAX_LENGTH } from '~/workflow-identity';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { WorkflowDeploymentHistory } from '~components/workflows/deployment-history';
 import { WorkflowNetworkPermissionsPanel } from '~components/workflows/network-permissions-panel';
@@ -101,7 +101,7 @@ function WorkflowManagePage() {
     mutationFn: (pinned: boolean) =>
       setWorkflowPinFn({ data: { id: workflow.id, pinned } }),
     onSuccess: (_result, pinned) => {
-      toast.success(pinned ? 'Pinned to sidebar' : 'Removed from sidebar');
+      toast.success(pinned ? 'Pinned to the dock' : 'Removed from the dock');
       void queryClient.invalidateQueries(workflowsQueryOptions);
       void router.invalidate();
     },
@@ -122,19 +122,18 @@ function WorkflowManagePage() {
     });
 
   return (
-    <Page
-      title={
-        <Group gap="sm" align="center" wrap="nowrap">
-          <AppGlyph
-            icon={false}
-            name={workflow.name}
-            seed={workflow.id}
-            size="md"
-          />
-          {workflow.name}
-          <StatusBadge status={workflow.status} />
-        </Group>
+    <WindowPage
+      title={`${workflow.name} · Manage`}
+      tile={
+        <AppGlyph
+          icon={false}
+          name={workflow.name}
+          seed={workflow.id}
+          size="sm"
+        />
       }
+      badge={<StatusBadge status={workflow.status} />}
+      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
       description={workflow.description || `Workflow · ${workflow.slug}`}
       actions={
         <>
@@ -165,7 +164,7 @@ function WorkflowManagePage() {
                 }
                 onClick={() => pin.mutate(!isPinned)}
               >
-                {isPinned ? 'Remove from sidebar' : 'Pin to sidebar'}
+                {isPinned ? 'Remove from dock' : 'Pin to dock'}
               </Menu.Item>
               <Menu.Divider />
               <Menu.Item
@@ -234,7 +233,7 @@ function WorkflowManagePage() {
 
         <WorkflowDeploymentHistory workflowId={workflow.id} />
       </Stack>
-    </Page>
+    </WindowPage>
   );
 }
 

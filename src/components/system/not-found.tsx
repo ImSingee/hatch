@@ -1,35 +1,34 @@
-import { Button, Container, Stack, Text, Title, rem } from '@mantine/core';
+import { Button, Stack, Text, ThemeIcon, Title } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
+import { IconCompassOff } from '@tabler/icons-react';
+import { useInsideDeskShell } from '~components/desk/desk-context';
+import { DeskStandalone } from '~components/desk/desk-standalone';
+import { DeskWindow } from '~components/desk/window';
 
+/**
+ * Not found, as a window on the desk: inside the signed-in shell it takes
+ * the stage like any page; on its own it brings the desk ground with it.
+ */
 export function NotFoundElement(_props: {}) {
-  return (
-    <Container
-      fluid
-      size="md"
-      pt={rem(80)}
-      pb={rem(80)}
-      mih="100vh"
-      strategy="grid"
-      style={{ placeContent: 'center' }}
-    >
-      <Stack align="center" gap="xl">
-        <Text size={rem(220)} fw={900} lh={1} c="gray.3">
-          404
-        </Text>
-
-        <Title order={1} size="h1" fw={900} ta="center">
-          You have found a secret place.
+  const insideShell = useInsideDeskShell();
+  const window = (
+    <DeskWindow title="Page not found" maxWidth={520}>
+      <Stack align="center" gap="sm" px="xl" py={40}>
+        <ThemeIcon size={56} radius="lg" variant="light" color="gray">
+          <IconCompassOff size={26} stroke={1.6} />
+        </ThemeIcon>
+        <Title order={2} ta="center">
+          Nothing lives at this address
         </Title>
-
-        <Text size="lg" c="dimmed" ta="center" maw={500}>
-          Unfortunately, this is only a 404 page. You may have mistyped the
-          address, or the page has been moved to another URL.
+        <Text c="dimmed" ta="center" maw={380}>
+          The address may be mistyped, or the page was moved, renamed or
+          deleted.
         </Text>
-
-        <Button component={Link} to="/" size="md" variant="default">
-          Take me back to home page
+        <Button component={Link} to="/" mt="sm">
+          Back to the desk
         </Button>
       </Stack>
-    </Container>
+    </DeskWindow>
   );
+  return insideShell ? window : <DeskStandalone>{window}</DeskStandalone>;
 }
