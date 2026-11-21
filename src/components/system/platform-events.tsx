@@ -57,6 +57,7 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       if (!accent) return null;
       return { type, accent } satisfies PlatformEvent;
     }
+    if (type === 'pins.updated') return { type } satisfies PlatformEvent;
     return null;
   } catch {
     return null;

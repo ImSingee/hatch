@@ -10,6 +10,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import { normalizeEntryHash } from './apps/sidebar';
 import { AppError } from './errors';
+import { publishPlatformEvent } from './platform-events';
 import { persistSortOrder } from './sort-order';
 import {
   readDashboards,
@@ -26,6 +27,9 @@ const SIDEBAR_PIN_LOCK_NS = 4;
 /** Next sidebar sortOrder: max+1, so deletions never cause collisions. */
 const nextSidebarSortOrder = () =>
   sql`(select coalesce(max(${schema.sidebarItems.sortOrder}), -1) + 1 from ${schema.sidebarItems})`;
+
+/** Tell connected clients to re-read pins; called after every change. */
+const pinsChanged = () => publishPlatformEvent({ type: 'pins.updated' });
 
 export type Pins = {
   /** In navigation order; includes pins of archived Apps. */
@@ -122,6 +126,7 @@ export async function pinApp(input: {
       .returning({ id: schema.sidebarItems.id });
     return { id: row.id, created: true };
   });
+  if (result.created) pinsChanged();
   return { pin: await appPin(result.id), created: result.created };
 }
 
@@ -154,6 +159,7 @@ export async function updateAppPin(
     .where(eq(schema.sidebarItems.id, id))
     .returning({ id: schema.sidebarItems.id });
   if (!updated.length) throw new AppError('Pin not found.', 404);
+  pinsChanged();
   return appPin(id);
 }
 
@@ -170,6 +176,7 @@ export async function unpinApp(
       .where(eq(schema.sidebarItems.id, target.pinId))
       .returning({ id: schema.sidebarItems.id });
     if (!removed.length) throw new AppError('Pin not found.', 404);
+    pinsChanged();
     return removed.map((row) => row.id);
   }
   const app =
@@ -186,6 +193,7 @@ export async function unpinApp(
     .delete(schema.sidebarItems)
     .where(eq(schema.sidebarItems.appId, app.id))
     .returning({ id: schema.sidebarItems.id });
+  if (removed.length) pinsChanged();
   return removed.map((row) => row.id);
 }
 
@@ -195,12 +203,17 @@ export async function unpinApp(
  */
 export async function reorderAppPins(pinIds: string[]): Promise<SidebarItem[]> {
   await persistSortOrder(schema.sidebarItems, pinIds);
+  pinsChanged();
   return readSidebarItems();
 }
 
 /** Reorder dashboards the same way; returns every dashboard id in order. */
-export function reorderDashboards(dashboardIds: string[]): Promise<string[]> {
-  return persistSortOrder(schema.dashboards, dashboardIds);
+export async function reorderDashboards(
+  dashboardIds: string[],
+): Promise<string[]> {
+  const ordered = await persistSortOrder(schema.dashboards, dashboardIds);
+  pinsChanged();
+  return ordered;
 }
 
 /** Pin or unpin a Workflow, addressed by id or slug. */
@@ -222,6 +235,7 @@ export async function setWorkflowPinned(
     .update(schema.workflows)
     .set({ pinned })
     .where(eq(schema.workflows.id, row.id));
+  pinsChanged();
   return { id: row.id, pinned };
 }
 
@@ -235,5 +249,6 @@ export async function setDashboardPinned(
     .where(eq(schema.dashboards.id, id))
     .returning({ id: schema.dashboards.id });
   if (!updated.length) throw new AppError('Dashboard not found.', 404);
+  pinsChanged();
   return { id, pinned };
 }

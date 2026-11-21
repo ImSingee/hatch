@@ -16,6 +16,7 @@ const {
   unpinApp,
   updateAppPin,
 } = await import('./pins');
+const { subscribePlatformEvents } = await import('./platform-events');
 
 beforeEach(async () => {
   await db.delete(schema.sidebarItems);
@@ -168,5 +169,34 @@ describe('Workflow and dashboard pins', () => {
     await expect(setDashboardPinned('nope', true)).rejects.toMatchObject({
       status: 404,
     });
+  });
+});
+
+describe('Pin change events', () => {
+  it('tells connected clients after every change and stays silent otherwise', async () => {
+    await db.insert(schema.workflows).values({
+      id: 'wf-digest',
+      slug: 'digest',
+      name: 'Digest',
+    });
+    const events: string[] = [];
+    const unsubscribe = subscribePlatformEvents((event) =>
+      events.push(event.type),
+    );
+    try {
+      const { pin } = await pinApp({ app: 'notes' });
+      await pinApp({ app: 'notes', ifAbsent: true });
+      await updateAppPin(pin.id, { label: 'Journal' });
+      await reorderAppPins([pin.id]);
+      await setWorkflowPinned('digest', true);
+      await unpinApp({ pinId: pin.id });
+      await unpinApp({ app: 'notes' });
+      await expect(unpinApp({ pinId: pin.id })).rejects.toThrow(
+        'Pin not found.',
+      );
+    } finally {
+      unsubscribe();
+    }
+    expect(events).toEqual(Array.from({ length: 5 }, () => 'pins.updated'));
   });
 });

@@ -42,16 +42,21 @@ resting on it, each thing where the user put it. The visual system is called
 - Developer consoles: dense monospace panels, log walls and status noise as
   the default view.
 - Warmth by decoration: gradients, glows, textures or tinted cards. The warmth
-  of Desk is one flat cream ground under plain white sheets, and nothing else.
+  of Desk is a flat cream ground under plain white sheets. The ground carries
+  three large flat shapes, each a quiet tint close to the ground; they are
+  part of the desk, not ornament on content, and they never get a gradient, a
+  glow or a place inside a sheet.
 - "Ghost cards": a 1px border plus a soft wide drop shadow on the same
   surface. A sheet has a shadow or a hairline, never both.
 - Neon / techy dark dashboards trying to look "powerful".
-- Toy-like UI: radii above 24px on anything but a pill, bouncy motion, several
+- Toy-like UI: radii above 24px on content surfaces (pills, the dock bar and
+  the ground shapes are the exceptions), bouncy motion, several
   bright colours competing on one screen. Rounded is friendly; inflated is not.
 
 ## Design Principles
 
-1. **A desk with sheets on it.** The ground is a warm cream; content lives on
+1. **A desk with sheets on it.** The ground is a warm cream with a few large,
+   flat, pale shapes on it; content lives on
    white sheets that float on a soft, ink-tinted shadow. Depth says what is
    on top: card, then menu, then window. It is never decoration.
 2. **One accent, on purpose.** Neutral surfaces carry the work; the accent

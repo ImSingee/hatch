@@ -99,6 +99,10 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
     queryClient.invalidateQueries({
       queryKey: sidebarItemsQueryOptions.queryKey,
     });
+  // Every pin mutation refetches when it settles, not only on success: a
+  // failure usually means the dock is stale (the pin was removed or the App
+  // archived elsewhere), and the refetch drops what no longer exists. The
+  // error itself is toasted by the global mutation handler.
 
   // First-time pin: idempotent (server uses an advisory lock) so a double-click
   // on an unpinned app can't create duplicate root shortcuts.
@@ -106,17 +110,17 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
     mutationFn: (appId: string) =>
       setSidebarPin({ data: { appId, pinned: true } }),
     onSuccess: () => {
-      void invalidate();
       toast.success('Pinned to the dock');
     },
+    onSettled: () => void invalidate(),
   });
 
   // Extra shortcut for an already-pinned app: always inserts a new pin, then
   // jumps into editing so it can be given a distinct name/entry point.
   const add = useMutation({
     mutationFn: (appId: string) => addSidebarItem({ data: { appId } }),
+    onSettled: () => void invalidate(),
     onSuccess: (row) => {
-      void invalidate();
       if (row) {
         setEditTarget({ id: row.id, appId: row.appId });
         setEditLabel(row.label);
@@ -128,18 +132,21 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const remove = useMutation({
     mutationFn: (id: string) => removeSidebarItem({ data: { id } }),
     onSuccess: () => {
-      void invalidate();
       toast.success('Unpinned');
     },
+    onSettled: () => void invalidate(),
   });
 
   const update = useMutation({
     mutationFn: (input: { id: string; label: string; entryHash: string }) =>
       updateSidebarItem({ data: input }),
     onSuccess: () => {
-      void invalidate();
-      setEditTarget(null);
       toast.success('Pin updated');
+    },
+    // Close on failure too: the pin being edited may be gone.
+    onSettled: () => {
+      setEditTarget(null);
+      void invalidate();
     },
   });
 
@@ -191,7 +198,7 @@ function DockApps({ openItems }: { openItems: readonly DockOpenItem[] }) {
                   label={item.label}
                   open={isAppPinOpen(item, pins, openItems)}
                   glyph={
-                    <AppGlyph name={item.label} seed={item.appId} size="lg" />
+                    <AppGlyph name={item.label} seed={item.appId} size="dock" />
                   }
                   renderLink={(props) => (
                     <Link
@@ -338,11 +345,13 @@ function DockWorkflows({ openItems }: { openItems: readonly DockOpenItem[] }) {
     mutationFn: (input: { id: string; pinned: boolean }) =>
       setWorkflowPinFn({ data: input }),
     onSuccess: (_res, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: workflowsQueryOptions.queryKey,
-      });
       toast.success(input.pinned ? 'Pinned to the dock' : 'Unpinned');
     },
+    // Also after a failure: the Workflow may have been removed elsewhere.
+    onSettled: () =>
+      void queryClient.invalidateQueries({
+        queryKey: workflowsQueryOptions.queryKey,
+      }),
   });
 
   const pinned = (workflows ?? []).filter((w) => w.pinned);
@@ -368,7 +377,12 @@ function DockWorkflows({ openItems }: { openItems: readonly DockOpenItem[] }) {
                   (item) => item.kind === 'workflow' && item.slug === w.slug,
                 )}
                 glyph={
-                  <AppGlyph icon={false} name={w.name} seed={w.id} size="lg" />
+                  <AppGlyph
+                    icon={false}
+                    name={w.name}
+                    seed={w.id}
+                    size="dock"
+                  />
                 }
                 renderLink={(props) => (
                   <Link

@@ -117,7 +117,16 @@ colour, radius, font, weight, shadow or motion value is written. Its shape
   "name": "desk",
   "fonts": { "sans": "Nunito", "mono": "JetBrains Mono" },
   "fontWeights": { "body": 500, "strong": 600, "label": 700, "heading": 800 },
-  "radius": { "xs": 6, "sm": 9, "md": 12, "lg": 16, "xl": 20, "window": 24 },
+  "radius": {
+    "xs": 6,
+    "sm": 9,
+    "md": 12,
+    "lg": 16,
+    "xl": 20,
+    "window": 24,
+    "dock": 28
+  },
+  "sizes": { "dockTile": 40 },
   "accents": {
     "indigo": "#3F51C7",
     "teal": "#0F766E",
@@ -139,7 +148,8 @@ colour, radius, font, weight, shadow or motion value is written. Its shape
     "ring": "#1E2230"
   },
   "dark": null,
-  "surfaces": { "panel": "…", "sunken": "…", "hairline": "…", "hover": "…" },
+  "surfaces": { "panel": "…", "dock": "…", "sunken": "…", "hairline": "…" },
+  "ground": { "accentTint": 18, "warm": "#F1DFD3", "fresh": "#DCEADF" },
   "shadows": { "card": "…", "dock": "…", "window": "…" },
   "motion": { "easing": "…", "fast": 120, "base": 180 }
 }
@@ -200,8 +210,16 @@ grid.
 rendered, and it hosts exactly one running App inside a Desk window. Today it
 mounts the iframe that `/app/$appSlug` mounts now; later it mounts an NSH
 player. The shell talks to it through a fixed interface (`load`, `visible`,
-`route`, `title`, `reload`, `close`) and to the App only by `postMessage`,
-never by reaching into the frame.
+`route`, `title`, `reload`, `close`). That public contract is iframe-free:
+nothing outside the component sees a frame, a window or a document.
+
+**[decision]** Inside the component, route and title are read from the
+same-origin frame directly for now. A `postMessage` bridge needs a script
+injected by the App runtime (`serve-app.ts` or the App SDK), which changes
+the deployed-App contract; it is deferred to the NSH work in
+[native-app-ui-plan.md](native-app-ui-plan.md), where the player brings its
+own channel. Until then the direct read stays inside `AppSurface` and nowhere
+else.
 
 - An App window has the standard title bar plus reload, open in a new tab and
   Manage.
@@ -286,7 +304,8 @@ None. Existing Apps open in the new window unchanged.
 
 - An App iframe is same-origin with the shell and can reach it. This is
   today's trust model, unchanged; a separate origin stays a follow-up, and
-  `AppSurface` using only `postMessage` keeps that change local.
+  `AppSurface` keeping every access to the frame inside one component keeps
+  that change local.
 - The desktop app keeps the session in the webview's cookie store, loads only
   the configured instance origin, and opens other links in the system browser.
 - Theme and pin RPCs accept every valid credential, as required for public

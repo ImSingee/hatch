@@ -33,20 +33,40 @@ circles).
 `light` uses the shadcn `cssVars` names so the same file can feed an App theme
 later.
 
-| Role            | Token                       | Value        | Use                                                                     |
-| --------------- | --------------------------- | ------------ | ----------------------------------------------------------------------- |
-| Ground          | `light.background`          | `#EDEBE6`    | The desk: page background                                               |
-| Ink             | `light.foreground`          | `#1E2230`    | Text, icons, focus ring                                                 |
-| Muted ink       | `light.muted-foreground`    | `#4F5666`    | Secondary text, placeholders, table headers                             |
-| Sheet           | `light.card`, `popover`     | `#FFFFFF`    | Cards, windows, menus, fields                                           |
-| Muted sheet     | `light.muted`, `secondary`  | `#F6F5F1`    | Window title bars, read-only wells, code blocks in a card               |
-| Sunken          | `surfaces.sunken`           | `#E4E2DC`    | Segmented-control track                                                 |
-| Panel           | `surfaces.panel`            | white 72%    | Translucent chrome over the ground: the menu bar, the dock, the tab bar |
-| Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet                        |
-| Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                                       |
-| Hover / pressed | `surfaces.hover`, `pressed` | ink 6% / 10% | Hover wash, neutral tint, skeletons                                     |
-| Scrim           | `surfaces.scrim`            | ink 45%      | Behind modals; over thumbnails                                          |
-| Destructive     | `light.destructive`         | `#B91C1C`    | Same value as `hues.red`                                                |
+| Role            | Token                       | Value        | Use                                                        |
+| --------------- | --------------------------- | ------------ | ---------------------------------------------------------- |
+| Ground          | `light.background`          | `#EDEBE6`    | The desk: page background                                  |
+| Ink             | `light.foreground`          | `#1E2230`    | Text, icons, focus ring                                    |
+| Muted ink       | `light.muted-foreground`    | `#4F5666`    | Secondary text, placeholders, table headers                |
+| Sheet           | `light.card`, `popover`     | `#FFFFFF`    | Cards, windows, menus, fields                              |
+| Muted sheet     | `light.muted`, `secondary`  | `#F6F5F1`    | Window title bars, read-only wells, code blocks in a card  |
+| Sunken          | `surfaces.sunken`           | `#E4E2DC`    | Segmented-control track                                    |
+| Panel           | `surfaces.panel`            | white 72%    | Translucent chrome over the ground: the menu bar           |
+| Dock panel      | `surfaces.dock`             | white 82%    | The dock and the tab bar, which sit over the ground shapes |
+| Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet           |
+| Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                          |
+| Hover / pressed | `surfaces.hover`, `pressed` | ink 6% / 10% | Hover wash, neutral tint, skeletons                        |
+| Scrim           | `surfaces.scrim`            | ink 45%      | Behind modals; over thumbnails                             |
+| Destructive     | `light.destructive`         | `#B91C1C`    | Same value as `hues.red`                                   |
+
+### Ground shapes
+
+The desk is not a bare colour. Three large shapes lie on the ground behind
+everything, cut off by the edges of the page: a circle at the top right, a
+rounded slab at the bottom left, and a smaller rounded square in the middle,
+the last two slightly rotated. Each is one flat fill close to the ground in
+lightness:
+
+| Shape  | Token               | Value                                                     |
+| ------ | ------------------- | --------------------------------------------------------- |
+| Accent | `ground.accentTint` | 18% of the current accent on white (`#DCE3F1` for indigo) |
+| Warm   | `ground.warm`       | `#F1DFD3`                                                 |
+| Fresh  | `ground.fresh`      | `#DCEADF`                                                 |
+
+They carry no content, never sit inside a sheet, and have no gradient, blur,
+glow, shadow, border or motion. Their sizes, positions and corner radii are
+geometry of the drawing, not palette, and are written in the shell's CSS.
+Text is never placed directly on a shape without a sheet or panel under it.
 
 `light.border` (`#ECEAE4`) is kept for the App theme, where borders sit on
 white. The platform uses the hairline instead because `#ECEAE4` disappears on
@@ -125,9 +145,10 @@ use `text-wrap: pretty`.
 | `lg`     | 16  | Menus, popovers, suggestion chips               |
 | `xl`     | 20  | Cards, the composer                             |
 | `window` | 24  | Windows, modals, the sign-in card               |
+| `dock`   | 28  | The dock and the tab bar                        |
 
-Pills (badges, status chips) are fully rounded. A radius never exceeds 24
-except on a pill.
+Pills (badges, status chips) are fully rounded. Apart from pills, the dock
+bar and the ground shapes, a radius never exceeds 24.
 
 ## Elevation
 
@@ -161,7 +182,9 @@ on the ground, on a sheet and on an accent fill.
 
 Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 
-`--surface-panel`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
+`--surface-panel`, `--surface-dock`, `--ground-shape-accent`,
+`--ground-shape-warm`, `--ground-shape-fresh`, `--radius-dock`,
+`--size-dock-tile`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
 `--surface-hover`, `--surface-pressed`, `--surface-scrim`, `--border-hairline`,
 `--border-input`, `--focus-ring`, `--radius-window`, `--shadow-card`,
 `--shadow-dock`, `--shadow-window`, `--font-weight-body`,
@@ -272,15 +295,17 @@ wide the two buttons become one back button at the start of the title bar.
 
 ### Dock tile
 
-- Tile 40, radius 12, a `tiles` fill, white icon 22 or monogram.
+- Tile 40 (`sizes.dockTile`), radius 12: the App icon, or a `tiles` fill
+  with a white monogram.
 - Label under the tile: 11 / 700, neutral shade 8, one line, ellipsis, tile
   column 64 wide, gap 5.
 - Hover: the tile rises 3 px over 150 ms. Running marker: a 4 px accent dot
   under the label.
 - "Add" tile: same size, 1.5 px dashed neutral shade-5 border, no fill.
 - Workflow tiles use radius `12 12 12 3` to differ from App tiles by shape.
-- The dock itself: panel fill with blur, 1 px white border, radius 28, `dock`
-  shadow, padding 10 18 12.
+- The dock itself: `surfaces.dock` fill with blur, 1 px white border, radius
+  28 (`radius.dock`), `dock` shadow, padding 10 18 12. The tab bar that
+  replaces it below 560 wide uses the same fill, border, radius and shadow.
 
 ### Empty state
 

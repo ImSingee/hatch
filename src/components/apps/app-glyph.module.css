@@ -16,6 +16,13 @@
   font-size: 21px;
 }
 
+.glyph[data-size='dock'] {
+  width: var(--size-dock-tile);
+  height: var(--size-dock-tile);
+  border-radius: var(--mantine-radius-md);
+  font-size: 19px;
+}
+
 .glyph[data-size='md'] {
   width: 38px;
   height: 38px;

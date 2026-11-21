@@ -8,6 +8,7 @@ import {
 import { useMemo } from 'react';
 import { DeskShell } from '~components/desk/desk-shell';
 import type { DockOpenItem } from '~components/desk/dock-item';
+import { LivePins } from '~components/desk/use-live-pins';
 import { PlatformEventsProvider } from '~components/system/platform-events';
 import { hasActiveSession } from '~server/auth';
 
@@ -46,6 +47,7 @@ function AppLayout() {
 
   return (
     <PlatformEventsProvider>
+      <LivePins />
       <DeskShell
         view={dashboardId ? 'home' : 'window'}
         tabDestination={TAB_DESTINATIONS.some(

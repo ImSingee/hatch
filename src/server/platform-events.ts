@@ -16,7 +16,9 @@ export type PlatformEvent =
       deliveryId: string;
     }
   /** The instance theme changed; clients re-read it. */
-  | { type: 'theme.updated'; accent: string };
+  | { type: 'theme.updated'; accent: string }
+  /** App, Workflow or dashboard pins changed; clients re-read them. */
+  | { type: 'pins.updated' };
 
 export type PlatformEventSubscriber = (event: PlatformEvent) => void;
 

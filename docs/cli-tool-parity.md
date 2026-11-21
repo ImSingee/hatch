@@ -114,7 +114,9 @@ writes the `ui.theme` platform setting through `src/server/theme-settings.ts`,
 the same service as the Appearance settings page. The accent list is
 `packages/hatch-design-tokens/tokens.json`; the CLI validates `--accent`
 against the copy it was built with and the platform validates again. A change
-is published as the `theme.updated` platform event.
+is published as the `theme.updated` platform event. Every pin change, from
+the Web UI or the CLI, is published as `pins.updated`, so an open dock
+refetches without a reload.
 
 `hatch pin ...` calls `PinService`, backed by `src/server/pins.ts`, which the
 Web UI Server Functions in `sidebar.ts`, `workflows.ts` and `dashboards.ts`

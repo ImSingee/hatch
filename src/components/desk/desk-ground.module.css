@@ -26,7 +26,7 @@
   width: 760px;
   height: 760px;
   border-radius: 50%;
-  background: var(--mantine-color-primary-1);
+  background: var(--ground-shape-accent);
 }
 
 .shapeWarm {
@@ -35,7 +35,7 @@
   width: 620px;
   height: 520px;
   border-radius: 120px;
-  background: var(--mantine-color-orange-1);
+  background: var(--ground-shape-warm);
   transform: rotate(-12deg);
 }
 
@@ -45,7 +45,7 @@
   width: 340px;
   height: 340px;
   border-radius: 80px;
-  background: var(--mantine-color-green-1);
+  background: var(--ground-shape-fresh);
   transform: rotate(18deg);
 }
 

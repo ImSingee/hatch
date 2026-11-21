@@ -28,7 +28,8 @@ type GlyphProps = {
   name: string;
   /** Stable identifier for the tint; defaults to the name. */
   seed?: string;
-  size?: 'sm' | 'md' | 'lg';
+  /** `dock` is the dock tile: the size comes from the design tokens. */
+  size?: 'sm' | 'md' | 'dock' | 'lg';
 };
 
 /**

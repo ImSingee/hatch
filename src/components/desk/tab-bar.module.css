@@ -7,8 +7,8 @@
   margin: 0 auto;
   padding: 0 8px;
   border: 1px solid var(--mantine-color-white);
-  border-radius: var(--radius-window);
-  background: var(--surface-panel);
+  border-radius: var(--radius-dock);
+  background: var(--surface-dock);
   box-shadow: var(--shadow-dock);
   backdrop-filter: blur(16px);
 }
