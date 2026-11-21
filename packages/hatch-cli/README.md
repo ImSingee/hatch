@@ -246,9 +246,10 @@ never run for either toolchain.
   access. An older Node that cannot deny network fails preparation. Node's
   permission model does not cover signals, so an evaluated manifest can still
   signal other processes of the same OS user; prepare source you do not trust
-  under a separate user or in a container. Adopt evaluates the manifest of
-  either kind the same way, installing first. A pnpm of another major
-  version fails preparation with a message naming the required one.
+  under a separate user or in a container. Adopt evaluates a `manifest.ts`
+  of either kind the same way, installing first; a `manifest.json` is parsed
+  without installing anything. A pnpm of another major version fails
+  preparation with a message naming the required one.
 - **Deno toolchain.** Apps validate the shared dependency policy and run
   `deno install --no-config --package-json --node-modules-dir=auto --lock=deno.lock --frozen`,
   then validate the source manifest with permissions denied. Workflow SDK

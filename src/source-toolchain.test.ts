@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -56,8 +55,9 @@ describe('detectSourceToolchain', () => {
   it('rejects a lockfile that is not a regular file instead of reading it', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-toolchain-'));
     try {
-      // Reading a named pipe with no writer would never return.
-      execFileSync('mkfifo', [path.join(root, 'pnpm-lock.yaml')]);
+      // A directory stands in for any non-regular entry; reading a named
+      // pipe with no writer would never return.
+      await fs.mkdir(path.join(root, 'pnpm-lock.yaml'));
       await expect(
         detectSourceToolchain(sourceToolchainReader(root)),
       ).rejects.toThrow('pnpm-lock.yaml must be a regular file.');
