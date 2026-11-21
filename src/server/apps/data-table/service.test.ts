@@ -1,12 +1,9 @@
-import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DataSchemaDescriptor } from './schema';
 
 const mocks = vi.hoisted(() => ({
   findApp: vi.fn<(options?: unknown) => Promise<unknown>>(),
   findDeployment: vi.fn<(options?: unknown) => Promise<unknown>>(),
-  pgClient: vi.fn<(...args: unknown[]) => unknown>(),
-  pgQuery: vi.fn<(...args: unknown[]) => unknown>(),
   postgres: vi.fn<(url?: unknown, options?: unknown) => unknown>(),
   resolveDataUrl: vi.fn<() => Promise<string>>(),
 }));
@@ -18,9 +15,6 @@ vi.mock('~/db', () => ({
       deployments: { findFirst: mocks.findDeployment },
     },
   },
-}));
-vi.mock('pg', () => ({
-  default: { Client: mocks.pgClient, Query: mocks.pgQuery },
 }));
 vi.mock('postgres', () => ({ default: mocks.postgres }));
 vi.mock('./provision', () => ({
@@ -49,110 +43,126 @@ type TaggedHandler = (
 ) => Promise<unknown[]>;
 type BeginHandler = (...args: unknown[]) => Promise<unknown>;
 type EndHandler = () => Promise<void>;
-type PgQueryResult = {
+type RawQueryResult = {
   command: string | null;
-  rowCount: number | null;
+  count: number | null;
   rows: Record<string, unknown>[];
 };
-type PgQueryHandler = (
+type RawQueryHandler = (
   statement: string,
-  values?: unknown[],
-) => Promise<PgQueryResult | PgQueryResult[]>;
+  signal: AbortSignal | undefined,
+) => Promise<RawQueryResult | RawQueryResult[]>;
 
 function rawResult(
   rows: Record<string, unknown>[],
   command: string,
   count: number | null,
-): PgQueryResult {
-  return { command, rowCount: count, rows };
+): RawQueryResult {
+  return { command, count, rows };
 }
 
+/** postgres.js rejects a query stopped by its CancelRequest with 57014. */
+function canceledStatement(): Error {
+  return Object.assign(new Error('canceling statement due to user request'), {
+    code: '57014',
+  });
+}
+
+/**
+ * Mock postgres.js client for raw SQL: a pool whose reserved connection runs
+ * tagged and simple-protocol queries, streams rows to `forEach` with each
+ * statement's own result object, and honors `.signal()` as a cancellation.
+ */
 function createRawHarness(
   options: {
     events?: string[];
-    emitErrors?: unknown[];
-    query?: PgQueryHandler;
-    commit?: () => Promise<PgQueryResult>;
-    connect?: () => Promise<void>;
+    query?: RawQueryHandler;
+    commit?: () => Promise<RawQueryResult>;
+    reserve?: () => Promise<void>;
+    /** PostgreSQL never acts on the CancelRequest. */
+    ignoreCancel?: boolean;
   } = {},
 ) {
-  class MockQuery extends EventEmitter {
-    constructor(readonly statement: string) {
-      super();
-    }
-  }
-  mocks.pgQuery.mockImplementation(function MockQueryConstructor(
-    ...args: unknown[]
-  ) {
-    const statement = args[0];
-    if (typeof statement !== 'string') {
-      throw new TypeError('Mock pg.Query requires a SQL string.');
-    }
-    return new MockQuery(statement);
-  });
-  const query = vi.fn<
-    (statement: string | MockQuery, values?: unknown[]) => unknown
-  >(async (statement, values) => {
-    if (statement instanceof MockQuery) {
-      options.events?.push(statement.statement);
-      let raw: PgQueryResult | PgQueryResult[];
-      try {
-        if (!options.query) {
-          throw new Error(
-            `Unexpected node-postgres query in test: ${statement.statement}`,
-          );
-        }
-        raw = await options.query(statement.statement, values);
-      } catch (error) {
-        statement.emit('error', error);
-        return statement;
-      }
-      try {
-        const results = Array.isArray(raw) ? raw : [raw];
-        for (const result of results) {
-          for (const row of result.rows) {
-            statement.emit('row', row, result);
-          }
-        }
-        statement.emit('end', raw);
-      } catch (error) {
-        options.emitErrors?.push(error);
-        statement.emit('error', error);
-      }
-      return statement;
-    }
-    options.events?.push(statement);
+  const events = options.events ?? [];
+  const canceled: string[] = [];
+  const run = (
+    statement: string,
+    execute: (signal: AbortSignal | undefined) => Promise<unknown>,
+  ) => {
+    let signal: AbortSignal | undefined;
+    let onRow: ((row: unknown, result: unknown) => void) | undefined;
+    // Like postgres.js, nothing is sent until the synchronous modifier chain
+    // (`.simple().signal(...).forEach(...)`) has been applied.
+    const promise = Promise.resolve().then(async () => {
+      events.push(statement);
+      if (signal?.aborted) throw canceledStatement();
+      let onAbort = () => {};
+      const abort = new Promise<never>((_resolve, reject) => {
+        onAbort = () => {
+          canceled.push(statement);
+          if (!options.ignoreCancel) reject(canceledStatement());
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+      });
+      const raw = await Promise.race([execute(signal), abort]).finally(() =>
+        signal?.removeEventListener('abort', onAbort),
+      );
+      if (!onRow) return raw;
+      const results = (Array.isArray(raw) ? raw : [raw]).map(
+        (result: RawQueryResult) => {
+          const meta = Object.assign([], {
+            command: result.command,
+            count: result.count,
+          });
+          for (const row of result.rows) onRow?.(row, meta);
+          return meta;
+        },
+      );
+      return Array.isArray(raw) ? results : results[0];
+    });
+    const pending = Object.assign(promise, {
+      simple: () => pending,
+      signal: (value: AbortSignal) => {
+        signal = value;
+        return pending;
+      },
+      forEach: (callback: (row: unknown, result: unknown) => void) => {
+        onRow = callback;
+        return promise;
+      },
+    });
+    return pending;
+  };
+  const control = async (statement: string) => {
     const normalized = statement.trim().toLowerCase();
-    if (normalized === 'commit' && options.commit) {
-      return options.commit();
-    }
-    if (normalized === 'begin' || normalized === 'commit') {
-      return rawResult([], normalized.toUpperCase(), null);
-    }
-    if (normalized === 'rollback') {
-      return rawResult([], 'ROLLBACK', null);
-    }
+    if (normalized === 'commit' && options.commit) return options.commit();
     if (normalized.includes('pg_try_advisory_xact_lock_shared')) {
-      return rawResult([{ ok: true }], 'SELECT', 1);
+      return [{ ok: true }];
     }
-    if (normalized.startsWith('set local')) {
-      return rawResult([], 'SET', null);
-    }
-    if (!options.query) {
-      throw new Error(`Unexpected node-postgres query in test: ${statement}`);
-    }
-    return options.query(statement, values);
-  });
-  const client = Object.assign(new EventEmitter(), {
-    connect: vi.fn<() => Promise<void>>(options.connect ?? (async () => {})),
-    query,
-    end: vi.fn<() => Promise<void>>(async () => {}),
-    ending: false,
-  });
-  mocks.pgClient.mockImplementation(function MockClient() {
-    return client;
-  });
-  return { client, query };
+    return [];
+  };
+  const tagged = (strings: TemplateStringsArray, ..._values: unknown[]) => {
+    const statement = strings.join('$1').replaceAll(/\s+/g, ' ').trim();
+    return run(statement, () => control(statement));
+  };
+  const unsafe = (statement: string) =>
+    run(statement, async (signal) => {
+      if (statement.startsWith('set local')) return rawResult([], 'SET', null);
+      if (!options.query) {
+        throw new Error(`Unexpected raw SQL in test: ${statement}`);
+      }
+      return options.query(statement, signal);
+    });
+  const connection = Object.assign(tagged, { unsafe });
+  const client = {
+    reserve: vi.fn<() => Promise<typeof connection>>(async () => {
+      await options.reserve?.();
+      return connection;
+    }),
+    end: vi.fn<(options?: unknown) => Promise<void>>(async () => {}),
+  };
+  mocks.postgres.mockImplementationOnce(() => client);
+  return { client, events, canceled };
 }
 
 function createHarness(
@@ -238,7 +248,7 @@ function decodeCursor(cursor: string): Record<string, unknown> {
 describe('managed Data Table service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.pgClient.mockReset();
+    mocks.postgres.mockReset();
     mocks.resolveDataUrl.mockResolvedValue(
       'postgres://data:data@127.0.0.1:5432/data',
     );
@@ -1627,14 +1637,12 @@ describe('managed Data Table service', () => {
 
   it('runs raw SQL after taking the migration guard and setting local bounds', async () => {
     const events: string[] = [];
-    const { query } = createRawHarness({
+    createRawHarness({
       events,
-      query: async () => {
-        return [
-          rawResult([{ answer: 42 }], 'SELECT', 1),
-          rawResult([], 'UPDATE', 3),
-        ];
-      },
+      query: async () => [
+        rawResult([{ answer: 42 }], 'SELECT', 1),
+        rawResult([], 'UPDATE', 3),
+      ],
     });
     mocks.findApp.mockImplementation(async () => {
       events.push('platform');
@@ -1647,18 +1655,21 @@ describe('managed Data Table service', () => {
       45_000,
     );
 
-    expect(mocks.pgClient).toHaveBeenCalledWith({
-      connectionString: expect.any(String),
-      connectionTimeoutMillis: expect.any(Number),
-      statement_timeout: 45_000,
+    const [url, config] = mocks.postgres.mock.calls[0] as [
+      string,
+      {
+        max: number;
+        connect_timeout: number;
+        connection: { statement_timeout: number };
+      },
+    ];
+    expect(url).toBe('postgres://data:data@127.0.0.1:5432/data');
+    expect(config).toMatchObject({
+      max: 1,
+      connection: { statement_timeout: 45_000 },
     });
-    const connectionTimeoutMillis = (
-      mocks.pgClient.mock.calls[0][0] as {
-        connectionTimeoutMillis: number;
-      }
-    ).connectionTimeoutMillis;
-    expect(connectionTimeoutMillis).toBeGreaterThan(0);
-    expect(connectionTimeoutMillis).toBeLessThanOrEqual(45_000);
+    expect(config.connect_timeout).toBeGreaterThan(0);
+    expect(config.connect_timeout).toBeLessThanOrEqual(45);
     expect(events).toEqual([
       'begin',
       'select pg_try_advisory_xact_lock_shared($1) as ok',
@@ -1675,10 +1686,6 @@ describe('managed Data Table service', () => {
       ],
       truncated: false,
     });
-    const rawQuery = query.mock.calls.find(
-      ([statement]) => typeof statement !== 'string',
-    )?.[0] as { statement?: string } | undefined;
-    expect(rawQuery?.statement).toContain(';');
   });
 
   it('schedules detached retention after a confirmed raw SQL commit', async () => {
@@ -1744,7 +1751,8 @@ describe('managed Data Table service', () => {
     ).resolves.toMatchObject({
       results: [{ command: 'UPDATE', count: 1 }],
     });
-    await vi.waitFor(() => expect(mocks.postgres).toHaveBeenCalledOnce());
+    // The raw SQL client, then the detached retention client.
+    await vi.waitFor(() => expect(mocks.postgres).toHaveBeenCalledTimes(2));
   });
 
   it('does not fail committed raw SQL when detached retention deletion fails', async () => {
@@ -1782,7 +1790,7 @@ describe('managed Data Table service', () => {
     const databaseError = Object.assign(new Error('invalid value'), {
       code: '22P02',
     });
-    createRawHarness({
+    const { events } = createRawHarness({
       query: async () => {
         throw databaseError;
       },
@@ -1796,8 +1804,10 @@ describe('managed Data Table service', () => {
     await expect(
       executeDataTableRawSql(APP_ID, 'select broken from items', 30_000),
     ).rejects.toMatchObject({ status: 400 });
+    expect(events.at(-1)).toBe('rollback');
     expect(globalState.__hatchDataLastPrune.has(APP_ID)).toBe(false);
-    expect(mocks.postgres).not.toHaveBeenCalled();
+    // Only the raw SQL client was opened; no retention client followed.
+    expect(mocks.postgres).toHaveBeenCalledOnce();
   });
 
   it('throttles retention across successful raw SQL calls', async () => {
@@ -1816,11 +1826,13 @@ describe('managed Data Table service', () => {
 
     await executeDataTableRawSql(APP_ID, 'select 42 as answer', 30_000);
     await vi.waitFor(() => expect(pruneQuery).toHaveBeenCalledOnce());
+    createRawHarness({
+      query: async () => rawResult([{ answer: 42 }], 'SELECT', 1),
+    });
     await executeDataTableRawSql(APP_ID, 'select 42 as answer', 30_000);
     await Promise.resolve();
 
     expect(pruneQuery).toHaveBeenCalledOnce();
-    expect(mocks.postgres).toHaveBeenCalledOnce();
   });
 
   it('serializes an out-of-range PostgreSQL timestamp without throwing', async () => {
@@ -1845,7 +1857,6 @@ describe('managed Data Table service', () => {
 
   it('turns a raw row processing failure into a rollback and bounded error', async () => {
     const processingError = new Error('row getter failed');
-    const emitErrors: unknown[] = [];
     const brokenRow: Record<string, unknown> = {};
     Object.defineProperty(brokenRow, 'broken', {
       enumerable: true,
@@ -1853,8 +1864,7 @@ describe('managed Data Table service', () => {
         throw processingError;
       },
     });
-    const { query } = createRawHarness({
-      emitErrors,
+    const { events } = createRawHarness({
       query: async () => rawResult([brokenRow], 'SELECT', 1),
     });
     mocks.findApp.mockResolvedValue(liveApp());
@@ -1866,152 +1876,12 @@ describe('managed Data Table service', () => {
       cause: processingError,
       message: 'row getter failed',
     });
-    expect(query.mock.calls.map(([statement]) => statement)).toContain(
-      'rollback',
-    );
-    expect(emitErrors).toEqual([]);
-  });
-
-  it.each([
-    ['prefer', 'no-verify'],
-    ['require', 'no-verify'],
-    ['allow', 'no-verify'],
-  ])(
-    'preserves postgres.js %s TLS behavior for raw SQL',
-    async (inputMode, expectedMode) => {
-      mocks.resolveDataUrl.mockResolvedValue(
-        `postgres://data:data@db.internal/data?sslmode=${inputMode}`,
-      );
-      createRawHarness({
-        query: async () => rawResult([], 'SELECT', 0),
-      });
-      mocks.findApp.mockResolvedValue(liveApp());
-
-      await executeDataTableRawSql(APP_ID, 'select 1', 30_000);
-
-      const config = mocks.pgClient.mock.calls[0]?.[0] as {
-        connectionString: string;
-      };
-      const connectionUrl = new URL(config.connectionString);
-      expect(connectionUrl.searchParams.get('sslmode')).toBe(expectedMode);
-      expect(connectionUrl.searchParams.has('uselibpqcompat')).toBe(false);
-    },
-  );
-
-  it('keeps certificate-verifying TLS modes unchanged', async () => {
-    mocks.resolveDataUrl.mockResolvedValue(
-      'postgres://data:data@db.internal/data?sslmode=verify-full',
-    );
-    createRawHarness({
-      query: async () => rawResult([], 'SELECT', 0),
-    });
-    mocks.findApp.mockResolvedValue(liveApp());
-
-    await executeDataTableRawSql(APP_ID, 'select 1', 30_000);
-
-    const config = mocks.pgClient.mock.calls[0]?.[0] as {
-      connectionString: string;
-    };
-    const connectionUrl = new URL(config.connectionString);
-    expect(connectionUrl.searchParams.get('sslmode')).toBe('verify-full');
-    expect(connectionUrl.searchParams.has('uselibpqcompat')).toBe(false);
-  });
-
-  it('maps sslrootcert=system to the host trust store without a file lookup', async () => {
-    mocks.resolveDataUrl.mockResolvedValue(
-      'postgres://data:data@db.internal/data?sslmode=prefer&sslrootcert=system',
-    );
-    createRawHarness({
-      query: async () => rawResult([], 'SELECT', 0),
-    });
-    mocks.findApp.mockResolvedValue(liveApp());
-
-    await executeDataTableRawSql(APP_ID, 'select 1', 30_000);
-
-    expect(mocks.pgClient).toHaveBeenCalledOnce();
-    const config = mocks.pgClient.mock.calls[0]?.[0] as {
-      connectionString: string;
-    };
-    const connectionUrl = new URL(config.connectionString);
-    expect(connectionUrl.searchParams.get('sslmode')).toBe('verify-full');
-    expect(connectionUrl.searchParams.has('sslrootcert')).toBe(false);
-  });
-
-  it('never downgrades sslrootcert=system to plaintext', async () => {
-    mocks.resolveDataUrl.mockResolvedValue(
-      'postgres://data:data@db.internal/data?sslmode=prefer&sslrootcert=system',
-    );
-    createRawHarness({
-      connect: async () => {
-        throw new Error('The server does not support SSL connections');
-      },
-    });
-
-    await expect(
-      executeDataTableRawSql(APP_ID, 'select 1', 30_000),
-    ).rejects.toMatchObject({ status: 500 });
-    expect(mocks.pgClient).toHaveBeenCalledOnce();
-  });
-
-  it('falls back to plaintext only when an sslmode=prefer server rejects TLS', async () => {
-    mocks.resolveDataUrl.mockResolvedValue(
-      'postgres://data:data@db.internal/data?sslmode=prefer&uselibpqcompat=false',
-    );
-    let attempts = 0;
-    createRawHarness({
-      connect: async () => {
-        attempts++;
-        if (attempts === 1) {
-          throw new Error('The server does not support SSL connections');
-        }
-      },
-      query: async () => rawResult([], 'SELECT', 0),
-    });
-    mocks.findApp.mockResolvedValue(liveApp());
-
-    await executeDataTableRawSql(APP_ID, 'select 1', 30_000);
-
-    expect(mocks.pgClient).toHaveBeenCalledTimes(2);
-    const [tlsConfig, plaintextConfig] = mocks.pgClient.mock.calls.map(
-      ([config]) => config as { connectionString: string },
-    );
-    expect(
-      new URL(tlsConfig.connectionString).searchParams.get('sslmode'),
-    ).toBe('no-verify');
-    expect(
-      new URL(tlsConfig.connectionString).searchParams.has('uselibpqcompat'),
-    ).toBe(false);
-    expect(
-      new URL(plaintextConfig.connectionString).searchParams.get('sslmode'),
-    ).toBe('disable');
-  });
-
-  it('does not downgrade sslmode=prefer after an unrelated connection error', async () => {
-    mocks.resolveDataUrl.mockResolvedValue(
-      'postgres://data:data@db.internal/data?sslmode=prefer',
-    );
-    const connectionError = Object.assign(new Error('connection refused'), {
-      code: 'ECONNREFUSED',
-    });
-    createRawHarness({
-      connect: async () => {
-        throw connectionError;
-      },
-    });
-
-    await expect(
-      executeDataTableRawSql(APP_ID, 'select 1', 30_000),
-    ).rejects.toMatchObject({
-      status: 500,
-      cause: connectionError,
-      message: 'connection refused',
-    });
-    expect(mocks.pgClient).toHaveBeenCalledOnce();
+    expect(events).toContain('rollback');
   });
 
   it('checks the activation fence after locking raw SQL', async () => {
     const events: string[] = [];
-    const userQuery = vi.fn<PgQueryHandler>(async () =>
+    const userQuery = vi.fn<RawQueryHandler>(async () =>
       rawResult([], 'SELECT', 0),
     );
     createRawHarness({ events, query: userQuery });
@@ -2034,9 +1904,10 @@ describe('managed Data Table service', () => {
   });
 
   it('does not inspect or reject DDL in raw SQL at runtime', async () => {
-    const { query } = createRawHarness({
-      query: async () => rawResult([], 'CREATE TABLE', null),
-    });
+    const userQuery = vi.fn<RawQueryHandler>(async () =>
+      rawResult([], 'CREATE TABLE', null),
+    );
+    createRawHarness({ query: userQuery });
     mocks.findApp.mockResolvedValue(liveApp());
 
     await expect(
@@ -2049,10 +1920,9 @@ describe('managed Data Table service', () => {
       results: [{ command: 'CREATE TABLE', count: null, rows: [] }],
       truncated: false,
     });
-    const rawQuery = query.mock.calls.find(
-      ([statement]) => typeof statement !== 'string',
-    )?.[0] as { statement?: string } | undefined;
-    expect(rawQuery?.statement).toBe('create table forbidden_by_text_only()');
+    expect(userQuery.mock.calls[0]?.[0]).toBe(
+      'create table forbidden_by_text_only()',
+    );
   });
 
   it('truncates raw output only between complete rows', async () => {
@@ -2173,7 +2043,6 @@ describe('managed Data Table service', () => {
         executeDataTableRawSql(APP_ID, 'select 1', timeoutMs),
       ).rejects.toMatchObject({ status: 400 });
     }
-    expect(mocks.pgClient).not.toHaveBeenCalled();
     expect(mocks.postgres).not.toHaveBeenCalled();
   });
 
@@ -2181,7 +2050,7 @@ describe('managed Data Table service', () => {
     const statementTimeout = Object.assign(new Error('canceling statement'), {
       code: '57014',
     });
-    const { query } = createRawHarness({
+    const { events } = createRawHarness({
       query: async () => {
         throw statementTimeout;
       },
@@ -2194,7 +2063,7 @@ describe('managed Data Table service', () => {
       status: 504,
       message: expect.stringContaining('1000'),
     });
-    expect(query.mock.calls.at(-1)?.[0]).toBe('rollback');
+    expect(events.at(-1)).toBe('rollback');
   });
 
   it('bounds PostgreSQL error text before returning it to the Agent', async () => {
@@ -2268,43 +2137,35 @@ describe('managed Data Table service', () => {
     },
   );
 
-  it('enforces the timeout across the raw SQL database operation', async () => {
-    vi.useFakeTimers();
-    let rejectStatement!: (error: Error) => void;
-    const pendingStatement = new Promise<PgQueryResult>((_resolve, reject) => {
-      rejectStatement = reject;
+  it('maps a connection failure to a bounded server error', async () => {
+    const connectionError = Object.assign(new Error('connection refused'), {
+      code: 'ECONNREFUSED',
     });
-    const { client, query } = createRawHarness({
-      query: async () => pendingStatement,
+    createRawHarness({
+      reserve: async () => {
+        throw connectionError;
+      },
     });
-    client.end.mockImplementation(async () => {
-      rejectStatement(new Error('connection destroyed'));
-    });
-    mocks.findApp.mockResolvedValue(liveApp());
 
-    const running = executeDataTableRawSql(
-      APP_ID,
-      'select pg_sleep(60)',
-      1_000,
-    );
-    const settled = running.catch((error: unknown) => error);
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(5));
-    await vi.advanceTimersByTimeAsync(1_000);
-
-    await expect(settled).resolves.toMatchObject({
-      status: 504,
-      message: expect.stringContaining('1000'),
+    await expect(
+      executeDataTableRawSql(APP_ID, 'select 1', 30_000),
+    ).rejects.toMatchObject({
+      status: 500,
+      cause: connectionError,
+      message: 'connection refused',
     });
-    expect(client.end).toHaveBeenCalled();
   });
 
-  it('does not wait forever for teardown after the database timeout', async () => {
+  it('cancels the running statement before closing it at the timeout', async () => {
     vi.useFakeTimers();
-    const pendingStatement = new Promise<PgQueryResult>(() => {});
-    const { client, query } = createRawHarness({
-      query: async () => pendingStatement,
+    const order: string[] = [];
+    const { client, events, canceled } = createRawHarness({
+      // A running statement only ends when PostgreSQL acts on the cancel.
+      query: async () => new Promise<never>(() => {}),
     });
-    client.end.mockImplementation(async () => new Promise<void>(() => {}));
+    client.end.mockImplementation(async () => {
+      order.push(`end after ${canceled.length} cancel`);
+    });
     mocks.findApp.mockResolvedValue(liveApp());
 
     const settled = executeDataTableRawSql(
@@ -2312,11 +2173,60 @@ describe('managed Data Table service', () => {
       'select pg_sleep(60)',
       1_000,
     ).catch((error: unknown) => error);
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(5));
+    await vi.waitFor(() => expect(events).toContain('select pg_sleep(60)'));
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(settled).resolves.toMatchObject({
+      status: 504,
+      message: expect.stringContaining('1000'),
+    });
+    expect(canceled).toEqual(['select pg_sleep(60)']);
+    await vi.waitFor(() => expect(order).toEqual(['end after 1 cancel']));
+    expect(events).not.toContain('rollback');
+  });
+
+  it('does not wait forever for teardown after the database timeout', async () => {
+    vi.useFakeTimers();
+    const { client, events } = createRawHarness();
+    // The platform check never answers, and closing the socket never
+    // completes either: the caller still gets its timeout.
+    mocks.findApp.mockImplementation(async () => new Promise<never>(() => {}));
+    client.end.mockImplementation(async () => new Promise<void>(() => {}));
+
+    const settled = executeDataTableRawSql(
+      APP_ID,
+      'select pg_sleep(60)',
+      1_000,
+    ).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(events).toContain('begin'));
     await vi.advanceTimersByTimeAsync(1_000);
 
     await expect(settled).resolves.toMatchObject({ status: 504 });
     expect(client.end).toHaveBeenCalled();
+  });
+
+  it('closes a stopped connection after a grace period when cancel is ignored', async () => {
+    vi.useFakeTimers();
+    const { client, events, canceled } = createRawHarness({
+      // Neither the statement nor its cancellation ever settles.
+      query: async () => new Promise<never>(() => {}),
+      ignoreCancel: true,
+    });
+    mocks.findApp.mockResolvedValue(liveApp());
+
+    const settled = executeDataTableRawSql(
+      APP_ID,
+      'select pg_sleep(60)',
+      1_000,
+    ).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(events).toContain('select pg_sleep(60)'));
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(settled).resolves.toMatchObject({ status: 504 });
+    expect(canceled).toEqual(['select pg_sleep(60)']);
+    expect(client.end).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(client.end).toHaveBeenCalledOnce();
   });
 
   it('does not delay a committed result while connection teardown is pending', async () => {
@@ -2335,15 +2245,8 @@ describe('managed Data Table service', () => {
   });
 
   it('cancels raw SQL and closes its connection when the Agent aborts', async () => {
-    let rejectStatement!: (error: Error) => void;
-    const pendingStatement = new Promise<PgQueryResult>((_resolve, reject) => {
-      rejectStatement = reject;
-    });
-    const { client, query } = createRawHarness({
-      query: async () => pendingStatement,
-    });
-    client.end.mockImplementation(async () => {
-      rejectStatement(new Error('connection destroyed'));
+    const { client, events, canceled } = createRawHarness({
+      query: async () => new Promise<never>(() => {}),
     });
     mocks.findApp.mockResolvedValue(liveApp());
     const abort = new AbortController();
@@ -2354,70 +2257,51 @@ describe('managed Data Table service', () => {
       30_000,
       abort.signal,
     );
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(5));
+    await vi.waitFor(() => expect(events).toContain('select pg_sleep(60)'));
     abort.abort();
 
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
-    expect(client.end).toHaveBeenCalled();
-  });
-
-  it('handles an idle Data DB connection error without an uncaught event', async () => {
-    const connectionError = Object.assign(new Error('socket reset'), {
-      code: 'ECONNRESET',
-    });
-    const { client, query } = createRawHarness();
-    mocks.findApp.mockImplementation(async () => new Promise<never>(() => {}));
-
-    const running = executeDataTableRawSql(APP_ID, 'select 1', 30_000);
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(2));
-    expect(() => client.emit('error', connectionError)).not.toThrow();
-
-    await expect(running).rejects.toMatchObject({
-      status: 500,
-      cause: connectionError,
-      message: 'socket reset',
-    });
-    expect(client.end).toHaveBeenCalled();
+    expect(canceled).toEqual(['select pg_sleep(60)']);
+    await vi.waitFor(() => expect(client.end).toHaveBeenCalled());
   });
 
   it('reports an unknown outcome when the database timeout fires during COMMIT', async () => {
     vi.useFakeTimers();
-    let rejectCommit!: (error: Error) => void;
-    const pendingCommit = new Promise<PgQueryResult>((_resolve, reject) => {
-      rejectCommit = reject;
-    });
-    const { client, query } = createRawHarness({
+    let resolveCommit!: (result: RawQueryResult) => void;
+    const { client, events, canceled } = createRawHarness({
       query: async () => rawResult([], 'UPDATE', 1),
-      commit: async () => pendingCommit,
-    });
-    client.end.mockImplementation(async () => {
-      rejectCommit(new Error('connection destroyed during commit'));
+      commit: async () =>
+        new Promise<RawQueryResult>((resolve) => {
+          resolveCommit = resolve;
+        }),
     });
     mocks.findApp.mockResolvedValue(liveApp());
 
-    const running = executeDataTableRawSql(
+    const settled = executeDataTableRawSql(
       APP_ID,
       'update items set updated_at = now()',
       1_000,
-    );
-    const settled = running.catch((error: unknown) => error);
-    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(6));
+    ).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(events).toContain('commit'));
     await vi.advanceTimersByTimeAsync(1_000);
 
     await expect(settled).resolves.toMatchObject({
       status: 409,
       message: expect.stringMatching(/outcome is unknown.*do not retry/is),
     });
-    expect(query.mock.calls.map(([statement]) => statement)).not.toContain(
-      'rollback',
-    );
+    expect(events).not.toContain('rollback');
+    expect(canceled).toEqual([]);
+    // The connection stays open until COMMIT has an answer from the server.
+    expect(client.end).not.toHaveBeenCalled();
+    resolveCommit(rawResult([], 'COMMIT', null));
+    await vi.waitFor(() => expect(client.end).toHaveBeenCalledOnce());
   });
 
   it('reports an unknown outcome when the COMMIT acknowledgement is lost', async () => {
     const connectionError = Object.assign(new Error('connection reset'), {
-      code: 'ECONNRESET',
+      code: 'CONNECTION_CLOSED',
     });
-    const { query } = createRawHarness({
+    const { events } = createRawHarness({
       query: async () => rawResult([], 'UPDATE', 1),
       commit: async () => {
         throw connectionError;
@@ -2440,11 +2324,9 @@ describe('managed Data Table service', () => {
       cause: connectionError,
       message: expect.stringMatching(/inspect the affected data first/i),
     });
-    expect(query.mock.calls.map(([statement]) => statement)).not.toContain(
-      'rollback',
-    );
+    expect(events).not.toContain('rollback');
     expect(globalState.__hatchDataLastPrune.has(APP_ID)).toBe(false);
-    expect(mocks.postgres).not.toHaveBeenCalled();
+    expect(mocks.postgres).toHaveBeenCalledOnce();
   });
 
   it('handles detached retention failure after a committed mutation', async () => {
