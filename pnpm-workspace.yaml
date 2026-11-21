@@ -14,10 +14,6 @@ allowBuilds:
   prisma: false
   protobufjs: false
 
-minimumReleaseAgeExclude:
-  - drizzle-kit@1.0.0-rc.6
-  - drizzle-orm@1.0.0-rc.6
-
 overrides:
   'protobufjs@7.6.4': 7.6.5
   'seroval@<=1.5.2': ^1.5.3
