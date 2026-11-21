@@ -177,9 +177,19 @@ describe('buildApp with the Node toolchain', { timeout: 180_000 }, () => {
         '  capabilities: { backend: true },\n' +
           "  backend: { entry: 'backend/main.ts', runtime: 'deno-run', network: [] },\n",
       ),
+      // The template has no @types/node; declare the two modules used below.
+      'backend/builtins.d.ts':
+        "declare module 'node:sqlite' {\n  export const DatabaseSync: new (path: string) => object;\n}\n" +
+        "declare module 'path' {\n  export function basename(path: string): string;\n}\n",
+      // Built-ins stay external whether written bare, or with the node:
+      // prefix that newer modules such as node:sqlite only exist under.
       'backend/main.ts':
+        '/// <reference path="./builtins.d.ts" />\n' +
         "import { createConnectRouter } from '@connectrpc/connect';\n" +
-        "console.log(`handlers=${createConnectRouter({}).handlers.length} port=${Deno.env.get('PORT')}`);\n",
+        "import { DatabaseSync } from 'node:sqlite';\n" +
+        "import { basename } from 'path';\n" +
+        "console.log(`handlers=${createConnectRouter({}).handlers.length} port=${Deno.env.get('PORT')} ` +\n" +
+        "  `sqlite=${typeof DatabaseSync} path=${basename('/a/b.txt')}`);\n",
     });
 
     const result = await buildApp('demo', { sourceDir, outputDir });
@@ -194,7 +204,9 @@ describe('buildApp with the Node toolchain', { timeout: 180_000 }, () => {
       ['run', ...bundleRuntimeFlags(outputDir), 'backend/main.bundle.js'],
       { cwd: outputDir, env: { ...process.env, PORT: '4321' } },
     );
-    expect(executed.stdout.trim()).toBe('handlers=0 port=4321');
+    expect(executed.stdout.trim()).toBe(
+      'handlers=0 port=4321 sqlite=function path=b.txt',
+    );
   });
 
   it('evaluates manifest.ts without file, process, worker or network access', async () => {

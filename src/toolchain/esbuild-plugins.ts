@@ -217,6 +217,21 @@ const NODE_BUILTINS = new Set(
 );
 
 /**
+ * The `node:` name of a built-in, or undefined for any other specifier.
+ * Newer built-ins such as `node:sqlite` exist only under the prefix: Node
+ * lists them with it, and the bare name is free for an npm package.
+ */
+function nodeBuiltinSpecifier(specifier: string): string | undefined {
+  if (NODE_BUILTINS.has(specifier)) {
+    return specifier.startsWith('node:') ? specifier : `node:${specifier}`;
+  }
+  return specifier.startsWith('node:') &&
+    NODE_BUILTINS.has(specifier.slice('node:'.length))
+    ? specifier
+    : undefined;
+}
+
+/**
  * Leave Node built-ins external under their `node:` name, the only spelling
  * Deno resolves without npm or an import map. Every other URL-like specifier
  * is rejected: a runtime bundle carries its dependencies with it.
@@ -226,12 +241,8 @@ export function nodeBuiltinsPlugin(): esbuild.Plugin {
     name: 'node-builtins',
     setup(build) {
       build.onResolve({ filter: /.*/ }, (args) => {
-        const name = args.path.startsWith('node:')
-          ? args.path.slice('node:'.length)
-          : args.path;
-        if (NODE_BUILTINS.has(name)) {
-          return { path: `node:${name}`, external: true };
-        }
+        const builtin = nodeBuiltinSpecifier(args.path);
+        if (builtin) return { path: builtin, external: true };
         if (
           /^[a-z][a-z\d+.-]*:/i.test(args.path) &&
           !/^[A-Za-z]:[\\/]/.test(args.path) &&
