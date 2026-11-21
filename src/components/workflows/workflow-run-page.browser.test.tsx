@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
@@ -59,10 +60,17 @@ function workflow(overrides: Partial<WorkflowDetail> = {}): WorkflowDetail {
 }
 
 async function renderRunPage() {
+  // The page's side panels (triggers, recent runs) load their own data; these
+  // tests cover only the run form gate, so keep those queries idle.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { enabled: false } },
+  });
   return render(
-    <MantineProvider theme={appTheme}>
-      <WorkflowRunPage />
-    </MantineProvider>,
+    <QueryClientProvider client={queryClient}>
+      <MantineProvider theme={appTheme}>
+        <WorkflowRunPage />
+      </MantineProvider>
+    </QueryClientProvider>,
   );
 }
 
