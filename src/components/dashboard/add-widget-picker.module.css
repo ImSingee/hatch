@@ -12,7 +12,7 @@
 }
 
 .option:focus-visible {
-  outline: 2px solid var(--mantine-color-ember-filled);
+  outline: 2px solid var(--mantine-color-primary-filled);
   outline-offset: -2px;
 }
 

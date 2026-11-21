@@ -56,10 +56,10 @@ function AppsPage() {
     >
       {apps.length === 0 ? (
         <Stack align="center" gap="xs" py={80} px="md">
-          <ThemeIcon size={52} radius="xl" variant="light" color="ember">
+          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
             <IconStack2 size={26} stroke={1.5} />
           </ThemeIcon>
-          <Text fw={600} mt="xs">
+          <Text fw={700} mt="xs">
             No apps yet
           </Text>
           <Text size="sm" c="dimmed" ta="center" maw={440}>
@@ -93,7 +93,7 @@ function AppsPage() {
                 <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
                   <AppGlyph name={app.name} seed={app.id} />
                   <Text
-                    fw={600}
+                    fw={700}
                     truncate
                     renderRoot={(props) => (
                       <Link

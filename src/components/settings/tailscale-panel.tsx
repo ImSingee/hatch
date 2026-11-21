@@ -142,7 +142,7 @@ function DnsSettingRow({
       <Table.Td>
         <Group gap={6} wrap="nowrap">
           <Icon size={16} color={color} aria-hidden />
-          <Text span size="sm" fw={500}>
+          <Text span size="sm" fw={600}>
             {label}
           </Text>
         </Group>
@@ -446,7 +446,7 @@ export function TailscalePanel({
           {status.enabled && (
             <Text size="sm" c="dimmed" truncate className={classes.device}>
               Device{' '}
-              <Text span inherit fw={500} c="var(--mantine-color-text)">
+              <Text span inherit fw={600} c="var(--mantine-color-text)">
                 {status.hostname}
               </Text>
             </Text>
@@ -531,7 +531,7 @@ export function TailscalePanel({
           <Stack gap="sm" align="flex-start">
             <Text size="sm">
               Your tailnet requires an admin to approve new devices. Approve{' '}
-              <Text span inherit fw={600}>
+              <Text span inherit fw={700}>
                 {status.hostname}
               </Text>{' '}
               in the Tailscale admin console; this page updates automatically.
@@ -572,7 +572,7 @@ export function TailscalePanel({
             {retryAt && retryTime?.isValid() && (
               <Text size="sm">
                 Next automatic attempt:{' '}
-                <Text span fw={500} component="time" dateTime={retryAt}>
+                <Text span fw={600} component="time" dateTime={retryAt}>
                   {retryTime.format(
                     retryTime.isSame(dayjs(), 'day')
                       ? 'h:mm A'
@@ -613,14 +613,14 @@ export function TailscalePanel({
       )}
       {status.state === 'connected' && status.origin && (
         <Stack gap="xs">
-          <Text size="sm" fw={600}>
+          <Text size="sm" fw={700}>
             Private address
           </Text>
           <Anchor
             href={status.origin}
             target="_blank"
             rel="noreferrer"
-            fw={500}
+            fw={600}
             td="underline"
             className={classes.address}
           >
@@ -704,7 +704,7 @@ export function TailscalePanel({
                     >
                       <Radio.Indicator className={classes.methodIndicator} />
                       <div>
-                        <Text size="sm" fw={500}>
+                        <Text size="sm" fw={600}>
                           {method.label}
                         </Text>
                         <Text size="sm" c="dimmed">

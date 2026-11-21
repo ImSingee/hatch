@@ -330,7 +330,7 @@ function FieldInput({
 
   return (
     <Stack gap={6}>
-      <Text size="sm" fw={500}>
+      <Text size="sm" fw={600}>
         {label}
         {required && !onPick ? (
           <Text span c="red.7">

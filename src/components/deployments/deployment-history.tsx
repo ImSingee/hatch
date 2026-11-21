@@ -56,12 +56,12 @@ const STATUS_META: Record<
   { color: string; label: string; icon: ReactNode }
 > = {
   building: {
-    color: 'ember',
+    color: 'primary',
     label: 'Building',
     icon: <IconLoader size={11} stroke={2.5} />,
   },
   deployed: {
-    color: 'ember',
+    color: 'primary',
     label: 'Deployed',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
@@ -177,7 +177,7 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
             v{deployment.version}
           </Text>
           {deployment.isCurrent ? (
-            <Badge size="xs" variant="filled" radius="sm" color="ember">
+            <Badge size="xs" variant="filled" radius="sm" color="primary">
               Live
             </Badge>
           ) : null}
@@ -271,7 +271,7 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
               size={14}
               className={`${classes.chevron} ${open ? classes.chevronOpen : ''}`}
             />
-            <Text size="xs" c="dimmed" fw={500}>
+            <Text size="xs" c="dimmed" fw={600}>
               {deployment.status === 'failed' ? 'Error log' : 'Build log'}
             </Text>
           </UnstyledButton>
@@ -356,7 +356,7 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
   return (
     <Box component="section">
       <Group gap={8} mb="md" align="baseline">
-        <Text fw={600} fz="lg">
+        <Text fw={700} fz="lg">
           Deployment history
         </Text>
         {deployments.length > 0 ? (

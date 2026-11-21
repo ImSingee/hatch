@@ -67,7 +67,7 @@ export function WorkflowRunPage() {
         </Stack>
       ) : (
         <Alert
-          color="ember"
+          color="primary"
           variant="light"
           icon={<IconInfoCircle size={16} />}
         >

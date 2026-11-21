@@ -1,4 +1,5 @@
 import { type CSSProperties, useState } from 'react';
+import { TILE_COLORS } from '~/ui/theme';
 import classes from './app-glyph.module.css';
 import { appIconUrl, useAppIconKey, useHasAppIcons } from './use-app-icon';
 
@@ -6,9 +7,8 @@ import { appIconUrl, useAppIconKey, useHasAppIcons } from './use-app-icon';
  * A small rounded monogram tile for an app, giving each app a stable visual
  * identity in lists and the sidebar. The tint is derived deterministically from
  * a stable seed (the app id) so it never shifts when an app is renamed, and it
- * is drawn from a curated, muted palette that sits inside the warm theme.
+ * is one of the design tokens' tile fills, which all carry white text.
  */
-const TINTS = ['ember', 'amber', 'rose', 'teal', 'blue', 'green'] as const;
 
 function hash(seed: string): number {
   let h = 0;
@@ -71,18 +71,13 @@ function AppIconGlyph(props: GlyphProps) {
 }
 
 function Monogram({ name, seed, size = 'md' }: GlyphProps) {
-  const tint = TINTS[hash(seed ?? name) % TINTS.length];
+  const tile = TILE_COLORS[hash(seed ?? name) % TILE_COLORS.length];
   return (
     <span
       className={classes.glyph}
       data-size={size}
       aria-hidden
-      style={
-        {
-          '--glyph-bg': `var(--mantine-color-${tint}-light)`,
-          '--glyph-fg': `var(--mantine-color-${tint}-light-color)`,
-        } as CSSProperties
-      }
+      style={{ '--glyph-bg': tile } as CSSProperties}
     >
       {initialOf(name)}
     </span>

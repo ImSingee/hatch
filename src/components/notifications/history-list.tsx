@@ -192,10 +192,10 @@ export function NotificationHistory() {
         </Center>
       ) : items.length === 0 ? (
         <Stack align="center" gap="xs" py={80} px="md">
-          <ThemeIcon size={52} radius="xl" variant="light" color="ember">
+          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
             <IconBell size={26} stroke={1.5} />
           </ThemeIcon>
-          <Text fw={600} mt="xs">
+          <Text fw={700} mt="xs">
             {filtered ? 'No matching notifications' : 'No notifications yet'}
           </Text>
           <Text size="sm" c="dimmed" ta="center" maw={480}>
@@ -254,7 +254,7 @@ export function NotificationHistory() {
                         />
                       )}
                     >
-                      <Text size="sm" fw={500} truncate>
+                      <Text size="sm" fw={600} truncate>
                         {item.title}
                       </Text>
                       <Text size="xs" c="dimmed" truncate>

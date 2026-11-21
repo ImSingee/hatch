@@ -19,7 +19,7 @@ export function SectionHead({
       mb="lg"
     >
       <Stack gap={2}>
-        <Text fw={600} fz="lg">
+        <Text fw={700} fz="lg">
           {title}
         </Text>
         <Text size="sm" c="dimmed">

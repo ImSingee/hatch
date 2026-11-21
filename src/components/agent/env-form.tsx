@@ -111,11 +111,11 @@ export function EnvForm({
           <Stack gap={6}>
             <Group gap={6}>
               <IconKey size={16} className={classes.envIcon} />
-              <Text size="xs" fw={600} className={classes.envHeading}>
+              <Text size="xs" fw={700} className={classes.envHeading}>
                 Agent needs environment variables
               </Text>
             </Group>
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={700}>
               {reason}
             </Text>
             <Text size="xs" c="dimmed" className={classes.envNote}>
@@ -175,7 +175,7 @@ export function EnvForm({
                     }));
                   }}
                   disabled={disabled || submitting}
-                  color="ember.7"
+                  color="primary.7"
                   label="Keep private"
                   aria-label={`Keep ${variable.key} private`}
                   description={
@@ -200,7 +200,7 @@ export function EnvForm({
               <Button
                 type="submit"
                 size="sm"
-                color="ember.7"
+                color="primary.7"
                 loading={submitting}
                 disabled={disabled || submitting}
               >

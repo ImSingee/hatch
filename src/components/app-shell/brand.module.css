@@ -17,8 +17,7 @@
 }
 
 .word {
-  font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: var(--font-weight-heading);
   letter-spacing: -0.01em;
   line-height: 1;
   color: var(--mantine-color-text);

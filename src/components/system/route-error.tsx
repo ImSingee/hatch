@@ -38,7 +38,7 @@ export function RouteError({ error }: ErrorComponentProps) {
         <ThemeIcon size={52} radius="xl" variant="light" color="red">
           <IconAlertTriangle size={26} stroke={1.5} />
         </ThemeIcon>
-        <Text fw={600} mt="xs">
+        <Text fw={700} mt="xs">
           This page couldn’t load
         </Text>
         <Text size="sm" c="dimmed" ta="center">

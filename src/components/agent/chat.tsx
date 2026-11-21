@@ -947,10 +947,10 @@ export function Chat({ sessionId }: { sessionId: string }) {
         </Text>
         <Box className={classes.chatHead}>
           <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-            <ThemeIcon variant="light" color="ember" radius="md" size="md">
+            <ThemeIcon variant="light" color="primary" radius="md" size="md">
               <IconSparkles size={16} stroke={1.7} />
             </ThemeIcon>
-            <Text fw={600} truncate>
+            <Text fw={700} truncate>
               {session?.title ?? 'Chat'}
             </Text>
           </Group>
@@ -966,10 +966,15 @@ export function Chat({ sessionId }: { sessionId: string }) {
               !streamState.active &&
               !streamState.outcome ? (
               <Stack align="center" gap={6} py={80}>
-                <ThemeIcon size={48} radius="xl" variant="light" color="ember">
+                <ThemeIcon
+                  size={48}
+                  radius="xl"
+                  variant="light"
+                  color="primary"
+                >
                   <IconSparkles size={24} stroke={1.5} />
                 </ThemeIcon>
-                <Text fw={600}>Describe an app to build</Text>
+                <Text fw={700}>Describe an app to build</Text>
                 <Text size="sm" c="dimmed" ta="center" maw={360}>
                   Ask the Agent to create a tracker, a notes app, a dashboard —
                   anything. It will scaffold, build, and deploy it for you.

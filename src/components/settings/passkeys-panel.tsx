@@ -149,7 +149,7 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
         className={classes.header}
       >
         <Stack gap={2}>
-          <Text fw={600}>Passkeys</Text>
+          <Text fw={700}>Passkeys</Text>
           <Text size="sm" c="dimmed">
             Sign in with your device, password manager, or a security key.
           </Text>
@@ -224,7 +224,7 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                     />
                   ) : (
                     <Stack gap={0} miw={0}>
-                      <Text size="sm" fw={600} truncate>
+                      <Text size="sm" fw={700} truncate>
                         {name}
                       </Text>
                       <Text size="xs" c="dimmed">
@@ -299,7 +299,7 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
             <IconKey size={21} stroke={1.7} />
           </ThemeIcon>
           <Stack gap={2} align="center">
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={700}>
               No passkeys yet
             </Text>
             <Text size="sm" c="dimmed" ta="center">

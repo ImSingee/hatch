@@ -379,7 +379,7 @@ const ResourceMentionMenu = forwardRef<
             onClick={() => select(0)}
           >
             <IconChevronLeft size={16} stroke={1.8} />
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={700}>
               {resourceLabel(activeScope)}
             </Text>
           </UnstyledButton>
@@ -401,7 +401,7 @@ const ResourceMentionMenu = forwardRef<
                   <Text
                     size="xs"
                     c="dimmed"
-                    fw={600}
+                    fw={700}
                     className={classes.mentionMenuSection}
                   >
                     {resourceLabel(item.resourceType)}
@@ -435,7 +435,7 @@ const ResourceMentionMenu = forwardRef<
                         size={30}
                         radius="sm"
                         variant="light"
-                        color={item.resourceType === 'app' ? 'ember' : 'blue'}
+                        color={item.resourceType === 'app' ? 'primary' : 'blue'}
                       >
                         {item.resourceType === 'app' ? (
                           <IconApps size={17} stroke={1.7} />
@@ -452,7 +452,7 @@ const ResourceMentionMenu = forwardRef<
                       />
                     )}
                     <div className={classes.mentionMenuIdentity}>
-                      <Text size="sm" fw={500} truncate>
+                      <Text size="sm" fw={600} truncate>
                         {item.kind === 'category'
                           ? resourceLabel(item.resourceType)
                           : item.resource.name}

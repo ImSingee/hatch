@@ -317,7 +317,7 @@ export function ChannelsSection() {
             {channels.map((channel) => (
               <Table.Tr key={channel.id}>
                 <Table.Td>
-                  <Text size="sm" fw={600} truncate>
+                  <Text size="sm" fw={700} truncate>
                     {channel.name}
                   </Text>
                   {channel.description ? (

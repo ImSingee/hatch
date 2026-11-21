@@ -33,7 +33,7 @@ function MethodRow({ method }: { method: RpcServiceApi['methods'][number] }) {
   return (
     <Table.Tr>
       <Table.Td>
-        <Text size="sm" fw={500} ff="monospace">
+        <Text size="sm" fw={600} ff="monospace">
           {method.name}
         </Text>
       </Table.Td>
@@ -72,7 +72,7 @@ function ServiceBlock({ service }: { service: RpcServiceApi }) {
   return (
     <Stack gap={6}>
       <Group gap={8} wrap="nowrap" align="baseline">
-        <Text fw={600} size="sm" ff="monospace">
+        <Text fw={700} size="sm" ff="monospace">
           {service.name}
         </Text>
         <Text size="xs" c="dimmed">
@@ -165,7 +165,7 @@ export function ApiPanel({ appId }: { appId: string }) {
   if (query.isLoading) {
     return (
       <Box component="section">
-        <Text fw={600} fz="lg" mb="md">
+        <Text fw={700} fz="lg" mb="md">
           API
         </Text>
         <Center py="lg">
@@ -184,7 +184,7 @@ export function ApiPanel({ appId }: { appId: string }) {
 
   return (
     <Box component="section">
-      <Text fw={600} fz="lg" mb="md">
+      <Text fw={700} fz="lg" mb="md">
         API
       </Text>
       {!manifest ? (
@@ -208,7 +208,7 @@ export function ApiPanel({ appId }: { appId: string }) {
               ))}
               {api.protoFiles.length > 0 ? (
                 <Stack gap={6}>
-                  <Text fw={600} size="sm">
+                  <Text fw={700} size="sm">
                     Proto source
                   </Text>
                   {api.protoFiles.map((file) => (
@@ -220,7 +220,7 @@ export function ApiPanel({ appId }: { appId: string }) {
           )}
           {workflows.length > 0 ? (
             <Stack gap={6}>
-              <Text fw={600} size="sm">
+              <Text fw={700} size="sm">
                 Workflow calls
               </Text>
               <Text size="xs" c="dimmed">
@@ -234,7 +234,7 @@ export function ApiPanel({ appId }: { appId: string }) {
                     return (
                       <Table.Tr key={w.alias}>
                         <Table.Td>
-                          <Text size="sm" fw={500} ff="monospace">
+                          <Text size="sm" fw={600} ff="monospace">
                             {w.alias}
                           </Text>
                         </Table.Td>

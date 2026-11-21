@@ -322,7 +322,7 @@ function AppView() {
       <Box className={classes.bar}>
         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
           <AppGlyph name={app.name} seed={app.id} size="sm" />
-          <Text fw={600} truncate>
+          <Text fw={700} truncate>
             {app.name}
           </Text>
         </Group>
@@ -335,12 +335,12 @@ function AppView() {
                     <Button
                       size="compact-sm"
                       variant="light"
-                      color="ember"
-                      // The light variant's default ember-6 text is ~3.3:1 on
-                      // its tint; ember-8 keeps small text above WCAG AA.
-                      c="ember.8"
+                      color="primary"
+                      // The light variant's default shade-6 text is ~3.3:1 on
+                      // its tint; shade 8 keeps small text above WCAG AA.
+                      c="primary.8"
                       radius="xl"
-                      fw={500}
+                      fw={600}
                       className={classes.updateButton}
                       aria-label={reloadLabel}
                       onClick={reload}
@@ -443,7 +443,7 @@ function AppView() {
                   ? 'red'
                   : hasLiveDeployment
                     ? 'gray'
-                    : 'ember'
+                    : 'primary'
               }
             >
               {isCompatibilityBlocked ? (
@@ -454,7 +454,7 @@ function AppView() {
                 <IconRocket size={26} stroke={1.5} />
               )}
             </ThemeIcon>
-            <Text fw={600} mt="xs">
+            <Text fw={700} mt="xs">
               {isCompatibilityBlocked
                 ? platformUpdateRequired
                   ? 'Platform update required'

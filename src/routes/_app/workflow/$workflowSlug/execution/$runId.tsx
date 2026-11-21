@@ -60,7 +60,7 @@ function StepItem({ step }: { step: WorkflowRunStepView }) {
       bullet={<RunStatusBullet status={step.status} filled />}
     >
       <Group gap={8} wrap="nowrap" align="baseline">
-        <Text fw={600} size="sm">
+        <Text fw={700} size="sm">
           {step.name}
         </Text>
         {step.attempt > 1 ? (
@@ -102,7 +102,7 @@ function Section({
 }) {
   return (
     <Box component="section">
-      <Text fw={600} fz="lg" mb="md">
+      <Text fw={700} fz="lg" mb="md">
         {title}
       </Text>
       {children}

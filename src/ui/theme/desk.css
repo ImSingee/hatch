@@ -1,0 +1,368 @@
+/* Desk: the surface treatment on top of Mantine.
+ *
+ * Every colour, radius, shadow and weight here is a CSS variable set from
+ * `packages/hatch-design-tokens/tokens.json` by `theme.ts` and
+ * `cssVariableResolver.ts`. Do not write literal values in this file.
+ */
+
+/* ---- Base --------------------------------------------------------------- */
+
+body {
+  font-weight: var(--font-weight-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  background-color: var(--mantine-color-primary-2);
+  color: var(--mantine-color-primary-9);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mantine-color-gray-4) transparent;
+}
+
+/* ---- Focus -------------------------------------------------------------- */
+
+/* One ring everywhere: ink, two pixels, offset from the control so it reads
+ * on the ground, on cards and on accent fills. */
+.mantine-focus-auto:focus-visible,
+.mantine-focus-always:focus,
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- Type --------------------------------------------------------------- */
+
+.mantine-Title-root,
+.mantine-Modal-title,
+.mantine-Drawer-title {
+  font-weight: var(--font-weight-heading);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.mantine-Modal-title,
+.mantine-Drawer-title {
+  font-size: var(--mantine-font-size-lg);
+}
+
+/* Controls carry the rounded, heavy label of the design. */
+.mantine-Button-root,
+.mantine-Badge-root,
+.mantine-NavLink-label,
+.mantine-Tabs-tab,
+.mantine-SegmentedControl-label,
+.mantine-InputWrapper-label,
+.mantine-Checkbox-label,
+.mantine-Radio-label,
+.mantine-Switch-label,
+.mantine-Menu-label,
+.mantine-Table-th {
+  font-weight: var(--font-weight-label);
+}
+
+.mantine-Menu-item,
+.mantine-Combobox-option,
+.mantine-Input-input,
+.mantine-Tooltip-tooltip {
+  font-weight: var(--font-weight-strong);
+}
+
+.mantine-InputWrapper-label {
+  color: var(--mantine-color-gray-7);
+}
+
+.mantine-Badge-root {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ---- Links -------------------------------------------------------------- */
+
+/* Browsers recolour followed links. In-app navigation (card titles, table
+ * rows, sidebar rows) is styled to match its surroundings, so pin the colour
+ * across states here instead of in each component. */
+a.mantine-Text-root:not(.mantine-Anchor-root),
+a.mantine-Text-root:not(.mantine-Anchor-root):visited,
+a.mantine-Text-root:not(.mantine-Anchor-root):hover,
+a.mantine-Text-root:not(.mantine-Anchor-root):active {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+.mantine-Anchor-root,
+.mantine-Anchor-root:visited {
+  color: var(--mantine-color-anchor);
+  font-weight: var(--font-weight-label);
+  text-underline-offset: 0.15em;
+}
+
+/* Keep the Anchor contract inside Typography's article styles as well. */
+.mantine-Anchor-root[data-underline='always'] {
+  text-decoration-line: underline;
+}
+
+.mantine-Anchor-root:hover {
+  color: var(--mantine-color-primary-9);
+  text-decoration-thickness: 2px;
+}
+
+/* ---- Surfaces ----------------------------------------------------------- */
+
+/* Cards float on the desk: a white sheet with a soft shadow and no outline.
+ * A sheet that asks for a border gets the hairline and stays flat, which is
+ * how grouped content inside a card or window is drawn. */
+.mantine-Card-root,
+.mantine-Paper-root {
+  background-color: var(--surface-raised);
+}
+
+.mantine-Card-root:where([data-with-border]),
+.mantine-Paper-root:where([data-with-border]) {
+  border: 1px solid var(--mantine-color-default-border);
+  box-shadow: none;
+}
+
+.mantine-Card-section {
+  border-color: var(--mantine-color-default-border);
+}
+
+.mantine-Divider-root {
+  --divider-color: var(--mantine-color-default-border);
+}
+
+.mantine-Modal-content,
+.mantine-Drawer-content {
+  background-color: var(--surface-raised);
+}
+
+.mantine-Modal-header,
+.mantine-Drawer-header {
+  background-color: transparent;
+}
+
+.mantine-Modal-overlay,
+.mantine-Drawer-overlay {
+  --overlay-bg: var(--surface-scrim);
+}
+
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown,
+.mantine-HoverCard-dropdown,
+.mantine-Combobox-dropdown {
+  background-color: var(--surface-raised);
+  border-color: var(--mantine-color-default-border);
+  box-shadow: var(--shadow-dock);
+}
+
+.mantine-Menu-dropdown {
+  padding: 6px;
+}
+
+.mantine-Menu-item {
+  border-radius: var(--mantine-radius-sm);
+}
+
+.mantine-Menu-divider {
+  border-color: var(--mantine-color-default-border);
+}
+
+.mantine-Tooltip-tooltip {
+  font-size: var(--mantine-font-size-xs);
+}
+
+/* ---- Fields ------------------------------------------------------------- */
+
+/* A field is a white well with a hairline, on the ground and on a card. */
+.mantine-Input-wrapper {
+  --input-bg: var(--surface-raised);
+  --input-bd: var(--border-input);
+  --input-bd-focus: var(--focus-ring);
+
+  &[data-variant='filled'] {
+    --input-bg: var(--surface-hover);
+    --input-bd: transparent;
+  }
+
+  &[data-variant='unstyled'] {
+    --input-bg: transparent;
+    --input-bd: transparent;
+    --input-bd-focus: transparent;
+  }
+}
+
+.mantine-Input-input:where(:not([data-variant='unstyled'])):focus,
+.mantine-Input-input:where(:not([data-variant='unstyled'])):focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.mantine-Input-input:disabled,
+.mantine-Input-input[data-disabled] {
+  background-color: var(--surface-muted);
+  color: var(--mantine-color-dimmed);
+  opacity: 1;
+}
+
+.mantine-Checkbox-input,
+.mantine-Radio-radio {
+  border-color: var(--mantine-color-gray-5);
+}
+
+.mantine-Switch-track {
+  border-color: transparent;
+  background-color: var(--mantine-color-gray-4);
+}
+
+.mantine-Switch-input:checked + .mantine-Switch-track {
+  background-color: var(--switch-color);
+}
+
+.mantine-Switch-thumb {
+  background-color: var(--surface-raised);
+  border-color: transparent;
+}
+
+.mantine-SegmentedControl-root {
+  background-color: var(--surface-sunken);
+}
+
+.mantine-SegmentedControl-indicator {
+  background-color: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.mantine-SegmentedControl-label {
+  color: var(--mantine-color-gray-7);
+
+  &[data-active] {
+    color: var(--mantine-color-text);
+  }
+}
+
+/* ---- Buttons ------------------------------------------------------------ */
+
+.mantine-Button-root,
+.mantine-ActionIcon-root,
+.mantine-NavLink-root,
+.mantine-CloseButton-root {
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.mantine-Button-root:where(
+  :disabled:not([data-loading]),
+  [data-disabled]:not([data-loading])
+) {
+  border: var(--button-bd);
+  opacity: 0.5;
+}
+
+/* Mantine's disabled fill reads as a grey chip; keep only the muted icon. */
+.mantine-ActionIcon-root:where(
+  :disabled:not([data-loading]),
+  [data-disabled]:not([data-loading])
+) {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mantine-color-disabled-color);
+  cursor: not-allowed;
+
+  &:active {
+    transform: none;
+  }
+}
+
+/* ---- Navigation --------------------------------------------------------- */
+
+.mantine-NavLink-root {
+  /* The router sets aria-current="page" on every link under the current
+   * path. Only the `active` prop (data-active) marks the current item. */
+  &:where([aria-current='page']:not([data-active])) {
+    background-color: transparent;
+    color: inherit;
+  }
+
+  &:where(:any-link):visited {
+    color: inherit;
+  }
+
+  &:hover {
+    background-color: var(--surface-hover);
+  }
+
+  &:where([data-active]) {
+    background-color: var(--nl-bg);
+    color: var(--nl-color);
+
+    &:hover {
+      background-color: var(--nl-hover);
+    }
+  }
+}
+
+.mantine-Tabs-root {
+  --tab-border-color: var(--mantine-color-default-border);
+  --tab-hover-color: var(--surface-hover);
+}
+
+.mantine-Tabs-tab {
+  color: var(--mantine-color-dimmed);
+
+  &:where([data-active]) {
+    color: var(--mantine-color-text);
+  }
+}
+
+/* ---- Data --------------------------------------------------------------- */
+
+.mantine-Table-table {
+  --table-border-color: var(--mantine-color-default-border);
+  --table-hover-color: var(--surface-hover);
+  --table-striped-color: var(--surface-hover);
+}
+
+.mantine-Table-th {
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+}
+
+.mantine-Code-root {
+  background-color: var(--code-bg, var(--surface-hover));
+  color: var(--mantine-color-text);
+}
+
+.mantine-Timeline-root {
+  --item-border-color: var(--mantine-color-default-border);
+}
+
+.mantine-Skeleton-root:where([data-visible])::after {
+  background-color: var(--surface-pressed);
+}
+
+/* ---- Motion ------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

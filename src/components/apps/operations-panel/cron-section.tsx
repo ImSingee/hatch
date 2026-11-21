@@ -29,7 +29,7 @@ function CronHistory({ appId }: { appId: string }) {
     <Stack gap={6}>
       <Group gap={8} wrap="nowrap">
         <IconHistory size={16} stroke={1.8} />
-        <Text fw={600} size="sm">
+        <Text fw={700} size="sm">
           Trigger history
         </Text>
         {runs.length > 0 ? (
@@ -61,7 +61,7 @@ function CronHistory({ appId }: { appId: string }) {
             {runs.map((run) => (
               <Table.Tr key={run.id}>
                 <Table.Td>
-                  <Text size="sm" fw={500} truncate>
+                  <Text size="sm" fw={600} truncate>
                     {run.jobName}
                   </Text>
                 </Table.Td>
@@ -152,7 +152,7 @@ export function CronSection({
             {cron.jobs.map((job) => (
               <Table.Tr key={job.name}>
                 <Table.Td>
-                  <Text size="sm" fw={500}>
+                  <Text size="sm" fw={600}>
                     {job.name}
                   </Text>
                 </Table.Td>

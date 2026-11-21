@@ -108,7 +108,7 @@ export function AddWidgetPicker({
                         size="sm"
                       />
                       <div className={classes.optionText}>
-                        <Text size="sm" fw={600} truncate>
+                        <Text size="sm" fw={700} truncate>
                           {widget.name}
                         </Text>
                         <Text size="xs" c="dimmed" truncate>

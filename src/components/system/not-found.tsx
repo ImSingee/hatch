@@ -13,7 +13,7 @@ export function NotFoundElement(_props: {}) {
       style={{ placeContent: 'center' }}
     >
       <Stack align="center" gap="xl">
-        <Text size={rem(220)} fw={900} lh={1} c="gray.2">
+        <Text size={rem(220)} fw={900} lh={1} c="gray.3">
           404
         </Text>
 

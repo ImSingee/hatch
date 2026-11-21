@@ -51,10 +51,10 @@ function ExecutionsPage() {
     >
       {runs.length === 0 ? (
         <Stack align="center" gap="xs" py={80} px="md">
-          <ThemeIcon size={52} radius="xl" variant="light" color="ember">
+          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
             <IconTimeline size={26} stroke={1.5} />
           </ThemeIcon>
-          <Text fw={600} mt="xs">
+          <Text fw={700} mt="xs">
             No executions yet
           </Text>
           <Text size="sm" c="dimmed" ta="center" maw={460}>
@@ -121,7 +121,7 @@ function ExecutionsPage() {
                         seed={run.workflowId}
                         size="sm"
                       />
-                      <Text size="sm" fw={500} truncate>
+                      <Text size="sm" fw={600} truncate>
                         {run.workflowName}
                       </Text>
                     </Group>

@@ -13,8 +13,8 @@
 
 /* Drop placeholder shown while dragging/resizing. */
 .grid :global(.react-grid-placeholder) {
-  background-color: var(--mantine-color-ember-light);
-  border: 1px dashed var(--mantine-color-ember-filled);
+  background-color: var(--mantine-color-primary-light);
+  border: 1px dashed var(--mantine-color-primary-filled);
   border-radius: var(--mantine-radius-md);
   opacity: 0.5;
 }

@@ -195,7 +195,7 @@ export function OperationsPanel({
   if (query.isLoading) {
     return (
       <Box component="section">
-        <Text fw={600} fz="lg" mb="md">
+        <Text fw={700} fz="lg" mb="md">
           Operations
         </Text>
         <Center py="lg">
@@ -223,7 +223,7 @@ export function OperationsPanel({
 
   return (
     <Box component="section">
-      <Text fw={600} fz="lg" mb="md">
+      <Text fw={700} fz="lg" mb="md">
         Operations
       </Text>
 

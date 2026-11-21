@@ -13,7 +13,7 @@ export function WorkflowNetworkPermissionsPanel({
 
   return (
     <Box component="section">
-      <Text fw={600} fz="lg" mb="md">
+      <Text fw={700} fz="lg" mb="md">
         Permissions
       </Text>
       {query.isLoading ? (
@@ -23,7 +23,7 @@ export function WorkflowNetworkPermissionsPanel({
       ) : query.data ? (
         <>
           <NetworkAccessDetails access={query.data.network} />
-          <Text fw={500} mt="md" mb="xs">
+          <Text fw={600} mt="md" mb="xs">
             Extra permissions
           </Text>
           <ExtraPermissionsDetails access={query.data.extraPermissions} />

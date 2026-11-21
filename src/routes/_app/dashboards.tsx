@@ -157,7 +157,7 @@ function DashboardsManagePage() {
       actions={
         <Button
           leftSection={<IconPlus size={16} stroke={1.8} />}
-          color="ember"
+          color="primary"
           loading={create.isPending}
           onClick={() => create.mutate()}
         >
@@ -180,10 +180,15 @@ function DashboardsManagePage() {
                     color: 'var(--mantine-color-dimmed)',
                   }}
                 />
-                <ThemeIcon variant="light" color="ember" radius="md" size={34}>
+                <ThemeIcon
+                  variant="light"
+                  color="primary"
+                  radius="md"
+                  size={34}
+                >
                   <IconLayoutDashboard size={18} stroke={1.6} />
                 </ThemeIcon>
-                <Text fw={600} truncate>
+                <Text fw={700} truncate>
                   {d.name}
                 </Text>
               </Group>

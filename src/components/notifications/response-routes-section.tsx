@@ -86,7 +86,7 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
       <form onSubmit={submit}>
         <Stack gap="md">
           <Stack gap={6}>
-            <Text size="sm" fw={500}>
+            <Text size="sm" fw={600}>
               When someone answers a notification from
             </Text>
             <SegmentedControl
@@ -271,7 +271,7 @@ export function ResponseRoutesSection() {
                 <Table.Tr key={route.id}>
                   <Table.Td>
                     <Stack gap={0} miw={0}>
-                      <Text size="sm" fw={500} truncate>
+                      <Text size="sm" fw={600} truncate>
                         {sourceLabel(route)} · {kindLabel(route)}
                       </Text>
                       {route.name ? (

@@ -1,3 +1,5 @@
+/* The layout editor's toolbar floats over the desk like the dock: a raised
+   white bar with the dock shadow. Its controls keep the standard theme. */
 .editorToolbar {
   position: sticky;
   top: var(--mantine-spacing-sm);
@@ -6,29 +8,9 @@
   margin: var(--mantine-spacing-sm) auto var(--mantine-spacing-xl);
   padding: var(--mantine-spacing-2xs);
   border-radius: var(--mantine-radius-lg);
-
-  /* Ember glow: the lightest apricot on the brand ramp (not a grayish warm
-     tint), defined by its warm hairline and the white controls floating on
-     it, so the bar says "editing" while staying airy. The filled Save button
-     carries the accent. */
-  background: var(--mantine-color-ember-0);
-  border: 1px solid rgba(194, 65, 12, 0.16);
-  box-shadow: 0 2px 8px -4px rgba(194, 65, 12, 0.16);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-dock);
   animation: editor-toolbar-in 200ms var(--ease-out-quart);
-
-  /* Remap the semantic tokens Mantine controls resolve their inline vars
-     against, so the neutral components pick up the warm ink and surfaces.
-     Portaled dropdowns render at body level and keep the plain light look. */
-  --mantine-color-text: var(--mantine-color-stone-8);
-  --mantine-color-dimmed: rgba(87, 83, 78, 0.85);
-  --mantine-color-default: transparent;
-  --mantine-color-default-hover: rgba(234, 88, 12, 0.08);
-  --mantine-color-default-color: var(--mantine-color-stone-7);
-  --mantine-color-default-border: rgba(124, 45, 18, 0.25);
-  --mantine-color-disabled: rgba(124, 45, 18, 0.07);
-  --mantine-color-disabled-color: rgba(124, 45, 18, 0.42);
-  --mantine-color-gray-light-hover: rgba(234, 88, 12, 0.08);
-  --mantine-color-gray-light-color: var(--mantine-color-stone-6);
 }
 
 @keyframes editor-toolbar-in {
@@ -54,43 +36,25 @@
   min-width: max-content;
 }
 
-.editorToolbar :global(.mantine-SegmentedControl-root) {
-  /* Selection reads as the app-wide light-ember tint (same vocabulary as the
-     sidebar's active item); the indicator resolves --mantine-color-default. */
-  --mantine-color-default: rgba(234, 88, 12, 0.13);
-
-  background-color: transparent;
-}
-
-.editorToolbar :global(.mantine-SegmentedControl-label) {
-  color: rgba(124, 45, 18, 0.82);
-}
-
-.editorToolbar :global(.mantine-SegmentedControl-label):hover,
-.editorToolbar :global(.mantine-SegmentedControl-label[data-active]) {
-  color: var(--mantine-color-ember-9);
-}
-
 .editorDivider {
   height: 24px;
   align-self: center;
-  border-color: rgba(124, 45, 18, 0.18);
 }
 
 .draftStatus {
   min-height: 30px;
   padding-inline: var(--mantine-spacing-xs);
   border-radius: var(--mantine-radius-xl);
-  background: rgba(234, 88, 12, 0.07);
+  background: var(--surface-hover);
   white-space: nowrap;
-  color: var(--mantine-color-stone-6);
+  color: var(--mantine-color-dimmed);
 }
 
 .draftError {
   min-height: 30px;
   padding-inline: var(--mantine-spacing-xs);
   border-radius: var(--mantine-radius-xl);
-  background: rgba(220, 38, 38, 0.1);
+  background: var(--mantine-color-red-light);
   white-space: nowrap;
-  color: var(--mantine-color-red-6);
+  color: var(--mantine-color-red-light-color);
 }

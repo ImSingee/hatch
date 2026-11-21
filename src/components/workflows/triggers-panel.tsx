@@ -34,7 +34,7 @@ function SectionHeader({
   return (
     <Group gap={8} wrap="nowrap">
       {icon}
-      <Text fw={600} size="sm">
+      <Text fw={700} size="sm">
         {title}
       </Text>
       {meta}
@@ -49,7 +49,7 @@ export function WorkflowTriggersPanel({ workflowId }: { workflowId: string }) {
   if (query.isLoading) {
     return (
       <Box component="section">
-        <Text fw={600} fz="lg" mb="md">
+        <Text fw={700} fz="lg" mb="md">
           Triggers
         </Text>
         <Center py="lg">
@@ -64,7 +64,7 @@ export function WorkflowTriggersPanel({ workflowId }: { workflowId: string }) {
 
   return (
     <Box component="section">
-      <Text fw={600} fz="lg" mb="md">
+      <Text fw={700} fz="lg" mb="md">
         Triggers
       </Text>
       <Stack gap="lg">
@@ -94,7 +94,7 @@ export function WorkflowTriggersPanel({ workflowId }: { workflowId: string }) {
                 {ops.cron.jobs.map((job) => (
                   <Table.Tr key={job.name}>
                     <Table.Td>
-                      <Text size="sm" fw={500}>
+                      <Text size="sm" fw={600}>
                         {job.name}
                       </Text>
                     </Table.Td>

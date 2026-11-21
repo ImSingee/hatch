@@ -88,7 +88,7 @@ function DeploymentActions({
               size="sm"
             />
             <Box className={classes.deploymentActionIdentity}>
-              <Text size="sm" fw={600} truncate>
+              <Text size="sm" fw={700} truncate>
                 {item.name}
               </Text>
               <Text size="xs" c="dimmed" truncate>
@@ -147,7 +147,7 @@ export function AppDeploymentActions({
                 <Button
                   size="compact-sm"
                   variant="light"
-                  color="ember"
+                  color="primary"
                   leftSection={<IconExternalLink size={14} stroke={1.8} />}
                   renderRoot={(props) => (
                     <Link
@@ -252,7 +252,7 @@ export function WorkflowDeploymentActions({
                 <Button
                   size="compact-sm"
                   variant="light"
-                  color="ember"
+                  color="primary"
                   leftSection={<IconExternalLink size={14} stroke={1.8} />}
                   renderRoot={(props) => (
                     <Link

@@ -202,7 +202,7 @@ export function GroupsSection() {
             {groups.map((group) => (
               <Table.Tr key={group.id}>
                 <Table.Td>
-                  <Text size="sm" fw={600} truncate>
+                  <Text size="sm" fw={700} truncate>
                     {group.name}
                   </Text>
                   {group.description ? (

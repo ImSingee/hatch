@@ -106,7 +106,7 @@ export function NewChat({
     <Box className={classes.hero}>
       <Stack className={classes.heroInner} gap="lg">
         <Stack gap={8} align="center">
-          <ThemeIcon size={56} radius="xl" variant="light" color="ember">
+          <ThemeIcon size={56} radius="xl" variant="light" color="primary">
             <IconSparkles size={28} stroke={1.5} />
           </ThemeIcon>
           <Title order={2} className={classes.heroTitle}>
@@ -124,7 +124,7 @@ export function NewChat({
               <ThemeIcon size={44} radius="xl" variant="light" color="gray">
                 <IconPlugConnected size={22} stroke={1.6} />
               </ThemeIcon>
-              <Text fw={600}>Connect an AI provider to start</Text>
+              <Text fw={700}>Connect an AI provider to start</Text>
               <Text size="sm" c="dimmed" ta="center" maw={380}>
                 Add a provider and enable a model in Settings, then come back to
                 start building.

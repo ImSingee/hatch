@@ -71,7 +71,7 @@ function AgentLayout() {
             >
               <IconMessages size={18} stroke={1.6} />
             </ActionIcon>
-            <Text fw={600} size="sm" truncate>
+            <Text fw={700} size="sm" truncate>
               {threadId ? 'Chat' : 'New chat'}
             </Text>
           </Box>

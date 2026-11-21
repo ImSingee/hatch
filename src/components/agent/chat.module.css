@@ -14,9 +14,9 @@
   display: inline;
   padding: 1px 4px;
   border-radius: var(--mantine-radius-xs);
-  background: var(--mantine-color-ember-light);
-  color: var(--mantine-color-ember-light-color);
-  font-weight: 600;
+  background: var(--mantine-color-primary-light);
+  color: var(--mantine-color-primary-light-color);
+  font-weight: 700;
   white-space: nowrap;
   box-decoration-break: clone;
 }
@@ -129,7 +129,7 @@
 .deploymentActionsTitle {
   padding: 7px 10px;
   font-size: var(--mantine-font-size-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--mantine-color-dimmed);
   background: var(--surface-panel);
 }
@@ -214,7 +214,7 @@ button.workHeader:hover {
 }
 
 .workLabel {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .workDuration {
@@ -291,7 +291,7 @@ button.stepHeader:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--mantine-font-size-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--mantine-color-text);
 }
 
@@ -342,7 +342,7 @@ button.stepHeader:hover {
 .stepBodyLabel {
   margin-bottom: 2px;
   font-size: var(--mantine-font-size-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--mantine-color-dimmed);
 }
 
@@ -587,7 +587,7 @@ button.stepHeader:hover {
   margin: 0 0 var(--mantine-spacing-4xs);
   padding-inline: 10px;
   font-size: var(--mantine-font-size-xs);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.4;
   color: var(--mantine-color-dimmed);
 }
@@ -606,7 +606,7 @@ button.stepHeader:hover {
 
 .sessionItemActive {
   composes: sessionItem;
-  background-color: var(--mantine-color-ember-light);
+  background-color: var(--mantine-color-primary-light);
 }
 
 .sessionItemLabel {
@@ -693,9 +693,9 @@ button.stepHeader:hover {
 /* ---------- composer card (LobeHub / cursor-style) ---------- */
 
 .composerCard {
-  border: 1px solid var(--mantine-color-default-border);
-  border-radius: var(--mantine-radius-lg);
-  background-color: var(--mantine-color-default);
+  border: 1px solid var(--border-input);
+  border-radius: var(--mantine-radius-xl);
+  background-color: var(--surface-raised);
   padding: 6px 8px 8px;
   transition:
     border-color 150ms ease,
@@ -703,15 +703,14 @@ button.stepHeader:hover {
 }
 
 .composerCard:focus-within {
-  border-color: var(--mantine-color-ember-filled);
-  box-shadow: 0 0 0 3px
-    color-mix(in srgb, var(--mantine-color-ember-filled) 16%, transparent);
+  border-color: var(--focus-ring);
+  box-shadow: var(--shadow-card);
 }
 
 .composerCard[data-dragging] {
-  border-color: var(--mantine-color-ember-filled);
+  border-color: var(--mantine-color-primary-filled);
   border-style: dashed;
-  background-color: var(--mantine-color-ember-light);
+  background-color: var(--mantine-color-primary-light);
 }
 
 .composerCard[data-disabled] {
@@ -751,9 +750,9 @@ button.stepHeader:hover {
 .composerMention {
   padding: 1px 4px;
   border-radius: var(--mantine-radius-xs);
-  background: var(--mantine-color-ember-light);
-  color: var(--mantine-color-ember-light-color);
-  font-weight: 600;
+  background: var(--mantine-color-primary-light);
+  color: var(--mantine-color-primary-light-color);
+  font-weight: 700;
   white-space: nowrap;
   box-decoration-break: clone;
 }
@@ -848,7 +847,7 @@ button.stepHeader:hover {
   padding: 5px 10px;
   border-radius: var(--mantine-radius-xl);
   font-size: var(--mantine-font-size-xs);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--mantine-color-dimmed);
   transition:
     background-color 120ms ease,
@@ -901,12 +900,16 @@ button.stepHeader:hover {
   position: absolute;
   top: 2px;
   right: 2px;
-  background-color: rgba(0, 0, 0, 0.55);
-  color: white;
+  background-color: var(--surface-scrim);
+  color: var(--mantine-color-white);
 }
 
 .thumbRemove:hover {
-  background-color: rgba(0, 0, 0, 0.75);
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-black) 75%,
+    transparent
+  );
 }
 
 .fileAttachment {
@@ -1004,26 +1007,26 @@ button.stepHeader:hover {
 
 .askCard {
   background-color: var(--mantine-color-body);
-  border-color: var(--mantine-color-ember-light);
+  border-color: var(--mantine-color-primary-light);
   max-width: 520px;
 }
 
 .askIcon {
-  color: var(--mantine-color-ember-6);
+  color: var(--mantine-color-primary-6);
 }
 
 .envCard {
   background-color: var(--mantine-color-body);
-  border-color: var(--mantine-color-ember-light);
+  border-color: var(--mantine-color-primary-light);
   max-width: 520px;
 }
 
 .envIcon {
-  color: var(--mantine-color-ember-8);
+  color: var(--mantine-color-primary-8);
 }
 
 .envHeading {
-  color: var(--mantine-color-ember-8);
+  color: var(--mantine-color-primary-8);
 }
 
 .envNote {

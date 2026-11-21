@@ -256,7 +256,7 @@ export function WidgetCard({
             <IconGripVertical size={17} stroke={1.7} className={classes.grip} />
           ) : null}
           <AppGlyph name={item.appName} seed={item.appId} size="sm" />
-          <Text size="sm" fw={600} truncate>
+          <Text size="sm" fw={700} truncate>
             {item.name}
           </Text>
         </Group>

@@ -384,7 +384,7 @@ export function DestinationsSection() {
                     </Box>
                     <Stack gap={0} miw={0}>
                       <Group gap={6} wrap="nowrap">
-                        <Text size="sm" fw={600} truncate>
+                        <Text size="sm" fw={700} truncate>
                           {destination.name}
                         </Text>
                         <Badge size="xs" variant="light" color="gray">

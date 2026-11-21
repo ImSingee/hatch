@@ -243,7 +243,7 @@ function AppDetailPage() {
         <AppCompatibilityNotice compatibility={app.compatibility} />
 
         <Box component="section">
-          <Text fw={600} fz="lg" mb="md">
+          <Text fw={700} fz="lg" mb="md">
             Overview
           </Text>
 

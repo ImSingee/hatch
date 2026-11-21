@@ -104,7 +104,7 @@ export function DashboardEmptyState({
   return (
     <Box className={classes.root}>
       <Stack className={classes.inner} align="center" gap="lg">
-        <ThemeIcon size={56} radius="xl" variant="light" color="ember">
+        <ThemeIcon size={56} radius="xl" variant="light" color="primary">
           <IconSparkles size={28} stroke={1.5} />
         </ThemeIcon>
         <Stack gap={8} align="center">
@@ -126,7 +126,7 @@ export function DashboardEmptyState({
           Build your first app
         </Button>
         <Stack gap={6} align="center">
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
             Try starting with
           </Text>
           <Group gap="xs" justify="center">

@@ -12,5 +12,5 @@
 }
 
 .row:hover {
-  background-color: var(--surface-panel);
+  background-color: var(--surface-hover);
 }

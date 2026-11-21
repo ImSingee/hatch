@@ -316,7 +316,7 @@ function DraftStatus({
     return (
       <Group gap="xs" className={classes.draftError} wrap="nowrap">
         <IconAlertCircle size={16} stroke={1.8} />
-        <Text size="sm" fw={500}>
+        <Text size="sm" fw={600}>
           {status.message}
         </Text>
         {status.state === 'unknown' ? (
@@ -338,7 +338,7 @@ function DraftStatus({
     return (
       <Group gap={6} className={classes.draftStatus} aria-live="polite">
         <Loader size={14} />
-        <Text size="sm" fw={500}>
+        <Text size="sm" fw={600}>
           Checking save status
         </Text>
       </Group>

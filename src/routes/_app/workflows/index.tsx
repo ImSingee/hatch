@@ -56,10 +56,10 @@ function WorkflowsPage() {
     >
       {workflows.length === 0 ? (
         <Stack align="center" gap="xs" py={80} px="md">
-          <ThemeIcon size={52} radius="xl" variant="light" color="ember">
+          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
             <IconRepeat size={26} stroke={1.5} />
           </ThemeIcon>
-          <Text fw={600} mt="xs">
+          <Text fw={700} mt="xs">
             No workflows yet
           </Text>
           <Text size="sm" c="dimmed" ta="center" maw={460}>
@@ -98,7 +98,7 @@ function WorkflowsPage() {
                     seed={workflow.id}
                   />
                   <Text
-                    fw={600}
+                    fw={700}
                     truncate
                     renderRoot={(props) => (
                       <Link

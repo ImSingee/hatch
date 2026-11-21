@@ -33,7 +33,7 @@ export function WorkflowRunList({
   return (
     <Box component="section">
       <Group gap={8} mb="md" align="baseline">
-        <Text fw={600} fz="lg">
+        <Text fw={700} fz="lg">
           Executions
         </Text>
         {runs.length > 0 ? (

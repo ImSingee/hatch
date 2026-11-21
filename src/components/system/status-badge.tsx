@@ -6,8 +6,8 @@ type LifecycleStatus = AppStatus | WorkflowStatus;
 
 const statusMeta: Record<LifecycleStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'gray' },
-  building: { label: 'Building', color: 'ember' },
-  deployed: { label: 'Live', color: 'ember' },
+  building: { label: 'Building', color: 'primary' },
+  deployed: { label: 'Live', color: 'primary' },
   failed: { label: 'Failed', color: 'red' },
   archived: { label: 'Archived', color: 'gray' },
 };

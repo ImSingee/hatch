@@ -415,7 +415,7 @@ export function Composer({
           ) : (
             <ActionIcon
               variant="filled"
-              color="ember"
+              color="primary"
               radius="xl"
               size="lg"
               aria-label="Send"

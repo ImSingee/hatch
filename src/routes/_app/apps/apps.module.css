@@ -1,27 +1,18 @@
-/* Calm warm-panel tile: a whisper-warm surface on the white page instead of a
-   hard bordered card. No lift/shadow — hover gently lifts the surface toward
-   white and adds a faint ember hairline. */
+/* App tile: a white card on the desk. Hover lifts it onto the dock shadow. */
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
-  background-color: var(--surface-panel);
-  border: 1px solid transparent;
+  background-color: var(--surface-raised);
+  box-shadow: var(--shadow-card);
   transition:
-    background-color 150ms ease,
-    border-color 150ms ease;
+    box-shadow var(--transition-base),
+    transform var(--transition-base);
 }
 
 .card:hover {
-  /* A whisper *brighter* than the resting panel — a gentle lift toward the page
-     white, but nowhere near full white (which read as a jarring "bleach"). The
-     ember hairline carries most of the hover cue. */
-  background-color: color-mix(
-    in srgb,
-    var(--surface-raised) 35%,
-    var(--surface-panel)
-  );
-  border-color: var(--mantine-color-ember-outline);
+  box-shadow: var(--shadow-dock);
+  transform: translateY(-1px);
 }
 
 /*

@@ -11,7 +11,7 @@ export function AppLoading() {
     <Center mih="100dvh" w="100%">
       <Stack align="center" gap="lg">
         <Brand size="lg" withWordmark={false} />
-        <Loader size="sm" color="ember" type="dots" />
+        <Loader size="sm" color="primary" type="dots" />
       </Stack>
     </Center>
   );

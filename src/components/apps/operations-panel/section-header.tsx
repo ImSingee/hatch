@@ -16,7 +16,7 @@ export function SectionHeader({
   return (
     <Group gap={8} wrap="nowrap">
       {icon}
-      <Text fw={600} size="sm">
+      <Text fw={700} size="sm">
         {title}
       </Text>
       {meta}
@@ -24,7 +24,7 @@ export function SectionHeader({
   );
 }
 
-// A small, flat status indicator (not a pill badge): ember when active, muted
+// A small, flat status indicator (not a pill badge): accent when active, muted
 // otherwise.
 export function StatusDot({ active }: { active: boolean }) {
   return (
@@ -36,7 +36,7 @@ export function StatusDot({ active }: { active: boolean }) {
         flex: 'none',
         borderRadius: '50%',
         backgroundColor: active
-          ? 'var(--mantine-color-ember-6)'
+          ? 'var(--mantine-color-primary-6)'
           : 'var(--mantine-color-gray-4)',
       }}
     />

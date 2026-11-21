@@ -24,7 +24,7 @@ export function WorkflowTabs({ slug, active }: { slug: string; active: Tab }) {
           />
         )}
         variant={active === 'run' ? 'light' : 'default'}
-        color={active === 'run' ? 'ember' : 'gray'}
+        color={active === 'run' ? 'primary' : 'gray'}
         leftSection={<IconPlayerPlay size={16} stroke={1.8} />}
       >
         Run
@@ -38,7 +38,7 @@ export function WorkflowTabs({ slug, active }: { slug: string; active: Tab }) {
           />
         )}
         variant={active === 'executions' ? 'light' : 'default'}
-        color={active === 'executions' ? 'ember' : 'gray'}
+        color={active === 'executions' ? 'primary' : 'gray'}
         leftSection={<IconTimeline size={16} stroke={1.8} />}
       >
         Executions
@@ -52,7 +52,7 @@ export function WorkflowTabs({ slug, active }: { slug: string; active: Tab }) {
           />
         )}
         variant={active === 'manage' ? 'light' : 'default'}
-        color={active === 'manage' ? 'ember' : 'gray'}
+        color={active === 'manage' ? 'primary' : 'gray'}
         leftSection={<IconSettings size={16} stroke={1.8} />}
       >
         Manage
