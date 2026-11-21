@@ -2,6 +2,7 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  border-radius: var(--glyph-radius);
   background: var(--glyph-bg);
   color: var(--mantine-color-white);
   font-weight: var(--font-weight-heading);
@@ -9,35 +10,56 @@
   user-select: none;
 }
 
+.glyph[data-size='hero'] {
+  width: 72px;
+  height: 72px;
+  --glyph-radius: var(--mantine-radius-xl);
+  font-size: 26px;
+  box-shadow: var(--shadow-card);
+}
+
+.glyph[data-size='xl'] {
+  width: 56px;
+  height: 56px;
+  --glyph-radius: var(--mantine-radius-lg);
+  font-size: 20px;
+  box-shadow: var(--shadow-card);
+}
+
 .glyph[data-size='lg'] {
   width: 44px;
   height: 44px;
-  border-radius: var(--mantine-radius-md);
+  --glyph-radius: var(--mantine-radius-md);
   font-size: 21px;
 }
 
 .glyph[data-size='dock'] {
   width: var(--size-dock-tile);
   height: var(--size-dock-tile);
-  border-radius: var(--mantine-radius-md);
+  --glyph-radius: var(--mantine-radius-md);
   font-size: 19px;
 }
 
 .glyph[data-size='md'] {
   width: 38px;
   height: 38px;
-  border-radius: var(--mantine-radius-sm);
+  --glyph-radius: var(--mantine-radius-sm);
   font-size: 18px;
 }
 
 .glyph[data-size='sm'] {
   width: 22px;
   height: 22px;
-  border-radius: var(--mantine-radius-xs);
+  --glyph-radius: var(--mantine-radius-xs);
   font-size: 12px;
 }
 
 img.glyph {
   display: block;
   object-fit: cover;
+}
+
+/* A Workflow tile squares off its bottom-left corner. */
+.glyph[data-shape='workflow'] {
+  border-end-start-radius: calc(var(--glyph-radius) / 4);
 }

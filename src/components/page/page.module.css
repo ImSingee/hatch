@@ -1,0 +1,575 @@
+/* Shared page primitives for content inside a Desk window. Every value is a
+   variable set from the design tokens. */
+
+/* ---- Body --------------------------------------------------------------- */
+
+.body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--mantine-color-gray-0);
+}
+
+.body[data-tone='sheet'] {
+  background: var(--surface-raised);
+}
+
+.bodyInner {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(var(--body-max-width, 100%), 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 22px clamp(16px, 2.4vw, 28px) 28px;
+}
+
+/* ---- Heading ------------------------------------------------------------ */
+
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 24px;
+}
+
+.headingText {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.headingTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.headingTitle {
+  margin: 0;
+  font-size: 24px;
+  font-weight: var(--font-weight-heading);
+  line-height: 32px;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.headingMeta {
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  font-weight: var(--font-weight-label);
+  line-height: 18px;
+}
+
+.headingDescription {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--mantine-color-gray-7);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.headingActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Section ------------------------------------------------------------ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: 30px;
+  padding: 0 6px;
+}
+
+.sectionTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-heading);
+  line-height: 18px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sectionMeta {
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  line-height: 18px;
+}
+
+.sectionAside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionNote {
+  margin: 0;
+  padding: 0 6px;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* ---- Columns ------------------------------------------------------------ */
+
+.columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.column {
+  flex: 1 1 var(--column-basis, 400px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---- Group card --------------------------------------------------------- */
+
+/* A group inside a window: outlined with the hairline, flat. */
+.group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--surface-raised);
+}
+
+.group[data-padded] {
+  padding: 16px;
+}
+
+.group[data-dashed] {
+  border-style: dashed;
+  border-color: var(--mantine-color-gray-4);
+  background: transparent;
+}
+
+.groupBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.groupBlock + .groupBlock,
+.row + .groupBlock,
+.item + .groupBlock,
+.groupBlock + .row,
+.groupBlock + .item,
+.groupFooter {
+  border-top: 1px solid var(--border-hairline);
+}
+
+.groupFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--surface-muted);
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ---- Row: one label and its value --------------------------------------- */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 46px;
+  padding: 6px 16px;
+  color: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-decoration: none;
+}
+
+.row + .row,
+.item + .row,
+.row + .item,
+.item + .item {
+  border-top: 1px solid var(--border-hairline);
+}
+
+.row[data-stack] {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  padding-block: 10px;
+}
+
+.rowLabel {
+  flex: none;
+  max-width: 50%;
+  color: var(--mantine-color-gray-7);
+  font-weight: var(--font-weight-label);
+}
+
+.row[data-stack] .rowLabel {
+  max-width: none;
+}
+
+.rowValue {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 8px;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.row[data-stack] .rowValue {
+  justify-content: flex-start;
+  text-align: start;
+}
+
+.rowValue[data-mono] {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+}
+
+a.row,
+button.row {
+  width: 100%;
+  border-inline: 0;
+  border-bottom: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: var(--font-weight-label);
+  text-align: start;
+  transition: background-color var(--transition-fast);
+}
+
+button.row:first-child,
+a.row:first-child {
+  border-top: 0;
+}
+
+a.row:hover,
+button.row:hover {
+  background: var(--surface-hover);
+}
+
+a.row:focus-visible,
+button.row:focus-visible {
+  outline-offset: -2px;
+}
+
+.rowChevron {
+  flex: none;
+  color: var(--mantine-color-gray-5);
+}
+
+/* ---- Item: a tile, a title, a meta line and trailing actions ------------- */
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 10px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.item {
+  transition: background-color var(--transition-fast);
+}
+
+a.item:hover {
+  background: var(--surface-hover);
+}
+
+a.item:focus-visible {
+  outline-offset: -2px;
+}
+
+.itemText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.itemTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.itemMeta {
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.itemTrailing {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 55%;
+}
+
+@media (max-width: 35em) {
+  .item[data-wrap] {
+    flex-wrap: wrap;
+  }
+
+  .item[data-wrap] .itemTrailing {
+    max-width: none;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-inline-start: 46px;
+  }
+}
+
+/* The neutral 34 tile that leads a list row. */
+.leadTile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-7);
+}
+
+/* ---- Table -------------------------------------------------------------- */
+
+/* A table scrolls sideways inside its group instead of squeezing its
+   columns: every column keeps its content on one line. */
+.tableScroll {
+  overflow-x: auto;
+}
+
+.tableScroll :global(.mantine-Table-table) {
+  min-width: max-content;
+}
+
+.tableScroll :global(.mantine-Table-th) {
+  height: 34px;
+  padding-block: 0;
+  white-space: nowrap;
+}
+
+.tableScroll :global(.mantine-Table-td) {
+  height: 38px;
+  padding-block: 6px;
+  white-space: nowrap;
+}
+
+.tableScroll :global(.mantine-Table-th),
+.tableScroll :global(.mantine-Table-td) {
+  padding-inline: 14px;
+}
+
+.tableScroll :global(.mantine-Table-thead) {
+  border-bottom: 0;
+}
+
+/* ---- Empty state -------------------------------------------------------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: min(420px, 100%);
+  margin: auto;
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.empty[data-variant='dashed'] {
+  width: 100%;
+  gap: 8px;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--mantine-color-gray-4);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--mantine-color-gray-0);
+}
+
+.emptyTile {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--mantine-radius-lg);
+  background: var(--surface-hover);
+  color: var(--mantine-color-gray-7);
+}
+
+.emptyTile[data-tone='accent'] {
+  background: var(--mantine-color-primary-light);
+  color: var(--mantine-color-primary-light-color);
+}
+
+.emptyTile[data-tone='danger'] {
+  background: var(--mantine-color-red-light);
+  color: var(--mantine-color-red-light-color);
+}
+
+.empty[data-variant='dashed'] .emptyTile {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mantine-radius-md);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--font-weight-heading);
+  line-height: 28px;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.empty[data-variant='dashed'] .emptyTitle {
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: 0;
+}
+
+.emptyText {
+  margin: 0;
+  color: var(--mantine-color-dimmed);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.empty[data-variant='dashed'] .emptyText {
+  max-width: 340px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.emptyLine {
+  margin: 0;
+  padding: 14px 16px;
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ---- Callout: a dashed note that points somewhere else ------------------- */
+
+.callout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1.5px dashed var(--mantine-color-gray-4);
+  border-radius: var(--mantine-radius-xl);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--mantine-color-gray-7);
+}
+
+.calloutTitle {
+  color: var(--mantine-color-text);
+  font-size: 14px;
+  font-weight: var(--font-weight-heading);
+}
+
+/* ---- Mono --------------------------------------------------------------- */
+
+.mono {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+}
+
+/* ---- Toolbar ------------------------------------------------------------ */
+
+/* The controls above a list: what it shows on the left, how to narrow it
+   and the primary action on the right. Wraps instead of squeezing. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.toolbarLead {
+  flex: 1 1 160px;
+  min-width: 0;
+  margin-inline-end: auto;
+  color: var(--mantine-color-dimmed);
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+  line-height: 20px;
+}
+
+.toolbarSearch {
+  flex: 0 1 340px;
+  min-width: 200px;
+}
+
+@media (max-width: 35em) {
+  .toolbarSearch {
+    flex-basis: 100%;
+  }
+}

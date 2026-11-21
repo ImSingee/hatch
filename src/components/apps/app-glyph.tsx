@@ -28,9 +28,20 @@ type GlyphProps = {
   name: string;
   /** Stable identifier for the tint; defaults to the name. */
   seed?: string;
-  /** `dock` is the dock tile: the size comes from the design tokens. */
-  size?: 'sm' | 'md' | 'dock' | 'lg';
+  /**
+   * `dock` is the dock tile: the size comes from the design tokens. `xl` (56)
+   * is the launcher tile and `hero` (72) leads a detail view.
+   */
+  size?: 'sm' | 'md' | 'dock' | 'lg' | 'xl' | 'hero';
+  /** Workflows share the tile and differ by one squared-off corner. */
+  shape?: 'app' | 'workflow';
 };
+
+/** Stored icon size that covers a tile on a 2x display. */
+function iconSizeFor(size: NonNullable<GlyphProps['size']>): 64 | 128 | 256 {
+  if (size === 'sm') return 64;
+  return size === 'xl' || size === 'hero' ? 256 : 128;
+}
 
 /**
  * An App's tile: its stored icon when it has one, else the monogram. `seed`
@@ -56,12 +67,13 @@ function AppIconGlyph(props: GlyphProps) {
   // remember the URL that failed and show the monogram until it changes.
   const [failed, setFailed] = useState<string | null>(null);
   if (!key || !props.seed) return <Monogram {...props} />;
-  const src = appIconUrl(props.seed, key, size === 'sm' ? 64 : 128);
+  const src = appIconUrl(props.seed, key, iconSizeFor(size));
   if (failed === src) return <Monogram {...props} />;
   return (
     <img
       className={classes.glyph}
       data-size={size}
+      data-shape={props.shape}
       src={src}
       onError={() => setFailed(src)}
       alt=""
@@ -71,12 +83,13 @@ function AppIconGlyph(props: GlyphProps) {
   );
 }
 
-function Monogram({ name, seed, size = 'md' }: GlyphProps) {
+function Monogram({ name, seed, size = 'md', shape }: GlyphProps) {
   const tile = TILE_COLORS[hash(seed ?? name) % TILE_COLORS.length];
   return (
     <span
       className={classes.glyph}
       data-size={size}
+      data-shape={shape}
       aria-hidden
       style={{ '--glyph-bg': tile } as CSSProperties}
     >

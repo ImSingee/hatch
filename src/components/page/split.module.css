@@ -1,0 +1,211 @@
+/* A window with a section rail on the left and the section on the right. */
+
+.split {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: var(--rail-width, 248px);
+  min-height: 0;
+  padding: 16px 12px;
+  overflow-y: auto;
+  background: var(--surface-muted);
+  border-inline-end: 1px solid var(--border-hairline);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 6px 14px;
+}
+
+.identityTile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.identityTile[data-monogram] {
+  background: var(--mantine-color-primary-filled);
+  color: var(--mantine-color-white);
+  font-size: 19px;
+  font-weight: var(--font-weight-heading);
+}
+
+.identityText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.identityName {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: var(--font-weight-heading);
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identityMeta {
+  overflow: hidden;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search {
+  margin-bottom: 8px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label {
+  padding: 12px 10px 2px;
+  color: var(--mantine-color-dimmed);
+  font-size: 11px;
+  font-weight: var(--font-weight-heading);
+  line-height: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.label:first-child {
+  padding-top: 6px;
+}
+
+.link {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-text);
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+  line-height: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.link:hover {
+  background: var(--mantine-color-gray-2);
+}
+
+/* The current section is a white chip on the muted rail. */
+.link[data-current] {
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.none {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding: 16px 6px 0;
+}
+
+/* Narrower than a rail plus a readable column: the rail lies down above the
+   section. Its identity and actions share one row, its links scroll sideways. */
+@media (max-width: 50em) {
+  .split {
+    flex-direction: column;
+  }
+
+  .rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'identity footer'
+      'nav nav';
+    align-items: center;
+    gap: 10px 12px;
+    width: auto;
+    padding: 12px;
+    overflow: visible;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--border-hairline);
+  }
+
+  .identity {
+    grid-area: identity;
+    padding: 0 4px;
+  }
+
+  .identityTile {
+    width: 36px;
+    height: 36px;
+  }
+
+  .identityName {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  .search {
+    display: none;
+  }
+
+  .nav {
+    grid-area: nav;
+    flex-direction: row;
+    margin: -4px;
+    padding: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .label {
+    display: none;
+  }
+
+  .footer {
+    grid-area: footer;
+    flex-direction: row;
+    margin: 0;
+    padding: 0;
+  }
+}
