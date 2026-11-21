@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { REFRESH_PRESETS, formatInterval } from '@hatch/platform-api';
 import { useCallback, useState } from 'react';
 import { useIsFocused, useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dashboardDestination, type BrowserDestination } from '../core';
 import { useSession } from '../state/session';
@@ -13,22 +13,23 @@ import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { useSurfaceHandoff } from '../state/use-surface-handoff';
 import { RefreshMenu } from '../ui/native-controls';
 import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
-import { ScopeTabs } from '../ui/scope-tabs';
+import { useAccent } from '../ui/accent';
 import { Screen } from '../ui/screen';
 import { SecureSurface } from '../ui/secure-surface';
-import { palette as c, radii } from '../ui/theme';
+import { palette as c, pill, radii, shadows } from '../ui/theme';
 
-export function DashboardScreen({ nested = false }: { nested?: boolean }) {
+/**
+ * The dashboards of the instance and the one on show. Widgets are web
+ * content: a dashboard is one web canvas, shown in a sheet on the home screen
+ * and at full height on the Widgets page.
+ */
+export function useDashboards(focused: boolean) {
   const { api, origin, epoch } = useSession();
-  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const lifetime = useLifetimeSignal();
   const [ready, setReady] = useState(false);
   // Each bump asks the loaded canvas to refresh its widgets once.
   const [refreshRevision, setRefreshRevision] = useState(0);
-  // Native tabs mount hidden screens: the surface's sign-in and the refresh
-  // timer wait until this one is on screen.
-  const focused = useIsFocused();
   // A link names a dashboard; each delivery (a new `at`) selects it again.
   const linked = useLocalSearchParams<{ dashboard?: string; at?: string }>();
   const delivery = linked.dashboard ? `${linked.dashboard} ${linked.at}` : null;
@@ -103,84 +104,154 @@ export function DashboardScreen({ nested = false }: { nested?: boolean }) {
       );
     },
   });
+  return {
+    origin,
+    epoch,
+    focused,
+    workspace,
+    dashboards,
+    current,
+    missing,
+    destination,
+    invalid,
+    attempt,
+    retry,
+    refresh,
+    refreshWidgets,
+    refreshRevision,
+    seconds,
+    saveInterval,
+    ready,
+    setReady,
+    select: setSelection,
+  };
+}
+
+export type Dashboards = ReturnType<typeof useDashboards>;
+
+/** Refresh now and auto refresh for the dashboard on show. */
+export function DashboardRefresh({ board }: { board: Dashboards }) {
+  const { current, seconds, saveInterval } = board;
   const intervals = REFRESH_PRESETS.some((preset) => preset.seconds === seconds)
     ? REFRESH_PRESETS
     : [...REFRESH_PRESETS, { label: formatInterval(seconds), seconds }];
-  // Dated by the last workspace refresh, so the masthead says when it was read.
-  const today = workspace.dataUpdatedAt
-    ? new Date(workspace.dataUpdatedAt).toLocaleDateString(undefined, {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-      })
-    : 'Today';
   return (
-    <Screen
-      eyebrow={today}
-      title="Dashboard"
-      nested={nested}
-      actions={
-        <RefreshMenu
-          label="Refresh dashboard"
-          // With no dashboards there is no canvas to wait for; a refresh
-          // can still find one created on the web.
-          disabled={!ready && !(workspace.data && !dashboards.length)}
-          onRefresh={refresh}
-          interval={String(current ? seconds : 0)}
-          intervalLabel={seconds ? formatInterval(seconds) : undefined}
-          intervalDisabled={!current || saveInterval.isPending}
-          options={intervals.map((preset) => ({
-            value: String(preset.seconds),
-            label: preset.seconds ? 'Every ' + preset.label : 'Off',
-          }))}
-          onInterval={(value) => {
-            if (current)
-              saveInterval.mutate({ id: current.id, seconds: Number(value) });
-          }}
-        />
+    <RefreshMenu
+      label="Refresh widgets"
+      // With no dashboards there is no canvas to wait for; a refresh can
+      // still find one created on the web.
+      disabled={
+        !board.ready && !(board.workspace.data && !board.dashboards.length)
       }
+      onRefresh={board.refresh}
+      interval={String(current ? seconds : 0)}
+      intervalLabel={seconds ? formatInterval(seconds) : undefined}
+      intervalDisabled={!current || saveInterval.isPending}
+      options={intervals.map((preset) => ({
+        value: String(preset.seconds),
+        label: preset.seconds ? 'Every ' + preset.label : 'Off',
+      }))}
+      onInterval={(value) => {
+        if (current)
+          saveInterval.mutate({ id: current.id, seconds: Number(value) });
+      }}
+    />
+  );
+}
+
+/**
+ * Page dots, one per dashboard: the one on show is a short accent bar. Each
+ * dot is a tab named after its dashboard.
+ */
+export function DashboardPager({ board }: { board: Dashboards }) {
+  const accent = useAccent();
+  if (board.dashboards.length < 2) return null;
+  return (
+    <View
+      accessibilityRole="tablist"
+      accessibilityLabel="Dashboards"
+      style={{ flexDirection: 'row', alignItems: 'center' }}
     >
-      {dashboards.length ? (
-        <ScopeTabs
-          label="Dashboards"
-          value={current?.id ?? ''}
-          options={dashboards.map((d) => ({ value: d.id, label: d.name }))}
-          onChange={setSelection}
+      {board.dashboards.map((dashboard) => {
+        const selected = dashboard.id === board.current?.id;
+        return (
+          <Pressable
+            key={dashboard.id}
+            accessibilityRole="tab"
+            accessibilityLabel={dashboard.name}
+            accessibilityState={{ selected }}
+            onPress={() => board.select(dashboard.id)}
+            style={{
+              minWidth: selected ? 30 : 20,
+              height: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <View
+              style={{
+                width: selected ? 18 : 7,
+                height: 7,
+                borderRadius: pill,
+                backgroundColor: selected ? accent.fill : c.idle,
+              }}
+            />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Problems with the dashboard on show, above its sheet. */
+export function DashboardNotices({ board }: { board: Dashboards }) {
+  return (
+    <>
+      {board.missing ? (
+        <Notice
+          tone="danger"
+          title="Couldn’t find that dashboard"
+          detail="It may have been deleted. Showing another dashboard."
         />
       ) : null}
-      {missing ? (
-        <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
-          <Notice
-            tone="danger"
-            title="Couldn’t find that dashboard"
-            detail="It may have been deleted. Showing another dashboard."
-          />
-        </View>
+      {board.saveInterval.error ? (
+        <Notice
+          tone="danger"
+          title="Couldn’t save refresh interval"
+          detail={errorText(board.saveInterval.error)}
+        />
       ) : null}
-      {saveInterval.error ? (
-        <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
-          <Notice
-            tone="danger"
-            title="Couldn’t save refresh interval"
-            detail={errorText(saveInterval.error)}
-          />
-        </View>
-      ) : null}
-      <View
-        style={{
-          flex: 1,
-          marginHorizontal: 10,
-          marginBottom: insets.bottom + 6,
-          borderRadius: radii.sheet,
-          backgroundColor: c.card,
-          overflow: 'hidden',
-        }}
-      >
-        {(workspace.error && !workspace.data) || invalid ? (
+    </>
+  );
+}
+
+/** The white sheet a dashboard's widgets are shown on. */
+export function WidgetSheet({
+  board,
+  style,
+}: {
+  board: Dashboards;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { workspace, destination, current, invalid, retry } = board;
+  const failed = Boolean((workspace.error && !workspace.data) || invalid);
+  // The web canvas draws its widgets as sheets on the ground itself, so it
+  // gets no sheet of its own; the native states in its place do.
+  const canvas = !failed && Boolean(destination && current);
+  return (
+    <View
+      style={[
+        { borderRadius: radii.xl },
+        !canvas && { backgroundColor: c.card, boxShadow: shadows.card },
+        style,
+      ]}
+    >
+      <View style={{ flex: 1, borderRadius: radii.xl, overflow: 'hidden' }}>
+        {failed ? (
           <View style={{ padding: 12 }}>
             <Notice
               tone="danger"
-              title="Couldn’t load your dashboard"
+              title="Couldn’t load your widgets"
               detail={errorText(workspace.error ?? invalid)}
               action={{ label: 'Try again', onPress: retry }}
             />
@@ -189,25 +260,62 @@ export function DashboardScreen({ nested = false }: { nested?: boolean }) {
           // One surface per lifetime: switching dashboards navigates the same
           // WebView, and a surface that comes back signs in afresh.
           <DashboardSurface
-            key={`${epoch}-${attempt}`}
-            origin={origin!}
-            focused={focused}
+            key={`${board.epoch}-${board.attempt}`}
+            origin={board.origin!}
+            focused={board.focused}
             destination={destination}
-            dashboardRefresh={{ id: current.id, revision: refreshRevision }}
+            dashboardRefresh={{
+              id: current.id,
+              revision: board.refreshRevision,
+            }}
             retry={retry}
-            onReady={setReady}
+            onReady={board.setReady}
           />
         ) : workspace.isPending ? (
           <Busy label="Loading widgets" />
         ) : (
           <View style={{ paddingHorizontal: 20 }}>
             <EmptyState
-              title="No dashboards yet"
+              glyph="dashboard"
+              title="No widgets yet"
               detail="Create a dashboard in Hatch on the web. Its widgets will appear here, live."
             />
           </View>
         )}
       </View>
+    </View>
+  );
+}
+
+/** Every widget of a dashboard, at full height. */
+export function DashboardScreen({ nested = false }: { nested?: boolean }) {
+  const insets = useSafeAreaInsets();
+  // Native tabs mount hidden screens: the surface's sign-in and the refresh
+  // timer wait until this one is on screen.
+  const board = useDashboards(useIsFocused());
+  return (
+    <Screen
+      eyebrow={board.current?.name}
+      title="Widgets"
+      nested={nested}
+      actions={<DashboardRefresh board={board} />}
+    >
+      <View style={{ paddingHorizontal: 16, gap: 12 }}>
+        <DashboardNotices board={board} />
+      </View>
+      {board.dashboards.length > 1 ? (
+        <View style={{ alignItems: 'center' }}>
+          <DashboardPager board={board} />
+        </View>
+      ) : null}
+      <WidgetSheet
+        board={board}
+        style={{
+          flex: 1,
+          marginHorizontal: 12,
+          marginBottom: insets.bottom + 8,
+        }}
+      />
     </Screen>
   );
 }

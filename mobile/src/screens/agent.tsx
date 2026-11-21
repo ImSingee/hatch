@@ -29,11 +29,13 @@ import {
   pageScrollProps,
 } from '../ui/screen';
 import { Text, type } from '../ui/text';
-import { palette as c, radii } from '../ui/theme';
+import { useAccent } from '../ui/accent';
+import { palette as c, pill, radii, shadows, weights } from '../ui/theme';
 import { Conversation } from './conversation';
 
 export function AgentScreen({ nested = false }: { nested?: boolean }) {
   const { api, origin } = useSession();
+  const accent = useAccent();
   const focused = useIsFocused();
   const queryClient = useQueryClient();
   const signal = useLifetimeSignal();
@@ -129,7 +131,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
               <RefreshControl
                 refreshing={pull.refreshing}
                 onRefresh={pull.onRefresh}
-                tintColor={c.moss}
+                tintColor={accent.fill}
               />
             }
             ListHeaderComponent={
@@ -138,8 +140,8 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
                   <Masthead
                     eyebrow={
                       sessions.data
-                        ? `Agent · ${list.length} conversation${list.length === 1 ? '' : 's'}`
-                        : 'Agent'
+                        ? `${list.length} conversation${list.length === 1 ? '' : 's'}`
+                        : undefined
                     }
                     title="Agent"
                     nested={nested}
@@ -183,6 +185,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
                 </View>
               ) : (
                 <EmptyState
+                  glyph="agent"
                   title="A quiet notebook"
                   detail="Your conversations with the Agent are kept on your instance. Start one above."
                 />
@@ -193,15 +196,6 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
                 {section.title}
               </SectionLabel>
             )}
-            ItemSeparatorComponent={() => (
-              <View
-                style={{
-                  height: StyleSheet.hairlineWidth,
-                  backgroundColor: c.rule,
-                  marginLeft: 76,
-                }}
-              />
-            )}
             renderItem={({ item }) => (
               <Pressable
                 accessibilityRole="button"
@@ -210,35 +204,55 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
                   selected: Boolean(split) && item.id === selected,
                 }}
                 onPress={() => open(item.id)}
-                style={({ pressed }) => ({
-                  minHeight: 64,
-                  flexDirection: 'row',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                  paddingVertical: 14,
-                  paddingHorizontal: 4,
-                  borderRadius: 14,
-                  backgroundColor:
-                    pressed || (split && item.id === selected)
-                      ? c.limeSoft
-                      : 'transparent',
-                })}
+                style={({ pressed }) => {
+                  const current = Boolean(split) && item.id === selected;
+                  return {
+                    minHeight: 48,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: radii.md,
+                    backgroundColor: current
+                      ? accent.fill
+                      : pressed
+                        ? c.hover
+                        : 'transparent',
+                  };
+                }}
               >
-                <Text
-                  maxFontSizeMultiplier={1.4}
-                  numberOfLines={1}
-                  style={[type.meta, { minWidth: 60, paddingTop: 3 }]}
-                >
-                  {stamp(item.updatedAt)}
-                </Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={type.heading} numberOfLines={2}>
-                    {item.title || 'New conversation'}
-                  </Text>
-                </View>
-                <View style={{ paddingTop: 5 }}>
-                  <Glyph name="chevron" size={12} color={c.inkFaint} />
-                </View>
+                {(() => {
+                  const current = Boolean(split) && item.id === selected;
+                  return (
+                    <>
+                      <Text
+                        style={[
+                          type.callout,
+                          {
+                            flex: 1,
+                            // Heavy enough to sit level with the system CJK face.
+                            fontWeight: weights.label,
+                            color: current ? accent.onFill : c.ink,
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.title || 'New conversation'}
+                      </Text>
+                      <Text
+                        maxFontSizeMultiplier={1.4}
+                        numberOfLines={1}
+                        style={[
+                          type.caption,
+                          current && { color: accent.onFill },
+                        ]}
+                      >
+                        {stamp(item.updatedAt)}
+                      </Text>
+                    </>
+                  );
+                })()}
               </Pressable>
             )}
           />
@@ -250,7 +264,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
                 style={{
                   flex: 1,
                   width: StyleSheet.hairlineWidth,
-                  backgroundColor: c.rule,
+                  backgroundColor: c.hairline,
                 }}
               />
             </View>
@@ -262,6 +276,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
                   style={{ flex: 1, justifyContent: 'center', padding: 20 }}
                 >
                   <EmptyState
+                    glyph="agent"
                     title="Pick a conversation"
                     detail="Choose one from the list to read it here, or start a new one."
                   />
@@ -276,6 +291,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
 }
 
 function StartCard({ busy, onPress }: { busy: boolean; onPress: () => void }) {
+  const accent = useAccent();
   return (
     <Pressable
       accessibilityRole="button"
@@ -285,38 +301,35 @@ function StartCard({ busy, onPress }: { busy: boolean; onPress: () => void }) {
       disabled={busy}
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: c.moss,
-        borderRadius: radii.sheet,
-        padding: 20,
+        backgroundColor: pressed ? c.muted : c.card,
+        borderRadius: radii.window,
+        boxShadow: shadows.dock,
+        padding: 18,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 16,
-        opacity: busy ? 0.7 : 1,
-        transform: [{ scale: pressed ? 0.985 : 1 }],
+        opacity: busy ? 0.6 : 1,
       })}
     >
-      <View style={{ flex: 1, gap: 6 }}>
-        <Text style={[type.meta, { color: c.lime }]}>
-          {busy ? 'Starting…' : 'New conversation'}
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={type.title}>
+          {busy ? 'Starting…' : 'What should we make?'}
         </Text>
-        <Text style={[type.title, { color: c.onMoss }]}>
-          What should we make?
-        </Text>
-        <Text style={[type.small, { color: c.onMoss, opacity: 0.86 }]}>
+        <Text style={type.callout}>
           Describe an App, a fix or a half-formed idea.
         </Text>
       </View>
       <View
         style={{
-          width: 52,
-          height: 52,
-          borderRadius: 26,
-          backgroundColor: c.lime,
+          width: 44,
+          height: 44,
+          borderRadius: pill,
+          backgroundColor: accent.fill,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Glyph name="plus" size={22} color={c.ink} />
+        <Glyph name="plus" size={18} color={accent.onFill} />
       </View>
     </Pressable>
   );

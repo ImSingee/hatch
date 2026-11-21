@@ -13,7 +13,7 @@ export function NotificationStatusTag({ status }: { status: string }) {
   const label = notificationLabels[status] ?? status;
   const tone =
     status === 'delivered'
-      ? 'lime'
+      ? 'success'
       : status === 'failed' || status === 'partial'
         ? 'danger'
         : status === 'pending'
@@ -48,7 +48,7 @@ export function NotificationReplyTag({
   if (!hasReply) return null;
   if (respondedAt) return <Tag tone="quiet" label="Answered" />;
   if (recalledAt) return null;
-  return <Tag tone="lime" label="Awaiting answer" />;
+  return <Tag tone="accent" label="Awaiting answer" />;
 }
 
 const priorityLabels: Record<number, string> = {
@@ -77,7 +77,7 @@ export function DeliveryStatusTag({ status }: { status: string }) {
     <Tag
       tone={
         status === 'succeeded'
-          ? 'lime'
+          ? 'success'
           : status === 'failed'
             ? 'danger'
             : 'outline'

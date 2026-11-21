@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 import { Animated, Easing, Image, View } from 'react-native';
 import type { JsonValue, StreamState } from '../core';
 import { Button } from './button';
@@ -7,7 +7,8 @@ import { Glyph } from './glyph';
 import { Egg, useReducedMotion } from './primitives';
 import { Text, type } from './text';
 import { messageBlocks } from './transcript-content';
-import { palette as c } from './theme';
+import { useAccent } from './accent';
+import { palette as c, pill, radii, status as hue } from './theme';
 
 function record(
   value: JsonValue | undefined,
@@ -35,11 +36,30 @@ function endedEarlyNote(stopReason: unknown): string | null {
   }
 }
 
+/** The Agent's words: a white sheet with its tail at the leading edge. */
+function Bubble({ children }: PropsWithChildren) {
+  return (
+    <View
+      style={{
+        alignSelf: 'flex-start',
+        maxWidth: '94%',
+        backgroundColor: c.card,
+        borderRadius: radii.xl,
+        borderBottomLeftRadius: radii.xs,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 function Speaker({ live }: { live?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Egg size={11} wobble={live} />
-      <Text style={[type.meta, { color: c.ink }]}>Hatch</Text>
+      <Text style={[type.caption, { color: c.ink }]}>Hatch</Text>
     </View>
   );
 }
@@ -52,6 +72,7 @@ export function TranscriptMessage({
   /** Whether this message ends its turn — only its stopReason counts. */
   terminal?: boolean;
 }) {
+  const accent = useAccent();
   const message = record(value);
   if (!message || typeof message.role !== 'string') return null;
   const role = message.role;
@@ -64,7 +85,7 @@ export function TranscriptMessage({
       .filter((part): part is string => typeof part === 'string')
       .join('\n');
     return (
-      <View style={{ paddingLeft: 19 }}>
+      <View>
         <Details
           title={
             typeof message.toolName === 'string'
@@ -81,7 +102,7 @@ export function TranscriptMessage({
   if (role !== 'user' && role !== 'assistant') return null;
   const mine = role === 'user';
   const displayContent = messageBlocks(message);
-  const ink = mine ? c.card : c.ink;
+  const ink = mine ? accent.onFill : c.ink;
   return (
     <View
       style={
@@ -89,17 +110,16 @@ export function TranscriptMessage({
           ? {
               alignSelf: 'flex-end',
               maxWidth: '88%',
-              backgroundColor: c.ink,
-              borderRadius: 22,
-              borderBottomRightRadius: 6,
+              backgroundColor: accent.fill,
+              borderRadius: radii.xl,
+              borderBottomRightRadius: radii.xs,
               paddingHorizontal: 16,
               paddingVertical: 12,
               gap: 8,
             }
-          : { alignSelf: 'stretch', gap: 10, paddingVertical: 4 }
+          : { alignSelf: 'stretch', gap: 10 }
       }
     >
-      {mine ? null : <Speaker />}
       {displayContent.map((part, index) => {
         const block = record(part);
         if (!block) return null;
@@ -111,7 +131,8 @@ export function TranscriptMessage({
                   '',
                 )
               : block.text;
-          return text ? (
+          if (!text) return null;
+          const words = (
             <Text
               key={index}
               selectable
@@ -119,7 +140,8 @@ export function TranscriptMessage({
             >
               {text}
             </Text>
-          ) : null;
+          );
+          return mine ? words : <Bubble key={index}>{words}</Bubble>;
         }
         if (block.type === 'thinking' && typeof block.thinking === 'string')
           return (
@@ -141,7 +163,7 @@ export function TranscriptMessage({
               source={{
                 uri: `data:${typeof block.mimeType === 'string' ? block.mimeType : 'image/jpeg'};base64,${block.data}`,
               }}
-              style={{ width: 200, height: 160, borderRadius: 14 }}
+              style={{ width: 200, height: 160, borderRadius: radii.md }}
               resizeMode="cover"
             />
           );
@@ -154,9 +176,14 @@ export function TranscriptMessage({
               <Glyph
                 name={block.type === 'app' ? 'apps' : 'workflows'}
                 size={13}
-                color={mine ? c.lime : c.moss}
+                color={mine ? accent.onFill : accent.ink}
               />
-              <Text style={[type.callout, { color: mine ? c.lime : c.moss }]}>
+              <Text
+                style={[
+                  type.callout,
+                  { color: mine ? accent.onFill : accent.ink },
+                ]}
+              >
                 {typeof block.name === 'string'
                   ? block.name
                   : 'Referenced resource'}
@@ -174,10 +201,13 @@ export function TranscriptMessage({
               <Glyph
                 name="attach"
                 size={12}
-                color={mine ? c.lime : c.inkSoft}
+                color={mine ? accent.onFill : c.inkSoft}
               />
               <Text
-                style={[type.small, { color: mine ? c.card : c.inkSoft }]}
+                style={[
+                  type.small,
+                  { color: mine ? accent.onFill : c.inkSoft },
+                ]}
                 numberOfLines={1}
               >
                 {String(record(attachment)?.name ?? 'Attachment')}
@@ -186,7 +216,9 @@ export function TranscriptMessage({
           ))
         : null}
       {typeof message.errorMessage === 'string' ? (
-        <Text style={[type.small, { color: mine ? c.lime : c.danger }]}>
+        <Text
+          style={[type.small, { color: mine ? accent.onFill : hue.danger.ink }]}
+        >
           {message.errorMessage}
         </Text>
       ) : null}
@@ -200,6 +232,7 @@ export function TranscriptMessage({
 }
 
 function WorkingDots() {
+  const accent = useAccent();
   const reduced = useReducedMotion();
   const [phase] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -223,8 +256,8 @@ function WorkingDots() {
           style={{
             width: 7,
             height: 7,
-            borderRadius: 4,
-            backgroundColor: c.moss,
+            borderRadius: pill,
+            backgroundColor: accent.fill,
             opacity: reduced
               ? 0.6
               : phase.interpolate({
@@ -266,7 +299,7 @@ export function LiveTranscript({
       >
         <Speaker live={!settled} />
         {settled ? null : <WorkingDots />}
-        <Text style={[type.meta, { flex: 1 }]} numberOfLines={2}>
+        <Text style={[type.caption, { flex: 1 }]} numberOfLines={2}>
           {status}
         </Text>
       </View>
@@ -284,13 +317,11 @@ export function LiveTranscript({
       {state.blocks.map((block, index) => {
         if (block.kind === 'text')
           return (
-            <Text
-              key={index}
-              selectable
-              style={[type.body, { lineHeight: 24 }]}
-            >
-              {block.text}
-            </Text>
+            <Bubble key={index}>
+              <Text selectable style={[type.body, { lineHeight: 24 }]}>
+                {block.text}
+              </Text>
+            </Bubble>
           );
         if (block.kind === 'thinking')
           return <Details key={index} title="Reasoning" text={block.text} />;
@@ -350,7 +381,9 @@ export function LiveTranscript({
         <Text style={type.callout}>Your Agent is getting started…</Text>
       ) : null}
       {state.error ? (
-        <Text style={[type.small, { color: c.danger }]}>{state.error}</Text>
+        <Text style={[type.small, { color: hue.danger.ink }]}>
+          {state.error}
+        </Text>
       ) : null}
       {endedEarlyNote(state.stopReason) ? (
         <Text style={[type.small, { color: c.inkSoft }]}>

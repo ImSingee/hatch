@@ -8,7 +8,7 @@ import type { AgentMessageMode } from '../src/core';
 import { Button } from '../src/ui/button';
 import { Choice } from '../src/ui/native-controls';
 import { glyphs, type GlyphName } from '../src/ui/glyph.types';
-import { Card, errorText } from '../src/ui/primitives';
+import { Card, Tag, errorText } from '../src/ui/primitives';
 import { GlyphTile } from '../src/ui/rows';
 import { Masthead, pageScrollProps } from '../src/ui/screen';
 import { Text, type } from '../src/ui/text';
@@ -123,7 +123,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView
       {...pageScrollProps}
-      style={{ flex: 1, backgroundColor: c.paper }}
+      style={{ flex: 1, backgroundColor: c.ground }}
       contentContainerStyle={{ paddingBottom: 32 }}
     >
       {/* Close leads the sheet's bar: horizontal at the top here, first on
@@ -135,21 +135,9 @@ export default function SettingsScreen() {
       </Stack.Toolbar>
       <Masthead nested eyebrow="Connected instance" title="Your instance" />
       <View style={{ paddingHorizontal: 16, gap: 14 }}>
-        <Card style={{ backgroundColor: c.ink, gap: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: c.lime,
-              }}
-            />
-            <Text style={[type.meta, { color: c.lime }]}>
-              Signed in on this phone
-            </Text>
-          </View>
-          <Text selectable style={[type.title, { color: c.card }]}>
+        <Card style={{ gap: 14 }}>
+          <Tag tone="success" dot label="Signed in on this phone" />
+          <Text selectable style={type.title}>
             {host}
           </Text>
           <Button
@@ -177,7 +165,7 @@ export default function SettingsScreen() {
                 alignItems: 'flex-start',
               }}
             >
-              <GlyphTile glyph={note.glyph} size={36} />
+              <GlyphTile glyph={note.glyph} />
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={type.heading}>{note.title}</Text>
                 <Text style={type.small}>{note.detail}</Text>

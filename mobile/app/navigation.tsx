@@ -7,17 +7,19 @@ import {
 import { Button } from '../src/ui/button';
 import { Glyph } from '../src/ui/glyph';
 import type { GlyphName } from '../src/ui/glyph.types';
-import { tabDetails } from '../src/ui/navigation';
 import { Card, Notice } from '../src/ui/primitives';
 import { GlyphTile } from '../src/ui/rows';
 import { Masthead, SectionLabel, pageScrollProps } from '../src/ui/screen';
 import { Text, type } from '../src/ui/text';
-import { palette as c, radii } from '../src/ui/theme';
+import { useAccent } from '../src/ui/accent';
+import { meTab, tabDetails } from '../src/ui/navigation';
+import { palette as c, pill, radii, shadows, weights } from '../src/ui/theme';
 
 type Start = TabId | 'more';
 
 export default function NavigationSettings() {
   const { preferences: p, save, saving, error } = useNavigationPreferences();
+  const accent = useAccent();
   const move = (id: TabId, offset: number) => {
     const order = [...p.order];
     const from = order.indexOf(id);
@@ -33,12 +35,12 @@ export default function NavigationSettings() {
       label: tabDetails[id].label,
       glyph: tabDetails[id].glyph,
     })),
-    { id: 'more', label: 'More', glyph: 'more' },
+    { id: 'more', label: meTab.label, glyph: meTab.glyph },
   ];
   return (
     <ScrollView
       {...pageScrollProps}
-      style={{ flex: 1, backgroundColor: c.paper }}
+      style={{ flex: 1, backgroundColor: c.ground }}
       contentContainerStyle={{ paddingBottom: 32 }}
     >
       <Masthead
@@ -57,7 +59,8 @@ export default function NavigationSettings() {
           style={{
             flexDirection: 'row',
             backgroundColor: c.card,
-            borderRadius: 999,
+            borderRadius: pill,
+            boxShadow: shadows.dock,
             padding: 6,
             gap: 2,
           }}
@@ -72,14 +75,14 @@ export default function NavigationSettings() {
                   alignItems: 'center',
                   gap: 3,
                   paddingVertical: 8,
-                  borderRadius: 999,
-                  backgroundColor: isStart ? c.limeSoft : 'transparent',
+                  borderRadius: pill,
+                  backgroundColor: isStart ? c.hover : 'transparent',
                 }}
               >
                 <Glyph
                   name={item.glyph}
                   size={18}
-                  color={isStart ? c.moss : c.inkSoft}
+                  color={isStart ? accent.fill : c.inkSoft}
                 />
                 <Text
                   maxFontSizeMultiplier={1.3}
@@ -89,8 +92,8 @@ export default function NavigationSettings() {
                     {
                       fontSize: 11,
                       lineHeight: 14,
-                      fontWeight: isStart ? '700' : '500',
-                      color: isStart ? c.moss : c.inkSoft,
+                      fontWeight: isStart ? weights.label : weights.strong,
+                      color: isStart ? accent.fill : c.inkSoft,
                     },
                   ]}
                 >
@@ -121,25 +124,18 @@ export default function NavigationSettings() {
                   alignItems: 'center',
                   gap: 8,
                   paddingHorizontal: 16,
-                  borderRadius: 999,
-                  backgroundColor: selected ? c.ink : c.card,
+                  borderRadius: radii.md,
+                  backgroundColor: selected ? accent.fill : c.card,
                   opacity: pressed ? 0.75 : 1,
                 })}
               >
                 {selected ? (
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: c.lime,
-                    }}
-                  />
+                  <Glyph name="check" size={12} color={accent.onFill} />
                 ) : null}
                 <Text
                   style={[
                     type.heading,
-                    { fontSize: 15, color: selected ? c.card : c.ink },
+                    { fontSize: 15, color: selected ? accent.onFill : c.ink },
                   ]}
                 >
                   {item.label}
@@ -153,8 +149,8 @@ export default function NavigationSettings() {
         <View
           style={{
             backgroundColor: c.card,
-            borderRadius: radii.card,
-            overflow: 'hidden',
+            borderRadius: radii.lg,
+            boxShadow: shadows.card,
           }}
         >
           {p.order.map((id, index) => {
@@ -167,7 +163,7 @@ export default function NavigationSettings() {
                   padding: 14,
                   gap: 10,
                   borderTopWidth: index ? StyleSheet.hairlineWidth : 0,
-                  borderTopColor: c.rule,
+                  borderTopColor: c.hairline,
                 }}
               >
                 <View
@@ -177,26 +173,24 @@ export default function NavigationSettings() {
                     gap: 12,
                   }}
                 >
-                  <Text style={[type.meta, { minWidth: 20 }]}>
-                    {String(index + 1).padStart(2, '0')}
-                  </Text>
                   <GlyphTile
                     glyph={tabDetails[id].glyph}
-                    tone={visible ? 'lime' : 'sunken'}
-                    size={36}
+                    tone={visible ? 'accent' : 'muted'}
                   />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={type.heading}>{label}</Text>
                     <Text style={type.small}>
-                      {visible ? 'Shown as a tab' : 'Hidden · still in More'}
+                      {visible
+                        ? 'Shown as a tab'
+                        : `Hidden · still in ${meTab.label}`}
                     </Text>
                   </View>
                   <Switch
                     accessibilityLabel={`Show ${label} in the tab bar`}
                     value={visible}
                     disabled={saving}
-                    trackColor={{ true: c.moss, false: c.rule }}
-                    ios_backgroundColor={c.rule}
+                    trackColor={{ true: accent.fill, false: c.idle }}
+                    ios_backgroundColor={c.idle}
                     onValueChange={() =>
                       void save({
                         ...p,
@@ -211,7 +205,7 @@ export default function NavigationSettings() {
                   style={{
                     flexDirection: 'row',
                     gap: 8,
-                    paddingLeft: 32,
+                    paddingLeft: 46,
                     flexWrap: 'wrap',
                   }}
                 >
@@ -239,11 +233,11 @@ export default function NavigationSettings() {
           })}
         </View>
 
-        <Card style={{ marginTop: 20, backgroundColor: c.limeSoft }}>
-          <Text style={type.heading}>More always comes last</Text>
+        <Card style={{ marginTop: 20 }}>
+          <Text style={type.heading}>{meTab.label} always comes last</Text>
           <Text style={type.callout}>
-            Hidden tabs stay one tap away in More. If you hide your start page,
-            Hatch opens the first visible tab instead.
+            Hidden tabs stay one tap away in {meTab.label}. If you hide your
+            start page, Hatch opens the first visible tab instead.
           </Text>
         </Card>
         <View style={{ marginTop: 16 }}>

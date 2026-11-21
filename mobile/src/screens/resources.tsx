@@ -1,38 +1,50 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
-import { RefreshControl, useWindowDimensions, View } from 'react-native';
-import { Reflow, TileGrid } from '../ui/columns';
+import { RefreshControl, View } from 'react-native';
+import type { AppSummary } from '../core';
+import { useNavigationPreferences } from '../state/navigation';
+import { openSection } from '../state/open-section';
 import { useSession } from '../state/session';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
-import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
+import { useAccent } from '../ui/accent';
+import { IconButton } from '../ui/button';
+import { Reflow } from '../ui/columns';
 import { NativeField } from '../ui/native-field';
-import { GlyphTile, Group, IndexRow, ListRow, PinTile } from '../ui/rows';
+import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
+import { AppTile, Group, ListRow } from '../ui/rows';
 import { ScopeTabs } from '../ui/scope-tabs';
 import { ScrollScreen, SectionLabel } from '../ui/screen';
-import { palette as c } from '../ui/theme';
-import type { AppSummary } from '../core';
 
-type Scope = 'pinned' | 'all';
+type Order = 'name' | 'recent';
+type Kind = 'apps' | 'workflows';
 
+/**
+ * Every App and Workflow of the instance, searchable, by name or by latest
+ * change. Pinned ones carry a pin; the pins themselves live on the home
+ * screen. The Workflows tab lists Workflows alone.
+ */
 export function ResourcesScreen({
   kind = 'apps',
-  all = false,
   nested = false,
 }: {
-  kind?: 'apps' | 'workflows';
-  all?: boolean;
+  kind?: Kind;
   nested?: boolean;
 }) {
   const { api, origin } = useSession();
+  const accent = useAccent();
   const focused = useIsFocused();
-  const { fontScale } = useWindowDimensions();
-  const [scope, setScope] = useState<Scope>(all ? 'all' : 'pinned');
+  const { preferences } = useNavigationPreferences();
+  const [order, setOrder] = useState<Order>('name');
   const [search, setSearch] = useState('');
-  const resources = useQuery({
-    queryKey: [origin, kind],
-    queryFn: ({ signal }) =>
-      kind === 'apps' ? api!.apps(signal) : api!.workflows(signal),
+  const apps = useQuery({
+    queryKey: [origin, 'apps'],
+    queryFn: ({ signal }) => api!.apps(signal),
+    enabled: Boolean(api) && kind === 'apps',
+  });
+  const workflows = useQuery({
+    queryKey: [origin, 'workflows'],
+    queryFn: ({ signal }) => api!.workflows(signal),
     enabled: Boolean(api),
   });
   const workspace = useQuery({
@@ -40,115 +52,91 @@ export function ResourcesScreen({
     queryFn: ({ signal }) => api!.workspace(signal),
     enabled: Boolean(api),
   });
-  const workflows = useQuery({
-    queryKey: [origin, 'workflows'],
-    queryFn: ({ signal }) => api!.workflows(signal),
-    // Pinned counts include workflows even while the complete list is shown.
-    enabled: Boolean(api) && kind === 'apps',
-  });
-  // Both scopes count pinned workflows, so a refresh re-reads them too.
   const refresh = () =>
     Promise.all([
-      resources.refetch(),
+      workflows.refetch(),
       workspace.refetch(),
-      ...(kind === 'apps' ? [workflows.refetch()] : []),
+      ...(kind === 'apps' ? [apps.refetch()] : []),
     ]);
   const pull = usePullToRefresh(focused, refresh);
-  const match = (name: string) =>
-    name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
-  const live = (items: AppSummary[] | undefined) =>
-    (items ?? []).filter((item) => item.status !== 'archived');
-  const available = live(resources.data);
-  const appById = new Map(available.map((item) => [item.id, item]));
-  const allPins = (workspace.data?.appPins ?? []).filter((pin) =>
-    appById.has(pin.appId),
+  const query = search.trim().toLocaleLowerCase();
+  const arrange = (items: AppSummary[] | undefined) =>
+    (items ?? [])
+      .filter(
+        (item) =>
+          item.status !== 'archived' &&
+          item.name.toLocaleLowerCase().includes(query),
+      )
+      .sort((a, b) =>
+        order === 'name'
+          ? a.name.localeCompare(b.name)
+          : b.updatedAt.localeCompare(a.updatedAt),
+      );
+  const pinnedApps = new Set(
+    (workspace.data?.appPins ?? []).map((pin) => pin.appId),
   );
-  const pins = allPins.filter((pin) => match(pin.label));
-  const pinnedWorkflowIds = workspace.data?.pinnedWorkflowIds ?? [];
-  const workflowById = new Map(
-    (kind === 'workflows' ? available : live(workflows.data)).map((item) => [
-      item.id,
-      item,
-    ]),
+  const pinnedWorkflows = new Set(workspace.data?.pinnedWorkflowIds ?? []);
+  const sections: { kind: Kind; title: string; items: AppSummary[] }[] = [
+    ...(kind === 'apps'
+      ? [{ kind: 'apps' as const, title: 'Apps', items: arrange(apps.data) }]
+      : []),
+    { kind: 'workflows', title: 'Workflows', items: arrange(workflows.data) },
+  ];
+  const total = sections.reduce(
+    (sum, section) => sum + section.items.length,
+    0,
   );
-  const allPinnedWorkflows = pinnedWorkflowIds.flatMap((id) => {
-    const item = workflowById.get(id);
-    return item ? [item] : [];
-  });
-  const pinnedWorkflows = allPinnedWorkflows.filter((item) => match(item.name));
-  const rows = available.filter((item) => match(item.name));
-  const pinCount =
-    kind === 'apps'
-      ? allPins.length + allPinnedWorkflows.length
-      : allPinnedWorkflows.length;
-  // Both Apps scopes show the pinned count, which includes workflows.
-  const failure =
-    resources.error ??
-    workspace.error ??
-    (kind === 'apps' ? workflows.error : null);
-  const pending =
-    resources.isPending ||
-    (scope === 'pinned' &&
-      (workspace.isPending || (kind === 'apps' && workflows.isPending)));
-  const empty =
-    scope === 'pinned'
-      ? kind === 'apps'
-        ? !pins.length && !pinnedWorkflows.length
-        : !pinnedWorkflows.length
-      : !rows.length;
-  const open = (item: AppSummary, resourceKind: 'apps' | 'workflows') =>
+  // The lists matter; a failed pin lookup only hides the pin marks.
+  const failure = (kind === 'apps' ? apps.error : null) ?? workflows.error;
+  const pending = (kind === 'apps' && apps.isPending) || workflows.isPending;
+  const open = (item: AppSummary, of: Kind) =>
     router.push({
-      pathname: resourceKind === 'apps' ? '/apps/[id]' : '/workflows/[id]',
+      pathname: of === 'apps' ? '/manage/[id]' : '/workflows/[id]',
       params:
-        resourceKind === 'apps'
-          ? { id: item.id, slug: item.slug }
-          : { id: item.id },
+        of === 'apps' ? { id: item.id, slug: item.slug } : { id: item.id },
     });
   const noun = kind === 'apps' ? 'Apps' : 'Workflows';
   return (
     <ScrollScreen
-      eyebrow={
-        resources.data
-          ? `${kind === 'apps' ? 'Collection' : 'Automations'} · ${available.length} total`
-          : kind === 'apps'
-            ? 'Collection'
-            : 'Automations'
-      }
       title={noun}
       nested={nested}
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
+      actions={
+        <IconButton
+          label={kind === 'apps' ? 'New App' : 'New Workflow'}
+          glyph="plus"
+          tone="clear"
+          onPress={() => openSection('agent', preferences)}
+        />
+      }
       refreshControl={
         <RefreshControl
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
-          tintColor={c.moss}
+          tintColor={accent.fill}
         />
       }
     >
-      <ScopeTabs<Scope>
-        label={`${noun} scope`}
-        value={scope}
-        onChange={setScope}
-        options={[
-          { value: 'pinned', label: 'Pinned', count: pinCount },
-          {
-            value: 'all',
-            label: `All ${kind}`,
-            count: resources.data ? available.length : undefined,
-          },
-        ]}
-      />
-      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
         <NativeField
           variant="search"
-          label={`Search ${scope === 'pinned' ? 'pinned items' : kind}`}
-          placeholder={
-            scope === 'pinned' ? 'Search pinned' : `Search all ${kind}`
-          }
+          label={`Search ${kind}`}
+          placeholder="Search"
           value={search}
           onChange={setSearch}
         />
+      </View>
+      <ScopeTabs<Order>
+        label="Order"
+        value={order}
+        onChange={setOrder}
+        options={[
+          { value: 'name', label: 'A–Z' },
+          { value: 'recent', label: 'Recent' },
+        ]}
+      />
+      <View style={{ paddingHorizontal: 16 }}>
         {failure ? (
           <View style={{ marginTop: 16 }}>
             <Notice
@@ -161,120 +149,66 @@ export function ResourcesScreen({
         ) : null}
         {pending ? (
           <Busy label={`Gathering ${kind}`} />
-        ) : empty && !failure ? (
+        ) : !total && !failure ? (
           <EmptyState
-            title={
-              search
-                ? 'Nothing by that name'
-                : scope === 'pinned'
-                  ? 'Keep your regulars here'
-                  : `No ${kind} yet`
-            }
+            glyph={query ? 'search' : kind}
+            title={query ? 'Nothing by that name' : `No ${kind} yet`}
             detail={
-              search
+              query
                 ? 'Try a shorter or different name.'
-                : scope === 'pinned'
-                  ? `Pin ${kind} in Hatch on the web. Each pin keeps its own name and starting point.`
-                  : kind === 'apps'
-                    ? 'Ask your Agent to build something, then find it here.'
-                    : 'Workflows you create on your instance will appear here.'
-            }
-            action={
-              !search && scope === 'pinned'
-                ? {
-                    label: `Browse all ${kind}`,
-                    onPress: () => setScope('all'),
-                  }
-                : undefined
+                : kind === 'apps'
+                  ? 'Ask your Agent to build something, then find it here.'
+                  : 'Workflows you create on your instance will appear here.'
             }
           />
         ) : null}
-        {pending ? null : scope === 'pinned' ? (
-          <>
-            {kind === 'apps' && pins.length ? (
-              <>
-                <SectionLabel count={pins.length}>Pinned apps</SectionLabel>
-                <TileGrid
-                  items={pins}
-                  keyOf={(pin) => pin.id}
-                  minTile={130}
-                  // Large text needs the full width for each tile.
-                  maxPerRow={fontScale > 1.3 ? 1 : undefined}
-                  render={(pin, width) => (
-                    <PinTile
-                      width={width}
-                      label={pin.label}
-                      detail={
-                        appById.get(pin.appId)?.description ||
-                        appById.get(pin.appId)?.name ||
-                        'App'
-                      }
-                      hash={pin.entryHash || undefined}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/apps/[id]',
-                          params: {
-                            id: pin.appId,
-                            slug: pin.appSlug,
-                            entryHash: pin.entryHash,
-                            label: pin.label,
-                          },
-                        })
-                      }
-                    />
-                  )}
-                />
-              </>
-            ) : null}
-            {pinnedWorkflows.length ? (
-              <>
-                <SectionLabel count={pinnedWorkflows.length}>
-                  Pinned workflows
-                </SectionLabel>
-                <Reflow
-                  items={pinnedWorkflows}
-                  render={(column) => (
-                    <Group>
-                      {column.map((item) => (
-                        <ListRow
-                          key={item.id}
-                          title={item.name}
-                          detail={item.description || 'Automation'}
-                          leading={<GlyphTile glyph="workflows" tone="lime" />}
-                          onPress={() => open(item, 'workflows')}
-                        />
-                      ))}
-                    </Group>
-                  )}
-                />
-              </>
-            ) : null}
-          </>
-        ) : rows.length ? (
-          <>
-            <SectionLabel count={rows.length}>
-              {search
-                ? 'Matches'
-                : `Every ${kind === 'apps' ? 'app' : 'workflow'}`}
-            </SectionLabel>
-            <Reflow
-              items={rows.map((item, index) => ({ item, number: index + 1 }))}
-              render={(column) => (
-                <Group>
-                  {column.map(({ item, number }) => (
-                    <IndexRow
-                      key={item.id}
-                      index={number}
-                      title={item.name}
-                      detail={item.description || undefined}
-                      onPress={() => open(item, kind)}
-                    />
-                  ))}
-                </Group>
-              )}
-            />
-          </>
-        ) : null}
+        {pending
+          ? null
+          : sections.map((section) =>
+              section.items.length ? (
+                <View key={section.kind}>
+                  <SectionLabel count={section.items.length}>
+                    {section.title}
+                  </SectionLabel>
+                  <Reflow
+                    items={section.items}
+                    render={(column) => (
+                      <Group>
+                        {column.map((item) => {
+                          const pinned = (
+                            section.kind === 'apps'
+                              ? pinnedApps
+                              : pinnedWorkflows
+                          ).has(item.id);
+                          return (
+                            <ListRow
+                              key={item.id}
+                              title={item.name}
+                              detail={item.description || undefined}
+                              mark={
+                                pinned
+                                  ? { glyph: 'pin', label: 'pinned' }
+                                  : undefined
+                              }
+                              leading={
+                                <AppTile
+                                  name={item.name}
+                                  seed={item.id}
+                                  iconPath={item.iconPath}
+                                  workflow={section.kind === 'workflows'}
+                                  size={40}
+                                />
+                              }
+                              onPress={() => open(item, section.kind)}
+                            />
+                          );
+                        })}
+                      </Group>
+                    )}
+                  />
+                </View>
+              ) : null,
+            )}
       </View>
     </ScrollScreen>
   );

@@ -37,6 +37,7 @@ import {
 import { AnswerCard, ReplyFormCard } from '../../src/ui/reply-card';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
+import { useAccent } from '../../src/ui/accent';
 import { palette as c } from '../../src/ui/theme';
 
 const destinationLabels: Record<string, string> = {
@@ -49,6 +50,7 @@ export default function NotificationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const { api, origin } = useSession();
+  const accent = useAccent();
   const deleted = useNotificationDeleted(id);
   const query = useQuery({
     queryKey: [origin, 'notification', id],
@@ -90,7 +92,7 @@ export default function NotificationScreen() {
     (query.error instanceof MobileError && query.error.status === 404)
   )
     return (
-      <View style={{ flex: 1, padding: 16, backgroundColor: c.paper }}>
+      <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>
         <EmptyState
           title="Notification not found"
           detail="It was deleted or has expired from history on this instance."
@@ -103,7 +105,7 @@ export default function NotificationScreen() {
     );
   if (query.error && !data)
     return (
-      <View style={{ flex: 1, padding: 16, backgroundColor: c.paper }}>
+      <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>
         <Notice
           tone="danger"
           title="Couldn’t load this notification"
@@ -122,7 +124,7 @@ export default function NotificationScreen() {
         <RefreshControl
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
-          tintColor={c.moss}
+          tintColor={accent.fill}
         />
       }
     >
@@ -149,7 +151,7 @@ export default function NotificationScreen() {
             respondedAt={data.respondedAt}
             recalledAt={data.recalledAt}
           />
-          <Text style={type.meta}>{notificationTime(data.occurredAt)}</Text>
+          <Text style={type.caption}>{notificationTime(data.occurredAt)}</Text>
         </View>
         {data.priority === -2 ? (
           <Text style={type.small}>
@@ -233,14 +235,14 @@ export default function NotificationScreen() {
                   styles.delivery,
                   index > 0 && {
                     borderTopWidth: StyleSheet.hairlineWidth,
-                    borderTopColor: c.rule,
+                    borderTopColor: c.hairline,
                   },
                 ]}
               >
                 <View style={styles.header}>
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={type.heading}>{delivery.destinationName}</Text>
-                    <Text style={type.meta}>
+                    <Text style={type.caption}>
                       {destinationLabels[delivery.destinationType] ??
                         delivery.destinationType}
                       {delivery.attempts > 1

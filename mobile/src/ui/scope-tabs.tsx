@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
-import { useReducedMotion } from './primitives';
+import { Pressable, View } from 'react-native';
 import { Text, type } from './text';
-import { palette as c } from './theme';
+import { palette as c, radii, shadows } from './theme';
 
-/** Typographic tabs; the selected one is struck with a lime marker. */
+/**
+ * Desk segmented control: a sunken track with a white thumb under the
+ * selected label. Segments share the width equally.
+ */
 export function ScopeTabs<T extends string>({
   options,
   value,
@@ -17,93 +18,64 @@ export function ScopeTabs<T extends string>({
   label: string;
 }) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
+    <View
       accessibilityRole="tablist"
       accessibilityLabel={label}
-      contentContainerStyle={{ gap: 22, paddingHorizontal: 20 }}
-      style={{ flexGrow: 0 }}
+      style={{
+        flexDirection: 'row',
+        marginHorizontal: 16,
+        padding: 3,
+        borderRadius: radii.md,
+        backgroundColor: c.sunken,
+      }}
     >
-      {options.map((option) => (
-        <ScopeTab
-          key={option.value}
-          {...option}
-          active={option.value === value}
-          onPress={() => onChange(option.value)}
-        />
-      ))}
-    </ScrollView>
-  );
-}
-
-function ScopeTab({
-  label,
-  count,
-  active,
-  onPress,
-}: {
-  label: string;
-  count?: number;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const reduced = useReducedMotion();
-  const [stroke] = useState(() => new Animated.Value(active ? 1 : 0));
-  useEffect(() => {
-    const target = active ? 1 : 0;
-    if (reduced) stroke.setValue(target);
-    else
-      Animated.timing(stroke, {
-        toValue: target,
-        duration: active ? 260 : 120,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-  }, [active, reduced, stroke]);
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={count === undefined ? label : `${label}, ${count}`}
-      onPress={onPress}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={{ minHeight: 44, justifyContent: 'center' }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 3 }}>
-        <View>
-          <Animated.View
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={
+              option.count === undefined
+                ? option.label
+                : `${option.label}, ${option.count}`
+            }
+            onPress={() => onChange(option.value)}
+            hitSlop={{ top: 5, bottom: 5 }}
             style={{
-              position: 'absolute',
-              left: -4,
-              right: -4,
-              bottom: 2,
-              height: '44%',
-              borderRadius: 4,
-              backgroundColor: c.lime,
-              transformOrigin: 'left',
-              transform: [{ scaleX: stroke }],
+              flex: 1,
+              minHeight: 34,
+              paddingHorizontal: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              borderRadius: radii.sm,
+              backgroundColor: active ? c.card : 'transparent',
+              boxShadow: active ? shadows.card : undefined,
             }}
-          />
-          <Text
-            maxFontSizeMultiplier={1.6}
-            style={[
-              type.title,
-              { fontSize: 20, color: active ? c.ink : c.inkFaint },
-            ]}
           >
-            {label}
-          </Text>
-        </View>
-        {count !== undefined ? (
-          <Text
-            maxFontSizeMultiplier={1.6}
-            style={[type.meta, { fontSize: 11, color: c.inkFaint }]}
-          >
-            {count}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+            <Text
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={[
+                type.small,
+                { fontSize: 14, color: active ? c.ink : c.inkSoft },
+                active && type.heading,
+                active && { fontSize: 14 },
+              ]}
+            >
+              {option.label}
+            </Text>
+            {option.count !== undefined ? (
+              <Text maxFontSizeMultiplier={1.4} style={type.caption}>
+                {option.count}
+              </Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }

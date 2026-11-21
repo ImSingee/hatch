@@ -15,6 +15,20 @@ const apnsEnvironment =
 // Without it a recall replaces the notification with a silent placeholder.
 const notificationFiltering = process.env.HATCH_NOTIFICATION_FILTERING === '1';
 
+// Nunito and JetBrains Mono are linked into the native projects, so text is
+// set in them from the first frame. The family names match
+// `packages/hatch-design-tokens/tokens.json`. iOS reads the family from each
+// file; Android needs every weight declared.
+const fontFile = (family: string, face: string) =>
+  `./node_modules/@expo-google-fonts/${family}/${face}/${face.replace(/^\d+/, (weight) => `${family === 'nunito' ? 'Nunito' : 'JetBrainsMono'}_${weight}`)}.ttf`;
+const nunito = ['500Medium', '600SemiBold', '700Bold', '800ExtraBold'];
+const jetBrainsMono = ['400Regular', '500Medium', '700Bold'];
+const faces = (family: string, names: string[]) =>
+  names.map((face) => ({
+    path: fontFile(family, face),
+    weight: Number.parseInt(face, 10),
+  }));
+
 const config: ExpoConfig = {
   name: 'Hatch',
   slug: 'hatch-mobile',
@@ -70,6 +84,26 @@ const config: ExpoConfig = {
   android: { package: 'app.hatch.mobile' },
   plugins: [
     './plugins/with-private-networking.cjs',
+    [
+      'expo-font',
+      {
+        ios: {
+          fonts: [
+            ...faces('nunito', nunito),
+            ...faces('jetbrains-mono', jetBrainsMono),
+          ].map((face) => face.path),
+        },
+        android: {
+          fonts: [
+            { fontFamily: 'Nunito', fontDefinitions: faces('nunito', nunito) },
+            {
+              fontFamily: 'JetBrains Mono',
+              fontDefinitions: faces('jetbrains-mono', jetBrainsMono),
+            },
+          ],
+        },
+      },
+    ],
     [
       'expo-notifications',
       {

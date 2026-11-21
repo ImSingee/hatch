@@ -7,7 +7,8 @@ import { Button } from './button';
 import { Glyph } from './glyph';
 import { Card, Tag } from './primitives';
 import { Text, type } from './text';
-import { palette as c } from './theme';
+import { useAccent } from './accent';
+import { palette as c, pill, radii } from './theme';
 
 export function OptionRow({
   label,
@@ -22,6 +23,7 @@ export function OptionRow({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const accent = useAccent();
   return (
     <Pressable
       accessibilityRole={multiple ? 'checkbox' : 'radio'}
@@ -35,35 +37,35 @@ export function OptionRow({
         gap: 12,
         paddingHorizontal: 14,
         paddingVertical: 10,
-        borderRadius: 16,
+        borderRadius: radii.md,
         borderWidth: 1,
-        borderColor: selected ? c.moss : c.rule,
-        backgroundColor: selected ? c.limeSoft : pressed ? c.paper : c.card,
-        opacity: disabled ? 0.55 : 1,
+        borderColor: selected ? accent.fill : c.input,
+        backgroundColor: selected ? accent.tint : pressed ? c.muted : c.card,
+        opacity: disabled ? 0.5 : 1,
       })}
     >
       <View
         style={{
           width: 22,
           height: 22,
-          borderRadius: multiple ? 7 : 11,
+          borderRadius: multiple ? radii.xs : pill,
           borderWidth: selected ? 0 : 1.5,
-          borderColor: c.inkFaint,
-          backgroundColor: selected ? c.moss : 'transparent',
+          borderColor: c.outline,
+          backgroundColor: selected ? accent.fill : 'transparent',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
         {selected ? (
           multiple ? (
-            <Glyph name="check" size={12} color={c.onMoss} />
+            <Glyph name="check" size={12} color={accent.onFill} />
           ) : (
             <View
               style={{
                 width: 8,
                 height: 8,
-                borderRadius: 4,
-                backgroundColor: c.lime,
+                borderRadius: pill,
+                backgroundColor: accent.onFill,
               }}
             />
           )
@@ -105,15 +107,15 @@ export function AskCard({
   const get = (id: string): AskAnswer =>
     answers[id] ?? { questionId: id, selectedOptionIds: [], customText: '' };
   return (
-    <Card style={{ borderWidth: 2, borderColor: c.lime, gap: 16 }}>
-      <Tag tone="lime" glyph="question" label="Your Agent asks" />
+    <Card style={{ gap: 16 }}>
+      <Tag tone="accent" glyph="question" label="Your Agent asks" />
       {ask.questions.map((question) => (
         <View key={question.id} style={{ gap: 10 }}>
           <Text accessibilityRole="header" style={type.heading}>
             {question.prompt}
           </Text>
           {question.allowMultiple ? (
-            <Text style={type.meta}>Choose any that apply</Text>
+            <Text style={type.small}>Choose any that apply</Text>
           ) : null}
           <View
             accessibilityRole={

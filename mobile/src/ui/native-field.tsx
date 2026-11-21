@@ -11,7 +11,8 @@ import { Pressable, View } from 'react-native';
 import { useImperativeHandle, useRef, type Ref } from 'react';
 import { IconButton } from './button';
 import { Glyph } from './glyph';
-import { palette as c, radii } from './theme';
+import { useAccent } from './accent';
+import { palette as c, pill, radii } from './theme';
 import { useFieldState } from './use-field-state';
 
 export type NativeFieldRef = { getText: () => string };
@@ -19,9 +20,9 @@ export type NativeFieldRef = { getText: () => string };
 const chrome = {
   box: {
     backgroundColor: c.card,
-    borderColor: c.rule,
+    borderColor: c.input,
     borderWidth: 1,
-    borderRadius: radii.tile,
+    borderRadius: radii.md,
     paddingHorizontal: 16,
     paddingVertical: 13,
   },
@@ -29,7 +30,7 @@ const chrome = {
     backgroundColor: c.sunken,
     borderColor: c.sunken,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: pill,
     paddingLeft: 16,
     paddingRight: 4,
     paddingVertical: 4,
@@ -62,6 +63,7 @@ export function NativeField({
   onSubmitEditing?: TextInputProps['onSubmitEditing'];
   variant?: keyof typeof chrome;
 }) {
+  const accent = useAccent();
   const binding = useFieldState(value, onChange);
   const input = useRef<TextInputRef>(null);
   // Native state can advance before its asynchronous onChangeText reaches JS.
@@ -90,7 +92,7 @@ export function NativeField({
       {search ? <Glyph name="search" size={15} color={c.inkSoft} /> : null}
       <Host
         colorScheme="light"
-        seedColor={c.moss}
+        seedColor={accent.fill}
         matchContents={{ vertical: true }}
         ignoreSafeArea="all"
         style={{ minHeight: 24, flex: 1 }}
@@ -99,9 +101,9 @@ export function NativeField({
           ref={input}
           {...binding}
           placeholder={placeholder}
-          placeholderTextColor={c.inkFaint}
-          cursorColor={c.moss}
-          selectionColor={c.moss}
+          placeholderTextColor={c.inkSoft}
+          cursorColor={accent.fill}
+          selectionColor={accent.fill}
           editable={!unavailable}
           multiline={multiline}
           maxLength={maxLength}

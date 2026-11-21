@@ -1,11 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-  type ScrollViewProps,
-} from 'react-native';
+import { Platform, ScrollView, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, type } from './text';
 import { palette as c } from './theme';
@@ -33,7 +27,7 @@ export function PageRoot({
 }: PropsWithChildren<{ nested?: boolean }>) {
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.paper }}
+      style={{ flex: 1, backgroundColor: c.ground }}
       edges={
         Platform.OS === 'ios' || nested
           ? ['left', 'right']
@@ -60,7 +54,7 @@ export function Screen({
 }>) {
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.paper }}
+      style={{ flex: 1, backgroundColor: c.ground }}
       edges={nested ? ['left', 'right'] : ['top', 'left', 'right']}
     >
       <Masthead
@@ -133,9 +127,9 @@ export function Masthead({
         gap: 12,
       }}
     >
-      <View style={{ flex: 1, gap: 6 }}>
+      <View style={{ flex: 1, gap: 4 }}>
         {eyebrow ? (
-          <Text style={type.meta} numberOfLines={2}>
+          <Text style={type.small} numberOfLines={2}>
             {eyebrow}
           </Text>
         ) : null}
@@ -149,15 +143,13 @@ export function Masthead({
         </Text>
       </View>
       {actions ? (
-        <View style={{ flexDirection: 'row', gap: 4, paddingBottom: 0 }}>
-          {actions}
-        </View>
+        <View style={{ flexDirection: 'row', gap: 4 }}>{actions}</View>
       ) : null}
     </View>
   );
 }
 
-/** Mono section heading with a hairline that runs to an optional count. */
+/** Group label above a list or grid, with an optional count. */
 export function SectionLabel({
   children,
   count,
@@ -170,22 +162,13 @@ export function SectionLabel({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        marginTop: 22,
+        marginTop: 24,
         marginBottom: 10,
+        paddingHorizontal: 4,
       }}
     >
-      <Text style={[type.meta, { color: c.ink }]}>{children}</Text>
-      <View
-        style={{
-          flex: 1,
-          height: StyleSheet.hairlineWidth,
-          backgroundColor: c.inkFaint,
-          opacity: 0.5,
-        }}
-      />
-      {count !== undefined ? (
-        <Text style={type.meta}>{String(count).padStart(2, '0')}</Text>
-      ) : null}
+      <Text style={[type.meta, { flex: 1 }]}>{children}</Text>
+      {count !== undefined ? <Text style={type.caption}>{count}</Text> : null}
     </View>
   );
 }

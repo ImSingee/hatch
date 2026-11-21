@@ -499,6 +499,25 @@ export class HatchApiClient {
       );
     return appProjection(response.resource);
   }
+  /**
+   * An App's icon as an authenticated image request. `iconPath` is the
+   * `icon_path` the instance returned for the App; anything that is not an
+   * icon address on this instance yields null, and the App shows its monogram.
+   * The credential travels in a header, never in the address.
+   */
+  async appIconSource(
+    iconPath: string,
+    size: 64 | 128 | 256,
+  ): Promise<{ uri: string; headers: Record<string, string> } | null> {
+    if (!/^\/api\/app\/[^/?#]+\/icon\?v=[A-Za-z0-9_-]+$/.test(iconPath))
+      return null;
+    const token = await this.vault.get(this.origin);
+    if (!token) return null;
+    return {
+      uri: apiPath(this.origin, `${iconPath}&size=${size}`),
+      headers: { authorization: `Bearer ${token}` },
+    };
+  }
   async sessions(
     appId?: string,
     signal?: AbortSignal,

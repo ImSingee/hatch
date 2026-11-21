@@ -28,6 +28,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { useState } from 'react';
 import { glyphs } from './glyph.types';
+import { useAccent } from './accent';
 import { palette as c } from './theme';
 import type {
   AttachmentMenuProps,
@@ -36,7 +37,7 @@ import type {
 } from './native-controls.types';
 
 // System menus keep native selection, VoiceOver and dismissal behavior; the
-// trigger is drawn as a Field Guide chip.
+// trigger is drawn as a Desk chip.
 export function Choice({
   label,
   value,
@@ -46,6 +47,7 @@ export function Choice({
   glyph,
   compact = false,
 }: ChoiceProps) {
+  const accent = useAccent();
   const chosen = options.find((option) => option.value === value);
   const current = chosen?.short ?? chosen?.label;
   // Menu labels report their ideal width; cap them to the width RN assigns.
@@ -57,7 +59,7 @@ export function Choice({
     // other actions always stay on screen.
     <Host
       colorScheme="light"
-      seedColor={c.moss}
+      seedColor={accent.fill}
       matchContents={{ vertical: true }}
       ignoreSafeArea="all"
       style={{
@@ -75,7 +77,7 @@ export function Choice({
             modifiers={[
               padding({ horizontal: 14, vertical: 10 }),
               frame({ minHeight: 44 }),
-              background(c.paper, shapes.capsule()),
+              background(c.muted, shapes.capsule()),
               contentShape(shapes.capsule()),
               frame({ maxWidth: width, alignment: 'leading' }),
               accessibilityElement('combine'),
@@ -87,7 +89,7 @@ export function Choice({
                 systemName={glyphs[glyph]}
                 modifiers={[
                   font({ textStyle: 'footnote', weight: 'semibold' }),
-                  foregroundStyle(c.moss),
+                  foregroundStyle(accent.ink),
                 ]}
               />
             ) : null}
@@ -139,10 +141,11 @@ export function AttachmentMenu({
   disabled: unavailable,
   onChoose,
 }: AttachmentMenuProps) {
+  const accent = useAccent();
   return (
     <Host
       colorScheme="light"
-      seedColor={c.moss}
+      seedColor={accent.fill}
       matchContents
       ignoreSafeArea="all"
       style={{ minHeight: 44, opacity: unavailable ? 0.45 : 1 }}
@@ -193,11 +196,12 @@ export function RefreshMenu({
   disabled: unavailable,
   intervalDisabled,
 }: RefreshMenuProps) {
+  const accent = useAccent();
   const auto = interval !== '0';
   return (
     <Host
       colorScheme="light"
-      seedColor={c.moss}
+      seedColor={accent.fill}
       matchContents
       ignoreSafeArea="all"
       style={{ minHeight: 44 }}

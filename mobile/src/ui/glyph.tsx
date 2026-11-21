@@ -1,5 +1,5 @@
 import { Text } from 'react-native';
-import { palette } from './theme';
+import { fonts, palette, weights } from './theme';
 import type { GlyphName, GlyphProps } from './glyph.types';
 
 // Android has no SF Symbols; keep a legible text mark until it gets its own set.
@@ -22,7 +22,13 @@ export function Glyph({ name, size = 18, color = palette.ink }: GlyphProps) {
     <Text
       accessible={false}
       importantForAccessibility="no"
-      style={{ color, fontSize: size, lineHeight: size * 1.2 }}
+      style={{
+        color,
+        fontFamily: fonts.sans,
+        fontWeight: weights.heading,
+        fontSize: size,
+        lineHeight: size * 1.2,
+      }}
     >
       {marks[name] ?? '•'}
     </Text>

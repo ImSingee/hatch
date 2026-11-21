@@ -12,7 +12,8 @@ import { Button } from './button';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import { Text, type } from './text';
-import { fonts, palette as c, radii } from './theme';
+import { useAccent } from './accent';
+import { palette as c, pill, radii, shadows, status, weights } from './theme';
 
 export { Text } from './text';
 
@@ -35,18 +36,17 @@ export function useReducedMotion() {
   return reduced;
 }
 
-/** The Hatch mark: a lime egg. `wobble` gives loaders a gentle rock. */
+/** The Hatch mark: an egg in the accent. `wobble` gives loaders a rock. */
 export function Egg({
   size = 22,
-  color = c.lime,
+  color,
   wobble = false,
-  outline = false,
 }: {
   size?: number;
   color?: string;
   wobble?: boolean;
-  outline?: boolean;
 }) {
+  const accent = useAccent();
   const reduced = useReducedMotion();
   const [turn] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -92,15 +92,13 @@ export function Egg({
       }}
     >
       {/* An ellipse drawn at its own size: a stretched circle blurs its
-          outline and thickens it at the top and bottom. */}
+          outline. */}
       <View
         style={{
           width: size,
           height,
           borderRadius: '50%',
-          backgroundColor: outline ? 'transparent' : color,
-          borderWidth: outline ? 2 : 0,
-          borderColor: c.ink,
+          backgroundColor: color ?? accent.fill,
         }}
       />
     </Animated.View>
@@ -119,10 +117,9 @@ export function Wordmark({ size = 30 }: { size?: number }) {
       <Text
         maxFontSizeMultiplier={1.4}
         style={{
-          fontFamily: fonts.display,
-          fontWeight: '800',
+          fontWeight: weights.heading,
           fontSize: size,
-          letterSpacing: -1,
+          letterSpacing: -size * 0.02,
           color: c.ink,
         }}
       >
@@ -132,46 +129,52 @@ export function Wordmark({ size = 30 }: { size?: number }) {
   );
 }
 
-/** Lime highlighter stroke behind the lower half of a label. */
-export function Highlight({
-  active = true,
-  children,
-}: PropsWithChildren<{ active?: boolean }>) {
-  return (
-    <View style={{ alignSelf: 'flex-start' }}>
-      {active ? (
-        <View
-          style={{
-            position: 'absolute',
-            left: -4,
-            right: -4,
-            bottom: 1,
-            height: '46%',
-            borderRadius: 4,
-            backgroundColor: c.lime,
-          }}
-        />
-      ) : null}
-      {children}
-    </View>
-  );
-}
+export type TagTone =
+  | 'accent'
+  | 'fill'
+  | 'quiet'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'outline';
 
+/** Status chip: a pill in sentence case, tinted, with an optional dot. */
 export function Tag({
   label,
   tone = 'quiet',
   glyph,
+  dot = false,
 }: {
   label: string;
-  tone?: 'lime' | 'quiet' | 'moss' | 'danger' | 'outline';
+  tone?: TagTone;
   glyph?: GlyphName;
+  dot?: boolean;
 }) {
+  const accent = useAccent();
+  const tint = (ramp: { tint: string; ink: string; fill: string }) => ({
+    bg: ramp.tint,
+    fg: ramp.ink,
+    mark: ramp.fill,
+    border: ramp.tint,
+  });
   const tones = {
-    lime: { bg: c.lime, fg: c.ink, border: c.lime },
-    quiet: { bg: c.sunken, fg: c.inkSoft, border: c.sunken },
-    moss: { bg: c.moss, fg: c.onMoss, border: c.moss },
-    danger: { bg: c.dangerSoft, fg: c.danger, border: c.dangerSoft },
-    outline: { bg: 'transparent', fg: c.inkSoft, border: c.rule },
+    accent: tint(accent),
+    fill: {
+      bg: accent.fill,
+      fg: accent.onFill,
+      mark: accent.onFill,
+      border: accent.fill,
+    },
+    quiet: { bg: c.hover, fg: c.inkSoft, mark: c.inkSoft, border: c.hover },
+    success: tint(status.success),
+    warning: tint(status.warning),
+    danger: tint(status.danger),
+    outline: {
+      bg: 'transparent',
+      fg: c.inkSoft,
+      mark: c.inkSoft,
+      border: c.hairline,
+    },
   }[tone];
   return (
     <View
@@ -179,19 +182,30 @@ export function Tag({
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
-        gap: 5,
-        paddingHorizontal: 8,
+        gap: 6,
+        minHeight: 24,
+        paddingHorizontal: 10,
         paddingVertical: 3,
-        borderRadius: 999,
-        borderWidth: 1,
+        borderRadius: pill,
+        borderWidth: tone === 'outline' ? 1 : 0,
         borderColor: tones.border,
         backgroundColor: tones.bg,
       }}
     >
+      {dot ? (
+        <View
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: pill,
+            backgroundColor: tones.mark,
+          }}
+        />
+      ) : null}
       {glyph ? <Glyph name={glyph} size={10} color={tones.fg} /> : null}
       <Text
         maxFontSizeMultiplier={1.6}
-        style={[styles.meta, { color: tones.fg, fontSize: 11 }]}
+        style={[styles.caption, { color: tones.fg }]}
       >
         {label}
       </Text>
@@ -199,6 +213,7 @@ export function Tag({
   );
 }
 
+/** A white sheet floating on the ground. Never nest one in another. */
 export function Card({
   children,
   style,
@@ -217,26 +232,21 @@ export function Notice({
   action?: { label: string; onPress: () => void };
   tone?: 'neutral' | 'danger' | 'info';
 }) {
+  const accent = useAccent();
+  const mark =
+    tone === 'danger'
+      ? { bg: status.danger.tint, fg: status.danger.ink }
+      : tone === 'info'
+        ? { bg: accent.tint, fg: accent.ink }
+        : { bg: c.muted, fg: c.ink };
   return (
     <Card>
       <View style={styles.row}>
-        <View
-          style={[
-            styles.noticeMark,
-            {
-              backgroundColor:
-                tone === 'danger'
-                  ? c.dangerSoft
-                  : tone === 'info'
-                    ? c.limeSoft
-                    : c.sunken,
-            },
-          ]}
-        >
+        <View style={[styles.noticeMark, { backgroundColor: mark.bg }]}>
           <Glyph
             name={tone === 'info' ? 'sparkle' : 'warning'}
-            size={14}
-            color={tone === 'danger' ? c.danger : c.ink}
+            size={15}
+            color={mark.fg}
           />
         </View>
         <Text accessibilityRole="header" style={[styles.heading, styles.grow]}>
@@ -269,28 +279,38 @@ export function Busy({ label = 'Loading…' }: { label?: string }) {
       accessibilityLabel={label}
     >
       <Egg size={26} wobble />
-      <Text style={[styles.meta, { color: c.inkSoft }]}>{label}</Text>
+      <Text style={styles.small}>{label}</Text>
     </View>
   );
 }
 
+/** Centred column: a tile, a heavy title, one or two muted sentences. */
 export function EmptyState({
   title,
   detail,
   action,
+  glyph = 'sparkle',
 }: {
   title: string;
   detail: string;
   action?: { label: string; onPress: () => void };
+  glyph?: GlyphName;
 }) {
+  const accent = useAccent();
   return (
     <View style={styles.empty}>
-      {/* One egg: a row of them reads as a "more" (…) control. */}
-      <Egg size={30} />
-      <Text accessibilityRole="header" style={[styles.title]}>
+      <View style={[styles.emptyMark, { backgroundColor: accent.tint }]}>
+        <Glyph name={glyph} size={24} color={accent.ink} />
+      </View>
+      <Text
+        accessibilityRole="header"
+        style={[styles.title, { textAlign: 'center' }]}
+      >
         {title}
       </Text>
-      <Text style={[styles.callout, { maxWidth: 320 }]}>{detail}</Text>
+      <Text style={[styles.callout, { maxWidth: 320, textAlign: 'center' }]}>
+        {detail}
+      </Text>
       {action ? (
         <Button
           variant="secondary"
@@ -309,21 +329,20 @@ export function errorText(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: c.paper },
-  content: { padding: 20, gap: 16, paddingBottom: 40 },
   grow: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   ...type,
   card: {
     backgroundColor: c.card,
-    borderRadius: radii.card,
+    borderRadius: radii.xl,
     padding: 18,
     gap: 12,
+    boxShadow: shadows.card,
   },
   noticeMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -335,8 +354,17 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   empty: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'center',
+    maxWidth: 420,
     gap: 12,
     paddingVertical: 36,
+  },
+  emptyMark: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

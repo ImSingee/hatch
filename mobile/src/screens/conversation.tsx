@@ -76,10 +76,11 @@ import { Glyph } from '../ui/glyph';
 import { LiveTranscript, TranscriptMessage } from '../ui/transcript';
 import { PendingTray } from '../ui/pending-tray';
 import { terminalReplyIndexes } from '../ui/transcript-content';
-import { Busy, Egg, Notice, errorText } from '../ui/primitives';
-import { GlyphTile, Monogram } from '../ui/rows';
+import { Busy, Notice, errorText } from '../ui/primitives';
+import { AppTile, GlyphTile } from '../ui/rows';
 import { Text, type } from '../ui/text';
-import { palette as c, radii } from '../ui/theme';
+import { useAccent } from '../ui/accent';
+import { palette as c, radii, shadows } from '../ui/theme';
 
 const suggestions = [
   'Build a tiny tool that tracks my week',
@@ -111,6 +112,7 @@ function ConversationBody({
   embedded?: boolean;
 }) {
   const { api, origin } = useSession();
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const {
@@ -750,7 +752,7 @@ function ConversationBody({
       ref={frame}
       style={{
         flex: 1,
-        backgroundColor: c.paper,
+        backgroundColor: c.ground,
         // A vertical bar arrives as an inset on one side only.
         paddingLeft: insets.left,
         paddingRight: insets.right,
@@ -773,7 +775,6 @@ function ConversationBody({
               gap: 4,
             }}
           >
-            <Text style={type.meta}>Conversation</Text>
             <Text
               accessibilityRole="header"
               numberOfLines={2}
@@ -910,9 +911,8 @@ function ConversationBody({
               ListEmptyComponent={
                 !streamRunId && !heldShown.rest.length ? (
                   <View style={{ gap: 14, paddingTop: 24 }}>
-                    <Egg size={30} />
                     <Text accessibilityRole="header" style={type.display}>
-                      Start with an idea.
+                      What should we make?
                     </Text>
                     <Text style={type.callout}>
                       Build an App, explore your data or pick up something
@@ -934,11 +934,11 @@ function ConversationBody({
                             gap: 10,
                             paddingHorizontal: 14,
                             paddingVertical: 10,
-                            borderRadius: 16,
-                            backgroundColor: pressed ? c.limeSoft : c.card,
+                            borderRadius: radii.lg,
+                            backgroundColor: pressed ? c.muted : c.card,
                           })}
                         >
-                          <Glyph name="sparkle" size={13} color={c.moss} />
+                          <Glyph name="sparkle" size={13} color={accent.ink} />
                           <Text
                             style={[type.callout, { flex: 1, color: c.ink }]}
                           >
@@ -1040,8 +1040,8 @@ function ConversationBody({
                     />
                   ) : null}
                   {(detail?.appIds ?? []).map((appId) => {
-                    const name =
-                      apps.data?.find((app) => app.id === appId)?.name ?? 'App';
+                    const app = apps.data?.find((item) => item.id === appId);
+                    const name = app?.name ?? 'App';
                     return (
                       <Pressable
                         key={appId}
@@ -1054,24 +1054,32 @@ function ConversationBody({
                           })
                         }
                         style={({ pressed }) => ({
-                          minHeight: 56,
+                          minHeight: 64,
                           flexDirection: 'row',
                           alignItems: 'center',
                           gap: 12,
-                          padding: 10,
+                          padding: 12,
                           paddingRight: 16,
-                          borderRadius: 20,
-                          backgroundColor: pressed ? c.limeSoft : c.card,
+                          borderRadius: radii.xl,
+                          backgroundColor: pressed ? c.muted : c.card,
+                          boxShadow: shadows.card,
                         })}
                       >
-                        <Monogram name={name} size={36} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={type.meta}>Built here</Text>
+                        <AppTile
+                          name={name}
+                          seed={appId}
+                          iconPath={app?.iconPath}
+                          size={44}
+                        />
+                        <View style={{ flex: 1, gap: 1 }}>
                           <Text style={type.heading} numberOfLines={1}>
-                            Open {name}
+                            {name}
                           </Text>
+                          <Text style={type.small}>Built here</Text>
                         </View>
-                        <Glyph name="chevron" size={12} color={c.inkFaint} />
+                        <Text style={[type.heading, { color: accent.ink }]}>
+                          Open
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -1082,16 +1090,13 @@ function ConversationBody({
         )}
         <View
           style={{
-            paddingHorizontal: 14,
-            paddingTop: 12,
-            paddingBottom: keyboardShown ? 10 : Math.max(insets.bottom, 12),
+            // A floating sheet, clear of the home indicator.
+            marginHorizontal: 12,
+            marginBottom: keyboardShown ? 10 : Math.max(insets.bottom, 12),
+            padding: 12,
             backgroundColor: c.card,
-            borderTopLeftRadius: radii.sheet,
-            borderTopRightRadius: radii.sheet,
-            shadowColor: c.ink,
-            shadowOpacity: 0.08,
-            shadowRadius: 18,
-            shadowOffset: { width: 0, height: -4 },
+            borderRadius: radii.window,
+            boxShadow: shadows.dock,
             gap: 8,
             flexShrink: 1,
             maxHeight: '75%',
@@ -1164,7 +1169,7 @@ function ConversationBody({
                   gap: 8,
                   padding: 12,
                   paddingRight: 4,
-                  borderRadius: 16,
+                  borderRadius: radii.md,
                   backgroundColor: c.dangerSoft,
                 }}
               >
@@ -1215,8 +1220,8 @@ function ConversationBody({
                       gap: 8,
                       padding: 6,
                       paddingRight: 10,
-                      borderRadius: 14,
-                      backgroundColor: pressed ? c.sunken : c.paper,
+                      borderRadius: radii.md,
+                      backgroundColor: pressed ? c.sunken : c.muted,
                       opacity: busy ? 0.5 : 1,
                     })}
                   >
@@ -1224,7 +1229,11 @@ function ConversationBody({
                       <Image
                         accessible={false}
                         source={{ uri: file.uri }}
-                        style={{ width: 36, height: 36, borderRadius: 9 }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: radii.sm,
+                        }}
                       />
                     ) : (
                       <GlyphTile glyph="file" size={36} />
@@ -1292,7 +1301,7 @@ function ConversationBody({
               />
             ) : config.data ? (
               <Text
-                style={[type.meta, { flex: 1 }]}
+                style={[type.caption, { flex: 1 }]}
                 numberOfLines={1}
                 accessibilityHint="Configure a provider in Hatch on the web"
               >
@@ -1302,7 +1311,7 @@ function ConversationBody({
               <View style={{ flex: 1 }} />
             )}
             {files.length ? (
-              <Text style={type.meta}>{`${files.length}/6`}</Text>
+              <Text style={type.caption}>{`${files.length}/6`}</Text>
             ) : null}
             {runId ? (
               <Button
@@ -1330,7 +1339,7 @@ function ConversationBody({
             <IconButton
               label={send.isPending ? 'Sending…' : 'Send'}
               glyph="send"
-              tone={canSend ? 'moss' : 'sunken'}
+              tone={canSend ? 'accent' : 'sunken'}
               disabled={!canSend}
               onPress={submit}
             />

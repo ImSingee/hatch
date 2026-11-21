@@ -31,6 +31,7 @@ export function appProjection(app: Resource): AppSummary {
     status: app.status,
     createdAt: app.createdAt,
     updatedAt: app.updatedAt,
+    iconPath: app.iconPath ?? null,
   };
 }
 export function summaryProjection(

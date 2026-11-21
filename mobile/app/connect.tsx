@@ -10,17 +10,12 @@ import {
   vault,
 } from '../src/state/session';
 import { Button } from '../src/ui/button';
-import {
-  Busy,
-  Card,
-  Highlight,
-  Wordmark,
-  errorText,
-} from '../src/ui/primitives';
+import { Busy, Card, Wordmark, errorText } from '../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../src/ui/rows';
 import { SectionLabel } from '../src/ui/screen';
 import { Text, type } from '../src/ui/text';
-import { fonts, palette as c } from '../src/ui/theme';
+import { useAccent } from '../src/ui/accent';
+import { palette as c, pill, weights } from '../src/ui/theme';
 
 type Approval = {
   userCode: string;
@@ -29,6 +24,7 @@ type Approval = {
 };
 export default function ConnectScreen() {
   const { connect, origins, authError } = useSession();
+  const accent = useAccent();
   const [url, setUrl] = useState(origins[0] ?? '');
   const urlField = useRef<NativeFieldRef>(null);
   const [pending, setPending] = useState(false);
@@ -122,7 +118,7 @@ export default function ConnectScreen() {
     'Come back — you’re in',
   ];
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.ground }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -159,33 +155,40 @@ export default function ConnectScreen() {
                     gap: 12,
                   }}
                 >
-                  <Text
-                    style={[
-                      type.meta,
-                      { color: active ? c.ink : c.inkFaint, minWidth: 22 },
-                    ]}
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: pill,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: active ? accent.fill : c.hover,
+                    }}
                   >
-                    {String(index + 1).padStart(2, '0')}
-                  </Text>
-                  <Highlight active={active}>
                     <Text
+                      maxFontSizeMultiplier={1.2}
                       style={[
-                        type.callout,
-                        {
-                          color: active ? c.ink : c.inkSoft,
-                          fontWeight: active ? '600' : '400',
-                        },
+                        type.caption,
+                        { color: active ? accent.onFill : c.inkSoft },
                       ]}
                     >
-                      {label}
+                      {index + 1}
                     </Text>
-                  </Highlight>
+                  </View>
+                  <Text
+                    style={[
+                      type.callout,
+                      active && { color: c.ink, fontWeight: weights.label },
+                    ]}
+                  >
+                    {label}
+                  </Text>
                 </View>
               );
             })}
           </View>
           <View style={{ gap: 10 }}>
-            <Text style={type.meta}>Instance address</Text>
+            <Text style={[type.small, { color: c.ink }]}>Instance address</Text>
             <NativeField
               ref={urlField}
               label="Hatch instance URL"
@@ -207,23 +210,25 @@ export default function ConnectScreen() {
             ) : null}
           </View>
           {code ? (
-            <Card style={{ backgroundColor: c.ink, gap: 14 }}>
-              <Text style={[type.meta, { color: c.lime }]}>Approval code</Text>
+            <Card style={{ gap: 14 }}>
+              <Text style={type.small}>Approval code</Text>
               <Text
                 selectable
                 accessibilityLabel={`Approval code ${code.userCode.split('').join(' ')}`}
-                style={{
-                  color: c.card,
-                  fontFamily: fonts.mono,
-                  fontSize: 34,
-                  lineHeight: 42,
-                  fontWeight: '600',
-                  letterSpacing: 4,
-                }}
+                style={[
+                  type.mono,
+                  {
+                    color: c.ink,
+                    fontSize: 34,
+                    lineHeight: 42,
+                    fontWeight: weights.label,
+                    letterSpacing: 4,
+                  },
+                ]}
               >
                 {code.userCode}
               </Text>
-              <Text style={[type.small, { color: c.card, opacity: 0.86 }]}>
+              <Text style={type.small}>
                 Check that your browser shows this same code. Approve only the
                 request you just started; this screen continues on its own.
               </Text>
@@ -271,7 +276,7 @@ export default function ConnectScreen() {
                   <ListRow
                     key={item}
                     title={item.replace(/^https?:\/\//, '')}
-                    leading={<GlyphTile glyph="server" size={36} />}
+                    leading={<GlyphTile glyph="server" />}
                     accessibilityHint="Fills in this address"
                     onPress={() => setUrl(item)}
                   />

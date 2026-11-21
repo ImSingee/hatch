@@ -1,20 +1,16 @@
 import { Pressable, View } from 'react-native';
+import { useAccent } from './accent';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import { Text } from './text';
-import { palette as c } from './theme';
+import { palette as c, pill, radii, status, weights } from './theme';
 
-const variants = {
-  primary: { bg: c.moss, fg: c.onMoss, border: c.moss },
-  secondary: { bg: c.card, fg: c.ink, border: c.rule },
-  quiet: { bg: 'transparent', fg: c.moss, border: 'transparent' },
-  danger: { bg: c.card, fg: c.danger, border: c.dangerSoft },
-} as const;
+type Variant = 'primary' | 'secondary' | 'quiet' | 'danger';
 
 export type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: keyof typeof variants;
+  variant?: Variant;
   size?: 'large' | 'regular' | 'small';
   glyph?: GlyphName;
   disabled?: boolean;
@@ -25,7 +21,8 @@ export type ButtonProps = {
   accessibilityHint?: string;
 };
 
-// Capsule buttons: filled moss for the one primary action on a surface.
+// Desk buttons: the accent fill for the one primary action of a view, a white
+// sheet with a hairline for the rest, a wash for subtle ones.
 export function Button({
   label,
   onPress,
@@ -38,7 +35,28 @@ export function Button({
   singleLine,
   accessibilityHint,
 }: ButtonProps) {
-  const tone = variants[variant];
+  const accent = useAccent();
+  const tone = {
+    primary: {
+      bg: accent.fill,
+      down: accent.pressed,
+      fg: accent.onFill,
+      border: 'transparent',
+    },
+    secondary: { bg: c.card, down: c.muted, fg: c.ink, border: c.hairline },
+    quiet: {
+      bg: 'transparent',
+      down: c.pressed,
+      fg: accent.ink,
+      border: 'transparent',
+    },
+    danger: {
+      bg: status.danger.tint,
+      down: status.danger.tintStrong,
+      fg: status.danger.ink,
+      border: 'transparent',
+    },
+  }[variant];
   const unavailable = Boolean(disabled || busy);
   return (
     <Pressable
@@ -50,20 +68,20 @@ export function Button({
       onPress={onPress}
       hitSlop={size === 'small' ? 5 : 4}
       style={({ pressed }) => ({
-        minHeight: size === 'large' ? 54 : size === 'small' ? 36 : 44,
-        paddingHorizontal: variant === 'quiet' ? 8 : size === 'small' ? 14 : 20,
+        minHeight: size === 'large' ? 50 : size === 'small' ? 36 : 44,
+        paddingHorizontal:
+          variant === 'quiet' ? 10 : size === 'small' ? 14 : 20,
         paddingVertical: size === 'small' ? 6 : 10,
-        borderRadius: 999,
+        borderRadius: radii.md,
         borderWidth: 1,
         borderColor: tone.border,
-        backgroundColor: tone.bg,
+        backgroundColor: pressed ? tone.down : tone.bg,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
         alignSelf: fullWidth ? 'stretch' : 'flex-start',
-        opacity: unavailable ? 0.42 : pressed ? 0.78 : 1,
-        transform: [{ scale: pressed ? 0.98 : 1 }],
+        opacity: unavailable ? 0.5 : 1,
       })}
     >
       {glyph ? (
@@ -74,7 +92,7 @@ export function Button({
         style={{
           color: tone.fg,
           fontSize: size === 'large' ? 17 : size === 'small' ? 14 : 16,
-          fontWeight: '600',
+          fontWeight: size === 'large' ? weights.heading : weights.label,
           textAlign: 'center',
           flexShrink: 1,
         }}
@@ -85,7 +103,7 @@ export function Button({
   );
 }
 
-/** A 44pt round control for toolbar-style actions. */
+/** A round control for toolbar-style actions, at least 44 points to touch. */
 export function IconButton({
   label,
   glyph,
@@ -97,16 +115,17 @@ export function IconButton({
   label: string;
   glyph: GlyphName;
   onPress: () => void;
-  tone?: 'card' | 'moss' | 'ink' | 'clear' | 'lime' | 'sunken';
+  tone?: 'card' | 'accent' | 'ink' | 'clear' | 'tint' | 'sunken';
   disabled?: boolean;
   size?: number;
 }) {
+  const accent = useAccent();
   const colors = {
     card: { bg: c.card, fg: c.ink },
-    moss: { bg: c.moss, fg: c.onMoss },
+    accent: { bg: accent.fill, fg: accent.onFill },
     ink: { bg: c.ink, fg: c.card },
     clear: { bg: 'transparent', fg: c.inkSoft },
-    lime: { bg: c.lime, fg: c.ink },
+    tint: { bg: accent.tint, fg: accent.ink },
     sunken: { bg: c.sunken, fg: c.inkSoft },
   }[tone];
   return (
@@ -122,15 +141,14 @@ export function IconButton({
         height: Math.max(size, 44),
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? 0.38 : pressed ? 0.7 : 1,
-        transform: [{ scale: pressed ? 0.94 : 1 }],
+        opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
       })}
     >
       <View
         style={{
           width: size,
           height: size,
-          borderRadius: size / 2,
+          borderRadius: pill,
           backgroundColor: colors.bg,
           alignItems: 'center',
           justifyContent: 'center',

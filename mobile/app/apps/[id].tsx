@@ -101,7 +101,7 @@ export default function AppScreen() {
       linked.error ||
       handoff.error ||
       (app.error && !destination) ? (
-        <View style={{ flex: 1, padding: 16, backgroundColor: c.paper }}>
+        <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>
           <Notice
             tone="danger"
             title="Couldn’t open this app"

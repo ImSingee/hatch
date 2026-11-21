@@ -1,15 +1,29 @@
 # Mobile UI conventions
 
-The native app has its own light visual system, Field Guide, defined in
-`src/ui/theme.ts`; it does not follow the web Ember styles. Pale sage paper,
-green-black ink, moss for actions and a lime highlighter for live, pinned and
-selected states. Rounded system display type (`ui-rounded`) for titles,
-system text for body and controls, and uppercase monospaced metadata
-(`ui-monospace`) for eyebrows, counts, timestamps and status tags. White
-22-point sheets without borders, hairline-divided rows, capsule buttons and
-SF Symbols through `Glyph`. Keep every text/surface pair at 4.5:1 or better;
-`theme.test.ts` guards the palette. Respect Reduce Motion for the egg loader
-and highlighter animations.
+The native app follows Desk, the visual system specified in the repository's
+`DESIGN.md`: a warm ground, white sheets on a soft ink-tinted shadow, heavy
+rounded type and one accent. `src/ui/theme.ts` reads every colour, radius,
+font, weight and shadow from `packages/hatch-design-tokens/tokens.json`; write
+no hex, `rgb()`, radius, font-family or font-weight literal anywhere else
+(pills use `pill`, circles `'50%'`). The accent is the theme's one input:
+components read it with `useAccent()` (`src/ui/accent.tsx`) while rendering,
+never at module scope, so the provider in `app/_layout.tsx` recolours the whole
+app. Text is Nunito, code and identifiers JetBrains Mono; both are linked into
+the binary by `expo-font` in `app.config.ts`, and neither has CJK glyphs (iOS
+falls back to PingFang, Android to Noto Sans CJK). Use weight 700 or heavier
+for names and titles that may hold CJK text, so the two faces sit level.
+System controls (tab bar, navigation bar, native fields and menus) keep the
+system font. A sheet on the ground floats on `shadows.card`; a group inside a
+sheet is divided by hairlines; never nest a shadowed sheet in another. App
+tiles go through `AppTile`, which shows the App's stored icon and falls back
+to the monogram; Workflows pass `workflow`. Keep every text/surface pair at
+4.5:1 or better; `theme.test.ts` guards the pairings. Respect Reduce Motion
+for the egg loader.
+
+The tab bar is the system one: Home, Apps, Agent and Me by default, with
+Workflows hidden. Which sections sit in it, their order and the start page
+stay the user's choice (Tabs & start page); never hard-code four tabs. The
+home tab keeps the `dashboard` id.
 
 React Native owns page composition, buttons, rows, tiles, the transcript,
 composer, questions and attachment previews. Use `@expo/ui` where the system

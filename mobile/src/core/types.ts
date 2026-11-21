@@ -30,8 +30,10 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-export type AppSummary = Omit<Plain<Resource>, 'description'> & {
+export type AppSummary = Omit<Plain<Resource>, 'description' | 'iconPath'> & {
   description: string | null;
+  /** Apps only: where the icon PNG is served; null while it shows a monogram. */
+  iconPath: string | null;
 };
 export type AppDetail = AppSummary;
 export type Model = Plain<AgentModel>;

@@ -2,11 +2,15 @@ import { useLocalSearchParams } from 'expo-router';
 import { ResourcesScreen } from '../src/screens/resources';
 import { AgentScreen } from '../src/screens/agent';
 import { DashboardScreen } from '../src/screens/dashboard';
+import { HomeScreen } from '../src/screens/home';
 
-// Hidden tabs stay reachable from More through this pushed screen.
+// Hidden tabs stay reachable from Me through this pushed screen; `widgets`
+// is the full-height page behind the home screen's widget sheet.
 export default function Library() {
-  const { kind, all } = useLocalSearchParams<{ kind?: string; all?: string }>();
+  const { kind } = useLocalSearchParams<{ kind?: string }>();
   return kind === 'dashboard' ? (
+    <HomeScreen nested />
+  ) : kind === 'widgets' ? (
     <DashboardScreen nested />
   ) : kind === 'agent' ? (
     <AgentScreen nested />
@@ -14,7 +18,6 @@ export default function Library() {
     <ResourcesScreen
       nested
       kind={kind === 'workflows' ? 'workflows' : 'apps'}
-      all={all === 'true'}
     />
   );
 }
