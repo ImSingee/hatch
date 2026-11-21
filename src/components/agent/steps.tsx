@@ -18,7 +18,11 @@ import {
 } from 'react';
 import { isEditFileDetails } from '~agent/edit-file-details';
 import { askCancellationMessage } from '~agent/ask-cancellation';
-import { isFilePathDetails, isFilePathTool } from '~agent/file-path-details';
+import {
+  filePathDisplayLabel,
+  isFilePathDetails,
+  isFilePathTool,
+} from '~agent/file-path-details';
 import { EditDiff } from './edit-diff';
 import type { StreamTool } from './use-agent-stream';
 import {
@@ -65,7 +69,7 @@ function resolvedToolDetail(
   fallback?: ToolDetail,
 ): ToolDetail | undefined {
   if (isFilePathTool(name) && isFilePathDetails(details)) {
-    return { value: details.relativePath, ellipsis: 'start' };
+    return { value: filePathDisplayLabel(details), ellipsis: 'start' };
   }
   if (!isError) {
     const legacyPath = legacyResultPath(name, details);
