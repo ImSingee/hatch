@@ -6,13 +6,16 @@ import {
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import {
-  hatchImportMapPath,
-  materializeWorkflowHatchSdk,
-} from '~agent/hatch-sdk';
+import { materializeWorkflowHatchSdk } from '~agent/hatch-sdk';
 import { WORKFLOW_BUILD_WORK_DIR } from '~agent/paths';
+import { NODE_TOOLCHAIN_IGNORED_ROOT_FILE } from '../../app-managed-path';
+import {
+  detectSourceToolchain,
+  sourceToolchainReader,
+} from '../../source-toolchain';
+import { createSourceToolchain } from '../../toolchain';
+import { platformToolchainContext } from '../../toolchain/platform';
 import { assertDenoPermissionFlags } from '../deno-permissions';
-import { validateDenoDependencySource } from '../deno-dependencies';
 import { run } from '../subprocess';
 import {
   type NormalizedWorkflowManifest,
@@ -92,7 +95,13 @@ export async function buildWorkflow(
         .split(path.sep)
         .join('/');
       const rootEntry = relative.split('/', 1)[0]?.toLowerCase();
-      return !['.git', '.hatch', 'node_modules'].includes(rootEntry);
+      return ![
+        '.git',
+        '.hatch',
+        'node_modules',
+        // pnpm writes this file itself; install never reads it.
+        NODE_TOOLCHAIN_IGNORED_ROOT_FILE,
+      ].includes(rootEntry);
     },
   });
 
@@ -106,7 +115,13 @@ export async function buildWorkflow(
           })
         : undefined;
 
-    await validateDenoDependencySource(tempSrc, 'workflow');
+    // The committed lockfile selects the build pipeline before any source is
+    // evaluated; the artifact runs on the same runtime either way.
+    const toolchain = createSourceToolchain(
+      await detectSourceToolchain(sourceToolchainReader(tempSrc)),
+      platformToolchainContext('workflow', tempSrc, logs),
+    );
+    await toolchain.validateDependencies();
 
     if (await pathExists(path.join(tempSrc, 'hatch', 'workflow.ts'))) {
       throw new Error(
@@ -116,41 +131,12 @@ export async function buildWorkflow(
     }
 
     await materializeWorkflowHatchSdk(tempSrc);
-    // 1) Reproduce the source-controlled dependency graph. Deno reads reviewed
-    // allowScripts entries from deno.json; --frozen rejects uncommitted changes.
-    const installArgs = [
-      'install',
-      '--package-json',
-      '--node-modules-dir=auto',
-      '--lock=deno.lock',
-      '--frozen',
-    ];
-    const install = await run('deno', installArgs, {
-      cwd: tempSrc,
-      env: workflowSandboxEnv(),
-    });
-    logs.push(
-      `$ deno ${installArgs.join(' ')}\n${(
-        install.stderr || install.stdout
-      ).trim()}`,
-    );
-    if (install.code !== 0) {
-      throw new Error(
-        'Workflow dependency install failed with the committed deno.lock. ' +
-          'Load the "building-workflows" Skill, run deno install locally, ' +
-          `commit the updated dependency files, and deploy again:\n${
-            install.stderr || install.stdout
-          }`,
-      );
-    }
+    // 1) Reproduce the source-controlled dependency graph from the committed
+    // lockfile.
+    await toolchain.install();
 
     const { manifest } =
-      legacy ??
-      (await loadSourceManifest(tempSrc, {
-        kind: 'workflow',
-        parse: parseSourceWorkflowManifest,
-        logs,
-      }));
+      legacy ?? (await toolchain.evaluateManifest(parseSourceWorkflowManifest));
     if (manifest.extraPermissions !== undefined) {
       await assertDenoPermissionFlags(manifest.extraPermissions, tempSrc);
     }
@@ -163,25 +149,7 @@ export async function buildWorkflow(
     // Check the authored entry and its transitive imports before bundling or
     // evaluating author code. Bundling erases TypeScript types without checking
     // them; describe mode only validates the emitted runtime program.
-    const checkArgs = [
-      'check',
-      '--config=deno.json',
-      '--node-modules-dir=auto',
-      `--import-map=${hatchImportMapPath(tempSrc)}`,
-      '--lock=deno.lock',
-      '--frozen',
-      `./${manifest.entry}`,
-    ];
-    const checked = await run('deno', checkArgs, {
-      cwd: tempSrc,
-      env: workflowSandboxEnv(),
-    });
-    logs.push(`$ deno ${checkArgs.join(' ')}\n${checked.output.trim()}`);
-    if (checked.code !== 0) {
-      throw new Error(
-        `Workflow source validation failed during deno check:\n${checked.output}`,
-      );
-    }
+    await toolchain.check({ entries: [manifest.entry] });
 
     await fs.mkdir(stagedOutput);
 
@@ -203,33 +171,14 @@ export async function buildWorkflow(
 
     // 2) Bundle the workflow + its npm deps into one Deno-runnable file.
     const bundlePath = path.join(stagedOutput, 'workflow.js');
-    const bundleArgs = [
-      'bundle',
-      '--node-modules-dir=auto',
-      '--lock=deno.lock',
-      '--frozen',
-      '--import-map',
-      hatchImportMapPath(tempSrc),
-      '-o',
-      bundlePath,
-      wrapper,
-    ];
-    const bundle = await run('deno', bundleArgs, {
-      cwd: tempSrc,
-      env: workflowSandboxEnv(),
+    await toolchain.bundle({
+      entry: path.basename(wrapper),
+      outfile: bundlePath,
+      outputRoot: stagedOutput,
     });
-    logs.push(
-      `$ deno ${bundleArgs.join(' ')}\n${(
-        bundle.stderr || bundle.stdout
-      ).trim()}`,
-    );
-    if (bundle.code !== 0 || !(await pathExists(bundlePath))) {
-      throw new Error(
-        `Workflow bundle failed:\n${bundle.stderr || bundle.stdout}`,
-      );
-    }
 
-    // 3) Run the bundle in describe mode to capture the input JSON Schema.
+    // 3) Run the bundle in describe mode to capture the input JSON Schema. This
+    // executes the deployed artifact, so it uses the runtime, not the toolchain.
     const describe = await run(
       'deno',
       // Describe mode imports and evaluates the same author-written bundle as a

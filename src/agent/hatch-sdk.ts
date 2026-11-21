@@ -29,8 +29,11 @@ import { resolveAgentOwnershipSession, sandboxSpawn } from './shell-sandbox';
 import {
   APP_SDK,
   LEGACY_DATA_SDK,
+  SDK_DENO_TYPES,
+  SDK_DENO_TYPES_LICENSE,
   WORKFLOW_SDK,
   sdkImports,
+  sdkToolchainFiles,
   type SdkDefinition,
 } from '../../sdk-internal/definitions';
 
@@ -72,6 +75,22 @@ type HatchSdkGeneration = {
   imports: Readonly<Record<string, string>>;
   packages: readonly HatchSdkPackage[];
   extraFiles?: Readonly<Record<string, string>>;
+  /** Generated path below `.hatch` -> platform file copied verbatim. */
+  copiedFiles: Readonly<Record<string, string>>;
+};
+
+// The runtime is still Deno, so Node-toolchain sources type-check against the
+// Deno namespace. The declarations come from the platform's own locked
+// dependency, never from the authored source.
+const DENO_TYPES_PACKAGE = path.join(
+  REPO_ROOT,
+  'node_modules',
+  '@types',
+  'deno',
+);
+const TOOLCHAIN_COPIED_FILES = {
+  [SDK_DENO_TYPES]: path.join(DENO_TYPES_PACKAGE, 'index.d.ts'),
+  [SDK_DENO_TYPES_LICENSE]: path.join(DENO_TYPES_PACKAGE, 'LICENSE'),
 };
 
 function sdkPackage(definition: SdkDefinition): HatchSdkPackage {
@@ -90,7 +109,11 @@ const APP_HATCH_SDK_GENERATION: HatchSdkGeneration = {
   sourceRootLabel: 'App source root',
   imports: APP_HATCH_SDK_IMPORTS,
   packages: [sdkPackage(APP_SDK), sdkPackage(LEGACY_DATA_SDK)],
-  extraFiles: { 'buf.gen.yaml': PLATFORM_APP_BUF_GEN_YAML },
+  extraFiles: {
+    'buf.gen.yaml': PLATFORM_APP_BUF_GEN_YAML,
+    ...sdkToolchainFiles('app'),
+  },
+  copiedFiles: TOOLCHAIN_COPIED_FILES,
 };
 
 const WORKFLOW_HATCH_SDK_GENERATION: HatchSdkGeneration = {
@@ -98,6 +121,8 @@ const WORKFLOW_HATCH_SDK_GENERATION: HatchSdkGeneration = {
   sourceRootLabel: 'Workflow source root',
   imports: WORKFLOW_HATCH_SDK_IMPORTS,
   packages: [sdkPackage(WORKFLOW_SDK)],
+  extraFiles: sdkToolchainFiles('workflow'),
+  copiedFiles: TOOLCHAIN_COPIED_FILES,
 };
 
 async function assertReplaceableManagedDirectory(
@@ -146,6 +171,15 @@ async function assertSdkBuildExists(
   } catch {
     throw new Error(
       'Hatch SDK build output is missing. Run `pnpm hatch-sdk:build`.',
+    );
+  }
+  try {
+    await Promise.all(
+      Object.values(generation.copiedFiles).map((file) => access(file)),
+    );
+  } catch {
+    throw new Error(
+      'Platform type declarations are missing. Run `pnpm install`.',
     );
   }
 }
@@ -513,6 +547,11 @@ async function stageSdkGeneration(
         flag: 'wx',
       }),
     );
+  }
+  for (const [file, source] of Object.entries(generation.copiedFiles)) {
+    const destination = path.join(target, ...file.split('/'));
+    await mkdir(path.dirname(destination), { recursive: true });
+    tasks.push(cp(source, destination, { errorOnExist: true, force: false }));
   }
   await Promise.all(tasks);
 }
