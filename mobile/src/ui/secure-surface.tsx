@@ -254,7 +254,11 @@ export function SecureSurface({
                 : `The server returned ${nativeEvent.statusCode}. Try again.`,
           );
         }}
+        // The system may kill the page's process to free memory (WebKit's
+        // content process, Android's renderer). The view is then blank for
+        // good, so it signs in afresh.
         onContentProcessDidTerminate={retry}
+        onRenderProcessGone={retry}
         style={{ flex: 1, backgroundColor: palette.card }}
       />
       {loadedPath !== target ? (

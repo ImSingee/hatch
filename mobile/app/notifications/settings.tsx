@@ -134,6 +134,7 @@ export default function NotificationSettingsScreen() {
                   value={on}
                   disabled={saving || !known}
                   trackColor={{ true: accent.fill, false: c.idle }}
+                  thumbColor={c.card}
                   ios_backgroundColor={c.idle}
                   onValueChange={toggle}
                 />

@@ -190,6 +190,7 @@ export default function NavigationSettings() {
                     value={visible}
                     disabled={saving}
                     trackColor={{ true: accent.fill, false: c.idle }}
+                    thumbColor={c.card}
                     ios_backgroundColor={c.idle}
                     onValueChange={() =>
                       void save({
