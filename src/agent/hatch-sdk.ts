@@ -16,7 +16,11 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { APP_MANAGED_DIR, isAppManagedPathSegment } from '../app-managed-path';
+import {
+  APP_MANAGED_DIR,
+  NODE_TOOLCHAIN_IGNORED_ROOT_FILE,
+  isAppManagedPathSegment,
+} from '../app-managed-path';
 import { PLATFORM_APP_BUF_GEN_YAML } from './app-codegen';
 import type { WorktreeMaterializer } from './worktree-materializer';
 import {
@@ -670,6 +674,8 @@ const COMMON_HATCH_SDK_EXCLUDES = [
   '/.hatch-install-*/',
   '/.hatch-backup-*/',
   '/node_modules/',
+  // pnpm writes this file itself; builds ignore it.
+  `/${NODE_TOOLCHAIN_IGNORED_ROOT_FILE}`,
 ] as const;
 
 export const appHatchSdkMaterializer = {

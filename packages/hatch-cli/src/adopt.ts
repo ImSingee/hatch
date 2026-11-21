@@ -111,7 +111,13 @@ export async function adopt(
   }
   let manifest;
   try {
-    manifest = await readWorkspaceManifest(root, kind, signal);
+    manifest = await readWorkspaceManifest(
+      root,
+      kind,
+      signal,
+      // Only a pnpm-toolchain source needs the platform's tool versions.
+      async () => (await client.sdk.get({ kind })).tooling,
+    );
   } catch {
     throw new CliError(
       'manifest_mismatch',

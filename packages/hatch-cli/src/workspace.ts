@@ -25,7 +25,12 @@ import { CliError } from './error';
 import type { Profile } from './config';
 import { platformClient } from './client';
 import { pnpmInvocation } from './pnpm';
-import { prepareApp } from './preparation';
+import { prepareApp, prepareNodeWorkflow } from './preparation';
+import {
+  PNPM_LOCKFILE,
+  detectSourceToolchain,
+  sourceToolchainReader,
+} from '../../../src/source-toolchain';
 
 export type Kind = 'app' | 'workflow';
 export type Workspace = {
@@ -404,7 +409,7 @@ export async function installSdk(
           6,
         );
       await handle.writeFile(
-        '\n.hatch/\n.hatch-stage-*/\n.hatch-backup-*/\nnode_modules/\ngen/\n',
+        '\n.hatch/\n.hatch-stage-*/\n.hatch-backup-*/\nnode_modules/\ngen/\npnpm-workspace.yaml\n',
       );
     } finally {
       await handle.close();
@@ -424,6 +429,21 @@ export async function installSdk(
         'Workflow preparation failed during dependency install: missing regular package.json. Add authored inputs and retry update.',
         6,
       );
+    // A committed pnpm lockfile selects the frozen install the platform
+    // repeats at deploy; Deno-toolchain Workflows keep the editor-only install.
+    if (await lstat(join(root, PNPM_LOCKFILE)).catch(() => null)) {
+      try {
+        await detectSourceToolchain(sourceToolchainReader(root));
+        await prepareNodeWorkflow(root, signal, payload.tooling);
+      } catch (error) {
+        throw new CliError(
+          'workflow_preparation_failed',
+          `Workflow preparation failed during dependency install: ${error instanceof Error ? error.message : 'Invalid source.'}`,
+          signal.aborted ? 130 : 6,
+        );
+      }
+      return;
+    }
     try {
       const pnpm = await pnpmInvocation();
       await command(

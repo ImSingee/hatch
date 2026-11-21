@@ -8,9 +8,12 @@ import { constants as fsConstants } from 'node:fs';
 import { access, lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  type DenoDependencySourceFile,
-  validateDenoDependencySource,
-} from '../deno-dependencies';
+  detectSourceToolchain,
+  type SourceToolchain,
+  type ToolchainCommand,
+  type ToolchainRunner,
+} from '../source-toolchain';
+import { createSourceToolchain } from '../toolchain';
 import {
   APP_MANAGED_DIR,
   isAppManagedPathSegment,
@@ -493,6 +496,39 @@ await mkdir(gen, { mode: 0o755 });
   );
 }
 
+/** The platform's own compiler launcher, run on the Runner's Node binary. */
+async function platformTscExecutable(root: string): Promise<string> {
+  const canonicalRoot = await realpath(root);
+  let canonicalWorkspaceRoot = WORKSPACE_ROOT;
+  try {
+    canonicalWorkspaceRoot = await realpath(WORKSPACE_ROOT);
+  } catch {
+    // The workspace may not exist in isolated preparation tests.
+  }
+  const candidate = path.join(
+    PLATFORM_NODE_BIN_DIR,
+    '..',
+    'typescript',
+    'bin',
+    'tsc',
+  );
+  try {
+    const resolved = await realpath(candidate);
+    if (
+      !isInside(canonicalRoot, resolved) &&
+      !isInside(canonicalWorkspaceRoot, resolved)
+    ) {
+      return resolved;
+    }
+  } catch {
+    // Report a preparation-stage error below.
+  }
+  throw new AppPreparationError(
+    'manifest validation',
+    `trusted tsc executable is unavailable at ${candidate}.`,
+  );
+}
+
 /**
  * Reproduce locked npm dependencies and generated Connect stubs without
  * changing authored files. The trusted inline template prevents an App's
@@ -504,72 +540,92 @@ export async function prepareAppWorktree(
   options: AppPreparationOptions = {},
 ): Promise<void> {
   await assertSourcePreflightSafe(root);
-  try {
-    await validateDenoDependencySource(
+  const timeoutMs = options.timeoutMs ?? PREPARE_TIMEOUT_MS;
+  const read = (file: string) => readPreparationFile(root, file);
+
+  let trustedEnv: Promise<NodeJS.ProcessEnv> | undefined;
+  const preparationEnv = () => (trustedEnv ??= trustedPreparationEnv(root));
+  // Every tool is a platform or Runner executable resolved outside the source
+  // root and the workspace; the source never chooses what runs.
+  const executables = new Map<
+    ToolchainCommand['tool'],
+    Promise<[string, ...string[]]>
+  >();
+  const executable = (tool: ToolchainCommand['tool']) => {
+    let resolved = executables.get(tool);
+    if (!resolved) {
+      resolved = (async (): Promise<[string, ...string[]]> => {
+        if (tool === 'node') return [await realpath(process.execPath)];
+        if (tool === 'tsc') {
+          return [
+            await realpath(process.execPath),
+            await platformTscExecutable(root),
+          ];
+        }
+        const env = await preparationEnv();
+        return [
+          await resolveTrustedExecutable(
+            root,
+            tool,
+            env.PATH ?? '',
+            'dependency install',
+          ),
+        ];
+      })();
+      executables.set(tool, resolved);
+    }
+    return resolved;
+  };
+  const run: ToolchainRunner = async (command) => {
+    const env = await preparationEnv();
+    const [program, ...prefix] = await executable(command.tool);
+    const install = command.step === 'install';
+    return runPreparationCommand(
       root,
-      'app',
-      isAgentAuthoredRoot(root)
-        ? (file: DenoDependencySourceFile) => readPreparationFile(root, file)
-        : undefined,
+      install ? 'dependency install' : 'manifest validation',
+      [program, ...prefix, ...command.args],
+      {
+        // Installs run with the Agent session's own home; source checks and
+        // evaluation get the sanitized build environment.
+        ...(install ? env : subprocessSandboxEnv({ PATH: env.PATH ?? '' })),
+        ...command.env,
+      },
+      Math.min(command.timeoutMs ?? timeoutMs, timeoutMs),
+      signal,
+      command.input,
     );
+  };
+
+  let toolchain: SourceToolchain;
+  try {
+    toolchain = createSourceToolchain(await detectSourceToolchain(read), {
+      root,
+      kind: 'app',
+      run,
+      read,
+      readDependenciesThroughReader: isAgentAuthoredRoot(root),
+      requireNetworkIsolation: process.env.NODE_ENV === 'production',
+    });
+    await toolchain.validateDependencies();
   } catch (error) {
     throw new AppPreparationError(
       'source preflight',
       error instanceof Error ? error.message : String(error),
     );
   }
-  const manifestFile = await detectSourceManifest(root, (file) =>
-    readPreparationFile(root, file),
-  );
+  const manifestFile = await detectSourceManifest(root, read);
   const legacy =
     manifestFile === 'manifest.json'
       ? await loadSourceManifest(root, {
           kind: 'app',
           parse: parseSourceManifest,
-          read: (file) => readPreparationFile(root, file),
+          read,
         })
       : undefined;
-  const env = await trustedPreparationEnv(root);
-  const timeoutMs = options.timeoutMs ?? PREPARE_TIMEOUT_MS;
-  const deno = await resolveTrustedExecutable(
-    root,
-    'deno',
-    env.PATH ?? '',
-    'dependency install',
-  );
-  await runPreparationCommand(
-    root,
-    'dependency install',
-    [
-      deno,
-      'install',
-      '--no-config',
-      '--package-json',
-      '--node-modules-dir=auto',
-      '--lock=deno.lock',
-      '--frozen',
-    ],
-    env,
-    timeoutMs,
-    signal,
-  );
+  await toolchain.install();
   const { manifest } =
-    legacy ??
-    (await loadSourceManifest(root, {
-      kind: 'app',
-      parse: parseSourceManifest,
-      read: (file) => readPreparationFile(root, file),
-      run: (args, extra) =>
-        runPreparationCommand(
-          root,
-          'manifest validation',
-          [deno, ...args],
-          subprocessSandboxEnv({ PATH: env.PATH ?? '' }),
-          Math.min(extra.timeoutMs ?? timeoutMs, timeoutMs),
-          signal,
-          extra.input,
-        ),
-    }));
+    legacy ?? (await toolchain.evaluateManifest(parseSourceManifest));
+  const env = await preparationEnv();
   if (!manifest.rpc) {
     // The preflight proved this entry is absent or a real directory. Keep the
     // ignored generated state aligned with a deploy's clean temporary copy
