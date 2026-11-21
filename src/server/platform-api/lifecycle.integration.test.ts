@@ -2334,8 +2334,22 @@ describe.runIf(Boolean(databaseUrl))(
       }
       expect(draining).toBe(0);
 
-      const listed: { id: string }[] = await backend('list');
-      expect(listed.map((item) => item.id)).toContain(id);
+      const listed: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: { backends: { id: string }[]; nextCursor: string | null } =
+          await backend(
+            'list',
+            '--limit',
+            '2',
+            ...(cursor ? ['--cursor', cursor] : []),
+          );
+        expect(page.backends.length).toBeLessThanOrEqual(2);
+        listed.push(...page.backends.map((item) => item.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      expect(listed).toContain(id);
+      expect(new Set(listed).size).toBe(listed.length);
       expect((await backend('stop', id)).runtime.state).toBe('stopped');
       const started = (await backend('start', id)).runtime;
       expect(started.state).toBe('running');

@@ -186,9 +186,23 @@ message AppBackend {
   bool runtime_supported = 5;
   AppBackendRuntime runtime = 6;
 }
-message ListAppBackendsRequest {}
+message ListAppBackendsRequest {
+  // Page size; defaults to 50.
+  optional uint32 limit = 1 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100
+  }];
+  // next_cursor of the previous page.
+  optional string cursor = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
 message ListAppBackendsResponse {
+  // Ordered by App id.
   repeated AppBackend backends = 1;
+  // Absent on the last page.
+  optional string next_cursor = 2;
 }
 message GetAppBackendRequest {
   string id = 1 [(buf.validate.field).string = {

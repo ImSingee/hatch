@@ -33,7 +33,17 @@ describe('hatch app backend arguments', () => {
       action: 'start',
       timeoutMs: 5000,
     });
-    expect(parse('list')).toMatchObject({ action: 'list', id: undefined });
+    expect(parse('list')).toMatchObject({
+      action: 'list',
+      id: undefined,
+      limit: undefined,
+      cursor: undefined,
+    });
+    expect(parse('list', '--limit', '25', '--cursor', 'app-9')).toMatchObject({
+      action: 'list',
+      limit: 25,
+      cursor: 'app-9',
+    });
   });
 
   it.each([
@@ -43,6 +53,12 @@ describe('hatch app backend arguments', () => {
     [['status', 'notes', '--force']],
     [['start', 'notes', '--force']],
     [['list', '--force']],
+    [['list', '--limit', '0']],
+    [['list', '--limit', '101']],
+    [['list', '--limit', '1.5']],
+    [['list', '--cursor', '']],
+    [['status', 'notes', '--limit', '5']],
+    [['stop', 'notes', '--cursor', 'app-9']],
     [['pause', 'notes']],
     [[]],
     [['stop', 'notes', '--unknown']],

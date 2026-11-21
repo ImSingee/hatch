@@ -357,10 +357,13 @@ export function cliClient(transport: Transport) {
         rollback: apps.rollbackApp,
       }),
       backend: {
-        list: async (_input: Record<string, never>) =>
-          (await apps.listAppBackends({})).backends.map((value) =>
-            backendView(value),
-          ),
+        list: async (input: { limit?: number; cursor?: string }) => {
+          const result = await apps.listAppBackends(input);
+          return {
+            backends: result.backends.map((value) => backendView(value)),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
         get: async (input: { params: { id: string } }) =>
           backendView((await apps.getAppBackend(input.params)).backend),
         start: async (input: { params: { id: string } }) =>

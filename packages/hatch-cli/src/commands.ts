@@ -117,9 +117,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['app', 'backend', 'list'],
-    usage: 'app backend list [--json]',
+    usage: 'app backend list [--limit <1-100>] [--cursor <id>] [--json]',
     description:
-      'List every runnable App backend with its runtime state: id, slug, mode (serverless or long-running), state (running, starting or stopped), pid, keep-alive mark and the number of draining instances. Runtime facts describe the answering platform process and are not persisted.',
+      'List runnable App backends in App id order, 50 per page by default; pass the printed nextCursor as --cursor for the next page (nextCursor is null on the last one). Each entry carries its runtime state: id, slug, mode (serverless or long-running), state (running, starting or stopped), pid, keep-alive mark and the number of draining instances. Runtime facts describe the answering platform process and are not persisted.',
   },
   {
     path: ['app', 'backend', 'status'],

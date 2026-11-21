@@ -35,7 +35,7 @@ import { rollbackAppToVersion } from '~server/apps/manage';
 import {
   type AppBackendView,
   getAppBackend,
-  listAppBackends,
+  listAppBackendsPage,
   restartBackendForApp,
   startBackendForApp,
   stopBackendForApp,
@@ -571,11 +571,20 @@ export function registerPlatformApi(
       }),
     { readMaxBytes: deployBodyLimit },
   );
-  router.rpc(AppService.method.listAppBackends, async () =>
-    dataOperation(async () => ({
-      backends: (await listAppBackends()).map(backendView),
-    })),
-  );
+  router.rpc(AppService.method.listAppBackends, async (input) => {
+    try {
+      const page = await listAppBackendsPage({
+        limit: input.limit,
+        cursor: input.cursor,
+      });
+      return {
+        backends: page.backends.map(backendView),
+        nextCursor: page.nextCursor ?? undefined,
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
   router.rpc(AppService.method.getAppBackend, (input) =>
     backendOperation(input.id),
   );

@@ -56,12 +56,24 @@ function serializeRuntime(view: BackendRuntimeView): AppBackendRuntime {
   };
 }
 
-/** Every app whose backend can be run from the Backends page. */
-export async function listAppBackends(): Promise<AppBackendView[]> {
+type BackendRow = {
+  id: string;
+  slug: string;
+  name: string;
+  backendMode: BackendMode | null;
+  currentDeploymentId: string;
+};
+
+/** Deployed, unarchived apps that declare the backend capability. */
+async function runnableBackendRows(
+  orderBy: { name: 'asc'; id: 'asc' } | { id: 'asc' },
+  afterId?: string,
+): Promise<BackendRow[]> {
   const rows = await db.query.apps.findMany({
     where: {
       status: { ne: 'archived' },
       currentDeploymentId: { isNotNull: true },
+      ...(afterId ? { id: { gt: afterId } } : {}),
     },
     columns: {
       id: true,
@@ -71,20 +83,29 @@ export async function listAppBackends(): Promise<AppBackendView[]> {
       backendMode: true,
       currentDeploymentId: true,
     },
-    orderBy: { name: 'asc', id: 'asc' },
+    orderBy,
   });
-  const backendRows = rows.filter(
-    (row) => row.capabilities?.backend && row.currentDeploymentId,
+  return rows.flatMap((row) =>
+    row.capabilities?.backend && row.currentDeploymentId
+      ? [
+          {
+            id: row.id,
+            slug: row.slug,
+            name: row.name,
+            backendMode: row.backendMode,
+            currentDeploymentId: row.currentDeploymentId,
+          },
+        ]
+      : [],
   );
+}
+
+async function backendViews(rows: BackendRow[]): Promise<AppBackendView[]> {
   const deployments =
-    backendRows.length === 0
+    rows.length === 0
       ? []
       : await db.query.deployments.findMany({
-          where: {
-            id: {
-              in: backendRows.map((row) => row.currentDeploymentId as string),
-            },
-          },
+          where: { id: { in: rows.map((row) => row.currentDeploymentId) } },
           columns: { id: true, compatibilityVersion: true },
         });
   const compatibilityByDeployment = new Map(
@@ -93,15 +114,46 @@ export async function listAppBackends(): Promise<AppBackendView[]> {
       appCompatibility(deployment.compatibilityVersion),
     ]),
   );
-  return backendRows.map((r) => ({
+  return rows.map((r) => ({
     id: r.id,
     slug: r.slug,
     name: r.name,
     mode: r.backendMode ?? 'serverless',
-    compatibility:
-      compatibilityByDeployment.get(r.currentDeploymentId as string) ?? null,
+    compatibility: compatibilityByDeployment.get(r.currentDeploymentId) ?? null,
     runtime: serializeRuntime(getBackendRuntimeView(r.id)),
   }));
+}
+
+/** Every app whose backend can be run from the Backends page. */
+export async function listAppBackends(): Promise<AppBackendView[]> {
+  return backendViews(await runnableBackendRows({ name: 'asc', id: 'asc' }));
+}
+
+export const BACKEND_PAGE_DEFAULT_LIMIT = 50;
+export const BACKEND_PAGE_MAX_LIMIT = 100;
+
+/**
+ * One page of runnable app backends in App id order, for the public API.
+ * `cursor` is the id of the last backend of the previous page; `nextCursor`
+ * is null on the last page.
+ */
+export async function listAppBackendsPage(options: {
+  limit?: number;
+  cursor?: string;
+}): Promise<{ backends: AppBackendView[]; nextCursor: string | null }> {
+  const limit = options.limit ?? BACKEND_PAGE_DEFAULT_LIMIT;
+  if (!Number.isInteger(limit) || limit < 1 || limit > BACKEND_PAGE_MAX_LIMIT) {
+    throw new AppError(
+      `limit must be an integer between 1 and ${BACKEND_PAGE_MAX_LIMIT}.`,
+      400,
+    );
+  }
+  const rows = await runnableBackendRows({ id: 'asc' }, options.cursor);
+  const page = rows.slice(0, limit);
+  return {
+    backends: await backendViews(page),
+    nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+  };
 }
 
 /** One runnable app backend, as listed by {@link listAppBackends}. */

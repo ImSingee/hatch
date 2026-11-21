@@ -406,7 +406,7 @@ platform data before retrying.
 ## App backend runtime
 
 ```sh
-hatch app backend list --json
+hatch app backend list --limit 50 --cursor '<nextCursor>' --json
 hatch app backend status <id-or-slug> --json
 hatch app backend start <id-or-slug> --json
 hatch app backend stop <id-or-slug> [--force] --json
@@ -418,8 +418,10 @@ Every command prints the backend view: `id`, `slug`, `name`, `mode`
 `running`/`starting`/`stopped`, `pid`, `port`, `startedAt`, `stoppedAt`,
 `lastExitCode`, `lastExitSignal`, `lastError`, `restartCount`, `keepAlive`,
 `drainingInstances`). Absent facts are `null`. Runtime facts describe the
-answering platform process and are not persisted. `list` returns every runnable
-backend and is not paginated, like `app list`.
+answering platform process and are not persisted. `list` prints
+`{ backends, nextCursor }` in App id order, 50 per page by default (`--limit`
+1–100); pass `nextCursor` as `--cursor` for the next page. It is `null` on the
+last page.
 
 Deploy, rollback, `stop` and `restart` are graceful: the previous instance
 receives no further requests, finishes the ones it holds and exits, at the

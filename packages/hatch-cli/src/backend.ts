@@ -12,6 +12,9 @@ export type BackendCommand = {
   /** App ID or slug; absent only for list. */
   id?: string;
   force: boolean;
+  /** Page size and position; list only. */
+  limit?: number;
+  cursor?: string;
   json: boolean;
   timeoutMs: number;
   config?: string;
@@ -40,6 +43,8 @@ export function parseBackendCommand(
         workdir: { type: 'string' },
         timeout: { type: 'string' },
         force: { type: 'boolean' },
+        limit: { type: 'string' },
+        cursor: { type: 'string' },
       },
       allowPositionals: true,
     });
@@ -54,6 +59,25 @@ export function parseBackendCommand(
     throw new CliError(
       'invalid_arguments',
       '--force applies only to backend stop and backend restart.',
+    );
+  if (action !== 'list' && (v.limit !== undefined || v.cursor !== undefined))
+    throw new CliError(
+      'invalid_arguments',
+      '--limit and --cursor apply only to backend list.',
+    );
+  const limit = v.limit === undefined ? undefined : Number(v.limit);
+  if (
+    limit !== undefined &&
+    (!/^[0-9]+$/.test(v.limit as string) || limit < 1 || limit > 100)
+  )
+    throw new CliError(
+      'invalid_arguments',
+      '--limit must be an integer between 1 and 100.',
+    );
+  if (v.cursor === '' || (v.cursor?.length ?? 0) > 191)
+    throw new CliError(
+      'invalid_arguments',
+      '--cursor must be the nextCursor of the previous backend list page.',
     );
   if (action === 'list') {
     if (parsed.positionals.length !== 0)
@@ -83,6 +107,8 @@ export function parseBackendCommand(
     action,
     id: parsed.positionals[0],
     force: v.force === true,
+    limit,
+    cursor: v.cursor,
     json: v.json === true,
     timeoutMs: Math.ceil(seconds * 1000),
     config: v.config,
@@ -129,11 +155,18 @@ export async function runBackend(
     signal,
   ).apps;
   if (command.action === 'list') {
-    const backends = await backend.list({});
+    const page = await backend.list({
+      limit: command.limit,
+      cursor: command.cursor,
+    });
+    const lines = [
+      ...(page.backends.length
+        ? page.backends.map((item) => backendText(item))
+        : ['No App backends.']),
+      ...(page.nextCursor === null ? [] : [`next cursor: ${page.nextCursor}`]),
+    ];
     process.stdout.write(
-      command.json
-        ? `${JSON.stringify(backends)}\n`
-        : `${backends.map((item) => backendText(item)).join('\n') || 'No App backends.'}\n`,
+      command.json ? `${JSON.stringify(page)}\n` : `${lines.join('\n')}\n`,
     );
     return;
   }
