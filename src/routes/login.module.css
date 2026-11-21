@@ -1,35 +1,6 @@
-.panel {
-  width: 100%;
-  max-width: 420px;
-  animation: panel-rise 480ms var(--ease-out-quart) both;
-}
-
-/* The auth card is a window on the desk. */
-.card {
-  border-radius: var(--radius-window);
-  box-shadow: var(--shadow-window);
-}
-
 /* Avoid iOS input zoom persisting into the device approval page after sign-in. */
 @media (pointer: coarse) {
-  .card input {
+  .form input {
     font-size: max(1rem, 16px);
-  }
-}
-
-@keyframes panel-rise {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .panel {
-    animation: none;
   }
 }

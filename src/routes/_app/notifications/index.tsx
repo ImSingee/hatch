@@ -1,44 +1,21 @@
-import { Button } from '@mantine/core';
-import { Link, createFileRoute } from '@tanstack/react-router';
-import { IconSettings } from '@tabler/icons-react';
-import { WindowPage } from '~components/desk/window-page';
-import { NotificationHistory } from '~components/notifications/history-list';
-import { useLiveNotifications } from '~components/notifications/use-live-notifications';
-import {
-  notificationHistoryQueryOptions,
-  notificationSourcesQueryOptions,
-} from '~queries/notifications';
+import { createFileRoute } from '@tanstack/react-router';
+import { IconBell } from '@tabler/icons-react';
+import { EmptyState, WindowBody } from '~components/page/page';
 
 export const Route = createFileRoute('/_app/notifications/')({
-  loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.prefetchInfiniteQuery(
-        notificationHistoryQueryOptions({}),
-      ),
-      context.queryClient.prefetchQuery(notificationSourcesQueryOptions),
-    ]);
-  },
-  component: NotificationsPage,
+  component: NoNotificationOpen,
 });
 
-function NotificationsPage() {
-  useLiveNotifications();
+/** The right half before a notification is picked. */
+function NoNotificationOpen() {
   return (
-    <WindowPage
-      title="Notifications"
-      description="Everything Apps and Channels pushed, and where each notification was delivered."
-      actions={
-        <Button
-          component={Link}
-          to="/settings/notifications"
-          variant="default"
-          leftSection={<IconSettings size={16} stroke={1.6} />}
-        >
-          Delivery settings
-        </Button>
-      }
-    >
-      <NotificationHistory />
-    </WindowPage>
+    <WindowBody tone="sheet">
+      <EmptyState
+        icon={<IconBell size={26} stroke={1.6} />}
+        title="Pick a notification"
+      >
+        See what it said, where it was delivered, and any reply.
+      </EmptyState>
+    </WindowBody>
   );
 }

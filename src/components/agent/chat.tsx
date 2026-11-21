@@ -1,7 +1,6 @@
 import {
   Box,
   Center,
-  Group,
   Loader,
   ScrollArea,
   Stack,
@@ -946,14 +945,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
           {envAnnouncement}
         </Text>
         <Box className={classes.chatHead}>
-          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-            <ThemeIcon variant="light" color="primary" radius="md" size="md">
-              <IconSparkles size={16} stroke={1.7} />
-            </ThemeIcon>
-            <Text fw={700} truncate>
-              {session?.title ?? 'Chat'}
-            </Text>
-          </Group>
+          <h2 className={classes.chatTitle}>{session?.title ?? 'Chat'}</h2>
         </Box>
 
         <ScrollArea className={classes.messages} viewportRef={viewportRef}>

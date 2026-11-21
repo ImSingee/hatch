@@ -3,7 +3,6 @@ import {
   Autocomplete,
   Button,
   Group,
-  Paper,
   Select,
   Stack,
   Text,
@@ -51,7 +50,7 @@ export function ImageModelPanel() {
   });
 
   return (
-    <Paper withBorder radius="md" p="md" mt="xl">
+    <div>
       <Stack gap="sm">
         <Stack gap={2}>
           <Text fw={700}>Image model</Text>
@@ -118,6 +117,6 @@ export function ImageModelPanel() {
           </>
         )}
       </Stack>
-    </Paper>
+    </div>
   );
 }

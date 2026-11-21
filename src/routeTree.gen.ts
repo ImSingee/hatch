@@ -17,6 +17,7 @@ import { Route as DotwellKnownWebauthnRouteImport } from './routes/[.]well-known
 import { Route as AppAgentRouteImport } from './routes/_app/agent'
 import { Route as AppDashboardsRouteImport } from './routes/_app/dashboards'
 import { Route as AppExecutionsRouteImport } from './routes/_app/executions'
+import { Route as AppNotificationsRouteImport } from './routes/_app/notifications'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
@@ -117,6 +118,11 @@ const AppExecutionsRoute = AppExecutionsRouteImport.update({
   path: '/executions',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -163,15 +169,15 @@ const AppDashboardDashboardIdRoute = AppDashboardDashboardIdRouteImport.update({
   getParentRoute: () => AppRoute,
 } as any)
 const AppNotificationsIndexRoute = AppNotificationsIndexRouteImport.update({
-  id: '/notifications/',
-  path: '/notifications/',
-  getParentRoute: () => AppRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppNotificationsRoute,
 } as any)
 const AppNotificationsNotificationIdRoute =
   AppNotificationsNotificationIdRouteImport.update({
-    id: '/notifications/$notificationId',
-    path: '/notifications/$notificationId',
-    getParentRoute: () => AppRoute,
+    id: '/$notificationId',
+    path: '/$notificationId',
+    getParentRoute: () => AppNotificationsRoute,
   } as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
@@ -445,6 +451,7 @@ export interface FileRoutesByFullPath {
   '/agent': typeof AppAgentRouteWithChildren
   '/dashboards': typeof AppDashboardsRoute
   '/executions': typeof AppExecutionsRoute
+  '/notifications': typeof AppNotificationsRouteWithChildren
   '/settings': typeof AppSettingsRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/api/events': typeof ApiEventsRoute
@@ -583,6 +590,7 @@ export interface FileRoutesById {
   '/_app/agent': typeof AppAgentRouteWithChildren
   '/_app/dashboards': typeof AppDashboardsRoute
   '/_app/executions': typeof AppExecutionsRoute
+  '/_app/notifications': typeof AppNotificationsRouteWithChildren
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/api/events': typeof ApiEventsRoute
@@ -654,6 +662,7 @@ export interface FileRouteTypes {
     | '/agent'
     | '/dashboards'
     | '/executions'
+    | '/notifications'
     | '/settings'
     | '/api/$'
     | '/api/events'
@@ -791,6 +800,7 @@ export interface FileRouteTypes {
     | '/_app/agent'
     | '/_app/dashboards'
     | '/_app/executions'
+    | '/_app/notifications'
     | '/_app/settings'
     | '/api/$'
     | '/api/events'
@@ -948,6 +958,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppExecutionsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/notifications': {
+      id: '/_app/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
@@ -1013,17 +1030,17 @@ declare module '@tanstack/react-router' {
     }
     '/_app/notifications/': {
       id: '/_app/notifications/'
-      path: '/notifications'
+      path: '/'
       fullPath: '/notifications/'
       preLoaderRoute: typeof AppNotificationsIndexRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppNotificationsRoute
     }
     '/_app/notifications/$notificationId': {
       id: '/_app/notifications/$notificationId'
-      path: '/notifications/$notificationId'
+      path: '/$notificationId'
       fullPath: '/notifications/$notificationId'
       preLoaderRoute: typeof AppNotificationsNotificationIdRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppNotificationsRoute
     }
     '/_app/settings/': {
       id: '/_app/settings/'
@@ -1385,6 +1402,19 @@ const AppAgentRouteWithChildren = AppAgentRoute._addFileChildren(
   AppAgentRouteChildren,
 )
 
+interface AppNotificationsRouteChildren {
+  AppNotificationsNotificationIdRoute: typeof AppNotificationsNotificationIdRoute
+  AppNotificationsIndexRoute: typeof AppNotificationsIndexRoute
+}
+
+const AppNotificationsRouteChildren: AppNotificationsRouteChildren = {
+  AppNotificationsNotificationIdRoute: AppNotificationsNotificationIdRoute,
+  AppNotificationsIndexRoute: AppNotificationsIndexRoute,
+}
+
+const AppNotificationsRouteWithChildren =
+  AppNotificationsRoute._addFileChildren(AppNotificationsRouteChildren)
+
 interface AppSettingsRouteChildren {
   AppSettingsAboutRoute: typeof AppSettingsAboutRoute
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
@@ -1419,12 +1449,11 @@ interface AppRouteChildren {
   AppAgentRoute: typeof AppAgentRouteWithChildren
   AppDashboardsRoute: typeof AppDashboardsRoute
   AppExecutionsRoute: typeof AppExecutionsRoute
+  AppNotificationsRoute: typeof AppNotificationsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppDashboardDashboardIdRoute: typeof AppDashboardDashboardIdRoute
-  AppNotificationsNotificationIdRoute: typeof AppNotificationsNotificationIdRoute
   AppAppsIndexRoute: typeof AppAppsIndexRoute
   AppDashboardIndexRoute: typeof AppDashboardIndexRoute
-  AppNotificationsIndexRoute: typeof AppNotificationsIndexRoute
   AppWorkflowsIndexRoute: typeof AppWorkflowsIndexRoute
   AppAppAppSlugManageRoute: typeof AppAppAppSlugManageRoute
   AppWorkflowWorkflowSlugManageRoute: typeof AppWorkflowWorkflowSlugManageRoute
@@ -1438,12 +1467,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppAgentRoute: AppAgentRouteWithChildren,
   AppDashboardsRoute: AppDashboardsRoute,
   AppExecutionsRoute: AppExecutionsRoute,
+  AppNotificationsRoute: AppNotificationsRouteWithChildren,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppDashboardDashboardIdRoute: AppDashboardDashboardIdRoute,
-  AppNotificationsNotificationIdRoute: AppNotificationsNotificationIdRoute,
   AppAppsIndexRoute: AppAppsIndexRoute,
   AppDashboardIndexRoute: AppDashboardIndexRoute,
-  AppNotificationsIndexRoute: AppNotificationsIndexRoute,
   AppWorkflowsIndexRoute: AppWorkflowsIndexRoute,
   AppAppAppSlugManageRoute: AppAppAppSlugManageRoute,
   AppWorkflowWorkflowSlugManageRoute: AppWorkflowWorkflowSlugManageRoute,

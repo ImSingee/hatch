@@ -96,7 +96,7 @@ export function EnvForm({
   return (
     <Paper
       className={classes.envCard}
-      radius="md"
+      radius="xl"
       p="md"
       withBorder
       aria-busy={submitting || undefined}

@@ -253,73 +253,75 @@ export function ResponseRoutesSection() {
           anywhere.
         </Text>
       ) : (
-        <Table verticalSpacing="sm" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Answers to</Table.Th>
-              <Table.Th w="30%">Send to</Table.Th>
-              <Table.Th w={90}>Enabled</Table.Th>
-              <Table.Th w={48} aria-label="Actions" />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {routes.map((route) => {
-              const destination = target(route);
-              const stale =
-                destination !== undefined && !destination.acceptsResponses;
-              return (
-                <Table.Tr key={route.id}>
-                  <Table.Td>
-                    <Stack gap={0} miw={0}>
-                      <Text size="sm" fw={600} truncate>
-                        {sourceLabel(route)} · {kindLabel(route)}
-                      </Text>
-                      {route.name ? (
-                        <Text size="xs" c="dimmed" truncate>
-                          {route.name}
-                        </Text>
-                      ) : null}
-                    </Stack>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      <IconArrowRight
-                        size={14}
-                        stroke={1.6}
-                        color="var(--mantine-color-dimmed)"
-                      />
+        <Table.ScrollContainer minWidth={620} type="native">
+          <Table verticalSpacing="sm" layout="fixed">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Answers to</Table.Th>
+                <Table.Th w="30%">Send to</Table.Th>
+                <Table.Th w={90}>Enabled</Table.Th>
+                <Table.Th w={48} aria-label="Actions" />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {routes.map((route) => {
+                const destination = target(route);
+                const stale =
+                  destination !== undefined && !destination.acceptsResponses;
+                return (
+                  <Table.Tr key={route.id}>
+                    <Table.Td>
                       <Stack gap={0} miw={0}>
-                        <Text size="sm" truncate>
-                          {destination?.name ?? 'Removed destination'}
+                        <Text size="sm" fw={600} truncate>
+                          {sourceLabel(route)} · {kindLabel(route)}
                         </Text>
-                        {stale ? (
-                          <Text size="xs" c="red.8">
-                            No longer accepts responses
+                        {route.name ? (
+                          <Text size="xs" c="dimmed" truncate>
+                            {route.name}
                           </Text>
                         ) : null}
                       </Stack>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <ResponseRouteSwitch route={route} />
-                  </Table.Td>
-                  <Table.Td>
-                    <Tooltip label="Delete response route" withArrow>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        aria-label="Delete response route"
-                        onClick={() => confirmDelete(route)}
-                      >
-                        <IconTrash size={16} stroke={1.6} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Table.Td>
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={6} wrap="nowrap">
+                        <IconArrowRight
+                          size={14}
+                          stroke={1.6}
+                          color="var(--mantine-color-dimmed)"
+                        />
+                        <Stack gap={0} miw={0}>
+                          <Text size="sm" truncate>
+                            {destination?.name ?? 'Removed destination'}
+                          </Text>
+                          {stale ? (
+                            <Text size="xs" c="red.8">
+                              No longer accepts responses
+                            </Text>
+                          ) : null}
+                        </Stack>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <ResponseRouteSwitch route={route} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label="Delete response route" withArrow>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          aria-label="Delete response route"
+                          onClick={() => confirmDelete(route)}
+                        >
+                          <IconTrash size={16} stroke={1.6} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {creating ? (

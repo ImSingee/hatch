@@ -1,12 +1,13 @@
 import {
   ActionIcon,
   Box,
-  Button,
   Group,
   Menu,
   ScrollArea,
   Stack,
   Text,
+  TextInput,
+  Tooltip,
   UnstyledButton,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
@@ -15,7 +16,14 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
-import { IconDots, IconPencil, IconPlus, IconTrash } from '@tabler/icons-react';
+import {
+  IconDots,
+  IconPencil,
+  IconPlus,
+  IconSearch,
+  IconTrash,
+} from '@tabler/icons-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { openTextPromptModal } from '~components/system/text-prompt-modal';
 import { sessionQueryOptions, sessionsQueryOptions } from '~queries/agent';
@@ -56,7 +64,7 @@ function SessionRow({
         className={classes.sessionItemLabel}
         onClick={() => onSelect(session.id)}
       >
-        <Text size="sm" truncate>
+        <Text component="span" truncate inherit>
           {session.title}
         </Text>
       </UnstyledButton>
@@ -102,7 +110,14 @@ export function SessionsPanel({
   const qc = useQueryClient();
   const { data: sessions } = useSuspenseQuery(sessionsQueryOptions);
   const calendarNow = useLocalCalendarNow();
-  const groups = groupSessionsByDate(sessions, calendarNow);
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const groups = groupSessionsByDate(
+    needle
+      ? sessions.filter((s) => s.title.toLowerCase().includes(needle))
+      : sessions,
+    calendarNow,
+  );
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: sessionsQueryOptions.queryKey });
@@ -165,14 +180,26 @@ export function SessionsPanel({
   return (
     <Box className={classes.sessions}>
       <Box className={classes.sessionsHead}>
-        <Button
-          fullWidth
-          variant={selected === null ? 'light' : 'default'}
-          leftSection={<IconPlus size={16} stroke={2} />}
-          onClick={() => onSelect(null)}
-        >
-          New chat
-        </Button>
+        <TextInput
+          className={classes.sessionsSearch}
+          type="search"
+          aria-label="Search chats"
+          placeholder="Search chats"
+          leftSection={<IconSearch size={15} stroke={2} />}
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        <Tooltip label="New chat" withArrow>
+          <ActionIcon
+            size={36}
+            radius="md"
+            aria-label="New chat"
+            aria-current={selected === null ? 'page' : undefined}
+            onClick={() => onSelect(null)}
+          >
+            <IconPlus size={18} stroke={2.2} />
+          </ActionIcon>
+        </Tooltip>
       </Box>
       <ScrollArea
         className={classes.sessionsList}
@@ -180,9 +207,11 @@ export function SessionsPanel({
         scrollbarSize={6}
       >
         <Stack gap="sm">
-          {sessions.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" py="md">
-              No chats yet.
+          {groups.length === 0 ? (
+            <Text className={classes.sessionsEmpty}>
+              {sessions.length === 0
+                ? 'No chats yet.'
+                : `No chat matches “${query.trim()}”.`}
             </Text>
           ) : (
             <>

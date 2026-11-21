@@ -85,7 +85,7 @@ function DeploymentActions({
               icon={item.isApp}
               name={item.name}
               seed={item.seed}
-              size="sm"
+              size="lg"
             />
             <Box className={classes.deploymentActionIdentity}>
               <Text size="sm" fw={700} truncate>
@@ -146,7 +146,7 @@ export function AppDeploymentActions({
               {canOpen ? (
                 <Button
                   size="compact-sm"
-                  variant="light"
+                  variant="filled"
                   color="primary"
                   leftSection={<IconExternalLink size={14} stroke={1.8} />}
                   renderRoot={(props) => (
@@ -251,7 +251,7 @@ export function WorkflowDeploymentActions({
               {canOpen ? (
                 <Button
                   size="compact-sm"
-                  variant="light"
+                  variant="filled"
                   color="primary"
                   leftSection={<IconExternalLink size={14} stroke={1.8} />}
                   renderRoot={(props) => (

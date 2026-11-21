@@ -190,80 +190,82 @@ export function GroupsSection() {
           No groups yet.
         </Text>
       ) : (
-        <Table verticalSpacing="sm" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th w="32%">Group</Table.Th>
-              <Table.Th>Destinations</Table.Th>
-              <Table.Th w={84} aria-label="Actions" />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {groups.map((group) => (
-              <Table.Tr key={group.id}>
-                <Table.Td>
-                  <Text size="sm" fw={700} truncate>
-                    {group.name}
-                  </Text>
-                  {group.description ? (
-                    <Text size="xs" c="dimmed" truncate>
-                      {group.description}
-                    </Text>
-                  ) : null}
-                  {group.autoAddDevices ? (
-                    <Text size="xs" c="dimmed">
-                      Adds new devices automatically
-                    </Text>
-                  ) : null}
-                </Table.Td>
-                <Table.Td>
-                  {group.destinationIds.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      Empty
-                    </Text>
-                  ) : (
-                    <Group gap={6}>
-                      {group.destinationIds.map((id) => (
-                        <Badge
-                          key={id}
-                          variant="light"
-                          color="gray"
-                          radius="sm"
-                        >
-                          {nameOf.get(id) ?? 'Removed'}
-                        </Badge>
-                      ))}
-                    </Group>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={4} wrap="nowrap">
-                    <Tooltip label="Edit group" withArrow>
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        aria-label={`Edit ${group.name}`}
-                        onClick={() => setModal({ editing: group })}
-                      >
-                        <IconPencil size={16} stroke={1.6} />
-                      </ActionIcon>
-                    </Tooltip>
-                    <Tooltip label="Delete group" withArrow>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        aria-label={`Delete ${group.name}`}
-                        onClick={() => confirmDelete(group)}
-                      >
-                        <IconTrash size={16} stroke={1.6} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                </Table.Td>
+        <Table.ScrollContainer minWidth={620} type="native">
+          <Table verticalSpacing="sm" layout="fixed">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th w="32%">Group</Table.Th>
+                <Table.Th>Destinations</Table.Th>
+                <Table.Th w={84} aria-label="Actions" />
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {groups.map((group) => (
+                <Table.Tr key={group.id}>
+                  <Table.Td>
+                    <Text size="sm" fw={700} truncate>
+                      {group.name}
+                    </Text>
+                    {group.description ? (
+                      <Text size="xs" c="dimmed" truncate>
+                        {group.description}
+                      </Text>
+                    ) : null}
+                    {group.autoAddDevices ? (
+                      <Text size="xs" c="dimmed">
+                        Adds new devices automatically
+                      </Text>
+                    ) : null}
+                  </Table.Td>
+                  <Table.Td>
+                    {group.destinationIds.length === 0 ? (
+                      <Text size="sm" c="dimmed">
+                        Empty
+                      </Text>
+                    ) : (
+                      <Group gap={6}>
+                        {group.destinationIds.map((id) => (
+                          <Badge
+                            key={id}
+                            variant="light"
+                            color="gray"
+                            radius="sm"
+                          >
+                            {nameOf.get(id) ?? 'Removed'}
+                          </Badge>
+                        ))}
+                      </Group>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap={4} wrap="nowrap">
+                      <Tooltip label="Edit group" withArrow>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Edit ${group.name}`}
+                          onClick={() => setModal({ editing: group })}
+                        >
+                          <IconPencil size={16} stroke={1.6} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label="Delete group" withArrow>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          aria-label={`Delete ${group.name}`}
+                          onClick={() => confirmDelete(group)}
+                        >
+                          <IconTrash size={16} stroke={1.6} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {modal ? (

@@ -1,6 +1,5 @@
 import {
   ActionIcon,
-  Box,
   Center,
   Code,
   Group,
@@ -19,6 +18,7 @@ import {
 } from '@tabler/icons-react';
 import copy from 'copy-to-clipboard';
 import { toast } from 'sonner';
+import { GroupCard, Section } from '~components/page/page';
 import { formatRelative } from '~lib/format';
 import { workflowOpsQueryOptions } from '~queries/workflows';
 
@@ -48,14 +48,13 @@ export function WorkflowTriggersPanel({ workflowId }: { workflowId: string }) {
 
   if (query.isLoading) {
     return (
-      <Box component="section">
-        <Text fw={700} fz="lg" mb="md">
-          Triggers
-        </Text>
-        <Center py="lg">
-          <Loader size="sm" />
-        </Center>
-      </Box>
+      <Section id="triggers" title="Triggers">
+        <GroupCard padded>
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
+        </GroupCard>
+      </Section>
     );
   }
 
@@ -63,108 +62,124 @@ export function WorkflowTriggersPanel({ workflowId }: { workflowId: string }) {
   if (!ops) return null;
 
   return (
-    <Box component="section">
-      <Text fw={700} fz="lg" mb="md">
-        Triggers
-      </Text>
-      <Stack gap="lg">
-        <Stack gap={6}>
-          <SectionHeader
-            icon={<IconHandClick size={16} stroke={1.8} />}
-            title="Manual"
-          />
-          <Text size="xs" c="dimmed">
-            Trigger on demand from the workflow&apos;s Run page; inputs are
-            validated against its schema before the run starts.
-          </Text>
-        </Stack>
-
-        <Stack gap={6}>
-          <SectionHeader
-            icon={<IconClock size={16} stroke={1.8} />}
-            title="Scheduled jobs"
-          />
-          {ops.cron.jobs.length === 0 ? (
+    <Section
+      id="triggers"
+      title="Triggers"
+      meta={`${1 + (ops.cron.jobs.length > 0 ? 1 : 0) + (ops.webhook.enabled ? 1 : 0)} of 3 on`}
+    >
+      <GroupCard padded>
+        <Stack gap="lg">
+          <Stack gap={6}>
+            <SectionHeader
+              icon={<IconHandClick size={16} stroke={1.8} />}
+              title="Manual"
+            />
             <Text size="xs" c="dimmed">
-              No cron jobs declared in the manifest.
+              Trigger on demand from the workflow&apos;s Run page; inputs are
+              validated against its schema before the run starts.
             </Text>
-          ) : (
-            <Table withTableBorder verticalSpacing={6} highlightOnHover>
-              <Table.Tbody>
-                {ops.cron.jobs.map((job) => (
-                  <Table.Tr key={job.name}>
-                    <Table.Td>
-                      <Text size="sm" fw={600}>
-                        {job.name}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td w={140}>
-                      <Text size="xs" c="dimmed" ff="monospace">
-                        {job.schedule}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs" c="dimmed" truncate>
-                        {job.nextRun
-                          ? `next ${formatRelative(job.nextRun)}`
-                          : 'not scheduled'}
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          )}
-        </Stack>
+          </Stack>
 
-        <Stack gap={6}>
-          <SectionHeader
-            icon={<IconWebhook size={16} stroke={1.8} />}
-            title="Inbound webhook"
-          />
-          {ops.webhook.enabled ? (
-            <>
-              <Group gap={8} wrap="nowrap" align="center">
-                <Code
-                  block
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 'var(--mantine-font-size-xs)',
-                  }}
-                >
-                  {`${ops.webhook.url ?? ''}?secret=${ops.webhook.secret ?? ''}`}
-                </Code>
-                <Tooltip label="Copy URL with secret" withArrow position="left">
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    aria-label="Copy webhook URL"
-                    onClick={() => {
-                      const url = `${origin}${ops.webhook.url ?? ''}?secret=${
-                        ops.webhook.secret ?? ''
-                      }`;
-                      copy(url);
-                      toast.success('Webhook URL copied');
+          <Stack gap={6}>
+            <SectionHeader
+              icon={<IconClock size={16} stroke={1.8} />}
+              title="Scheduled jobs"
+            />
+            {ops.cron.jobs.length === 0 ? (
+              <Text size="xs" c="dimmed">
+                No cron jobs declared in the manifest.
+              </Text>
+            ) : (
+              <Table withTableBorder verticalSpacing={6} highlightOnHover>
+                <Table.Tbody>
+                  {ops.cron.jobs.map((job) => (
+                    <Table.Tr key={job.name}>
+                      <Table.Td>
+                        <Text
+                          size="sm"
+                          fw={600}
+                          style={{ whiteSpace: 'nowrap' }}
+                        >
+                          {job.name}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                          ff="monospace"
+                          style={{ whiteSpace: 'nowrap' }}
+                        >
+                          {job.schedule}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" c="dimmed" truncate>
+                          {job.nextRun
+                            ? `next ${formatRelative(job.nextRun)}`
+                            : 'not scheduled'}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            )}
+          </Stack>
+
+          <Stack gap={6}>
+            <SectionHeader
+              icon={<IconWebhook size={16} stroke={1.8} />}
+              title="Inbound webhook"
+            />
+            {ops.webhook.enabled ? (
+              <>
+                <Group gap={8} wrap="nowrap" align="center">
+                  <Code
+                    block
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 'var(--mantine-font-size-xs)',
                     }}
                   >
-                    <IconCopy size={15} />
-                  </ActionIcon>
-                </Tooltip>
-              </Group>
+                    {`${ops.webhook.url ?? ''}?secret=${ops.webhook.secret ?? ''}`}
+                  </Code>
+                  <Tooltip
+                    label="Copy URL with secret"
+                    withArrow
+                    position="left"
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      aria-label="Copy webhook URL"
+                      onClick={() => {
+                        const url = `${origin}${ops.webhook.url ?? ''}?secret=${
+                          ops.webhook.secret ?? ''
+                        }`;
+                        copy(url);
+                        toast.success('Webhook URL copied');
+                      }}
+                    >
+                      <IconCopy size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+                <Text size="xs" c="dimmed">
+                  POST a JSON body (or GET with query params) here; the platform
+                  verifies the secret and starts a run with it as input.
+                </Text>
+              </>
+            ) : (
               <Text size="xs" c="dimmed">
-                POST a JSON body (or GET with query params) here; the platform
-                verifies the secret and starts a run with it as input.
+                Webhook trigger is disabled. Enable it in the manifest (
+                <Code>triggers.webhook</Code>) and redeploy.
               </Text>
-            </>
-          ) : (
-            <Text size="xs" c="dimmed">
-              Webhook trigger is disabled. Enable it in the manifest (
-              <Code>triggers.webhook</Code>) and redeploy.
-            </Text>
-          )}
+            )}
+          </Stack>
         </Stack>
-      </Stack>
-    </Box>
+      </GroupCard>
+    </Section>
   );
 }

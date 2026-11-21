@@ -1,6 +1,7 @@
-import { Center, Divider, Loader, Stack } from '@mantine/core';
+import { Center, Loader } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { Suspense } from 'react';
+import { GroupCard } from '~components/page/page';
 import { ChannelsSection } from '~components/notifications/channels-section';
 import { DestinationsSection } from '~components/notifications/destinations-section';
 import { GroupsSection } from '~components/notifications/groups-section';
@@ -45,17 +46,21 @@ function NotificationSettingsRoute() {
           </Center>
         }
       >
-        <Stack gap="xl">
+        <GroupCard padded>
           <DestinationsSection />
-          <Divider />
+        </GroupCard>
+        <GroupCard padded>
           <GroupsSection />
-          <Divider />
+        </GroupCard>
+        <GroupCard padded>
           <RoutesSection />
-          <Divider />
+        </GroupCard>
+        <GroupCard padded>
           <ResponseRoutesSection />
-          <Divider />
+        </GroupCard>
+        <GroupCard padded>
           <ChannelsSection />
-        </Stack>
+        </GroupCard>
       </Suspense>
     </>
   );

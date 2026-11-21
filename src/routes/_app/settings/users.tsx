@@ -1,6 +1,7 @@
 import { Center, Loader } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { Suspense } from 'react';
+import { GroupCard } from '~components/page/page';
 import { SectionHead } from '~components/settings/section-head';
 import { UsersPanel } from '~components/settings/users-panel';
 import { usersPanelQueryOptions } from '~queries/users';
@@ -25,7 +26,9 @@ function UsersRoute() {
           </Center>
         }
       >
-        <UsersPanel />
+        <GroupCard padded>
+          <UsersPanel />
+        </GroupCard>
       </Suspense>
     </>
   );

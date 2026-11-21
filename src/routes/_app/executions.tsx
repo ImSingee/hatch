@@ -1,16 +1,14 @@
-import {
-  Box,
-  Button,
-  Group,
-  Stack,
-  Table,
-  Text,
-  ThemeIcon,
-} from '@mantine/core';
+import { Button, Group, Table, Text, ThemeIcon } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { IconTimeline } from '@tabler/icons-react';
-import { WindowPage } from '~components/desk/window-page';
+import { DeskWindow } from '~components/desk/window';
+import {
+  EmptyState,
+  TableCard,
+  Toolbar,
+  WindowBody,
+} from '~components/page/page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { RunStatusBadge } from '~components/workflows/run-status';
 import { formatDuration, formatRelative } from '~lib/format';
@@ -40,40 +38,43 @@ function ExecutionsPage() {
   const runs = query.data ?? [];
 
   return (
-    <WindowPage
+    <DeskWindow
+      fill
       title="Executions"
-      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
-      description="Run history across every workflow."
-      actions={
-        <Button component={Link} to="/workflows" variant="default">
-          Workflows
-        </Button>
+      tile={
+        <ThemeIcon size={22} radius="xs" color="dark">
+          <IconTimeline size={13} stroke={2.4} />
+        </ThemeIcon>
       }
+      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
     >
-      {runs.length === 0 ? (
-        <Stack align="center" gap="xs" py={80} px="md">
-          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
-            <IconTimeline size={26} stroke={1.5} />
-          </ThemeIcon>
-          <Text fw={700} mt="xs">
-            No executions yet
-          </Text>
-          <Text size="sm" c="dimmed" ta="center" maw={460}>
+      <WindowBody>
+        <Toolbar
+          lead={`Run history across every workflow · ${runs.length} execution${runs.length === 1 ? '' : 's'}`}
+        >
+          <Button component={Link} to="/workflows" variant="default">
+            Workflows
+          </Button>
+        </Toolbar>
+        {runs.length === 0 ? (
+          <EmptyState
+            tone="accent"
+            icon={<IconTimeline size={26} stroke={1.6} />}
+            title="No executions yet"
+          >
             Trigger a workflow manually, on a schedule, or via webhook and every
             run will show up here.
-          </Text>
-        </Stack>
-      ) : (
-        <Box component="section">
-          <Table highlightOnHover verticalSpacing="sm" layout="fixed">
+          </EmptyState>
+        ) : (
+          <TableCard>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Workflow</Table.Th>
-                <Table.Th w={150}>Status</Table.Th>
-                <Table.Th w={110}>Trigger</Table.Th>
-                <Table.Th w={80}>Steps</Table.Th>
-                <Table.Th w={110}>Duration</Table.Th>
-                <Table.Th w={150}>Started</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Trigger</Table.Th>
+                <Table.Th>Steps</Table.Th>
+                <Table.Th>Duration</Table.Th>
+                <Table.Th>Started</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -118,6 +119,7 @@ function ExecutionsPage() {
                     >
                       <AppGlyph
                         icon={false}
+                        shape="workflow"
                         name={run.workflowName}
                         seed={run.workflowId}
                         size="sm"
@@ -153,9 +155,9 @@ function ExecutionsPage() {
                 </Table.Tr>
               ))}
             </Table.Tbody>
-          </Table>
-        </Box>
-      )}
-    </WindowPage>
+          </TableCard>
+        )}
+      </WindowBody>
+    </DeskWindow>
   );
 }

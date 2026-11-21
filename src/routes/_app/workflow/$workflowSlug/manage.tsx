@@ -1,16 +1,12 @@
 import {
   ActionIcon,
   Anchor,
-  Box,
-  Divider,
   Group,
-  Menu,
-  Stack,
   Text,
   TextInput,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
-import { modals } from '@mantine/modals';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Link,
@@ -19,42 +15,27 @@ import {
   useNavigate,
   useRouter,
 } from '@tanstack/react-router';
-import {
-  IconArchive,
-  IconArchiveOff,
-  IconCheck,
-  IconDotsVertical,
-  IconFileCode,
-  IconPencil,
-  IconPin,
-  IconPinnedOff,
-  IconTrash,
-  IconX,
-} from '@tabler/icons-react';
+import { IconCheck, IconPencil, IconX } from '@tabler/icons-react';
+import copy from 'copy-to-clipboard';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { WORKFLOW_SLUG_MAX_LENGTH } from '~/workflow-identity';
-import { WindowPage } from '~components/desk/window-page';
-import { AppGlyph } from '~components/apps/app-glyph';
+import {
+  Column,
+  Columns,
+  GroupCard,
+  GroupFooter,
+  Row,
+  Section,
+} from '~components/page/page';
 import { WorkflowDeploymentHistory } from '~components/workflows/deployment-history';
 import { WorkflowNetworkPermissionsPanel } from '~components/workflows/network-permissions-panel';
 import { WorkflowCompatibilityNotice } from '~components/workflows/workflow-compatibility-notice';
-import { Field } from '~components/system/field';
-import { StatusBadge } from '~components/system/status-badge';
 import { WorkflowTriggersPanel } from '~components/workflows/triggers-panel';
-import { WorkflowTabs } from '~components/workflows/workflow-tabs';
-import {
-  workflowOpsQueryOptions,
-  workflowsQueryOptions,
-} from '~queries/workflows';
-import {
-  archiveWorkflowFn,
-  deleteWorkflowFn,
-  getWorkflowBySlug,
-  setWorkflowPinFn,
-  setWorkflowSlugFn,
-} from '~server/workflows';
+import { WorkflowWindow } from '~components/workflows/workflow-window';
+import { workflowsQueryOptions } from '~queries/workflows';
+import { getWorkflowBySlug, setWorkflowSlugFn } from '~server/workflows';
 
 export const Route = createFileRoute('/_app/workflow/$workflowSlug/manage')({
   loader: async ({ params }) => {
@@ -67,173 +48,64 @@ export const Route = createFileRoute('/_app/workflow/$workflowSlug/manage')({
 
 function WorkflowManagePage() {
   const workflow = Route.useLoaderData();
-  const router = useRouter();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const isArchived = workflow.status === 'archived';
-  const isPinned = Boolean(workflow.pinned);
-  const hasCurrent = Boolean(workflow.currentDeploymentId);
-
-  const archive = useMutation({
-    mutationFn: (archived: boolean) =>
-      archiveWorkflowFn({ data: { id: workflow.id, archived } }),
-    onSuccess: (_result, archived) => {
-      toast.success(archived ? 'Workflow archived' : 'Workflow restored');
-      // Archiving flips webhook/cron availability; refresh the ops query the
-      // Triggers panel reads so it doesn't keep showing a now-dead webhook.
-      void queryClient.invalidateQueries(workflowOpsQueryOptions(workflow.id));
-      void queryClient.invalidateQueries(workflowsQueryOptions);
-      void router.invalidate();
-    },
-  });
-
-  const remove = useMutation({
-    mutationFn: () => deleteWorkflowFn({ data: workflow.id }),
-    onSuccess: () => {
-      toast.success(`Deleted ${workflow.name}`);
-      void queryClient.invalidateQueries(workflowsQueryOptions);
-      void navigate({ to: '/workflows' });
-    },
-  });
-
-  const pin = useMutation({
-    mutationFn: (pinned: boolean) =>
-      setWorkflowPinFn({ data: { id: workflow.id, pinned } }),
-    onSuccess: (_result, pinned) => {
-      toast.success(pinned ? 'Pinned to the dock' : 'Removed from the dock');
-      void queryClient.invalidateQueries(workflowsQueryOptions);
-      void router.invalidate();
-    },
-  });
-
-  const confirmDelete = () =>
-    modals.openConfirmModal({
-      title: `Delete ${workflow.name}?`,
-      children: (
-        <Text size="sm">
-          This permanently removes the workflow, all deployments, and its run
-          history. This cannot be undone.
-        </Text>
-      ),
-      labels: { confirm: 'Delete workflow', cancel: 'Cancel' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => remove.mutate(),
-    });
 
   return (
-    <WindowPage
-      title={`${workflow.name} · Manage`}
-      tile={
-        <AppGlyph
-          icon={false}
-          name={workflow.name}
-          seed={workflow.id}
-          size="sm"
-        />
-      }
-      badge={<StatusBadge status={workflow.status} />}
-      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
-      description={workflow.description || `Workflow · ${workflow.slug}`}
-      actions={
-        <>
-          <WorkflowTabs slug={workflow.slug} active="manage" />
-          <Menu position="bottom-end" withinPortal>
-            <Menu.Target>
-              <ActionIcon variant="default" size="lg" aria-label="More actions">
-                <IconDotsVertical size={18} stroke={1.8} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Label>Download</Menu.Label>
-              <Menu.Item
-                leftSection={<IconFileCode size={16} />}
-                component="a"
-                href={`/api/workflow/${workflow.id}/download?deployment=${
-                  workflow.currentDeploymentId ?? ''
-                }`}
-                download
-                disabled={!hasCurrent}
-              >
-                Live bundle (.js)
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                leftSection={
-                  isPinned ? <IconPinnedOff size={16} /> : <IconPin size={16} />
-                }
-                onClick={() => pin.mutate(!isPinned)}
-              >
-                {isPinned ? 'Remove from dock' : 'Pin to dock'}
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                leftSection={
-                  isArchived ? (
-                    <IconArchiveOff size={16} />
-                  ) : (
-                    <IconArchive size={16} />
-                  )
-                }
-                onClick={() => archive.mutate(!isArchived)}
-              >
-                {isArchived ? 'Restore from archive' : 'Archive'}
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                color="red"
-                leftSection={<IconTrash size={16} />}
-                onClick={confirmDelete}
-              >
-                Delete workflow
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </>
-      }
-    >
-      <Stack gap="xl">
-        <WorkflowCompatibilityNotice compatibility={workflow.compatibility} />
+    <WorkflowWindow workflow={workflow} page="manage">
+      <WorkflowCompatibilityNotice compatibility={workflow.compatibility} />
+      <Columns>
+        <Column grow basis={420}>
+          <Section id="overview" title="Overview">
+            <GroupCard>
+              <Row label="Name">
+                <strong>{workflow.name}</strong>
+              </Row>
+              <WorkflowSlugField id={workflow.id} slug={workflow.slug} />
+              <Row label="Workflow ID" mono>
+                <CopyValue value={workflow.id} />
+              </Row>
+              <Row label="Updated">
+                {dayjs(workflow.updatedAt).format('YYYY-MM-DD HH:mm')}
+              </Row>
+              <Row label="Dock">
+                {workflow.pinned ? 'Pinned' : 'Not pinned'}
+              </Row>
+              <GroupFooter>
+                <span>
+                  Continue editing this workflow from the{' '}
+                  <Anchor component={Link} to="/agent" size="sm">
+                    Agent
+                  </Anchor>
+                  .
+                </span>
+              </GroupFooter>
+            </GroupCard>
+          </Section>
+          <WorkflowTriggersPanel workflowId={workflow.id} />
+          <WorkflowNetworkPermissionsPanel workflowId={workflow.id} />
+        </Column>
+        <Column basis={360}>
+          <WorkflowDeploymentHistory workflowId={workflow.id} />
+        </Column>
+      </Columns>
+    </WorkflowWindow>
+  );
+}
 
-        <Box component="section">
-          <Text fw={700} fz="lg" mb="md">
-            Overview
-          </Text>
-          <Stack gap="sm">
-            <WorkflowSlugField id={workflow.id} slug={workflow.slug} />
-            <Field
-              label="Workflow ID"
-              value={workflow.id}
-              mono
-              copyValue={workflow.id}
-            />
-            <Field
-              label="Updated"
-              value={dayjs(workflow.updatedAt).format('YYYY-MM-DD HH:mm')}
-            />
-          </Stack>
-          <Text size="sm" c="dimmed" mt="lg">
-            Continue editing this workflow from the{' '}
-            <Anchor component={Link} to="/agent">
-              Agent
-            </Anchor>
-            .
-          </Text>
-        </Box>
-
-        <Divider />
-
-        <WorkflowNetworkPermissionsPanel workflowId={workflow.id} />
-
-        <Divider />
-
-        <WorkflowTriggersPanel workflowId={workflow.id} />
-
-        <Divider />
-
-        <WorkflowDeploymentHistory workflowId={workflow.id} />
-      </Stack>
-    </WindowPage>
+/** A value that copies itself when clicked. */
+function CopyValue({ value }: { value: string }) {
+  return (
+    <Tooltip label="Copy" withArrow position="top">
+      <UnstyledButton
+        onClick={() => {
+          copy(value);
+          toast.success('Copied');
+        }}
+        ff="monospace"
+        fz="xs"
+      >
+        {value}
+      </UnstyledButton>
+    </Tooltip>
   );
 }
 
@@ -278,10 +150,7 @@ function WorkflowSlugField({ id, slug }: { id: string; slug: string }) {
   };
 
   return (
-    <Group gap="md" wrap="nowrap" align="center">
-      <Text size="sm" c="dimmed" style={{ width: 96, flex: 'none' }}>
-        URL slug
-      </Text>
+    <Row label="URL slug">
       {editing ? (
         <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
           <TextInput
@@ -299,7 +168,7 @@ function WorkflowSlugField({ id, slug }: { id: string; slug: string }) {
             size="xs"
             disabled={save.isPending}
             styles={{ input: { fontFamily: 'monospace' } }}
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 160 }}
           />
           <Tooltip label="Save" withArrow position="top">
             <ActionIcon
@@ -347,6 +216,6 @@ function WorkflowSlugField({ id, slug }: { id: string; slug: string }) {
           </Tooltip>
         </Group>
       )}
-    </Group>
+    </Row>
   );
 }

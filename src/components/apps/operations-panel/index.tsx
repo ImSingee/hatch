@@ -1,4 +1,4 @@
-import { Box, Center, Group, Loader, Stack, Text } from '@mantine/core';
+import { Center, Group, Loader, Stack, Text } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconFolder, IconServerBolt } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
@@ -9,6 +9,7 @@ import {
   BackendTime,
   backendLastExitLabel,
 } from '~components/apps/backend-controls';
+import { GroupCard, Section } from '~components/page/page';
 import { ExtraPermissionsDetails } from '~components/system/extra-permissions';
 import { NetworkAccessDetails } from '~components/system/network-access';
 import {
@@ -194,14 +195,13 @@ export function OperationsPanel({
 
   if (query.isLoading) {
     return (
-      <Box component="section">
-        <Text fw={700} fz="lg" mb="md">
-          Operations
-        </Text>
-        <Center py="lg">
-          <Loader size="sm" />
-        </Center>
-      </Box>
+      <Section id="operations" title="Operations">
+        <GroupCard padded>
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
+        </GroupCard>
+      </Section>
     );
   }
 
@@ -222,61 +222,81 @@ export function OperationsPanel({
     Boolean(notifications);
 
   return (
-    <Box component="section">
-      <Text fw={700} fz="lg" mb="md">
-        Operations
-      </Text>
-
+    <Section id="operations" title="Operations">
       {!hasOperations ? (
-        <Text size="sm" c="dimmed">
-          No database, Data Tables, persistent storage, backend, scheduled jobs,
-          webhook, KV, or notifications to manage for this app.
-        </Text>
+        <GroupCard padded>
+          <Text size="sm" c="dimmed">
+            No database, Data Tables, persistent storage, backend, scheduled
+            jobs, webhook, KV, or notifications to manage for this app.
+          </Text>
+        </GroupCard>
       ) : (
-        <Stack gap="lg">
+        <Stack gap="sm">
           {ops.backend.capable ? (
-            <BackendSection
-              appId={appId}
-              backend={ops.backend}
-              runtimeSupported={runtimeSupported}
-            />
+            <GroupCard padded id="backend">
+              <BackendSection
+                appId={appId}
+                backend={ops.backend}
+                runtimeSupported={runtimeSupported}
+              />
+            </GroupCard>
           ) : null}
           {databaseVisible ? (
-            <DatabaseSection
-              appId={appId}
-              appName={appName}
-              database={ops.database}
-              onDelete={deleteDatabase}
-            />
+            <GroupCard padded id="database">
+              <DatabaseSection
+                appId={appId}
+                appName={appName}
+                database={ops.database}
+                onDelete={deleteDatabase}
+              />
+            </GroupCard>
           ) : null}
-          {ops.storage.enabled ? <PersistentStorageSection /> : null}
+          {ops.storage.enabled ? (
+            <GroupCard padded id="storage">
+              <PersistentStorageSection />
+            </GroupCard>
+          ) : null}
           {ops.dataTable.enabled ? (
-            <DataTableSection appId={appId} />
+            <GroupCard padded id="data-tables">
+              <DataTableSection appId={appId} />
+            </GroupCard>
           ) : ops.dataTable.dbName ? (
-            <RetainedDataTableSection
-              appId={appId}
-              appName={appName}
-              dbName={ops.dataTable.dbName}
-              schemaHash={ops.dataTable.schemaHash}
-              onDelete={deleteDataDatabase}
-            />
+            <GroupCard padded id="data-tables">
+              <RetainedDataTableSection
+                appId={appId}
+                appName={appName}
+                dbName={ops.dataTable.dbName}
+                schemaHash={ops.dataTable.schemaHash}
+                onDelete={deleteDataDatabase}
+              />
+            </GroupCard>
           ) : null}
           {ops.cron.enabled ? (
-            <CronSection
-              appId={appId}
-              cron={ops.cron}
-              runtimeSupported={runtimeSupported}
-            />
+            <GroupCard padded id="schedules">
+              <CronSection
+                appId={appId}
+                cron={ops.cron}
+                runtimeSupported={runtimeSupported}
+              />
+            </GroupCard>
           ) : null}
           {ops.webhook.enabled ? (
-            <WebhookSection webhook={ops.webhook} />
+            <GroupCard padded id="webhook">
+              <WebhookSection webhook={ops.webhook} />
+            </GroupCard>
           ) : null}
-          {ops.kv.enabled ? <KvSection appId={appId} /> : null}
+          {ops.kv.enabled ? (
+            <GroupCard padded id="kv">
+              <KvSection appId={appId} />
+            </GroupCard>
+          ) : null}
           {notifications ? (
-            <NotificationsSection notifications={notifications} />
+            <GroupCard padded id="notifications">
+              <NotificationsSection notifications={notifications} />
+            </GroupCard>
           ) : null}
         </Stack>
       )}
-    </Box>
+    </Section>
   );
 }

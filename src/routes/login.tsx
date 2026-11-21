@@ -1,12 +1,9 @@
 import {
   Button,
-  Paper,
   PasswordInput,
   SegmentedControl,
   Stack,
-  Text,
   TextInput,
-  Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router';
@@ -17,6 +14,10 @@ import { browserSupportsPasskeys } from '~auth/passkey-browser';
 import { Brand } from '~components/desk/brand';
 import { DeskStandalone } from '~components/desk/desk-standalone';
 import { PasskeySignIn } from '~components/auth/passkey-sign-in';
+import {
+  StandaloneWindow,
+  WindowHero,
+} from '~components/page/standalone-window';
 import { hasActiveSession } from '~server/auth';
 import { getSignupConfig } from '~server/users';
 import { passkeyOriginQueryOptions } from '~queries/passkeys';
@@ -65,6 +66,9 @@ function LoginPage() {
   // a signup mode was selected before the config loaded.
   const mode: Mode = allowSignup ? rawMode : 'signin';
   const [passwordLoading, setPasswordLoading] = useState(false);
+  // With a passkey offered it is the primary action; the password form is
+  // the alternative.
+  const passkeysAvailable = browserSupportsPasskeys(appOrigin);
 
   const navigateAfterAuthentication = useCallback(async () => {
     await router.navigate({ href: safeRedirect(redirectTo) });
@@ -111,82 +115,81 @@ function LoginPage() {
 
   return (
     <DeskStandalone>
-      <div className={classes.panel}>
-        <Stack gap="xl">
-          <Stack gap="md" align="center">
-            <Brand size="lg" withWordmark={false} />
-            <Stack gap={6} align="center">
-              <Title order={2} ta="center">
-                {mode === 'signin' ? 'Welcome back' : 'Create your account'}
-              </Title>
-              <Text c="dimmed" size="sm" ta="center" maw={300}>
-                Spin up your own apps just by talking to AI.
-              </Text>
-            </Stack>
+      <StandaloneWindow
+        title={mode === 'signin' ? 'Sign in' : 'Create account'}
+        footer={
+          !allowSignup
+            ? 'Sign-up is closed. Ask the owner of this space for access.'
+            : mode === 'signin'
+              ? 'New here? Switch to Create account above.'
+              : 'Already have an account? Switch to Sign in above.'
+        }
+      >
+        <WindowHero
+          tile={<Brand size="lg" withWordmark={false} />}
+          title={mode === 'signin' ? 'Welcome back' : 'Create your account'}
+        >
+          Spin up your own apps just by talking to AI.
+        </WindowHero>
+        {allowSignup && (
+          <SegmentedControl
+            fullWidth
+            value={mode}
+            onChange={(v) => setRawMode(v as Mode)}
+            data={[
+              { label: 'Sign in', value: 'signin' },
+              { label: 'Create account', value: 'signup' },
+            ]}
+          />
+        )}
+        {mode === 'signin' ? (
+          <PasskeySignIn
+            primary
+            appOrigin={appOrigin}
+            onSuccess={navigateAfterAuthentication}
+          />
+        ) : null}
+        <form onSubmit={submit} className={classes.form}>
+          <Stack gap="md">
+            {mode === 'signup' ? (
+              <TextInput
+                size="md"
+                label="Name"
+                {...form.getInputProps('name')}
+              />
+            ) : null}
+            <TextInput
+              size="md"
+              label="Email"
+              autoComplete={
+                mode === 'signin'
+                  ? browserSupportsPasskeys(appOrigin)
+                    ? 'username webauthn'
+                    : 'username'
+                  : 'email'
+              }
+              {...form.getInputProps('email')}
+            />
+            <PasswordInput
+              size="md"
+              label="Password"
+              {...form.getInputProps('password')}
+            />
+            <Button
+              type="submit"
+              loading={passwordLoading}
+              mt="xs"
+              fullWidth
+              size="lg"
+              variant={
+                mode === 'signin' && passkeysAvailable ? 'default' : 'filled'
+              }
+            >
+              {mode === 'signin' ? 'Sign in' : 'Create account'}
+            </Button>
           </Stack>
-
-          <Paper withBorder radius="lg" p="xl" className={classes.card}>
-            <Stack gap="lg">
-              {allowSignup && (
-                <SegmentedControl
-                  fullWidth
-                  value={mode}
-                  onChange={(v) => setRawMode(v as Mode)}
-                  data={[
-                    { label: 'Sign in', value: 'signin' },
-                    { label: 'Create account', value: 'signup' },
-                  ]}
-                />
-              )}
-              {mode === 'signin' ? (
-                <PasskeySignIn
-                  appOrigin={appOrigin}
-                  onSuccess={navigateAfterAuthentication}
-                />
-              ) : null}
-              <form onSubmit={submit}>
-                <Stack gap="md">
-                  {mode === 'signup' ? (
-                    <TextInput label="Name" {...form.getInputProps('name')} />
-                  ) : null}
-                  <TextInput
-                    label="Email"
-                    autoComplete={
-                      mode === 'signin'
-                        ? browserSupportsPasskeys(appOrigin)
-                          ? 'username webauthn'
-                          : 'username'
-                        : 'email'
-                    }
-                    {...form.getInputProps('email')}
-                  />
-                  <PasswordInput
-                    label="Password"
-                    {...form.getInputProps('password')}
-                  />
-                  <Button
-                    type="submit"
-                    loading={passwordLoading}
-                    mt="xs"
-                    fullWidth
-                    size="md"
-                  >
-                    {mode === 'signin' ? 'Sign in' : 'Create account'}
-                  </Button>
-                </Stack>
-              </form>
-            </Stack>
-          </Paper>
-
-          <Text c="dimmed" size="xs" ta="center">
-            {!allowSignup
-              ? 'Sign-up is disabled. Ask the owner of this space for access.'
-              : mode === 'signin'
-                ? 'New here? Switch to Create account above.'
-                : 'Already have an account? Switch to Sign in above.'}
-          </Text>
-        </Stack>
-      </div>
+        </form>
+      </StandaloneWindow>
     </DeskStandalone>
   );
 }

@@ -366,120 +366,124 @@ export function DestinationsSection() {
           deploy an App that accepts notifications.
         </Text>
       ) : (
-        <Table verticalSpacing="sm" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Destination</Table.Th>
-              <Table.Th w={90}>Enabled</Table.Th>
-              <Table.Th w={48} aria-label="Actions" />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {destinations.map((destination) => (
-              <Table.Tr key={destination.id}>
-                <Table.Td>
-                  <Group gap="sm" wrap="nowrap" align="flex-start">
-                    <Box c="dimmed" pt={2} style={{ display: 'inline-flex' }}>
-                      <DestinationTypeIcon type={destination.type} />
-                    </Box>
-                    <Stack gap={0} miw={0}>
-                      <Group gap={6} wrap="nowrap">
-                        <Text size="sm" fw={700} truncate>
-                          {destination.name}
+        <Table.ScrollContainer minWidth={620} type="native">
+          <Table verticalSpacing="sm" layout="fixed">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Destination</Table.Th>
+                <Table.Th w={90}>Enabled</Table.Th>
+                <Table.Th w={48} aria-label="Actions" />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {destinations.map((destination) => (
+                <Table.Tr key={destination.id}>
+                  <Table.Td>
+                    <Group gap="sm" wrap="nowrap" align="flex-start">
+                      <Box c="dimmed" pt={2} style={{ display: 'inline-flex' }}>
+                        <DestinationTypeIcon type={destination.type} />
+                      </Box>
+                      <Stack gap={0} miw={0}>
+                        <Group gap={6} wrap="nowrap">
+                          <Text size="sm" fw={700} truncate>
+                            {destination.name}
+                          </Text>
+                          <Badge size="xs" variant="light" color="gray">
+                            {DESTINATION_TYPE_LABEL[destination.type]}
+                          </Badge>
+                        </Group>
+                        <Text size="xs" c="dimmed" truncate>
+                          {describe(destination)}
                         </Text>
-                        <Badge size="xs" variant="light" color="gray">
-                          {DESTINATION_TYPE_LABEL[destination.type]}
-                        </Badge>
-                      </Group>
-                      <Text size="xs" c="dimmed" truncate>
-                        {describe(destination)}
-                      </Text>
-                      {destination.lastError ? (
-                        <Text size="xs" c="red.8">
-                          {destination.lastError}
-                        </Text>
-                      ) : null}
-                    </Stack>
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Switch
-                    checked={
-                      toggle.isPending &&
-                      toggle.variables?.id === destination.id
-                        ? toggle.variables.enabled
-                        : destination.enabled
-                    }
-                    onChange={(event) =>
-                      toggle.mutate({
-                        id: destination.id,
-                        enabled: event.currentTarget.checked,
-                      })
-                    }
-                    aria-label={`Enable ${destination.name}`}
-                  />
-                </Table.Td>
-                <Table.Td>
-                  <Menu position="bottom-end" withinPortal>
-                    <Menu.Target>
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        aria-label={`Actions for ${destination.name}`}
-                      >
-                        <IconDotsVertical size={16} stroke={1.6} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item
-                        leftSection={<IconSend size={14} stroke={1.6} />}
-                        disabled={!destination.enabled}
-                        onClick={() => test.mutate(destination.id)}
-                      >
-                        Send test
-                      </Menu.Item>
-                      {destination.type === 'device' ? (
-                        <Menu.Item
-                          leftSection={<IconPencil size={14} stroke={1.6} />}
-                          onClick={() => setRenaming(destination)}
+                        {destination.lastError ? (
+                          <Text size="xs" c="red.8">
+                            {destination.lastError}
+                          </Text>
+                        ) : null}
+                      </Stack>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Switch
+                      checked={
+                        toggle.isPending &&
+                        toggle.variables?.id === destination.id
+                          ? toggle.variables.enabled
+                          : destination.enabled
+                      }
+                      onChange={(event) =>
+                        toggle.mutate({
+                          id: destination.id,
+                          enabled: event.currentTarget.checked,
+                        })
+                      }
+                      aria-label={`Enable ${destination.name}`}
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Actions for ${destination.name}`}
                         >
-                          Rename
+                          <IconDotsVertical size={16} stroke={1.6} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<IconSend size={14} stroke={1.6} />}
+                          disabled={!destination.enabled}
+                          onClick={() => test.mutate(destination.id)}
+                        >
+                          Send test
                         </Menu.Item>
-                      ) : null}
-                      {destination.type === 'webhook' ? (
-                        <>
+                        {destination.type === 'device' ? (
                           <Menu.Item
                             leftSection={<IconPencil size={14} stroke={1.6} />}
-                            onClick={() =>
-                              setWebhookModal({ editing: destination })
-                            }
+                            onClick={() => setRenaming(destination)}
                           >
-                            Edit
+                            Rename
                           </Menu.Item>
+                        ) : null}
+                        {destination.type === 'webhook' ? (
+                          <>
+                            <Menu.Item
+                              leftSection={
+                                <IconPencil size={14} stroke={1.6} />
+                              }
+                              onClick={() =>
+                                setWebhookModal({ editing: destination })
+                              }
+                            >
+                              Edit
+                            </Menu.Item>
+                            <Menu.Item
+                              leftSection={<IconKey size={14} stroke={1.6} />}
+                              onClick={() => confirmRotate(destination)}
+                            >
+                              Rotate secret
+                            </Menu.Item>
+                          </>
+                        ) : null}
+                        {destination.type !== 'app' ? (
                           <Menu.Item
-                            leftSection={<IconKey size={14} stroke={1.6} />}
-                            onClick={() => confirmRotate(destination)}
+                            color="red"
+                            leftSection={<IconTrash size={14} stroke={1.6} />}
+                            onClick={() => confirmDelete(destination)}
                           >
-                            Rotate secret
+                            Remove
                           </Menu.Item>
-                        </>
-                      ) : null}
-                      {destination.type !== 'app' ? (
-                        <Menu.Item
-                          color="red"
-                          leftSection={<IconTrash size={14} stroke={1.6} />}
-                          onClick={() => confirmDelete(destination)}
-                        >
-                          Remove
-                        </Menu.Item>
-                      ) : null}
-                    </Menu.Dropdown>
-                  </Menu>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+                        ) : null}
+                      </Menu.Dropdown>
+                    </Menu>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {webhookModal ? (

@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { GroupCard } from '~components/page/page';
 import { AboutPanel } from '~components/settings/about-panel';
 import { SectionHead } from '~components/settings/section-head';
 
@@ -13,7 +14,9 @@ function AboutRoute() {
         title="About"
         description="Source revision used to build this platform."
       />
-      <AboutPanel />
+      <GroupCard padded>
+        <AboutPanel />
+      </GroupCard>
     </>
   );
 }

@@ -18,6 +18,7 @@ import { IconMessages, IconSparkles } from '@tabler/icons-react';
 import { Suspense } from 'react';
 import { SessionsPanel } from '~components/agent/sessions-panel';
 import { DeskWindow } from '~components/desk/window';
+import { InsideWindowProvider } from '~components/page/window-context';
 import { providersQueryOptions, sessionsQueryOptions } from '~queries/agent';
 import classes from '~components/agent/chat.module.css';
 
@@ -95,7 +96,9 @@ function AgentLayout() {
               </Text>
             </Box>
 
-            <Outlet />
+            <InsideWindowProvider value>
+              <Outlet />
+            </InsideWindowProvider>
           </Box>
         </Suspense>
       </Box>
