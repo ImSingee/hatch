@@ -14,10 +14,16 @@
  * reachable from `src/auth/server.ts`, which the Better Auth CLI loads
  * directly and cannot resolve the `~` path alias for.
  */
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
 import { db, schema } from '../db';
 import type { JsonValue } from '../db/schema';
+
+const imageModelConfigSchema = z
+  .object({ providerId: z.string().min(1), modelId: z.string().min(1) })
+  .nullable();
+export type ImageModelConfig = z.infer<typeof imageModelConfigSchema>;
 
 type ConfigEntry<T> = {
   schema: z.ZodType<T>;
@@ -55,6 +61,15 @@ const REGISTRY = {
     fallback: true,
     invalidFallback: false,
   } satisfies ConfigEntry<boolean>,
+  /**
+   * The one image-generation model of this instance, or null when none is
+   * chosen. Only names a provider row: the API key stays in
+   * `agent_providers`.
+   */
+  'image.model': {
+    schema: imageModelConfigSchema,
+    fallback: null,
+  } satisfies ConfigEntry<ImageModelConfig>,
 } as const;
 
 export type PlatformConfigKey = keyof typeof REGISTRY;
@@ -87,6 +102,15 @@ export async function getPlatformConfig<K extends PlatformConfigKey>(
     return (entry.invalidFallback ?? entry.fallback) as PlatformConfigValue<K>;
   }
   return parsed.data as PlatformConfigValue<K>;
+}
+
+/** Remove a stored setting so its fallback applies again. */
+export async function clearPlatformConfig(
+  key: PlatformConfigKey,
+): Promise<void> {
+  await db
+    .delete(schema.platformConfig)
+    .where(eq(schema.platformConfig.key, key));
 }
 
 /**

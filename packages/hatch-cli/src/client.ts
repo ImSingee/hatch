@@ -30,6 +30,11 @@ import {
   WorkflowService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/workflow_pb';
 import { AuthService } from '../../hatch-platform-api/gen/hatch/platform/v1/auth_pb';
+import {
+  ImageService,
+  type ImageModelState,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/image_pb';
+import { type AppIcon } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import {
@@ -116,6 +121,32 @@ const restored = (value: RestoredVersion) => ({
     ? {}
     : { dataSchemaMismatch: value.dataSchemaMismatch }),
 });
+const icon = (app: string, value: AppIcon | undefined) => ({
+  // The id or slug the caller passed; `path` carries the immutable id.
+  app,
+  key: required(value).key ?? null,
+  path: required(value).path ?? null,
+  sizes: required(value).sizes,
+});
+const imageModel = (value: ImageModelState | undefined) => {
+  const state = required(value);
+  return {
+    selected: state.selected
+      ? {
+          providerId: state.selected.providerId,
+          providerName: state.selected.providerName,
+          modelId: state.selected.modelId,
+          usable: state.selected.usable,
+        }
+      : null,
+    providers: state.providers.map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      enabled: provider.enabled,
+      suggestedModels: provider.suggestedModels,
+    })),
+  };
+};
 type CreateInput = {
   slug: string;
   name: string;
@@ -189,6 +220,7 @@ export function cliClient(transport: Transport) {
       const result = resourceViewSchema.safeParse({
         ...basicResource(value),
         ...jsonObject(toJson(ValueSchema, required(value.view))),
+        ...(value.iconPath === undefined ? {} : { iconPath: value.iconPath }),
       });
       if (!result.success) throw invalidResponse();
       return result.data;
@@ -238,8 +270,55 @@ export function cliClient(transport: Transport) {
   }
   const auth = createClient(AuthService, transport);
   const sdk = createClient(SdkService, transport);
+  const images = createClient(ImageService, transport);
   return {
+    images: {
+      model: async () => imageModel((await images.getImageModel({})).state),
+      setModel: async (input: { providerId: string; modelId: string }) =>
+        imageModel((await images.setImageModel(input)).state),
+      clearModel: async () =>
+        imageModel((await images.clearImageModel({})).state),
+      generate: async (input: {
+        prompt: string;
+        count: number;
+        quality?: string;
+        glyphTile?: string;
+      }) => {
+        const result = await images.generateImages(input);
+        return {
+          modelId: result.modelId,
+          candidates: result.candidates.map((candidate) => ({
+            id: candidate.id,
+            path: candidate.path,
+          })),
+        };
+      },
+    },
     apps: {
+      icon: {
+        get: async (input: { id: string }) =>
+          icon(input.id, (await apps.getAppIcon(input)).icon),
+        set: async (
+          input: { id: string } & (
+            | { image: Uint8Array }
+            | { candidateId: string }
+          ),
+        ) =>
+          icon(
+            input.id,
+            (
+              await apps.setAppIcon({
+                id: input.id,
+                source:
+                  'image' in input
+                    ? { case: 'image', value: input.image }
+                    : { case: 'candidateId', value: input.candidateId },
+              })
+            ).icon,
+          ),
+        clear: async (input: { id: string }) =>
+          icon(input.id, (await apps.clearAppIcon(input)).icon),
+      },
       ...lifecycle({
         list: apps.listApps,
         create: (input) =>

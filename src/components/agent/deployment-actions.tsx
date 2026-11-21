@@ -30,6 +30,8 @@ type DeploymentActionItem = {
   key: string;
   name: string;
   seed: string;
+  /** Whether `seed` is an App id that may have a stored icon. */
+  isApp: boolean;
   subtitle: string;
   action: ReactNode;
 };
@@ -79,7 +81,12 @@ function DeploymentActions({
             className={classes.deploymentActionRow}
             wrap="nowrap"
           >
-            <AppGlyph name={item.name} seed={item.seed} size="sm" />
+            <AppGlyph
+              icon={item.isApp}
+              name={item.name}
+              seed={item.seed}
+              size="sm"
+            />
             <Box className={classes.deploymentActionIdentity}>
               <Text size="sm" fw={600} truncate>
                 {item.name}
@@ -128,6 +135,7 @@ export function AppDeploymentActions({
           key: app?.id ?? reference,
           name,
           seed: app?.id ?? reference,
+          isApp: true,
           subtitle: app ? app.slug : 'No longer available',
           action: app ? (
             <Group
@@ -232,6 +240,7 @@ export function WorkflowDeploymentActions({
           key: workflow?.id ?? reference,
           name,
           seed: workflow?.id ?? reference,
+          isApp: false,
           subtitle: workflow ? workflow.slug : 'No longer available',
           action: workflow ? (
             <Group

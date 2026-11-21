@@ -62,6 +62,23 @@ import { queryAppDatabase } from '~server/apps/query-db';
 import { associateAgentSessionApp } from '~server/agent-session-apps';
 import { WorkspaceService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/workspace_pb';
 import { readWorkspace } from '~server/workspace-read';
+import { ImageService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/image_pb';
+import {
+  appIconPath,
+  clearAppIcon,
+  getAppIcon,
+  setAppIcon,
+  setAppIconFromCandidate,
+  type AppIconView,
+  MAX_APP_ICON_BYTES,
+} from '~server/apps/icon';
+import { generateImages } from '~server/images/generate';
+import {
+  clearImageModel,
+  getImageModelState,
+  setImageModel,
+  type ImageModelState,
+} from '~server/images/model';
 
 export { publicApiContext };
 const columns = {
@@ -74,6 +91,7 @@ const columns = {
   updatedAt: true,
 } as const;
 type Kind = 'apps' | 'workflows';
+const ORDINARY_FRAMING_BYTES = 16 * 1024;
 
 async function list(kind: Kind) {
   const rows =
@@ -83,6 +101,7 @@ async function list(kind: Kind) {
   const summaries =
     kind === 'apps' ? await listAppsForAgent() : await listWorkflowsForAgent();
   const byId = new Map(summaries.map((summary) => [summary.id, summary]));
+  const icons = kind === 'apps' ? await appIconPaths() : new Map();
   return rows.flatMap((row) => {
     const summary = byId.get(row.id);
     if (!summary) return [];
@@ -95,6 +114,7 @@ async function list(kind: Kind) {
     return [
       {
         ...project(row),
+        iconPath: icons.get(row.id),
         view: jsonValue(
           (kind === 'apps' ? appSummarySchema : workflowSummarySchema).parse(
             view,
@@ -104,6 +124,28 @@ async function list(kind: Kind) {
     ];
   });
 }
+/** Icon path per App id, for Apps that have a stored icon. */
+async function appIconPaths(id?: string): Promise<Map<string, string>> {
+  const rows = await db.query.apps.findMany({
+    where: id === undefined ? undefined : { id },
+    columns: { id: true, icon: true },
+  });
+  return new Map(
+    rows.flatMap((row) =>
+      row.icon ? [[row.id, appIconPath(row.id, row.icon)] as const] : [],
+    ),
+  );
+}
+const iconMessage = (icon: AppIconView) => ({
+  icon: {
+    key: icon.key ?? undefined,
+    path: icon.path ?? undefined,
+    sizes: icon.sizes,
+  },
+});
+const imageModelMessage = (state: ImageModelState) => ({
+  state: { ...state, selected: state.selected ?? undefined },
+});
 const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
 async function associate(id: string, context: HandlerContext) {
   const run = context.values.get(publicApiContext).run;
@@ -220,7 +262,16 @@ function lifecycle(kind: Kind) {
         ...released,
         updatedAt: row.updatedAt.toISOString(),
       });
-      return { resource: { ...project(row), view: jsonValue(view) } };
+      return {
+        resource: {
+          ...project(row),
+          iconPath:
+            kind === 'apps'
+              ? (await appIconPaths(row.id)).get(row.id)
+              : undefined,
+          view: jsonValue(view),
+        },
+      };
     },
     source: async (input: { id: string }) => ({
       source: await source(kind, input.id),
@@ -459,6 +510,52 @@ export function registerPlatformApi(
       }),
     { readMaxBytes: deployBodyLimit },
   );
+  router.rpc(AppService.method.getAppIcon, async (input) =>
+    iconMessage(await getAppIcon((await find('apps', input.id)).id)),
+  );
+  router.rpc(
+    AppService.method.setAppIcon,
+    async (input) => {
+      const { id } = await find('apps', input.id);
+      if (input.source.case === 'image')
+        return iconMessage(
+          await setAppIcon(id, Buffer.from(input.source.value)),
+        );
+      if (input.source.case === 'candidateId')
+        return iconMessage(
+          await setAppIconFromCandidate(id, input.source.value),
+        );
+      throw publicApiError('BAD_REQUEST');
+    },
+    // Room for the largest accepted image plus message framing. Connect's
+    // JSON encoding carries `bytes` as base64, four characters per three
+    // bytes; the decoded image is still capped by the domain service.
+    {
+      readMaxBytes:
+        Math.ceil(MAX_APP_ICON_BYTES / 3) * 4 + ORDINARY_FRAMING_BYTES,
+    },
+  );
+  router.rpc(AppService.method.clearAppIcon, async (input) =>
+    iconMessage(await clearAppIcon((await find('apps', input.id)).id)),
+  );
+  router.service(ImageService, {
+    getImageModel: async () => imageModelMessage(await getImageModelState()),
+    setImageModel: async (input) =>
+      imageModelMessage(await setImageModel(input)),
+    clearImageModel: async () => imageModelMessage(await clearImageModel()),
+    generateImages: async (input, context) => {
+      const result = await generateImages(
+        {
+          prompt: input.prompt,
+          count: input.count,
+          quality: input.quality as 'low' | 'medium' | 'high' | undefined,
+          glyphTile: input.glyphTile,
+        },
+        context.signal,
+      );
+      return { modelId: result.model, candidates: result.images };
+    },
+  });
   router.rpc(AppService.method.listApps, apps.list);
   router.rpc(AppService.method.createApp, apps.create);
   router.rpc(AppService.method.getApp, apps.get);

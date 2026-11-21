@@ -13,6 +13,7 @@ const REQUIRED_SKILL_NAMES = [
   'importing-workflows',
   'app-compatibility',
   'workflow-compatibility',
+  'app-icon',
 ] as const;
 
 const WORKFLOW_SKILL_NAMES = new Set([

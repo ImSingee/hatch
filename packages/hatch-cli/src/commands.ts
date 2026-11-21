@@ -168,6 +168,48 @@ const definitions: readonly CliCommandDefinition[] = [
       'Execute the App data operation with domain limits and complete results.',
   },
   {
+    path: ['app', 'icon', 'get'],
+    usage: 'app icon get <id-or-slug>',
+    description:
+      'Show the App icon: key, authenticated path and stored sizes; all null/empty while the App shows its monogram.',
+  },
+  {
+    path: ['app', 'icon', 'set'],
+    usage: 'app icon set <id-or-slug> (--file <path|-> | --candidate <id>)',
+    description:
+      'Replace the App icon with a PNG, JPEG or WebP file (at most 4 MB, sides 64 to 4096 px) or with a candidate from image generate. The platform crops to a centred square and re-encodes it; the previous icon is deleted.',
+  },
+  {
+    path: ['app', 'icon', 'clear'],
+    usage: 'app icon clear <id-or-slug>',
+    description:
+      'Delete the App icon so the App shows its monogram again. Succeeds when there is none.',
+  },
+  {
+    path: ['image-model', 'get'],
+    usage: 'image-model get',
+    description:
+      'Show the selected image model (null when none) and every provider that can generate images with suggested model ids. Never prints API keys.',
+  },
+  {
+    path: ['image-model', 'set'],
+    usage: 'image-model set --provider <provider-id> --model <model-id>',
+    description:
+      'Select the instance image model, replacing the previous choice. The provider must be one listed by image-model get; its existing API key is used.',
+  },
+  {
+    path: ['image-model', 'clear'],
+    usage: 'image-model clear',
+    description: 'Unselect the image model; image generate then fails.',
+  },
+  {
+    path: ['image', 'generate'],
+    usage:
+      'image generate (--prompt <text> | --prompt-file <path|->) [--count <1-4>] [--quality low|medium|high] [--glyph-tile <#RRGGBB>] [--output-dir <path>]',
+    description:
+      'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. Prints each candidate id and authenticated path; candidates expire after one day. --glyph-tile expects a white glyph on black and lays it on a solid 512px tile of that colour. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
+  },
+  {
     path: ['notification', 'list'],
     usage:
       'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',

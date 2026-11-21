@@ -20,6 +20,7 @@ const definitions = {
     'Resource was deleted or recreated. Fetch its current source.',
   ],
   PAYLOAD_TOO_LARGE: [Code.ResourceExhausted, 413, 'Payload too large.'],
+  TOO_MANY_REQUESTS: [Code.ResourceExhausted, 429, 'Too many requests.'],
   UNSUPPORTED_MEDIA_TYPE: [
     Code.InvalidArgument,
     415,
@@ -72,6 +73,7 @@ export function publicError(
       409: 'CONFLICT',
       413: 'PAYLOAD_TOO_LARGE',
       415: 'UNSUPPORTED_MEDIA_TYPE',
+      429: 'TOO_MANY_REQUESTS',
     };
     return publicApiError(
       codes[error.status] ?? 'BAD_REQUEST',

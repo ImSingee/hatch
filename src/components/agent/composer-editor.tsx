@@ -445,6 +445,7 @@ const ResourceMentionMenu = forwardRef<
                       </ThemeIcon>
                     ) : (
                       <AppGlyph
+                        icon={item.resourceType === 'app'}
                         name={item.resource.name}
                         seed={item.resource.id}
                         size="sm"

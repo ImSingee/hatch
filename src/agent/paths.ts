@@ -67,6 +67,13 @@ export const AGENT_ATTACHMENTS_DIR = path.resolve(
   WORKSPACE_ROOT,
   'agent-attachments',
 );
+/** Re-encoded App icons, one dir per App id. */
+export const APP_ICONS_DIR = path.resolve(WORKSPACE_ROOT, 'app-icons');
+/** Short-lived generated images awaiting a user choice; never in the DB. */
+export const IMAGE_CANDIDATES_DIR = path.resolve(
+  WORKSPACE_ROOT,
+  'image-candidates',
+);
 /** Markdown skills available to the Agent. */
 export const SKILLS_DIR = path.resolve(REPO_ROOT, 'skills');
 /** App scaffolding template. */
@@ -184,6 +191,11 @@ export function deploymentArtifactDir(
   deploymentId: string,
 ): string {
   return path.resolve(ARTIFACTS_DIR, id, deploymentId);
+}
+
+/** Directory holding every stored size of one App's icon. */
+export function appIconDir(id: string): string {
+  return childPath(APP_ICONS_DIR, id, 'App id');
 }
 
 /** Fixed persistent directory exposed to a storage-capable app backend. */

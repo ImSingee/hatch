@@ -25,6 +25,19 @@ App/Workflow compatibility bump or protocol-18 wire change is required.
 | deploy_workflow      | workflow push / deploy                  | Git push, then WorkflowService/DeployWorkflow by commit; normalized release/triggers and generation       |
 | rollback_workflow    | workflow rollback                       | WorkflowService/RollbackWorkflow; compatibility and source recovery                                       |
 
+The capabilities below have no Agent Tool; the CLI is their only Agent
+interface.
+
+| Capability       | CLI                           | Public API / shared behavior                                                                            |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| App icon         | app icon get / set / clear    | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded  |
+| Image model      | image-model get / set / clear | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed |
+| Image generation | image generate                | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap  |
+
+Not covered by the CLI: providers and their chat models (create, edit, API
+keys) remain Web-only as before this change. `image-model set` selects among
+existing providers and cannot create one. See [App icons](app-icons.md).
+
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`
 pushes, then calls the Deploy RPC with the commit to release (`--commit`

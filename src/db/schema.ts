@@ -201,6 +201,11 @@ export const apps = snakeCase.table(
      * deploy of a backend-capable app; never exposed to the browser.
      */
     signingSecret: text(),
+    /**
+     * Key of the stored icon files under the App's icon directory; changes
+     * every time the icon is replaced. Null means the monogram fallback.
+     */
+    icon: text(),
     currentDeploymentId: ulid(),
     createdAt,
     updatedAt,

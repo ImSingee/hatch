@@ -1,4 +1,5 @@
 /** Server-only: app lifecycle management — archive, rollback, delete. */
+import { removeAppIconFiles } from './icon';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
@@ -574,6 +575,7 @@ async function deleteAppInner(id: string): Promise<{ ok: true }> {
     fs.rm(appArtifactsDir(id), { recursive: true, force: true }),
     fs.rm(appRepoDir(id), { recursive: true, force: true }),
     fs.rm(appStorageDir(id), { recursive: true, force: true }),
+    removeAppIconFiles(id),
   ]);
   // Cancel any scheduled cron jobs for the removed app.
   await reloadScheduler();
