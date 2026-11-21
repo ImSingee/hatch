@@ -128,63 +128,70 @@ describe('createApp', () => {
     await expect(db.query.apps.findFirst()).resolves.toMatchObject({ name });
   });
 
-  it('creates a digit-leading slug with the default scaffold and separate identity', async () => {
-    const result = await createApp({
-      slug: '123-test-app',
-      name: 'Hello "World"',
-      description: 'First line\nSecond line',
-    });
+  // Evaluating the manifest reproduces the template's locked dependencies.
+  it(
+    'creates a digit-leading slug with the default scaffold and separate identity',
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      const result = await createApp({
+        slug: '123-test-app',
+        name: 'Hello "World"',
+        description: 'First line\nSecond line',
+      });
 
-    const manifest = await evaluateTemplateManifest(
-      renderedFile(result.files, 'manifest.ts'),
-      'app',
-    );
-    expect(manifest).toMatchObject({
-      id: result.id,
-      name: 'Hello "World"',
-      description: 'First line\nSecond line',
-      compatibilityVersion: 2,
-      backend: { runtime: 'deno-serve' },
-      backendMode: 'serverless',
-      capabilities: {
-        frontend: true,
-        widgets: true,
-        backend: true,
-        dataTable: true,
-      },
-    });
-    expect(
-      JSON.parse(renderedFile(result.files, 'package.json')),
-    ).toMatchObject({ name: '123-test-app' });
-    expect(renderedFile(result.files, 'app/index.html')).toContain(
-      '<title>Hello "World"</title>',
-    );
-    expect(result.files.some((file) => file.path.startsWith('gen/'))).toBe(
-      false,
-    );
+      const manifest = await evaluateTemplateManifest(
+        renderedFile(result.files, 'manifest.ts'),
+        'app',
+      );
+      expect(manifest).toMatchObject({
+        id: result.id,
+        name: 'Hello "World"',
+        description: 'First line\nSecond line',
+        compatibilityVersion: 2,
+        backend: { runtime: 'deno-serve' },
+        backendMode: 'serverless',
+        capabilities: {
+          frontend: true,
+          widgets: true,
+          backend: true,
+          dataTable: true,
+        },
+      });
+      expect(
+        JSON.parse(renderedFile(result.files, 'package.json')),
+      ).toMatchObject({ name: '123-test-app' });
+      expect(renderedFile(result.files, 'app/index.html')).toContain(
+        '<title>Hello "World"</title>',
+      );
+      expect(result.files.some((file) => file.path.startsWith('gen/'))).toBe(
+        false,
+      );
 
-    expect(mocks.ensureAppRepo).toHaveBeenCalledOnce();
-    expect(mocks.ensureAppRepo).toHaveBeenCalledWith(result.id);
-    await expect(db.query.apps.findFirst()).resolves.toMatchObject({
-      id: result.id,
-      slug: '123-test-app',
-      name: 'Hello "World"',
-      description: 'First line\nSecond line',
-      status: 'draft',
-      capabilities: null,
-      manifest: null,
-      backendMode: null,
-      currentDeploymentId: null,
-      repoPath: `/test/repos/${result.id}.git`,
-    });
-    await expect(db.query.sidebarItems.findMany()).resolves.toMatchObject([
-      {
-        appId: result.id,
-        label: 'Hello "World"',
-        sortOrder: 0,
-      },
-    ]);
-  });
+      expect(mocks.ensureAppRepo).toHaveBeenCalledOnce();
+      expect(mocks.ensureAppRepo).toHaveBeenCalledWith(result.id);
+      await expect(db.query.apps.findFirst()).resolves.toMatchObject({
+        id: result.id,
+        slug: '123-test-app',
+        name: 'Hello "World"',
+        description: 'First line\nSecond line',
+        status: 'draft',
+        capabilities: null,
+        manifest: null,
+        backendMode: null,
+        currentDeploymentId: null,
+        repoPath: `/test/repos/${result.id}.git`,
+      });
+      await expect(db.query.sidebarItems.findMany()).resolves.toMatchObject([
+        {
+          appId: result.id,
+          label: 'Hello "World"',
+          sortOrder: 0,
+        },
+      ]);
+    },
+  );
 
   it('honors an explicit request not to pin the draft', async () => {
     const result = await createApp({

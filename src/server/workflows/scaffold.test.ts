@@ -35,45 +35,52 @@ beforeEach(async () => {
 });
 
 describe('createWorkflow', () => {
-  it('generates an immutable id and uses the slug only for human-facing state', async () => {
-    const created = await createWorkflow({
-      slug: '123-test-workflow',
-      name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
-      description: 'First line\nSecond line \\ __WORKFLOW_ID__',
-    });
+  // Evaluating the manifest reproduces the template's locked dependencies.
+  it(
+    'generates an immutable id and uses the slug only for human-facing state',
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      const created = await createWorkflow({
+        slug: '123-test-workflow',
+        name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
+        description: 'First line\nSecond line \\ __WORKFLOW_ID__',
+      });
 
-    expect(created).toMatchObject({
-      slug: '123-test-workflow',
-      name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
-    });
-    expect(created.id).toMatch(/^[0-9a-z]{26}$/);
-    expect(created.id).not.toBe(created.slug);
-    expect(
-      await evaluateTemplateManifest(
-        renderedFile(created.files, 'manifest.ts'),
-        'workflow',
-      ),
-    ).toMatchObject({
-      id: created.id,
-      name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
-      description: 'First line\nSecond line \\ __WORKFLOW_ID__',
-    });
-    expect(
-      JSON.parse(renderedFile(created.files, 'package.json')),
-    ).toMatchObject({ name: '123-test-workflow' });
-    expect(mocks.ensureWorkflowRepo).toHaveBeenCalledWith(created.id);
-    await expect(db.query.workflows.findFirst()).resolves.toMatchObject({
-      id: created.id,
-      slug: '123-test-workflow',
-      name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
-      description: 'First line\nSecond line \\ __WORKFLOW_ID__',
-      repoPath: `/test/workflow-repos/${created.id}.git`,
-      status: 'draft',
-      manifest: null,
-      inputSchema: null,
-      currentDeploymentId: null,
-    });
-  });
+      expect(created).toMatchObject({
+        slug: '123-test-workflow',
+        name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
+      });
+      expect(created.id).toMatch(/^[0-9a-z]{26}$/);
+      expect(created.id).not.toBe(created.slug);
+      expect(
+        await evaluateTemplateManifest(
+          renderedFile(created.files, 'manifest.ts'),
+          'workflow',
+        ),
+      ).toMatchObject({
+        id: created.id,
+        name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
+        description: 'First line\nSecond line \\ __WORKFLOW_ID__',
+      });
+      expect(
+        JSON.parse(renderedFile(created.files, 'package.json')),
+      ).toMatchObject({ name: '123-test-workflow' });
+      expect(mocks.ensureWorkflowRepo).toHaveBeenCalledWith(created.id);
+      await expect(db.query.workflows.findFirst()).resolves.toMatchObject({
+        id: created.id,
+        slug: '123-test-workflow',
+        name: 'Daily "digest" __WORKFLOW_DESCRIPTION__',
+        description: 'First line\nSecond line \\ __WORKFLOW_ID__',
+        repoPath: `/test/workflow-repos/${created.id}.git`,
+        status: 'draft',
+        manifest: null,
+        inputSchema: null,
+        currentDeploymentId: null,
+      });
+    },
+  );
 
   it('rejects a duplicate slug but allows a slug equal to another Workflow id', async () => {
     await db.insert(schema.workflows).values({

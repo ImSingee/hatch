@@ -16,7 +16,8 @@ async function loadDefaultManifest() {
   return { source, manifest: parseSourceManifest(source) };
 }
 
-describe('default app template', () => {
+// Evaluating the manifest reproduces the template's locked dependencies.
+describe('default app template', { timeout: 60_000 }, () => {
   it('uses a managed Data Table instead of a raw App database', async () => {
     const { source, manifest } = await loadDefaultManifest();
     const template = new URL(

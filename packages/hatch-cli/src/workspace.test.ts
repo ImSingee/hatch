@@ -31,6 +31,10 @@ import { tmpdir } from 'node:os';
 import { join, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  pnpmFetchArgs,
+  pnpmInstallArgs,
+} from '../../../src/node-toolchain-commands';
 const entry = fileURLToPath(new URL('./main.ts', import.meta.url));
 let directory: string;
 let origin: string;
@@ -46,6 +50,26 @@ let sdkDelay: (() => Promise<void>) | undefined;
 let sdkFailure: boolean;
 let resourceSlug: string;
 let createRequests: unknown[];
+/** Extra scaffold files, layered over the default fixture. */
+let scaffoldFiles: Record<string, string>;
+let sdkTooling: Record<string, string> | undefined;
+const PNPM_LOCKFILE = `lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+`;
+const NODE_TOOLING = {
+  bufVersion: '1.0.0',
+  protocGenEsVersion: '2.0.0',
+  typescriptVersion: '7.0.2',
+  esbuildVersion: '0.28.2',
+  pnpmVersion: '12.22.0',
+};
 const token = 'private-workspace-test-secret';
 const getResource = () => ({
   id: 'immutable',
@@ -72,18 +96,11 @@ function createResource(
     id: 'immutable',
     slug: resourceSlug,
     name: 'Fixture',
-    files: [
-      {
-        path: 'package.json',
-        content: Buffer.from('{"type":"module","dependencies":{}}'),
-      },
-      {
-        path: 'manifest.ts',
-        content: Buffer.from(
-          'export default {id:"immutable", compatibilityVersion:1};',
-        ),
-      },
-    ],
+    files: Object.entries({
+      'package.json': '{"type":"module","dependencies":{}}',
+      'manifest.ts': 'export default {id:"immutable", compatibilityVersion:1};',
+      ...scaffoldFiles,
+    }).map(([path, content]) => ({ path, content: Buffer.from(content) })),
   };
 }
 const rpc = connectNodeAdapter({
@@ -133,6 +150,7 @@ const rpc = connectNodeAdapter({
           files: [
             { path: 'import-map.json', content: Buffer.from('{"imports":{}}') },
           ],
+          tooling: sdkTooling,
         };
       },
     });
@@ -314,6 +332,8 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     sdkFailure = false;
     resourceSlug = 'fixture';
     createRequests = [];
+    scaffoldFiles = {};
+    sdkTooling = undefined;
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
     );
@@ -780,6 +800,133 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       (await readdir(directory)).filter((name) => name.endsWith('.lock')),
     ).toEqual([]);
   });
+  /** Put a `pnpm` first on PATH that records its arguments and environment. */
+  async function recordingPnpm(version: string) {
+    const bin = join(directory, 'bin');
+    const calls = join(directory, 'pnpm-calls.jsonl');
+    const script = join(bin, 'pnpm.cjs');
+    await mkdir(bin);
+    await writeFile(
+      script,
+      '#!/usr/bin/env node\n' +
+        "const fs = require('node:fs');\n" +
+        `fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ args: process.argv.slice(2), configHome: process.env.XDG_CONFIG_HOME, configHomeEntries: process.env.XDG_CONFIG_HOME ? fs.readdirSync(process.env.XDG_CONFIG_HOME) : null }) + '\\n');\n` +
+        `if (process.argv.includes('--version')) console.log(${JSON.stringify(version)});\n`,
+      { mode: 0o755 },
+    );
+    if (process.platform === 'win32')
+      await writeFile(
+        join(bin, 'pnpm.cmd'),
+        '@echo off\r\nnode "%~dp0pnpm.cjs" %*\r\n',
+      );
+    else await symlink(script, join(bin, 'pnpm'));
+    return {
+      env: { PATH: `${bin}${delimiter}${process.env.PATH}` },
+      calls: async () =>
+        (await readFile(calls, 'utf8').catch(() => ''))
+          .split('\n')
+          .filter(Boolean)
+          .map(
+            (line) =>
+              JSON.parse(line) as {
+                args: string[];
+                configHome?: string;
+                configHomeEntries: string[] | null;
+              },
+          ),
+    };
+  }
+  async function createWorkflow(env: NodeJS.ProcessEnv) {
+    const input = join(directory, 'input.json');
+    await writeFile(input, '{"slug":"fixture","name":"Fixture"}');
+    return run(
+      [
+        'workflow',
+        'create',
+        '--file',
+        input,
+        '--directory',
+        join(directory, 'source'),
+      ],
+      env,
+    ).result;
+  }
+  it('reproduces a pnpm-lockfile Workflow with the install the platform runs at deploy', async () => {
+    scaffoldFiles = { 'pnpm-lock.yaml': PNPM_LOCKFILE };
+    sdkTooling = NODE_TOOLING;
+    const pnpm = await recordingPnpm('12.4.0');
+
+    const result = await createWorkflow(pnpm.env);
+
+    assert.equal(result.code, 0, JSON.stringify(result));
+    const calls = await pnpm.calls();
+    // Frozen and offline after the fetch, with the platform's own argument
+    // lists: no editor-only `--lockfile=false` install.
+    expect(calls.map((call) => call.args)).toEqual([
+      ['--pm-on-fail=ignore', '--version'],
+      pnpmFetchArgs(),
+      pnpmInstallArgs(),
+    ]);
+    // pnpm's global configuration directory is replaced by an empty one.
+    for (const call of calls) {
+      expect(call.configHomeEntries).toEqual([]);
+      expect(call.configHome).not.toBe(process.env.XDG_CONFIG_HOME);
+    }
+  });
+  it('refuses to prepare a pnpm-lockfile Workflow with another pnpm major', async () => {
+    scaffoldFiles = { 'pnpm-lock.yaml': PNPM_LOCKFILE };
+    sdkTooling = NODE_TOOLING;
+    const pnpm = await recordingPnpm('9.15.0');
+
+    const result = await createWorkflow(pnpm.env);
+
+    expect(result.code).toBe(6);
+    expect(result.data.error).toMatchObject({
+      code: 'workflow_preparation_failed',
+      message: expect.stringContaining(
+        'pnpm 9.15.0 cannot reproduce this source. Install pnpm 12',
+      ),
+    });
+    expect((await pnpm.calls()).map((call) => call.args)).toEqual([
+      ['--pm-on-fail=ignore', '--version'],
+    ]);
+  });
+  it.each([
+    [
+      'mixes pnpm-lock.yaml with deno.lock',
+      { 'pnpm-lock.yaml': PNPM_LOCKFILE, 'deno.lock': '{}' },
+      'mixes two build toolchains',
+    ],
+    [
+      'declares packageManager',
+      {
+        'pnpm-lock.yaml': PNPM_LOCKFILE,
+        'package.json': '{"type":"module","packageManager":"pnpm@9.0.0"}',
+      },
+      'package.json must not declare packageManager',
+    ],
+    [
+      'carries a pnpm hook',
+      { 'pnpm-lock.yaml': PNPM_LOCKFILE, '.pnpmfile.cjs': 'module.exports={}' },
+      'workflow sources cannot include .pnpmfile.cjs',
+    ],
+  ])(
+    'rejects a Workflow that %s before running pnpm',
+    async (_label, files, message) => {
+      scaffoldFiles = files;
+      sdkTooling = NODE_TOOLING;
+      const pnpm = await recordingPnpm('12.22.0');
+
+      const result = await createWorkflow(pnpm.env);
+
+      expect(result.code).toBe(6);
+      expect(result.data.error).toMatchObject({
+        code: 'workflow_preparation_failed',
+        message: expect.stringContaining(message),
+      });
+      expect(await pnpm.calls()).toEqual([]);
+    },
+  );
   it('keeps CLI, fleet, database and provider credentials out of dependency processes', async () => {
     const bin = join(directory, 'bin');
     await mkdir(bin);

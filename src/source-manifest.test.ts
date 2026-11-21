@@ -43,7 +43,7 @@ beforeAll(async () => {
   root = await createManifestFixtureRoot();
   for (const file of ['package.json', 'deno.json', 'deno.lock']) {
     await fs.copyFile(
-      path.resolve('templates/default-workflow', file),
+      path.resolve('src/test-fixtures/deno-toolchain/workflow', file),
       path.join(root, file),
     );
   }
