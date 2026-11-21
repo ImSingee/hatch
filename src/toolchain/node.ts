@@ -108,17 +108,9 @@ export function createNodeToolchain(
     input: string,
     step: ToolchainCommand['step'],
   ): Promise<ToolchainRunResult> {
-    const { args, deniesNetwork } = nodeEvaluationArgs();
-    if (!deniesNetwork) {
-      const message =
-        `Node.js ${process.versions.node} cannot deny network access to ` +
-        'evaluated source; Node.js 26 or later is required.';
-      if (context.requireNetworkIsolation) throw new Error(message);
-      logs?.push(`warning: ${message}`);
-    }
     return run({
       tool: 'node',
-      args,
+      args: nodeEvaluationArgs(),
       step,
       input,
       timeoutMs: context.evaluationTimeoutMs ?? 30_000,
@@ -167,6 +159,7 @@ export function createNodeToolchain(
         read,
         steps: {
           conditions: NODE_EVALUATION_CONDITIONS,
+          jsxImportSource: 'react',
           graph: () => assertProgramInsideRoot(MANIFEST_TSCONFIG, 'manifest'),
           async check() {
             const checked = await run({
@@ -253,6 +246,7 @@ export function createNodeToolchain(
             `import schema from './data/schema.ts';\n` +
             `console.log(${JSON.stringify(DATA_SCHEMA_SENTINEL)} + JSON.stringify(schema.descriptor));\n`,
           conditions: NODE_EVALUATION_CONDITIONS,
+          jsxImportSource: 'react',
           subject: 'schema',
         });
         result = await evaluate(`${source}\n`, 'describe');

@@ -171,6 +171,11 @@ export async function bundleEvaluationModule(options: {
   contents: string;
   /** Resolution conditions of the runtime that evaluates the bundle. */
   conditions: string[];
+  /**
+   * Package whose automatic JSX runtime the bundle uses, matching the
+   * toolchain's type check. Omitted, JSX compiles to `React.createElement`.
+   */
+  jsxImportSource?: string;
   /** Lower-case noun used in error messages, e.g. `manifest`. */
   subject: string;
 }): Promise<string> {
@@ -190,6 +195,9 @@ export async function bundleEvaluationModule(options: {
     conditions: options.conditions,
     target: 'esnext',
     tsconfigRaw: {},
+    ...(options.jsxImportSource
+      ? { jsx: 'automatic', jsxImportSource: options.jsxImportSource }
+      : {}),
     logLevel: 'silent',
     metafile: true,
     plugins: [
@@ -220,6 +228,11 @@ export async function bundleEvaluationModule(options: {
 export type ManifestEvaluationSteps = {
   /** Resolution conditions of the runtime that evaluates the bundle. */
   conditions: string[];
+  /**
+   * Package whose automatic JSX runtime the bundle uses, matching the
+   * toolchain's type check. Omitted, JSX compiles to `React.createElement`.
+   */
+  jsxImportSource?: string;
   /** Verify the full import graph, including type-only imports. */
   graph(file: ManifestFile): Promise<void>;
   check(file: ManifestFile): Promise<void>;
@@ -346,6 +359,7 @@ export async function loadSourceManifest<T>(
       read: reader,
       contents: `import manifest from './manifest.ts';\n__hatchSerialize(manifest);`,
       conditions: steps.conditions,
+      jsxImportSource: steps.jsxImportSource,
       subject: 'manifest',
     });
     await steps.check(file);

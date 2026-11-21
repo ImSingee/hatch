@@ -172,7 +172,7 @@ async function nodeToolchain(
           throw new Error('Manifest bundle exceeds its output budget.');
         result = await command(
           process.execPath,
-          nodeEvaluationArgs().args,
+          nodeEvaluationArgs(),
           root,
           signal,
           false,

@@ -118,7 +118,14 @@ export async function adopt(
       // Only a pnpm-toolchain source needs the platform's tool versions.
       async () => (await client.sdk.get({ kind })).tooling,
     );
-  } catch {
+  } catch (error) {
+    // Validation can install dependencies; a cancelled run or a missing tool
+    // says nothing about the manifest and keeps its own exit code.
+    if (
+      error instanceof CliError &&
+      (error.code === 'cancelled' || error.code === 'tool_unavailable')
+    )
+      throw error;
     throw new CliError(
       'manifest_mismatch',
       'Cannot validate the existing manifest. Source and origin were preserved.',

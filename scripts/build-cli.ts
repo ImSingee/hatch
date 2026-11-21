@@ -18,7 +18,7 @@ const result = await build({
   outfile: output,
   bundle: true,
   platform: 'node',
-  target: 'node24',
+  target: 'node26',
   format: 'esm',
   banner: {
     // Bundled CommonJS dependencies require Node built-ins; an ES module has

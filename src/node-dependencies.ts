@@ -8,13 +8,13 @@
  * manifest and a lockfile whose every package resolves by registry integrity.
  */
 import { promises as fs } from 'node:fs';
-import path from 'node:path';
 import { isAlias, isNode, parseAllDocuments, visit } from 'yaml';
+import { isNodeToolchainRejectedRootFile } from './app-managed-path';
 import {
-  NODE_TOOLCHAIN_REJECTED_ROOT_FILES,
-  isNodeToolchainRejectedRootFile,
-} from './app-managed-path';
-import { PNPM_LOCKFILE, type SourceKind } from './source-toolchain';
+  PNPM_LOCKFILE,
+  readRootDependencyFile,
+  type SourceKind,
+} from './source-toolchain';
 
 type JsonObject = Record<string, unknown>;
 
@@ -382,21 +382,11 @@ export async function validateNodeDependencySource(
   kind: SourceKind,
   sourceReader?: NodeDependencySourceReader,
 ): Promise<void> {
-  let rejected: string | undefined;
-  if (sourceReader) {
-    const present = await Promise.all(
-      NODE_TOOLCHAIN_REJECTED_ROOT_FILES.map(
-        async (file) => (await sourceReader(file)) !== null,
-      ),
-    );
-    rejected = NODE_TOOLCHAIN_REJECTED_ROOT_FILES.find(
-      (_, index) => present[index],
-    );
-  } else {
-    rejected = (await fs.readdir(sourceDir)).find(
-      isNodeToolchainRejectedRootFile,
-    );
-  }
+  // Names are listed, never probed, so every site rejects the same case
+  // variants; `sourceReader` only changes how file contents are read.
+  const rejected = (await fs.readdir(sourceDir)).find(
+    isNodeToolchainRejectedRootFile,
+  );
   if (rejected) {
     throw new Error(
       `${kind} sources cannot include ${rejected}. Package manager, ` +
@@ -406,15 +396,7 @@ export async function validateNodeDependencySource(
   }
 
   const readSource =
-    sourceReader ??
-    (async (file: string) => {
-      try {
-        return await fs.readFile(path.join(sourceDir, file), 'utf8');
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-        throw error;
-      }
-    });
+    sourceReader ?? ((file: string) => readRootDependencyFile(sourceDir, file));
   const [packageSource, lockSource] = await Promise.all([
     readSource('package.json'),
     readSource(PNPM_LOCKFILE),

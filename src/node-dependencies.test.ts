@@ -111,19 +111,23 @@ describe('validateNodeDependencySource', () => {
     );
   });
 
-  it('reads rejected files through the supplied reader', async () => {
+  it('rejects a case variant of a root file at every site, however contents are read', async () => {
     const files: Record<string, string> = {
       'package.json': JSON.stringify(packageJson()),
       'pnpm-lock.yaml': lockfile(),
-      '.pnpmfile.cjs': 'module.exports = {}',
     };
+    const root = await source({ ...files, '.PNPMFILE.CJS': '' });
+    await expect(
+      validateNodeDependencySource(root, 'workflow'),
+    ).rejects.toThrow('workflow sources cannot include .PNPMFILE.CJS');
+    // The Runner reads contents through an Agent-scoped reader.
     await expect(
       validateNodeDependencySource(
-        '/nonexistent',
+        root,
         'workflow',
         async (file) => files[file] ?? null,
       ),
-    ).rejects.toThrow('workflow sources cannot include .pnpmfile.cjs');
+    ).rejects.toThrow('workflow sources cannot include .PNPMFILE.CJS');
   });
 
   it('ignores a pnpm-workspace.yaml that pnpm wrote into the root', async () => {

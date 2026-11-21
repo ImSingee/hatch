@@ -23,16 +23,29 @@ export type SourceToolchainReader = (
   file: SourceToolchainFile,
 ) => Promise<string | null>;
 
-/** Read a root dependency file, treating a missing file as absent. */
-export function sourceToolchainReader(root: string): SourceToolchainReader {
-  return async (file) => {
-    try {
-      return await fs.readFile(path.join(root, file), 'utf8');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw error;
+/**
+ * Read a root dependency file, treating a missing file as absent. Anything
+ * but a regular file is rejected before it is opened: reading a named pipe
+ * would wait forever.
+ */
+export async function readRootDependencyFile(
+  root: string,
+  file: string,
+): Promise<string | null> {
+  const target = path.join(root, file);
+  try {
+    if (!(await fs.lstat(target)).isFile()) {
+      throw new Error(`${file} must be a regular file.`);
     }
-  };
+    return await fs.readFile(target, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+export function sourceToolchainReader(root: string): SourceToolchainReader {
+  return (file) => readRootDependencyFile(root, file);
 }
 
 /**
@@ -120,12 +133,6 @@ export type SourceToolchainContext = {
   evaluationTimeoutMs?: number;
   /** Shared pnpm store; pnpm's per-user default when omitted. */
   pnpmStoreDir?: string;
-  /**
-   * Where manifest and schema evaluation must be network-isolated. Node only
-   * denies network from the version that has `--allow-net`; older versions
-   * are refused when this is set and merely reported otherwise.
-   */
-  requireNetworkIsolation?: boolean;
 };
 
 /** One build pipeline. Selected by `detectSourceToolchain`. */

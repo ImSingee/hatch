@@ -117,22 +117,22 @@ export async function withEmptyConfigHome<T>(
 
 /**
  * Node arguments that evaluate a module read from stdin with no permission
- * grants: no file system, child process, worker, addon or WASI access.
- * Network is denied only where Node has an `--allow-net` flag to withhold.
+ * grants: no file system, network, child process, worker, addon or WASI
+ * access. Node denies network only from the version that has an
+ * `--allow-net` flag to withhold; an older one is refused, because evaluated
+ * code that can both signal a Node process and reach its inspector over the
+ * loopback interface runs arbitrary code in that process.
  */
 export function nodeEvaluationArgs(
   flags: ReadonlySet<string> = process.allowedNodeEnvironmentFlags,
-): { args: string[]; deniesNetwork: boolean } {
-  if (!flags.has('--permission')) {
+): string[] {
+  if (!flags.has('--permission') || !flags.has('--allow-net')) {
     throw new Error(
-      'This Node.js version cannot evaluate source without host access: ' +
-        'the --permission flag is unavailable. Use Node.js 26 or later.',
+      `Node.js ${process.versions.node} cannot evaluate source without ` +
+        'host and network access. Use Node.js 26 or later.',
     );
   }
-  return {
-    args: ['--permission', '--input-type=module', '-'],
-    deniesNetwork: flags.has('--allow-net'),
-  };
+  return ['--permission', '--input-type=module', '-'];
 }
 
 export function tscArgs(project: string, listFilesOnly = false): string[] {
@@ -254,8 +254,12 @@ export async function assertBundleInputsInsideRoot(
   }
 }
 
-/** Resolution used when a bundle is evaluated by Node rather than Deno. */
-export const NODE_EVALUATION_CONDITIONS = ['node', 'import', 'default'];
+/**
+ * Custom resolution condition of a bundle that Node evaluates. esbuild adds
+ * `import` or `require` itself according to how each module is loaded;
+ * listing `import` here would also apply it to `require()` calls.
+ */
+export const NODE_EVALUATION_CONDITIONS = ['node'];
 
 /** esbuild command line equivalent of the in-process manifest bundle. */
 export function esbuildManifestCliArgs(options: {

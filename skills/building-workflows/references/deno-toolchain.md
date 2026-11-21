@@ -81,9 +81,16 @@ it reports a skipped lifecycle script, do not enable it blindly:
 
 ## Local validation
 
-After create/checkout has prepared `.hatch/` and locked dependencies (and after
-installing any dependency changes), run from the Workflow root. If the selected
-source is `manifest.ts`, check it independently before the execution entry:
+Create/checkout prepares `.hatch/` but does not install dependencies. On a
+checkout without `node_modules`, install the locked dependencies first, and
+repeat the non-frozen command above after any dependency change:
+
+```bash
+deno install --package-json --node-modules-dir=auto --lock=deno.lock --frozen
+```
+
+Then run from the Workflow root. If the selected source is `manifest.ts`,
+check it independently before the execution entry:
 
 ```bash
 deno check --config=deno.json --no-remote --node-modules-dir=manual \

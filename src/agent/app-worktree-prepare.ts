@@ -604,7 +604,6 @@ export async function prepareAppWorktree(
       run,
       read,
       readDependenciesThroughReader: isAgentAuthoredRoot(root),
-      requireNetworkIsolation: process.env.NODE_ENV === 'production',
     });
     await toolchain.validateDependencies();
   } catch (error) {

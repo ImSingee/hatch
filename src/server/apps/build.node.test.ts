@@ -237,13 +237,8 @@ describe('buildApp with the Node toolchain', { timeout: 180_000 }, () => {
 
     const result = await buildApp('demo', { sourceDir, outputDir });
 
-    // Node denies network to a permission-restricted process only from the
-    // version that has an --allow-net flag to withhold.
-    const network = process.allowedNodeEnvironmentFlags.has('--allow-net')
-      ? 'denied'
-      : 'allowed';
     expect(result.source.description).toBe(
-      `read:denied,write:denied,spawn:denied,worker:denied,connect:${network}`,
+      'read:denied,write:denied,spawn:denied,worker:denied,connect:denied',
     );
     await expect(fs.access(marker)).rejects.toMatchObject({ code: 'ENOENT' });
   });

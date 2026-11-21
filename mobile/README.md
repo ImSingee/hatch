@@ -9,8 +9,7 @@ open in a separate authenticated WebView.
 
 Requirements:
 
-- Node.js 26 (recommended) and the repository's pnpm 12.22.0. Expo also
-  supports Node 24.
+- Node.js 26 and the repository's pnpm 12.22.0.
 - The Hatch platform **from this branch**, with its normal database, at least one
   enabled provider/model, and a connected Agent Runner. Existing server setup is
   described in the [root README](../README.md).

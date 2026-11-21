@@ -1,6 +1,11 @@
+import { execFileSync } from 'node:child_process';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   detectSourceToolchain,
+  sourceToolchainReader,
   type SourceToolchainFile,
 } from './source-toolchain';
 
@@ -46,5 +51,18 @@ describe('detectSourceToolchain', () => {
     await expect(detectSourceToolchain(reader([]))).rejects.toThrow(
       /no dependency lockfile.*pnpm-lock\.yaml/s,
     );
+  });
+
+  it('rejects a lockfile that is not a regular file instead of reading it', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-toolchain-'));
+    try {
+      // Reading a named pipe with no writer would never return.
+      execFileSync('mkfifo', [path.join(root, 'pnpm-lock.yaml')]);
+      await expect(
+        detectSourceToolchain(sourceToolchainReader(root)),
+      ).rejects.toThrow('pnpm-lock.yaml must be a regular file.');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
