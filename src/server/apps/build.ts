@@ -4,9 +4,8 @@ import {
   loadSourceManifest,
 } from '../../source-manifest';
 import { randomUUID } from 'node:crypto';
-import { constants as fsConstants, promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
 import {
   BUILD_WORK_DIR,
@@ -14,11 +13,20 @@ import {
   appBuildDir,
   appSrcDir,
 } from '~agent/paths';
+import { materializeAppHatchSdk } from '~agent/hatch-sdk';
+import { NODE_TOOLCHAIN_IGNORED_ROOT_FILE } from '../../app-managed-path';
+import { assertNoBundleImports } from '../../node-toolchain-commands';
 import {
-  APP_HATCH_SDK_IMPORTS,
-  hatchImportMapPath,
-  materializeAppHatchSdk,
-} from '~agent/hatch-sdk';
+  detectSourceToolchain,
+  sourceToolchainReader,
+  type SourceToolchain,
+} from '../../source-toolchain';
+import { createSourceToolchain } from '../../toolchain';
+import {
+  hatchSdkPlugin,
+  sourceBoundaryPlugin,
+} from '../../toolchain/esbuild-plugins';
+import { platformToolchainContext } from '../../toolchain/platform';
 import { PLATFORM_APP_BUF_GEN_YAML } from '~agent/app-codegen';
 import {
   type AppApi,
@@ -37,7 +45,6 @@ import {
 } from './data-table/schema';
 import { subprocessSandboxEnv } from '../sandbox-env';
 import { assertDenoPermissionFlags } from '../deno-permissions';
-import { validateDenoDependencySource } from '../deno-dependencies';
 import { run as runSubprocess } from '../subprocess';
 
 export type BuildResult = {
@@ -320,7 +327,7 @@ function sourceCheckEntries(manifest: SourceManifest): SourceCheckEntry[] {
 async function checkAppSource(
   src: string,
   manifest: SourceManifest,
-  logs: string[],
+  toolchain: SourceToolchain,
 ): Promise<void> {
   const entries = sourceCheckEntries(manifest);
   if (entries.length === 0) return;
@@ -331,56 +338,15 @@ async function checkAppSource(
     }
   }
 
-  const checkPaths = entries.map((entry) => entry.path);
   const backend = manifest.backend;
   const validatesFetchBackend =
     backend?.runtime === 'deno-serve' &&
     manifest.capabilities.backend &&
     backend !== undefined;
-  const contractEntry = validatesFetchBackend
-    ? '.hatch/backend-fetch-contract.ts'
-    : null;
-  if (contractEntry && backend) {
-    const backendUrl = pathToFileURL(
-      await fs.realpath(path.resolve(src, backend.entry)),
-    ).href;
-    await fs.writeFile(
-      path.join(src, contractEntry),
-      '/// <reference lib="deno.ns" />\n' +
-        `import backend from ${JSON.stringify(backendUrl)};\n\n` +
-        'const fetchHandler: Deno.ServeDefaultExport = backend;\n' +
-        'void fetchHandler;\n',
-      'utf8',
-    );
-    checkPaths.push(contractEntry);
-  }
-
-  const checkArgs = [
-    'check',
-    '--config=deno.json',
-    '--no-remote',
-    '--node-modules-dir=auto',
-    `--import-map=${hatchImportMapPath(src)}`,
-    '--lock=deno.lock',
-    '--frozen',
-    ...checkPaths.map((entry) => `./${entry}`),
-  ];
-  const checked = await run('deno', checkArgs, {
-    cwd: src,
-    env: subprocessSandboxEnv(),
+  await toolchain.check({
+    entries: entries.map((entry) => entry.path),
+    fetchContract: validatesFetchBackend ? backend.entry : undefined,
   });
-  logs.push(`$ deno ${checkArgs.join(' ')}\n${checked.output.trim()}`);
-  if (checked.code !== 0) {
-    const contractMessage =
-      contractEntry && checked.output.includes(contractEntry)
-        ? ' deno-serve backends must default-export ' +
-          'a Deno.ServeDefaultExport.'
-        : '';
-    throw new Error(
-      `Source validation failed during deno check.${contractMessage}\n` +
-        checked.output,
-    );
-  }
 }
 
 /**
@@ -561,208 +527,9 @@ function prependHeadScript(html: string, code: string): string {
   return body ? insertAt(body.index) : html + tag;
 }
 
-/** Resolve only the public, platform-owned Hatch SDK browser entrypoints. */
-function hatchSdkPlugin(src: string): esbuild.Plugin {
-  const entries = new Map(
-    Object.entries(APP_HATCH_SDK_IMPORTS).map(([specifier, target]) => [
-      specifier,
-      path.resolve(src, '.hatch', target),
-    ]),
-  );
-  // Legacy @hatch/data aliases still resolve but are not suggested.
-  const suggested = [...entries.keys()]
-    .filter((specifier) => /^@hatch\/app(?:\/|$)/.test(specifier))
-    .join(', ');
-  return {
-    name: 'hatch-sdk',
-    setup(build) {
-      build.onResolve({ filter: /^@hatch(?:\/|$)/ }, (args) => {
-        const resolved = entries.get(args.path);
-        if (resolved) return { path: resolved };
-        return {
-          errors: [
-            {
-              text:
-                `Unknown Hatch SDK import "${args.path}". ` +
-                `Use one of: ${suggested}.`,
-            },
-          ],
-        };
-      });
-    },
-  };
-}
-
-function pathIsInside(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  return (
-    relative === '' ||
-    (relative !== '..' &&
-      !relative.startsWith(`..${path.sep}`) &&
-      !path.isAbsolute(relative))
-  );
-}
-
-function browserLoaderForPath(target: string): esbuild.Loader | undefined {
-  switch (path.extname(target).toLowerCase()) {
-    case '.js':
-    case '.mjs':
-    case '.cjs':
-      return 'js';
-    case '.jsx':
-      return 'jsx';
-    case '.ts':
-    case '.mts':
-    case '.cts':
-      return 'ts';
-    case '.tsx':
-      return 'tsx';
-    case '.json':
-      return 'json';
-    case '.css':
-      return 'css';
-    case '.txt':
-      return 'text';
-    default:
-      return undefined;
-  }
-}
-
-function directBrowserLocalPath(
-  specifier: string,
-  resolveDir: string,
-): { path: string; suffix?: string } | null {
-  if (specifier.startsWith('file:')) {
-    let url: URL;
-    try {
-      url = new URL(specifier);
-      if (url.protocol !== 'file:') return null;
-      const suffix = `${url.search}${url.hash}` || undefined;
-      url.search = '';
-      url.hash = '';
-      return { path: fileURLToPath(url), suffix };
-    } catch {
-      return { path: specifier };
-    }
-  }
-  if (/^[A-Za-z]:[\\/]/.test(specifier) || specifier.startsWith('\\\\')) {
-    return { path: specifier };
-  }
-  if (path.isAbsolute(specifier)) return { path: specifier };
-  if (
-    specifier === '.' ||
-    specifier === '..' ||
-    specifier.startsWith('./') ||
-    specifier.startsWith('../')
-  ) {
-    return { path: path.resolve(resolveDir, specifier) };
-  }
-  return null;
-}
-
-/**
- * Defense in depth for esbuild's separate resolver. Every browser module is
- * canonicalized before its bytes are returned to esbuild, including package
- * files reached through node_modules links. Installed dependencies and the
- * managed .hatch SDK remain valid because both live below the temporary source
- * root; platform-repository fallback modules do not.
- */
-function browserSourceBoundaryPlugin(sourceRoot: string): esbuild.Plugin {
-  return {
-    name: 'app-source-boundary',
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        const local = directBrowserLocalPath(args.path, args.resolveDir);
-        if (!local) return undefined;
-        const absolute = path.resolve(local.path);
-        if (!pathIsInside(sourceRoot, absolute)) {
-          return {
-            errors: [
-              {
-                text:
-                  `Browser import "${args.path}" must stay inside the App ` +
-                  'source root.',
-              },
-            ],
-          };
-        }
-        // esbuild does not resolve file: URLs itself. Other local forms can use
-        // its normal extension/package metadata handling before onLoad applies
-        // the canonical check below.
-        if (args.path.startsWith('file:')) return local;
-        return undefined;
-      });
-
-      build.onLoad({ filter: /.*/, namespace: 'file' }, async (args) => {
-        let canonical: string;
-        try {
-          canonical = await fs.realpath(args.path);
-        } catch (error) {
-          return {
-            errors: [
-              {
-                text:
-                  `Browser module "${args.path}" could not be verified: ` +
-                  `${error instanceof Error ? error.message : String(error)}`,
-              },
-            ],
-          };
-        }
-        if (!pathIsInside(sourceRoot, canonical)) {
-          return {
-            errors: [
-              {
-                text:
-                  `Browser module "${args.path}" resolves outside the App ` +
-                  'source root.',
-              },
-            ],
-          };
-        }
-
-        const loader = browserLoaderForPath(canonical);
-        if (!loader) return undefined;
-        let handle;
-        try {
-          handle = await fs.open(
-            canonical,
-            fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
-          );
-          if (!(await handle.stat()).isFile()) {
-            return {
-              errors: [
-                { text: `Browser module is not a regular file: ${args.path}` },
-              ],
-            };
-          }
-          return {
-            contents: await handle.readFile(),
-            loader,
-            resolveDir: path.dirname(canonical),
-          };
-        } catch (error) {
-          return {
-            errors: [
-              {
-                text:
-                  `Browser module "${args.path}" could not be read safely: ` +
-                  `${error instanceof Error ? error.message : String(error)}`,
-              },
-            ],
-          };
-        } finally {
-          await handle?.close();
-        }
-      });
-    },
-  };
-}
-
-const DATA_SCHEMA_SENTINEL = '[[hatch-data-schema]]';
-
 async function describeDataSchema(
   src: string,
-  logs: string[],
+  toolchain: SourceToolchain,
 ): Promise<DataSchemaDescriptor> {
   const schemaPath = path.join(src, 'data', 'schema.ts');
   if (!(await pathExists(schemaPath))) {
@@ -770,43 +537,9 @@ async function describeDataSchema(
       'capabilities.dataTable is true but data/schema.ts does not exist.',
     );
   }
-  const runner = path.join(src, '.hatch', '__describe_data.ts');
-  await fs.writeFile(
-    runner,
-    `import schema from '../data/schema.ts';\n` +
-      `console.log(${JSON.stringify(DATA_SCHEMA_SENTINEL)} + JSON.stringify(schema.descriptor));\n`,
-    'utf8',
-  );
-  const describeArgs = [
-    'run',
-    '--no-prompt',
-    '--config=deno.json',
-    '--no-remote',
-    '--node-modules-dir=auto',
-    `--import-map=${hatchImportMapPath(src)}`,
-    '--lock=deno.lock',
-    '--frozen',
-    `--allow-read=${src}`,
-    runner,
-  ];
-  const result = await run('deno', describeArgs, {
-    cwd: src,
-    env: subprocessSandboxEnv(),
-  });
-  logs.push(`$ deno ${describeArgs.join(' ')}\n${result.output.trim()}`);
-  if (result.code !== 0) {
-    throw new Error(`Data Table schema evaluation failed:\n${result.output}`);
-  }
-  const line = result.output
-    .split('\n')
-    .find((value) => value.startsWith(DATA_SCHEMA_SENTINEL));
-  if (!line) {
-    throw new Error('Data Table schema did not produce a descriptor.');
-  }
+  const descriptor = await toolchain.describe();
   try {
-    return parseDataSchemaDescriptor(
-      JSON.parse(line.slice(DATA_SCHEMA_SENTINEL.length)),
-    );
+    return parseDataSchemaDescriptor(JSON.parse(descriptor));
   } catch (error) {
     throw new Error(
       `Data Table schema is invalid: ${
@@ -847,7 +580,14 @@ export async function buildApp(
           .split(path.sep)
           .join('/');
         const rootEntry = relative.split('/', 1)[0]?.toLowerCase();
-        return !['.git', '.hatch', 'gen', 'node_modules'].includes(rootEntry);
+        return ![
+          '.git',
+          '.hatch',
+          'gen',
+          'node_modules',
+          // pnpm writes this file itself; install never reads it.
+          NODE_TOOLCHAIN_IGNORED_ROOT_FILE,
+        ].includes(rootEntry);
       },
     });
     await assertSourceHasNoSymlinks(tempSrc);
@@ -861,45 +601,25 @@ export async function buildApp(
           })
         : undefined;
 
-    await validateDenoDependencySource(src, 'app');
+    // The committed lockfile selects the build pipeline before any source is
+    // evaluated; it is independent of the runtime the manifest declares.
+    const toolchain = createSourceToolchain(
+      await detectSourceToolchain(sourceToolchainReader(src)),
+      platformToolchainContext('app', src, logs),
+    );
+    await toolchain.validateDependencies();
 
     // Agent worktree dependencies are intentionally absent from deploy bundles.
     // After validating authored dependency metadata, materialize the trusted
     // SDK and fixed platform import map inside this disposable checkout.
     await materializeAppHatchSdk(src);
 
-    // 2) Reproduce the Agent-reviewed dependency install from the committed
-    // package.json + deno.lock. `--no-config` prevents Deno from implicitly
-    // executing source-controlled lifecycle policy. App deploys never run npm
-    // preinstall/install/postinstall code inside the platform process.
-    const installArgs = [
-      'install',
-      '--no-config',
-      '--package-json',
-      '--node-modules-dir=auto',
-      '--lock=deno.lock',
-      '--frozen',
-    ];
-    const install = await run('deno', installArgs, {
-      cwd: src,
-      env: subprocessSandboxEnv(),
-    });
-    logs.push(`$ deno ${installArgs.join(' ')}\n${install.output.trim()}`);
-    if (install.code !== 0) {
-      throw new Error(
-        'Dependency install failed with the committed deno.lock. Load the ' +
-          '"building-apps" Skill, run deno install locally, commit the updated ' +
-          `dependency files, and deploy again:\n${install.output}`,
-      );
-    }
+    // 2) Reproduce the dependency install from the committed lockfile. Neither
+    // pipeline runs npm lifecycle scripts for Apps inside the platform process.
+    await toolchain.install();
 
     const { manifest } =
-      legacy ??
-      (await loadSourceManifest(src, {
-        kind: 'app',
-        parse: parseSourceManifest,
-        logs,
-      }));
+      legacy ?? (await toolchain.evaluateManifest(parseSourceManifest));
 
     if (manifest.backend?.extraPermissions !== undefined) {
       await assertDenoPermissionFlags(manifest.backend?.extraPermissions, src);
@@ -965,9 +685,9 @@ export async function buildApp(
       );
     }
 
-    // Deno checks every enabled manifest entry and its transitive imports after
+    // Type-check every enabled manifest entry and its transitive imports after
     // the frozen install, before schema evaluation, bundling, or artifact writes.
-    await checkAppSource(src, manifest, logs);
+    await checkAppSource(src, manifest, toolchain);
 
     // Source checking validates imports and types, but schema.ts still needs to
     // execute to produce the declarative migration descriptor. Keep that run
@@ -975,7 +695,7 @@ export async function buildApp(
     // lockfile and bless it for the rest of this build.
     let dataSchema: DataSchemaDescriptor | undefined;
     if (manifest.capabilities.dataTable) {
-      dataSchema = await describeDataSchema(src, logs);
+      dataSchema = await describeDataSchema(src, toolchain);
     }
 
     // Only start replacing the requested output after every source validation
@@ -985,23 +705,33 @@ export async function buildApp(
     await fs.mkdir(out, { recursive: true });
 
     // Browser bundles may resolve only modules materialized inside this build's
-    // disposable App root. Deno installed every declared npm dependency above;
+    // disposable App root. The install above put every declared npm dependency there;
     // falling back to the platform repository would make builds non-hermetic.
     const browserSourceRoot = await fs.realpath(src);
     const esbuildResolve = {
       absWorkingDir: src,
-      plugins: [
-        hatchSdkPlugin(src),
-        browserSourceBoundaryPlugin(browserSourceRoot),
-      ],
+      plugins: [hatchSdkPlugin(src), sourceBoundaryPlugin(browserSourceRoot)],
       // Prevent esbuild from walking above the temporary App root in search of
-      // a platform tsconfig. Deno remains the source of truth for type checking.
+      // a platform tsconfig. The toolchain's type checker is the source of
+      // truth for types.
       tsconfigRaw: {
         compilerOptions: {
           jsx: 'react-jsx' as const,
           jsxImportSource: 'react',
         },
       },
+      metafile: true as const,
+    };
+    // `deno check --no-remote` rejects remote imports for Deno sources. tsc
+    // accepts any import an ambient declaration covers, and esbuild keeps URL
+    // imports external, so Node sources are checked on the bundle itself.
+    const assertSelfContained = (
+      result: esbuild.BuildResult<{ metafile: true }>,
+      subject: string,
+    ) => {
+      if (toolchain.name === 'node') {
+        assertNoBundleImports(result.metafile, subject);
+      }
     };
 
     const define = browserDefine(id, manifest.name, options.deploymentId);
@@ -1019,7 +749,7 @@ export async function buildApp(
         throw new Error(`app entry not found: ${manifest.app.entry}`);
       }
       await fs.mkdir(path.join(out, 'app'), { recursive: true });
-      await esbuild.build({
+      const appBundle = await esbuild.build({
         ...esbuildResolve,
         entryPoints: [entry],
         outfile: path.join(out, 'app', 'app.js'),
@@ -1033,6 +763,7 @@ export async function buildApp(
         define,
         logLevel: 'silent',
       });
+      assertSelfContained(appBundle, 'App bundle');
       const htmlRel = manifest.app.html ?? 'app/index.html';
       const htmlSrc = path.join(src, htmlRel);
       if (!(await pathExists(htmlSrc))) {
@@ -1072,7 +803,7 @@ export async function buildApp(
         if (!(await pathExists(entry))) {
           throw new Error(`widget entry not found: ${widget.entry}`);
         }
-        await esbuild.build({
+        const widgetBundle = await esbuild.build({
           ...esbuildResolve,
           entryPoints: [entry],
           outfile: path.join(out, 'widgets', `${widget.id}.js`),
@@ -1088,11 +819,12 @@ export async function buildApp(
           define,
           logLevel: 'silent',
         });
+        assertSelfContained(widgetBundle, `Widget ${widget.id} bundle`);
         logs.push(`bundled widget ${widget.id} -> widgets/${widget.id}.js`);
       }
     }
 
-    // 5) Bundle the Deno backend, generated stubs, and npm dependencies into one
+    // 5) Bundle the backend, generated stubs, and npm dependencies into one
     // runtime entry. Source files and dependency manifests remain build inputs;
     // only files below the fixed backend/assets directory enter the artifact.
     if (manifest.capabilities.backend && manifest.backend) {
@@ -1103,45 +835,11 @@ export async function buildApp(
       bundledBackendEntry = backendBundleEntry(sourceEntry);
       const bundlePath = path.join(out, bundledBackendEntry);
       await fs.mkdir(path.dirname(bundlePath), { recursive: true });
-      const bundleArgs = [
-        'bundle',
-        '--config=deno.json',
-        '--no-remote',
-        '--platform=deno',
-        '--packages=bundle',
-        '--node-modules-dir=auto',
-        `--import-map=${hatchImportMapPath(src)}`,
-        '--lock=deno.lock',
-        '--frozen',
-        '-o',
-        bundlePath,
-        sourceEntry,
-      ];
-      const bundle = await run('deno', bundleArgs, {
-        cwd: src,
-        env: subprocessSandboxEnv(),
+      await toolchain.bundle({
+        entry: sourceEntry,
+        outfile: bundlePath,
+        outputRoot: out,
       });
-      logs.push(`$ deno ${bundleArgs.join(' ')}\n${bundle.output.trim()}`);
-      if (bundle.code !== 0 || !(await pathExists(bundlePath))) {
-        throw new Error(`Backend bundle failed:\n${bundle.output}`);
-      }
-
-      const checkArgs = [
-        'check',
-        '--no-config',
-        '--no-lock',
-        '--no-npm',
-        '--no-remote',
-        bundlePath,
-      ];
-      const checked = await run('deno', checkArgs, {
-        cwd: out,
-        env: subprocessSandboxEnv(),
-      });
-      logs.push(`$ deno ${checkArgs.join(' ')}\n${checked.output.trim()}`);
-      if (checked.code !== 0) {
-        throw new Error(`Backend bundle validation failed:\n${checked.output}`);
-      }
       logs.push(`bundled backend -> ${bundledBackendEntry}`);
     }
 

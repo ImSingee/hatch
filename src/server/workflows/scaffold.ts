@@ -69,6 +69,9 @@ export async function createWorkflow(
       },
       'package.json': { __WORKFLOW_ID__: slug },
     },
+    // Installed dependencies and platform-owned SDK files are generated in
+    // the worktree. Never let stale template artifacts enter source.
+    { exclude: ['.hatch', 'node_modules'] },
   );
 
   // Like App drafts, the source manifest is recorded after deployment.

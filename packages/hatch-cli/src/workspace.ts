@@ -21,11 +21,16 @@ import {
   relative,
   isAbsolute,
 } from 'node:path';
-import { CliError } from './error';
+import { CliError, preparationFailure } from './error';
 import type { Profile } from './config';
 import { platformClient } from './client';
 import { pnpmInvocation } from './pnpm';
-import { prepareApp } from './preparation';
+import { prepareApp, prepareNodeWorkflow } from './preparation';
+import {
+  PNPM_LOCKFILE,
+  detectSourceToolchain,
+  sourceToolchainReader,
+} from '../../../src/source-toolchain';
 
 export type Kind = 'app' | 'workflow';
 export type Workspace = {
@@ -404,7 +409,7 @@ export async function installSdk(
           6,
         );
       await handle.writeFile(
-        '\n.hatch/\n.hatch-stage-*/\n.hatch-backup-*/\nnode_modules/\ngen/\n',
+        '\n.hatch/\n.hatch-stage-*/\n.hatch-backup-*/\nnode_modules/\ngen/\npnpm-workspace.yaml\n',
       );
     } finally {
       await handle.close();
@@ -424,6 +429,22 @@ export async function installSdk(
         'Workflow preparation failed during dependency install: missing regular package.json. Add authored inputs and retry update.',
         6,
       );
+    // A committed pnpm lockfile selects the frozen install the platform
+    // repeats at deploy; Deno-toolchain Workflows keep the editor-only install.
+    if (await lstat(join(root, PNPM_LOCKFILE)).catch(() => null)) {
+      try {
+        await detectSourceToolchain(sourceToolchainReader(root));
+        await prepareNodeWorkflow(root, signal, payload.tooling);
+      } catch (error) {
+        throw preparationFailure(
+          'workflow_preparation_failed',
+          `Workflow preparation failed during dependency install: ${error instanceof Error ? error.message : 'Invalid source.'}`,
+          error,
+          signal,
+        );
+      }
+      return;
+    }
     try {
       const pnpm = await pnpmInvocation();
       await command(
@@ -433,10 +454,11 @@ export async function installSdk(
         signal,
       );
     } catch (error) {
-      throw new CliError(
+      throw preparationFailure(
         'workflow_preparation_failed',
         `Workflow preparation failed during dependency install: ${error instanceof CliError ? error.message : 'Invalid source.'}`,
-        signal.aborted ? 130 : 6,
+        error,
+        signal,
       );
     }
   } finally {
@@ -474,7 +496,14 @@ async function remoteGit(
     env[`GIT_CONFIG_KEY_${index}`] = key;
     env[`GIT_CONFIG_VALUE_${index}`] = value;
   });
-  const result = await git(root, signal, args, true, { env, timeoutMs });
+  const result = await git(root, signal, args, true, { env, timeoutMs }).catch(
+    (error) => {
+      // A transfer that runs out of time is a remote failure like any other.
+      throw error instanceof CliError && error.code === 'local_command_timeout'
+        ? remoteFailure('')
+        : error;
+    },
+  );
   if (result.code === 0 || args[0] === 'push') return result;
   throw remoteFailure(result.stderr);
 }

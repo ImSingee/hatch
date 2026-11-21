@@ -116,6 +116,7 @@ function ExecutionsPage() {
                       )}
                     >
                       <AppGlyph
+                        icon={false}
                         name={run.workflowName}
                         seed={run.workflowId}
                         size="sm"

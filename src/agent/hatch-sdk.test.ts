@@ -461,7 +461,9 @@ describe('Workflow Hatch SDK materialization', () => {
   it('provides inferred Workflow types through the generated import map', async () => {
     const root = await tempRoot();
     const denoDir = await tempRoot();
-    const templateDir = path.resolve('templates/default-workflow');
+    const templateDir = path.resolve(
+      'src/test-fixtures/deno-toolchain/workflow',
+    );
     await Promise.all([
       ...['package.json', 'deno.json', 'deno.lock'].map((file) =>
         copyFile(path.join(templateDir, file), path.join(root, file)),

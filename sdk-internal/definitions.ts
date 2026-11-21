@@ -63,3 +63,82 @@ export function sdkImports(
     ),
   );
 }
+
+export type SdkKind = 'app' | 'workflow';
+
+export function sdkDefinitionsFor(kind: SdkKind): SdkDefinition[] {
+  return kind === 'app' ? [APP_SDK, LEGACY_DATA_SDK] : [WORKFLOW_SDK];
+}
+
+/** Deno namespace declarations shipped beside the generated tsconfig. */
+export const SDK_DENO_TYPES = 'types/deno.d.ts';
+export const SDK_DENO_TYPES_LICENSE = 'types/deno.LICENSE';
+export const SDK_TSCONFIG = 'tsconfig.json';
+export const SDK_MANIFEST_TSCONFIG = 'tsconfig.manifest.json';
+export const SDK_SCHEMA_TSCONFIG = 'tsconfig.schema.json';
+
+/**
+ * A tsconfig that checks only `files`, with the platform compiler options.
+ * Paths are relative to the `.hatch` directory that holds the file.
+ */
+export function sdkEntryTsconfig(files: readonly string[]): string {
+  return `${JSON.stringify(
+    {
+      extends: `./${SDK_TSCONFIG}`,
+      files: [`./${SDK_DENO_TYPES}`, ...files],
+      include: [],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/**
+ * Platform-authored TypeScript configuration for Node-toolchain sources,
+ * written into `.hatch/` next to the SDK. Authored sources carry no compiler
+ * configuration of their own; these are the options `deno.json` used to fix.
+ *
+ * - `paths` targets have no extension, so `tsc` picks the declaration file
+ *   and esbuild picks the JavaScript file of the same SDK entry.
+ * - `typeRoots` is explicit so `types: ["*"]` loads the source's own
+ *   `@types/*` packages and never those of a directory above the source root.
+ * - The runtime is Deno, so the `Deno` namespace is declared; web globals
+ *   come from the DOM library, as they did under `deno.json`.
+ */
+export function sdkToolchainFiles(kind: SdkKind): Record<string, string> {
+  const paths = Object.fromEntries(
+    Object.entries(sdkImports(sdkDefinitionsFor(kind))).map(
+      ([specifier, target]) => [specifier, [target.replace(/\.js$/, '')]],
+    ),
+  );
+  const tsconfig = {
+    compilerOptions: {
+      target: 'esnext',
+      module: 'esnext',
+      moduleResolution: 'bundler',
+      moduleDetection: 'force',
+      allowImportingTsExtensions: true,
+      resolveJsonModule: true,
+      noEmit: true,
+      strict: true,
+      noImplicitOverride: true,
+      jsx: 'react-jsx',
+      jsxImportSource: 'react',
+      lib: ['esnext', 'dom', 'dom.asynciterable'],
+      skipLibCheck: true,
+      types: ['*'],
+      typeRoots: ['../node_modules/@types'],
+      paths,
+    },
+    files: [`./${SDK_DENO_TYPES}`],
+    include: ['../**/*.ts', '../**/*.tsx'],
+    exclude: ['../node_modules', '../.hatch', '../.git'],
+  };
+  return {
+    [SDK_TSCONFIG]: `${JSON.stringify(tsconfig, null, 2)}\n`,
+    [SDK_MANIFEST_TSCONFIG]: sdkEntryTsconfig(['../manifest.ts']),
+    ...(kind === 'app'
+      ? { [SDK_SCHEMA_TSCONFIG]: sdkEntryTsconfig(['../data/schema.ts']) }
+      : {}),
+  };
+}

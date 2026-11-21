@@ -85,7 +85,8 @@ services:
     volumes:
       # Persist agent-authored app source, builds, versions and storage.
       - platform_workspace:/app/workspace
-      # Persist dependency/tool caches, including Deno's npm cache.
+      # Persist dependency/tool caches: Deno's npm cache and the pnpm store
+      # that deploy builds install from.
       - platform_cache:/cache
 
   # The Agent Runner: executes LLM turns and the agent's shell/file sandbox in

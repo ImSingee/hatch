@@ -24,7 +24,21 @@ const REMARK_PLUGINS: PluginList = [remarkGfm, remarkMath];
 const REHYPE_PLUGINS: PluginList = [
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
-const MARKDOWN_COMPONENTS = { a: MarkdownLink };
+/**
+ * Chat text is model output, so an image is shown only when it is one the
+ * platform itself stores: a generated candidate or an App icon. Anything
+ * else (notably a remote URL, which would leak a request) stays text.
+ */
+const PLATFORM_IMAGE_RE =
+  /^\/api\/(?:images\/candidates\/[a-f0-9]{32}|app\/[A-Za-z0-9-]+\/icon(?:\?[A-Za-z0-9=&]*)?)$/;
+
+function MarkdownImage({ src, alt }: ComponentPropsWithoutRef<'img'>) {
+  if (typeof src !== 'string' || !PLATFORM_IMAGE_RE.test(src))
+    return <>{alt}</>;
+  return <img className={classes.markdownImage} src={src} alt={alt ?? ''} />;
+}
+
+const MARKDOWN_COMPONENTS = { a: MarkdownLink, img: MarkdownImage };
 
 /**
  * Normalize the `\( … \)` / `\[ … \]` math delimiters that LLMs emit into the

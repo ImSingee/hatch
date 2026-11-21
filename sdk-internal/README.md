@@ -33,8 +33,9 @@ package and leaving declared peer dependencies external. It emits declarations
 with the repository's TypeScript compiler and asks that compiler for each
 package's declaration dependency graph. Only reachable declarations are copied
 under `dist/_types`; public declarations re-export them. Public JS entrypoints
-carry `@ts-self-types` for Deno. App and Workflow never ship each other's
-unrelated schemas or implementations. Common declarations may appear in both
+carry `@ts-self-types` for sources that build with the Deno toolchain; `tsc`
+resolves the same declarations as the sibling `.d.ts` of each entrypoint. App
+and Workflow never ship each other's unrelated schemas or implementations. Common declarations may appear in both
 payloads so each remains independently resolvable.
 
 All payloads are built and validated in staging before replacing `dist` trees.
@@ -42,6 +43,27 @@ Generated output is ignored by Git. Docker and SDK materialization consume only
 each package's `package.json` and `dist`. Runtime loading does not depend on this
 repository's source files. Do not replace this process with recursive copying
 of another package's entire build directory.
+
+## Generated toolchain files
+
+Sources that build with the pnpm toolchain carry no compiler configuration.
+`sdkToolchainFiles` in `definitions.ts` generates it from the same export
+definitions, and both delivery paths (SDK materialization in
+`src/agent/hatch-sdk.ts` and `SdkService/GetSdk`) write identical bytes into
+`.hatch/`:
+
+| File                     | Purpose                                                      |
+| ------------------------ | ------------------------------------------------------------ |
+| `tsconfig.json`          | Fixed compiler options and `@hatch/*` paths; whole source    |
+| `tsconfig.manifest.json` | Checks only `manifest.ts`                                    |
+| `tsconfig.schema.json`   | Apps only; checks only `data/schema.ts`                      |
+| `types/deno.d.ts`        | `Deno` namespace declarations, from the locked `@types/deno` |
+| `types/deno.LICENSE`     | License of those declarations                                |
+
+`paths` targets have no file extension, so `tsc` selects each entrypoint's
+declaration file and esbuild selects its JavaScript file. The platform, the
+Runner and the CLI must check a source against the same configuration; change
+it only in `sdkToolchainFiles`.
 
 ## Legacy Data imports
 

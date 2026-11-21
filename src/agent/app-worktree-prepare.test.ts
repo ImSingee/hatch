@@ -22,12 +22,26 @@ const [{ materializeAppHatchSdk }, { prepareAppWorktree }, shellEnvModule] =
   ]);
 const { agentShellEnv, PLATFORM_NODE_BIN_DIR } = shellEnvModule;
 
-async function defaultAppRoot(): Promise<string> {
+/**
+ * A default App source. `deno` overlays the frozen Deno-toolchain dependency
+ * files, so the source is what the template scaffolded before it moved to pnpm.
+ */
+async function defaultAppRoot(
+  toolchain: 'deno' | 'node' = 'deno',
+): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-prepare-app-'));
   tempDirs.push(root);
   await fs.cp(new URL('../../templates/default-app/', import.meta.url), root, {
     recursive: true,
   });
+  if (toolchain === 'deno') {
+    await fs.rm(path.join(root, 'pnpm-lock.yaml'));
+    await fs.cp(
+      new URL('../test-fixtures/deno-toolchain/app/', import.meta.url),
+      root,
+      { recursive: true },
+    );
+  }
   const manifestPath = path.join(root, 'manifest.ts');
   const packagePath = path.join(root, 'package.json');
   await Promise.all([
@@ -302,6 +316,78 @@ describe('prepareAppWorktree', () => {
       { cwd: root, env: { ...process.env, ...agentShellEnv() } },
     );
   }, 120_000);
+
+  it('prepares a pnpm-toolchain scaffold with trusted tools and without Deno', async () => {
+    const root = await defaultAppRoot('node');
+    // A `deno` first on PATH records any use; this toolchain needs none.
+    const denoMarker = path.join(os.tmpdir(), `hatch-deno-${randomUUID()}`);
+    tempDirs.push(denoMarker);
+    const bin = await fakeTrustedDeno(
+      `require('node:fs').writeFileSync(${JSON.stringify(denoMarker)}, 'x');\nprocess.exit(1);`,
+    );
+    // App-local executables and the workspace file pnpm leaves in a worktree
+    // must not take part in preparation.
+    const appBin = path.join(root, 'node_modules', '.bin');
+    const toolMarker = path.join(root, 'hijacked-tool');
+    await fs.mkdir(appBin, { recursive: true });
+    for (const tool of ['pnpm', 'tsc', 'node']) {
+      await fs.writeFile(
+        path.join(appBin, tool),
+        `#!/bin/sh\nprintf hijacked > ${JSON.stringify(toolMarker)}\n`,
+        { mode: 0o755 },
+      );
+    }
+    await fs.writeFile(
+      path.join(root, 'pnpm-workspace.yaml'),
+      'modulesDir: hijacked_modules\n',
+    );
+    const authoredFiles = [
+      'manifest.ts',
+      'package.json',
+      'pnpm-lock.yaml',
+      'pnpm-workspace.yaml',
+    ];
+    const before = await Promise.all(
+      authoredFiles.map((file) => fs.readFile(path.join(root, file), 'utf8')),
+    );
+
+    await withPrepPath([appBin, bin].join(path.delimiter), () =>
+      prepareAppWorktree(root),
+    );
+
+    await expect(fs.access(denoMarker)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(fs.access(toolMarker)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(
+      fs.access(path.join(root, 'hijacked_modules')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      fs.access(path.join(root, 'node_modules', 'react')),
+    ).resolves.toBeUndefined();
+    await expect(
+      fs.access(path.join(root, 'gen', 'service_pb.ts')),
+    ).resolves.toBeUndefined();
+    await expect(
+      Promise.all(
+        authoredFiles.map((file) => fs.readFile(path.join(root, file), 'utf8')),
+      ),
+    ).resolves.toEqual(before);
+
+    // The prepared worktree type-checks as a whole with the platform compiler
+    // and the generated configuration, as the Agent would check it.
+    await run(
+      process.execPath,
+      [
+        path.join(PLATFORM_NODE_BIN_DIR, '..', 'typescript', 'bin', 'tsc'),
+        '-p',
+        '.hatch/tsconfig.json',
+      ],
+      { cwd: root },
+    );
+  }, 300_000);
 
   it.each(['node_modules', 'gen', '.hatch'])(
     'rejects a symlinked generated %s root before it can write outside the App',

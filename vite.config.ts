@@ -60,6 +60,23 @@ const config = defineConfig(({ mode, isPreview }) => ({
         return { server: { port, strictPort: true } };
       },
     },
+    {
+      // Nitro's dev middleware treats any request whose `sec-fetch-dest` is
+      // not a document as a static asset unless a dedicated Nitro route
+      // matches, and every TanStack route sits behind one catch-all. An
+      // `<img>` pointing at an API route (App icons) would therefore 404 in
+      // dev only. API paths are never static assets, so drop the hint.
+      name: 'hatch-api-is-not-an-asset',
+      apply: 'serve',
+      enforce: 'pre',
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          if (req.url?.startsWith('/api/'))
+            delete req.headers['sec-fetch-dest'];
+          next();
+        });
+      },
+    },
     devtools(),
     tanstackStart({
       spa: {
@@ -72,7 +89,9 @@ const config = defineConfig(({ mode, isPreview }) => ({
       // CommonJS module. Bundling it into Nitro's ESM output removes the
       // __filename/__dirname globals it relies on, so keep this one runtime
       // dependency external. The production image already ships node_modules.
-      rollupConfig: { external: ['esbuild'] },
+      // sharp loads a prebuilt native addon the same way and stays external
+      // for the same reason.
+      rollupConfig: { external: ['esbuild', 'sharp'] },
     }),
     viteReact(),
   ],

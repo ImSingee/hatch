@@ -1,11 +1,13 @@
 # Hatch CLI
 
 Authentication, App/Workflow source lifecycles and App data operations, over the
-public Connect RPC contract at `/api/rpc`. Requires Node >=22.19, Git and pnpm.
-Deno is
-needed to check/run authored App/Workflow code locally. No platform repository
-checkout, current-working-directory dependency, or runtime npm dependencies
-are needed by the CLI executable.
+public Connect RPC contract at `/api/rpc`. Requires Node >=26, Git and pnpm.
+A source that builds with the pnpm toolchain (`pnpm-lock.yaml`) needs pnpm of
+the same major version as the platform's, currently 12. Deno is needed to
+prepare a Deno-toolchain source (`deno.json` + `deno.lock`) and to run or test
+authored App/Workflow code locally. No platform repository checkout,
+current-working-directory dependency, or runtime npm dependencies are needed by
+the CLI executable.
 
 ## Build and install
 
@@ -219,25 +221,70 @@ when the requested host is the logged-in platform. `store` and `erase` do
 nothing. It exists for Git to call.
 
 SDK preparation uses authenticated `hatch.platform.v1.SdkService/GetSdk`: compiled
-`@hatch/app`, legacy `@hatch/data`, or `@hatch/workflow` payloads and import maps
-from the **running platform build**. Install into generated `.hatch/` atomically;
-never commit it. Apps validate the shared dependency policy and run
-`deno install --no-config --package-json --node-modules-dir=auto --lock=deno.lock --frozen`,
-then validate the source manifest with permissions denied. App lifecycle-script
-dependencies remain unsupported; authored lockfiles are never rewritten.
-Workflow SDK preparation retains `pnpm install --ignore-scripts --lockfile=false`.
+`@hatch/app`, legacy `@hatch/data`, or `@hatch/workflow` payloads, import maps,
+the platform-generated TypeScript configuration and the versions of the tools
+the platform builds with, all from the **running platform build**. Install into
+generated `.hatch/` atomically; never commit it.
+
+The committed lockfile selects the build toolchain, exactly as it does on the
+platform: `pnpm-lock.yaml` with no `deno.json`/`deno.lock` selects pnpm,
+`deno.json` + `deno.lock` with no `pnpm-lock.yaml` selects Deno. A source with
+files of both families, or an App with neither, fails preparation with a
+message naming the files to remove.
+Authored lockfiles are never rewritten, and dependency lifecycle scripts are
+never run for either toolchain.
+
+- **pnpm toolchain (Apps and Workflows).** Validate `package.json` and
+  `pnpm-lock.yaml` with the platform's dependency policy, then run the two pnpm
+  steps the platform runs at deploy: `pnpm fetch`, then an offline frozen
+  install. The registry is fixed to `https://registry.npmjs.org/`; project,
+  user and global pnpm/npm configuration, install hooks and
+  `pnpm-workspace.yaml` are ignored. Apps then fetch the platform's pinned
+  `typescript` and `esbuild` with `pnpm dlx`, check the import graph and types
+  of `manifest.ts`, bundle it, and evaluate the bundle with this machine's Node
+  under `--permission` with no grants: no file, network, subprocess or worker
+  access. An older Node that cannot deny network fails preparation. Node's
+  permission model does not cover signals, so an evaluated manifest can still
+  signal other processes of the same OS user; prepare source you do not trust
+  under a separate user or in a container. Adopt evaluates a `manifest.ts`
+  of either kind the same way, installing first; a `manifest.json` is parsed
+  without installing anything. A pnpm of another major version fails
+  preparation with a message naming the required one.
+- **Deno toolchain.** Apps validate the shared dependency policy and run
+  `deno install --no-config --package-json --node-modules-dir=auto --lock=deno.lock --frozen`,
+  then validate the source manifest with permissions denied. Workflow SDK
+  preparation retains `pnpm install --ignore-scripts --lockfile=false`.
+
+A CLI that predates the pnpm toolchain fails App preparation on a
+`pnpm-lock.yaml` source with a missing-`deno.json` message; upgrade the CLI. A
+platform that predates it delivers no toolchain versions, and preparation
+reports that the platform does not provide the pnpm build toolchain. Both
+surface as `app_preparation_failed` or `workflow_preparation_failed` with the
+stage in the message.
+
+A failure that says nothing about the source keeps its own code and exit 7,
+during preparation and during adopt alike: `tool_unavailable` when a local tool
+(`pnpm`, `deno`, `git`) cannot be run, and `local_command_timeout` when a local
+command is stopped at its 300s limit. Fix the environment and retry; the source
+was not judged. A Git transfer that runs out of time stays `git_remote_failed`.
+
 App Connect codegen uses
 platform-pinned Buf/protoc-gen-es through pnpm dlx and the platform-owned
-`.hatch/buf.gen.yaml`, not an authored plugin configuration. Generated `gen/`
-and dependencies are Git-excluded. Commands receive a limited child environment,
+`.hatch/buf.gen.yaml`, not an authored plugin configuration. Generated `gen/`,
+dependencies and a pnpm-written `pnpm-workspace.yaml` are Git-excluded. Commands receive a limited child environment,
 including no CLI, fleet, database or provider secrets. This is not a same-UID
 sandbox: local dependency/source tooling still runs as the invoking user.
 
 ```sh
 cd notes-copy
-# Check/run with the materialized import map, outside the platform repository.
+# pnpm toolchain: type-check with the platform-generated configuration, using
+# the TypeScript major the platform runs. Outside the platform repository.
+pnpm dlx --package typescript@7 tsc -p .hatch/tsconfig.json
+# Run tests on the Deno runtime without writing a deno.lock.
+deno test --no-lock --node-modules-dir=manual --import-map=.hatch/import-map.json
+# Deno toolchain: check with the materialized import map.
 deno check --import-map .hatch/import-map.json manifest.ts app/main.tsx
-# Workflow:
+# Deno-toolchain Workflow:
 deno check --import-map .hatch/import-map.json manifest.ts workflow.ts
 ```
 
@@ -394,6 +441,46 @@ a session ID. Workflows have no association feature.
 See [the 15-tool comparison](../../../docs/cli-tool-parity.md). Platform and CLI
 contracts/SDKs are built and released together; strict DTO validation does not
 promise compatibility with older CLI binaries.
+
+## App icons and image generation
+
+```sh
+hatch image-model get --json
+hatch image-model set --provider <provider-id> --model gpt-image-1-mini
+hatch image generate --prompt-file prompt.txt --count 3 --glyph-tile '#3E63DD' --json
+hatch app icon set my-app --candidate <candidate-id>
+hatch app icon set my-app --file icon.png
+hatch app icon get my-app --json
+hatch app icon clear my-app
+hatch image-model clear
+```
+
+`image-model get` lists the providers that can generate images with suggested
+model ids; `set` replaces the single selection and uses that provider's stored
+API key. `image generate` costs provider credit and prints one candidate
+`id` and authenticated `path` per image; candidates expire after one day.
+`--glyph-tile` expects the model to draw a white glyph on black and returns a
+finished 512 px tile in that colour. `--output-dir` also writes `<id>.png`.
+`app icon set` takes exactly one of `--file` (PNG, JPEG or WebP, at most 4 MB,
+sides 64 to 4096 px; `-` reads stdin) and `--candidate`; the platform crops to
+a centred square, re-encodes and deletes the previous icon. `clear` succeeds
+when there is no icon.
+
+Local rejections exit 2: `invalid_arguments` (missing or contradictory flags,
+an empty or over-long `--prompt`, `--count` outside 1 to 4, malformed colour,
+model or candidate id), `invalid_input` (not an image, or a `--prompt-file`
+whose content is empty or over-long), `input_too_large`, and
+`output_unwritable` when `--output-dir` cannot be created, which is checked
+before any image is generated. Prompts are limited to 4000 Unicode code points.
+Platform errors: `CONFLICT` (6) when no usable image model is selected,
+`BAD_REQUEST` (2) carrying the image provider's reason or an image that cannot
+be decoded, `TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
+`NOT_FOUND` (5) for an unknown App, provider or expired candidate,
+`SERVICE_UNAVAILABLE` (7) when the provider is unreachable, and
+`download_failed` (7) when a generated candidate could not be saved to
+`--output-dir`. With `--json` its `error.details` is the normal result:
+`modelId` and every candidate with `id` and `path`, plus `file` for the ones
+that were saved, so no image has to be generated again.
 
 ## Notifications
 

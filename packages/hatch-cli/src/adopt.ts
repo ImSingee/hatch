@@ -111,8 +111,20 @@ export async function adopt(
   }
   let manifest;
   try {
-    manifest = await readWorkspaceManifest(root, kind, signal);
-  } catch {
+    manifest = await readWorkspaceManifest(
+      root,
+      kind,
+      signal,
+      // Only a pnpm-toolchain source needs the platform's tool versions.
+      async () => (await client.sdk.get({ kind })).tooling,
+    );
+  } catch (error) {
+    // Validation can install dependencies and ask the platform for tool
+    // versions. Only a failed local command or an invalid source says
+    // something about the manifest; a cancelled run, a missing tool, a
+    // timeout or a failed request keeps its own code and exit status.
+    if (error instanceof CliError && error.code !== 'local_command_failed')
+      throw error;
     throw new CliError(
       'manifest_mismatch',
       'Cannot validate the existing manifest. Source and origin were preserved.',

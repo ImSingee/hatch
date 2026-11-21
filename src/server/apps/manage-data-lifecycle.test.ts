@@ -70,6 +70,7 @@ vi.mock('~agent/paths', () => ({
   appRepoDir: (id: string) => `/workspace/repos/${id}`,
   appSrcDir: (id: string) => `/workspace/src/${id}`,
   appStorageDir: (id: string) => `/workspace/storage/${id}`,
+  appIconDir: (id: string) => `/workspace/app-icons/${id}`,
   appVersionsDir: (id: string) => `/workspace/versions/${id}`,
   deploymentArtifactDir: (id: string, deploymentId: string) =>
     `/workspace/artifacts/${id}/${deploymentId}`,

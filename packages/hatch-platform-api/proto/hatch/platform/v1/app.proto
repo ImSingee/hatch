@@ -26,6 +26,9 @@ service AppService {
   // once the requests it already holds finish or the drain timeout elapses.
   rpc StopAppBackend(StopAppBackendRequest) returns (StopAppBackendResponse);
   rpc RestartAppBackend(RestartAppBackendRequest) returns (RestartAppBackendResponse);
+  rpc GetAppIcon(GetAppIconRequest) returns (GetAppIconResponse);
+  rpc SetAppIcon(SetAppIconRequest) returns (SetAppIconResponse);
+  rpc ClearAppIcon(ClearAppIconRequest) returns (ClearAppIconResponse);
 }
 
 message ListAppsRequest {}
@@ -227,4 +230,56 @@ message RestartAppBackendRequest {
 }
 message RestartAppBackendResponse {
   AppBackend backend = 1;
+}
+
+// The stored icon of an App; every field is unset while it shows a monogram.
+message AppIcon {
+  // Changes whenever the icon is replaced.
+  optional string key = 1;
+  // Authenticated platform path of the PNG; append `&size=<n>` for one of sizes.
+  optional string path = 2;
+  repeated uint32 sizes = 3;
+}
+
+message GetAppIconRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+
+message GetAppIconResponse {
+  AppIcon icon = 1;
+}
+
+message SetAppIconRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  oneof source {
+    option (buf.validate.oneof).required = true;
+    // PNG, JPEG or WebP bytes; validated and re-encoded by the platform.
+    bytes image = 2 [(buf.validate.field).bytes = {
+      min_len: 1
+      max_len: 4194304
+    }];
+    // An unexpired candidate from ImageService/GenerateImages.
+    string candidate_id = 3 [(buf.validate.field).string.pattern = "^[a-f0-9]{32}$"];
+  }
+}
+
+message SetAppIconResponse {
+  AppIcon icon = 1;
+}
+
+message ClearAppIconRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+
+message ClearAppIconResponse {
+  AppIcon icon = 1;
 }

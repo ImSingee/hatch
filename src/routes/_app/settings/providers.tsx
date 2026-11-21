@@ -7,6 +7,7 @@ import {
   ProviderFormModal,
   ProvidersPanel,
 } from '~components/settings/providers-panel';
+import { ImageModelPanel } from '~components/settings/image-model-panel';
 import { providersQueryOptions } from '~queries/agent';
 
 export const Route = createFileRoute('/_app/settings/providers')({
@@ -40,6 +41,7 @@ function ProvidersRoute() {
         }
       >
         <ProvidersPanel onAddProvider={() => setCreateOpen(true)} />
+        <ImageModelPanel />
       </Suspense>
 
       {createOpen && (

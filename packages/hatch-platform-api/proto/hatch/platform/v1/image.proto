@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// Image generation with the instance's single selected image model.
+service ImageService {
+  rpc GetImageModel(GetImageModelRequest) returns (GetImageModelResponse);
+  rpc SetImageModel(SetImageModelRequest) returns (SetImageModelResponse);
+  rpc ClearImageModel(ClearImageModelRequest) returns (ClearImageModelResponse);
+  rpc GenerateImages(GenerateImagesRequest) returns (GenerateImagesResponse);
+}
+
+message SelectedImageModel {
+  string provider_id = 1;
+  string provider_name = 2;
+  string model_id = 3;
+  // False while the provider is disabled or has no API key.
+  bool usable = 4;
+}
+
+// A configured provider whose wire API can generate images. Never a key.
+message ImageProvider {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+  // Suggestions only: any model id the provider accepts may be selected.
+  repeated string suggested_models = 4;
+}
+
+message ImageModelState {
+  // Unset when no model is chosen or its provider no longer exists.
+  optional SelectedImageModel selected = 1;
+  repeated ImageProvider providers = 2;
+}
+
+message GetImageModelRequest {}
+
+message GetImageModelResponse {
+  ImageModelState state = 1;
+}
+
+message SetImageModelRequest {
+  string provider_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string model_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+  }];
+}
+
+message SetImageModelResponse {
+  ImageModelState state = 1;
+}
+
+message ClearImageModelRequest {}
+
+message ClearImageModelResponse {
+  ImageModelState state = 1;
+}
+
+message GenerateImagesRequest {
+  string prompt = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 4000
+  }];
+  // Defaults to 1.
+  optional uint32 count = 2 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 4
+  }];
+  // low (default), medium or high.
+  optional string quality = 3 [(buf.validate.field).string = {
+    in: [
+      "low",
+      "medium",
+      "high"
+    ]
+  }];
+  // When set, each result must be a white glyph on black; the platform lays
+  // it on a solid square tile of this colour with fixed margins.
+  optional string glyph_tile = 4 [(buf.validate.field).string.pattern = "^#[0-9a-fA-F]{6}$"];
+}
+
+// A generated image kept for one day so the user can choose one.
+message ImageCandidate {
+  string id = 1;
+  // Authenticated platform path of the PNG.
+  string path = 2;
+}
+
+message GenerateImagesResponse {
+  string model_id = 1;
+  repeated ImageCandidate candidates = 2;
+}

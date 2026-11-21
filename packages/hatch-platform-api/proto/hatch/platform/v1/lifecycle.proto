@@ -15,6 +15,9 @@ message Resource {
   string updated_at = 7;
   // Complete allowlisted JSON inspection/summary, including nullable values.
   google.protobuf.Value view = 8;
+  // Apps only: authenticated platform path of the icon PNG, unset while the
+  // App shows its monogram. Append `&size=64`, `128` or `256`.
+  optional string icon_path = 9;
 }
 
 message Source {

@@ -371,10 +371,11 @@ export function createWorkflowTools(options: {
     name: 'deploy_workflow',
     label: 'Deploy workflow',
     description:
-      'Type-check the workflow source and its imports with Deno, bundle it ' +
-      'into a single Deno program, capture its input JSON ' +
-      'Schema, and deploy it so it can be triggered. Requires package.json, ' +
-      'deno.json, and a committed deno.lock; load the building-workflows Skill ' +
+      'Type-check the workflow source and its imports, bundle it into a ' +
+      'single Deno program, capture its input JSON Schema, and deploy it so ' +
+      'it can be triggered. Requires package.json and a committed lockfile: ' +
+      'pnpm-lock.yaml, or deno.json plus deno.lock for an existing ' +
+      'Deno-toolchain source, never both. Load the building-workflows Skill ' +
       'to repair source validation errors. The source manifest must explicitly ' +
       'declare a supported compatibilityVersion. Reports the deployment and ' +
       'compatibility versions plus the webhook URL (if enabled).',

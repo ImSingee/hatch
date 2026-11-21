@@ -92,7 +92,11 @@ function WorkflowsPage() {
                 gap="sm"
               >
                 <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-                  <AppGlyph name={workflow.name} seed={workflow.id} />
+                  <AppGlyph
+                    icon={false}
+                    name={workflow.name}
+                    seed={workflow.id}
+                  />
                   <Text
                     fw={600}
                     truncate

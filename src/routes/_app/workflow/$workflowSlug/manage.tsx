@@ -125,7 +125,12 @@ function WorkflowManagePage() {
     <Page
       title={
         <Group gap="sm" align="center" wrap="nowrap">
-          <AppGlyph name={workflow.name} seed={workflow.id} size="md" />
+          <AppGlyph
+            icon={false}
+            name={workflow.name}
+            seed={workflow.id}
+            size="md"
+          />
           {workflow.name}
           <StatusBadge status={workflow.status} />
         </Group>

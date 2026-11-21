@@ -694,8 +694,10 @@ describe.runIf(Boolean(databaseUrl))(
           'An injected credential reached logs, model context or transcripts.',
         );
       }
+      // A CLI profile is a file named config.json; the SDK's generated
+      // .hatch/tsconfig.json is not one.
       const configs = (await allFiles(path.join(root, 'runner'))).filter(
-        (file) => /(?:config\.json|\.env)$/.test(file),
+        (file) => /^(?:config\.json|.*\.env)$/.test(path.basename(file)),
       );
       expect(configs).toEqual([]);
       for (const file of await allFiles(path.join(root, 'runner'))) {
