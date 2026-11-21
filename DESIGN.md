@@ -150,7 +150,7 @@ use `text-wrap: pretty`.
 | `tile`   | 18  | Desk home tile (60) and launcher tile (56)      |
 | `xl`     | 20  | Cards, the composer                             |
 | `window` | 24  | Windows, modals, the sign-in card               |
-| `panel`  | 26  | Desk widget panels, the sign-in hero tile       |
+| `widget` | 26  | Desk widget panels, the sign-in hero tile       |
 | `dock`   | 28  | The dock and the tab bar                        |
 
 Pills (badges, status chips) are fully rounded. Apart from pills, widget
@@ -188,7 +188,7 @@ on the ground, on a sheet and on an accent fill.
 
 Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 
-`--surface-panel`, `--surface-dock`, `--surface-widget`, `--radius-panel`, `--ground-shape-accent`,
+`--surface-panel`, `--surface-dock`, `--surface-widget`, `--radius-widget`, `--ground-shape-accent`,
 `--ground-shape-warm`, `--ground-shape-fresh`, `--radius-dock`,
 `--size-dock-tile`, `--size-desk-tile`, `--size-widget-icon`, `--radius-tile`,
 `--surface-window`, `--surface-bubble`, `--border-composer`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
@@ -323,7 +323,7 @@ A widget on the desk, and any panel of the desk's own (the today column, an
 empty desk).
 
 - `surfaces.widget` fill with a 12 px backdrop blur, 1 px white border,
-  radius 26 (`radius.panel`), `card` shadow; padding 16 18 18.
+  radius 26 (`radius.widget`), `card` shadow; padding 16 18 18.
 - Header: a 26 tile (`sizes.widgetIcon`), the name 15 / 800 with ellipsis, and on the right the
   App it comes from as a 12 / 700 muted link ("Plant Care ›"). A refresh
   button appears on hover when the widget supports it.

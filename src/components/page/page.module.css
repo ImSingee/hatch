@@ -507,6 +507,26 @@ a.item:focus-visible {
   line-height: 20px;
 }
 
+.empty[data-compact] {
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.empty[data-compact] .emptyTile {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.empty[data-compact] .emptyText {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.empty[data-compact] .emptyActions {
+  margin-top: 2px;
+}
+
 .emptyActions {
   display: flex;
   flex-wrap: wrap;

@@ -125,7 +125,7 @@ colour, radius, font, weight, shadow or motion value is written. Its shape
     "tile": 18,
     "xl": 20,
     "window": 24,
-    "panel": 26,
+    "widget": 26,
     "dock": 28
   },
   "sizes": { "widgetIcon": 26, "dockTile": 40, "deskTile": 60 },

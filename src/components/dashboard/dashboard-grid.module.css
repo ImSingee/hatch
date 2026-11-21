@@ -15,7 +15,7 @@
 .grid :global(.react-grid-placeholder) {
   background-color: var(--mantine-primary-color-light);
   border: 2px dashed var(--mantine-primary-color-filled);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-widget);
   opacity: 0.6;
 }
 

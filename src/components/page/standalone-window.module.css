@@ -65,7 +65,7 @@
   place-items: center;
   width: 84px;
   height: 84px;
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-widget);
   background: var(--surface-muted);
   box-shadow: var(--shadow-card);
 }

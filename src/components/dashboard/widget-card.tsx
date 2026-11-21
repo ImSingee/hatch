@@ -421,8 +421,9 @@ export function WidgetCard({
           <div className={classes.overlay} role="alert">
             <EmptyState
               variant="dashed"
+              compact
               tone="danger"
-              icon={<IconAlertTriangle size={20} stroke={1.8} />}
+              icon={<IconAlertTriangle size={17} stroke={1.8} />}
               title="This widget didn’t load"
               actions={
                 editing ? null : (

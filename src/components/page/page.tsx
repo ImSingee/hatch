@@ -282,12 +282,14 @@ export function TableCard({
 
 /**
  * Nothing here yet. `page` fills the body of a window; `dashed` sits in
- * place of a group's content.
+ * place of a group's content. `compact` tightens a dashed state for a small
+ * fixed box, such as a widget that failed to load.
  */
 export function EmptyState({
   icon,
   tone = 'neutral',
   variant = 'page',
+  compact,
   title,
   children,
   actions,
@@ -295,12 +297,17 @@ export function EmptyState({
   icon?: ReactNode;
   tone?: 'neutral' | 'accent' | 'danger';
   variant?: 'page' | 'dashed';
+  compact?: boolean;
   title: ReactNode;
   children?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
-    <div className={classes.empty} data-variant={variant}>
+    <div
+      className={classes.empty}
+      data-variant={variant}
+      data-compact={compact || undefined}
+    >
       {icon ? (
         <span className={classes.emptyTile} data-tone={tone} aria-hidden>
           {icon}

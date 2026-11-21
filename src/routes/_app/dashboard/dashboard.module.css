@@ -28,7 +28,7 @@
   min-height: 240px;
   padding: 20px 22px;
   border: 1px solid var(--mantine-color-white);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-widget);
   background: var(--surface-widget);
   box-shadow: var(--shadow-card);
 }
@@ -58,7 +58,7 @@
   margin: 8vh auto 0;
   padding: 40px 28px;
   border: 1px solid var(--mantine-color-white);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-widget);
   background: var(--surface-widget);
   box-shadow: var(--shadow-card);
   text-align: center;

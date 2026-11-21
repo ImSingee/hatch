@@ -40,7 +40,7 @@ type GlyphProps = {
 
 /** Stored icon size that covers a tile on a 2x display. */
 function iconSizeFor(size: NonNullable<GlyphProps['size']>): 64 | 128 | 256 {
-  if (size === 'sm') return 64;
+  if (size === 'sm' || size === 'widget') return 64;
   return size === 'xl' || size === 'desk' || size === 'hero' ? 256 : 128;
 }
 

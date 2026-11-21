@@ -43,7 +43,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--ground-shape-fresh': tokens.ground.fresh,
     '--radius-window': `${tokens.radius.window}px`,
     '--radius-dock': `${tokens.radius.dock}px`,
-    '--radius-panel': `${tokens.radius.panel}px`,
+    '--radius-widget': `${tokens.radius.widget}px`,
     '--radius-tile': `${tokens.radius.tile}px`,
     '--size-dock-tile': `${tokens.sizes.dockTile}px`,
     '--size-desk-tile': `${tokens.sizes.deskTile}px`,
