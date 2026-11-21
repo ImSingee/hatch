@@ -11,6 +11,13 @@ export function isDesktopHost(userAgent = globalThis.navigator?.userAgent) {
 }
 
 /**
+ * Marks the document `data-host="desktop"` before first paint, so pages
+ * outside the signed-in shell (sign-in, 404, errors) leave room for the
+ * window's traffic lights from their first frame.
+ */
+export const DESKTOP_HOST_BOOT_SCRIPT = `try{if(${DESKTOP_HOST}.test(navigator.userAgent))document.documentElement.dataset.host='desktop'}catch(e){}`;
+
+/**
  * The macOS app's menu and keyboard shortcuts reach the page as this event.
  * The host dispatches it on `window`; the page decides what each command
  * means, so the host never needs to know a route's implementation.

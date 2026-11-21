@@ -22,7 +22,10 @@ import {
 import { authClient } from '~auth/client';
 import { useSignOut } from '~auth/use-sign-out';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { InsideDeskShellProvider } from '~components/desk/desk-context';
+import {
+  InsideDeskShellProvider,
+  WindowFrameProvider,
+} from '~components/desk/desk-context';
 import type { DockOpenItem } from '~components/desk/dock-item';
 import { isAppPinOpen } from '~components/desk/dock';
 import { DESK_HOME } from '~components/desk/paths';
@@ -84,7 +87,9 @@ export function DesktopShell({
           <div className={classes.collapsedStrip} data-tauri-drag-region />
         ) : null}
         <div className={classes.stage}>
-          <InsideDeskShellProvider value>{children}</InsideDeskShellProvider>
+          <InsideDeskShellProvider value>
+            <WindowFrameProvider value="host">{children}</WindowFrameProvider>
+          </InsideDeskShellProvider>
         </div>
       </main>
     </div>

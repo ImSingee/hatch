@@ -18,6 +18,7 @@ import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import appCss from '~styles.css?url';
 import { themeQueryOptions } from '~queries/theme';
+import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
   ACCENT_BOOT_SCRIPT,
   ACCENT_CSS,
@@ -111,6 +112,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <style dangerouslySetInnerHTML={{ __html: ACCENT_CSS }} />
         <script dangerouslySetInnerHTML={{ __html: ACCENT_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: NATIVE_HOST_BOOT_SCRIPT }} />
+        <script
+          dangerouslySetInnerHTML={{ __html: DESKTOP_HOST_BOOT_SCRIPT }}
+        />
       </head>
       <body>
         <MantineProvider

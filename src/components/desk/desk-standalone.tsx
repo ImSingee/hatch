@@ -21,7 +21,12 @@ export function DeskStandalone({
 }) {
   return (
     <DeskGround className={classes.root}>
-      <header className={bar.bar}>
+      <header
+        className={`${bar.bar} ${classes.bar}`}
+        // In the macOS app this bar sits under the traffic lights and moves
+        // the window (Tauri's drag script); inert in a browser.
+        data-tauri-drag-region="deep"
+      >
         <span className={`${bar.item} ${classes.brand}`}>
           <Brand size="xs" />
         </span>

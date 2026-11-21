@@ -243,31 +243,3 @@
   flex-direction: column;
   overflow: auto;
 }
-
-/*
- * Pages render inside the desk's window frame. Here the window is the macOS
- * window itself, so the frame fills the page and drops its radius, shadow
- * and minimise/close buttons; its title bar becomes the page's toolbar.
- * TEMPORARY: this reaches into `DeskWindow`'s markup. It goes away once
- * `DeskWindow` takes its chrome from the shell (see desktop/README.md,
- * "Web hook").
- */
-.stage > section[aria-labelledby] {
-  flex: 1;
-  width: 100%;
-  max-height: none;
-  height: 100%;
-  border-radius: 0;
-  box-shadow: none;
-  animation: none;
-}
-
-.stage > section[aria-labelledby] > header {
-  min-height: var(--desktop-title-height);
-  background: var(--surface-raised);
-}
-
-.stage > section[aria-labelledby] > header > a[aria-label^='Minimise window'],
-.stage > section[aria-labelledby] > header > a[aria-label^='Close window'] {
-  display: none;
-}
