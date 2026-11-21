@@ -19,8 +19,10 @@ export const DESKTOP_HOST_BOOT_SCRIPT = `try{if(${DESKTOP_HOST}.test(navigator.u
 
 /**
  * The macOS app's menu and keyboard shortcuts reach the page as this event.
- * The host dispatches it on `window`; the page decides what each command
- * means, so the host never needs to know a route's implementation.
+ * The host dispatches it on `window` as a cancelable event; the page decides
+ * what each command means and cancels the event when it handled it. When
+ * nothing does (a page outside the signed-in shell), the host loads `navigate`
+ * destinations itself.
  */
 export const DESKTOP_COMMAND_EVENT = 'hatch:desktop-command';
 

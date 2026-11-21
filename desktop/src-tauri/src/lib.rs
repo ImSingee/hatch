@@ -634,8 +634,15 @@ fn page_command(app: &AppHandle, command: serde_json::Value) {
         return;
     }
     if let Some(window) = main_window(app) {
+        // The sidebar shell cancels the event when it handles it. Pages
+        // outside the shell (sign-in, not found) have no handler, so a
+        // destination then loads as a plain navigation.
+        let fallback = match command.get("type").and_then(|value| value.as_str()) {
+            Some("navigate") => format!("location.assign({})", command["to"]),
+            _ => String::new(),
+        };
         let _ = window.eval(format!(
-            "window.dispatchEvent(new CustomEvent('hatch:desktop-command', {{ detail: {command} }}))"
+            "if (window.dispatchEvent(new CustomEvent('hatch:desktop-command', {{ cancelable: true, detail: {command} }}))) {{ {fallback} }}"
         ));
     }
 }

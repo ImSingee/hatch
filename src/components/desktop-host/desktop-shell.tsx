@@ -61,6 +61,7 @@ export function DesktopShell({
   const onCommand = useEffectEvent((event: Event) => {
     const command = parseDesktopCommand((event as CustomEvent).detail);
     if (!command) return;
+    event.preventDefault();
     if (command.type === 'navigate') void navigate({ to: command.to });
     if (command.type === 'toggle-sidebar') setCollapsed((value) => !value);
     if (command.type === 'focus-search') {
