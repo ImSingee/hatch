@@ -5,14 +5,7 @@
  * and the re-encoded PNGs under the App's icon directory. Input bytes are
  * validated, decoded and re-encoded; they are never stored or served as-is.
  */
-import {
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  rmdir,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
@@ -142,7 +135,11 @@ async function swapIconKey(
   });
 }
 
-/** Remove the files of one icon key; other keys in the directory are kept. */
+/**
+ * Remove the files of one icon key. Other keys and the directory itself are
+ * kept: a concurrent writer may already have created the directory for its
+ * own files. The directory goes away with the App.
+ */
 async function removeIconKeyFiles(id: string, key: string | null) {
   if (!key || !KEY_RE.test(key)) return;
   const dir = appIconDir(id);
@@ -151,9 +148,6 @@ async function removeIconKeyFiles(id: string, key: string | null) {
       rm(path.join(dir, `${key}-${size}.png`), { force: true }),
     ),
   );
-  // Drop the directory once nothing is left in it; a concurrent write that
-  // repopulated it makes this fail, which is the wanted outcome.
-  await rmdir(dir).catch(() => undefined);
 }
 
 export async function setAppIcon(

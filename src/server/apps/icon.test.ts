@@ -124,7 +124,7 @@ describe('App icon storage', () => {
       sizes: [],
     });
     expect(await readAppIcon(APP_ID, 64)).toBeNull();
-    await expect(readdir(appIconDir(APP_ID))).rejects.toThrow('ENOENT');
+    expect(await readdir(appIconDir(APP_ID))).toEqual([]);
   });
 
   it('removes every icon file when an App is deleted', async () => {
