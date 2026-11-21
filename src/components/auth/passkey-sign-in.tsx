@@ -12,9 +12,12 @@ import {
 export function PasskeySignIn({
   appOrigin,
   onSuccess,
+  primary = false,
 }: {
   appOrigin: string;
   onSuccess: () => Promise<void>;
+  /** The passkey is the view's main action, as on the sign-in page. */
+  primary?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -108,8 +111,8 @@ export function PasskeySignIn({
     <Stack gap="md">
       <Button
         type="button"
-        variant="default"
-        size="md"
+        variant={primary ? 'filled' : 'default'}
+        size="lg"
         fullWidth
         loading={loading}
         leftSection={<IconKey size={18} stroke={1.7} />}

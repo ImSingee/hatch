@@ -9,6 +9,7 @@ import { IconBell, IconSettings } from '@tabler/icons-react';
 import { DeskWindow } from '~components/desk/window';
 import { NotificationHistory } from '~components/notifications/history-list';
 import classes from '~components/notifications/notifications-window.module.css';
+import { InsideWindowProvider } from '~components/page/window-context';
 import { useLiveNotifications } from '~components/notifications/use-live-notifications';
 import {
   notificationHistoryQueryOptions,
@@ -69,7 +70,9 @@ function NotificationsLayout() {
           <NotificationHistory selected={notificationId} />
         </aside>
         <section className={classes.detail}>
-          <Outlet />
+          <InsideWindowProvider value>
+            <Outlet />
+          </InsideWindowProvider>
         </section>
       </div>
     </DeskWindow>

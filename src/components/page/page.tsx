@@ -9,6 +9,7 @@ import {
   useId,
 } from 'react';
 import classes from './page.module.css';
+import { InsideWindowProvider } from './window-context';
 
 /**
  * The scrolling body of a window. `ground` is the pale sheet that grouped
@@ -32,7 +33,7 @@ export function WindowBody({
           size ? ({ '--body-max-width': `${size}px` } as CSSProperties) : {}
         }
       >
-        {children}
+        <InsideWindowProvider value>{children}</InsideWindowProvider>
       </div>
     </div>
   );
