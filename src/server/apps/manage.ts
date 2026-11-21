@@ -48,7 +48,7 @@ import {
   waitForDataMigrationBarrier,
 } from './data-table/migrate';
 import { closeDataRealtime } from './data-table/realtime';
-import { ensureAppRunning, setKeepAlive, stopApp } from './runtime';
+import { ensureAppRunning, killApp, setKeepAlive, stopApp } from './runtime';
 import { reloadScheduler } from './scheduler';
 import { appSlugExists } from './access';
 
@@ -200,7 +200,7 @@ async function setAppArchivedInner(
   await db.update(schema.apps).set({ status }).where(eq(schema.apps.id, id));
 
   if (archived) {
-    stopApp(id);
+    killApp(id);
     if (app.dataDbName || app.dataActivationId || app.capabilities?.dataTable) {
       await closeDataRealtime(id);
       // A Data request may already hold the shared migration lock after checking
@@ -446,10 +446,11 @@ async function rollbackAppInner(
     });
   }
 
-  // Force the backend to restart from the restored build, then re-apply the
-  // keep-alive contract for the *restored* manifest: rolling back to/from a
-  // long-running backend must flip warm-start accordingly (stopApp cleared it).
-  stopApp(id);
+  // Retire instances of the replaced build (they finish the requests they
+  // hold), then re-apply the keep-alive contract for the *restored* manifest:
+  // rolling back to/from a long-running backend must flip warm-start
+  // accordingly (stopApp cleared it).
+  stopApp(id, { keepDeploymentId: deployment.id });
   if (!compatibility.isSupported) {
     await closeDataRealtime(id);
   }
@@ -545,7 +546,7 @@ async function deleteAppInner(id: string): Promise<{ ok: true }> {
     .update(schema.apps)
     .set({ status: 'archived' })
     .where(eq(schema.apps.id, id));
-  stopApp(id);
+  killApp(id);
   if (hasManagedData) {
     await closeDataRealtime(id);
     if (app?.dataDbPasswordCiphertext) {

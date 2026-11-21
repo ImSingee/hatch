@@ -91,9 +91,11 @@ async function finishCommittedRelease(
   // the fence when cleanup fails so reconciliation can retry the exact path.
   await fs.rm(liveBackup, { recursive: true, force: true });
 
-  // Stop the old backend before clearing the fence, so no stale process can
-  // enter the newly migrated Data schema once access reopens.
-  stopApp(id);
+  // Retire the old backend before clearing the fence: from here no instance
+  // of a previous build receives another request. Requests it already holds
+  // run to completion; once access reopens, the Data API still rejects any
+  // of them whose build expects a different Data schema.
+  stopApp(id, { keepDeploymentId: deploymentId });
 
   // Keep the durable activation fence through COMMIT and stale-runtime
   // shutdown. If the acknowledgement or this update loses its connection, both
@@ -320,7 +322,7 @@ async function reconcilePendingActivation(id: string): Promise<string | null> {
         app.status !== 'archived' &&
         app.backendMode === 'long-running' &&
         Boolean(app.capabilities?.backend);
-      stopApp(id);
+      stopApp(id, { keepDeploymentId: currentId });
       try {
         // The pending id is the only durable key for this backup. Delete it
         // before clearing that id so a failed cleanup remains retryable.

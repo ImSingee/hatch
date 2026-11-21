@@ -19,6 +19,13 @@ service AppService {
   rpc QueryAppDataTable(QueryAppDataTableRequest) returns (QueryAppDataTableResponse);
   rpc QueryAppDb(QueryAppDbRequest) returns (QueryAppDbResponse);
   rpc AssociateAppSession(AssociateAppSessionRequest) returns (AssociateAppSessionResponse);
+  rpc ListAppBackends(ListAppBackendsRequest) returns (ListAppBackendsResponse);
+  rpc GetAppBackend(GetAppBackendRequest) returns (GetAppBackendResponse);
+  rpc StartAppBackend(StartAppBackendRequest) returns (StartAppBackendResponse);
+  // Graceful by default: no instance receives another request, and each exits
+  // once the requests it already holds finish or the drain timeout elapses.
+  rpc StopAppBackend(StopAppBackendRequest) returns (StopAppBackendResponse);
+  rpc RestartAppBackend(RestartAppBackendRequest) returns (RestartAppBackendResponse);
 }
 
 message ListAppsRequest {}
@@ -146,4 +153,78 @@ message AssociateAppSessionRequest {
 message AssociateAppSessionResponse {
   string app_id = 1;
   string association = 2;
+}
+
+// Runtime facts describe the answering platform process and are not persisted.
+message AppBackendRuntime {
+  // running | starting | stopped
+  string state = 1;
+  optional uint32 pid = 2;
+  optional uint32 port = 3;
+  optional string started_at = 4;
+  optional string stopped_at = 5;
+  optional int32 last_exit_code = 6;
+  optional string last_exit_signal = 7;
+  optional string last_error = 8;
+  uint32 restart_count = 9;
+  // Whether the platform restarts this backend automatically after an exit.
+  bool keep_alive = 10;
+  // Retired instances still finishing the requests they hold after a deploy,
+  // rollback or stop. They receive no new requests.
+  uint32 draining_instances = 11;
+}
+message AppBackend {
+  string id = 1;
+  string slug = 2;
+  string name = 3;
+  // serverless | long-running
+  string mode = 4;
+  // False when the active deployment cannot run on this platform version.
+  bool runtime_supported = 5;
+  AppBackendRuntime runtime = 6;
+}
+message ListAppBackendsRequest {}
+message ListAppBackendsResponse {
+  repeated AppBackend backends = 1;
+}
+message GetAppBackendRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message GetAppBackendResponse {
+  AppBackend backend = 1;
+}
+message StartAppBackendRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message StartAppBackendResponse {
+  AppBackend backend = 1;
+}
+message StopAppBackendRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  // Kill every instance at once, draining ones and their in-flight requests
+  // included.
+  bool force = 2;
+}
+message StopAppBackendResponse {
+  AppBackend backend = 1;
+}
+message RestartAppBackendRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  // Kill the previous instance instead of letting it drain.
+  bool force = 2;
+}
+message RestartAppBackendResponse {
+  AppBackend backend = 1;
 }

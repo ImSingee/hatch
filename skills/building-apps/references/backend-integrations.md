@@ -492,6 +492,46 @@ or storage. An idle stop sends `SIGTERM` and allows about 5 seconds before
 by a new instance right away, so two instances of one App can overlap briefly;
 do not assume a single process owns a storage file.
 
+## Deploys, rollbacks, and stops do not interrupt requests
+
+A deploy, rollback, restart, or stop retires the running instance instead of
+killing it. In both modes the retired instance receives no further requests,
+finishes the ones it already holds, and then gets `SIGTERM` (about 5 seconds
+before `SIGKILL`). Requests still open after the platform drain timeout
+(5 minutes by default) are ended. New requests go to an instance of the new
+deployment right away. Archiving or deleting an App, and a forced stop, kill
+every instance at once.
+
+Design for that overlap:
+
+- While a retired instance still holds a request, the old and the new
+  deployment run side by side. Background loops, pollers, and queue consumers
+  of a long-running backend can therefore run twice for that time; make them
+  idempotent or guard them with a KV or database lease. Treat `SIGTERM` as the
+  signal to stop background work and release such a lease.
+- Old code keeps Data Table access only when the new deployment left the Data
+  schema unchanged. After a schema migration its Data Table calls fail with
+  409, so the request it was serving fails instead of writing through an
+  outdated schema. A Data Table call made while a deployment is being
+  activated waits briefly for it to finish.
+- The App database (`DATABASE_URL`), KV, and storage are shared by both
+  deployments with no such check. Keep changes to their layout compatible with
+  the previous deployment, or migrate in two deploys.
+
+Inspect and control the runtime with the CLI:
+
+```sh
+hatch app backend status my-app --json
+hatch app backend restart my-app --json
+hatch app backend stop my-app --json
+```
+
+`status` reports `state`, `keepAlive`, `lastError` (the most recent start
+failure) and `drainingInstances`, the number of retired instances still
+finishing requests. `stop --force` and `restart --force` kill instances
+immediately and fail their in-flight requests; use them only when a drain must
+not be waited for.
+
 ## Calling top-level Workflows
 
 Apps call Workflows created in the Workflow module; they do not define

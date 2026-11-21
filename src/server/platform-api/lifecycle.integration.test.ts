@@ -2195,6 +2195,137 @@ describe.runIf(Boolean(databaseUrl))(
       expect(count.data.count).toBe(2);
     }, 120000);
 
+    it('finishes a request held across a redeploy and controls the backend through the CLI', async () => {
+      const directory = path.join(root, `app-drain-${randomUUID()}`);
+      const input = `${directory}.json`;
+      await writeFile(
+        input,
+        JSON.stringify({
+          slug: `app-drain-${randomUUID()}`,
+          name: 'Zero-downtime deploy',
+          pin: false,
+        }),
+      );
+      const created = await cliInvoke(
+        ['app', 'create', '--file', input, '--directory', directory],
+        credentials[3],
+      );
+      assert.equal(created.code, 0, JSON.stringify(created));
+      const id: string = created.data.id;
+      const commit = () => {
+        git(directory, 'add', '.');
+        git(
+          directory,
+          '-c',
+          'user.name=Public API Test',
+          '-c',
+          'user.email=fixture@example.test',
+          'commit',
+          '-m',
+          randomUUID(),
+        );
+      };
+      // Increment(7) stays in flight, reading the Data Table, until another
+      // request has pushed the counter to 100.
+      const entry = path.join(directory, 'backend', 'main.ts');
+      const authored = await readFile(entry, 'utf8');
+      const marker = 'const amount = req.amount || 1;';
+      assert.ok(authored.includes(marker));
+      await writeFile(
+        entry,
+        authored.replace(
+          marker,
+          `${marker}
+      if (amount === 7) {
+        const deadline = Date.now() + 90_000;
+        while ((await readCounter(counter)) < 100 && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }`,
+        ),
+      );
+      commit();
+      const first = await cliInvoke(
+        ['app', 'deploy', '--directory', directory],
+        credentials[3],
+      );
+      assert.equal(first.code, 0, JSON.stringify(first));
+
+      const base = `${origin}/api/app/${id}/rpc/app.v1.CounterService`;
+      const headers = { cookie, 'connect-protocol-version': '1' };
+      // Backend controls run with the Run credential, as the platform Agent
+      // uses them.
+      const backend = async (...args: string[]) => {
+        const result = await cliInvoke(
+          ['app', 'backend', ...args],
+          credentials[2],
+        );
+        assert.equal(result.code, 0, JSON.stringify(result));
+        return result.data;
+      };
+      const held = call(`${base}/Increment`, headers, { amount: 7 });
+      let previous: number | null = null;
+      for (let attempt = 0; attempt < 100 && previous === null; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        previous = (await backend('status', id)).runtime.pid;
+      }
+      assert.ok(previous, 'the first deployment never started');
+
+      // Redeploy with the Data schema unchanged while the request is held.
+      await writeFile(entry, `${await readFile(entry, 'utf8')}\n// v2\n`);
+      commit();
+      const second = await cliInvoke(
+        ['app', 'deploy', '--directory', directory],
+        credentials[3],
+      );
+      assert.equal(second.code, 0, JSON.stringify(second));
+      expect(second.data.version).toBe(first.data.version + 1);
+      expect((await backend('status', id)).runtime).toMatchObject({
+        state: 'stopped',
+        drainingInstances: 1,
+      });
+
+      // The new deployment serves new requests beside the retired instance.
+      const released = await call(`${base}/Increment`, headers, {
+        amount: 100,
+      });
+      assert.equal(released.response.status, 200, JSON.stringify(released));
+      expect(released.data.count).toBe(100);
+      const current = (await backend('status', id)).runtime;
+      expect(current.state).toBe('running');
+      expect(current.pid).not.toBe(previous);
+
+      // The held request was neither cut off nor refused Data Table access.
+      const finished = await held;
+      assert.equal(finished.response.status, 200, JSON.stringify(finished));
+      expect(finished.data.count).toBe(107);
+      let draining = 1;
+      for (let attempt = 0; attempt < 100 && draining > 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        draining = (await backend('status', id)).runtime.drainingInstances;
+      }
+      expect(draining).toBe(0);
+
+      const listed: { id: string }[] = await backend('list');
+      expect(listed.map((item) => item.id)).toContain(id);
+      expect((await backend('stop', id)).runtime.state).toBe('stopped');
+      const started = (await backend('start', id)).runtime;
+      expect(started.state).toBe('running');
+      const restarted = (await backend('restart', id, '--force')).runtime;
+      expect(restarted.state).toBe('running');
+      expect(restarted.pid).not.toBe(started.pid);
+      expect((await backend('stop', id, '--force')).runtime).toMatchObject({
+        state: 'stopped',
+        drainingInstances: 0,
+      });
+      const rejected = await cliInvoke(
+        ['app', 'backend', 'start', id, '--force'],
+        credentials[2],
+      );
+      expect(rejected.code).toBe(2);
+      expect(rejected.data.error.code).toBe('invalid_arguments');
+    }, 240000);
+
     it('bounds actual streamed JSON bytes at 16 KiB and 256 MiB', async () => {
       async function streamed(endpoint: string, size: number, json = '{}') {
         const tail = Buffer.from(json);

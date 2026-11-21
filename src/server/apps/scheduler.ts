@@ -13,7 +13,7 @@ import {
 } from '../secrets';
 import type { CronJob, NormalizedManifest } from './manifest';
 import { nextRun, parseCron } from './cron-expr';
-import { callAppBackend } from './runtime';
+import { BackendDeploymentChangedError, callAppBackend } from './runtime';
 
 async function log(
   appId: string,
@@ -128,6 +128,20 @@ async function cronInvokeContext(appId: string): Promise<{
  * name + timestamp) so the backend can verify the call came from the platform.
  */
 async function invokeCron(
+  appId: string,
+  job: CronJob,
+): Promise<{ status: number; body: string; target: string }> {
+  try {
+    return await invokeCronOnce(appId, job);
+  } catch (error) {
+    // A deploy or rollback committed after the invoke context was read.
+    // Nothing reached a backend yet: fire against the new deployment.
+    if (!(error instanceof BackendDeploymentChangedError)) throw error;
+    return invokeCronOnce(appId, job);
+  }
+}
+
+async function invokeCronOnce(
   appId: string,
   job: CronJob,
 ): Promise<{ status: number; body: string; target: string }> {

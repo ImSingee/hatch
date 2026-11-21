@@ -12,6 +12,7 @@ import { AppError } from '../errors';
 import {
   type BackendRuntimeView,
   getBackendRuntimeView,
+  killApp,
   restartAppBackend,
   startAppBackend,
   stopApp,
@@ -32,6 +33,8 @@ export type AppBackendRuntime = {
   lastError: string | null;
   restartCount: number;
   keepAlive: boolean;
+  /** Retired instances still finishing the requests they hold. */
+  drainingInstances: number;
 };
 
 export type AppBackendView = {
@@ -101,6 +104,45 @@ export async function listAppBackends(): Promise<AppBackendView[]> {
   }));
 }
 
+/** One runnable app backend, as listed by {@link listAppBackends}. */
+export async function getAppBackend(id: string): Promise<AppBackendView> {
+  const app = await db.query.apps.findFirst({
+    where: { id },
+    columns: {
+      id: true,
+      slug: true,
+      name: true,
+      status: true,
+      capabilities: true,
+      backendMode: true,
+      currentDeploymentId: true,
+    },
+  });
+  if (!app || app.status === 'archived') {
+    throw new AppError('App not found.', 404);
+  }
+  if (!app.capabilities?.backend) {
+    throw new AppError('This app has no backend.', 400);
+  }
+  if (!app.currentDeploymentId) {
+    throw new AppError('This app has never been deployed.', 400);
+  }
+  const deployment = await db.query.deployments.findFirst({
+    where: { id: app.currentDeploymentId },
+    columns: { compatibilityVersion: true },
+  });
+  return {
+    id: app.id,
+    slug: app.slug,
+    name: app.name,
+    mode: app.backendMode ?? 'serverless',
+    compatibility: deployment
+      ? appCompatibility(deployment.compatibilityVersion)
+      : null,
+    runtime: serializeRuntime(getBackendRuntimeView(app.id)),
+  };
+}
+
 /**
  * Guard for the backend control server fns. These are plain authenticated
  * RPCs, so the page only listing runnable backends is not a boundary — a
@@ -153,17 +195,26 @@ export async function startBackendForApp(
   return serializeRuntime(getBackendRuntimeView(id));
 }
 
-/** Idempotent: stopping a backend that isn't running succeeds. */
+/**
+ * Idempotent: stopping a backend that isn't running succeeds. A stop is
+ * graceful: no instance receives another request, and each exits once the
+ * requests it already holds finish or the drain timeout elapses. `force`
+ * kills every instance at once, draining ones and their requests included.
+ */
 export async function stopBackendForApp(
   id: string,
+  options: { force?: boolean } = {},
 ): Promise<AppBackendRuntime> {
   await requireBackendApp(id, { requireSupportedCompatibility: false });
-  stopApp(id);
+  if (options.force) killApp(id);
+  else stopApp(id);
   return serializeRuntime(getBackendRuntimeView(id));
 }
 
+/** `force` kills the previous instance instead of letting it drain. */
 export async function restartBackendForApp(
   id: string,
+  options: { force?: boolean } = {},
 ): Promise<AppBackendRuntime> {
   const { mode, deploymentId } = await requireBackendApp(id, {
     requireSupportedCompatibility: true,
@@ -171,6 +222,7 @@ export async function restartBackendForApp(
   await restartAppBackend(id, {
     keepAlive: mode === 'long-running',
     expectedDeploymentId: deploymentId,
+    force: options.force,
   });
   return serializeRuntime(getBackendRuntimeView(id));
 }

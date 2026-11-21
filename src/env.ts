@@ -6,6 +6,7 @@ import {
 import { parseBetaFeatures } from './beta-features';
 
 const DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS = 300;
+const DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS = 300;
 const DEV_AGENT_RUNNER_TOKEN = 'hatch-dev-runner-token';
 const PRERENDER_ONLY_SECRET =
   'Zp8V4nQ2xR7mL5kC9sT3wH6fD1bG0yE4uA8jN2qP7rX5cM9v';
@@ -40,6 +41,12 @@ export type PlatformEnv = Readonly<{
    * request before the platform stops it.
    */
   appBackendIdleTimeoutSeconds: number;
+  /**
+   * How long a retired App backend instance (after a deploy, rollback or
+   * stop) may keep finishing in-flight requests before it is terminated.
+   * 0 terminates it immediately.
+   */
+  appBackendDrainTimeoutSeconds: number;
 }>;
 
 /** Immutable startup configuration for the Agent Runner process. */
@@ -112,6 +119,7 @@ function resolvePlatformEnv(): PlatformEnv {
       agentInternalPort: DEFAULT_INTERNAL_PORT,
       runTokenLifetimeSeconds: 300,
       appBackendIdleTimeoutSeconds: DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS,
+      appBackendDrainTimeoutSeconds: DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS,
     });
   }
 
@@ -159,9 +167,23 @@ function resolvePlatformEnv(): PlatformEnv {
       'HATCH_APP_IDLE_TIMEOUT_SECONDS must be an integer between 1 and 86400.',
     );
 
+  const appBackendDrainTimeoutSeconds = Number(
+    process.env.HATCH_APP_DRAIN_TIMEOUT_SECONDS ??
+      DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS,
+  );
+  if (
+    !Number.isSafeInteger(appBackendDrainTimeoutSeconds) ||
+    appBackendDrainTimeoutSeconds < 0 ||
+    appBackendDrainTimeoutSeconds > 86_400
+  )
+    throw new Error(
+      'HATCH_APP_DRAIN_TIMEOUT_SECONDS must be an integer between 0 and 86400.',
+    );
+
   return Object.freeze({
     runTokenLifetimeSeconds,
     appBackendIdleTimeoutSeconds,
+    appBackendDrainTimeoutSeconds,
     betaFeatures: parseBetaFeatures(process.env.HATCH_BETA),
     appUrl,
     secret,

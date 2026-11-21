@@ -395,9 +395,11 @@ export const startAppBackendFn = createServerFn({ method: 'POST' })
 
 export const stopAppBackendFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
-  .validator((id: string) => idSchema.parse(id))
-  .handler(async ({ data: id }) => {
-    return stopBackendForApp(id);
+  .validator((input: { id: string; force?: boolean }) =>
+    z.object({ id: idSchema, force: z.boolean().optional() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    return stopBackendForApp(data.id, { force: data.force });
   });
 
 export const restartAppBackendFn = createServerFn({ method: 'POST' })

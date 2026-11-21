@@ -8,6 +8,7 @@ import { db } from '~/db';
 import type { JsonValue } from '~/db/schema';
 import { AppError } from '~server/errors';
 import { assertSupportedDeployment } from '../compatibility';
+import { supersededDeploymentSharesDataSchema } from './deployment-access';
 import { DATA_MIGRATION_LOCK_KEY } from './migrate';
 import { resolveAppDataDatabaseUrl } from './provision';
 import { parseDataRevision } from './revision';
@@ -117,6 +118,12 @@ type SqlParam = string | number | boolean | null;
 export type DataTableAccessOptions = {
   /** Deployment expected by the calling App bundle, when known. */
   expectedDeploymentId?: string;
+  /**
+   * The caller is an App backend (platform-signed), which may be a retired
+   * instance finishing in-flight requests after a deploy. Accept its
+   * superseded deployment while it was built for the live Data schema.
+   */
+  acceptSupersededDeployment?: boolean;
 };
 
 export type DataQueryOptions = DataTableAccessOptions & {
@@ -423,6 +430,7 @@ async function assertCurrentAppState(
       currentDeploymentId: true,
       capabilities: true,
       dataActivationId: true,
+      dataSchemaHash: true,
     },
   });
   if (
@@ -438,7 +446,15 @@ async function assertCurrentAppState(
   }
   if (
     options.expectedDeploymentId &&
-    app.currentDeploymentId !== options.expectedDeploymentId
+    app.currentDeploymentId !== options.expectedDeploymentId &&
+    !(
+      options.acceptSupersededDeployment &&
+      (await supersededDeploymentSharesDataSchema(
+        id,
+        options.expectedDeploymentId,
+        app.dataSchemaHash,
+      ))
+    )
   ) {
     throw new AppError(
       'Data Table client is stale. Reload the App before retrying.',

@@ -22,10 +22,12 @@ vi.mock('~server/apps/runtime', () => {
       lastError: null,
       restartCount: 0,
       keepAlive: false,
+      drainingInstances: 0,
     })),
     startAppBackend: vi.fn<Runtime['startAppBackend']>(async () => {}),
     restartAppBackend: vi.fn<Runtime['restartAppBackend']>(async () => {}),
     stopApp: vi.fn<Runtime['stopApp']>(),
+    killApp: vi.fn<Runtime['killApp']>(),
   };
 });
 
@@ -123,6 +125,7 @@ describe('listAppBackends', () => {
       lastError: null,
       restartCount: 1,
       keepAlive: true,
+      drainingInstances: 0,
     });
 
     const [backend] = await listAppBackends();
@@ -199,6 +202,17 @@ describe('backend controls', () => {
     const view = await stopBackendForApp('idle');
     expect(runtime.stopApp).toHaveBeenCalledWith('idle');
     expect(view.state).toBe('stopped');
+  });
+
+  it('kills instead of draining only on an explicit force stop', async () => {
+    await seedApp('busy');
+    await stopBackendForApp('busy');
+    expect(runtime.stopApp).toHaveBeenCalledWith('busy');
+    expect(runtime.killApp).not.toHaveBeenCalled();
+
+    await stopBackendForApp('busy', { force: true });
+    expect(runtime.killApp).toHaveBeenCalledWith('busy');
+    expect(runtime.stopApp).toHaveBeenCalledOnce();
   });
 
   it('blocks start and restart below the minimum but still allows stop', async () => {

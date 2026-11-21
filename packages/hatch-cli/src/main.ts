@@ -5,6 +5,7 @@ import { runAuth } from './auth';
 import { runLifecycle } from './lifecycle';
 import { runGitCredential } from './git-credential';
 import { runData } from './data';
+import { runBackend } from './backend';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { runNotification } from './notifications';
@@ -66,6 +67,7 @@ try {
               ...(operation && !operation.startsWith('--') ? [operation] : []),
               ...([
                 'invoke',
+                'backend',
                 'kv',
                 'data-table',
                 'db',
@@ -111,7 +113,9 @@ try {
         'invalid_arguments',
         'Use hatch app invoke backend or hatch app invoke webhook.',
       );
-  } else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
+  } else if (name === 'app' && operation === 'backend')
+    await runBackend(args, offset, controller.signal);
+  else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
     await runData(args, offset, controller.signal);
   else if (['app', 'workflow'].includes(name))
     await runLifecycle(args, offset, controller.signal);
