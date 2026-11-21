@@ -9,7 +9,7 @@ import {
 import { IconArrowLeft, IconTrash } from '@tabler/icons-react';
 import { Suspense, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { NotificationDetail } from '~components/notifications/notification-detail';
 import {
   notificationDeletedToastId,
@@ -64,8 +64,9 @@ function NotificationDetailPage() {
     leave();
   });
   return (
-    <Page
+    <WindowPage
       title={notification.title}
+      closeTo={{ link: { to: '/notifications' }, label: 'Notifications' }}
       description={`${notification.kindName} from ${notification.sourceName}`}
       size={960}
       actions={
@@ -100,6 +101,6 @@ function NotificationDetailPage() {
       >
         <NotificationDetail id={notificationId} />
       </Suspense>
-    </Page>
+    </WindowPage>
   );
 }

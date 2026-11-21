@@ -33,20 +33,20 @@ circles).
 `light` uses the shadcn `cssVars` names so the same file can feed an App theme
 later.
 
-| Role            | Token                       | Value        | Use                                                                      |
-| --------------- | --------------------------- | ------------ | ------------------------------------------------------------------------ |
-| Ground          | `light.background`          | `#EDEBE6`    | The desk: page background                                                |
-| Ink             | `light.foreground`          | `#1E2230`    | Text, icons, focus ring                                                  |
-| Muted ink       | `light.muted-foreground`    | `#4F5666`    | Secondary text, placeholders, table headers                              |
-| Sheet           | `light.card`, `popover`     | `#FFFFFF`    | Cards, windows, menus, fields                                            |
-| Muted sheet     | `light.muted`, `secondary`  | `#F6F5F1`    | Window title bars, read-only wells, code blocks in a card                |
-| Sunken          | `surfaces.sunken`           | `#E4E2DC`    | Segmented-control track                                                  |
-| Panel           | `surfaces.panel`            | white 72%    | Translucent chrome over the ground: sidebar now, menu bar and dock later |
-| Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet                         |
-| Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                                        |
-| Hover / pressed | `surfaces.hover`, `pressed` | ink 6% / 10% | Hover wash, neutral tint, skeletons                                      |
-| Scrim           | `surfaces.scrim`            | ink 45%      | Behind modals; over thumbnails                                           |
-| Destructive     | `light.destructive`         | `#B91C1C`    | Same value as `hues.red`                                                 |
+| Role            | Token                       | Value        | Use                                                                     |
+| --------------- | --------------------------- | ------------ | ----------------------------------------------------------------------- |
+| Ground          | `light.background`          | `#EDEBE6`    | The desk: page background                                               |
+| Ink             | `light.foreground`          | `#1E2230`    | Text, icons, focus ring                                                 |
+| Muted ink       | `light.muted-foreground`    | `#4F5666`    | Secondary text, placeholders, table headers                             |
+| Sheet           | `light.card`, `popover`     | `#FFFFFF`    | Cards, windows, menus, fields                                           |
+| Muted sheet     | `light.muted`, `secondary`  | `#F6F5F1`    | Window title bars, read-only wells, code blocks in a card               |
+| Sunken          | `surfaces.sunken`           | `#E4E2DC`    | Segmented-control track                                                 |
+| Panel           | `surfaces.panel`            | white 72%    | Translucent chrome over the ground: the menu bar, the dock, the tab bar |
+| Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet                        |
+| Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                                       |
+| Hover / pressed | `surfaces.hover`, `pressed` | ink 6% / 10% | Hover wash, neutral tint, skeletons                                     |
+| Scrim           | `surfaces.scrim`            | ink 45%      | Behind modals; over thumbnails                                          |
+| Destructive     | `light.destructive`         | `#B91C1C`    | Same value as `hues.red`                                                |
 
 `light.border` (`#ECEAE4`) is kept for the App theme, where borders sit on
 white. The platform uses the hairline instead because `#ECEAE4` disappears on
@@ -265,8 +265,10 @@ The frame a page, a modal or the sign-in form is presented in.
 - A modal is a window without the tile; its title is 18 / 800 and it sits on
   the scrim. Below 560 wide a window fills the stage and loses its radius.
 
-Today modals and the sign-in card use this frame. Pages move into it with the
-shell in a later step.
+Every page is shown in this frame (`DeskWindow` in `src/components/desk/`):
+minimise leads to the desk, close to the window's parent or the desk, and
+Escape closes it unless a field or a layer above it wants the key. Below 560
+wide the two buttons become one back button at the start of the title bar.
 
 ### Dock tile
 

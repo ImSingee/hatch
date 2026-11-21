@@ -13,7 +13,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, notFound } from '@tanstack/react-router';
 import { IconArrowLeft, IconPlayerStop } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { Page } from '~components/app-shell/page';
+import { AppGlyph } from '~components/apps/app-glyph';
+import { WindowPage } from '~components/desk/window-page';
 import {
   RunStatusBadge,
   RunStatusBullet,
@@ -137,14 +138,25 @@ function WorkflowExecutionPage() {
   });
 
   return (
-    <Page
+    <WindowPage
       size={920}
-      title={
-        <Group gap="sm" align="center" wrap="nowrap">
-          Execution
-          <RunStatusBadge status={run.status} />
-        </Group>
+      title={`${workflow.name} · Execution`}
+      tile={
+        <AppGlyph
+          icon={false}
+          name={workflow.name}
+          seed={workflow.id}
+          size="sm"
+        />
       }
+      badge={<RunStatusBadge status={run.status} />}
+      closeTo={{
+        link: {
+          to: '/workflow/$workflowSlug/executions',
+          params: { workflowSlug: workflow.slug },
+        },
+        label: "this workflow's executions",
+      }}
       description={
         <>
           {run.trigger} trigger
@@ -243,6 +255,6 @@ function WorkflowExecutionPage() {
           </>
         ) : null}
       </Stack>
-    </Page>
+    </WindowPage>
   );
 }

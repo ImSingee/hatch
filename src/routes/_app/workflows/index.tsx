@@ -15,7 +15,7 @@ import {
   IconSettings,
   IconTimeline,
 } from '@tabler/icons-react';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { StatusBadge } from '~components/system/status-badge';
 import { formatRelative } from '~lib/format';
@@ -31,7 +31,7 @@ function WorkflowsPage() {
   const workflows = Route.useLoaderData();
 
   return (
-    <Page
+    <WindowPage
       title="Workflows"
       description="Headless, code-based jobs the Agent builds — run them manually, on a schedule, or via webhook."
       actions={
@@ -146,6 +146,6 @@ function WorkflowsPage() {
           ))}
         </SimpleGrid>
       )}
-    </Page>
+    </WindowPage>
   );
 }

@@ -1,0 +1,181 @@
+.dock {
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
+  max-width: 100%;
+  padding: 10px 18px 12px;
+  border: 1px solid var(--mantine-color-white);
+  border-radius: var(--radius-window);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-dock);
+  backdrop-filter: blur(16px);
+}
+
+.group {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The Apps group gives way first: it scrolls sideways when pins outgrow the
+   dock, while Workflows stay in view. */
+.grow {
+  flex: 0 1 auto;
+}
+
+.groupLabel {
+  color: var(--mantine-color-dimmed);
+  font-size: 10px;
+  font-weight: var(--font-weight-heading);
+  letter-spacing: 0.12em;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+
+.row {
+  display: flex;
+  gap: 4px;
+  min-height: 63px;
+  /* Room for a tile to rise on hover without being clipped by the scroller. */
+  margin-top: -4px;
+  padding-top: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.row::-webkit-scrollbar {
+  display: none;
+}
+
+.divider {
+  flex: none;
+  width: 1px;
+  background: var(--border-hairline);
+}
+
+.slot {
+  position: relative;
+  flex: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 64px;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-gray-8);
+  font-size: 11px;
+  font-weight: var(--font-weight-label);
+  line-height: 14px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.tile {
+  display: block;
+  transition: transform var(--transition-base);
+}
+
+/* Workflows differ from Apps by shape: one corner is nearly square. */
+.tile[data-shape='workflow'] > *,
+.add[data-shape='workflow'] {
+  border-bottom-left-radius: 3px;
+}
+
+.item:hover .tile {
+  transform: translateY(-3px);
+}
+
+.label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The open marker. It keeps its place when hidden so labels stay aligned. */
+.marker {
+  width: 4px;
+  height: 4px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.item[data-open] .marker {
+  background: var(--mantine-color-primary-6);
+}
+
+.item[data-open] {
+  color: var(--mantine-color-text);
+}
+
+.options {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  opacity: 0;
+  box-shadow: var(--shadow-card);
+  transition: opacity var(--transition-fast);
+}
+
+.slot:hover .options,
+.options:focus-visible,
+.options[aria-expanded='true'] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .options {
+    opacity: 1;
+  }
+}
+
+.add {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 10px;
+  border: 1.5px dashed var(--mantine-color-gray-5);
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-gray-7);
+  transition: background-color var(--transition-fast);
+}
+
+.add:hover,
+.add[aria-expanded='true'] {
+  background: var(--surface-hover);
+}
+
+@media (max-width: 48em) {
+  .dock {
+    gap: 14px;
+    width: 100%;
+    padding: 10px 14px 12px;
+  }
+
+  .grow {
+    flex: 1 1 0;
+  }
+
+  .item {
+    width: 58px;
+  }
+
+  .add {
+    margin: 0 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item:hover .tile {
+    transform: none;
+  }
+}

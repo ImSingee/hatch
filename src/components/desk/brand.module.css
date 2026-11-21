@@ -4,6 +4,10 @@
   gap: 10px;
 }
 
+.root[data-size='xs'] {
+  gap: 6px;
+}
+
 .mark {
   flex: 0 0 auto;
 }

@@ -10,7 +10,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { IconTimeline } from '@tabler/icons-react';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { RunStatusBadge } from '~components/workflows/run-status';
 import { formatDuration, formatRelative } from '~lib/format';
@@ -40,8 +40,9 @@ function ExecutionsPage() {
   const runs = query.data ?? [];
 
   return (
-    <Page
+    <WindowPage
       title="Executions"
+      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
       description="Run history across every workflow."
       actions={
         <Button component={Link} to="/workflows" variant="default">
@@ -155,6 +156,6 @@ function ExecutionsPage() {
           </Table>
         </Box>
       )}
-    </Page>
+    </WindowPage>
   );
 }

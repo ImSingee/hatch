@@ -1,6 +1,5 @@
-import { Group } from '@mantine/core';
 import { createFileRoute, notFound } from '@tanstack/react-router';
-import { Page } from '~components/app-shell/page';
+import { WindowPage } from '~components/desk/window-page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { WorkflowRunList } from '~components/workflows/run-list';
 import { StatusBadge } from '~components/system/status-badge';
@@ -22,23 +21,22 @@ function WorkflowExecutionsPage() {
   const workflow = Route.useLoaderData();
 
   return (
-    <Page
-      title={
-        <Group gap="sm" align="center" wrap="nowrap">
-          <AppGlyph
-            icon={false}
-            name={workflow.name}
-            seed={workflow.id}
-            size="md"
-          />
-          {workflow.name}
-          <StatusBadge status={workflow.status} />
-        </Group>
+    <WindowPage
+      title={`${workflow.name} · Executions`}
+      tile={
+        <AppGlyph
+          icon={false}
+          name={workflow.name}
+          seed={workflow.id}
+          size="sm"
+        />
       }
+      badge={<StatusBadge status={workflow.status} />}
+      closeTo={{ link: { to: '/workflows' }, label: 'Workflows' }}
       description="Execution history"
       actions={<WorkflowTabs slug={workflow.slug} active="executions" />}
     >
       <WorkflowRunList workflowId={workflow.id} workflowSlug={workflow.slug} />
-    </Page>
+    </WindowPage>
   );
 }

@@ -20,8 +20,8 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { Page } from '~components/app-shell/page';
-import { SortableList, sortByIds } from '~components/app-shell/sortable-list';
+import { WindowPage } from '~components/desk/window-page';
+import { SortableList, sortByIds } from '~components/desk/sortable-list';
 import { openTextPromptModal } from '~components/system/text-prompt-modal';
 import { dashboardsQueryOptions } from '~queries/dashboards';
 import {
@@ -151,7 +151,7 @@ function DashboardsManagePage() {
     });
 
   return (
-    <Page
+    <WindowPage
       title="Dashboards"
       description="Create, organize, and pin the dashboards you use most."
       actions={
@@ -193,10 +193,7 @@ function DashboardsManagePage() {
                 </Text>
               </Group>
               <Group gap={4} wrap="nowrap">
-                <Tooltip
-                  label={d.pinned ? 'Pinned to sidebar' : 'Not pinned'}
-                  withArrow
-                >
+                <Tooltip label={d.pinned ? 'Pinned' : 'Not pinned'} withArrow>
                   <Switch
                     size="sm"
                     checked={d.pinned}
@@ -206,7 +203,7 @@ function DashboardsManagePage() {
                         pinned: e.currentTarget.checked,
                       })
                     }
-                    aria-label="Pin to sidebar"
+                    aria-label="Pin"
                   />
                 </Tooltip>
                 <Tooltip label="Rename" withArrow>
@@ -248,6 +245,6 @@ function DashboardsManagePage() {
           )}
         />
       </Stack>
-    </Page>
+    </WindowPage>
   );
 }
