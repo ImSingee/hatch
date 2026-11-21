@@ -42,7 +42,14 @@ message PinnedDashboard {
   string name = 2;
 }
 
-message ListPinsRequest {}
+message ListPinsRequest {
+  // Pages walk one sequence: App pins, then pinned Workflows, then pinned
+  // dashboards, each in the order below. The cursor is the next_cursor of
+  // the previous page.
+  optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Entries per page across the three lists; 0 returns every entry.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+}
 
 message ListPinsResponse {
   // In navigation order.
@@ -51,6 +58,8 @@ message ListPinsResponse {
   repeated PinnedWorkflow workflows = 2;
   // In dashboard order.
   repeated PinnedDashboard dashboards = 3;
+  // Set when more entries follow this page.
+  optional string next_cursor = 4;
 }
 
 message PinAppRequest {

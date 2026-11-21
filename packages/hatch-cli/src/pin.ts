@@ -3,10 +3,13 @@ import {
   invalid,
   listFlag,
   openClient,
+  PAGE_OPTIONS,
+  pageFlags,
   parseCommandArgs,
   printResult,
   textFlag,
   type Flags,
+  type Page,
 } from './command-session';
 
 export const MAX_PIN_LABEL_LENGTH = 500;
@@ -14,7 +17,7 @@ export const MAX_PIN_ENTRY_LENGTH = 2048;
 const MAX_REORDER_IDS = 1000;
 
 export type PinCommand =
-  | { kind: 'list' }
+  | { kind: 'list'; page: Page }
   | {
       kind: 'add-app';
       app: string;
@@ -83,8 +86,8 @@ export function parsePinCommand(
     return parsed;
   };
   if (operation === 'list') {
-    const { flags } = parse({});
-    return { command: { kind: 'list' }, flags };
+    const { flags } = parse(PAGE_OPTIONS);
+    return { command: { kind: 'list', page: pageFlags(flags) }, flags };
   }
   if (operation === 'add') {
     const { flags } = parse({
@@ -214,7 +217,7 @@ export async function runPin(
   const { command, flags } = parsePinCommand(args, offset);
   const { pins } = await openClient(flags, signal);
   let result: unknown;
-  if (command.kind === 'list') result = await pins.list();
+  if (command.kind === 'list') result = await pins.list(command.page);
   else if (command.kind === 'add-app') result = await pins.pinApp(command);
   else if (command.kind === 'update') result = await pins.updateAppPin(command);
   else if (command.kind === 'remove-pin' || command.kind === 'remove-app')

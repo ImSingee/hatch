@@ -2,11 +2,14 @@
 import {
   invalid,
   openClient,
+  PAGE_OPTIONS,
+  pageFlags,
   parseCommandArgs,
   printResult,
   textFlag,
   type Flags,
   type OptionSpec,
+  type Page,
 } from './command-session';
 
 export const MAX_DASHBOARD_NAME_LENGTH = 500;
@@ -32,7 +35,7 @@ export type WidgetPosition = {
 };
 
 export type DashboardCommand =
-  | { kind: 'list' }
+  | { kind: 'list'; page: Page }
   | { kind: 'get'; id: string }
   | { kind: 'create'; name: string; description?: string }
   | {
@@ -156,8 +159,8 @@ export function parseDashboardCommand(
   };
 
   if (operation === 'list') {
-    const { flags } = parse(2, {}, []);
-    return { command: { kind: 'list' }, flags };
+    const { flags } = parse(2, PAGE_OPTIONS, []);
+    return { command: { kind: 'list', page: pageFlags(flags) }, flags };
   }
   if (operation === 'get') {
     const { flags, positionals } = parse(2, {}, ['dashboard-id']);
@@ -312,7 +315,7 @@ export async function runDashboard(
   const { command, flags } = parseDashboardCommand(args, offset);
   const { dashboards } = await openClient(flags, signal);
   let result: unknown;
-  if (command.kind === 'list') result = await dashboards.list();
+  if (command.kind === 'list') result = await dashboards.list(command.page);
   else if (command.kind === 'get') result = await dashboards.get(command.id);
   else if (command.kind === 'create') result = await dashboards.create(command);
   else if (command.kind === 'update') result = await dashboards.update(command);

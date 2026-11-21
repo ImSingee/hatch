@@ -1,3 +1,4 @@
+import { listPage } from '~server/list-page';
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
 import { AgentService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/agent_pb';
@@ -499,6 +500,7 @@ export function registerPlatformApi(
             ...session,
             providerId: session.providerId ?? undefined,
             modelId: session.modelId ?? undefined,
+            runnerId: session.runnerId ?? undefined,
             messages: session.messages.map((message) =>
               fromJson(ValueSchema, message),
             ),
@@ -643,9 +645,27 @@ export function registerPlatformApi(
     setTheme: async (input) => ({ theme: await setThemeAccent(input.accent) }),
   });
   router.service(PinService, {
-    listPins: async () => {
+    listPins: async (input) => {
       const pins = await listPins();
-      return { ...pins, appPins: pins.appPins.map(pinMessage) };
+      // One sequence across the three lists, in the documented order.
+      const entries = [
+        ...pins.appPins.map((pin) => ({ kind: 'app' as const, pin })),
+        ...pins.workflows.map((pin) => ({ kind: 'workflow' as const, pin })),
+        ...pins.dashboards.map((pin) => ({ kind: 'dashboard' as const, pin })),
+      ];
+      const page = listPage(entries, input);
+      return {
+        appPins: page.items.flatMap((entry) =>
+          entry.kind === 'app' ? [pinMessage(entry.pin)] : [],
+        ),
+        workflows: page.items.flatMap((entry) =>
+          entry.kind === 'workflow' ? [entry.pin] : [],
+        ),
+        dashboards: page.items.flatMap((entry) =>
+          entry.kind === 'dashboard' ? [entry.pin] : [],
+        ),
+        nextCursor: page.nextCursor,
+      };
     },
     pinApp: async (input) => {
       const result = await pinApp(input);
@@ -680,9 +700,13 @@ export function registerPlatformApi(
       setDashboardPinned(input.dashboardId, input.pinned),
   });
   router.service(DashboardService, {
-    listDashboards: async () => ({
-      dashboards: (await listDashboards()).map(dashboardMessage),
-    }),
+    listDashboards: async (input) => {
+      const page = listPage(await listDashboards(), input);
+      return {
+        dashboards: page.items.map(dashboardMessage),
+        nextCursor: page.nextCursor,
+      };
+    },
     getDashboard: async (input) => ({
       detail: await dashboardDetail(input.id),
     }),

@@ -373,11 +373,13 @@ export function cliClient(transport: Transport) {
   const dashboards = createClient(DashboardService, transport);
   return {
     dashboards: {
-      list: async () => ({
-        dashboards: (await dashboards.listDashboards({})).dashboards.map(
-          dashboardView,
-        ),
-      }),
+      list: async (page: { limit: number; cursor?: string }) => {
+        const result = await dashboards.listDashboards(page);
+        return {
+          dashboards: result.dashboards.map(dashboardView),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
       get: async (id: string) =>
         dashboardDetailView((await dashboards.getDashboard({ id })).detail),
       create: async (input: { name: string; description?: string }) => ({
@@ -467,8 +469,8 @@ export function cliClient(transport: Transport) {
         theme((await themes.setTheme(input)).theme),
     },
     pins: {
-      list: async () => {
-        const result = await pins.listPins({});
+      list: async (page: { limit: number; cursor?: string }) => {
+        const result = await pins.listPins(page);
         return {
           appPins: result.appPins.map(appPin),
           workflows: result.workflows.map((workflow) => ({
@@ -480,6 +482,7 @@ export function cliClient(transport: Transport) {
             id: dashboard.id,
             name: dashboard.name,
           })),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
         };
       },
       pinApp: async (input: {

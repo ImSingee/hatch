@@ -120,6 +120,8 @@ describe('theme and pin RPCs', () => {
       ['PinService/ReorderAppPins', { pinIds: ['a', 'a'] }],
       ['PinService/ReorderDashboards', { dashboardIds: [] }],
       ['PinService/SetWorkflowPinned', { pinned: true }],
+      ['PinService/ListPins', { limit: 101 }],
+      ['PinService/ListPins', { cursor: 'next' }],
     ] as const)
       expect({
         method,
@@ -131,6 +133,38 @@ describe('theme and pin RPCs', () => {
       'indigo',
     );
     expect((await call('PinService/ListPins')).data.appPins ?? []).toEqual([]);
+  });
+
+  it('page one sequence of App pins, Workflows and dashboards', async () => {
+    for (const label of ['Inbox', 'Archive', 'Drafts'])
+      await call('PinService/PinApp', { app: 'notes', label });
+    await db.delete(schema.workflows);
+    await db.insert(schema.workflows).values({
+      id: 'wf-digest',
+      slug: 'digest',
+      name: 'Digest',
+      status: 'deployed',
+      pinned: true,
+    });
+    const whole = (await call('PinService/ListPins')).data;
+    expect(whole.nextCursor).toBeUndefined();
+    const flat = (data: typeof whole) => [
+      ...(data.appPins ?? []).map((pin: { id: string }) => pin.id),
+      ...(data.workflows ?? []).map((pin: { id: string }) => pin.id),
+      ...(data.dashboards ?? []).map((pin: { id: string }) => pin.id),
+    ];
+    // Three App pins, the Workflow and the default dashboard.
+    expect(flat(whole)).toHaveLength(5);
+    const paged: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      const { data } = await call('PinService/ListPins', { limit: 2, cursor });
+      paged.push(...flat(data));
+      cursor = data.nextCursor;
+      pages += 1;
+    } while (cursor);
+    expect({ pages, paged }).toEqual({ pages: 3, paged: flat(whole) });
   });
 
   it('clear a pin entry point only when the field is sent empty', async () => {

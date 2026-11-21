@@ -2,7 +2,7 @@
 import { parseArgs } from 'node:util';
 import { platformClient, type PlatformClient } from './client';
 import { configPath, resolveCredential } from './config';
-import { CliError } from './error';
+import { argumentsError, CliError } from './error';
 
 export type Flags = Record<string, string | boolean | string[] | undefined>;
 export type OptionSpec = Record<
@@ -35,8 +35,8 @@ export function parseCommandArgs(
       allowPositionals: true,
     });
     return { flags: parsed.values as Flags, positionals: parsed.positionals };
-  } catch {
-    throw invalid('Invalid arguments. Use hatch help.');
+  } catch (error) {
+    throw argumentsError(error, args[offset] ?? '');
   }
 }
 
@@ -58,6 +58,31 @@ export function listFlag(flags: Flags, name: string): string[] | undefined {
   if (new Set(value).size !== value.length)
     throw invalid(`--${name} lists the same id more than once.`);
   return value;
+}
+
+/** The flags of a paged list command. */
+export const PAGE_OPTIONS: OptionSpec = {
+  limit: { type: 'string' },
+  cursor: { type: 'string' },
+};
+
+export type Page = { limit: number; cursor?: string };
+
+/** `--limit` (1–100, or 0 for every entry) and `--cursor` of a list. */
+export function pageFlags(flags: Flags): Page {
+  const limitText = textFlag(flags, 'limit');
+  const limit = limitText === undefined ? 0 : Number(limitText);
+  if (
+    limitText !== undefined &&
+    (!/^\d+$/.test(limitText) || limit < 1 || limit > 100)
+  )
+    throw invalid('--limit must be a whole number from 1 to 100.');
+  const cursor = textFlag(flags, 'cursor');
+  if (cursor !== undefined && !/^\d{1,9}$/.test(cursor))
+    throw invalid(
+      '--cursor must be the nextCursor printed by the previous page.',
+    );
+  return { limit, cursor };
 }
 
 /** Resolve the credential and open a client honouring the global flags. */

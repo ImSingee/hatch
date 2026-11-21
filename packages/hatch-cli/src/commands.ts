@@ -223,9 +223,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['pin', 'list'],
-    usage: 'pin list',
+    usage: 'pin list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List navigation pins: App pins in order (pin id, App id and slug, label, entry point, App status), pinned Workflows and pinned dashboards.',
+      'List navigation pins: App pins in order (pin id, App id and slug, label, entry point, App status), pinned Workflows and pinned dashboards. Without --limit it prints every pin. --limit (1-100) pages one sequence: App pins, then Workflows, then dashboards; pass the printed nextCursor as --cursor for the next page. No nextCursor means the last page.',
   },
   {
     path: ['pin', 'add'],
@@ -256,9 +256,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['dashboard', 'list'],
-    usage: 'dashboard list',
+    usage: 'dashboard list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List every dashboard in order: id, name, description, pinned and autoRefreshSeconds (0 is off). Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard.',
+      'Without --limit, list every dashboard in order: id, name, description, pinned and autoRefreshSeconds (0 is off). Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.',
   },
   {
     path: ['dashboard', 'get'],

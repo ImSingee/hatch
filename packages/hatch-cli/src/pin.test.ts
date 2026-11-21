@@ -13,7 +13,14 @@ const rejected = (...args: string[]) => {
 
 describe('pin command arguments', () => {
   it('maps each command to one explicit operation', () => {
-    expect(command('pin', 'list')).toEqual({ kind: 'list' });
+    expect(command('pin', 'list')).toEqual({
+      kind: 'list',
+      page: { limit: 0, cursor: undefined },
+    });
+    expect(command('pin', 'list', '--limit', '20', '--cursor', '40')).toEqual({
+      kind: 'list',
+      page: { limit: 20, cursor: '40' },
+    });
     expect(command('pin', 'add', '--app', 'notes')).toEqual({
       kind: 'add-app',
       app: 'notes',
@@ -100,6 +107,9 @@ describe('pin command arguments', () => {
       ['pin'],
       ['pin', 'show'],
       ['pin', 'list', 'extra'],
+      ['pin', 'list', '--limit', '0'],
+      ['pin', 'list', '--limit', '101'],
+      ['pin', 'list', '--cursor', '-1'],
       // Exactly one target.
       ['pin', 'add'],
       ['pin', 'add', 'notes'],

@@ -125,7 +125,7 @@ also call. Web operation to command:
 
 | Web UI                                        | CLI                                          | RPC                |
 | --------------------------------------------- | -------------------------------------------- | ------------------ |
-| Sidebar pins, pinned Workflows and dashboards | pin list                                     | ListPins           |
+| Sidebar pins, pinned Workflows and dashboards | pin list [--limit --cursor]                  | ListPins (paged)   |
 | Pin an App again (sidebar)                    | pin add --app                                | PinApp             |
 | App page pin toggle, on                       | pin add --app --if-absent                    | PinApp (if_absent) |
 | Rename a pin, set its entry point             | pin update --label / --entry / --clear-entry | UpdateAppPin       |
@@ -154,7 +154,7 @@ refetches without a reload. Web operation to command:
 
 | Web UI                                         | CLI                                    | RPC                      |
 | ---------------------------------------------- | -------------------------------------- | ------------------------ |
-| Dashboard switcher, Manage dashboards          | dashboard list                         | ListDashboards           |
+| Dashboard switcher, Manage dashboards          | dashboard list [--limit --cursor]      | ListDashboards (paged)   |
 | The desk: widgets and their layout             | dashboard get                          | GetDashboard             |
 | New dashboard                                  | dashboard create                       | CreateDashboard          |
 | Rename, edit description, auto-refresh menu    | dashboard update                       | UpdateDashboard          |

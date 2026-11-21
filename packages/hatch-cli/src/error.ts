@@ -28,3 +28,35 @@ export function preparationFailure(
     ? new CliError(error.code, message, 7)
     : new CliError(code, message, 6);
 }
+
+/**
+ * The `invalid_arguments` error for a `node:util` parseArgs failure, naming
+ * the flag to fix instead of a generic "invalid arguments".
+ */
+export function argumentsError(error: unknown, command: string): CliError {
+  const code = (error as { code?: string } | null)?.code;
+  const message = error instanceof Error ? error.message : '';
+  // Node quotes the option as '--name', '-n, --name' or '--name <value>'.
+  const flag =
+    /--[A-Za-z0-9][\w-]*/.exec(message)?.[0] ??
+    /'(-[A-Za-z0-9])/.exec(message)?.[1];
+  const help = `Use hatch help ${command}.`;
+  if (flag && code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION')
+    return new CliError(
+      'invalid_arguments',
+      `${flag} is not a flag of this command. ${help}`,
+    );
+  if (flag && code === 'ERR_PARSE_ARGS_INVALID_OPTION_VALUE')
+    return new CliError(
+      'invalid_arguments',
+      /does not take an argument/.test(message)
+        ? `${flag} does not take a value.`
+        : // Missing, or followed by another flag ("ambiguous").
+          `${flag} needs a value.`,
+    );
+  const detail = message.split('\n')[0];
+  return new CliError(
+    'invalid_arguments',
+    `Invalid arguments${detail ? `: ${detail}` : ''}. ${help}`,
+  );
+}

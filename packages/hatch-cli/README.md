@@ -458,6 +458,7 @@ that were saved, so no image has to be generated again.
 hatch theme get --json
 hatch theme set --accent teal
 hatch pin list --json
+hatch pin list --limit 20 --cursor <next-cursor> --json
 hatch pin add --app my-app --label Inbox --entry /inbox
 hatch pin add --app my-app --if-absent
 hatch pin update <pin-id> --label 'Inbox' --clear-entry
@@ -473,7 +474,10 @@ signed-in clients recolour without a reload.
 
 `pin list` prints App pins in navigation order (`id` is the pin id, which
 `update`, `remove --pin` and `reorder --pin` take), pinned Workflows and pinned
-dashboards. An App can have several pins: `pin add --app` always adds one and
+dashboards. Without `--limit` it prints every pin. `--limit` (1–100) pages
+one sequence, App pins first, then Workflows, then dashboards, and prints
+`nextCursor` while more entries follow; pass it as `--cursor`. An App can
+have several pins: `pin add --app` always adds one and
 `--if-absent` returns the existing pin instead (`created: false`). `--entry`
 is the fragment the pin opens, with or without `#`. `pin update` leaves
 omitted fields unchanged and `--clear-entry` makes the pin open the App root.
@@ -488,13 +492,16 @@ not define, no target or more than one of `--app`, `--workflow`, `--dashboard`
 and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
 `--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`,
 `--entry` with `--clear-entry`, `pin update` with nothing to change, and a
-repeated id in `pin reorder`. Platform errors: `NOT_FOUND` (5) for an unknown
+repeated id in `pin reorder`, a `--limit` outside 1–100, a `--cursor` that
+is not a printed `nextCursor`, a flag the command does not take and a flag
+given without its value (the message names the flag). Platform errors: `NOT_FOUND` (5) for an unknown
 App, Workflow, dashboard or pin id, and `BAD_REQUEST` (2).
 
 ## Dashboards
 
 ```sh
 hatch dashboard list --json
+hatch dashboard list --limit 20 --cursor <next-cursor> --json
 hatch dashboard get <dashboard-id> --json
 hatch dashboard create --name 'Morning' --description 'What I check first'
 hatch dashboard update <dashboard-id> --name 'Mornings' --auto-refresh 60
@@ -507,6 +514,8 @@ hatch dashboard widget layout <dashboard-id> <placement-id> --breakpoint mobile 
 hatch dashboard widget remove <dashboard-id> <placement-id>
 ```
 
+`dashboard list` prints every dashboard unless `--limit` (1–100) asks for a
+page; it then prints `nextCursor` while more follow, to pass as `--cursor`.
 `dashboard get` prints the settings, the placed widgets and their `x`, `y`,
 `w`, `h` in grid units for each breakpoint: `desktop` has 12 columns,
 `tablet` 8 and `mobile` 4. A widget's `id` there is its placement id, which
@@ -523,7 +532,8 @@ new position move down and empty rows close up, so read the printed layouts.
 Local rejections exit 2 with `invalid_arguments`: no field to change, a blank
 `--name` or `--description`, `--description` with `--clear-description`,
 `--auto-refresh` with `--no-auto-refresh`, a number outside the grid of the
-breakpoint, `--breakpoint` without a number, and `delete` without `--yes`.
+breakpoint, `--breakpoint` without a number, `delete` without `--yes`, a
+`--limit` outside 1–100 and a `--cursor` that is not a printed `nextCursor`.
 Platform errors: `NOT_FOUND` (5) for an unknown dashboard, App, widget or
 placement; `BAD_REQUEST` (2) for a size the widget does not support, named in
 the message; `CONFLICT` (6) for a widget that is already on the dashboard or

@@ -260,9 +260,32 @@ describe('dashboard RPCs', () => {
     }
   });
 
+  it('page the dashboard list in order', async () => {
+    for (const name of ['Weekend', 'Travel'])
+      await call('DashboardService/CreateDashboard', { name });
+    const ids = (data: { dashboards?: { id: string }[] }) =>
+      (data.dashboards ?? []).map((item) => item.id);
+    const whole = (await call('DashboardService/ListDashboards')).data;
+    expect(whole.nextCursor).toBeUndefined();
+    expect(ids(whole)).toHaveLength(3);
+    const first = (await call('DashboardService/ListDashboards', { limit: 2 }))
+      .data;
+    expect(first.nextCursor).toBe('2');
+    const rest = (
+      await call('DashboardService/ListDashboards', {
+        limit: 2,
+        cursor: first.nextCursor,
+      })
+    ).data;
+    expect(rest.nextCursor).toBeUndefined();
+    expect([...ids(first), ...ids(rest)]).toEqual(ids(whole));
+  });
+
   it('reject malformed and unknown input without changing state', async () => {
     for (const [method, body, status] of [
       ['DashboardService/CreateDashboard', {}, 400],
+      ['DashboardService/ListDashboards', { limit: 101 }, 400],
+      ['DashboardService/ListDashboards', { cursor: '-1' }, 400],
       ['DashboardService/CreateDashboard', { name: '   ' }, 400],
       ['DashboardService/UpdateDashboard', { id: 'home' }, 400],
       [

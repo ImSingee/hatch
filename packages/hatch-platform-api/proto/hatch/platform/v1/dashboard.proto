@@ -92,11 +92,18 @@ message AvailableWidget {
   repeated WidgetSize supported_sizes = 7;
 }
 
-message ListDashboardsRequest {}
+message ListDashboardsRequest {
+  // The next_cursor of the previous page.
+  optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Dashboards per page; 0 returns every dashboard.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+}
 
 message ListDashboardsResponse {
   // In dashboard order, pinned or not.
   repeated Dashboard dashboards = 1;
+  // Set when more dashboards follow this page.
+  optional string next_cursor = 2;
 }
 
 message GetDashboardRequest {

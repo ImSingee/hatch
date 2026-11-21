@@ -13,7 +13,13 @@ const rejected = (...args: string[]) => {
 
 describe('dashboard command arguments', () => {
   it('maps each command to one explicit operation', () => {
-    expect(command('dashboard', 'list')).toEqual({ kind: 'list' });
+    expect(command('dashboard', 'list')).toEqual({
+      kind: 'list',
+      page: { limit: 0, cursor: undefined },
+    });
+    expect(
+      command('dashboard', 'list', '--limit', '1', '--cursor', '1'),
+    ).toEqual({ kind: 'list', page: { limit: 1, cursor: '1' } });
     expect(command('dashboard', 'get', 'd1')).toEqual({
       kind: 'get',
       id: 'd1',
@@ -120,6 +126,12 @@ describe('dashboard command arguments', () => {
       ['dashboard'],
       ['dashboard', 'show'],
       ['dashboard', 'list', 'extra'],
+      ['dashboard', 'list', '--limit', '0'],
+      ['dashboard', 'list', '--limit', '101'],
+      ['dashboard', 'list', '--limit', '2.5'],
+      ['dashboard', 'list', '--limit'],
+      ['dashboard', 'list', '--cursor', 'abc'],
+      ['dashboard', 'list', '--cursor', ''],
       ['dashboard', 'get'],
       ['dashboard', 'create'],
       ['dashboard', 'create', '--name', '  '],

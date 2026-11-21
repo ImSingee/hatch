@@ -40,8 +40,16 @@ describe('theme command arguments', () => {
         args,
         code: 'invalid_arguments',
       });
-    expect(rejected('theme', 'set', '--accent', 'orange').message).toContain(
-      '--accent must be one of',
-    );
+    // Every rejection names the flag to fix, including the ones Node's
+    // argument parser raises before the command sees the flags.
+    for (const [args, message] of [
+      [['theme', 'set'], '--accent must be one of'],
+      [['theme', 'set', '--accent', 'orange'], '--accent must be one of'],
+      [['theme', 'set', '--accent'], '--accent needs a value'],
+      [['theme', 'set', '--accent', '--json'], '--accent needs a value'],
+      [['theme', 'set', '--colour', 'teal'], '--colour is not a flag'],
+      [['theme', 'get', '--json=yes'], '--json does not take a value'],
+    ] as const)
+      expect(rejected(...args).message).toContain(message);
   });
 });
