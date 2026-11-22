@@ -13,7 +13,8 @@ import {
 } from './command-session';
 
 export const MAX_PIN_LABEL_LENGTH = 500;
-export const MAX_PIN_ENTRY_LENGTH = 2048;
+/** The platform stores at most this many UTF-16 units, without the '#'. */
+export const MAX_PIN_ENTRY_LENGTH = 512;
 const MAX_REORDER_IDS = 1000;
 
 export type PinCommand =
@@ -48,7 +49,7 @@ function entry(flags: Flags): string | undefined {
   // A bare '#' or blank text would silently mean the App root.
   if (!value.trim().replace(/^#/, '').trim())
     throw invalid('--entry must name a fragment; use --clear-entry instead.');
-  if (Array.from(value).length > MAX_PIN_ENTRY_LENGTH)
+  if (value.trim().replace(/^#/, '').trim().length > MAX_PIN_ENTRY_LENGTH)
     throw invalid(`--entry exceeds ${MAX_PIN_ENTRY_LENGTH} characters.`);
   return value;
 }

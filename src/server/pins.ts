@@ -8,7 +8,11 @@
  */
 import { eq, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
-import { normalizeEntryHash } from './apps/sidebar';
+import {
+  cleanEntryHash,
+  MAX_ENTRY_HASH_LEN,
+  normalizeEntryHash,
+} from './apps/sidebar';
 import { AppError } from './errors';
 import { publishPlatformEvent } from './platform-events';
 import { persistSortOrder } from './sort-order';
@@ -65,6 +69,19 @@ async function appPin(id: string): Promise<SidebarItem> {
   return pin;
 }
 
+/**
+ * The stored entry point, or a 400 when it is longer than storage keeps:
+ * a pin must open exactly the fragment it was given, never a shortened one.
+ */
+function pinEntryHash(entryHash: string): string | null {
+  if (cleanEntryHash(entryHash).length > MAX_ENTRY_HASH_LEN)
+    throw new AppError(
+      `The entry point is longer than ${MAX_ENTRY_HASH_LEN} characters.`,
+      400,
+    );
+  return normalizeEntryHash(entryHash);
+}
+
 /** Trimmed label, or a 400 when nothing is left. */
 function pinLabel(label: string): string {
   const trimmed = label.trim();
@@ -93,9 +110,7 @@ export async function pinApp(input: {
     );
   const label = input.label === undefined ? undefined : pinLabel(input.label);
   const entryHash =
-    input.entryHash === undefined
-      ? undefined
-      : normalizeEntryHash(input.entryHash);
+    input.entryHash === undefined ? undefined : pinEntryHash(input.entryHash);
   // One global sidebar-insert lock (not per-app): it keeps the "ensure one
   // pin" check free of duplicates under concurrent calls AND makes the max+1
   // sortOrder allocation safe across concurrent pins of *different* apps.
@@ -153,7 +168,7 @@ export async function updateAppPin(
             entryHash:
               changes.entryHash === null
                 ? null
-                : normalizeEntryHash(changes.entryHash),
+                : pinEntryHash(changes.entryHash),
           }),
     })
     .where(eq(schema.sidebarItems.id, id))

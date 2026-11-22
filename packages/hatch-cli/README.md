@@ -523,7 +523,9 @@ orders all dashboards, pinned or not.
 Local rejections exit 2 with `invalid_arguments`: an `--accent` the tokens do
 not define, no target or more than one of `--app`, `--workflow`, `--dashboard`
 and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
-`--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`,
+`--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`, an
+`--entry` longer than 512 characters (the platform also rejects one, never
+shortening it),
 `--entry` with `--clear-entry`, `pin update` with nothing to change, and a
 repeated id in `pin reorder`, a `--limit` outside 1–100, a `--cursor` that
 is not a printed `nextCursor`, a flag the command does not take and a flag
