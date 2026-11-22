@@ -12,17 +12,17 @@
 }
 
 .group {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-/* The Apps group gives way first: it scrolls sideways when pins outgrow the
-   dock, while Workflows stay in view. */
+/* Both groups scroll sideways when their pins outgrow the dock. The Apps
+   group gives way first; Workflows shrink only when they alone overflow. */
 .grow {
-  flex: 0 1 auto;
+  flex-shrink: 8;
 }
 
 .groupLabel {

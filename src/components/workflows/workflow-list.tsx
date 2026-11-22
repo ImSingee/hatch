@@ -20,7 +20,7 @@ import {
 import { StatusBadge } from '~components/system/status-badge';
 import { formatRelative } from '~lib/format';
 import {
-  allWorkflowRunsQueryOptions,
+  latestWorkflowRunsQueryOptions,
   workflowOpsQueryOptions,
 } from '~queries/workflows';
 import type { WorkflowListItem } from '~server/workflows';
@@ -56,7 +56,9 @@ const WAYS = [
 
 /** The Workflows window: every workflow as a card, and how they run. */
 export function WorkflowList({ workflows }: { workflows: WorkflowListItem[] }) {
-  const { data: runs } = useQuery(allWorkflowRunsQueryOptions);
+  // One newest run per workflow: a global recent list would leave out
+  // workflows that run rarely next to ones that run every minute.
+  const { data: runs } = useQuery(latestWorkflowRunsQueryOptions);
   const count = workflows.length;
 
   return (

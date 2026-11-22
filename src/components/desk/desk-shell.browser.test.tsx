@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-router';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 
 type Pin = {
   id: string;
@@ -438,4 +438,29 @@ test('an offline runner shows a warning that leads to its status', async () => {
   await expect
     .element(screen.getByRole('link', { name: /Runner offline/ }))
     .toHaveAttribute('href', '/settings/agent-runner');
+});
+
+test('many pinned workflows scroll inside the dock instead of overflowing it', async () => {
+  await page.viewport(600, 800);
+  fixtures.workflows = Array.from({ length: 10 }, (_, index) => ({
+    id: `wf-${index}`,
+    slug: `digest-${index}`,
+    name: `Digest ${index}`,
+    pinned: true,
+  }));
+  const { screen } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  await expect
+    .element(dock.getByRole('link', { name: 'Digest 0' }))
+    .toBeInTheDocument();
+  const add = dock.getByRole('button', { name: /Pin a workflow/ });
+  await vi.waitFor(() => {
+    const dockBox = dock.element().getBoundingClientRect();
+    const row = add.element().closest<HTMLElement>('[class*="row"]')!;
+    // The Workflows group stays inside the dock, and its row scrolls.
+    expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(
+      dockBox.right + 1,
+    );
+    expect(row.scrollWidth).toBeGreaterThan(row.clientWidth);
+  });
 });

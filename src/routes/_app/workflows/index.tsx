@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DeskWindow } from '~components/desk/window';
 import { WorkflowList } from '~components/workflows/workflow-list';
-import { allWorkflowRunsQueryOptions } from '~queries/workflows';
+import { latestWorkflowRunsQueryOptions } from '~queries/workflows';
 import { listWorkflows } from '~server/workflows';
 
 export const Route = createFileRoute('/_app/workflows/')({
   loader: ({ context }) => {
-    void context.queryClient.prefetchQuery(allWorkflowRunsQueryOptions);
+    void context.queryClient.prefetchQuery(latestWorkflowRunsQueryOptions);
     return listWorkflows();
   },
   component: WorkflowsPage,
