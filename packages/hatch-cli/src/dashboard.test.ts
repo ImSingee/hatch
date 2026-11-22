@@ -35,7 +35,19 @@ describe('dashboard command arguments', () => {
     });
     expect(command('dashboard', 'widget', 'available')).toEqual({
       kind: 'widget-available',
+      page: { limit: 0, cursor: undefined },
     });
+    expect(
+      command(
+        'dashboard',
+        'widget',
+        'available',
+        '--limit',
+        '20',
+        '--cursor',
+        '20',
+      ),
+    ).toEqual({ kind: 'widget-available', page: { limit: 20, cursor: '20' } });
     expect(
       command(
         'dashboard',
@@ -132,6 +144,8 @@ describe('dashboard command arguments', () => {
       ['dashboard', 'list', '--limit'],
       ['dashboard', 'list', '--cursor', 'abc'],
       ['dashboard', 'list', '--cursor', ''],
+      ['dashboard', 'widget', 'available', '--limit', '0'],
+      ['dashboard', 'widget', 'available', '--cursor', 'x'],
       ['dashboard', 'get'],
       ['dashboard', 'create'],
       ['dashboard', 'create', '--name', '  '],

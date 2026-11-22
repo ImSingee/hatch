@@ -165,10 +165,17 @@ message DeleteDashboardResponse {
   string id = 1;
 }
 
-message ListAvailableWidgetsRequest {}
+message ListAvailableWidgetsRequest {
+  // The next_cursor of the previous page.
+  optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Widgets per page; 0 returns every widget.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+}
 
 message ListAvailableWidgetsResponse {
   repeated AvailableWidget widgets = 1;
+  // Set when more widgets follow this page.
+  optional string next_cursor = 2;
 }
 
 // A position and size at one breakpoint. Unset numbers keep their current

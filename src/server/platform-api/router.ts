@@ -818,17 +818,21 @@ export function registerPlatformApi(
       await deleteDashboard(input.id);
       return { id: input.id };
     },
-    listAvailableWidgets: async () => ({
-      widgets: (await listAvailableWidgets()).map((widget) => ({
-        appId: widget.appId,
-        appSlug: widget.appSlug,
-        appName: widget.appName,
-        widgetId: widget.widgetId,
-        name: widget.name,
-        defaultSize: widget.defaultSize,
-        supportedSizes: widget.supportedSizes,
-      })),
-    }),
+    listAvailableWidgets: async (input) => {
+      const page = listPage(await listAvailableWidgets(), input);
+      return {
+        widgets: page.items.map((widget) => ({
+          appId: widget.appId,
+          appSlug: widget.appSlug,
+          appName: widget.appName,
+          widgetId: widget.widgetId,
+          name: widget.name,
+          defaultSize: widget.defaultSize,
+          supportedSizes: widget.supportedSizes,
+        })),
+        nextCursor: page.nextCursor,
+      };
+    },
     addDashboardWidget: async (input) => {
       const result = await addDashboardWidget(input.dashboardId, {
         app: input.app,

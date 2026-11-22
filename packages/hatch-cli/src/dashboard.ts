@@ -48,7 +48,7 @@ export type DashboardCommand =
       autoRefreshSeconds?: number;
     }
   | { kind: 'delete'; id: string }
-  | { kind: 'widget-available' }
+  | { kind: 'widget-available'; page: Page }
   | {
       kind: 'widget-add';
       dashboardId: string;
@@ -239,8 +239,11 @@ export function parseDashboardCommand(
   if (operation === 'widget') {
     const action = args[offset + 2];
     if (action === 'available') {
-      const { flags } = parse(3, {}, []);
-      return { command: { kind: 'widget-available' }, flags };
+      const { flags } = parse(3, PAGE_OPTIONS, []);
+      return {
+        command: { kind: 'widget-available', page: pageFlags(flags) },
+        flags,
+      };
     }
     if (action === 'add') {
       const { flags, positionals } = parse(
@@ -322,7 +325,7 @@ export async function runDashboard(
   else if (command.kind === 'delete')
     result = await dashboards.delete(command.id);
   else if (command.kind === 'widget-available')
-    result = await dashboards.availableWidgets();
+    result = await dashboards.availableWidgets(command.page);
   else if (command.kind === 'widget-add')
     result = await dashboards.addWidget(command);
   else if (command.kind === 'widget-layout')
