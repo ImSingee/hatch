@@ -343,3 +343,39 @@ export function placeDashboardLayoutItem(
   // nothing is above it, exactly as the editor shows the result.
   return compactDashboardLayout(placed);
 }
+
+/**
+ * Move one item a step with the keyboard. A step that compaction would undo
+ * (the item lands on its neighbour, which moves down, and both close back up
+ * where they were) keeps going until the item ends somewhere new, so each
+ * key press makes progress past the widget next to it. Returns null when the
+ * item cannot move further in that direction.
+ */
+export function moveDashboardLayoutItem(
+  layout: DashboardLayoutItem[],
+  id: string,
+  dx: number,
+  dy: number,
+  columns: number,
+): DashboardLayoutItem[] | null {
+  const item = layout.find((candidate) => candidate.id === id);
+  if (!item || (dx === 0 && dy === 0)) return null;
+  const bottom = layout.reduce(
+    (value, other) => Math.max(value, other.y + other.h),
+    0,
+  );
+  const maxY = Math.min(DASHBOARD_MAX_Y, bottom);
+  for (let step = 1; ; step += 1) {
+    const x = Math.min(columns - item.w, Math.max(0, item.x + dx * step));
+    const y = Math.min(maxY, Math.max(0, item.y + dy * step));
+    const next = placeDashboardLayoutItem(layout, { ...item, x, y });
+    const moved = next.find((candidate) => candidate.id === id)!;
+    if (moved.x !== item.x || moved.y !== item.y) return next;
+    // Reached the edge in that direction without getting anywhere.
+    if (
+      (dx === 0 || x === 0 || x === columns - item.w) &&
+      (dy === 0 || y === 0 || y === maxY)
+    )
+      return null;
+  }
+}

@@ -13,9 +13,9 @@ import type { DashboardItem } from '~server/dashboards';
 import {
   DASHBOARD_COLUMNS,
   dashboardBreakpointForWidth,
+  moveDashboardLayoutItem,
   placeDashboardLayoutItem,
   supportedSizesForBreakpoint,
-  DASHBOARD_MAX_Y,
   type DashboardBreakpoint,
   type DashboardLayoutItem,
   type DashboardLayouts,
@@ -111,11 +111,14 @@ export function DashboardGrid({
   const place = (item: DashboardLayoutItem) =>
     onLayoutCommit(breakpoint, placeDashboardLayoutItem(activeLayout, item));
   const move = (geometry: DashboardLayoutItem, dx: number, dy: number) => {
-    const columns = DASHBOARD_COLUMNS[breakpoint];
-    const x = Math.min(columns - geometry.w, Math.max(0, geometry.x + dx));
-    const y = Math.min(DASHBOARD_MAX_Y, Math.max(0, geometry.y + dy));
-    if (x === geometry.x && y === geometry.y) return;
-    place({ ...geometry, x, y });
+    const next = moveDashboardLayoutItem(
+      activeLayout,
+      geometry.id,
+      dx,
+      dy,
+      DASHBOARD_COLUMNS[breakpoint],
+    );
+    if (next) onLayoutCommit(breakpoint, next);
   };
 
   const commit = (next: Layout) =>

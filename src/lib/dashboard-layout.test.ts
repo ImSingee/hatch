@@ -4,6 +4,7 @@ import {
   dashboardPreviewScale,
   deriveDashboardLayouts,
   fitWidgetSize,
+  moveDashboardLayoutItem,
   type DashboardLayoutItem,
   type DashboardLayoutWidget,
 } from './dashboard-layout';
@@ -139,5 +140,27 @@ describe('fitWidgetSize', () => {
       w: 4,
       h: 6,
     });
+  });
+});
+
+describe('keyboard moves', () => {
+  const stacked: DashboardLayoutItem[] = [
+    { id: 'a', x: 0, y: 0, w: 12, h: 2 },
+    { id: 'b', x: 0, y: 2, w: 12, h: 2 },
+  ];
+  const at = (layout: DashboardLayoutItem[] | null, id: string) =>
+    layout?.find((item) => item.id === id);
+
+  it('moves a widget past the one stacked below or above it', () => {
+    const down = moveDashboardLayoutItem(stacked, 'a', 0, 1, 12);
+    expect([at(down, 'a')?.y, at(down, 'b')?.y]).toEqual([2, 0]);
+    const up = moveDashboardLayoutItem(stacked, 'b', 0, -1, 12);
+    expect([at(up, 'b')?.y, at(up, 'a')?.y]).toEqual([0, 2]);
+  });
+
+  it('reports no move at an edge', () => {
+    expect(moveDashboardLayoutItem(stacked, 'a', 0, -1, 12)).toBeNull();
+    expect(moveDashboardLayoutItem(stacked, 'b', 0, 1, 12)).toBeNull();
+    expect(moveDashboardLayoutItem(stacked, 'a', 1, 0, 12)).toBeNull();
   });
 });
