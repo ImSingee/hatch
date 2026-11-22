@@ -7,6 +7,9 @@ import type { WorkflowRunStatus } from '~/db/schema';
 import { allWorkflowRunsQueryOptions } from '~queries/workflows';
 import classes from './today-panel.module.css';
 
+const ACTIVE_POLL_MS = 5_000;
+const IDLE_POLL_MS = 60_000;
+
 const STATUS_LABEL: Record<WorkflowRunStatus, string> = {
   queued: 'Queued',
   running: 'Running',
@@ -21,7 +24,18 @@ const STATUS_LABEL: Record<WorkflowRunStatus, string> = {
  * today's Workflow runs, which every instance has data for.
  */
 export function TodayPanel() {
-  const runs = useQuery(allWorkflowRunsQueryOptions);
+  // No platform event announces run progress, so poll while the desk is
+  // visible: quickly while a run is in flight, slowly otherwise so newly
+  // scheduled runs still appear. Paused when the tab is hidden.
+  const runs = useQuery({
+    ...allWorkflowRunsQueryOptions,
+    refetchInterval: (query) =>
+      query.state.data?.some(
+        (run) => run.status === 'queued' || run.status === 'running',
+      )
+        ? ACTIVE_POLL_MS
+        : IDLE_POLL_MS,
+  });
   const today = (runs.data ?? []).filter((run) =>
     dayjs(run.createdAt).isSame(dayjs(), 'day'),
   );
