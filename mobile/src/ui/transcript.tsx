@@ -291,6 +291,17 @@ export function LiveTranscript({
           );
         if (block.kind === 'thinking')
           return <Details key={index} title="Reasoning" text={block.text} />;
+        if (block.kind === 'steer')
+          return (
+            <TranscriptMessage
+              key={index}
+              value={{
+                role: 'user',
+                content: [{ type: 'text', text: block.text }],
+                steered: true,
+              }}
+            />
+          );
         if (block.kind !== 'tool') return null;
         const tool = state.tools.find((item) => item.id === block.id);
         return tool ? (

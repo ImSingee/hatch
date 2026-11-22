@@ -33,6 +33,11 @@ import {
   userMessageIndexOfTurn,
 } from './chat-turns';
 import { MessageView } from './message-view';
+import {
+  enqueuePendingMessage,
+  type PendingMessagesResult,
+} from './pending-api';
+import { PendingTray } from './pending-tray';
 import { useLastSelectedModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
@@ -70,6 +75,29 @@ function workStateKey(runKey: string, phase: WorkPhase): string {
  */
 const SETTLED_REFRESH_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
+/** How often an idle session with waiting messages is re-read. */
+const DELIVERY_POLL_MS = 1500;
+
+function awaitsDelivery(
+  session:
+    | {
+        activeRun: unknown;
+        pending?: { paused: boolean; messages: unknown[] };
+        retry: { nextRetryAt: string | null } | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  return Boolean(
+    session &&
+    !session.activeRun &&
+    session.pending &&
+    !session.pending.paused &&
+    session.pending.messages.length > 0 &&
+    !session.retry?.nextRetryAt,
+  );
+}
+
 function runTiming(startedAt: string, completedAt: string | null): WorkTiming {
   return {
     startedAt: Date.parse(startedAt),
@@ -79,7 +107,13 @@ function runTiming(startedAt: string, completedAt: string | null): WorkTiming {
 
 export function Chat({ sessionId }: { sessionId: string }) {
   const qc = useQueryClient();
-  const sessionQuery = useQuery(sessionQueryOptions(sessionId));
+  const sessionQuery = useQuery({
+    ...sessionQueryOptions(sessionId),
+    // The platform starts the run that delivers waiting messages on its own
+    // once the session is idle; follow it until that run shows up.
+    refetchInterval: (query) =>
+      awaitsDelivery(query.state.data) ? DELIVERY_POLL_MS : false,
+  });
   const appsQuery = useQuery(appsQueryOptions);
   const workflowsQuery = useQuery(workflowsQueryOptions);
   const { groups, first, available } = useModelOptions();
@@ -336,6 +370,52 @@ export function Chat({ sessionId }: { sessionId: string }) {
     (Boolean(activeRun) && !activeRunSettled);
   const busy = runBusy || retrying;
 
+  const sessionKey = sessionQueryOptions(sessionId).queryKey;
+  // Show the tray an operation returned at once; the refetch confirms it and
+  // picks up a run the operation started.
+  const applyPendingResult = useCallback(
+    (result: PendingMessagesResult) => {
+      qc.setQueryData(sessionKey, (old) =>
+        old ? { ...old, pending: result.pending } : old,
+      );
+      revalidateSession();
+    },
+    [qc, revalidateSession, sessionKey],
+  );
+
+  // While the Agent works, a message waits as a pending message and is
+  // delivered in the user's queue/steer mode.
+  const sendWhileBusy = useCallback(
+    async (
+      content: ComposerSubmit['content'],
+      images: ComposerImage[],
+      files: ComposerFile[],
+      model: { providerId: string; modelId: string },
+    ): Promise<boolean> => {
+      let attachments;
+      try {
+        attachments = await uploadAgentFiles(sessionId, files);
+        applyPendingResult(
+          await enqueuePendingMessage(sessionId, {
+            content,
+            images,
+            attachmentIds: attachments.map((attachment) => attachment.id),
+            ...model,
+          }),
+        );
+        return true;
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Could not send the message.',
+        );
+        return false;
+      }
+    },
+    [applyPendingResult, sessionId],
+  );
+
   const send = useCallback(
     async (
       content: ComposerSubmit['content'],
@@ -343,7 +423,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
       files: ComposerFile[],
       modelValue: string,
     ): Promise<boolean> => {
-      if (runBusy) return false;
       if (
         !hasComposerText(content) &&
         images.length === 0 &&
@@ -352,6 +431,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
         return false;
       const parsed = splitModelValue(modelValue);
       if (!parsed) return false;
+      if (busy) return sendWhileBusy(content, images, files, parsed);
 
       let attachments;
       try {
@@ -424,12 +504,13 @@ export function Chat({ sessionId }: { sessionId: string }) {
       return true;
     },
     [
+      busy,
       messages,
       qc,
       revalidateSession,
       retryIdentity,
-      runBusy,
       sendRun,
+      sendWhileBusy,
       sessionId,
     ],
   );
@@ -530,7 +611,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
     sessionId,
   ]);
 
-  const sessionKey = sessionQueryOptions(sessionId).queryKey;
   const stopAutoRetry = useMutation({
     mutationFn: () => stopAgentAutoRetryRequest(sessionId),
     onMutate: async () => {
@@ -998,8 +1078,18 @@ export function Chat({ sessionId }: { sessionId: string }) {
 
         <Box className={classes.composer}>
           <Box className={classes.composerInner}>
+            {session?.pending ? (
+              <PendingTray
+                sessionId={sessionId}
+                pending={session.pending}
+                apps={appsQuery.data}
+                workflows={workflowsQuery.data}
+                onResult={applyPendingResult}
+              />
+            ) : null}
             <Composer
               onSubmit={onComposerSubmit}
+              queueWhileBusy
               apps={appsQuery.data}
               appsLoading={appsQuery.isLoading}
               appsError={appsQuery.isError}

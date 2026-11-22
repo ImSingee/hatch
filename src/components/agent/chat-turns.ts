@@ -1,6 +1,7 @@
 import type { StopReason } from '@earendil-works/pi-ai';
 import type { AgentRunStatus } from '~/db/schema';
 import type { SessionRunTiming } from '~server/agent-runs';
+import { isUserTurnMessage } from '~agent/user-turns';
 import type { AssistantBlock, ChatMessage } from './types';
 import type { WorkPhase } from './work-process';
 
@@ -30,7 +31,22 @@ export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
   const turns: RenderTurn[] = [];
   let userTurns = 0;
   messages.forEach((message, index) => {
-    if (message.role === 'user') {
+    if (message.role === 'user' && message.steered) {
+      // A steered message belongs to the reply of the run it was injected
+      // into: it never starts a user turn (see `~agent/user-turns`).
+      const block: AssistantBlock = { type: 'steer', message };
+      const last = turns.at(-1);
+      if (last?.kind === 'assistant') {
+        last.blocks = [...last.blocks, block];
+      } else {
+        turns.push({
+          kind: 'assistant',
+          key: `m${index}`,
+          userTurn: userTurns > 0 ? userTurns - 1 : null,
+          blocks: [block],
+        });
+      }
+    } else if (message.role === 'user') {
       turns.push({
         kind: 'user',
         key: `m${index}`,
@@ -165,7 +181,7 @@ export function userMessageIndexOfTurn(
 ): number {
   let turn = -1;
   for (let index = 0; index < messages.length; index++) {
-    if (messages[index]?.role !== 'user') continue;
+    if (!isUserTurnMessage(messages[index])) continue;
     turn += 1;
     if (turn === userTurn) return index;
   }

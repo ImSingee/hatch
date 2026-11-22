@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { StopReason } from '@earendil-works/pi-ai';
-import type { ComposerInputPart } from '~agent/composer-content';
+import type { AgentAttachmentRef } from '~agent/attachments';
+import type {
+  AgentComposerContentPart,
+  ComposerInputPart,
+} from '~agent/composer-content';
 import type {
   AgentRunStreamEvent,
   AgentStreamEvent,
@@ -48,6 +52,14 @@ export type StreamSeed = {
 export type StreamThinkingBlock = { kind: 'thinking'; text: string };
 export type StreamTextBlock = { kind: 'text'; text: string };
 export type StreamToolBlock = { kind: 'tool'; tool: StreamTool };
+/** A steer message the run took in, at the point it was injected. */
+export type StreamSteerBlock = {
+  kind: 'steer';
+  pendingId: string;
+  text: string;
+  composerContent?: AgentComposerContentPart[];
+  attachments?: AgentAttachmentRef[];
+};
 export type StreamCompactBlock = {
   kind: 'compact';
   compact: {
@@ -69,7 +81,8 @@ export type StreamBlock =
   | StreamThinkingBlock
   | StreamTextBlock
   | StreamToolBlock
-  | StreamCompactBlock;
+  | StreamCompactBlock
+  | StreamSteerBlock;
 
 /**
  * How a live run ended, as observed on its event stream (or a local Stop).
@@ -298,7 +311,7 @@ function appendDelta(
 /** Whether a live turn shows any reply content (whitespace renders nothing). */
 export function hasVisibleStreamOutput(blocks: StreamBlock[]): boolean {
   return blocks.some((block) =>
-    block.kind === 'tool' || block.kind === 'compact'
+    block.kind === 'tool' || block.kind === 'compact' || block.kind === 'steer'
       ? true
       : Boolean(block.text.trim()),
   );
@@ -503,6 +516,32 @@ export function reduceStreamState(
         ],
       };
     }
+    case 'user_message':
+      // Replays of the same event (a reconnect) must not duplicate it.
+      return state.blocks.some(
+        (block) =>
+          block.kind === 'steer' && block.pendingId === event.pendingId,
+      )
+        ? state
+        : {
+            ...state,
+            thinkingActive: false,
+            textActive: false,
+            blocks: [
+              ...state.blocks,
+              {
+                kind: 'steer',
+                pendingId: event.pendingId,
+                text: event.text,
+                ...(event.composerContent
+                  ? { composerContent: event.composerContent }
+                  : {}),
+                ...(event.attachments
+                  ? { attachments: event.attachments }
+                  : {}),
+              },
+            ],
+          };
     case 'done': {
       const stopReason = event.stopReason;
       return {
@@ -796,7 +835,10 @@ export function useAgentStream({
         case 'tool_start':
         case 'tool_update':
         case 'tool_end':
-        case 'compact': {
+        case 'compact':
+        case 'user_message': {
+          // The steered message left the session's pending tray.
+          if (event.type === 'user_message') handleSessionChanged();
           const submission = envSubmissionRef.current;
           if (
             event.type === 'env_request' &&
@@ -869,7 +911,7 @@ export function useAgentStream({
           break;
       }
     },
-    [abortEnvSubmission, handleSettled, isCurrentSource],
+    [abortEnvSubmission, handleSessionChanged, handleSettled, isCurrentSource],
   );
 
   /**

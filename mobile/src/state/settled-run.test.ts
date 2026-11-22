@@ -46,6 +46,20 @@ describe('a stopped run keeps what it showed until its reply is saved', () => {
     expect(replySaved(messages, 2)).toBe(false);
   });
 
+  it('counts a steered message as part of the reply it joined, not a new turn', () => {
+    const steered = { ...user('also blue'), steered: true };
+    const messages = [user('a'), assistant('A'), steered, assistant('B')];
+    expect(replySaved(messages, 0)).toBe(true);
+    expect(replySaved([...messages, user('next')], 1)).toBe(false);
+    const held = { runId: 'r2', userTurn: 1, checks: 0 } as Parameters<
+      typeof placeHeldReplies
+    >[1][number];
+    // The reply to turn 1 goes after "next", the second real user message.
+    expect([
+      ...placeHeldReplies([...messages, user('next')], [held]).after.keys(),
+    ]).toEqual([4]);
+  });
+
   it('keeps the frozen reply after the re-read budget runs out, until a person checks again', () => {
     const unsaved = transcript([user('a')], [run('r1', 0)]);
     let held = replay({

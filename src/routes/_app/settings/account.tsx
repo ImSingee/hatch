@@ -1,5 +1,6 @@
 import { Stack } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
+import { AgentPreferencesPanel } from '~components/settings/agent-preferences-panel';
 import { ApiKeysPanel } from '~components/settings/api-keys-panel';
 import { AccountProfilePanel } from '~components/settings/account-profile-panel';
 import { ActiveSessionsPanel } from '~components/settings/active-sessions-panel';
@@ -26,6 +27,7 @@ function AccountRoute() {
       <Stack gap="4xl">
         <AccountProfilePanel />
         <HomepagePanel />
+        <AgentPreferencesPanel />
         <ChangePasswordPanel />
         <PasskeysPanel appOrigin={appOrigin} />
         <ApiKeysPanel />

@@ -129,7 +129,10 @@ describe('instance and credential boundaries', () => {
     expect(await client.app(app.id)).toEqual(app);
     expect(await client.sessions(app.id)).toEqual([]);
     expect(await client.createSession()).toEqual({ id: session.id });
-    expect(await client.session(session.id)).toEqual(session);
+    expect(await client.session(session.id)).toEqual({
+      ...session,
+      pending: { paused: false, messages: [] },
+    });
     expect(await client.createHandoff()).toEqual(handoff);
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       `${origin}/api/rpc/hatch.platform.v1.AppService/ListApps`,
@@ -406,6 +409,111 @@ describe('instance and credential boundaries', () => {
     expect(await vault.get(origin)).toBe('fixture-token');
     await client.signOut();
     expect(await vault.get(origin)).toBeNull();
+  });
+});
+
+describe('pending messages and preferences', () => {
+  it('manages pending messages over the session routes and validates replies', async () => {
+    const tray = {
+      paused: false,
+      messages: [
+        {
+          id: 'p1',
+          mode: 'steer',
+          status: 'pending',
+          content: [{ type: 'text', text: 'Use blue' }],
+          text: 'Use blue',
+          images: [],
+          attachments: [],
+          providerId: 'p',
+          modelId: 'm',
+        },
+      ],
+    };
+    const fetcher = vi
+      .fn<FetchLike>()
+      .mockImplementation(async () =>
+        json({ pending: tray, startedRunId: null }),
+      );
+    const { client, vault } = setup(fetcher);
+    await vault.set(origin, 'fixture-token');
+    const message = {
+      providerId: 'p',
+      modelId: 'm',
+      content: [{ type: 'text' as const, text: 'Use blue' }],
+    };
+    expect(await client.enqueuePending('s1', message)).toEqual({
+      pending: tray,
+      startedRunId: null,
+    });
+    await client.updatePendingText('s1', 'p1', 'Use navy');
+    await client.cancelPending('s1', 'p1');
+    await client.sendPendingNow('s1', 'p1');
+    await client.resumePending('s1');
+    const base = `${origin}/api/agent/sessions/s1/pending`;
+    expect(
+      fetcher.mock.calls.map(([url, init]) => [init.method, url, init.body]),
+    ).toEqual([
+      ['POST', base, JSON.stringify(message)],
+      [
+        'PATCH',
+        `${base}/p1`,
+        JSON.stringify({ content: [{ type: 'text', text: 'Use navy' }] }),
+      ],
+      ['DELETE', `${base}/p1`, undefined],
+      ['POST', `${base}/p1/send-now`, '{}'],
+      ['POST', `${base}/resume`, '{}'],
+    ]);
+
+    fetcher.mockResolvedValueOnce(json({ pending: null }));
+    await expect(client.resumePending('s1')).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+  });
+
+  it('reads and writes the message mode through the preference RPC', async () => {
+    const fetcher = vi
+      .fn<FetchLike>()
+      .mockResolvedValueOnce(json({ preferences: { messageMode: 'steer' } }))
+      .mockResolvedValueOnce(json({ preferences: { messageMode: 'queue' } }));
+    const { client, vault } = setup(fetcher);
+    await vault.set(origin, 'fixture-token');
+    expect(await client.agentMessageMode()).toBe('steer');
+    expect(await client.setAgentMessageMode('queue')).toBe('queue');
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      `${origin}/api/rpc/hatch.platform.v1.PreferenceService/GetAgentPreferences`,
+      `${origin}/api/rpc/hatch.platform.v1.PreferenceService/UpdateAgentPreferences`,
+    ]);
+    expect(
+      JSON.parse(
+        new TextDecoder().decode(fetcher.mock.calls[1][1].body as Uint8Array),
+      ),
+    ).toEqual({ messageMode: 'queue' });
+  });
+
+  it('shows a steered message where the run took it in, once', async () => {
+    const fetcher = vi
+      .fn<FetchLike>()
+      .mockResolvedValue(
+        stream([
+          event(1, { type: 'text', delta: 'Working.' }),
+          event(2, { type: 'user_message', pendingId: 'p1', text: 'Use blue' }),
+          event(3, { type: 'user_message', pendingId: 'p1', text: 'Use blue' }),
+          event(4, { type: 'done' }),
+        ]),
+      );
+    const { client, vault } = setup(fetcher);
+    await vault.set(origin, 'fixture-token');
+    let state = initialStreamState();
+    await client.streamRun('run-1', {
+      onEvent: (packet) => {
+        state = reduceStreamEvent(state, packet);
+      },
+    });
+    expect(state.blocks).toEqual([
+      { kind: 'text', text: 'Working.' },
+      { kind: 'steer', id: 'p1', text: 'Use blue' },
+    ]);
   });
 });
 

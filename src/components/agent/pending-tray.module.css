@@ -1,0 +1,94 @@
+/* Sits directly on top of the composer card and reads as part of it. */
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding: 4px;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-lg);
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-text) 2%,
+    var(--mantine-color-body)
+  );
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.paused {
+  padding: 4px 8px;
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-color-yellow-light);
+  color: var(--mantine-color-yellow-light-color);
+}
+
+.row {
+  padding: 6px 8px;
+  border-radius: var(--mantine-radius-md);
+}
+
+.row:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-text) 4%,
+    transparent
+  );
+}
+
+.mode {
+  flex: none;
+  margin-top: 2px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-color-default);
+  padding: 0 4px 6px;
+}
+
+.editor:focus-within {
+  border-color: var(--mantine-color-ember-filled);
+}
+
+.thumb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.thumbImg {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.thumbRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+}
+
+.file {
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+}

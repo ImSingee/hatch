@@ -10,6 +10,7 @@ import {
 import { AskForm } from './ask-form';
 import { finalTextIndex } from './chat-turns';
 import { Markdownish } from './markdownish';
+import { UserMessage } from './message-view';
 import { EnvForm, type EnvEntry } from './env-form';
 import {
   CompactionStep,
@@ -90,6 +91,22 @@ export function StreamingBubble({
             key={index}
             text={block.text}
             active={index === lastThinkingIndex && state.thinkingActive}
+          />,
+        );
+      } else if (block.kind === 'steer') {
+        flush();
+        out.push(
+          <UserMessage
+            key={index}
+            message={{
+              role: 'user',
+              content: [{ type: 'text', text: block.text }],
+              ...(block.composerContent
+                ? { composerContent: block.composerContent }
+                : {}),
+              ...(block.attachments ? { attachments: block.attachments } : {}),
+              steered: true,
+            }}
           />,
         );
       } else if (block.kind === 'compact') {

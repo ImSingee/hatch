@@ -148,6 +148,74 @@ function UserMessageBubble({
   );
 }
 
+/** A user message: its images, files and text bubble, right-aligned. */
+export function UserMessage({
+  message,
+  onToggle,
+}: {
+  message: Extract<ChatMessage, { role: 'user' }>;
+  onToggle?: UserMessageToggle;
+}) {
+  const text = partsToText(
+    message.content,
+    message.attachments,
+    message.composerContent,
+  );
+  const images = partsToImages(message.content);
+  const files = message.attachments ?? [];
+  return (
+    <Box className={classes.userRow}>
+      <Stack gap={6} align="flex-end" maw="80%">
+        {images.length > 0 ? (
+          <Group gap={6} justify="flex-end" wrap="wrap">
+            {images.map((src, i) => (
+              <Image
+                key={i}
+                src={src}
+                alt="Attached image"
+                radius="md"
+                w="auto"
+                mah={260}
+                className={classes.messageImage}
+              />
+            ))}
+          </Group>
+        ) : null}
+        {files.length > 0 ? (
+          <Box className={classes.messageFiles}>
+            {files.map((file) => (
+              <Box
+                component="a"
+                key={file.id}
+                href={`/api/agent/attachments/${encodeURIComponent(file.id)}`}
+                download={file.name}
+                className={classes.messageFile}
+                title={`${file.name} (${formatBytes(file.size)})`}
+              >
+                <IconFile size={16} stroke={1.7} />
+                <Text size="xs" className={classes.messageFileName}>
+                  {file.name}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {formatBytes(file.size)}
+                </Text>
+                <IconDownload size={14} stroke={1.7} />
+              </Box>
+            ))}
+          </Box>
+        ) : null}
+        {text ? (
+          <UserMessageBubble
+            content={message.composerContent}
+            fallback={text}
+            onToggle={onToggle}
+          />
+        ) : null}
+      </Stack>
+    </Box>
+  );
+}
+
 /**
  * Render assistant blocks, grouping consecutive thinking/tool steps into one
  * connected timeline and keeping prose as clean standalone markdown.
@@ -187,6 +255,10 @@ function AssistantBlocks({
           summary={block.summary}
         />,
       );
+    } else if (block.type === 'steer') {
+      // Shown where the run took it in, between the steps before and after.
+      flush();
+      out.push(<UserMessage key={index} message={block.message} />);
     } else {
       const result = toolResults?.get(block.id);
       steps.push(
@@ -255,64 +327,7 @@ export function MessageView({
   onUserMessageToggle?: UserMessageToggle;
 }) {
   if (message.role === 'user') {
-    const text = partsToText(
-      message.content,
-      message.attachments,
-      message.composerContent,
-    );
-    const images = partsToImages(message.content);
-    const files = message.attachments ?? [];
-    return (
-      <Box className={classes.userRow}>
-        <Stack gap={6} align="flex-end" maw="80%">
-          {images.length > 0 ? (
-            <Group gap={6} justify="flex-end" wrap="wrap">
-              {images.map((src, i) => (
-                <Image
-                  key={i}
-                  src={src}
-                  alt="Attached image"
-                  radius="md"
-                  w="auto"
-                  mah={260}
-                  className={classes.messageImage}
-                />
-              ))}
-            </Group>
-          ) : null}
-          {files.length > 0 ? (
-            <Box className={classes.messageFiles}>
-              {files.map((file) => (
-                <Box
-                  component="a"
-                  key={file.id}
-                  href={`/api/agent/attachments/${encodeURIComponent(file.id)}`}
-                  download={file.name}
-                  className={classes.messageFile}
-                  title={`${file.name} (${formatBytes(file.size)})`}
-                >
-                  <IconFile size={16} stroke={1.7} />
-                  <Text size="xs" className={classes.messageFileName}>
-                    {file.name}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {formatBytes(file.size)}
-                  </Text>
-                  <IconDownload size={14} stroke={1.7} />
-                </Box>
-              ))}
-            </Box>
-          ) : null}
-          {text ? (
-            <UserMessageBubble
-              content={message.composerContent}
-              fallback={text}
-              onToggle={onUserMessageToggle}
-            />
-          ) : null}
-        </Stack>
-      </Box>
-    );
+    return <UserMessage message={message} onToggle={onUserMessageToggle} />;
   }
 
   // Standalone tool results are normally merged into their call above; this is

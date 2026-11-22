@@ -27,11 +27,21 @@ export type CompactionBlock = {
   summary: string;
   tokensBefore: number;
 };
+/**
+ * A message the user steered into the run while it worked, shown where it was
+ * injected. Not part of any persisted assistant message: `groupTurns` derives
+ * it from the transcript's `steered` user message.
+ */
+export type SteerBlock = {
+  type: 'steer';
+  message: Extract<ChatMessage, { role: 'user' }>;
+};
 export type AssistantBlock =
   | TextBlock
   | ThinkingBlock
   | ToolCallBlock
-  | CompactionBlock;
+  | CompactionBlock
+  | SteerBlock;
 
 export type ContentPart = {
   type: string;
@@ -46,6 +56,8 @@ export type ChatMessage =
       content: string | ContentPart[];
       attachments?: AgentAttachmentRef[];
       composerContent?: AgentComposerContentPart[];
+      /** Injected into a running run (see `~agent/user-turns`). */
+      steered?: boolean;
     }
   | {
       role: 'assistant';
