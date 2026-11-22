@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   withAppDatabaseLifecycle:
     vi.fn<<T>(id: string, run: () => Promise<T>) => Promise<T>>(),
   stopApp: vi.fn<(id: string) => void>(),
+  killApp: vi.fn<(id: string) => void>(),
   reloadScheduler: vi.fn<() => Promise<void>>(),
   moveMasterToDeploymentTag: vi.fn<() => Promise<string>>(),
   publishPlatformEvent: vi.fn<(event: unknown) => void>(),
@@ -142,6 +143,7 @@ vi.mock('./runtime', () => ({
   >(async () => 1234),
   setKeepAlive: vi.fn<(id: string, on: boolean) => void>(),
   stopApp: mocks.stopApp,
+  killApp: mocks.killApp,
 }));
 vi.mock('./scheduler', () => ({ reloadScheduler: mocks.reloadScheduler }));
 vi.mock('~server/notifications/app-destinations', () => ({
@@ -965,7 +967,7 @@ describe('App Data lifecycle recovery', () => {
       'migration-barrier',
     ]);
     expect(mocks.updates).toContainEqual({ status: 'archived' });
-    expect(mocks.stopApp).toHaveBeenCalledWith(APP_ID);
+    expect(mocks.killApp).toHaveBeenCalledWith(APP_ID);
   });
 
   it('serializes deletion and preserves the row when Data DB drop fails', async () => {

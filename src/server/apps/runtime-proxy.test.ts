@@ -29,7 +29,7 @@ vi.mock('~/db', () => ({
   schema: {},
 }));
 
-const { proxyAppRequest, stopApp } = await import('./runtime');
+const { killApp, proxyAppRequest } = await import('./runtime');
 
 const APP_ID = 'proxy-media-app';
 const DEPLOYMENT_ID = 'proxy-media-deployment';
@@ -371,13 +371,14 @@ beforeEach(() => {
         idleTimer: null,
         drainTimer: null,
         draining: false,
+        terminating: false,
       },
     ]),
   );
 });
 
 afterEach(() => {
-  stopApp(APP_ID);
+  killApp(APP_ID);
 });
 
 afterAll(async () => {

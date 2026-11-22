@@ -1,6 +1,7 @@
 import { listPage } from '~server/list-page';
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
+import { EmptyFilter } from 'drizzle-orm/relations';
 import { AgentService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/agent_pb';
 import { getAgentModelCatalog } from '~server/agent-model-catalog';
 import { createHandoff } from '~server/handoffs';
@@ -12,7 +13,11 @@ import {
 } from '~server/agent-session-store';
 import { sessionOriginError } from '~server/session-http-auth';
 import { sdkPayload } from './sdk';
-import { type HandlerContext, type ConnectRouter } from '@connectrpc/connect';
+import {
+  ConnectError,
+  type HandlerContext,
+  type ConnectRouter,
+} from '@connectrpc/connect';
 import { publicApiContext } from './context';
 import { registerNotificationApi } from './notifications';
 import { AppService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/app_pb';
@@ -20,6 +25,7 @@ import { WorkflowService } from '../../../packages/hatch-platform-api/gen/hatch/
 import { AuthService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/auth_pb';
 import { SdkService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { publicApiError, publicError } from './errors';
+import { AppError } from '~server/errors';
 import { db } from '~/db';
 import { deployApp } from '~server/apps/deploy';
 import {
@@ -28,6 +34,14 @@ import {
   importAppBundleToMaster,
 } from '~server/apps/git';
 import { rollbackAppToVersion } from '~server/apps/manage';
+import {
+  type AppBackendView,
+  getAppBackend,
+  listAppBackendsPage,
+  restartBackendForApp,
+  startBackendForApp,
+  stopBackendForApp,
+} from '~server/apps/backends';
 import { createApp } from '~server/apps/scaffold';
 import { deployWorkflow } from '~server/workflows/deploy';
 import {
@@ -202,7 +216,7 @@ async function list(kind: Kind) {
 /** Icon path per App id, for Apps that have a stored icon. */
 async function appIconPaths(id?: string): Promise<Map<string, string>> {
   const rows = await db.query.apps.findMany({
-    where: id === undefined ? undefined : { id },
+    where: { id: id ?? EmptyFilter },
     columns: { id: true, icon: true },
   });
   return new Map(
@@ -241,6 +255,54 @@ function dataInput(
 ) {
   if (!value) throw publicApiError('BAD_REQUEST');
   return toJson(ValueSchema, value);
+}
+function backendView(view: AppBackendView) {
+  const { runtime } = view;
+  return {
+    id: view.id,
+    slug: view.slug,
+    name: view.name,
+    mode: view.mode,
+    runtimeSupported: view.compatibility?.isSupported ?? false,
+    runtime: {
+      state: runtime.state,
+      pid: runtime.pid ?? undefined,
+      port: runtime.port ?? undefined,
+      startedAt: runtime.startedAt ?? undefined,
+      stoppedAt: runtime.stoppedAt ?? undefined,
+      lastExitCode: runtime.lastExitCode ?? undefined,
+      lastExitSignal: runtime.lastExitSignal ?? undefined,
+      lastError: runtime.lastError ?? undefined,
+      restartCount: runtime.restartCount,
+      keepAlive: runtime.keepAlive,
+      drainingInstances: runtime.drainingInstances,
+    },
+  };
+}
+/** Run one backend control, then answer with the backend's resulting view. */
+async function backendOperation(
+  id: string,
+  operation?: (appId: string) => Promise<unknown>,
+) {
+  try {
+    const row = await find('apps', id);
+    try {
+      await operation?.(row.id);
+    } catch (error) {
+      if (error instanceof AppError || error instanceof ConnectError) {
+        throw error;
+      }
+      // A boot failure carries the process log tail. Keep it out of the
+      // error; the backend view exposes it as lastError.
+      throw publicApiError(
+        'CONFLICT',
+        'The backend did not start. Read lastError with hatch app backend status.',
+      );
+    }
+    return { backend: backendView(await getAppBackend(row.id)) };
+  } catch (error) {
+    throw publicError(error);
+  }
 }
 async function dataOperation<T>(operation: () => Promise<T>) {
   try {
@@ -593,6 +655,36 @@ export function registerPlatformApi(
         return queryAppDatabase(row.id, input.sql, context.signal);
       }),
     { readMaxBytes: deployBodyLimit },
+  );
+  router.rpc(AppService.method.listAppBackends, async (input) => {
+    try {
+      const page = await listAppBackendsPage({
+        limit: input.limit,
+        cursor: input.cursor,
+      });
+      return {
+        backends: page.backends.map(backendView),
+        nextCursor: page.nextCursor ?? undefined,
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.getAppBackend, (input) =>
+    backendOperation(input.id),
+  );
+  router.rpc(AppService.method.startAppBackend, (input) =>
+    backendOperation(input.id, startBackendForApp),
+  );
+  router.rpc(AppService.method.stopAppBackend, (input) =>
+    backendOperation(input.id, (appId) =>
+      stopBackendForApp(appId, { force: input.force }),
+    ),
+  );
+  router.rpc(AppService.method.restartAppBackend, (input) =>
+    backendOperation(input.id, (appId) =>
+      restartBackendForApp(appId, { force: input.force }),
+    ),
   );
   router.rpc(AppService.method.getAppIcon, async (input) =>
     iconMessage(await getAppIcon((await find('apps', input.id)).id)),

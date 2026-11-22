@@ -22,6 +22,7 @@ import {
 } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import {
+  type AppBackend,
   CreateAppRequestSchema,
   AppService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
@@ -287,6 +288,33 @@ function parseCreate<D extends DescMessage>(schema: D, input: CreateInput) {
     );
   }
 }
+
+/** Public backend DTO: absent runtime facts are explicit nulls. */
+function backendView(value: AppBackend | undefined) {
+  const backend = required(value);
+  const runtime = required(backend.runtime);
+  return {
+    id: backend.id,
+    slug: backend.slug,
+    name: backend.name,
+    mode: backend.mode,
+    runtimeSupported: backend.runtimeSupported,
+    runtime: {
+      state: runtime.state,
+      pid: runtime.pid ?? null,
+      port: runtime.port ?? null,
+      startedAt: runtime.startedAt ?? null,
+      stoppedAt: runtime.stoppedAt ?? null,
+      lastExitCode: runtime.lastExitCode ?? null,
+      lastExitSignal: runtime.lastExitSignal ?? null,
+      lastError: runtime.lastError ?? null,
+      restartCount: runtime.restartCount,
+      keepAlive: runtime.keepAlive,
+      drainingInstances: runtime.drainingInstances,
+    },
+  };
+}
+export type AppBackendView = ReturnType<typeof backendView>;
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
@@ -611,6 +639,37 @@ export function cliClient(transport: Transport) {
         deploy: apps.deployApp,
         rollback: apps.rollbackApp,
       }),
+      backend: {
+        list: async (input: { limit?: number; cursor?: string }) => {
+          const result = await apps.listAppBackends(input);
+          return {
+            backends: result.backends.map((value) => backendView(value)),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        get: async (input: { params: { id: string } }) =>
+          backendView((await apps.getAppBackend(input.params)).backend),
+        start: async (input: { params: { id: string } }) =>
+          backendView((await apps.startAppBackend(input.params)).backend),
+        stop: async (input: { params: { id: string }; force: boolean }) =>
+          backendView(
+            (
+              await apps.stopAppBackend({
+                id: input.params.id,
+                force: input.force,
+              })
+            ).backend,
+          ),
+        restart: async (input: { params: { id: string }; force: boolean }) =>
+          backendView(
+            (
+              await apps.restartAppBackend({
+                id: input.params.id,
+                force: input.force,
+              })
+            ).backend,
+          ),
+      },
       kv: async (input: {
         params: { id: string };
         body: QueryAppKvRequest;

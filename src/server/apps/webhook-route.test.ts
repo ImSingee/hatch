@@ -28,6 +28,7 @@ vi.mock('~/db', () => ({
   },
 }));
 vi.mock('~server/apps/runtime', () => ({
+  BackendDeploymentChangedError: class extends Error {},
   proxyAppRequest: mocks.proxyAppRequest,
 }));
 

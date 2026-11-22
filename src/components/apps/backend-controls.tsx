@@ -87,6 +87,18 @@ export function BackendStatus({
           </Badge>
         </Tooltip>
       )}
+      {runtime.drainingInstances > 0 && (
+        <Tooltip
+          label={`${runtime.drainingInstances} previous instance${runtime.drainingInstances === 1 ? ' is' : 's are'} finishing in-flight requests and will exit on ${runtime.drainingInstances === 1 ? 'its' : 'their'} own`}
+          withArrow
+          multiline
+          maw={360}
+        >
+          <Badge size="xs" variant="light" color="gray">
+            {runtime.drainingInstances} draining
+          </Badge>
+        </Tooltip>
+      )}
       {runtime.lastError && (
         <Tooltip label={runtime.lastError} withArrow multiline maw={360}>
           <ThemeIcon size="xs" variant="transparent" color="red">
@@ -133,9 +145,11 @@ export function BackendControls({
     onSuccess: () => toast.success('Backend started'),
   });
   const stop = useMutation({
-    mutationFn: () => stopAppBackendFn({ data: appId }),
+    mutationFn: (force: boolean) =>
+      stopAppBackendFn({ data: { id: appId, force } }),
     onSettled: settled,
-    onSuccess: () => toast.success('Backend stopped'),
+    onSuccess: (_result, force) =>
+      toast.success(force ? 'Backend force-stopped' : 'Backend stopped'),
   });
   const restart = useMutation({
     mutationFn: () => restartAppBackendFn({ data: appId }),
@@ -148,6 +162,9 @@ export function BackendControls({
   // Stop also cancels a boot in progress (starting) and a crashed keep-alive
   // backend's pending auto-restart (stopped but still marked keep-alive).
   const stoppable = runtime.state !== 'stopped' || runtime.keepAlive;
+  // A stop is graceful: retired instances keep finishing the requests they
+  // hold. Once nothing else is left to stop, the same button ends those too.
+  const forceStop = !stoppable && runtime.drainingInstances > 0;
 
   return (
     <Group gap={4} wrap="nowrap">
@@ -177,7 +194,13 @@ export function BackendControls({
         </ActionIcon>
       </Tooltip>
       <Tooltip
-        label={!running && stoppable ? 'Stop (cancels auto-restart)' : 'Stop'}
+        label={
+          forceStop
+            ? 'Force stop (ends in-flight requests)'
+            : !running && stoppable
+              ? 'Stop (cancels auto-restart)'
+              : 'Stop'
+        }
         withArrow
       >
         <ActionIcon
@@ -185,9 +208,9 @@ export function BackendControls({
           color="red"
           size={size}
           loading={stop.isPending}
-          disabled={pending || !stoppable}
-          onClick={() => stop.mutate()}
-          aria-label={`Stop ${name}`}
+          disabled={pending || (!stoppable && !forceStop)}
+          onClick={() => stop.mutate(forceStop)}
+          aria-label={`${forceStop ? 'Force stop' : 'Stop'} ${name}`}
         >
           <IconPlayerStop size={iconSize} stroke={1.8} />
         </ActionIcon>

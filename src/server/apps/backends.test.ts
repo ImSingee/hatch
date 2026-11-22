@@ -22,10 +22,12 @@ vi.mock('~server/apps/runtime', () => {
       lastError: null,
       restartCount: 0,
       keepAlive: false,
+      drainingInstances: 0,
     })),
     startAppBackend: vi.fn<Runtime['startAppBackend']>(async () => {}),
     restartAppBackend: vi.fn<Runtime['restartAppBackend']>(async () => {}),
     stopApp: vi.fn<Runtime['stopApp']>(),
+    killApp: vi.fn<Runtime['killApp']>(),
   };
 });
 
@@ -33,6 +35,7 @@ const { db, schema } = await import('~/db');
 const runtime = await import('~server/apps/runtime');
 const {
   listAppBackends,
+  listAppBackendsPage,
   restartBackendForApp,
   startBackendForApp,
   stopBackendForApp,
@@ -123,6 +126,7 @@ describe('listAppBackends', () => {
       lastError: null,
       restartCount: 1,
       keepAlive: true,
+      drainingInstances: 0,
     });
 
     const [backend] = await listAppBackends();
@@ -199,6 +203,42 @@ describe('backend controls', () => {
     const view = await stopBackendForApp('idle');
     expect(runtime.stopApp).toHaveBeenCalledWith('idle');
     expect(view.state).toBe('stopped');
+  });
+
+  it('pages runnable backends by App id without skipping or repeating any', async () => {
+    for (const id of ['page-c', 'page-a', 'page-b']) await seedApp(id);
+
+    const first = await listAppBackendsPage({ limit: 2 });
+    expect(first.backends.map((backend) => backend.id)).toEqual([
+      'page-a',
+      'page-b',
+    ]);
+    expect(first.nextCursor).toBe('page-b');
+
+    const last = await listAppBackendsPage({
+      limit: 2,
+      cursor: first.nextCursor ?? undefined,
+    });
+    expect(last.backends.map((backend) => backend.id)).toEqual(['page-c']);
+    expect(last.nextCursor).toBeNull();
+
+    await expect(listAppBackendsPage({ limit: 0 })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(listAppBackendsPage({ limit: 101 })).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it('kills instead of draining only on an explicit force stop', async () => {
+    await seedApp('busy');
+    await stopBackendForApp('busy');
+    expect(runtime.stopApp).toHaveBeenCalledWith('busy');
+    expect(runtime.killApp).not.toHaveBeenCalled();
+
+    await stopBackendForApp('busy', { force: true });
+    expect(runtime.killApp).toHaveBeenCalledWith('busy');
+    expect(runtime.stopApp).toHaveBeenCalledOnce();
   });
 
   it('blocks start and restart below the minimum but still allows stop', async () => {

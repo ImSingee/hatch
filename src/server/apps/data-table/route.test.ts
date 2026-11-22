@@ -37,6 +37,7 @@ vi.mock('~server/apps/data-table/realtime', () => ({
 }));
 
 import { handle } from '~/routes/api/app/$appId/data/$.ts';
+import { hatchSignature } from '~server/secrets';
 
 describe('managed Data Table runtime fence', () => {
   beforeEach(() => {
@@ -85,6 +86,102 @@ describe('managed Data Table runtime fence', () => {
     await expect(response.text()).resolves.toContain('inactive deployment');
     expect(mocks.getSession).not.toHaveBeenCalled();
     expect(mocks.subscribeDataChanges).not.toHaveBeenCalled();
+  });
+
+  /** A query signed the way an App backend signs its Data requests. */
+  function backendQuery(deploymentId: string): Request {
+    const body = JSON.stringify({ table: 'todos' });
+    const timestamp = String(Date.now());
+    return new Request('https://hatch.test/api/app/example/data/query', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-hatch-data-deployment': deploymentId,
+        'x-hatch-timestamp': timestamp,
+        'x-hatch-signature': hatchSignature('signing-secret', timestamp, body),
+      },
+      body,
+    });
+  }
+
+  it('lets a retired backend keep querying only while its deployment shares the live schema', async () => {
+    mocks.findApp.mockResolvedValue({
+      status: 'deployed',
+      currentDeploymentId: 'deployment-v2',
+      capabilities: { dataTable: true },
+      dataActivationId: null,
+      dataSchemaHash: 'schema-a',
+      signingSecret: 'signing-secret',
+    });
+    mocks.getSession.mockResolvedValue(null);
+    mocks.queryDataTable.mockResolvedValue({
+      items: [],
+      cursor: null,
+      revision: 0,
+    });
+
+    // deployment-v1 was superseded by a deploy that left the schema alone.
+    mocks.findDeployment.mockResolvedValue({ dataSchemaHash: 'schema-a' });
+    const drained = await handle({ request: backendQuery('deployment-v1') });
+    expect(drained.status).toBe(200);
+    expect(mocks.queryDataTable).toHaveBeenCalledWith(
+      'example',
+      { table: 'todos' },
+      {
+        expectedDeploymentId: 'deployment-v1',
+        acceptSupersededDeployment: true,
+      },
+    );
+
+    // The deploy migrated the schema: old code must not touch it.
+    mocks.queryDataTable.mockClear();
+    mocks.findDeployment.mockResolvedValue({ dataSchemaHash: 'schema-old' });
+    const migrated = await handle({ request: backendQuery('deployment-v1') });
+    expect(migrated.status).toBe(409);
+    expect(mocks.queryDataTable).not.toHaveBeenCalled();
+
+    // A browser session never outlives its deployment, whatever the schema.
+    mocks.findDeployment.mockResolvedValue({ dataSchemaHash: 'schema-a' });
+    mocks.getSession.mockResolvedValue({ user: { id: 'user-1' } });
+    const browser = await handle({
+      request: new Request('https://hatch.test/api/app/example/data/query', {
+        method: 'POST',
+        headers: { 'x-hatch-data-deployment': 'deployment-v1' },
+        body: JSON.stringify({ table: 'todos' }),
+      }),
+    });
+    expect(browser.status).toBe(409);
+    expect(mocks.queryDataTable).not.toHaveBeenCalled();
+  });
+
+  it('holds a query through a short activation fence instead of failing it', async () => {
+    const app = {
+      status: 'deployed',
+      currentDeploymentId: 'deployment-v2',
+      capabilities: { dataTable: true },
+      dataSchemaHash: 'schema-a',
+    };
+    mocks.findApp
+      .mockResolvedValueOnce({ ...app, dataActivationId: 'deployment-v2' })
+      .mockResolvedValueOnce({ ...app, dataActivationId: 'deployment-v2' })
+      .mockResolvedValue({ ...app, dataActivationId: null });
+    mocks.getSession.mockResolvedValue({ user: { id: 'user-1' } });
+    mocks.queryDataTable.mockResolvedValue({
+      items: [],
+      cursor: null,
+      revision: 0,
+    });
+
+    const response = await handle({
+      request: new Request('https://hatch.test/api/app/example/data/query', {
+        method: 'POST',
+        headers: { 'x-hatch-data-deployment': 'deployment-v2' },
+        body: JSON.stringify({ table: 'todos' }),
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.queryDataTable).toHaveBeenCalledOnce();
   });
 
   it('rejects the active deployment below the compatibility minimum', async () => {
@@ -138,7 +235,10 @@ describe('managed Data Table runtime fence', () => {
     expect(mocks.queryDataTable).toHaveBeenCalledWith(
       'example',
       { table: 'todos' },
-      { expectedDeploymentId: 'deployment-v2' },
+      {
+        expectedDeploymentId: 'deployment-v2',
+        acceptSupersededDeployment: false,
+      },
     );
   });
 

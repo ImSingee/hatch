@@ -7,6 +7,7 @@ vi.mock('~/db', async () => {
   return createTestDb();
 });
 vi.mock('./runtime', () => ({
+  BackendDeploymentChangedError: class extends Error {},
   callAppBackend: vi.fn<() => Promise<unknown>>(),
 }));
 

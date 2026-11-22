@@ -16,6 +16,18 @@ export function isFilePathTool(name: string): boolean {
   );
 }
 
+/**
+ * Short label for a file tool path. A relative path that climbs two or more
+ * levels above its root (`../../x`) is harder to read than the absolute path
+ * it stands for, so those show the absolute path instead.
+ */
+export function filePathDisplayLabel(details: FilePathDetails): string {
+  const segments = details.relativePath.split('/');
+  return segments[0] === '..' && segments[1] === '..'
+    ? details.absolutePath
+    : details.relativePath;
+}
+
 /** Safely recognize streamed or persisted path details from untrusted JSON. */
 export function isFilePathDetails(value: unknown): value is FilePathDetails {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;

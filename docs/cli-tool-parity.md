@@ -172,6 +172,19 @@ rejects a size the widget does not declare and names the sizes it does.
 device- or browser-bound operation, so there is no CLI exception.
 `WorkspaceService.SetDashboardAutoRefresh` stays for the mobile client and
 calls the same service.
+||||||| 9e8b5a1
+
+## App backend runtime: CLI only, no Agent Tool
+
+`hatch app backend list|status|start|stop|restart` calls
+`AppService/ListAppBackends`, `GetAppBackend`, `StartAppBackend`,
+`StopAppBackend` and `RestartAppBackend`, which use the same
+`src/server/apps/backends.ts` service as the Backends page and the App
+Operations panel. Sessions, API keys and Run JWTs have the same authority, and
+no operation is bound to a device or browser. The CLI covers every Web UI
+action, including the force stop the UI offers for draining instances
+(`stop --force`), and additionally offers `restart --force`. No Agent Tool is
+added.
 
 ## Known gaps
 

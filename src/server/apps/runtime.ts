@@ -7,6 +7,13 @@
  * out. A retired instance is never routed to again and never revived: a
  * request that arrives while one drains boots a fresh instance beside it.
  *
+ * Deploy, rollback and manual stop retire instances instead of killing them:
+ * a retired instance keeps serving the requests it already holds and exits
+ * once they finish or the drain timeout elapses. Old code cannot reach a
+ * migrated Data schema meanwhile — the Data API checks the deployment each
+ * backend was built for. Only archive, delete and an explicit force stop kill
+ * every instance at once.
+ *
  * Serverless backends start on the first request and are retired once they
  * have had no in-flight request for the idle timeout. Long-running backends
  * are never idle-stopped and restart automatically after an unexpected exit.
@@ -517,10 +524,18 @@ type BackendInstance = {
    * still alive, and its exit is neither a crash nor a restart trigger.
    */
   draining: boolean;
+  /** Set once the exit signal was sent; a terminating instance is past drain. */
+  terminating: boolean;
+  /** Drain deadline while requests are in flight, then the SIGKILL grace. */
   drainTimer: NodeJS.Timeout | null;
 };
 
 type StartingBackend = {
+  /**
+   * The deployment being booted: the caller's expectation at first, then the
+   * one the start resolved from the platform row. Undefined only while a
+   * start without an expectation (an automatic restart) has not resolved it.
+   */
   deploymentId: string | undefined;
   promise: Promise<BackendInstance>;
 };
@@ -579,9 +594,9 @@ function clearInstanceTimers(instance: BackendInstance): void {
 }
 
 /**
- * Retire an instance immediately (stop, restart, redeploy). It
- * leaves the registry at once, so the app can boot a replacement without
- * waiting for the exit event.
+ * Kill an instance immediately, in-flight requests included (archive, delete,
+ * force stop, a superseded cold start). It leaves the registry at once, so
+ * the app can boot a replacement without waiting for the exit event.
  */
 function killInstance(instance: BackendInstance): void {
   instance.draining = true;
@@ -598,16 +613,15 @@ function killInstance(instance: BackendInstance): void {
 const DRAIN_GRACE_MS = 5000;
 
 /**
- * Retire an idle instance gracefully: SIGTERM, then SIGKILL after the grace
- * period. Marking it draining is synchronous, so from this point the app has
- * no routable instance and the next request boots a new one instead of
- * waiting for (or reviving) this one. The instance stays registered until it
- * actually exits so platform shutdown still reaps it.
+ * Ask an instance with nothing left to serve to exit: SIGTERM, then SIGKILL
+ * after the grace. Every graceful shutdown ends this way, including one whose
+ * drain timeout elapsed, so a backend's SIGTERM handler always gets the
+ * chance to stop background work and release what it holds.
  */
-function drainInstance(instance: BackendInstance): void {
-  instance.draining = true;
+function terminateInstance(instance: BackendInstance): void {
+  if (instance.terminating) return;
+  instance.terminating = true;
   clearInstanceTimers(instance);
-  recordBackendStopped(instance.appId, instance.proc.pid ?? null);
   try {
     instance.proc.kill('SIGTERM');
   } catch {
@@ -626,6 +640,39 @@ function drainInstance(instance: BackendInstance): void {
 }
 
 /**
+ * Retire an instance gracefully (deploy, rollback, stop, restart). Marking it
+ * draining is synchronous, so from this point the app has no routable
+ * instance and the next request boots a new one instead of waiting for (or
+ * reviving) this one. Requests it already holds run to completion: the
+ * instance is terminated once nothing is in flight, or when the drain timeout
+ * elapses for requests that never end (long-lived streams). The instance
+ * stays registered until it actually exits so platform shutdown still reaps
+ * it.
+ *
+ * A drain timeout of 0 opts out of draining altogether and kills the instance
+ * at once, as the platform did before graceful retirement.
+ */
+function retireInstance(instance: BackendInstance): void {
+  if (instance.draining) return;
+  const drainTimeoutMs = getPlatformEnv().appBackendDrainTimeoutSeconds * 1000;
+  if (drainTimeoutMs === 0) {
+    killInstance(instance);
+    return;
+  }
+  instance.draining = true;
+  clearInstanceTimers(instance);
+  if (instance.activeRequests === 0) {
+    terminateInstance(instance);
+    return;
+  }
+  instance.drainTimer = setTimeout(() => {
+    instance.drainTimer = null;
+    terminateInstance(instance);
+  }, drainTimeoutMs);
+  instance.drainTimer.unref();
+}
+
+/**
  * (Re)arm the idle timer of an instance that has nothing in flight. The
  * timer callback and {@link leaseInstance} both run synchronously on the
  * event loop, so an instance is either leased or retired, never both.
@@ -638,7 +685,10 @@ function scheduleIdleStop(instance: BackendInstance): void {
   instance.idleTimer = setTimeout(() => {
     instance.idleTimer = null;
     if (instance.draining || instance.activeRequests > 0) return;
-    drainInstance(instance);
+    // An idle instance has nothing to drain, whatever the drain timeout.
+    recordBackendStopped(instance.appId, instance.proc.pid ?? null);
+    instance.draining = true;
+    terminateInstance(instance);
   }, getPlatformEnv().appBackendIdleTimeoutSeconds * 1000);
   instance.idleTimer.unref();
 }
@@ -658,6 +708,12 @@ function leaseInstance(instance: BackendInstance): () => void {
     if (released) return;
     released = true;
     instance.activeRequests -= 1;
+    // The last request of a retired instance just finished: let it exit now
+    // rather than hold the process until the drain timeout.
+    if (instance.draining && instance.activeRequests === 0) {
+      if (isLive(instance)) terminateInstance(instance);
+      return;
+    }
     scheduleIdleStop(instance);
   };
 }
@@ -840,6 +896,47 @@ async function waitForPort(port: number, timeoutMs: number): Promise<void> {
   throw new Error(`backend did not become reachable on port ${port}`);
 }
 
+/**
+ * The deployment a caller resolved is no longer the app's active one: a
+ * deploy or rollback committed in between. Nothing was sent to a backend, so
+ * the caller can resolve the active deployment again and retry.
+ */
+export class BackendDeploymentChangedError extends Error {
+  constructor(id: string) {
+    super(
+      `App "${id}" deployment changed before its backend started. Retry ` +
+        'against the active deployment.',
+    );
+    this.name = 'BackendDeploymentChangedError';
+  }
+}
+
+/** A cold start was cancelled by a stop, deploy or rollback that landed meanwhile. */
+class BackendStartSupersededError extends Error {
+  constructor(id: string) {
+    super(`App "${id}" start was superseded by a stop/redeploy.`);
+    this.name = 'BackendStartSupersededError';
+  }
+}
+
+/**
+ * Tell a caller holding a superseded deployment id apart from a local
+ * instance that is the stale one (another platform process activated a
+ * deployment, or this process has not finalized its own cutover yet).
+ */
+async function assertActiveDeployment(
+  id: string,
+  expectedDeploymentId: string,
+): Promise<void> {
+  const app = await db.query.apps.findFirst({
+    where: { id },
+    columns: { currentDeploymentId: true },
+  });
+  if (app?.currentDeploymentId !== expectedDeploymentId) {
+    throw new BackendDeploymentChangedError(id);
+  }
+}
+
 /** Start (or reuse) the Deno backend for an app and return its local port. */
 export async function ensureAppRunning(
   id: string,
@@ -853,50 +950,80 @@ async function ensureInstance(
   id: string,
   expectedDeploymentId?: string,
 ): Promise<BackendInstance> {
-  const existing = routableInstance(id);
-  if (existing) {
-    if (isLive(existing)) {
+  const starting = startingRegistry();
+  for (;;) {
+    const existing = routableInstance(id);
+    if (existing && !isLive(existing)) {
+      removeInstance(existing);
+      continue;
+    }
+    if (existing) {
       if (
         !expectedDeploymentId ||
         existing.deploymentId === expectedDeploymentId
       ) {
-        await existing.ready;
+        try {
+          await existing.ready;
+        } catch (error) {
+          // A stop or deploy retired this instance before it became ready,
+          // which is what failed its readiness. The request is still wanted:
+          // resolve again, as the caller that started the boot does.
+          if (existing.draining) continue;
+          throw error;
+        }
         return existing;
       }
-      // Another platform process activated a deployment after this backend was
-      // spawned. Preserve keep-alive intent while invalidating only the stale
-      // local instances; the replacement below boots the expected artifact.
-      invalidateLocalBackend(id, true);
-    } else {
-      removeInstance(existing);
+      // Never retire an instance on a caller's word alone: a request that
+      // resolved its deployment just before a cutover must not take down the
+      // instance of the deployment that replaced it.
+      await assertActiveDeployment(id, expectedDeploymentId);
+      // The local instance is the stale one. Retire it, preserving keep-alive
+      // intent; the next iteration boots the active deployment beside it.
+      invalidateLocalBackend(id, {
+        preserveKeepAlive: true,
+        keepDeploymentId: expectedDeploymentId,
+      });
+      continue;
     }
-  }
 
-  // Coalesce concurrent cold starts. Without this, two requests that both find
-  // no routable instance each spawn a backend and the app ends up with two
-  // routable instances. The first caller records a pending-start promise that
-  // later callers await instead of starting again.
-  const starting = startingRegistry();
-  const pending = starting.get(id);
-  if (pending) {
-    if (
-      !expectedDeploymentId ||
-      pending.deploymentId === expectedDeploymentId
-    ) {
-      return pending.promise;
+    // Coalesce concurrent cold starts. Without this, two requests that both
+    // find no routable instance each spawn a backend and the app ends up with
+    // two routable instances. The first caller records a pending-start
+    // promise that later callers await instead of starting again.
+    const pending = starting.get(id);
+    if (pending) {
+      if (
+        !expectedDeploymentId ||
+        pending.deploymentId === expectedDeploymentId
+      ) {
+        return pending.promise;
+      }
+      await assertActiveDeployment(id, expectedDeploymentId);
+      invalidateLocalBackend(id, {
+        preserveKeepAlive: true,
+        keepDeploymentId: expectedDeploymentId,
+      });
+      continue;
     }
-    invalidateLocalBackend(id, true);
-  }
 
-  const startPromise = startBackend(id, expectedDeploymentId);
-  const start = { deploymentId: expectedDeploymentId, promise: startPromise };
-  starting.set(id, start);
-  try {
-    return await startPromise;
-  } finally {
-    // Only clear our own entry: a stopApp() during startup deletes this entry
-    // and a later ensureAppRunning() may register a fresh one we must not drop.
-    if (starting.get(id) === start) starting.delete(id);
+    const start: StartingBackend = {
+      deploymentId: expectedDeploymentId,
+      // startBackend resolves the deployment only after its first await, by
+      // which point `start` is assigned.
+      promise: startBackend(id, expectedDeploymentId, (resolved) => {
+        start.deploymentId = resolved;
+      }),
+    };
+    const startPromise = start.promise;
+    starting.set(id, start);
+    try {
+      return await startPromise;
+    } finally {
+      // Only clear our own entry: a stop during startup deletes this entry
+      // and a later ensureAppRunning() may register a fresh one we must not
+      // drop.
+      if (starting.get(id) === start) starting.delete(id);
+    }
   }
 }
 
@@ -910,7 +1037,15 @@ async function acquireInstance(
   expectedDeploymentId?: string,
 ): Promise<{ port: number; release: () => void }> {
   for (let attempt = 0; ; attempt += 1) {
-    const instance = await ensureInstance(id, expectedDeploymentId);
+    let instance: BackendInstance;
+    try {
+      instance = await ensureInstance(id, expectedDeploymentId);
+    } catch (error) {
+      // The cold start this request was waiting on was cancelled by a stop
+      // or deploy. The request itself is still wanted: resolve again.
+      if (error instanceof BackendStartSupersededError && attempt < 2) continue;
+      throw error;
+    }
     if (!instance.draining) {
       return { port: instance.port, release: leaseInstance(instance) };
     }
@@ -924,7 +1059,8 @@ async function acquireInstance(
 
 async function startBackend(
   id: string,
-  expectedDeploymentId?: string,
+  expectedDeploymentId: string | undefined,
+  onDeploymentResolved: (deploymentId: string) => void,
 ): Promise<BackendInstance> {
   // Snapshot the stop epoch: if stopApp() runs while we're spawning, we abort
   // instead of registering/serving a build the caller has since superseded.
@@ -950,11 +1086,11 @@ async function startBackend(
     throw new Error(`App "${id}" has no active deployment.`);
   }
   if (expectedDeploymentId && targetDeploymentId !== expectedDeploymentId) {
-    throw new Error(
-      `App "${id}" deployment changed before its backend started. Retry ` +
-        'against the active deployment.',
-    );
+    throw new BackendDeploymentChangedError(id);
   }
+  // From here a deploy that keeps this deployment (its finalization, which
+  // retires only replaced builds) no longer cancels this start.
+  onDeploymentResolved(targetDeploymentId);
   try {
     await assertSupportedDeployment(targetDeploymentId);
   } catch (error) {
@@ -1035,10 +1171,7 @@ async function startBackend(
     activeDeploymentId !== targetDeploymentId ||
     (buildMarker.kind === 'deployment' && buildMarker.id !== activeDeploymentId)
   ) {
-    throw new Error(
-      `App "${id}" deployment changed while its backend was starting. Retry ` +
-        'against the active deployment.',
-    );
+    throw new BackendDeploymentChangedError(id);
   }
   const backendDeploymentId = targetDeploymentId;
   const signingSecret = appRow.signingSecret ?? null;
@@ -1169,7 +1302,7 @@ async function startBackend(
     } catch {
       /* best-effort */
     }
-    throw new Error(`App "${id}" start was superseded by a stop/redeploy.`);
+    throw new BackendStartSupersededError(id);
   }
 
   const backend: BackendInstance = {
@@ -1185,6 +1318,7 @@ async function startBackend(
     idleTimer: null,
     drainTimer: null,
     draining: false,
+    terminating: false,
   };
   backend.ready = Promise.race([waitForPort(port, 20000), spawnFailure]);
   addInstance(backend);
@@ -1201,13 +1335,14 @@ async function startBackend(
     clearInstanceTimers(backend);
     removeInstance(backend);
     const uptimeMs = Date.now() - backend.startedAt;
-    // Restart only on an *unexpected* exit. An epoch bump means this process
-    // was superseded by an explicit stop/restart/redeploy — its exit event
-    // often lands after the caller has already re-armed keep-alive for the
-    // replacement, which used to schedule a spurious restart, log a phantom
-    // crash, and inflate the auto-restart count.
-    const willRestart =
-      !retired && stopEpoch(id) === epoch && keepAliveSet().has(id);
+    // Restart only on an *unexpected* exit. A stop, restart or redeploy
+    // retires the instance before its exit event lands — often after the
+    // caller has already re-armed keep-alive for the replacement — so a
+    // retired instance never schedules a restart or logs a phantom crash.
+    // This is deliberately per instance, not per app: an instance of the
+    // newly active deployment that a deploy left running must keep
+    // self-healing after that deploy retired its predecessors.
+    const willRestart = !retired && keepAliveSet().has(id);
     // A self-exit (no signal) is always unexpected — backends are servers.
     // Signal kills are usually our own stop/redeploy SIGKILL, so don't log
     // those; a keep-alive crash is logged by the restart branch below.
@@ -1275,9 +1410,8 @@ async function startBackend(
     // stop/restart/redeploy killed this start mid-boot — the resulting
     // SIGKILL/timeout rejection is expected, not a crash, and recording it
     // would show a phantom "failed to start" on the Backends page.
-    if (stopEpoch(id) === epoch) {
-      recordBackendStartFailure(id, proc.pid ?? null, message);
-    }
+    if (stopEpoch(id) !== epoch) throw new BackendStartSupersededError(id);
+    recordBackendStartFailure(id, proc.pid ?? null, message);
     throw new Error(`Failed to start app "${id}": ${message}\n${log}`);
   }
 
@@ -1285,7 +1419,7 @@ async function startBackend(
   // the next request boots the current build rather than reusing this one.
   if (stopEpoch(id) !== epoch) {
     killInstance(backend);
-    throw new Error(`App "${id}" start was superseded by a stop/redeploy.`);
+    throw new BackendStartSupersededError(id);
   }
 
   recordBackendReady(id, proc.pid ?? null);
@@ -1365,12 +1499,18 @@ export type BackendRuntimeView = {
   restartCount: number;
   /** Whether the platform auto-restarts this backend if it exits. */
   keepAlive: boolean;
+  /**
+   * Retired instances still finishing the requests they hold (after a
+   * deploy, rollback or stop). They receive no new requests.
+   */
+  drainingInstances: number;
 };
 
 export function getBackendRuntimeView(id: string): BackendRuntimeView {
   const snap: BackendRuntimeSnapshot | null = getBackendSnapshot(id);
-  // Draining instances are deliberately not reported: they are already
-  // retired, so the app is `stopped` (or `starting` its replacement).
+  // Draining instances do not define the state: they are already retired,
+  // so the app is `stopped` (or `starting` its replacement). They are only
+  // counted, in `drainingInstances`.
   const backend = routableInstance(id);
   const live = Boolean(backend && isLive(backend));
   // Check the in-flight start first: a cold start registers its process
@@ -1395,6 +1535,9 @@ export function getBackendRuntimeView(id: string): BackendRuntimeView {
     lastError: snap?.lastError ?? null,
     restartCount: snap?.restartCount ?? 0,
     keepAlive: keepAliveSet().has(id),
+    drainingInstances: [...(instanceRegistry().get(id) ?? [])].filter(
+      (instance) => instance.draining && isLive(instance),
+    ).length,
   };
 }
 
@@ -1412,38 +1555,85 @@ export async function startAppBackend(
   await ensureAppRunning(id, opts.expectedDeploymentId);
 }
 
-/** Stop-then-start an app backend (Backends page restart action). */
+/**
+ * Stop-then-start an app backend (Backends page restart action). The previous
+ * instance drains beside the new one unless `force` kills it outright.
+ */
 export async function restartAppBackend(
   id: string,
-  opts: { keepAlive: boolean; expectedDeploymentId?: string },
+  opts: { keepAlive: boolean; expectedDeploymentId?: string; force?: boolean },
 ): Promise<void> {
-  stopApp(id);
+  if (opts.force) killApp(id);
+  else stopApp(id);
   await startAppBackend(id, opts);
 }
 
 /**
- * Stop a running app backend (no-op if not running). Clears the keep-alive
- * mark so long-running backends are not auto-restarted by an intentional stop.
+ * Stop an app backend gracefully (no-op if not running): every instance is
+ * retired at once, so none receives another request, and each exits when the
+ * requests it already holds finish or the drain timeout elapses. Clears the
+ * keep-alive mark so long-running backends are not auto-restarted by an
+ * intentional stop.
+ *
+ * A deploy or rollback passes the deployment it just activated as
+ * `keepDeploymentId`: an instance already booted from that deployment (a
+ * request raced the finalization) is the current one and is left alone.
  */
-export function stopApp(id: string): void {
-  invalidateLocalBackend(id, false);
+export function stopApp(
+  id: string,
+  opts: { keepDeploymentId?: string } = {},
+): void {
+  invalidateLocalBackend(id, {
+    preserveKeepAlive: false,
+    keepDeploymentId: opts.keepDeploymentId,
+  });
 }
 
-function invalidateLocalBackend(id: string, preserveKeepAlive: boolean): void {
-  if (!preserveKeepAlive) keepAliveSet().delete(id);
+/**
+ * Kill every instance of an app immediately, in-flight requests included.
+ * For archive and delete, where nothing of the app may keep running, and for
+ * an explicit force stop.
+ */
+export function killApp(id: string): void {
+  invalidateLocalBackend(id, { preserveKeepAlive: false, kill: true });
+}
+
+function invalidateLocalBackend(
+  id: string,
+  opts: {
+    preserveKeepAlive: boolean;
+    /** SIGKILL instead of draining; also takes draining instances down. */
+    kill?: boolean;
+    /** Leave instances and cold starts of this deployment untouched. */
+    keepDeploymentId?: string;
+  },
+): void {
+  if (!opts.preserveKeepAlive) keepAliveSet().delete(id);
+  const keep = opts.kill ? undefined : opts.keepDeploymentId;
   // Invalidate any in-flight cold start so a subsequent ensureAppRunning() (e.g.
   // the long-running warm start right after a deploy/rollback) boots the current
   // build instead of coalescing onto a start for the build we're replacing.
-  bumpStopEpoch(id);
-  startingRegistry().delete(id);
-  // Every instance goes, draining ones included: after a stop or redeploy no
-  // process of the previous build may keep running.
+  // A start that has not resolved its deployment yet is cancelled too: it may
+  // be booting the replaced build, and its caller retries.
+  const starting = startingRegistry();
+  if (!keep || starting.get(id)?.deploymentId !== keep) {
+    bumpStopEpoch(id);
+    starting.delete(id);
+  }
   const instances = [...(instanceRegistry().get(id) ?? [])];
-  const routable = instances.find((instance) => !instance.draining);
-  for (const instance of instances) killInstance(instance);
-  // The kill's exit event (matching pid) fills in the exit signal moments
-  // later; record the stop itself so the moment is never lost.
-  if (routable) recordBackendStopped(id, routable.proc.pid ?? null);
+  let stopped: BackendInstance | undefined;
+  for (const instance of instances) {
+    if (opts.kill) {
+      if (!instance.draining) stopped = instance;
+      killInstance(instance);
+    } else if (!instance.draining && instance.deploymentId !== keep) {
+      stopped = instance;
+      retireInstance(instance);
+    }
+  }
+  // The exit event (matching pid) fills in the exit signal moments later;
+  // record the stop itself so the moment is never lost.
+  if (stopped) recordBackendStopped(id, stopped.proc.pid ?? null);
 }
 
 /**

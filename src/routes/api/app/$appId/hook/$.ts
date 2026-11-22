@@ -5,7 +5,10 @@ import {
 } from '~/app-compatibility';
 import type { NormalizedManifest } from '~server/apps/manifest';
 import { db } from '~/db';
-import { proxyAppRequest } from '~server/apps/runtime';
+import {
+  BackendDeploymentChangedError,
+  proxyAppRequest,
+} from '~server/apps/runtime';
 import { secretsMatch } from '~server/secrets';
 import { authenticateCredential } from '~server/auth/credentials';
 import {
@@ -18,11 +21,10 @@ import {
  * or the legacy per-App secret and signs raw bytes. None mode is public and
  * unsigned. Both modes strip platform credentials before authored code runs.
  */
-export async function handle({
-  request,
-}: {
-  request: Request;
-}): Promise<Response> {
+export async function handle(
+  { request }: { request: Request },
+  retried = false,
+): Promise<Response> {
   const url = new URL(request.url);
   const match = url.pathname.match(/^\/api\/app\/([^/]+)\/hook(?:\/.*)?$/);
   if (!match) return new Response('Not found', { status: 404 });
@@ -61,7 +63,13 @@ export async function handle({
   // detail (backend start failures embed the process log tail — stack traces,
   // absolute paths, whatever the app printed). Keep this diagnostic fixed;
   // the owner sees backend details on authenticated management surfaces.
-  const fail = () => {
+  const fail = (error: unknown) => {
+    // A deploy or rollback committed after the app row was read. Nothing
+    // reached a backend yet, so re-resolve the deployment (its webhook auth
+    // mode included) instead of failing the delivery.
+    if (error instanceof BackendDeploymentChangedError && !retried) {
+      return handle({ request }, true);
+    }
     console.error(`[app-hook] app ${id} webhook forward failed`);
     return new Response('App backend error', { status: 502 });
   };
@@ -79,8 +87,8 @@ export async function handle({
       return await proxyAppRequest(id, request, base, '/__webhook', {
         expectedDeploymentId: app.currentDeploymentId,
       });
-    } catch {
-      return fail();
+    } catch (error) {
+      return fail(error);
     }
   }
 
@@ -137,8 +145,8 @@ export async function handle({
       // deployed before signing keys existed — they redeploy to gain one.
       signWithSecret: app.signingSecret ?? undefined,
     });
-  } catch {
-    return fail();
+  } catch (error) {
+    return fail(error);
   }
 }
 

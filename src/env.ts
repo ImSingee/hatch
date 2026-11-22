@@ -6,6 +6,7 @@ import {
 import { parseBetaFeatures } from './beta-features';
 
 const DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS = 300;
+const DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS = 300;
 const DEV_AGENT_RUNNER_TOKEN = 'hatch-dev-runner-token';
 const PRERENDER_ONLY_SECRET =
   'Zp8V4nQ2xR7mL5kC9sT3wH6fD1bG0yE4uA8jN2qP7rX5cM9v';
@@ -40,6 +41,13 @@ export type PlatformEnv = Readonly<{
    * request before the platform stops it.
    */
   appBackendIdleTimeoutSeconds: number;
+  /**
+   * How long a retired App backend instance (after a deploy, rollback or
+   * stop) may keep finishing in-flight requests before it is terminated
+   * (SIGTERM, then SIGKILL after a 5-second grace). 0 disables draining and
+   * kills retired instances at once.
+   */
+  appBackendDrainTimeoutSeconds: number;
 }>;
 
 /** Immutable startup configuration for the Agent Runner process. */
@@ -112,6 +120,7 @@ function resolvePlatformEnv(): PlatformEnv {
       agentInternalPort: DEFAULT_INTERNAL_PORT,
       runTokenLifetimeSeconds: 300,
       appBackendIdleTimeoutSeconds: DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS,
+      appBackendDrainTimeoutSeconds: DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS,
     });
   }
 
@@ -146,8 +155,10 @@ function resolvePlatformEnv(): PlatformEnv {
       'HATCH_RUN_TOKEN_TTL_SECONDS must be an integer between 5 and 300.',
     );
 
+  // An empty value (VAR= in a shell or env file) means unset, as in
+  // docker-compose.yml, rather than Number('') === 0.
   const appBackendIdleTimeoutSeconds = Number(
-    process.env.HATCH_APP_IDLE_TIMEOUT_SECONDS ??
+    process.env.HATCH_APP_IDLE_TIMEOUT_SECONDS ||
       DEFAULT_APP_BACKEND_IDLE_TIMEOUT_SECONDS,
   );
   if (
@@ -159,9 +170,24 @@ function resolvePlatformEnv(): PlatformEnv {
       'HATCH_APP_IDLE_TIMEOUT_SECONDS must be an integer between 1 and 86400.',
     );
 
+  // Empty means unset; only an explicit 0 disables draining.
+  const appBackendDrainTimeoutSeconds = Number(
+    process.env.HATCH_APP_DRAIN_TIMEOUT_SECONDS ||
+      DEFAULT_APP_BACKEND_DRAIN_TIMEOUT_SECONDS,
+  );
+  if (
+    !Number.isSafeInteger(appBackendDrainTimeoutSeconds) ||
+    appBackendDrainTimeoutSeconds < 0 ||
+    appBackendDrainTimeoutSeconds > 86_400
+  )
+    throw new Error(
+      'HATCH_APP_DRAIN_TIMEOUT_SECONDS must be an integer between 0 and 86400.',
+    );
+
   return Object.freeze({
     runTokenLifetimeSeconds,
     appBackendIdleTimeoutSeconds,
+    appBackendDrainTimeoutSeconds,
     betaFeatures: parseBetaFeatures(process.env.HATCH_BETA),
     appUrl,
     secret,

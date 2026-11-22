@@ -60,6 +60,9 @@ export async function queryAppDatabase(
     if (signal?.aborted) onAbort();
     try {
       const rows = await pending;
+      // postgres.js 4 reads `timestamp` (without time zone) as UTC, so such a
+      // value renders as its stored wall-clock time with a `Z`, independent
+      // of the platform host's time zone.
       const full =
         rows.length > 0
           ? JSON.stringify(rows.slice(0, 100), null, 2)

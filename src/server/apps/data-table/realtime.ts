@@ -329,10 +329,14 @@ export async function subscribeDataChanges(options: {
   since: number;
   table?: string | null;
   expectedDeploymentId?: string;
+  acceptSupersededDeployment?: boolean;
   send: Subscriber['send'];
   close?: Subscriber['close'];
 }): Promise<() => void> {
-  const access = { expectedDeploymentId: options.expectedDeploymentId };
+  const access = {
+    expectedDeploymentId: options.expectedDeploymentId,
+    acceptSupersededDeployment: options.acceptSupersededDeployment,
+  };
   for (;;) {
     // Avoid opening a new LISTEN client for an App already known to be stale or
     // unavailable. The second check below closes the race with deletion while
