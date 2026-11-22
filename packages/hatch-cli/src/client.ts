@@ -440,11 +440,13 @@ export function cliClient(transport: Transport) {
       delete: async (id: string) => ({
         deletedDashboardId: (await dashboards.deleteDashboard({ id })).id,
       }),
-      availableWidgets: async () => ({
-        widgets: (await dashboards.listAvailableWidgets({})).widgets.map(
-          availableWidgetView,
-        ),
-      }),
+      availableWidgets: async (page: { limit: number; cursor?: string }) => {
+        const result = await dashboards.listAvailableWidgets(page);
+        return {
+          widgets: result.widgets.map(availableWidgetView),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
       addWidget: async (input: {
         dashboardId: string;
         app: string;

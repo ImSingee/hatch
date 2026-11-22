@@ -191,6 +191,20 @@ describe('dashboard RPCs', () => {
           (item: { widgetId: string }) => item.widgetId,
         ),
       ).toEqual(['summary', 'streak']);
+      const firstPage = await call('DashboardService/ListAvailableWidgets', {
+        limit: 1,
+      });
+      expect(firstPage.data.nextCursor).toBe('1');
+      const lastPage = await call('DashboardService/ListAvailableWidgets', {
+        limit: 1,
+        cursor: firstPage.data.nextCursor,
+      });
+      expect(lastPage.data.nextCursor).toBeUndefined();
+      expect(
+        [...firstPage.data.widgets, ...lastPage.data.widgets].map(
+          (item: { widgetId: string }) => item.widgetId,
+        ),
+      ).toEqual(['summary', 'streak']);
 
       const first = await call('DashboardService/AddDashboardWidget', {
         dashboardId: 'home',
@@ -286,6 +300,7 @@ describe('dashboard RPCs', () => {
       ['DashboardService/CreateDashboard', {}, 400],
       ['DashboardService/ListDashboards', { limit: 101 }, 400],
       ['DashboardService/ListDashboards', { cursor: '-1' }, 400],
+      ['DashboardService/ListAvailableWidgets', { limit: 101 }, 400],
       ['DashboardService/CreateDashboard', { name: '   ' }, 400],
       ['DashboardService/UpdateDashboard', { id: 'home' }, 400],
       [

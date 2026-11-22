@@ -317,9 +317,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['dashboard', 'widget', 'available'],
-    usage: 'dashboard widget available',
+    usage: 'dashboard widget available [--limit <n>] [--cursor <cursor>]',
     description:
-      'List the widgets deployed Apps offer: appId, appSlug, widgetId, name, defaultSize and supportedSizes.',
+      'List the widgets deployed Apps offer: appId, appSlug, widgetId, name, defaultSize and supportedSizes. Without --limit it prints every widget; --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.',
   },
   {
     path: ['dashboard', 'widget', 'add'],

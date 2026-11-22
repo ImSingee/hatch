@@ -541,13 +541,15 @@ hatch dashboard update <dashboard-id> --name 'Mornings' --auto-refresh 60
 hatch dashboard update <dashboard-id> --clear-description --no-auto-refresh
 hatch dashboard delete <dashboard-id> --yes
 hatch dashboard widget available --json
+hatch dashboard widget available --limit 20 --cursor <next-cursor> --json
 hatch dashboard widget add <dashboard-id> --app my-app --widget summary
 hatch dashboard widget layout <dashboard-id> <placement-id> --x 6 --w 6
 hatch dashboard widget layout <dashboard-id> <placement-id> --breakpoint mobile --h 3
 hatch dashboard widget remove <dashboard-id> <placement-id>
 ```
 
-`dashboard list` prints every dashboard unless `--limit` (1–100) asks for a
+`dashboard list` and `dashboard widget available` print everything unless
+`--limit` (1–100) asks for a
 page; it then prints `nextCursor` while more follow, to pass as `--cursor`.
 `dashboard get` prints the settings, the placed widgets and their `x`, `y`,
 `w`, `h` in grid units for each breakpoint: `desktop` has 12 columns,
