@@ -1,6 +1,6 @@
 /** Server-only: workflow lifecycle management + run inspection views. */
 import { promises as fs } from 'node:fs';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import {
   workflowArtifactsDir,
   workflowCurrentDir,
@@ -362,6 +362,37 @@ export type WorkflowRunGlobalItem = WorkflowRunSummary & {
   workflowSlug: string;
   workflowName: string;
 };
+
+export type WorkflowLatestRun = {
+  workflowId: string;
+  status: WorkflowRunStatus;
+  createdAt: string;
+  startedAt: string | null;
+};
+
+/**
+ * The newest execution of every workflow that has one. Unlike the recent
+ * executions list, it is not cut off at a global limit, so a workflow that
+ * runs rarely still reports its last run next to one that runs every minute.
+ */
+export async function listLatestWorkflowRuns(): Promise<WorkflowLatestRun[]> {
+  const runs = schema.workflowRuns;
+  const rows = await db
+    .selectDistinctOn([runs.workflowId], {
+      workflowId: runs.workflowId,
+      status: runs.status,
+      createdAt: runs.createdAt,
+      startedAt: runs.startedAt,
+    })
+    .from(runs)
+    .orderBy(runs.workflowId, desc(runs.createdAt), desc(runs.id));
+  return rows.map((row) => ({
+    workflowId: row.workflowId,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    startedAt: row.startedAt?.toISOString() ?? null,
+  }));
+}
 
 /** Recent executions across every workflow, newest first. */
 export async function listRecentWorkflowRuns(

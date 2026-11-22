@@ -485,6 +485,97 @@ be decoded, `TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
 `modelId` and every candidate with `id` and `path`, plus `file` for the ones
 that were saved, so no image has to be generated again.
 
+## Theme and pins
+
+```sh
+hatch theme get --json
+hatch theme set --accent teal
+hatch pin list --json
+hatch pin list --limit 20 --cursor <next-cursor> --json
+hatch pin add --app my-app --label Inbox --entry /inbox
+hatch pin add --app my-app --if-absent
+hatch pin update <pin-id> --label 'Inbox' --clear-entry
+hatch pin reorder --pin <pin-id> --pin <pin-id>
+hatch pin remove --pin <pin-id>
+hatch pin add --workflow my-workflow
+hatch pin remove --dashboard <dashboard-id>
+```
+
+`theme get` prints the chosen `accent`, the `defaultAccent` and every accent
+with its colour; `theme set` replaces the accent for the whole instance and
+signed-in clients recolour without a reload.
+
+`pin list` prints App pins in navigation order (`id` is the pin id, which
+`update`, `remove --pin` and `reorder --pin` take), pinned Workflows and pinned
+dashboards. Without `--limit` it prints every pin. `--limit` (1–100) pages
+one sequence, App pins first, then Workflows, then dashboards, and prints
+`nextCursor` while more entries follow; pass it as `--cursor`. An App can
+have several pins: `pin add --app` always adds one and
+`--if-absent` returns the existing pin instead (`created: false`). `--entry`
+is the fragment the pin opens, with or without `#`. `pin update` leaves
+omitted fields unchanged and `--clear-entry` makes the pin open the App root.
+`pin remove --app` deletes every pin of the App and prints `removedPinIds`.
+`--workflow` and `--dashboard` only set the pinned flag. `pin reorder` moves
+the listed ids to the front in the order given, keeps unlisted ones in their
+relative order after them, and prints the complete new order; `--dashboard`
+orders all dashboards, pinned or not.
+
+Local rejections exit 2 with `invalid_arguments`: an `--accent` the tokens do
+not define, no target or more than one of `--app`, `--workflow`, `--dashboard`
+and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
+`--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`, an
+`--entry` longer than 512 characters (the platform also rejects one, never
+shortening it),
+`--entry` with `--clear-entry`, `pin update` with nothing to change, and a
+repeated id in `pin reorder`, a `--limit` outside 1–100, a `--cursor` that
+is not a printed `nextCursor`, a flag the command does not take and a flag
+given without its value (the message names the flag). Platform errors: `NOT_FOUND` (5) for an unknown
+App, Workflow, dashboard or pin id, and `BAD_REQUEST` (2).
+
+## Dashboards
+
+```sh
+hatch dashboard list --json
+hatch dashboard list --limit 20 --cursor <next-cursor> --json
+hatch dashboard get <dashboard-id> --json
+hatch dashboard create --name 'Morning' --description 'What I check first'
+hatch dashboard update <dashboard-id> --name 'Mornings' --auto-refresh 60
+hatch dashboard update <dashboard-id> --clear-description --no-auto-refresh
+hatch dashboard delete <dashboard-id> --yes
+hatch dashboard widget available --json
+hatch dashboard widget available --limit 20 --cursor <next-cursor> --json
+hatch dashboard widget add <dashboard-id> --app my-app --widget summary
+hatch dashboard widget layout <dashboard-id> <placement-id> --x 6 --w 6
+hatch dashboard widget layout <dashboard-id> <placement-id> --breakpoint mobile --h 3
+hatch dashboard widget remove <dashboard-id> <placement-id>
+```
+
+`dashboard list` and `dashboard widget available` print everything unless
+`--limit` (1–100) asks for a
+page; it then prints `nextCursor` while more follow, to pass as `--cursor`.
+`dashboard get` prints the settings, the placed widgets and their `x`, `y`,
+`w`, `h` in grid units for each breakpoint: `desktop` has 12 columns,
+`tablet` 8 and `mobile` 4. A widget's `id` there is its placement id, which
+`widget layout` and `widget remove` take. `supportedSizes` lists the only
+footprints a widget accepts; empty means any size from 2×2 up. `widget add`
+places a widget below the others at its default size and prints the new
+`placementId`; position flags place it at one breakpoint instead, and the
+other breakpoints follow. `widget layout` changes one breakpoint (desktop
+unless `--breakpoint` is given) and keeps omitted numbers; widgets under the
+new position move down and empty rows close up, so read the printed layouts.
+`update` leaves omitted fields unchanged; `--auto-refresh` takes seconds
+(1 to 3600). Pin, unpin and reorder dashboards with `hatch pin`.
+
+Local rejections exit 2 with `invalid_arguments`: no field to change, a blank
+`--name` or `--description`, `--description` with `--clear-description`,
+`--auto-refresh` with `--no-auto-refresh`, a number outside the grid of the
+breakpoint, `--breakpoint` without a number, `delete` without `--yes`, a
+`--limit` outside 1–100 and a `--cursor` that is not a printed `nextCursor`.
+Platform errors: `NOT_FOUND` (5) for an unknown dashboard, App, widget or
+placement; `BAD_REQUEST` (2) for a size the widget does not support, named in
+the message; `CONFLICT` (6) for a widget that is already on the dashboard or
+deleting the last dashboard.
+
 ## Notifications
 
 `hatch notification ...` manages the notification center with a user session,

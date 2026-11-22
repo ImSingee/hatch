@@ -28,6 +28,8 @@ export type SessionDetail = {
   appIds: string[];
   providerId: string | null;
   modelId: string | null;
+  /** Runner whose workspace holds this chat; null until a run is accepted. */
+  runnerId: string | null;
   /** Changes whenever the persisted session is mutated; used as a Retry CAS. */
   updatedAt: string;
   messages: JsonValue[];
@@ -142,6 +144,7 @@ export async function loadSessionDetail(
         appIds: associations.map((association) => association.appId).sort(),
         providerId: row.providerId,
         modelId: row.modelId,
+        runnerId: row.workspaceRunnerId,
         updatedAt: row.updatedAt.toISOString(),
         messages: row.messages,
         activeRun,

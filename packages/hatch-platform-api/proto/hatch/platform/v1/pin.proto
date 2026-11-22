@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// Pins are the shortcuts in the platform navigation: App pins (an App can
+// have several, each with its own label and entry point), and the pinned flag
+// of Workflows and dashboards.
+service PinService {
+  rpc ListPins(ListPinsRequest) returns (ListPinsResponse);
+  rpc PinApp(PinAppRequest) returns (PinAppResponse);
+  rpc UpdateAppPin(UpdateAppPinRequest) returns (UpdateAppPinResponse);
+  rpc UnpinApp(UnpinAppRequest) returns (UnpinAppResponse);
+  rpc ReorderAppPins(ReorderAppPinsRequest) returns (ReorderAppPinsResponse);
+  rpc ReorderDashboards(ReorderDashboardsRequest) returns (ReorderDashboardsResponse);
+  rpc SetWorkflowPinned(SetWorkflowPinnedRequest) returns (SetWorkflowPinnedResponse);
+  rpc SetDashboardPinned(SetDashboardPinnedRequest) returns (SetDashboardPinnedResponse);
+}
+
+message PinnedApp {
+  // Pin identity, not App identity: one App can have multiple pins.
+  string id = 1;
+  string app_id = 2;
+  string app_slug = 3;
+  string label = 4;
+  // Bare fragment without '#'; unset opens the App root.
+  optional string entry_hash = 5;
+  // draft, building, deployed, failed or archived. Navigation hides pins of
+  // archived Apps.
+  string app_status = 6;
+}
+
+message PinnedWorkflow {
+  string id = 1;
+  string slug = 2;
+  string name = 3;
+}
+
+message PinnedDashboard {
+  string id = 1;
+  string name = 2;
+}
+
+message ListPinsRequest {
+  // Pages walk one sequence: App pins, then pinned Workflows, then pinned
+  // dashboards, each in the order below. The cursor is the next_cursor of
+  // the previous page.
+  optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Entries per page across the three lists; 0 returns every entry.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+}
+
+message ListPinsResponse {
+  // In navigation order.
+  repeated PinnedApp app_pins = 1;
+  // Most recently updated first; archived Workflows are left out.
+  repeated PinnedWorkflow workflows = 2;
+  // In dashboard order.
+  repeated PinnedDashboard dashboards = 3;
+  // Set when more entries follow this page.
+  optional string next_cursor = 4;
+}
+
+message PinAppRequest {
+  // App id or slug.
+  string app = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Defaults to the App name.
+  optional string label = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  // Fragment the pin opens, with or without a leading '#'.
+  optional string entry_hash = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 2048
+  }];
+  // When set and the App already has a pin, returns that pin unchanged
+  // instead of adding another; label and entry_hash must then be unset.
+  bool if_absent = 4;
+}
+
+message PinAppResponse {
+  PinnedApp pin = 1;
+  // False when if_absent found an existing pin.
+  bool created = 2;
+}
+
+message UpdateAppPinRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Unset leaves the label unchanged.
+  optional string label = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  // Unset leaves the entry point unchanged; empty clears it so the pin opens
+  // the App root.
+  optional string entry_hash = 3 [(buf.validate.field).string.max_len = 2048];
+}
+
+message UpdateAppPinResponse {
+  PinnedApp pin = 1;
+}
+
+message UnpinAppRequest {
+  oneof target {
+    option (buf.validate.oneof).required = true;
+    // Removes this one pin.
+    string pin_id = 1 [(buf.validate.field).string = {
+      min_len: 1
+      max_len: 200
+    }];
+    // App id or slug: removes every pin of the App.
+    string app = 2 [(buf.validate.field).string = {
+      min_len: 1
+      max_len: 200
+    }];
+  }
+}
+
+message UnpinAppResponse {
+  // Ids of the pins that were removed.
+  repeated string removed_pin_ids = 1;
+}
+
+message ReorderAppPinsRequest {
+  // Pin ids in their new order. Pins that are not listed keep their relative
+  // order after the listed ones.
+  repeated string pin_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 1000
+    unique: true
+    items: {
+      string: {
+        min_len: 1
+        max_len: 200
+      }
+    }
+  }];
+}
+
+message ReorderAppPinsResponse {
+  // Every App pin in its new order.
+  repeated PinnedApp app_pins = 1;
+}
+
+message ReorderDashboardsRequest {
+  // Dashboard ids in their new order, pinned or not. Dashboards that are not
+  // listed keep their relative order after the listed ones.
+  repeated string dashboard_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 1000
+    unique: true
+    items: {
+      string: {
+        min_len: 1
+        max_len: 200
+      }
+    }
+  }];
+}
+
+message ReorderDashboardsResponse {
+  // Every dashboard id in its new order.
+  repeated string dashboard_ids = 1;
+}
+
+message SetWorkflowPinnedRequest {
+  // Workflow id or slug.
+  string workflow = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  bool pinned = 2;
+}
+
+message SetWorkflowPinnedResponse {
+  string id = 1;
+  bool pinned = 2;
+}
+
+message SetDashboardPinnedRequest {
+  string dashboard_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  bool pinned = 2;
+}
+
+message SetDashboardPinnedResponse {
+  string id = 1;
+  bool pinned = 2;
+}

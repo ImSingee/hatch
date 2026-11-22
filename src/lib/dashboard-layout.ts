@@ -300,3 +300,46 @@ export function deriveDashboardLayouts(
 
   return result;
 }
+
+/**
+ * Close vertical gaps the way the layout editor does: every item moves up
+ * until it meets the top or another item.
+ */
+export function compactDashboardLayout(
+  layout: DashboardLayoutItem[],
+): DashboardLayoutItem[] {
+  const placed: DashboardLayoutItem[] = [];
+  for (const item of [...layout].sort(compareLayoutItems)) {
+    let y = item.y;
+    while (
+      y > 0 &&
+      !placed.some((other) => overlaps({ ...item, y: y - 1 }, other))
+    )
+      y -= 1;
+    placed.push({ ...item, y });
+  }
+  return placed.sort(compareLayoutItems);
+}
+
+/**
+ * Put one item exactly where it was asked to go and push whatever it lands on
+ * downward, then close the gaps. This is what dropping a widget in the layout
+ * editor does, for callers that set a position without the editor.
+ */
+export function placeDashboardLayoutItem(
+  layout: DashboardLayoutItem[],
+  item: DashboardLayoutItem,
+): DashboardLayoutItem[] {
+  const placed: DashboardLayoutItem[] = [item];
+  const others = layout
+    .filter((other) => other.id !== item.id)
+    .sort(compareLayoutItems);
+  for (const other of others) {
+    let y = other.y;
+    while (placed.some((taken) => overlaps({ ...other, y }, taken))) y += 1;
+    placed.push({ ...other, y });
+  }
+  // Compact around the placed item: it keeps its column and only rises when
+  // nothing is above it, exactly as the editor shows the result.
+  return compactDashboardLayout(placed);
+}

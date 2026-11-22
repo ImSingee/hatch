@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { db, schema } from '~/db';
+import { db } from '~/db';
 import type { JsonObject, WorkflowStatus } from '~/db/schema';
 import {
   type NetworkAccessView,
@@ -16,6 +16,7 @@ import {
   workflowCompatibility,
 } from '~/workflow-compatibility';
 import { authMiddleware } from './auth';
+import { setWorkflowPinned } from './pins';
 import { idAndDeploymentSchema, idSchema } from './validation';
 import {
   workflowNetworkPolicyFromManifest,
@@ -25,6 +26,7 @@ import {
 import {
   deleteWorkflow,
   getWorkflowRun as loadWorkflowRun,
+  listLatestWorkflowRuns,
   listRecentWorkflowRuns,
   listWorkflowDeployments as loadWorkflowDeployments,
   listWorkflowRuns as loadWorkflowRuns,
@@ -33,7 +35,6 @@ import {
   setWorkflowArchived,
   workflowDeploymentBuildLog,
 } from './workflows/manage';
-import { eq } from 'drizzle-orm';
 import {
   ensureWorkflowScheduler,
   listWorkflowCronJobs,
@@ -188,11 +189,8 @@ export const setWorkflowPinFn = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, pinned: z.boolean() }).parse(input),
   )
   .handler(async ({ data }) => {
-    await db
-      .update(schema.workflows)
-      .set({ pinned: data.pinned })
-      .where(eq(schema.workflows.id, data.id));
-    return { pinned: data.pinned };
+    const result = await setWorkflowPinned(data.id, data.pinned);
+    return { pinned: result.pinned };
   });
 
 export const setWorkflowSlugFn = createServerFn({ method: 'POST' })
@@ -303,6 +301,11 @@ export const listWorkflowRuns = createServerFn({ method: 'GET' })
   .handler(async ({ data: id }) => {
     return loadWorkflowRuns(id);
   });
+
+/** The newest execution of each workflow, for the workflow cards. */
+export const listLatestRunPerWorkflow = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(() => listLatestWorkflowRuns());
 
 export const listAllWorkflowRuns = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])

@@ -1,3 +1,4 @@
+import { listPage } from '~server/list-page';
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
 import { EmptyFilter } from 'drizzle-orm/relations';
@@ -94,7 +95,81 @@ import {
   type ImageModelState,
 } from '~server/images/model';
 
+import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import { getThemeState, setThemeAccent } from '~server/theme-settings';
+import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
+import {
+  listPins,
+  pinApp,
+  reorderAppPins,
+  reorderDashboards,
+  setDashboardPinned,
+  setWorkflowPinned,
+  unpinApp,
+  updateAppPin,
+} from '~server/pins';
+import type { SidebarItem } from '~server/workspace-read';
+import { DashboardService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/dashboard_pb';
+import {
+  addDashboardWidget,
+  createDashboard,
+  deleteDashboard,
+  getDashboardData,
+  listAvailableWidgets,
+  listDashboards,
+  removeDashboardWidget,
+  setDashboardWidgetLayout,
+  updateDashboard,
+  type Dashboard,
+  type DashboardData,
+} from '~server/dashboard-service';
+import type { DashboardBreakpoint } from '~/lib/dashboard-layout';
+
 export { publicApiContext };
+const dashboardMessage = (dashboard: Dashboard) => ({
+  id: dashboard.id,
+  name: dashboard.name,
+  description: dashboard.description ?? undefined,
+  pinned: dashboard.pinned,
+  autoRefreshSeconds: dashboard.autoRefreshSeconds,
+});
+
+async function dashboardDetail(id: string, data?: DashboardData) {
+  const [dashboards, current] = await Promise.all([
+    listDashboards(),
+    data ?? getDashboardData(id),
+  ]);
+  const dashboard = dashboards.find((item) => item.id === id);
+  if (!dashboard) throw publicApiError('NOT_FOUND', 'Dashboard not found.');
+  return {
+    dashboard: dashboardMessage(dashboard),
+    widgets: current.widgets.map((widget) => ({
+      id: widget.id,
+      appId: widget.appId,
+      appSlug: widget.appSlug,
+      appName: widget.appName,
+      widgetId: widget.widgetId,
+      name: widget.name,
+      defaultSize: widget.defaultSize,
+      supportedSizes: widget.supportedSizes,
+    })),
+    layouts: current.layouts,
+    revision: current.revision,
+  };
+}
+
+const widgetPosition = (position: {
+  breakpoint: string;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+}) => ({
+  ...position,
+  // Protovalidate has already limited this to the three breakpoints.
+  breakpoint: position.breakpoint as DashboardBreakpoint,
+});
+
 const columns = {
   id: true,
   slug: true,
@@ -159,6 +234,14 @@ const iconMessage = (icon: AppIconView) => ({
 });
 const imageModelMessage = (state: ImageModelState) => ({
   state: { ...state, selected: state.selected ?? undefined },
+});
+const pinMessage = (pin: SidebarItem) => ({
+  id: pin.id,
+  appId: pin.appId,
+  appSlug: pin.appSlug,
+  label: pin.label,
+  entryHash: pin.entryHash ?? undefined,
+  appStatus: pin.status,
 });
 const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
 async function associate(id: string, context: HandlerContext) {
@@ -479,6 +562,7 @@ export function registerPlatformApi(
             ...session,
             providerId: session.providerId ?? undefined,
             modelId: session.modelId ?? undefined,
+            runnerId: session.runnerId ?? undefined,
             messages: session.messages.map((message) =>
               fromJson(ValueSchema, message),
             ),
@@ -647,6 +731,138 @@ export function registerPlatformApi(
       );
       return { modelId: result.model, candidates: result.images };
     },
+  });
+  router.service(ThemeService, {
+    getTheme: async () => ({ theme: await getThemeState() }),
+    setTheme: async (input) => ({ theme: await setThemeAccent(input.accent) }),
+  });
+  router.service(PinService, {
+    listPins: async (input) => {
+      const pins = await listPins();
+      // One sequence across the three lists, in the documented order.
+      const entries = [
+        ...pins.appPins.map((pin) => ({ kind: 'app' as const, pin })),
+        ...pins.workflows.map((pin) => ({ kind: 'workflow' as const, pin })),
+        ...pins.dashboards.map((pin) => ({ kind: 'dashboard' as const, pin })),
+      ];
+      const page = listPage(entries, input);
+      return {
+        appPins: page.items.flatMap((entry) =>
+          entry.kind === 'app' ? [pinMessage(entry.pin)] : [],
+        ),
+        workflows: page.items.flatMap((entry) =>
+          entry.kind === 'workflow' ? [entry.pin] : [],
+        ),
+        dashboards: page.items.flatMap((entry) =>
+          entry.kind === 'dashboard' ? [entry.pin] : [],
+        ),
+        nextCursor: page.nextCursor,
+      };
+    },
+    pinApp: async (input) => {
+      const result = await pinApp(input);
+      return { pin: pinMessage(result.pin), created: result.created };
+    },
+    updateAppPin: async (input) => ({
+      pin: pinMessage(
+        await updateAppPin(input.id, {
+          label: input.label,
+          // Present but empty clears the entry point.
+          entryHash:
+            input.entryHash === undefined ? undefined : input.entryHash || null,
+        }),
+      ),
+    }),
+    unpinApp: async (input) => {
+      if (input.target.case === 'pinId')
+        return { removedPinIds: await unpinApp({ pinId: input.target.value }) };
+      if (input.target.case === 'app')
+        return { removedPinIds: await unpinApp({ app: input.target.value }) };
+      throw publicApiError('BAD_REQUEST');
+    },
+    reorderAppPins: async (input) => ({
+      appPins: (await reorderAppPins(input.pinIds)).map(pinMessage),
+    }),
+    reorderDashboards: async (input) => ({
+      dashboardIds: await reorderDashboards(input.dashboardIds),
+    }),
+    setWorkflowPinned: (input) =>
+      setWorkflowPinned(input.workflow, input.pinned),
+    setDashboardPinned: (input) =>
+      setDashboardPinned(input.dashboardId, input.pinned),
+  });
+  router.service(DashboardService, {
+    listDashboards: async (input) => {
+      const page = listPage(await listDashboards(), input);
+      return {
+        dashboards: page.items.map(dashboardMessage),
+        nextCursor: page.nextCursor,
+      };
+    },
+    getDashboard: async (input) => ({
+      detail: await dashboardDetail(input.id),
+    }),
+    createDashboard: async (input) => ({
+      dashboard: dashboardMessage(await createDashboard(input)),
+    }),
+    updateDashboard: async (input) => ({
+      dashboard: dashboardMessage(
+        await updateDashboard(input.id, {
+          name: input.name,
+          description: input.description,
+          autoRefreshSeconds: input.autoRefreshSeconds,
+        }),
+      ),
+    }),
+    deleteDashboard: async (input) => {
+      await deleteDashboard(input.id);
+      return { id: input.id };
+    },
+    listAvailableWidgets: async (input) => {
+      const page = listPage(await listAvailableWidgets(), input);
+      return {
+        widgets: page.items.map((widget) => ({
+          appId: widget.appId,
+          appSlug: widget.appSlug,
+          appName: widget.appName,
+          widgetId: widget.widgetId,
+          name: widget.name,
+          defaultSize: widget.defaultSize,
+          supportedSizes: widget.supportedSizes,
+        })),
+        nextCursor: page.nextCursor,
+      };
+    },
+    addDashboardWidget: async (input) => {
+      const result = await addDashboardWidget(input.dashboardId, {
+        app: input.app,
+        widgetId: input.widgetId,
+        position: input.position && widgetPosition(input.position),
+      });
+      return {
+        detail: await dashboardDetail(input.dashboardId, result.data),
+        placementId: result.placementId,
+      };
+    },
+    setDashboardWidgetLayout: async (input) => {
+      if (!input.position) throw publicApiError('BAD_REQUEST');
+      return {
+        detail: await dashboardDetail(
+          input.dashboardId,
+          await setDashboardWidgetLayout(
+            input.dashboardId,
+            input.placementId,
+            widgetPosition(input.position),
+          ),
+        ),
+      };
+    },
+    removeDashboardWidget: async (input) => ({
+      detail: await dashboardDetail(
+        input.dashboardId,
+        await removeDashboardWidget(input.dashboardId, input.placementId),
+      ),
+    }),
   });
   router.rpc(AppService.method.listApps, apps.list);
   router.rpc(AppService.method.createApp, apps.create);
