@@ -17,6 +17,7 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
+import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
 import { db, schema } from '../db';
 import type { JsonValue } from '../db/schema';
 
@@ -24,6 +25,10 @@ const imageModelConfigSchema = z
   .object({ providerId: z.string().min(1), modelId: z.string().min(1) })
   .nullable();
 export type ImageModelConfig = z.infer<typeof imageModelConfigSchema>;
+
+/** The accents come from the design tokens; nothing else lists them. */
+const uiThemeConfigSchema = z.object({ accent: z.enum(ACCENT_NAMES) });
+export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
 
 type ConfigEntry<T> = {
   schema: z.ZodType<T>;
@@ -70,6 +75,14 @@ const REGISTRY = {
     schema: imageModelConfigSchema,
     fallback: null,
   } satisfies ConfigEntry<ImageModelConfig>,
+  /**
+   * The instance-wide look every client applies. A stored accent that the
+   * tokens no longer define falls back to the default accent.
+   */
+  'ui.theme': {
+    schema: uiThemeConfigSchema,
+    fallback: { accent: DEFAULT_ACCENT },
+  } satisfies ConfigEntry<UiThemeConfig>,
 } as const;
 
 export type PlatformConfigKey = keyof typeof REGISTRY;

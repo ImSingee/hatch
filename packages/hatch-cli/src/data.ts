@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { configPath, resolveCredential } from './config';
 import { platformClient } from './client';
-import { CliError } from './error';
+import { argumentsError, CliError } from './error';
 import { readInput, readTextInput } from './input';
 import {
   DATA_CALL_BODY_LIMIT,
@@ -59,11 +59,8 @@ export async function runData(
       options,
       allowPositionals: true,
     });
-  } catch {
-    throw new CliError(
-      'invalid_arguments',
-      'Invalid data arguments. Use hatch help.',
-    );
+  } catch (error) {
+    throw argumentsError(error, 'app');
   }
   const v = parsed.values;
   const [id, key] = parsed.positionals;

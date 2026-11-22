@@ -1,48 +1,16 @@
-/** Server functions for sidebar app pins. */
+/** Server functions for sidebar app pins; the domain logic is in `pins.ts`. */
 import { createServerFn } from '@tanstack/react-start';
-import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, schema } from '~/db';
-import { normalizeEntryHash } from './apps/sidebar';
 import { authMiddleware } from './auth';
-import { persistSortOrder } from './sort-order';
+import { pinApp, reorderAppPins, unpinApp, updateAppPin } from './pins';
 import { readSidebarItems } from './workspace-read';
 import { idListSchema, idSchema, nameSchema } from './validation';
-
-// Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
-// Existing namespaces elsewhere: appDeployLock=1 (apps/deploy.ts),
-// workflowDeployLock=2 (workflows/deploy.ts), APP_KV_LOCK_NS=3
-// (apps/kv.ts), DASHBOARDS_LOCK_NS=5 (dashboards.ts).
-const SIDEBAR_PIN_LOCK_NS = 4;
 
 export type { SidebarItem } from './workspace-read';
 
 export const listSidebarItems = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .handler(() => readSidebarItems());
-
-/** Next sidebar sortOrder: max+1, so deletions never cause collisions. */
-const nextSidebarSortOrder = sql`(select coalesce(max(${schema.sidebarItems.sortOrder}), -1) + 1 from ${schema.sidebarItems})`;
-
-async function appendSidebarPin(appId: string) {
-  // One global sidebar-insert lock (not per-app): it serializes this insert
-  // against setSidebarPin AND makes the max+1 sortOrder allocation safe across
-  // concurrent pins of *different* apps. Pin writes are rare; contention is nil.
-  return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(${SIDEBAR_PIN_LOCK_NS}, 0)`,
-    );
-    const app = await tx.query.apps.findFirst({
-      where: { id: appId },
-    });
-    if (!app) throw new Error('App not found.');
-    const [row] = await tx
-      .insert(schema.sidebarItems)
-      .values({ appId, label: app.name, sortOrder: nextSidebarSortOrder })
-      .returning();
-    return row;
-  });
-}
 
 /**
  * App-level pin toggle used by the app page: `pinned: true` ensures the app has
@@ -54,39 +22,9 @@ export const setSidebarPin = createServerFn({ method: 'POST' })
     z.object({ appId: idSchema, pinned: z.boolean() }).parse(input),
   )
   .handler(async ({ data }) => {
-    if (data.pinned) {
-      // The app_id index is no longer unique (apps can be pinned many times via
-      // addSidebarItem), so guard this "ensure one pin" toggle against
-      // concurrent calls with the global sidebar-insert advisory lock —
-      // otherwise two racing requests could both pass the existence check and
-      // create duplicates. The lock is global (not per-app) so the max+1
-      // sortOrder allocation is also collision-free across different apps.
-      return db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(${SIDEBAR_PIN_LOCK_NS}, 0)`,
-        );
-        const existing = await tx.query.sidebarItems.findFirst({
-          where: { appId: data.appId },
-        });
-        if (existing) return existing;
-        const app = await tx.query.apps.findFirst({
-          where: { id: data.appId },
-        });
-        if (!app) throw new Error('App not found.');
-        const [row] = await tx
-          .insert(schema.sidebarItems)
-          .values({
-            appId: data.appId,
-            label: app.name,
-            sortOrder: nextSidebarSortOrder,
-          })
-          .returning();
-        return row;
-      });
-    }
-    await db
-      .delete(schema.sidebarItems)
-      .where(eq(schema.sidebarItems.appId, data.appId));
+    if (data.pinned)
+      return (await pinApp({ app: data.appId, ifAbsent: true })).pin;
+    await unpinApp({ app: data.appId });
     return { ok: true };
   });
 
@@ -96,16 +34,14 @@ export const addSidebarItem = createServerFn({ method: 'POST' })
   .validator((input: { appId: string }) =>
     z.object({ appId: idSchema }).parse(input),
   )
-  .handler(async ({ data }) => appendSidebarPin(data.appId));
+  .handler(async ({ data }) => (await pinApp({ app: data.appId })).pin);
 
 /** Remove a single sidebar pin by its id (leaves the app's other pins). */
 export const removeSidebarItem = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((input: { id: string }) => z.object({ id: idSchema }).parse(input))
   .handler(async ({ data }) => {
-    await db
-      .delete(schema.sidebarItems)
-      .where(eq(schema.sidebarItems.id, data.id));
+    await unpinApp({ pinId: data.id });
     return { ok: true };
   });
 
@@ -122,18 +58,12 @@ export const updateSidebarItem = createServerFn({ method: 'POST' })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const label = data.label.trim();
-    if (!label) throw new Error('Name cannot be empty.');
-    // Normalize the entry point to the bare hash fragment we store (or null for
-    // the app root). Only update it when the caller actually sent the field.
-    const entryHash =
-      data.entryHash === undefined
-        ? undefined
-        : normalizeEntryHash(data.entryHash);
-    await db
-      .update(schema.sidebarItems)
-      .set(entryHash === undefined ? { label } : { label, entryHash })
-      .where(eq(schema.sidebarItems.id, data.id));
+    // An empty entry point means the app root; an absent one is left as is.
+    await updateAppPin(data.id, {
+      label: data.label,
+      entryHash:
+        data.entryHash === undefined ? undefined : data.entryHash || null,
+    });
     return { ok: true };
   });
 
@@ -141,6 +71,6 @@ export const reorderSidebarItems = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((orderedIds: string[]) => idListSchema.parse(orderedIds))
   .handler(async ({ data: orderedIds }) => {
-    await persistSortOrder(schema.sidebarItems, orderedIds);
+    await reorderAppPins(orderedIds);
     return { ok: true };
   });

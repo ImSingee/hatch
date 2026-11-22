@@ -3,7 +3,7 @@ import { mkdtemp, rename, writeFile, lstat, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { configPath, resolveCredential } from './config';
 import { platformClient } from './client';
-import { CliError } from './error';
+import { argumentsError, CliError } from './error';
 import {
   assertAbsent,
   assertReplacementSafe,
@@ -94,11 +94,8 @@ export async function runLifecycle(
       options: { ...common, ...extra },
       allowPositionals: true,
     });
-  } catch {
-    throw new CliError(
-      'invalid_arguments',
-      'Invalid arguments. Use hatch help.',
-    );
+  } catch (error) {
+    throw argumentsError(error, args[offset] ?? '');
   }
   const values = parsed.values as Record<string, string | boolean | undefined>;
   const positional = parsed.positionals;

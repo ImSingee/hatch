@@ -121,6 +121,7 @@ function snapshot(overrides: Partial<SessionSnapshot>): SessionSnapshot {
     appIds: [],
     providerId: 'provider-1',
     modelId: 'model-1',
+    runnerId: null,
     updatedAt: '2026-10-12T10:00:00.000Z',
     messages: [],
     activeRun: null,

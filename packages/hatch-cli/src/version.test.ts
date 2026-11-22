@@ -36,6 +36,7 @@ beforeAll(async () => {
     'src',
     'packages/hatch-manifest',
     'packages/hatch-platform-api',
+    'packages/hatch-design-tokens',
     'packages/hatch-cli/package.json',
     'packages/hatch-cli/src',
   ]) {

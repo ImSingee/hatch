@@ -91,6 +91,9 @@ message AgentSession {
   string server_time = 10;
   // Present when the latest run failed and its turn can be replayed.
   AgentRetryState retry = 11;
+  // The Agent Runner whose workspace holds this chat; unset until a run of
+  // the chat has been accepted by a runner.
+  optional string runner_id = 12;
 }
 message ActiveAgentRun {
   string id = 1;

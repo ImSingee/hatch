@@ -14,7 +14,16 @@ export type PlatformEvent =
       type: 'notification.delivery.updated';
       notificationId: string;
       deliveryId: string;
-    };
+    }
+  /** The instance theme changed; clients re-read it. */
+  | { type: 'theme.updated'; accent: string }
+  /** App, Workflow or dashboard pins changed; clients re-read them. */
+  | { type: 'pins.updated' }
+  /**
+   * A dashboard, its settings or its widgets changed; clients re-read it.
+   * Without an id, every dashboard may have changed.
+   */
+  | { type: 'dashboards.updated'; dashboardId?: string };
 
 export type PlatformEventSubscriber = (event: PlatformEvent) => void;
 

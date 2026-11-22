@@ -240,6 +240,108 @@ const definitions: readonly CliCommandDefinition[] = [
       'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. Prints each candidate id and authenticated path; candidates expire after one day. --glyph-tile expects a white glyph on black and lays it on a solid 512px tile of that colour. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
   },
   {
+    path: ['theme', 'get'],
+    usage: 'theme get',
+    description:
+      'Show the instance theme: the chosen accent, the default accent and every accent that can be chosen with its #RRGGBB colour.',
+  },
+  {
+    path: ['theme', 'set'],
+    usage: 'theme set --accent <name>',
+    description:
+      'Choose the accent colour of the whole instance, replacing the previous choice. Every signed-in web, mobile and desktop client recolours without a reload. Names come from theme get.',
+  },
+  {
+    path: ['pin', 'list'],
+    usage: 'pin list [--limit <n>] [--cursor <cursor>]',
+    description:
+      'List navigation pins: App pins in order (pin id, App id and slug, label, entry point, App status), pinned Workflows and pinned dashboards. Without --limit it prints every pin. --limit (1-100) pages one sequence: App pins, then Workflows, then dashboards; pass the printed nextCursor as --cursor for the next page. No nextCursor means the last page.',
+  },
+  {
+    path: ['pin', 'add'],
+    usage:
+      'pin add (--app <id-or-slug> [--label <text>] [--entry <fragment>] [--if-absent] | --workflow <id-or-slug> | --dashboard <id>)',
+    description:
+      'Pin an App, Workflow or dashboard. --app always adds another pin (an App can have several, each with its own label and entry fragment such as /settings) and prints its pin id; --if-absent instead returns the existing pin when the App already has one. The label defaults to the App name. Pinning a Workflow or dashboard that is already pinned succeeds.',
+  },
+  {
+    path: ['pin', 'update'],
+    usage:
+      'pin update <pin-id> [--label <text>] [--entry <fragment> | --clear-entry]',
+    description:
+      'Change an App pin. Omitted fields stay unchanged; --clear-entry makes the pin open the App root.',
+  },
+  {
+    path: ['pin', 'remove'],
+    usage:
+      'pin remove (--pin <pin-id> | --app <id-or-slug> | --workflow <id-or-slug> | --dashboard <id>)',
+    description:
+      'Unpin. --pin deletes that one App pin; --app deletes every pin of the App and prints the removed pin ids. --workflow and --dashboard clear the pinned flag; the Workflow or dashboard itself is kept.',
+  },
+  {
+    path: ['pin', 'reorder'],
+    usage: 'pin reorder (--pin <pin-id>... | --dashboard <id>...)',
+    description:
+      'Reorder App pins or dashboards. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order. Pinned Workflows are ordered by last update and cannot be reordered.',
+  },
+  {
+    path: ['dashboard', 'list'],
+    usage: 'dashboard list [--limit <n>] [--cursor <cursor>]',
+    description:
+      'Without --limit, list every dashboard in order: id, name, description, pinned and autoRefreshSeconds (0 is off). Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.',
+  },
+  {
+    path: ['dashboard', 'get'],
+    usage: 'dashboard get <dashboard-id>',
+    description:
+      'Show one dashboard: its settings, the widgets placed on it (id is the placement id that widget layout and widget remove take; supportedSizes lists the only footprints the widget accepts, empty means any) and their x, y, w, h in grid units at each breakpoint (desktop 12 columns, tablet 8, mobile 4).',
+  },
+  {
+    path: ['dashboard', 'create'],
+    usage: 'dashboard create --name <text> [--description <text>]',
+    description:
+      'Create an empty dashboard and print its id. It is pinned and placed last.',
+  },
+  {
+    path: ['dashboard', 'update'],
+    usage:
+      'dashboard update <dashboard-id> [--name <text>] [--description <text> | --clear-description] [--auto-refresh <1-3600> | --no-auto-refresh]',
+    description:
+      'Rename a dashboard, change its description or set how often, in seconds, its widgets refresh on an open desk. Omitted fields stay unchanged.',
+  },
+  {
+    path: ['dashboard', 'delete'],
+    usage: 'dashboard delete <dashboard-id> --yes',
+    description:
+      'Permanently delete a dashboard and its widget placements; cannot be undone, so --yes is required. Apps and their widgets are kept. The last dashboard cannot be deleted.',
+  },
+  {
+    path: ['dashboard', 'widget', 'available'],
+    usage: 'dashboard widget available',
+    description:
+      'List the widgets deployed Apps offer: appId, appSlug, widgetId, name, defaultSize and supportedSizes.',
+  },
+  {
+    path: ['dashboard', 'widget', 'add'],
+    usage:
+      'dashboard widget add <dashboard-id> --app <id-or-slug> --widget <widget-id> [--breakpoint desktop|tablet|mobile] [--x <n>] [--y <n>] [--w <n>] [--h <n>]',
+    description:
+      'Place a widget on a dashboard and print its placementId with the new layouts. Without position flags it goes below the others at its default size. Position flags apply to one breakpoint (desktop unless --breakpoint is given) and the other breakpoints follow. A widget can be on a dashboard once.',
+  },
+  {
+    path: ['dashboard', 'widget', 'layout'],
+    usage:
+      'dashboard widget layout <dashboard-id> <placement-id> [--breakpoint desktop|tablet|mobile] [--x <n>] [--y <n>] [--w <n>] [--h <n>]',
+    description:
+      'Move a placed widget (--x, --y) or resize it (--w, --h) at one breakpoint, desktop unless --breakpoint is given; omitted numbers stay unchanged. Widgets under the new position move down and empty rows close up, so read the printed layouts for the result. A size the widget does not support is rejected with the sizes it does.',
+  },
+  {
+    path: ['dashboard', 'widget', 'remove'],
+    usage: 'dashboard widget remove <dashboard-id> <placement-id>',
+    description:
+      'Take a widget off a dashboard. The App and its widget stay available and can be added again.',
+  },
+  {
     path: ['notification', 'list'],
     usage:
       'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',

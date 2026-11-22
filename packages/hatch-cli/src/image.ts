@@ -5,7 +5,7 @@ import { addAbortSignal } from 'node:stream';
 import { parseArgs } from 'node:util';
 import { credentialHeaders, platformClient } from './client';
 import { configPath, resolveCredential } from './config';
-import { CliError } from './error';
+import { argumentsError, CliError } from './error';
 import { readTextInput } from './input';
 
 export const MAX_ICON_FILE_BYTES = 4 * 1024 * 1024;
@@ -57,8 +57,8 @@ function parse(
       options: { ...GLOBALS, ...options },
       allowPositionals: true,
     });
-  } catch {
-    throw invalid('Invalid arguments. Use hatch help.');
+  } catch (error) {
+    throw argumentsError(error, 'image');
   }
   if (parsed.positionals.length !== positionals)
     throw invalid(
