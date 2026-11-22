@@ -5,7 +5,8 @@ The native app follows Desk, the visual system specified in the repository's
 rounded type and one accent. `src/ui/theme.ts` reads every colour, radius,
 font, weight and shadow from `packages/hatch-design-tokens/tokens.json`; write
 no hex, `rgb()`, radius, font-family or font-weight literal anywhere else
-(pills use `pill`, circles `'50%'`). The accent is the theme's one input:
+(pills use `pill`, circles `'50%'`; the ground shapes' sizes, positions and
+corner radii in `src/ui/ground.tsx` are drawing geometry, as `DESIGN.md` says). The accent is the theme's one input:
 components read it with `useAccent()` (`src/ui/accent.tsx`) while rendering,
 never at module scope, so the provider in `app/_layout.tsx` recolours the whole
 app. Text is Nunito, code and identifiers JetBrains Mono; both are linked into
