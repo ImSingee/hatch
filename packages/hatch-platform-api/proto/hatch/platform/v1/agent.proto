@@ -94,6 +94,42 @@ message AgentSession {
   // The Agent Runner whose workspace holds this chat; unset until a run of
   // the chat has been accepted by a runner.
   optional string runner_id = 12;
+  // Messages sent while a run was working that are not delivered yet.
+  AgentPendingMessages pending = 13;
+}
+message AgentPendingMessages {
+  // Delivery stopped after the user stopped a run or a run failed for good.
+  bool paused = 1;
+  // In send order.
+  repeated AgentPendingMessage messages = 2;
+}
+message AgentPendingMessage {
+  string id = 1;
+  // "queue" or "steer".
+  string mode = 2;
+  // "pending" (editable), "claimed" (being injected) or "sending" (Send now).
+  string status = 3;
+  // Composer input parts with their existing JSON shape.
+  repeated google.protobuf.Value content = 4;
+  // Display text; resource mentions read as @name.
+  string text = 5;
+  repeated AgentPendingImage images = 6;
+  repeated AgentPendingAttachment attachments = 7;
+  string provider_id = 8;
+  string model_id = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+message AgentPendingImage {
+  // Base64 image data.
+  string data = 1;
+  string mime_type = 2;
+}
+message AgentPendingAttachment {
+  string id = 1;
+  string name = 2;
+  string mime_type = 3;
+  double size = 4;
 }
 message ActiveAgentRun {
   string id = 1;

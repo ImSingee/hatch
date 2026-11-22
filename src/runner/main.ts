@@ -201,6 +201,14 @@ function handleHubMessage(message: HubMessage): void {
       executor.answer(message.runId, message.askId, message.answers);
       return;
     }
+    case 'run.steer': {
+      executor.steerHint(message.runId);
+      return;
+    }
+    case 'run.steer_claimed': {
+      executor.steerClaimed(message.runId, message.requestId, message.messages);
+      return;
+    }
     case 'run.env': {
       executor.env(
         message.runId,

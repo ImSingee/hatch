@@ -46,7 +46,21 @@ export function parseRetryableAgentTurn(
   }
   if (index === -1 || turn !== userTurn) return null;
 
-  const message = asObject(messages[index])!;
+  const input = parseUserMessageInput(messages[index]);
+  if (!input) return null;
+  return { baseMessages: messages.slice(0, index), ...input };
+}
+
+/**
+ * The input a persisted user message was sent with: the exact model text
+ * (resource mentions restored from `composerContent`), images and
+ * attachments. Null when it carries nothing to send.
+ */
+export function parseUserMessageInput(
+  value: unknown,
+): Omit<RetryableAgentTurn, 'baseMessages'> | null {
+  const message = asObject(value);
+  if (!message) return null;
   const textParts: string[] = [];
   const images: SendImage[] = [];
   const attachments: AgentAttachmentRef[] = [];
@@ -108,7 +122,6 @@ export function parseRetryableAgentTurn(
     return null;
   }
   return {
-    baseMessages: messages.slice(0, index),
     userText,
     composerContent: composerContent ?? [],
     images,

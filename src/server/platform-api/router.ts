@@ -78,6 +78,11 @@ import { associateAgentSessionApp } from '~server/agent-session-apps';
 import { WorkspaceService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/workspace_pb';
 import { readWorkspace } from '~server/workspace-read';
 import { ImageService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/image_pb';
+import { PreferenceService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/preference_pb';
+import {
+  readAgentPreferences,
+  updateAgentPreferences,
+} from '~server/agent-preferences';
 import {
   appIconPath,
   clearAppIcon,
@@ -244,6 +249,33 @@ const pinMessage = (pin: SidebarItem) => ({
   appStatus: pin.status,
 });
 const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
+/**
+ * Whose personal preferences a call reads and writes: the user behind a
+ * session or API key, or for a Run credential the user who sent the prompt
+ * the run answers.
+ */
+async function preferenceUserId(context: HandlerContext): Promise<string> {
+  const { status, run } = context.values.get(publicApiContext);
+  if (
+    status?.credentialType === 'session' ||
+    status?.credentialType === 'api-key'
+  ) {
+    return status.user.id;
+  }
+  const row = run
+    ? await db.query.agentRuns.findFirst({
+        where: { id: run.runId },
+        columns: { userId: true },
+      })
+    : null;
+  if (!row?.userId) {
+    throw publicApiError(
+      'CONFLICT',
+      'This Run has no user whose preferences it can use.',
+    );
+  }
+  return row.userId;
+}
 async function associate(id: string, context: HandlerContext) {
   const run = context.values.get(publicApiContext).run;
   if (!run) return { appId: id, association: 'not-applicable' };
@@ -586,6 +618,15 @@ export function registerPlatformApi(
                   nextRetryAt: session.retry.nextRetryAt ?? undefined,
                 }
               : undefined,
+            pending: {
+              paused: session.pending.paused,
+              messages: session.pending.messages.map((message) => ({
+                ...message,
+                content: message.content.map((part) =>
+                  fromJson(ValueSchema, part),
+                ),
+              })),
+            },
           },
         };
       },
@@ -714,6 +755,19 @@ export function registerPlatformApi(
   router.rpc(AppService.method.clearAppIcon, async (input) =>
     iconMessage(await clearAppIcon((await find('apps', input.id)).id)),
   );
+  router.service(PreferenceService, {
+    getAgentPreferences: async (_input, context) => ({
+      preferences: await readAgentPreferences(await preferenceUserId(context)),
+    }),
+    updateAgentPreferences: async (input, context) => ({
+      preferences: await updateAgentPreferences(
+        await preferenceUserId(context),
+        input.messageMode === undefined
+          ? {}
+          : { messageMode: input.messageMode as 'queue' | 'steer' },
+      ),
+    }),
+  });
   router.service(ImageService, {
     getImageModel: async () => imageModelMessage(await getImageModelState()),
     setImageModel: async (input) =>

@@ -67,6 +67,7 @@ describe('POST /api/agent/runs', () => {
       const forwarded = mocks.startAgentRun.mock.calls[0]?.[0];
       expect(forwarded).toEqual({
         ...baseBody,
+        userId: 'user-1',
         content: [{ type: 'text', text: 'Keep these instructions' }],
         ...extra,
       });
@@ -85,6 +86,7 @@ describe('POST /api/agent/runs', () => {
     expect(response.status).toBe(200);
     expect(mocks.startAgentRun).toHaveBeenCalledWith({
       ...baseBody,
+      userId: 'user-1',
       content: [{ type: 'text', text: 'Legacy instructions' }],
     });
   });
@@ -106,6 +108,7 @@ describe('POST /api/agent/runs', () => {
     expect(response.status).toBe(200);
     expect(mocks.startAgentRun).toHaveBeenCalledWith({
       ...baseBody,
+      userId: 'user-1',
       content,
     });
   });

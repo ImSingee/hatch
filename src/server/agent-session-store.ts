@@ -11,6 +11,10 @@ import {
   type SessionRetryState,
   type SessionRunTiming,
 } from './agent-runs';
+import {
+  listSessionPendingMessages,
+  type SessionPendingMessages,
+} from './agent-pending-store';
 
 export type SessionSummary = {
   id: string;
@@ -38,6 +42,8 @@ export type SessionDetail = {
   runs: SessionRunTiming[];
   /** The failed latest turn and its automatic retry, if it can be replayed. */
   retry: SessionRetryState | null;
+  /** Messages sent while a run was working that are not delivered yet. */
+  pending: SessionPendingMessages;
   /** Server clock when the snapshot was read, for live timer alignment. */
   serverTime: string;
 };
@@ -121,7 +127,7 @@ export async function loadSessionDetail(
         where: { id },
       });
       if (!row) return null;
-      const [associations, active, runs, retry] = await Promise.all([
+      const [associations, active, runs, retry, pending] = await Promise.all([
         tx
           .select({ appId: schema.agentSessionApps.appId })
           .from(schema.agentSessionApps)
@@ -129,6 +135,7 @@ export async function loadSessionDetail(
         getActiveAgentRun(row.id, tx),
         listSessionRunTimings(row.id, tx),
         getSessionRetryState(row.id, row.messages, tx),
+        listSessionPendingMessages(row.id, tx),
       ]);
       // A run created before runs recorded their user turn still answers the
       // last user message of this same snapshot: no other run can append one
@@ -151,6 +158,7 @@ export async function loadSessionDetail(
         runs,
         // An active run supersedes any failure still recorded on older runs.
         retry: activeRun ? null : retry,
+        pending,
         serverTime: new Date().toISOString(),
       };
     },

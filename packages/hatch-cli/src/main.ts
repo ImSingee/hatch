@@ -8,6 +8,7 @@ import { runData } from './data';
 import { runBackend } from './backend';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
+import { runPreferences } from './preferences';
 import { runNotification } from './notifications';
 import { runImage } from './image';
 import { runTheme } from './theme';
@@ -136,6 +137,8 @@ try {
   else if (name === 'pin') await runPin(args, offset, controller.signal);
   else if (name === 'dashboard')
     await runDashboard(args, offset, controller.signal);
+  else if (name === 'preferences')
+    await runPreferences(args, offset, controller.signal);
   else
     throw new CliError(
       'unknown_command',

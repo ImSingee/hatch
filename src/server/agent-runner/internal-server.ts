@@ -13,10 +13,13 @@ import { WebSocketServer } from 'ws';
 import { RUNNER_WS_PATH } from '~agent/protocol';
 import { getPlatformEnv } from '~env';
 import {
+  claimSteerMessages,
   completeRunFromRunner,
+  deliverPendingAfterRunnerReady,
   ingestRunnerEvent,
   reconcileRunnerRuns,
   renewRunnerLeases,
+  steerPendingRunIds,
 } from '~server/agent-runs';
 import { reconcileRunnerWorkspaces } from '~server/agent-workspaces';
 import { secretsMatch } from '~server/secrets';
@@ -30,6 +33,9 @@ export const runnerHubHandlers: RunnerHubHandlers = {
   renewRunnerLeases,
   ingestRunnerEvent,
   completeRunFromRunner,
+  claimSteerMessages,
+  steerPendingRunIds,
+  runnerReady: () => deliverPendingAfterRunnerReady(),
 };
 
 type InternalServerGlobal = typeof globalThis & {

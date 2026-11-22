@@ -1,6 +1,8 @@
 /** Stream event protocol between the Agent SSE endpoint and the chat UI. */
 import type { StopReason } from '@earendil-works/pi-ai';
 import type { JsonValue } from '~/db/schema';
+import type { AgentAttachmentRef } from './attachments';
+import type { AgentComposerContentPart } from './composer-content';
 
 /** A selectable option for an Agent `ask` question. */
 export type AskOption = { id: string; label: string };
@@ -86,6 +88,19 @@ export type AgentStreamEvent =
       summary?: string;
     }
   | { type: 'turn_end' }
+  | {
+      /**
+       * A steer message the user sent while the run was working, injected
+       * after the run's tool calls finished (`~server/agent-pending-messages`).
+       */
+      type: 'user_message';
+      pendingId: string;
+      /** Display text of the message. */
+      text: string;
+      composerContent?: AgentComposerContentPart[];
+      attachments?: AgentAttachmentRef[];
+      images: { mimeType: string }[];
+    }
   | {
       /**
        * Auto-compaction lifecycle. `threshold` fired on the estimated context

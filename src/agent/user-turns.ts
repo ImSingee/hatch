@@ -7,13 +7,29 @@
  * the chat UI counts user messages the same way to pair each reply with the
  * run that produced it. A Retry re-appends the failed turn's user message at
  * the same position, so the newest run for a user turn is the one shown.
+ *
+ * A steer message the user sent while a run was working is injected into
+ * that run and persisted as a `role: 'user'` message marked `steered: true`.
+ * It belongs to the run's reply, so it never starts a user turn.
  */
 export function isUserTurnMessage(message: unknown): boolean {
   return (
     typeof message === 'object' &&
     message !== null &&
     !Array.isArray(message) &&
-    (message as { role?: unknown }).role === 'user'
+    (message as { role?: unknown }).role === 'user' &&
+    !isSteeredUserMessage(message)
+  );
+}
+
+/** A user message injected into a running run (see `isUserTurnMessage`). */
+export function isSteeredUserMessage(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    !Array.isArray(message) &&
+    (message as { role?: unknown }).role === 'user' &&
+    (message as { steered?: unknown }).steered === true
   );
 }
 

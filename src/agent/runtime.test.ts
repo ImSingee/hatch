@@ -20,8 +20,12 @@ import {
   type FauxResponseStep,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentComposerContentPart } from './composer-content';
+import {
+  composerModelText,
+  type AgentComposerContentPart,
+} from './composer-content';
 import type { AgentStreamEvent } from './events';
+import type { SteerMessage } from './protocol';
 import type { PlatformClient } from './platform-client';
 import type { ResolvedModel } from './remote-models';
 import { nextUserTurn } from './user-turns';
@@ -1309,5 +1313,147 @@ describe('runAgentTurn auto compaction', () => {
     expect(result.error).toContain('rate limit');
     expect(provider.agentRequests).toHaveLength(1);
     expect(compactPhases(events)).toEqual([]);
+  });
+});
+
+describe('runAgentTurn steer messages', () => {
+  async function runWithSteer(
+    responses: FauxResponseStep[],
+    sessionId: string,
+    batches: SteerMessage[][],
+    emit: (event: AgentStreamEvent) => void,
+  ) {
+    const providerId = `runtime-steer-${sessionId}`;
+    const faux = fauxProvider({ provider: providerId });
+    faux.setResponses(responses);
+    const models = createModels();
+    models.setProvider(faux.provider);
+    const claim = vi.fn<() => Promise<SteerMessage[]>>(
+      async () => batches.shift() ?? [],
+    );
+    const result = await runAgentTurn({
+      appUrl: 'https://hatch.example.test',
+      betaFeatures: [],
+      priorMessages: [],
+      sessionId,
+      userText: 'Build a tracker',
+      models,
+      picked: {
+        providerId,
+        providerName: 'Runtime Test',
+        apiType: 'openai-responses',
+        model: faux.getModel() as ResolvedModel['model'],
+      },
+      platform: stubPlatform,
+      signal: new AbortController().signal,
+      steer: { pending: () => batches.length > 0, claim },
+      emit,
+    });
+    return { result, claim };
+  }
+
+  const steer = (
+    id: string,
+    userText: string,
+    composerContent: AgentComposerContentPart[] = [],
+  ): SteerMessage => ({
+    id,
+    userText,
+    composerContent,
+    images: [],
+    attachments: [],
+  });
+
+  const userTexts = (messages: readonly unknown[]) =>
+    messages
+      .filter(
+        (message): message is { role: 'user'; content: unknown } =>
+          (message as { role?: unknown }).role === 'user',
+      )
+      .map((message) =>
+        typeof message.content === 'string'
+          ? message.content
+          : (message.content as { type: string; text?: string }[])
+              .map((part) => part.text ?? '')
+              .join(''),
+      );
+
+  it('injects every claimed message after the tool calls, before the next model call', async () => {
+    const events: AgentStreamEvent[] = [];
+    let seenByModel: string[] = [];
+    const app = {
+      type: 'app' as const,
+      id: 'app-1',
+      name: 'Tracker',
+      slug: 'tracker',
+    };
+    const fix: AgentComposerContentPart[] = [
+      { type: 'text', text: 'Also fix ' },
+      app,
+    ];
+    const { result, claim } = await runWithSteer(
+      [
+        fauxAssistantMessage(
+          fauxToolCall('write_file', { path: 'a.txt', content: 'x' }),
+        ),
+        (context) => {
+          seenByModel = userTexts(context.messages);
+          return fauxAssistantMessage('done');
+        },
+      ],
+      'steer-after-tools',
+      [[steer('p1', 'Use blue'), steer('p2', composerModelText(fix), fix)]],
+      (event) => events.push(event),
+    );
+
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(seenByModel).toEqual([
+      'Build a tracker',
+      'Use blue',
+      composerModelText(fix),
+    ]);
+    const order = events
+      .filter((event) => ['tool_end', 'user_message'].includes(event.type))
+      .map((event) =>
+        event.type === 'user_message' ? event.pendingId : event.type,
+      );
+    expect(order).toEqual(['tool_end', 'p1', 'p2']);
+    expect(events).toContainEqual({
+      type: 'user_message',
+      pendingId: 'p2',
+      text: 'Also fix @Tracker',
+      composerContent: fix,
+      images: [],
+    });
+
+    const users = result.messages.filter(
+      (message) => (message as { role?: unknown }).role === 'user',
+    );
+    expect(users).toMatchObject([
+      { role: 'user' },
+      { steered: true, pendingMessageId: 'p1' },
+      { steered: true, pendingMessageId: 'p2', composerContent: fix },
+    ]);
+    expect(users[0]).not.toHaveProperty('steered');
+    // Steered messages belong to the run: still one user turn.
+    expect(nextUserTurn(result.messages)).toBe(1);
+  });
+
+  it('continues the run after a final answer when a steer message arrived', async () => {
+    const events: AgentStreamEvent[] = [];
+    const { result } = await runWithSteer(
+      [fauxAssistantMessage('first answer'), fauxAssistantMessage('revised')],
+      'steer-after-answer',
+      [[steer('p1', 'Make it shorter')]],
+      (event) => events.push(event),
+    );
+    expect(
+      result.messages.map(
+        (message) =>
+          (message as { role: string; steered?: boolean }).steered ??
+          (message as { role: string }).role,
+      ),
+    ).toEqual(['user', 'assistant', true, 'assistant']);
+    expect(result.error).toBeUndefined();
   });
 });

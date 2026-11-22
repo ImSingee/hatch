@@ -561,3 +561,71 @@ describe('RunnerExecutor terminal outcomes', () => {
     await vi.waitFor(() => expect(executor.activeRunIds()).toEqual([]));
   });
 });
+
+describe('RunnerExecutor steer messages', () => {
+  const message = (id: string) => ({
+    id,
+    userText: `steer ${id}`,
+    composerContent: [],
+    images: [],
+    attachments: [],
+  });
+
+  it('claims only after a hint and keeps a reply that missed its boundary for the next one', async () => {
+    vi.useFakeTimers();
+    try {
+      let steer: NonNullable<Parameters<typeof runAgentTurn>[0]['steer']>;
+      let release!: () => void;
+      vi.mocked(runAgentTurn).mockImplementationOnce(async (options) => {
+        steer = options.steer!;
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { messages: [] };
+      });
+      const { executor, sent } = setupExecutor();
+      executor.start({ ...payload, steerPending: false });
+      await vi.waitFor(() => expect(steer!).toBeDefined());
+      const claims = () =>
+        sent.filter(
+          (item): item is Extract<RunnerMessage, { type: 'run.steer_claim' }> =>
+            item.type === 'run.steer_claim',
+        );
+
+      // No hint: a boundary asks the platform nothing.
+      expect(steer!.pending()).toBe(false);
+      expect(await steer!.claim()).toEqual([]);
+      expect(claims()).toHaveLength(0);
+
+      executor.steerHint(payload.runId);
+      expect(steer!.pending()).toBe(true);
+      const answered = steer!.claim();
+      expect(claims()).toHaveLength(1);
+      executor.steerClaimed(payload.runId, claims()[0].requestId, [
+        message('p1'),
+      ]);
+      expect(await answered).toEqual([message('p1')]);
+      expect(steer!.pending()).toBe(false);
+
+      // The platform does not answer in time: the run goes on, and the late
+      // reply is injected at the next boundary without asking again.
+      executor.steerHint(payload.runId);
+      const timedOut = steer!.claim();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await timedOut).toEqual([]);
+      executor.steerClaimed(payload.runId, claims()[1].requestId, [
+        message('p2'),
+      ]);
+      expect(steer!.pending()).toBe(true);
+      const next = steer!.claim();
+      // The timed-out claim left the hint set, so the platform is asked too.
+      executor.steerClaimed(payload.runId, claims()[2].requestId, [
+        message('p3'),
+      ]);
+      expect(await next).toEqual([message('p2'), message('p3')]);
+      release();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -452,6 +452,95 @@ describe('interactive Platform API contracts and authority', () => {
     ).toBe(403);
   });
 
+  it('reads and writes personal preferences with every credential type', async () => {
+    const owner = await auth.api.getSession({
+      headers: new Headers({ authorization: `Bearer ${token}` }),
+    });
+    const userId = owner!.user.id;
+    await db
+      .delete(schema.userPreferences)
+      .where(eq(schema.userPreferences.userId, userId));
+    const keyResponse = await authCall(
+      'api-key/create',
+      { name: 'Preference test' },
+      { cookie },
+    );
+    const key = ((await keyResponse.json()) as { key: string }).key;
+    const runnerId = 'preference-test-runner';
+    const runJwt = async (runUserId: string | null) => {
+      const runId = randomUUID();
+      const runSession = randomUUID();
+      await db.insert(schema.agentSessions).values({ id: runSession });
+      await db.insert(schema.agentRuns).values({
+        id: runId,
+        sessionId: runSession,
+        userId: runUserId,
+        runnerId,
+        providerId: 'fixture',
+        modelId: 'fixture',
+        input: { text: 'fixture' },
+        leaseExpiresAt: new Date(Date.now() + 90_000),
+      });
+      const now = Math.floor(Date.now() / 1000);
+      const jwt = await auth.api.signJWT({
+        body: {
+          payload: {
+            sub: runId,
+            sid: runSession,
+            rnr: runnerId,
+            iat: now,
+            exp: now + 90,
+            jti: randomUUID(),
+          },
+        },
+      });
+      return { authorization: `Bearer ${jwt.token}` };
+    };
+    const preferences = async (
+      headers: Record<string, string>,
+      update?: { messageMode?: string },
+    ) => {
+      const response = await call(
+        update
+          ? 'PreferenceService/UpdateAgentPreferences'
+          : 'PreferenceService/GetAgentPreferences',
+        { headers, body: update ?? {} },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+
+    // The default applies before the user ever saved a preference.
+    expect(await preferences({})).toEqual({
+      status: 200,
+      body: { preferences: { messageMode: 'steer' } },
+    });
+    expect(
+      await preferences({ 'x-api-key': key }, { messageMode: 'queue' }),
+    ).toEqual({ status: 200, body: { preferences: { messageMode: 'queue' } } });
+    // A Run acts for the user who sent its prompt; omitting the field keeps it.
+    const run = await runJwt(userId);
+    expect(await preferences(run, {})).toEqual({
+      status: 200,
+      body: { preferences: { messageMode: 'queue' } },
+    });
+    expect(await preferences(run, { messageMode: 'steer' })).toEqual({
+      status: 200,
+      body: { preferences: { messageMode: 'steer' } },
+    });
+    expect(await preferences({})).toMatchObject({
+      body: { preferences: { messageMode: 'steer' } },
+    });
+    expect((await preferences({}, { messageMode: 'later' })).status).toBe(400);
+    // The homepage preference is untouched by the new column.
+    expect(
+      await db.query.userPreferences.findFirst({ where: { userId } }),
+    ).toMatchObject({ homepage: { kind: 'page', page: 'dashboard' } });
+
+    const orphan = await preferences(await runJwt(null));
+    expect(orphan.status).toBe(409);
+    await db.delete(schema.agentRuns);
+  });
+
   it.each([false, true])(
     'round-trips generated clients, transcript values and optional presence (binary=%s)',
     async (binary) => {

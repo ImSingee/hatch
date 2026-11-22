@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// Personal preferences of the calling user. A Run credential acts for the
+// user who sent the prompt its run answers.
+service PreferenceService {
+  rpc GetAgentPreferences(GetAgentPreferencesRequest) returns (GetAgentPreferencesResponse);
+  rpc UpdateAgentPreferences(UpdateAgentPreferencesRequest) returns (UpdateAgentPreferencesResponse);
+}
+
+message AgentPreferences {
+  // How a message sent while the Agent is working is delivered: "queue"
+  // waits for the run to finish and starts its own run; "steer" is injected
+  // into the running run after its current tool calls finish.
+  string message_mode = 1;
+}
+
+message GetAgentPreferencesRequest {}
+
+message GetAgentPreferencesResponse {
+  AgentPreferences preferences = 1;
+}
+
+message UpdateAgentPreferencesRequest {
+  // Unset leaves the mode unchanged.
+  optional string message_mode = 1 [(buf.validate.field).string = {
+    in: [
+      "queue",
+      "steer"
+    ]
+  }];
+}
+
+message UpdateAgentPreferencesResponse {
+  AgentPreferences preferences = 1;
+}

@@ -96,8 +96,53 @@ describe('Workflow creation payload', () => {
 });
 
 describe('runner -> platform messages', () => {
-  it('uses protocol v20 for auto-compaction stream events', () => {
-    expect(PROTOCOL_VERSION).toBe(20);
+  it('uses protocol v21 for steer messages', () => {
+    expect(PROTOCOL_VERSION).toBe(21);
+  });
+
+  it('parses a steer claim and rejects one without a request id', () => {
+    expect(
+      parseRunnerMessage({
+        type: 'run.steer_claim',
+        runId: 'run-1',
+        requestId: 'claim-1',
+      }),
+    ).toEqual({
+      type: 'run.steer_claim',
+      runId: 'run-1',
+      requestId: 'claim-1',
+    });
+    expect(() =>
+      parseRunnerMessage({ type: 'run.steer_claim', runId: 'run-1' }),
+    ).toThrow(/requestId/);
+  });
+
+  it('allows a steered user message event with image metadata only', () => {
+    const event = {
+      type: 'user_message',
+      pendingId: 'pending-1',
+      text: 'Use blue',
+      images: [{ mimeType: 'image/png' }],
+    };
+    expect(
+      parseRunnerMessage({
+        type: 'run.event',
+        runId: 'run-1',
+        runnerSeq: 1,
+        event,
+      }),
+    ).toMatchObject({ event });
+    expect(() =>
+      parseRunnerMessage({
+        type: 'run.event',
+        runId: 'run-1',
+        runnerSeq: 1,
+        event: {
+          ...event,
+          images: [{ mimeType: 'image/png', data: 'AAAA' }],
+        },
+      }),
+    ).toThrow(/data/);
   });
 
   it('parses runner.hello', () => {

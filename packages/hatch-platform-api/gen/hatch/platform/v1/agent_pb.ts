@@ -23,7 +23,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_agent: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ch1oYXRjaC9wbGF0Zm9ybS92MS9hZ2VudC5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiGAoWR2V0TW9kZWxDYXRhbG9nUmVxdWVzdCKNAQoXR2V0TW9kZWxDYXRhbG9nUmVzcG9uc2USMwoJcHJvdmlkZXJzGAEgAygLMiAuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcm92aWRlchI9Cg1kZWZhdWx0X21vZGVsGAIgASgLMiYuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRNb2RlbFNlbGVjdGlvbiJYCg1BZ2VudFByb3ZpZGVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSLQoGbW9kZWxzGAMgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRNb2RlbCJ3CgpBZ2VudE1vZGVsEgoKAmlkGAEgASgJEhAKCG1vZGVsX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSEQoJcmVhc29uaW5nGAQgASgIEhYKDmNvbnRleHRfd2luZG93GAUgASgBEhIKCm1heF90b2tlbnMYBiABKAEiPAoTQWdlbnRNb2RlbFNlbGVjdGlvbhITCgtwcm92aWRlcl9pZBgBIAEoCRIQCghtb2RlbF9pZBgCIAEoCSJBChNMaXN0U2Vzc2lvbnNSZXF1ZXN0Eh8KBmFwcF9pZBgBIAEoCUIKukgHcgUQARjIAUgAiAEBQgkKB19hcHBfaWQiUAoUTGlzdFNlc3Npb25zUmVzcG9uc2USOAoIc2Vzc2lvbnMYASADKAsyJi5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFNlc3Npb25TdW1tYXJ5IroBChNBZ2VudFNlc3Npb25TdW1tYXJ5EgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEg8KB2FwcF9pZHMYAyADKAkSGAoLcHJvdmlkZXJfaWQYBCABKAlIAIgBARIVCghtb2RlbF9pZBgFIAEoCUgBiAEBEhUKDW1lc3NhZ2VfY291bnQYBiABKA0SEgoKdXBkYXRlZF9hdBgHIAEoCUIOCgxfcHJvdmlkZXJfaWRCCwoJX21vZGVsX2lkIqQBChRDcmVhdGVTZXNzaW9uUmVxdWVzdBIcCgV0aXRsZRgBIAEoCUIIukgFcgMYyAFIAIgBARIkCgtwcm92aWRlcl9pZBgCIAEoCUIKukgHcgUQARjIAUgBiAEBEiEKCG1vZGVsX2lkGAMgASgJQgq6SAdyBRABGMgBSAKIAQFCCAoGX3RpdGxlQg4KDF9wcm92aWRlcl9pZEILCglfbW9kZWxfaWQiIwoVQ3JlYXRlU2Vzc2lvblJlc3BvbnNlEgoKAmlkGAEgASgJIisKEUdldFNlc3Npb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGMgBIkYKEkdldFNlc3Npb25SZXNwb25zZRIwCgdzZXNzaW9uGAEgASgLMh8uaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRTZXNzaW9uIpwDCgxBZ2VudFNlc3Npb24SCgoCaWQYASABKAkSDQoFdGl0bGUYAiABKAkSDwoHYXBwX2lkcxgDIAMoCRIYCgtwcm92aWRlcl9pZBgEIAEoCUgAiAEBEhUKCG1vZGVsX2lkGAUgASgJSAGIAQESEgoKdXBkYXRlZF9hdBgGIAEoCRIoCghtZXNzYWdlcxgHIAMoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZRI1CgphY3RpdmVfcnVuGAggASgLMiEuaGF0Y2gucGxhdGZvcm0udjEuQWN0aXZlQWdlbnRSdW4SLwoEcnVucxgJIAMoCzIhLmhhdGNoLnBsYXRmb3JtLnYxLkFnZW50UnVuVGltaW5nEhMKC3NlcnZlcl90aW1lGAogASgJEjEKBXJldHJ5GAsgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRSZXRyeVN0YXRlEhYKCXJ1bm5lcl9pZBgMIAEoCUgCiAEBQg4KDF9wcm92aWRlcl9pZEILCglfbW9kZWxfaWRCDAoKX3J1bm5lcl9pZCKaAgoOQWN0aXZlQWdlbnRSdW4SCgoCaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEhIKCnN0YXJ0ZWRfYXQYAyABKAkSFgoJdXNlcl90dXJuGAQgASgFSACIAQESNwoLcGVuZGluZ19hc2sYBSABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFBlbmRpbmdBc2sSHAoPYW5zd2VyZWRfYXNrX2lkGAYgASgJSAGIAQESRwoTcGVuZGluZ19lbnZfcmVxdWVzdBgHIAEoCzIqLmhhdGNoLnBsYXRmb3JtLnYxLkFnZW50UGVuZGluZ0Vudmlyb25tZW50QgwKCl91c2VyX3R1cm5CEgoQX2Fuc3dlcmVkX2Fza19pZCKdAQoOQWdlbnRSdW5UaW1pbmcSCgoCaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEhEKCXVzZXJfdHVybhgDIAEoBRISCgpzdGFydGVkX2F0GAQgASgJEhkKDGNvbXBsZXRlZF9hdBgFIAEoCUgAiAEBEhIKBWVycm9yGAYgASgJSAGIAQFCDwoNX2NvbXBsZXRlZF9hdEIICgZfZXJyb3IiiQEKD0FnZW50UmV0cnlTdGF0ZRIOCgZydW5faWQYASABKAkSEQoJdXNlcl90dXJuGAIgASgFEg8KB2F0dGVtcHQYAyABKAUSFAoMbWF4X2F0dGVtcHRzGAQgASgFEhoKDW5leHRfcmV0cnlfYXQYBSABKAlIAIgBAUIQCg5fbmV4dF9yZXRyeV9hdCJWCg9BZ2VudFBlbmRpbmdBc2sSDgoGYXNrX2lkGAEgASgJEjMKCXF1ZXN0aW9ucxgCIAMoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLkFnZW50UXVlc3Rpb24ifAoNQWdlbnRRdWVzdGlvbhIKCgJpZBgBIAEoCRIOCgZwcm9tcHQYAiABKAkSFgoOYWxsb3dfbXVsdGlwbGUYAyABKAgSNwoHb3B0aW9ucxgEIAMoCzImLmhhdGNoLnBsYXRmb3JtLnYxLkFnZW50UXVlc3Rpb25PcHRpb24iMAoTQWdlbnRRdWVzdGlvbk9wdGlvbhIKCgJpZBgBIAEoCRINCgVsYWJlbBgCIAEoCSJ9ChdBZ2VudFBlbmRpbmdFbnZpcm9ubWVudBISCgpyZXF1ZXN0X2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCRI+Cgl2YXJpYWJsZXMYAyADKAsyKy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudEVudmlyb25tZW50VmFyaWFibGUiTAoYQWdlbnRFbnZpcm9ubWVudFZhcmlhYmxlEgsKA2tleRgBIAEoCRITCgtkZXNjcmlwdGlvbhgCIAEoCRIOCgZzZWNyZXQYAyABKAgymAMKDEFnZW50U2VydmljZRJoCg9HZXRNb2RlbENhdGFsb2cSKS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRNb2RlbENhdGFsb2dSZXF1ZXN0GiouaGF0Y2gucGxhdGZvcm0udjEuR2V0TW9kZWxDYXRhbG9nUmVzcG9uc2USXwoMTGlzdFNlc3Npb25zEiYuaGF0Y2gucGxhdGZvcm0udjEuTGlzdFNlc3Npb25zUmVxdWVzdBonLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RTZXNzaW9uc1Jlc3BvbnNlEmIKDUNyZWF0ZVNlc3Npb24SJy5oYXRjaC5wbGF0Zm9ybS52MS5DcmVhdGVTZXNzaW9uUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZVNlc3Npb25SZXNwb25zZRJZCgpHZXRTZXNzaW9uEiQuaGF0Y2gucGxhdGZvcm0udjEuR2V0U2Vzc2lvblJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRTZXNzaW9uUmVzcG9uc2ViBnByb3RvMw',
+    'Ch1oYXRjaC9wbGF0Zm9ybS92MS9hZ2VudC5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiGAoWR2V0TW9kZWxDYXRhbG9nUmVxdWVzdCKNAQoXR2V0TW9kZWxDYXRhbG9nUmVzcG9uc2USMwoJcHJvdmlkZXJzGAEgAygLMiAuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcm92aWRlchI9Cg1kZWZhdWx0X21vZGVsGAIgASgLMiYuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRNb2RlbFNlbGVjdGlvbiJYCg1BZ2VudFByb3ZpZGVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSLQoGbW9kZWxzGAMgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRNb2RlbCJ3CgpBZ2VudE1vZGVsEgoKAmlkGAEgASgJEhAKCG1vZGVsX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSEQoJcmVhc29uaW5nGAQgASgIEhYKDmNvbnRleHRfd2luZG93GAUgASgBEhIKCm1heF90b2tlbnMYBiABKAEiPAoTQWdlbnRNb2RlbFNlbGVjdGlvbhITCgtwcm92aWRlcl9pZBgBIAEoCRIQCghtb2RlbF9pZBgCIAEoCSJBChNMaXN0U2Vzc2lvbnNSZXF1ZXN0Eh8KBmFwcF9pZBgBIAEoCUIKukgHcgUQARjIAUgAiAEBQgkKB19hcHBfaWQiUAoUTGlzdFNlc3Npb25zUmVzcG9uc2USOAoIc2Vzc2lvbnMYASADKAsyJi5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFNlc3Npb25TdW1tYXJ5IroBChNBZ2VudFNlc3Npb25TdW1tYXJ5EgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEg8KB2FwcF9pZHMYAyADKAkSGAoLcHJvdmlkZXJfaWQYBCABKAlIAIgBARIVCghtb2RlbF9pZBgFIAEoCUgBiAEBEhUKDW1lc3NhZ2VfY291bnQYBiABKA0SEgoKdXBkYXRlZF9hdBgHIAEoCUIOCgxfcHJvdmlkZXJfaWRCCwoJX21vZGVsX2lkIqQBChRDcmVhdGVTZXNzaW9uUmVxdWVzdBIcCgV0aXRsZRgBIAEoCUIIukgFcgMYyAFIAIgBARIkCgtwcm92aWRlcl9pZBgCIAEoCUIKukgHcgUQARjIAUgBiAEBEiEKCG1vZGVsX2lkGAMgASgJQgq6SAdyBRABGMgBSAKIAQFCCAoGX3RpdGxlQg4KDF9wcm92aWRlcl9pZEILCglfbW9kZWxfaWQiIwoVQ3JlYXRlU2Vzc2lvblJlc3BvbnNlEgoKAmlkGAEgASgJIisKEUdldFNlc3Npb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGMgBIkYKEkdldFNlc3Npb25SZXNwb25zZRIwCgdzZXNzaW9uGAEgASgLMh8uaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRTZXNzaW9uItYDCgxBZ2VudFNlc3Npb24SCgoCaWQYASABKAkSDQoFdGl0bGUYAiABKAkSDwoHYXBwX2lkcxgDIAMoCRIYCgtwcm92aWRlcl9pZBgEIAEoCUgAiAEBEhUKCG1vZGVsX2lkGAUgASgJSAGIAQESEgoKdXBkYXRlZF9hdBgGIAEoCRIoCghtZXNzYWdlcxgHIAMoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZRI1CgphY3RpdmVfcnVuGAggASgLMiEuaGF0Y2gucGxhdGZvcm0udjEuQWN0aXZlQWdlbnRSdW4SLwoEcnVucxgJIAMoCzIhLmhhdGNoLnBsYXRmb3JtLnYxLkFnZW50UnVuVGltaW5nEhMKC3NlcnZlcl90aW1lGAogASgJEjEKBXJldHJ5GAsgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRSZXRyeVN0YXRlEhYKCXJ1bm5lcl9pZBgMIAEoCUgCiAEBEjgKB3BlbmRpbmcYDSABKAsyJy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFBlbmRpbmdNZXNzYWdlc0IOCgxfcHJvdmlkZXJfaWRCCwoJX21vZGVsX2lkQgwKCl9ydW5uZXJfaWQiYAoUQWdlbnRQZW5kaW5nTWVzc2FnZXMSDgoGcGF1c2VkGAEgASgIEjgKCG1lc3NhZ2VzGAIgAygLMiYuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQZW5kaW5nTWVzc2FnZSK7AgoTQWdlbnRQZW5kaW5nTWVzc2FnZRIKCgJpZBgBIAEoCRIMCgRtb2RlGAIgASgJEg4KBnN0YXR1cxgDIAEoCRInCgdjb250ZW50GAQgAygLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlEgwKBHRleHQYBSABKAkSNAoGaW1hZ2VzGAYgAygLMiQuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQZW5kaW5nSW1hZ2USPgoLYXR0YWNobWVudHMYByADKAsyKS5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFBlbmRpbmdBdHRhY2htZW50EhMKC3Byb3ZpZGVyX2lkGAggASgJEhAKCG1vZGVsX2lkGAkgASgJEhIKCmNyZWF0ZWRfYXQYCiABKAkSEgoKdXBkYXRlZF9hdBgLIAEoCSI0ChFBZ2VudFBlbmRpbmdJbWFnZRIMCgRkYXRhGAEgASgJEhEKCW1pbWVfdHlwZRgCIAEoCSJTChZBZ2VudFBlbmRpbmdBdHRhY2htZW50EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSEQoJbWltZV90eXBlGAMgASgJEgwKBHNpemUYBCABKAEimgIKDkFjdGl2ZUFnZW50UnVuEgoKAmlkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRISCgpzdGFydGVkX2F0GAMgASgJEhYKCXVzZXJfdHVybhgEIAEoBUgAiAEBEjcKC3BlbmRpbmdfYXNrGAUgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQZW5kaW5nQXNrEhwKD2Fuc3dlcmVkX2Fza19pZBgGIAEoCUgBiAEBEkcKE3BlbmRpbmdfZW52X3JlcXVlc3QYByABKAsyKi5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFBlbmRpbmdFbnZpcm9ubWVudEIMCgpfdXNlcl90dXJuQhIKEF9hbnN3ZXJlZF9hc2tfaWQinQEKDkFnZW50UnVuVGltaW5nEgoKAmlkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIRCgl1c2VyX3R1cm4YAyABKAUSEgoKc3RhcnRlZF9hdBgEIAEoCRIZCgxjb21wbGV0ZWRfYXQYBSABKAlIAIgBARISCgVlcnJvchgGIAEoCUgBiAEBQg8KDV9jb21wbGV0ZWRfYXRCCAoGX2Vycm9yIokBCg9BZ2VudFJldHJ5U3RhdGUSDgoGcnVuX2lkGAEgASgJEhEKCXVzZXJfdHVybhgCIAEoBRIPCgdhdHRlbXB0GAMgASgFEhQKDG1heF9hdHRlbXB0cxgEIAEoBRIaCg1uZXh0X3JldHJ5X2F0GAUgASgJSACIAQFCEAoOX25leHRfcmV0cnlfYXQiVgoPQWdlbnRQZW5kaW5nQXNrEg4KBmFza19pZBgBIAEoCRIzCglxdWVzdGlvbnMYAiADKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFF1ZXN0aW9uInwKDUFnZW50UXVlc3Rpb24SCgoCaWQYASABKAkSDgoGcHJvbXB0GAIgASgJEhYKDmFsbG93X211bHRpcGxlGAMgASgIEjcKB29wdGlvbnMYBCADKAsyJi5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFF1ZXN0aW9uT3B0aW9uIjAKE0FnZW50UXVlc3Rpb25PcHRpb24SCgoCaWQYASABKAkSDQoFbGFiZWwYAiABKAkifQoXQWdlbnRQZW5kaW5nRW52aXJvbm1lbnQSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZyZWFzb24YAiABKAkSPgoJdmFyaWFibGVzGAMgAygLMisuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRFbnZpcm9ubWVudFZhcmlhYmxlIkwKGEFnZW50RW52aXJvbm1lbnRWYXJpYWJsZRILCgNrZXkYASABKAkSEwoLZGVzY3JpcHRpb24YAiABKAkSDgoGc2VjcmV0GAMgASgIMpgDCgxBZ2VudFNlcnZpY2USaAoPR2V0TW9kZWxDYXRhbG9nEikuaGF0Y2gucGxhdGZvcm0udjEuR2V0TW9kZWxDYXRhbG9nUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkdldE1vZGVsQ2F0YWxvZ1Jlc3BvbnNlEl8KDExpc3RTZXNzaW9ucxImLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RTZXNzaW9uc1JlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0U2Vzc2lvbnNSZXNwb25zZRJiCg1DcmVhdGVTZXNzaW9uEicuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlU2Vzc2lvblJlcXVlc3QaKC5oYXRjaC5wbGF0Zm9ybS52MS5DcmVhdGVTZXNzaW9uUmVzcG9uc2USWQoKR2V0U2Vzc2lvbhIkLmhhdGNoLnBsYXRmb3JtLnYxLkdldFNlc3Npb25SZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuR2V0U2Vzc2lvblJlc3BvbnNlYgZwcm90bzM',
     [file_buf_validate_validate, file_google_protobuf_struct],
   );
 
@@ -405,6 +405,13 @@ export type AgentSession = Message<'hatch.platform.v1.AgentSession'> & {
    * @generated from field: optional string runner_id = 12;
    */
   runnerId?: string | undefined;
+
+  /**
+   * Messages sent while a run was working that are not delivered yet.
+   *
+   * @generated from field: hatch.platform.v1.AgentPendingMessages pending = 13;
+   */
+  pending?: AgentPendingMessages | undefined;
 };
 
 /**
@@ -414,6 +421,171 @@ export type AgentSession = Message<'hatch.platform.v1.AgentSession'> & {
 export const AgentSessionSchema: GenMessage<AgentSession> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_agent, 12);
+
+/**
+ * @generated from message hatch.platform.v1.AgentPendingMessages
+ */
+export type AgentPendingMessages =
+  Message<'hatch.platform.v1.AgentPendingMessages'> & {
+    /**
+     * Delivery stopped after the user stopped a run or a run failed for good.
+     *
+     * @generated from field: bool paused = 1;
+     */
+    paused: boolean;
+
+    /**
+     * In send order.
+     *
+     * @generated from field: repeated hatch.platform.v1.AgentPendingMessage messages = 2;
+     */
+    messages: AgentPendingMessage[];
+  };
+
+/**
+ * Describes the message hatch.platform.v1.AgentPendingMessages.
+ * Use `create(AgentPendingMessagesSchema)` to create a new message.
+ */
+export const AgentPendingMessagesSchema: GenMessage<AgentPendingMessages> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_agent, 13);
+
+/**
+ * @generated from message hatch.platform.v1.AgentPendingMessage
+ */
+export type AgentPendingMessage =
+  Message<'hatch.platform.v1.AgentPendingMessage'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * "queue" or "steer".
+     *
+     * @generated from field: string mode = 2;
+     */
+    mode: string;
+
+    /**
+     * "pending" (editable), "claimed" (being injected) or "sending" (Send now).
+     *
+     * @generated from field: string status = 3;
+     */
+    status: string;
+
+    /**
+     * Composer input parts with their existing JSON shape.
+     *
+     * @generated from field: repeated google.protobuf.Value content = 4;
+     */
+    content: Value[];
+
+    /**
+     * Display text; resource mentions read as @name.
+     *
+     * @generated from field: string text = 5;
+     */
+    text: string;
+
+    /**
+     * @generated from field: repeated hatch.platform.v1.AgentPendingImage images = 6;
+     */
+    images: AgentPendingImage[];
+
+    /**
+     * @generated from field: repeated hatch.platform.v1.AgentPendingAttachment attachments = 7;
+     */
+    attachments: AgentPendingAttachment[];
+
+    /**
+     * @generated from field: string provider_id = 8;
+     */
+    providerId: string;
+
+    /**
+     * @generated from field: string model_id = 9;
+     */
+    modelId: string;
+
+    /**
+     * @generated from field: string created_at = 10;
+     */
+    createdAt: string;
+
+    /**
+     * @generated from field: string updated_at = 11;
+     */
+    updatedAt: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.AgentPendingMessage.
+ * Use `create(AgentPendingMessageSchema)` to create a new message.
+ */
+export const AgentPendingMessageSchema: GenMessage<AgentPendingMessage> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_agent, 14);
+
+/**
+ * @generated from message hatch.platform.v1.AgentPendingImage
+ */
+export type AgentPendingImage =
+  Message<'hatch.platform.v1.AgentPendingImage'> & {
+    /**
+     * Base64 image data.
+     *
+     * @generated from field: string data = 1;
+     */
+    data: string;
+
+    /**
+     * @generated from field: string mime_type = 2;
+     */
+    mimeType: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.AgentPendingImage.
+ * Use `create(AgentPendingImageSchema)` to create a new message.
+ */
+export const AgentPendingImageSchema: GenMessage<AgentPendingImage> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_agent, 15);
+
+/**
+ * @generated from message hatch.platform.v1.AgentPendingAttachment
+ */
+export type AgentPendingAttachment =
+  Message<'hatch.platform.v1.AgentPendingAttachment'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: string name = 2;
+     */
+    name: string;
+
+    /**
+     * @generated from field: string mime_type = 3;
+     */
+    mimeType: string;
+
+    /**
+     * @generated from field: double size = 4;
+     */
+    size: number;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.AgentPendingAttachment.
+ * Use `create(AgentPendingAttachmentSchema)` to create a new message.
+ */
+export const AgentPendingAttachmentSchema: GenMessage<AgentPendingAttachment> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_agent, 16);
 
 /**
  * @generated from message hatch.platform.v1.ActiveAgentRun
@@ -461,7 +633,7 @@ export type ActiveAgentRun = Message<'hatch.platform.v1.ActiveAgentRun'> & {
  */
 export const ActiveAgentRunSchema: GenMessage<ActiveAgentRun> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 13);
+  messageDesc(file_hatch_platform_v1_agent, 17);
 
 /**
  * @generated from message hatch.platform.v1.AgentRunTiming
@@ -504,7 +676,7 @@ export type AgentRunTiming = Message<'hatch.platform.v1.AgentRunTiming'> & {
  */
 export const AgentRunTimingSchema: GenMessage<AgentRunTiming> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 14);
+  messageDesc(file_hatch_platform_v1_agent, 18);
 
 /**
  * @generated from message hatch.platform.v1.AgentRetryState
@@ -548,7 +720,7 @@ export type AgentRetryState = Message<'hatch.platform.v1.AgentRetryState'> & {
  */
 export const AgentRetryStateSchema: GenMessage<AgentRetryState> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 15);
+  messageDesc(file_hatch_platform_v1_agent, 19);
 
 /**
  * @generated from message hatch.platform.v1.AgentPendingAsk
@@ -571,7 +743,7 @@ export type AgentPendingAsk = Message<'hatch.platform.v1.AgentPendingAsk'> & {
  */
 export const AgentPendingAskSchema: GenMessage<AgentPendingAsk> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 16);
+  messageDesc(file_hatch_platform_v1_agent, 20);
 
 /**
  * @generated from message hatch.platform.v1.AgentQuestion
@@ -604,7 +776,7 @@ export type AgentQuestion = Message<'hatch.platform.v1.AgentQuestion'> & {
  */
 export const AgentQuestionSchema: GenMessage<AgentQuestion> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 17);
+  messageDesc(file_hatch_platform_v1_agent, 21);
 
 /**
  * @generated from message hatch.platform.v1.AgentQuestionOption
@@ -628,7 +800,7 @@ export type AgentQuestionOption =
  */
 export const AgentQuestionOptionSchema: GenMessage<AgentQuestionOption> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 18);
+  messageDesc(file_hatch_platform_v1_agent, 22);
 
 /**
  * @generated from message hatch.platform.v1.AgentPendingEnvironment
@@ -657,7 +829,7 @@ export type AgentPendingEnvironment =
  */
 export const AgentPendingEnvironmentSchema: GenMessage<AgentPendingEnvironment> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 19);
+  messageDesc(file_hatch_platform_v1_agent, 23);
 
 /**
  * @generated from message hatch.platform.v1.AgentEnvironmentVariable
@@ -686,7 +858,7 @@ export type AgentEnvironmentVariable =
  */
 export const AgentEnvironmentVariableSchema: GenMessage<AgentEnvironmentVariable> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_agent, 20);
+  messageDesc(file_hatch_platform_v1_agent, 24);
 
 /**
  * Interactive resources require a Better Auth user session, never API keys or Run JWTs.

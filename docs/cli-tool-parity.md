@@ -36,6 +36,7 @@ interface.
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent names come from the design tokens, clients recolour live                 |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
+| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
 
 Not covered by the CLI: providers and their chat models (create, edit, API
 keys) remain Web-only as before this change. `image-model set` selects among
@@ -188,7 +189,11 @@ added.
 
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`
 (workspace navigation, Dashboard auto-refresh) still accept only a native user
-session and have no `hatch` CLI commands. Both are pending: add their CLI
+session and have no `hatch` CLI commands. Pending chat messages (the queue/steer
+tray: send while a run works, edit, cancel, Send now, resume) belong to the same
+gap: like sending a message, they are only `/api/agent/sessions/<id>/pending`
+HTTP routes for the Web and mobile chat, and `AgentService/GetSession` returns
+the tray read-only. Both are pending: add their CLI
 commands and remove the session-only gate in `src/server/platform-api/router.ts`
 together, so Run credentials gain the same authority. `AuthService.CreateHandoff`
 stays session-only because it exchanges the caller's native login session for

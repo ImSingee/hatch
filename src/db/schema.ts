@@ -134,6 +134,24 @@ export type AgentRunStatus =
 
 export type AgentWorkspaceAffinityState = 'uninitialized' | 'claimed';
 
+/**
+ * How a message sent while an Agent run is working is delivered: `queue`
+ * waits for the run to finish and starts its own run; `steer` is injected into
+ * the running run after its current tool calls finish.
+ */
+export type AgentMessageMode = 'queue' | 'steer';
+
+/**
+ * `pending` is editable; `claimed` was handed to a running run's Runner for
+ * injection and `injected` is in that run's context, kept until its
+ * transcript is persisted; `sending` is being started as a run by Send now.
+ */
+export type AgentPendingMessageStatus =
+  | 'pending'
+  | 'claimed'
+  | 'injected'
+  | 'sending';
+
 /** ================== apps ================== */
 
 /**
@@ -544,6 +562,11 @@ export const agentSessions = snakeCase.table(
       .$type<AgentWorkspaceAffinityState>()
       .notNull()
       .default('uninitialized'),
+    /**
+     * Pending messages stop being delivered automatically after the user
+     * stopped a run or a run failed for good; Resume or Send now clears it.
+     */
+    pendingPaused: boolean('pending_paused').notNull().default(false),
     createdAt,
     updatedAt,
   },
@@ -608,6 +631,14 @@ export const agentRuns = snakeCase.table(
     modelId: text('model_id').notNull(),
     status: text().$type<AgentRunStatus>().notNull().default('running'),
     /**
+     * User who sent the prompt this run answers (an automatic retry keeps the
+     * failed run's user). Null for runs created before it was recorded or
+     * after the user was deleted. A Run credential acts for this user.
+     */
+    userId: text('user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    /**
      * The user input that started the run, stored for diagnostics/replay,
      * plus its `userTurn` binding to the transcript (`~agent/user-turns`).
      */
@@ -656,6 +687,58 @@ export const agentRuns = snakeCase.table(
     index('agent_runs_auto_retry_at_idx')
       .on(table.autoRetryAt)
       .where(sql`"agent_runs"."auto_retry_at" is not null`),
+  ],
+);
+
+/**
+ * Messages sent while a run was working, not yet delivered (see
+ * `~server/agent-pending-messages`). Rows are ordered by id (monotonic ULID)
+ * and deleted once they become part of the transcript.
+ */
+export const agentPendingMessages = snakeCase.table(
+  'agent_pending_messages',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    sessionId: ulid('session_id')
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: 'cascade' }),
+    /** Sender; the run that delivers the message acts for this user. */
+    userId: text('user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    mode: text().$type<AgentMessageMode>().notNull(),
+    status: text()
+      .$type<AgentPendingMessageStatus>()
+      .notNull()
+      .default('pending'),
+    /** Run whose Runner claimed (and maybe injected) this steer message. */
+    claimedRunId: ulid('claimed_run_id').references(() => agentRuns.id, {
+      onDelete: 'set null',
+    }),
+    /** Composer input parts (`ComposerInputPart[]`). */
+    content: jsonb().$type<JsonValue[]>().notNull(),
+    /** Inline images with their base64 data (`SendImage[]`). */
+    images: jsonb().$type<JsonValue[]>().notNull().default([]),
+    /**
+     * Uploaded attachments (`AgentAttachmentRef[]`). Enqueueing commits them
+     * (`attached_at`) so they cannot be pruned or reused elsewhere.
+     */
+    attachments: jsonb().$type<JsonValue[]>().notNull().default([]),
+    providerId: ulid('provider_id').notNull(),
+    modelId: text('model_id').notNull(),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [
+    index('agent_pending_messages_session_idx').on(table.sessionId, table.id),
+    check(
+      'agent_pending_messages_mode_check',
+      sql`"agent_pending_messages"."mode" in ('queue', 'steer')`,
+    ),
+    check(
+      'agent_pending_messages_status_check',
+      sql`"agent_pending_messages"."status" in ('pending', 'claimed', 'injected', 'sending')`,
+    ),
   ],
 );
 
@@ -827,13 +910,26 @@ export const platformConfig = snakeCase.table('platform_config', {
 });
 
 /** Personal account preferences; platform resources remain shared. */
-export const userPreferences = snakeCase.table('user_preferences', {
-  userId: text()
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  homepage: jsonb().$type<HomepageTarget>().notNull(),
-  updatedAt,
-});
+export const userPreferences = snakeCase.table(
+  'user_preferences',
+  {
+    userId: text()
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    homepage: jsonb().$type<HomepageTarget>().notNull(),
+    agentMessageMode: text('agent_message_mode')
+      .$type<AgentMessageMode>()
+      .notNull()
+      .default('steer'),
+    updatedAt,
+  },
+  () => [
+    check(
+      'user_preferences_agent_message_mode_check',
+      sql`"user_preferences"."agent_message_mode" in ('queue', 'steer')`,
+    ),
+  ],
+);
 
 /** ================== notifications ================== */
 
