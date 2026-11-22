@@ -81,6 +81,7 @@ import {
 } from './agent-pending-store';
 import {
   connectedRunnerCount,
+  listConnectedRunners,
   dispatchRun,
   sendRunAnswer,
   sendRunCancel,
@@ -783,6 +784,23 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
   // An automatic retry still creates its run without a Runner: the dispatch
   // failure below counts as another consecutive failure and backs off again,
   // instead of silently dropping the schedule.
+  // Automatic delivery waits for the Runner owning the chat's workspace
+  // instead of consuming the messages into a run that cannot be dispatched;
+  // that Runner's return delivers them (see deliverPendingAfterRunnerReady).
+  if ('automatic' in input && input.automatic === true) {
+    const affinity = await getSessionWorkspaceAffinity(input.sessionId);
+    if (
+      affinity.runnerId !== null &&
+      !listConnectedRunners().some(
+        (runner) => runner.runnerId === affinity.runnerId,
+      )
+    ) {
+      throw new AppError(
+        'The Agent Runner that owns this chat workspace is unavailable.',
+        503,
+      );
+    }
+  }
   if (autoRetryOfRunId === null && connectedRunnerCount() === 0) {
     throw new AppError(
       'No Agent Runner is connected. Start the agent-runner service, then retry.',
@@ -2389,22 +2407,48 @@ export async function dispatchPendingMessages(
       if (error instanceof PendingMessagesChangedError) continue;
       // Paused or a retry is due after all: the messages keep waiting.
       if (error instanceof PendingDeliveryDeferredError) return null;
-      // Another start won the race: its end delivers these later.
-      if (await getActiveAgentRun(sessionId)) return null;
       // No Runner yet: deliver once one connects.
       if (error instanceof AppError && error.status === 503) return null;
       // The messages cannot start a run (for example their model was
       // removed); stop delivering until the user resumes or sends one now.
-      console.error('[agent-runs] pending messages could not start:', error);
-      await db.transaction(async (tx) => {
+      // Decide under the session lock: a run another start created
+      // meanwhile delivers them later, and edited or sent messages are no
+      // longer this batch.
+      const batch = sameModel.map((row) => row.id);
+      const paused = await db.transaction(async (tx) => {
         await tx
           .select({ id: schema.agentSessions.id })
           .from(schema.agentSessions)
           .where(eq(schema.agentSessions.id, sessionId))
           .for('update');
+        const [active] = await tx
+          .select({ id: schema.agentRuns.id })
+          .from(schema.agentRuns)
+          .where(
+            and(
+              eq(schema.agentRuns.sessionId, sessionId),
+              inArray(schema.agentRuns.status, ACTIVE_STATUSES),
+            ),
+          )
+          .limit(1);
+        if (active) return false;
+        const rows = await loadPendingRows(tx, sessionId);
+        const stillWaiting = batch.every((id) => {
+          const row = rows.find((candidate) => candidate.id === id);
+          return (
+            row !== undefined &&
+            effectivePendingStatus(row, row.claimedRunStatus) === 'pending'
+          );
+        });
+        if (!stillWaiting) return false;
         await setPendingPaused(tx, sessionId, true);
+        return true;
       });
-      return null;
+      if (paused) {
+        console.error('[agent-runs] pending messages could not start:', error);
+        return null;
+      }
+      continue;
     }
   }
   return null;

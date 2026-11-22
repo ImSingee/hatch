@@ -5,6 +5,7 @@ const adminUrl = process.env.HATCH_POSTGRES_TEST_DATABASE_URL;
 
 vi.mock('~server/agent-runner/hub', () => ({
   connectedRunnerCount: () => 1,
+  listConnectedRunners: () => [{ runnerId: 'runner-pg' }],
   dispatchRun: async (
     _payload: unknown,
     plan: {

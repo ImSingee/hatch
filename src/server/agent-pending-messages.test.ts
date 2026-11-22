@@ -12,6 +12,7 @@ vi.mock('~server/agent-runner/hub', () => {
   type Hub = typeof import('~server/agent-runner/hub');
   return {
     connectedRunnerCount: vi.fn<Hub['connectedRunnerCount']>(() => 1),
+    listConnectedRunners: vi.fn<Hub['listConnectedRunners']>(),
     dispatchRun: vi.fn<Hub['dispatchRun']>(),
     sendRunAnswer: vi.fn<Hub['sendRunAnswer']>(),
     sendRunCancel: vi.fn<Hub['sendRunCancel']>(() => false),
@@ -40,6 +41,15 @@ beforeEach(async () => {
   vi.clearAllMocks();
   started = [];
   vi.mocked(hub.connectedRunnerCount).mockReturnValue(1);
+  vi.mocked(hub.listConnectedRunners).mockReturnValue([
+    {
+      runnerId: RUNNER,
+      protocolVersion: 21,
+      activeRunCount: 0,
+      connectedAt: '2026-11-20T00:00:00.000Z',
+      lastSeenAt: '2026-11-20T00:00:00.000Z',
+    },
+  ]);
   vi.mocked(hub.sendRunCancel).mockReturnValue(false);
   vi.mocked(hub.dispatchRun).mockImplementation(async (payload, plan) => {
     started.push(payload);
@@ -411,6 +421,19 @@ describe('review regressions', () => {
       }),
     ).rejects.toBeInstanceOf(runs.PendingDeliveryDeferredError);
     expect((await tray()).messages).toHaveLength(1);
+  });
+
+  it('leaves messages waiting while the workspace owner Runner is away', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+    vi.mocked(hub.listConnectedRunners).mockReturnValue([]);
+    await finish(runId);
+    expect(await activeRunId()).toBeNull();
+    expect((await tray()).messages.map((message) => message.text)).toEqual([
+      'Add a chart',
+    ]);
+    expect((await tray()).paused).toBe(false);
   });
 
   it('keeps a pause from a stopped retry when a late success repairs the run', async () => {
