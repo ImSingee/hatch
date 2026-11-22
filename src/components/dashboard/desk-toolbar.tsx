@@ -122,7 +122,8 @@ export function DashboardSwitcher({
 
 /**
  * The row over the widgets: which dashboard is showing and how often it
- * refreshes, Edit widgets, the dashboard menu and New app.
+ * refreshes, Edit widgets, the dashboard menu and New app. Below 768 Edit
+ * widgets lives only in the dashboard menu.
  */
 export function DeskToolbar({
   dashboard,
@@ -147,6 +148,7 @@ export function DeskToolbar({
           variant="default"
           leftSection={<IconPencil size={15} stroke={1.9} />}
           onClick={onEdit}
+          data-toolbar-edit
         >
           Edit widgets
         </Button>

@@ -79,43 +79,19 @@
   background: var(--border-hairline);
 }
 
-.space {
-  gap: 4px;
-  max-width: 200px;
-  color: var(--mantine-color-gray-7);
-}
-
-.spaceName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Runner status: a dot that carries the state and a few words. */
+/* Shown only while no runner is connected: a red warning chip. */
 .runner {
   gap: 7px;
   margin-right: 4px;
   padding: 0 10px 0 9px;
   border-radius: 999px;
+  background: var(--mantine-color-red-light);
+  color: var(--mantine-color-red-light-color);
   font-size: 12px;
 }
 
-.runner[data-state='connected'] {
-  background: var(--mantine-color-green-light);
-  color: var(--mantine-color-green-light-color);
-}
-
-.runner[data-state='offline'] {
-  background: var(--surface-hover);
-  color: var(--mantine-color-gray-7);
-}
-
-.runner[data-state='attention'] {
-  background: var(--mantine-color-amber-light);
-  color: var(--mantine-color-amber-light-color);
-}
-
 .runner:hover {
-  filter: brightness(0.96);
+  background: var(--mantine-color-red-light-hover);
 }
 
 .runnerDot {
@@ -227,14 +203,13 @@
 
   .nav,
   .date,
-  .space,
   .kbd,
   .runnerLabel {
     display: none;
   }
 
   .runner,
-  .runner[data-state] {
+  .runner:hover {
     min-width: 36px;
     margin-right: 0;
     padding: 0;

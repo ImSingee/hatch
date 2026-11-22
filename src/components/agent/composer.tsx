@@ -1,4 +1,11 @@
-import { Button, Box, CloseButton, Group, Image, Text } from '@mantine/core';
+import {
+  ActionIcon,
+  Box,
+  CloseButton,
+  Group,
+  Image,
+  Text,
+} from '@mantine/core';
 import {
   IconArrowUp,
   IconFile,
@@ -374,37 +381,40 @@ export function Composer({
         justify="space-between"
         wrap="nowrap"
       >
-        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
-          <Button
-            variant="default"
-            size="sm"
+        <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size={28}
+            radius="md"
             aria-label="Attach files"
-            leftSection={<IconPaperclip size={16} stroke={1.8} />}
             onClick={() => fileInputRef.current?.click()}
           >
-            Attach
-          </Button>
+            <IconPaperclip size={16} stroke={1.8} />
+          </ActionIcon>
           {modelControl}
         </Group>
 
         {busy ? (
-          <Button
+          <ActionIcon
             color="red"
-            size="sm"
-            leftSection={<IconPlayerStopFilled size={14} />}
+            size={30}
+            radius="xl"
+            aria-label="Stop"
             onClick={onStop}
           >
-            Stop
-          </Button>
+            <IconPlayerStopFilled size={13} />
+          </ActionIcon>
         ) : (
-          <Button
-            size="sm"
+          <ActionIcon
+            size={30}
+            radius="xl"
+            aria-label="Send"
             disabled={!canSend}
-            rightSection={<IconArrowUp size={16} stroke={2.2} />}
             onClick={() => void submit()}
           >
-            Send
-          </Button>
+            <IconArrowUp size={16} stroke={2.2} />
+          </ActionIcon>
         )}
       </Group>
     </Box>

@@ -388,6 +388,18 @@ a.mantine-Text-root:not(.mantine-Anchor-root):active {
   border-radius: var(--radius-window);
 }
 
+/* The search field is the palette's own header, not a field on a page: no
+ * focus ring, and a hairline (not the ink default) above the results. */
+.mantine-Spotlight-search,
+.mantine-Spotlight-search:focus,
+.mantine-Spotlight-search:focus-within {
+  outline: none;
+}
+
+.mantine-Spotlight-actionsList {
+  border-top-color: var(--border-hairline);
+}
+
 .mantine-Spotlight-action {
   border-radius: var(--mantine-radius-md);
 }

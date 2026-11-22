@@ -31,6 +31,7 @@ const fixtures = vi.hoisted(() => ({
     pinned: boolean;
     status?: string;
   }[],
+  runnerState: 'connected' as string,
   apps: [] as {
     id: string;
     slug: string;
@@ -41,19 +42,10 @@ const fixtures = vi.hoisted(() => ({
   }[],
 }));
 
-vi.mock('~queries/users', () => ({
-  spaceQueryOptions: {
-    queryKey: ['test-space'],
-    queryFn: async () => ({ name: 'Robin’s space' }),
-  },
-}));
 vi.mock('~queries/agent', () => ({
   agentRunnerStatusQueryOptions: {
     queryKey: ['test-runner-status'],
-    queryFn: async () => ({
-      state: 'connected',
-      runners: [{ runnerId: 'runner-1' }],
-    }),
+    queryFn: async () => ({ state: fixtures.runnerState, runners: [] }),
   },
 }));
 
@@ -200,6 +192,7 @@ beforeEach(() => {
   fixtures.pins = [];
   fixtures.workflows = [];
   fixtures.apps = [];
+  fixtures.runnerState = 'connected';
 });
 
 test('every destination of the shell is reachable from the menu bar', async () => {
@@ -364,7 +357,7 @@ test('the dock lists pins and marks the one whose window is open', async () => {
     .toHaveAttribute('href', '/app/notes/manage');
 });
 
-test('the menu bar names the space and the runner, and ⌘K searches', async () => {
+test('the menu bar warns only while the runner is offline, and ⌘K searches', async () => {
   fixtures.apps = [
     {
       id: 'app-1',
@@ -385,12 +378,10 @@ test('the menu bar names the space and the runner, and ⌘K searches', async () 
   ];
   const { screen, path } = await renderDesk('/dashboard/home');
 
+  // A connected runner needs no attention.
   await expect
-    .element(screen.getByRole('button', { name: /Robin’s space/ }))
-    .toBeVisible();
-  await expect
-    .element(screen.getByRole('link', { name: /runner-1 online/ }))
-    .toHaveAttribute('href', '/settings/agent-runner');
+    .element(screen.getByRole('link', { name: /Runner offline/ }))
+    .not.toBeInTheDocument();
 
   await userEvent.keyboard('{Control>}k{/Control}');
   const search = screen.getByRole('textbox', {
@@ -439,4 +430,12 @@ test('a pin removed elsewhere turns its open edit dialog into a notice', async (
     .not.toBeInTheDocument();
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect.element(dialog).not.toBeInTheDocument();
+});
+
+test('an offline runner shows a warning that leads to its status', async () => {
+  fixtures.runnerState = 'offline';
+  const { screen } = await renderDesk('/dashboard/home');
+  await expect
+    .element(screen.getByRole('link', { name: /Runner offline/ }))
+    .toHaveAttribute('href', '/settings/agent-runner');
 });

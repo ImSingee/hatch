@@ -6,7 +6,6 @@ import { AccountMenu } from './account-menu';
 import { Brand } from './brand';
 import { CommandPalette } from './command-palette';
 import { RunnerStatus } from './runner-status';
-import { SpaceMenu } from './space-menu';
 import { DESK_HOME } from './paths';
 import classes from './menu-bar.module.css';
 
@@ -21,10 +20,10 @@ function isUnder(pathname: string, to: string) {
 }
 
 /**
- * The bar across the top of the desk: brand, space, primary navigation,
- * runner status, search, notifications, date and the account. Below 768
- * wide the navigation folds into a menu and the bar shows which section is
- * open instead; the space name and the runner's words give way to icons.
+ * The bar across the top of the desk: brand, primary navigation, a warning
+ * when no Agent Runner is connected, search, notifications, date and the
+ * account. Below 768 wide the navigation folds into a menu and the bar shows
+ * which section is open instead; the runner warning keeps only its dot.
  */
 export function MenuBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -61,8 +60,6 @@ export function MenuBar() {
         >
           <Brand size="xs" />
         </Link>
-
-        <SpaceMenu />
 
         <span aria-hidden className={classes.divider} />
 

@@ -207,8 +207,8 @@ second one; `native-app-ui-plan.md` section 3.7 is updated to say so.
 Replaces `AppShell` in `src/routes/_app.tsx` with three parts under
 `src/components/desk/`:
 
-- **Menu bar**: brand menu, space name, primary navigation (Desk, Agent, All
-  apps), runner status, search (`⌘K`), date, account menu.
+- **Menu bar**: brand menu, primary navigation (Desk, Agent, All apps), a
+  runner warning, search (`⌘K`), date, account menu.
 - **Dock**: pinned Apps and Workflows from the existing pins, a marker under
   the open App, and an add button that opens the pin picker.
 - **Window**: the frame every page except the desk renders inside (title bar,
@@ -220,16 +220,13 @@ Widths follow the canvas: at 768 the window fills the stage; at 560 the menu
 bar collapses and the dock becomes the four-item tab bar; 2560 widens the desk
 grid.
 
-**[decision]** The space name is a label, not a setting: an instance is one
-shared space, so every user sees the same name, taken from the first account
-("Robin's space"). Its menu leads to the shared settings (AI providers,
-Users, Agent Runner). A stored, editable name would be a new capability with
-its own RPC and CLI command; it is not part of this redesign.
+**[decision]** (user review) The menu bar has no space name: the product has
+no space concept to name. The artboards' space label is dropped.
 
-**[decision]** The runner status chip reads the Agent Runner status the
-settings page shows and links to it: the runner id when one runner is
-online, a count when several are, "Runner offline" or "Runner needs
-attention" otherwise. Below 768 only its coloured dot stays.
+**[decision]** (user review) The runner chip is a warning: it appears, red,
+only while no Agent Runner is connected ("Runner offline") and links to the
+Agent Runner status page. Nothing shows while a runner is online. Below 768
+only its red dot stays.
 
 **[decision]** The App detail panel in All apps has two pin actions. "Pin to
 dock" / "Remove from dock" is the App pin (`PinService`). "Pin to desk" puts

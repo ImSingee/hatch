@@ -933,9 +933,10 @@ button.stepHeader:hover {
   border-top: 1px solid var(--mantine-color-default-border);
 }
 
+/* The controls sit inside the field, under the text, with no rule of their
+ * own: the field and its buttons read as one control. */
 .composerBar {
-  padding: 8px 10px;
-  border-top: 1px solid var(--border-hairline);
+  padding: 0 8px 8px 10px;
 }
 
 .attachRow {
@@ -949,14 +950,14 @@ button.stepHeader:hover {
   align-items: center;
   gap: 6px;
   max-width: 240px;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--border-hairline);
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
   border-radius: var(--mantine-radius-md);
-  background: var(--surface-raised);
-  font-size: 13px;
+  background: transparent;
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
   font-weight: var(--font-weight-label);
-  color: var(--mantine-color-text);
   transition:
     background-color 120ms ease,
     color 120ms ease;
