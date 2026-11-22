@@ -120,6 +120,21 @@ describe('App pins', () => {
     expect(await ids()).toEqual([d, b, a, c, e]);
   });
 
+  it('rejects an entry point longer than storage keeps instead of cutting it', async () => {
+    const longest = `/${'x'.repeat(511)}`;
+    const { pin } = await pinApp({ app: 'notes', entryHash: `#${longest}` });
+    expect(pin.entryHash).toBe(longest);
+    await expect(
+      pinApp({ app: 'notes', entryHash: `${longest}y` }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      updateAppPin(pin.id, { entryHash: `${longest}y` }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect((await listPins()).appPins.map((item) => item.entryHash)).toEqual([
+      longest,
+    ]);
+  });
+
   it('rejects an unknown App', async () => {
     await expect(pinApp({ app: 'nope' })).rejects.toMatchObject({
       status: 404,

@@ -124,6 +124,8 @@ describe('pin command arguments', () => {
       ['pin', 'add', '--app', 'notes', '--label', 'x'.repeat(501)],
       // A blank fragment would mean the App root without saying so.
       ['pin', 'add', '--app', 'notes', '--entry', '#'],
+      // The platform keeps 512 characters; longer would be cut silently.
+      ['pin', 'add', '--app', 'notes', '--entry', `#/${'x'.repeat(512)}`],
       ['pin', 'update', 'p1'],
       ['pin', 'update', '--label', 'Inbox'],
       ['pin', 'update', 'p1', 'p2', '--label', 'Inbox'],
