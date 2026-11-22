@@ -26,6 +26,7 @@ import {
 import {
   deleteWorkflow,
   getWorkflowRun as loadWorkflowRun,
+  listLatestWorkflowRuns,
   listRecentWorkflowRuns,
   listWorkflowDeployments as loadWorkflowDeployments,
   listWorkflowRuns as loadWorkflowRuns,
@@ -300,6 +301,11 @@ export const listWorkflowRuns = createServerFn({ method: 'GET' })
   .handler(async ({ data: id }) => {
     return loadWorkflowRuns(id);
   });
+
+/** The newest execution of each workflow, for the workflow cards. */
+export const listLatestRunPerWorkflow = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(() => listLatestWorkflowRuns());
 
 export const listAllWorkflowRuns = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
