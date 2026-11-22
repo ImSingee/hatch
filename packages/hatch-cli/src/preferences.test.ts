@@ -36,5 +36,18 @@ describe('preferences command arguments', () => {
       rejected('preferences', 'get', '--agent-message-mode', 'queue'),
     ).toMatch(/Invalid arguments/);
     expect(rejected('preferences', 'get', 'extra')).toMatch(/positional/);
+    for (const [first, second] of [
+      ['queue', 'steer'],
+      ['steer', 'queue'],
+    ])
+      expect(
+        rejected(
+          'preferences',
+          'set',
+          '--agent-message-mode',
+          first,
+          `--agent-message-mode=${second}`,
+        ),
+      ).toMatch(/only once/);
   });
 });

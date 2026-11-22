@@ -75,7 +75,8 @@ export async function patchAgentPendingMessage({
       await updatePendingMessage({ ...ids, message: parsed }),
     );
   } catch (error) {
-    return errorResponse(error, 400);
+    // Service errors carry their own status; anything else is ours.
+    return errorResponse(error, 500);
   }
 }
 

@@ -776,18 +776,46 @@ describe('steer messages', () => {
       stale: [],
       pendingAnswers: [],
     });
-    // A slow lookup must not leave a window in which runner.ready, sent as
-    // soon as hello_ack arrives, finds the connection unregistered.
-    handlers.steerPendingRunIds.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      return ['run-2'];
+    // Nothing may be awaited after hello_ack: the Runner answers it with
+    // runner.ready at once, which must find the connection registered.
+    let release!: (runIds: string[]) => void;
+    handlers.steerPendingRunIds.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const socket = new FakeSocket();
+    handleRunnerSocket(socket.asWebSocket(), {
+      betaFeatures: DEFAULT_BETA_FEATURES,
+      handlers,
     });
-    const socket = await connectRunner('runner-a', ['run-1', 'run-2']);
+    socket.emit(
+      'message',
+      JSON.stringify({
+        type: 'runner.hello',
+        runnerId: 'runner-a',
+        protocolVersion: PROTOCOL_VERSION,
+        activeRunIds: ['run-1', 'run-2'],
+        workspaceSessionIds: [],
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(handlers.steerPendingRunIds).toHaveBeenCalledWith([
+        'run-1',
+        'run-2',
+      ]),
+    );
+    expect(socket.sent.some((m) => m.type === 'hub.hello_ack')).toBe(false);
+    release(['run-2']);
+    await vi.waitFor(() =>
+      expect(socket.sent.some((m) => m.type === 'hub.hello_ack')).toBe(true),
+    );
+    socket.emit('message', JSON.stringify({ type: 'runner.ready' }));
+    await vi.waitFor(() =>
+      expect(socket.sent.some((m) => m.type === 'hub.ready_ack')).toBe(true),
+    );
     expect(socket.closed).toBeNull();
-    expect(handlers.steerPendingRunIds).toHaveBeenCalledWith([
-      'run-1',
-      'run-2',
-    ]);
     expect(
       socket.sent.filter((message) => message.type === 'run.steer'),
     ).toEqual([{ type: 'run.steer', runId: 'run-2' }]);

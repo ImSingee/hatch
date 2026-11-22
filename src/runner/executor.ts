@@ -346,18 +346,27 @@ export class RunnerExecutor {
     run.steerPending = false;
     const requestId = crypto.randomUUID();
     return new Promise<SteerMessage[]>((resolve) => {
+      const signal = run.controller.signal;
       const settle = (messages: SteerMessage[]) => {
         clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
         run.steerClaims.delete(requestId);
         resolve([...late, ...messages]);
       };
+      // A stopped run injects nothing more; whatever the platform claimed
+      // returns to the tray when it settles the run.
+      const onAbort = () => settle([]);
       const timer = setTimeout(() => {
         run.steerPending = true;
-        settle([]);
         // A reply after this point is kept for the next boundary.
-        run.steerClaims.delete(requestId);
+        settle([]);
       }, STEER_CLAIM_TIMEOUT_MS);
       run.steerClaims.set(requestId, settle);
+      if (signal.aborted) {
+        settle([]);
+        return;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
       if (
         !this.opts.send({
           type: 'run.steer_claim',

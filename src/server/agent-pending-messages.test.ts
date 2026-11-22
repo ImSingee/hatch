@@ -310,6 +310,123 @@ describe('steer delivery edge cases', () => {
   });
 });
 
+describe('review regressions', () => {
+  it('keeps a message edited after its run stopped when a late report arrives', async () => {
+    const runId = await startRun('Build a tracker');
+    await send('Use blue');
+    const [claimed] = await runs.claimSteerMessages(RUNNER, runId);
+    await runs.ingestRunnerEvent(RUNNER, {
+      runId,
+      runnerSeq: 1,
+      event: {
+        type: 'user_message',
+        pendingId: claimed.id,
+        text: 'Use blue',
+        images: [],
+      },
+    });
+    // Stopped while the Runner is away: the message is the user's again.
+    await runs.cancelAgentRun(runId);
+    await runs.pendingDispatchesSettled();
+    await pending.updatePendingMessage({
+      sessionId: SESSION,
+      messageId: claimed.id,
+      message: { content: text('Use red') },
+    });
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    await finish(runId, 'cancelled', [
+      ...(session!.messages as JsonValue[]),
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Use blue' }],
+        steered: true,
+        pendingMessageId: claimed.id,
+      },
+    ]);
+    expect((await tray()).messages.map((message) => message.text)).toEqual([
+      'Use red',
+    ]);
+  });
+
+  it('restores injected steer messages ahead of ones sent after them', async () => {
+    const runId = await startRun('Build a tracker');
+    await send('Use blue');
+    const [claimed] = await runs.claimSteerMessages(RUNNER, runId);
+    await send('Actually use red');
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    await finish(runId, 'failed', [
+      ...(session!.messages as JsonValue[]),
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Use blue' }],
+        steered: true,
+        pendingMessageId: claimed.id,
+      },
+    ]);
+    await runs.stopAgentAutoRetry(SESSION);
+    const failed = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    await runs.startAgentRun({
+      sessionId: SESSION,
+      retry: true,
+      expectedSessionUpdatedAt: failed!.updatedAt.toISOString(),
+      ...MODEL,
+      userId: USER,
+    });
+    const retryRun = await activeRunId();
+    expect(
+      (await runs.claimSteerMessages(RUNNER, retryRun!)).map(
+        (message) => message.userText,
+      ),
+    ).toEqual(['Use blue', 'Actually use red']);
+  });
+
+  it('defers automatic delivery under the lock when paused or a retry is due', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+    const [message] = (await tray()).messages;
+    await finish(runId, 'failed');
+    // A retry is scheduled: automatic delivery waits, Send now does not.
+    await expect(
+      runs.startAgentRun({
+        sessionId: SESSION,
+        pendingMessageIds: [message.id],
+        ...MODEL,
+        automatic: true,
+      }),
+    ).rejects.toBeInstanceOf(runs.PendingDeliveryDeferredError);
+    await runs.stopAgentAutoRetry(SESSION);
+    await expect(
+      runs.startAgentRun({
+        sessionId: SESSION,
+        pendingMessageIds: [message.id],
+        ...MODEL,
+        automatic: true,
+      }),
+    ).rejects.toBeInstanceOf(runs.PendingDeliveryDeferredError);
+    expect((await tray()).messages).toHaveLength(1);
+  });
+
+  it('keeps a pause from a stopped retry when a late success repairs the run', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+    await runs.interruptAgentRun(runId, 'Runner went away.');
+    await runs.stopAgentAutoRetry(SESSION);
+    expect((await tray()).paused).toBe(true);
+    await finish(runId, 'completed');
+    expect((await runs.getAgentRun(runId))?.status).toBe('completed');
+    expect(await activeRunId()).toBeNull();
+    expect((await tray()).paused).toBe(true);
+  });
+});
+
 describe('pausing and Send now', () => {
   it('pauses after a Stop until the user resumes', async () => {
     await updateAgentPreferences(USER, { messageMode: 'queue' });

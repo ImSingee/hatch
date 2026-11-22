@@ -629,3 +629,26 @@ describe('RunnerExecutor steer messages', () => {
     }
   });
 });
+
+describe('RunnerExecutor steer claims on stop', () => {
+  it('answers a pending claim with nothing as soon as the run is stopped', async () => {
+    let steer: NonNullable<Parameters<typeof runAgentTurn>[0]['steer']>;
+    vi.mocked(runAgentTurn).mockImplementationOnce(async (options) => {
+      steer = options.steer!;
+      await new Promise<void>((resolve) =>
+        options.signal.addEventListener('abort', () => resolve(), {
+          once: true,
+        }),
+      );
+      return { messages: [] };
+    });
+    const { executor, finished } = setupExecutor();
+    executor.start({ ...payload, runId: 'run-stop', steerPending: true });
+    await vi.waitFor(() => expect(steer!).toBeDefined());
+    const claim = steer!.claim();
+    executor.cancel('run-stop', true);
+    // Settles without waiting for the platform or the claim timeout.
+    await expect(claim).resolves.toEqual([]);
+    await vi.waitFor(() => expect(finished()?.status).toBe('cancelled'));
+  });
+});

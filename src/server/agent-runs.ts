@@ -148,7 +148,20 @@ export type AgentRunInput =
       providerId: string;
       modelId: string;
       userId?: string | null;
+      /**
+       * Automatic delivery (not Send now): defers, under the session lock,
+       * when delivery was paused or an automatic retry is scheduled.
+       */
+      automatic?: boolean;
     };
+
+/** Automatic delivery must wait: delivery is paused or a retry is due. */
+export class PendingDeliveryDeferredError extends AppError {
+  constructor() {
+    super('Pending messages wait for the session.', 409);
+    this.name = 'PendingDeliveryDeferredError';
+  }
+}
 
 /** The pending messages a run was asked to deliver changed meanwhile. */
 export class PendingMessagesChangedError extends AppError {
@@ -812,6 +825,21 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
       if (lockedActiveRun) {
         throw new AppError('This chat already has a running Agent turn.', 409);
       }
+      const automatic = 'automatic' in input && input.automatic === true;
+      if (automatic) {
+        // Re-read under the lock: a Stop or a failure scheduling a retry can
+        // commit after the dispatcher's unlocked checks.
+        const retrying = await tx.query.agentRuns.findFirst({
+          where: {
+            sessionId: input.sessionId,
+            autoRetryAt: { isNotNull: true },
+          },
+          columns: { id: true },
+        });
+        if (lockedSession.pendingPaused || retrying) {
+          throw new PendingDeliveryDeferredError();
+        }
+      }
       // No run is active, so no older run can deliver what it claimed.
       await releaseSettledClaims(tx, input.sessionId);
 
@@ -884,18 +912,28 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         for (const message of steered) {
           const restored = parseUserMessageInput(message);
           if (!restored) continue;
-          await tx.insert(schema.agentPendingMessages).values({
-            sessionId: input.sessionId,
-            userId,
-            mode: 'steer',
-            content: (restored.composerContent.length > 0
-              ? restored.composerContent
-              : [{ type: 'text', text: restored.userText }]) as JsonValue[],
-            images: restored.images as unknown as JsonValue[],
-            attachments: restored.attachments as unknown as JsonValue[],
-            providerId: model.providerId,
-            modelId: model.model.id,
-          });
+          // Keep the original id: rows are ordered by id, so the restored
+          // message stays ahead of steer messages sent after it.
+          const originalId = (message as { pendingMessageId?: unknown })
+            .pendingMessageId;
+          await tx
+            .insert(schema.agentPendingMessages)
+            .values({
+              ...(typeof originalId === 'string' && originalId.length > 0
+                ? { id: originalId }
+                : {}),
+              sessionId: input.sessionId,
+              userId,
+              mode: 'steer',
+              content: (restored.composerContent.length > 0
+                ? restored.composerContent
+                : [{ type: 'text', text: restored.userText }]) as JsonValue[],
+              images: restored.images as unknown as JsonValue[],
+              attachments: restored.attachments as unknown as JsonValue[],
+              providerId: model.providerId,
+              modelId: model.model.id,
+            })
+            .onConflictDoNothing();
         }
       } else if ('pendingMessageIds' in input && input.pendingMessageIds) {
         const rows = await loadPendingRows(tx, input.sessionId, {
@@ -1677,8 +1715,6 @@ export async function completeRunFromRunner(
             autoRetryAt: null,
           })
           .where(eq(schema.agentRuns.id, run.id));
-        // The turn settled after all, so a pause its failure caused is void.
-        await setPendingPaused(tx, run.sessionId, false);
         return {
           kind: 'terminal' as const,
           status: 'completed' as const,
@@ -2345,11 +2381,14 @@ export async function dispatchPendingMessages(
         providerId: first.providerId,
         modelId: first.modelId,
         userId: first.userId,
+        automatic: true,
       });
       return { runId };
     } catch (error) {
       // Edited or cancelled meanwhile: decide again from fresh rows.
       if (error instanceof PendingMessagesChangedError) continue;
+      // Paused or a retry is due after all: the messages keep waiting.
+      if (error instanceof PendingDeliveryDeferredError) return null;
       // Another start won the race: its end delivers these later.
       if (await getActiveAgentRun(sessionId)) return null;
       // No Runner yet: deliver once one connects.

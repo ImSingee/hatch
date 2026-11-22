@@ -41,6 +41,7 @@ export function parsePreferencesCommand(
           : {}),
       },
       allowPositionals: true,
+      tokens: true,
     });
   } catch {
     throw invalid('Invalid arguments. Use hatch help.');
@@ -49,6 +50,14 @@ export function parsePreferencesCommand(
     throw invalid('This command takes no positional arguments.');
   const flags = parsed.values as Flags;
   if (operation === 'get') return { command: { kind: 'get' }, flags };
+  const modes = new Set(
+    (parsed.tokens ?? []).flatMap((token) =>
+      token.kind === 'option' && token.name === 'agent-message-mode'
+        ? [token.value]
+        : [],
+    ),
+  );
+  if (modes.size > 1) throw invalid('Supply --agent-message-mode only once.');
   const mode = flags['agent-message-mode'];
   if (mode === undefined)
     throw invalid('Supply --agent-message-mode queue|steer.');

@@ -224,13 +224,15 @@ export async function settleRunPendingMessages(
 ): Promise<void> {
   const delivered = persisted ? steeredPendingMessageIds(persisted) : [];
   if (delivered.length > 0) {
-    // Whatever their status: a late report can deliver a message the tray
-    // already got back after the run was stopped.
+    // Only rows still claimed by this run match what it delivered. A late
+    // report must not remove a message the user edited (or sent) after the
+    // run stopped: those changes released the claim.
     await tx
       .delete(schema.agentPendingMessages)
       .where(
         and(
           eq(schema.agentPendingMessages.sessionId, sessionId),
+          eq(schema.agentPendingMessages.claimedRunId, runId),
           inArray(schema.agentPendingMessages.id, delivered),
         ),
       );
