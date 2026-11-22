@@ -82,12 +82,14 @@ export function usePinToDesk(appId: string): {
     </Button>
   );
 
+  // The menu names the target dashboard, so it waits for every query; until
+  // then the plain button stands in, disabled.
   const control =
-    missing.length > 1 ? (
+    ready && target && missing.length > 1 ? (
       <Menu position="bottom-end" width={240} shadow="md">
         <Menu.Target>{button}</Menu.Target>
         <Menu.Dropdown>
-          <Menu.Label>Add to {target!.name}</Menu.Label>
+          <Menu.Label>Add to {target.name}</Menu.Label>
           {missing.map((widget) => (
             <Menu.Item key={widget.widgetId} onClick={() => add.mutate(widget)}>
               {widget.name}

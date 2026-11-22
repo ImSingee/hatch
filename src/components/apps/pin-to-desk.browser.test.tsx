@@ -6,16 +6,20 @@ import { render } from 'vitest-browser-react';
 const fixtures = vi.hoisted(() => ({
   available: [] as { appId: string; widgetId: string; name: string }[],
   placed: {} as Record<string, { appId: string; widgetId: string }[]>,
+  dashboardsFail: false,
   added: [] as unknown[],
 }));
 
 vi.mock('~queries/dashboards', () => ({
   dashboardsQueryOptions: {
     queryKey: ['test-dashboards'],
-    queryFn: async () => [
-      { id: 'home', name: 'My Dashboard' },
-      { id: 'weekend', name: 'Weekend' },
-    ],
+    queryFn: async () => {
+      if (fixtures.dashboardsFail) throw new Error('Dashboards unavailable');
+      return [
+        { id: 'home', name: 'My Dashboard' },
+        { id: 'weekend', name: 'Weekend' },
+      ];
+    },
   },
   availableWidgetsQueryOptions: {
     queryKey: ['test-available'],
@@ -66,6 +70,7 @@ beforeEach(() => {
   fixtures.available = [];
   fixtures.placed = {};
   fixtures.added = [];
+  fixtures.dashboardsFail = false;
 });
 
 test('pin to desk places the widget on the desk shown last', async () => {
@@ -99,6 +104,19 @@ test('an App without a widget says why it cannot be pinned', async () => {
   await expect
     .element(screen.getByText('This App has no widget to put on the desk.'))
     .toBeVisible();
+  await expect
+    .element(screen.getByRole('button', { name: 'Pin to desk' }))
+    .toBeDisabled();
+});
+
+test('an App with several widgets waits for the dashboards before the menu', async () => {
+  fixtures.available = [
+    { appId: 'notes', widgetId: 'today', name: 'Today' },
+    { appId: 'notes', widgetId: 'streak', name: 'Streak' },
+  ];
+  fixtures.dashboardsFail = true;
+  const screen = await renderPinToDesk('notes');
+  // Widgets are known but no dashboard is: no crash, the button stays off.
   await expect
     .element(screen.getByRole('button', { name: 'Pin to desk' }))
     .toBeDisabled();
