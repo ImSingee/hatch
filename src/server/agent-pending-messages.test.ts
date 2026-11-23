@@ -436,6 +436,51 @@ describe('review regressions', () => {
     expect((await tray()).paused).toBe(false);
   });
 
+  it('returns messages to the tray when the owner Runner drops during dispatch', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+    // The owner passes the check, then the dispatch fails.
+    vi.mocked(hub.dispatchRun).mockRejectedValueOnce(
+      new Error(
+        'The Agent Runner that owns this chat workspace is unavailable.',
+      ),
+    );
+    await finish(runId);
+    expect(await activeRunId()).toBeNull();
+    expect((await tray()).messages.map((message) => message.text)).toEqual([
+      'Add a chart',
+    ]);
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    expect(JSON.stringify(session!.messages)).not.toContain('Add a chart');
+    const runRows = await db.select().from(schema.agentRuns);
+    expect(runRows.map((row) => row.id)).toEqual([runId]);
+    // The Runner's return delivers them.
+    await runs.deliverPendingAfterRunnerReady();
+    await runs.pendingDispatchesSettled();
+    expect(started.at(-1)?.userText).toBe('Add a chart');
+    expect((await tray()).messages).toEqual([]);
+  });
+
+  it('delivers again after an abandoned Send now reservation expires', async () => {
+    // The platform stopped between a Send now's cancel and its start.
+    await db.insert(schema.agentPendingMessages).values({
+      sessionId: SESSION,
+      userId: USER,
+      mode: 'queue',
+      status: 'sending',
+      content: text('Deploy it now'),
+      ...MODEL,
+      updatedAt: new Date(Date.now() - 3 * 60_000),
+    });
+    await runs.sweepExpiredAgentRuns();
+    await runs.pendingDispatchesSettled();
+    expect(started.at(-1)?.userText).toBe('Deploy it now');
+    expect((await tray()).messages).toEqual([]);
+  });
+
   it('keeps a pause from a stopped retry when a late success repairs the run', async () => {
     await updateAgentPreferences(USER, { messageMode: 'queue' });
     const runId = await startRun('Build a tracker');
