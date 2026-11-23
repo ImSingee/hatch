@@ -212,7 +212,8 @@ function PendingRow({
     setWasEditable(editable);
     if (!editable) setEditing(false);
   }
-  const working = cancel.isPending || sendNow.isPending;
+  // A save still in flight would close an edit reopened meanwhile.
+  const working = cancel.isPending || sendNow.isPending || update.isPending;
   const files = message.images.length + message.attachments.length;
 
   return (

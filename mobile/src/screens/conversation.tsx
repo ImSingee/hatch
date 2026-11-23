@@ -364,6 +364,7 @@ function ConversationBody({
     <LiveTranscript
       key={entry.runId}
       state={entry.state}
+      steerImages={steerImages}
       settled
       status={
         checksSpent(entry)
