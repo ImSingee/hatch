@@ -95,6 +95,14 @@ export const agentMessageAttachmentIdsSchema = z
   .array(z.string().min(1))
   .max(MAX_ATTACHMENTS);
 
+/**
+ * Names one message across resends of the same draft, so a send repeated
+ * after a lost response is recognized (see `~server/agent-message-receipts`).
+ */
+export const clientMessageIdSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{8,128}$/, 'Invalid clientMessageId.');
+
 /** Fields of a user message, shared by run starts and pending messages. */
 export const agentMessageFields = {
   content: composerInputSchema.default([]),

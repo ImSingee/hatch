@@ -225,6 +225,7 @@ test('sends a message while the Agent works to the pending tray', async () => {
         attachmentIds: [],
         providerId: 'provider-1',
         modelId: 'model-1',
+        clientMessageId: expect.any(String),
       },
     },
   ]);
@@ -232,6 +233,44 @@ test('sends a message while the Agent works to the pending tray', async () => {
   await expect
     .element(screen.getByRole('button', { name: 'Stop' }))
     .toBeVisible();
+});
+
+test('resends a draft whose response was lost as the same message', async () => {
+  let lost = true;
+  const { calls } = stubFetch((call) => {
+    if (lost) {
+      // The server took the message; its response never arrived.
+      lost = false;
+      throw new TypeError('Failed to fetch');
+    }
+    const body = call.body as { content: { text: string }[] };
+    return {
+      paused: false,
+      messages: [pendingMessage('pending-1', body.content[0].text)],
+    };
+  });
+  const screen = await renderChat();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Use blue');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => calls.length).toBe(1);
+  // The draft is kept; sending it again names the same message.
+  await expect.element(input).toHaveTextContent('Use blue');
+  await userEvent.keyboard('{Enter}');
+  const tray = screen.getByRole('region', { name: 'Pending messages' });
+  await expect.element(tray.getByText('Use blue')).toBeVisible();
+
+  await input.click();
+  await userEvent.keyboard('And dark');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => calls.length).toBe(3);
+  const ids = calls.map(
+    (call) => (call.body as { clientMessageId: string }).clientMessageId,
+  );
+  expect(ids[1]).toBe(ids[0]);
+  // A new draft is a new message.
+  expect(ids[2]).not.toBe(ids[0]);
 });
 
 test('edits, sends now and cancels pending messages', async () => {

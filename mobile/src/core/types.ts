@@ -120,6 +120,8 @@ export type CreateRunInput = {
       content: { type: 'text'; text: string }[];
       images?: { data: string; mimeType: string }[];
       attachmentIds?: string[];
+      /** Reused when resending the same draft; the server dedupes on it. */
+      clientMessageId?: string;
     }
   | { retry: true; expectedSessionUpdatedAt: string }
 );

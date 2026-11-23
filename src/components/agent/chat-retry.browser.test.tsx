@@ -584,6 +584,7 @@ test('sends a new message with the model currently shown in the picker', async (
     attachmentIds: [],
     providerId: 'provider-latest',
     modelId: 'model-latest',
+    clientMessageId: expect.any(String),
   });
   expect(
     queryClient.getQueryData(['test-agent-session', 'session-1']),

@@ -128,6 +128,25 @@ describe('POST /api/agent/runs', () => {
     expect(mocks.startAgentRun).not.toHaveBeenCalled();
   });
 
+  it('forwards a clientMessageId and rejects a malformed one', async () => {
+    const message = { ...baseBody, content: [{ type: 'text', text: 'Hi' }] };
+    const accepted = await postAgentRun({
+      request: runRequest({ ...message, clientMessageId: 'draft-0001' }),
+    });
+    expect(accepted.status).toBe(200);
+    expect(mocks.startAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ clientMessageId: 'draft-0001' }),
+    );
+
+    for (const clientMessageId of ['', 'short', 'has spaces in it', 42]) {
+      const rejected = await postAgentRun({
+        request: runRequest({ ...message, clientMessageId }),
+      });
+      expect(rejected.status).toBe(400);
+    }
+    expect(mocks.startAgentRun).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps platform-scheduled retries out of client requests', async () => {
     const response = await postAgentRun({
       request: runRequest({

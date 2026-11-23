@@ -66,6 +66,14 @@ import {
 import type { SteerMessage } from '~agent/protocol';
 import { AppError } from '~server/errors';
 import {
+  bindReceiptsToRun,
+  findMessageReceipt,
+  messageFingerprint,
+  MessageAlreadySentError,
+  recordMessageReceipt,
+  type AgentMessageReceipt,
+} from './agent-message-receipts';
+import {
   AGENT_AUTO_RETRY_MAX_ATTEMPTS,
   AGENT_AUTO_RETRY_IDLE_POLL_MS,
   AGENT_AUTO_RETRY_STATUSES,
@@ -148,6 +156,11 @@ export type AgentRunInput =
       providerId: string;
       modelId: string;
       userId?: string | null;
+      /**
+       * Names the message for safe resends: a start that repeats an earlier
+       * one returns that run (see `~server/agent-message-receipts`).
+       */
+      clientMessageId?: string;
       pendingMessageIds?: never;
     }
   | {
@@ -168,6 +181,38 @@ export type AgentRunInput =
        */
       automatic?: boolean;
     };
+
+export type StartedAgentRun = {
+  runId: string;
+  startedAt: string;
+  /** User turn the run answers (null for runs that predate the binding). */
+  userTurn: number | null;
+};
+
+function startedRun(
+  run: typeof schema.agentRuns.$inferSelect,
+): StartedAgentRun {
+  return {
+    runId: run.id,
+    startedAt: run.createdAt.toISOString(),
+    userTurn: parseUserTurn(run.input.userTurn),
+  };
+}
+
+/** The run an earlier send of this message started. */
+async function replayStartedRun(
+  executor: DB | TX,
+  receipt: AgentMessageReceipt,
+): Promise<StartedAgentRun> {
+  const run = receipt.runId
+    ? await executor.query.agentRuns.findFirst({
+        where: { id: receipt.runId },
+      })
+    : null;
+  // Still waiting in the tray, or delivered without a run of its own.
+  if (!run) throw new MessageAlreadySentError();
+  return startedRun(run);
+}
 
 /** Another run is active in the session. */
 export class ActiveRunConflictError extends AppError {
@@ -870,14 +915,32 @@ export async function getSessionRetryState(
   };
 }
 
-export async function startAgentRun(input: AgentRunInput): Promise<{
-  runId: string;
-  startedAt: string;
-}> {
+export async function startAgentRun(
+  input: AgentRunInput,
+): Promise<StartedAgentRun> {
   const sessionRow = await db.query.agentSessions.findFirst({
     where: { id: input.sessionId },
   });
   if (!sessionRow) throw new AppError('Session not found.', 404);
+
+  // A resend returns the original outcome before any check that the first
+  // send itself changed (its run is active, its attachments attached).
+  const receiptKey =
+    'content' in input && input.clientMessageId
+      ? {
+          clientMessageId: input.clientMessageId,
+          fingerprint: messageFingerprint(input),
+        }
+      : null;
+  if (receiptKey) {
+    const receipt = await findMessageReceipt(
+      db,
+      input.sessionId,
+      receiptKey.clientMessageId,
+      receiptKey.fingerprint,
+    );
+    if (receipt) return replayStartedRun(db, receipt);
+  }
 
   const activeRun = await getActiveAgentRun(input.sessionId);
   if (activeRun) {
@@ -947,7 +1010,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     images: SendImage[];
     attachments: AgentAttachmentRef[];
   };
-  let prepared: PreparedRun;
+  let prepared: PreparedRun | { replayed: StartedAgentRun };
   try {
     prepared = await db.transaction(async (tx) => {
       // Serialize starts for this exact session, then re-read every piece of
@@ -960,6 +1023,17 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         .where(eq(schema.agentSessions.id, input.sessionId))
         .for('update');
       if (!lockedSession) throw new AppError('Session not found.', 404);
+
+      // A concurrent copy of this send may have committed meanwhile.
+      if (receiptKey) {
+        const receipt = await findMessageReceipt(
+          tx,
+          input.sessionId,
+          receiptKey.clientMessageId,
+          receiptKey.fingerprint,
+        );
+        if (receipt) return { replayed: await replayStartedRun(tx, receipt) };
+      }
 
       const [lockedActiveRun] = await tx
         .select({ id: schema.agentRuns.id })
@@ -1238,6 +1312,21 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
           },
         })
         .returning();
+      if (receiptKey) {
+        await recordMessageReceipt(tx, {
+          sessionId: input.sessionId,
+          ...receiptKey,
+          runId: inserted.id,
+        });
+      }
+      if ('pendingMessageIds' in input && input.pendingMessageIds) {
+        await bindReceiptsToRun(
+          tx,
+          input.sessionId,
+          input.pendingMessageIds,
+          inserted.id,
+        );
+      }
 
       // Keep run creation and transcript replacement in one commit. In
       // particular, a retry must never delete the failed turn unless the new
@@ -1297,6 +1386,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     }
     throw error;
   }
+  if ('replayed' in prepared) return prepared.replayed;
   const {
     run,
     consumed,
@@ -1341,7 +1431,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
       console.warn(
         `[agent-runs] dispatch of ${run.id} is unconfirmed: ${error.message}`,
       );
-      return { runId: run.id, startedAt: run.createdAt.toISOString() };
+      return startedRun(run);
     }
     // The run never started (no Runner took it, or the work before sending
     // it failed). Fail it gracefully: the client's SSE connection replays the
@@ -1380,7 +1470,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     }
   }
 
-  return { runId: run.id, startedAt: run.createdAt.toISOString() };
+  return startedRun(run);
 }
 
 type SessionSettings = {

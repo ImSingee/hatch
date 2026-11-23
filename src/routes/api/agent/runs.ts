@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import {
   agentMessageFields,
+  clientMessageIdSchema,
   MAX_BODY_BYTES,
   normalizeLegacyUserText,
   readCappedJson,
@@ -20,6 +21,8 @@ const startBodySchema = z.preprocess(
       retry: z.literal(false).optional(),
       providerId: z.string().min(1),
       modelId: z.string().min(1),
+      /** Reused when resending the same draft; see agent-message-receipts. */
+      clientMessageId: clientMessageIdSchema.optional(),
       ...agentMessageFields,
     }),
   ),
