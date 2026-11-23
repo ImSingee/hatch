@@ -3,6 +3,7 @@ import { authClient } from '~auth/client';
 import { DeviceApproval } from '~components/cli-auth/device-approval';
 import { normalizeUserCode } from '~components/cli-auth/device-api';
 import { hasActiveSession } from '~server/auth';
+import { releaseDeviceClaim } from '~server/device-claims';
 
 /** Same-origin path back to this page; it carries only the user code. */
 function returnPath(userCode: string): string {
@@ -57,6 +58,7 @@ function AuthorizePage() {
         await authClient.signOut();
         await signIn(userCode);
       }}
+      releaseClaim={(userCode) => releaseDeviceClaim({ data: { userCode } })}
     />
   );
 }

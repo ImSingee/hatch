@@ -21,9 +21,27 @@ const claimed = { user_code: CODE, status: 'pending', client_id: 'hatch-cli' };
 type Reply = Response | Promise<Response> | 'network-error';
 let replies: Record<string, Reply>;
 let calls: { action: string; url: URL; init: RequestInit }[];
+let releaseClaim: ReturnType<typeof vi.fn<(userCode: string) => Promise<void>>>;
+let onSwitchAccount: ReturnType<typeof vi.fn<(userCode: string) => void>>;
 
 beforeEach(() => {
   calls = [];
+  releaseClaim = vi.fn<(userCode: string) => Promise<void>>(
+    async (userCode) => {
+      calls.push({
+        action: 'release',
+        url: new URL(`release:${userCode}`),
+        init: {},
+      });
+    },
+  );
+  onSwitchAccount = vi.fn<(userCode: string) => void>((userCode) => {
+    calls.push({
+      action: 'switch',
+      url: new URL(`switch:${userCode}`),
+      init: {},
+    });
+  });
   replies = { claim: Response.json(claimed) };
   vi.spyOn(window, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), window.location.origin);
@@ -48,7 +66,8 @@ function page(client: QueryClient, initialCode: string) {
           initialCode={initialCode}
           account="owner@example.com"
           onSignIn={() => {}}
-          onSwitchAccount={() => {}}
+          onSwitchAccount={onSwitchAccount}
+          releaseClaim={releaseClaim}
         />
       </QueryClientProvider>
     </MantineProvider>
@@ -245,4 +264,29 @@ test('the verified mobile client identity is displayed before approval', async (
     .element(screen.getByRole('button', { name: 'Approve' }))
     .toBeDisabled();
   expect(calls.map((call) => call.action)).toEqual(['claim']);
+});
+
+test('switching account from the review releases the claim first', async () => {
+  const screen = await openReview();
+  await screen.getByRole('button', { name: 'Use a different account' }).click();
+  await expect
+    .poll(() => calls.map((call) => call.action))
+    .toEqual(['claim', 'release', 'switch']);
+  expect(releaseClaim).toHaveBeenCalledWith(CODE);
+  expect(onSwitchAccount).toHaveBeenCalledWith(CODE);
+});
+
+test('an unconfirmed release keeps the account and the review', async () => {
+  releaseClaim.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  const screen = await openReview();
+  await screen.getByRole('button', { name: 'Use a different account' }).click();
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent(
+      'Couldn’t release this request, so you’re still signed in here. Try again.',
+    );
+  expect(onSwitchAccount).not.toHaveBeenCalled();
+  await expect
+    .element(screen.getByRole('button', { name: 'Deny' }))
+    .toBeEnabled();
 });

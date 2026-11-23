@@ -25,7 +25,7 @@ import { RequestReview } from './request-review';
 type Stage =
   | { kind: 'opening' }
   | { kind: 'entry'; problem: EntryProblem | null; retryAfter?: number | null }
-  | { kind: 'review'; request: DeviceRequest }
+  | { kind: 'review'; request: DeviceRequest; switchFailed?: boolean }
   | { kind: 'outcome'; outcome: DeviceOutcome; request: DeviceRequest }
   | {
       kind: 'problem';
@@ -42,6 +42,11 @@ export type DeviceApprovalProps = {
   /** Leave for the existing login page, returning to this code afterwards. */
   onSignIn: (userCode: string) => void;
   onSwitchAccount: (userCode: string) => void;
+  /**
+   * Give up this account's claim on a request so another account can claim
+   * it. Runs before switching away from a review; rejects if not confirmed.
+   */
+  releaseClaim: (userCode: string) => Promise<void>;
 };
 
 /**
@@ -51,6 +56,8 @@ export type DeviceApprovalProps = {
  * account as soon as the page opens and goes straight to the decision; without
  * one, the person enters the code first. Claiming only shows the request:
  * approving still needs the code comparison, the confirmation and Approve.
+ * A claim binds the request to the account, so switching account from the
+ * review first releases the claim; the next account claims it on return.
  * Approve or Deny records one decision.
  * Each call is a single explicit action: it is never retried automatically,
  * a second action cannot start while one is in flight, and only an outcome
@@ -70,6 +77,7 @@ function DeviceApprovalFlow({
   account,
   onSignIn,
   onSwitchAccount,
+  releaseClaim,
 }: DeviceApprovalProps) {
   const [code, setCode] = useState(() => normalizeUserCode(initialCode));
   const [stage, setStage] = useState<Stage>(() =>
@@ -88,6 +96,12 @@ function DeviceApprovalFlow({
   // Offline calls must fail now and go through the explicit recovery path.
   const claim = useMutation({
     mutationFn: claimDeviceRequest,
+    retry: false,
+    networkMode: 'always',
+    meta: { errorToast: false },
+  });
+  const release = useMutation({
+    mutationFn: (userCode: string) => releaseClaim(userCode),
     retry: false,
     networkMode: 'always',
     meta: { errorToast: false },
@@ -151,6 +165,20 @@ function DeviceApprovalFlow({
     );
   };
 
+  // Release before leaving: if the release is not confirmed, stay here, since
+  // signing in as another account could no longer claim the request.
+  const switchFromReview = (request: DeviceRequest) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    release.mutate(request.userCode, {
+      onSuccess: () => onSwitchAccount(request.userCode),
+      onError: () => setStage({ kind: 'review', request, switchFailed: true }),
+      onSettled: () => {
+        inFlight.current = false;
+      },
+    });
+  };
+
   // Runs once per flow; the in-flight guard also absorbs Strict Mode's
   // repeated effect, so a link sends exactly one claim.
   const opening = useRef(stage.kind === 'opening');
@@ -197,6 +225,9 @@ function DeviceApprovalFlow({
               decide.isPending ? (decide.variables?.decision ?? null) : null
             }
             onDecide={(decision) => submitDecision(stage.request, decision)}
+            switching={release.isPending || release.isSuccess}
+            switchFailed={stage.switchFailed ?? false}
+            onSwitchAccount={() => switchFromReview(stage.request)}
           />
         ) : stage.kind === 'outcome' ? (
           <OutcomeView
