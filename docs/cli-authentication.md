@@ -126,11 +126,12 @@ device list can show both from one table.
 
 `src/routes/cli/authorize.tsx`, components in `src/components/cli-auth/`.
 
-- Opening a verification link only prefills the code; headless devices can type
-  it instead. Anonymous visitors go through the existing `/login` with a
+- A verification link with a complete code goes straight to the review;
+  headless devices can type the code instead and press Continue. Anonymous
+  visitors go through the existing `/login` with a
   same-origin return path that carries only `user_code`; the page never asks for
   a password.
-- An explicit "Review request" calls `GET /api/auth/device?user_code=…`, which
+- Opening the review calls `GET /api/auth/device?user_code=…` once, which
   claims a pending request for the signed-in account. Only that account gets the
   request details back; another account sees "Claimed by another account".
 - The review shows the account, the origin, the code to compare and that

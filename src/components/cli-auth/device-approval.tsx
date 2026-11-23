@@ -1,10 +1,12 @@
+import { Center, Loader } from '@mantine/core';
 import { useMutation } from '@tanstack/react-query';
-import { Fragment, useCallback, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { CodeEntry } from './code-entry';
 import {
   claimDeviceRequest,
   decideDeviceRequest,
   normalizeUserCode,
+  USER_CODE_LENGTH,
   type DeviceDecision,
   type DeviceOutcome,
   type DeviceRequest,
@@ -21,6 +23,7 @@ import {
 import { RequestReview } from './request-review';
 
 type Stage =
+  | { kind: 'opening' }
   | { kind: 'entry'; problem: EntryProblem | null; retryAfter?: number | null }
   | { kind: 'review'; request: DeviceRequest }
   | { kind: 'outcome'; outcome: DeviceOutcome; request: DeviceRequest }
@@ -44,8 +47,11 @@ export type DeviceApprovalProps = {
 /**
  * Browser half of the device authorization grant.
  *
- * Opening the page never calls the server. "Review request" claims the
- * request for the signed-in account; Approve or Deny records one decision.
+ * A link that carries a complete code claims the request for the signed-in
+ * account as soon as the page opens and goes straight to the decision; without
+ * one, the person enters the code first. Claiming only shows the request:
+ * approving still needs the code comparison, the confirmation and Approve.
+ * Approve or Deny records one decision.
  * Each call is a single explicit action: it is never retried automatically,
  * a second action cannot start while one is in flight, and only an outcome
  * the server confirmed is ever shown as approved or denied.
@@ -66,7 +72,11 @@ function DeviceApprovalFlow({
   onSwitchAccount,
 }: DeviceApprovalProps) {
   const [code, setCode] = useState(() => normalizeUserCode(initialCode));
-  const [stage, setStage] = useState<Stage>({ kind: 'entry', problem: null });
+  const [stage, setStage] = useState<Stage>(() =>
+    code.length === USER_CODE_LENGTH
+      ? { kind: 'opening' }
+      : { kind: 'entry', problem: null },
+  );
   // Counts step changes. Each step remounts under a new key so its title (or
   // the code field) takes focus, even when one problem replaces another.
   const [transitions, setTransitions] = useState(0);
@@ -141,6 +151,15 @@ function DeviceApprovalFlow({
     );
   };
 
+  // Runs once per flow; the in-flight guard also absorbs Strict Mode's
+  // repeated effect, so a link sends exactly one claim.
+  const opening = useRef(stage.kind === 'opening');
+  useEffect(() => {
+    if (!opening.current) return;
+    opening.current = false;
+    review(code);
+  });
+
   const startOver = () => {
     claim.reset();
     decide.reset();
@@ -151,7 +170,11 @@ function DeviceApprovalFlow({
   return (
     <DeviceLayout>
       <Fragment key={transitions}>
-        {stage.kind === 'entry' ? (
+        {stage.kind === 'opening' ? (
+          <Center py="xl">
+            <Loader aria-label="Opening request" />
+          </Center>
+        ) : stage.kind === 'entry' ? (
           <CodeEntry
             code={code}
             onCodeChange={(next) => {
