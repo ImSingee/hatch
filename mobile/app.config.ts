@@ -73,7 +73,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'light',
   ios: {
     buildNumber: '3',
-    supportsTablet: false,
+    supportsTablet: true,
     deploymentTarget: '16.4',
     bundleIdentifier: 'app.hatch.mobile',
     infoPlist: {
