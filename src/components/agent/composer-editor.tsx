@@ -534,6 +534,8 @@ export const ComposerEditor = forwardRef<
     placeholder: string;
     seedText?: string;
     seedNonce?: number;
+    /** Initial content with resource mentions; wins over `seedText`. */
+    seedContent?: ComposerInputPart[];
     onChange: (content: ComposerInputPart[]) => void;
     onMentionLookupPendingChange: (pending: boolean) => void;
     onSubmit: () => void;
@@ -552,6 +554,7 @@ export const ComposerEditor = forwardRef<
     placeholder,
     seedText,
     seedNonce,
+    seedContent,
     onChange,
     onMentionLookupPendingChange,
     onSubmit,
@@ -730,7 +733,9 @@ export const ComposerEditor = forwardRef<
 
   const editor = useEditor({
     extensions,
-    content: plainTextComposerDocument(seedText ?? ''),
+    content: seedContent
+      ? composerDocumentFromParts(seedContent)
+      : plainTextComposerDocument(seedText ?? ''),
     editable: !disabled,
     immediatelyRender: false,
     editorProps: {
@@ -819,9 +824,18 @@ export const ComposerEditor = forwardRef<
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
 
+  // Read at seed time only: a new array with the same content must not
+  // replace what the user typed since.
+  const seedContentRef = useRef(seedContent);
+  seedContentRef.current = seedContent;
   useEffect(() => {
     if (!editor || seedNonce === undefined) return;
-    editor.commands.setContent(plainTextComposerDocument(seedText ?? ''));
+    const content = seedContentRef.current;
+    editor.commands.setContent(
+      content
+        ? composerDocumentFromParts(content)
+        : plainTextComposerDocument(seedText ?? ''),
+    );
     editor.commands.focus('end');
   }, [editor, seedNonce, seedText]);
 

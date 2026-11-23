@@ -5,10 +5,16 @@ export const SETTLE_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
 type Transcript = Pick<SessionDetail, 'messages' | 'runs'>;
 
+/**
+ * A message's role for turn counting. A user message steered into a running
+ * run belongs to that run's reply and never starts a user turn.
+ */
 function role(message: JsonValue) {
-  return message && typeof message === 'object' && !Array.isArray(message)
-    ? message.role
-    : undefined;
+  if (!message || typeof message !== 'object' || Array.isArray(message))
+    return undefined;
+  return message.role === 'user' && message.steered === true
+    ? 'steered'
+    : message.role;
 }
 
 /** Whether the transcript holds a reply to the given (zero-based) user turn. */

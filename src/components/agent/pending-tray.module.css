@@ -1,0 +1,93 @@
+/* Sits directly on top of the composer card and reads as part of it. */
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding: 4px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-xl);
+  background-color: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.paused {
+  padding: 6px 10px;
+  border-radius: var(--mantine-radius-lg);
+  background-color: var(--mantine-color-yellow-light);
+  color: var(--mantine-color-yellow-light-color);
+}
+
+.row {
+  padding: 6px 8px 6px 10px;
+  border-radius: var(--mantine-radius-lg);
+  transition: background-color var(--transition-fast);
+}
+
+.row:hover {
+  background-color: var(--surface-hover);
+}
+
+.mode {
+  flex: none;
+  margin-top: 2px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  flex: none;
+}
+
+.edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor {
+  border: 1px solid var(--border-input);
+  border-radius: var(--mantine-radius-lg);
+  background-color: var(--surface-raised);
+  padding: 0 4px 6px;
+  transition: border-color var(--transition-fast);
+}
+
+.editor:focus-within {
+  border-color: var(--focus-ring);
+}
+
+.thumb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.thumbImg {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.thumbRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+}
+
+.file {
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-sm);
+}

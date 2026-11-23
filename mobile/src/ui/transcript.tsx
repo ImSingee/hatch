@@ -246,8 +246,11 @@ export function LiveTranscript({
   status,
   settled = false,
   action,
+  steerImages,
 }: {
   state: StreamState;
+  /** Images of a pending message, known from the tray before injection. */
+  steerImages?: (pendingId: string) => { data: string; mimeType: string }[];
   status: string;
   /** A stopped run's frozen output: nothing is still working. */
   settled?: boolean;
@@ -291,6 +294,41 @@ export function LiveTranscript({
           );
         if (block.kind === 'thinking')
           return <Details key={index} title="Reasoning" text={block.text} />;
+        if (block.kind === 'steer') {
+          // An event without images shows none, even if a stale cache has
+          // some.
+          const images = block.imageCount
+            ? (steerImages?.(block.id) ?? [])
+            : [];
+          // Without the image data, say the message had images.
+          const text =
+            !images.length && block.imageCount
+              ? [
+                  block.text,
+                  block.imageCount === 1
+                    ? '1 image'
+                    : `${block.imageCount} images`,
+                ]
+                  .filter(Boolean)
+                  .join('\n')
+              : block.text;
+          return (
+            <TranscriptMessage
+              key={index}
+              value={{
+                role: 'user',
+                content: [
+                  { type: 'text', text },
+                  ...images.map((image) => ({ type: 'image', ...image })),
+                ],
+                ...(block.attachments.length
+                  ? { attachments: block.attachments }
+                  : {}),
+                steered: true,
+              }}
+            />
+          );
+        }
         if (block.kind !== 'tool') return null;
         const tool = state.tools.find((item) => item.id === block.id);
         return tool ? (

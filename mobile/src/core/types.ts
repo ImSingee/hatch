@@ -70,8 +70,29 @@ export type SessionSummary = Omit<
   providerId: string | null;
   modelId: string | null;
 };
+export type AgentMessageMode = 'queue' | 'steer';
+/** A message sent while the Agent worked, not delivered yet. */
+export type PendingMessage = {
+  id: string;
+  mode: AgentMessageMode;
+  /** `pending` is editable; `claimed` and `sending` are being delivered. */
+  status: 'pending' | 'claimed' | 'sending';
+  /** Composer parts; the app edits only plain text messages. */
+  content: JsonValue[];
+  text: string;
+  images: { data: string; mimeType: string }[];
+  attachments: Attachment[];
+  providerId: string;
+  modelId: string;
+};
+export type PendingMessages = { paused: boolean; messages: PendingMessage[] };
+export type PendingMessagesResult = {
+  pending: PendingMessages;
+  startedRunId: string | null;
+};
 export type SessionDetail = Omit<SessionSummary, 'messageCount'> & {
   messages: JsonValue[];
+  pending: PendingMessages;
   activeRun: ActiveRun | null;
   runs: {
     id: string;
@@ -141,6 +162,15 @@ export type AgentStreamEvent =
       summary?: string;
     }
   | { type: 'turn_end' | 'cancelled' }
+  | {
+      /** A steer message the run took in while working. */
+      type: 'user_message';
+      pendingId: string;
+      text: string;
+      /** Image metadata only; the data is known from the pending tray. */
+      images?: { mimeType: string }[];
+      attachments?: Attachment[];
+    }
   | {
       /** Auto-compaction lifecycle. Accepted so the stream keeps advancing. */
       type: 'compact';

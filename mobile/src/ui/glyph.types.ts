@@ -32,6 +32,8 @@ export const glyphs = {
   bell: 'bell',
   settings: 'gearshape',
   trash: 'trash',
+  edit: 'pencil',
+  pause: 'pause.fill',
 } as const;
 
 export type GlyphName = keyof typeof glyphs;

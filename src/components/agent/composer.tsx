@@ -5,6 +5,7 @@ import {
   Group,
   Image,
   Text,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconArrowUp,
@@ -129,6 +130,7 @@ function readFileAttachment(file: File): FileAttachment {
 export function Composer({
   onSubmit,
   busy = false,
+  queueWhileBusy = false,
   onStop,
   disabled = false,
   focusOnMount = false,
@@ -152,6 +154,11 @@ export function Composer({
     payload: ComposerSubmit,
   ) => void | boolean | Promise<void | boolean>;
   busy?: boolean;
+  /**
+   * While busy, still accept a message (the chat holds it as a pending
+   * message for the running Agent) and offer Send next to Stop.
+   */
+  queueWhileBusy?: boolean;
   onStop?: () => void;
   disabled?: boolean;
   focusOnMount?: boolean;
@@ -220,7 +227,12 @@ export function Composer({
     !submitting;
 
   const submit = async () => {
-    if (busy || disabled || mentionLookupPending || submittingRef.current)
+    if (
+      (busy && !queueWhileBusy) ||
+      disabled ||
+      mentionLookupPending ||
+      submittingRef.current
+    )
       return;
     // Snapshot exactly what we send so we can clear only this draft later.
     const submittedDraft = editorRef.current?.getSnapshot() ?? {
@@ -395,27 +407,39 @@ export function Composer({
           {modelControl}
         </Group>
 
-        {busy ? (
-          <ActionIcon
-            color="red"
-            size={30}
-            radius="xl"
-            aria-label="Stop"
-            onClick={onStop}
-          >
-            <IconPlayerStopFilled size={13} />
-          </ActionIcon>
-        ) : (
-          <ActionIcon
-            size={30}
-            radius="xl"
-            aria-label="Send"
-            disabled={!canSend}
-            onClick={() => void submit()}
-          >
-            <IconArrowUp size={16} stroke={2.2} />
-          </ActionIcon>
-        )}
+        <Group gap={6} wrap="nowrap">
+          {busy ? (
+            <Tooltip label="Stop" withArrow>
+              <ActionIcon
+                color="red"
+                variant={queueWhileBusy ? 'light' : 'filled'}
+                size={30}
+                radius="xl"
+                aria-label="Stop"
+                onClick={onStop}
+              >
+                <IconPlayerStopFilled size={13} />
+              </ActionIcon>
+            </Tooltip>
+          ) : null}
+          {!busy || queueWhileBusy ? (
+            <Tooltip
+              label="Send while the Agent works"
+              withArrow
+              disabled={!busy}
+            >
+              <ActionIcon
+                size={30}
+                radius="xl"
+                aria-label="Send"
+                disabled={!canSend}
+                onClick={() => void submit()}
+              >
+                <IconArrowUp size={16} stroke={2.2} />
+              </ActionIcon>
+            </Tooltip>
+          ) : null}
+        </Group>
       </Group>
     </Box>
   );

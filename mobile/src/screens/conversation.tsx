@@ -45,7 +45,13 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import type { AskAnswer, JsonValue, PendingAsk, StreamState } from '../core';
+import type {
+  AskAnswer,
+  JsonValue,
+  PendingAsk,
+  SessionDetail,
+  StreamState,
+} from '../core';
 import { useSession } from '../state/session';
 import {
   useAskDraft,
@@ -67,6 +73,7 @@ import { AskCard } from '../ui/ask-card';
 import { Button, IconButton } from '../ui/button';
 import { Glyph } from '../ui/glyph';
 import { LiveTranscript, TranscriptMessage } from '../ui/transcript';
+import { PendingTray } from '../ui/pending-tray';
 import { terminalReplyIndexes } from '../ui/transcript-content';
 import { Busy, Egg, Notice, errorText } from '../ui/primitives';
 import { GlyphTile, Monogram } from '../ui/rows';
@@ -216,6 +223,18 @@ function ConversationBody({
     queryKey: [origin, 'session', id],
     queryFn: ({ signal }) => api!.session(id, signal),
     enabled: Boolean(api),
+    // The server starts the run that delivers waiting messages on its own
+    // once the conversation is idle; follow it until that run shows up.
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data &&
+        !data.activeRun &&
+        data.pending &&
+        !data.pending.paused &&
+        data.pending.messages.length > 0
+        ? 1500
+        : false;
+    },
   });
   // Another client may add messages or start a run while a pushed screen
   // covers this one. Joining any read in flight keeps background checks whole.
@@ -291,6 +310,49 @@ function ConversationBody({
     [refresh],
   );
   const stream = useRunStream(api, streamRunId, reconcile);
+  // Images of messages that were in the tray, for the live reply that shows
+  // them once the run takes them in (its event carries no image data).
+  const steerImagesRef = useRef(
+    new Map<string, { data: string; mimeType: string }[]>(),
+  );
+  // Claimed messages leave the tray before their event reaches the live
+  // reply; their images stay cached until a reply shows them.
+  const steerAwaitingRef = useRef(new Set<string>());
+  const pendingMessages = detail?.pending?.messages;
+  const liveSteerIds = [
+    stream.state,
+    ...held.entries.map((entry) => entry.state),
+  ]
+    .flatMap((state) =>
+      state.blocks.flatMap((block) =>
+        block.kind === 'steer' ? [block.id] : [],
+      ),
+    )
+    .join('\n');
+  useEffect(() => {
+    const cache = steerImagesRef.current;
+    const awaiting = steerAwaitingRef.current;
+    const keep = new Set(liveSteerIds ? liveSteerIds.split('\n') : []);
+    for (const pendingId of keep) awaiting.delete(pendingId);
+    for (const message of pendingMessages ?? []) {
+      // Always overwrite: an edit can remove every image.
+      cache.set(message.id, message.images);
+      keep.add(message.id);
+      if (message.status === 'claimed') awaiting.add(message.id);
+      else awaiting.delete(message.id);
+    }
+    // Drop images no tray row, live or held reply, or claimed handover still
+    // needs, such as those of cancelled messages.
+    for (const pendingId of cache.keys()) {
+      if (!keep.has(pendingId) && !awaiting.has(pendingId)) {
+        cache.delete(pendingId);
+      }
+    }
+  }, [pendingMessages, liveSteerIds]);
+  const steerImages = useCallback(
+    (pendingId: string) => steerImagesRef.current.get(pendingId) ?? [],
+    [],
+  );
   const heldShown = placeHeldReplies(
     detail?.messages ?? [],
     shownHeldReplies(held, id, detail),
@@ -302,6 +364,7 @@ function ConversationBody({
     <LiveTranscript
       key={entry.runId}
       state={entry.state}
+      steerImages={steerImages}
       settled
       status={
         checksSpent(entry)
@@ -330,14 +393,17 @@ function ConversationBody({
     ? stream.state.pendingEnv
     : detail?.activeRun?.pendingEnvRequest;
 
+  const sessionKey = [origin, 'session', id];
+  const applyPending = (pending: SessionDetail['pending']) =>
+    queryClient.setQueryData<SessionDetail>(sessionKey, (old) =>
+      old ? { ...old, pending } : old,
+    );
   const send = useMutation({
     mutationKey: runKey,
     mutationFn: async () => {
       const signal = lifetimeSignal();
       const text = (composer.current?.getText() ?? draft).trim();
       if (!selectedModel) throw new Error('Choose a configured model first.');
-      if (streamRunId)
-        throw new Error('Wait for the current reply or stop it first.');
       const attachmentIds: string[] = [];
       for (const file of files.filter((item) => !item.image)) {
         const blob = new File(file.uri);
@@ -351,25 +417,41 @@ function ConversationBody({
         );
         attachmentIds.push(file.id);
       }
+      const message = {
+        ...selectedModel,
+        content: text ? [{ type: 'text' as const, text }] : [],
+        attachmentIds,
+        images: files
+          .filter((item) => item.image)
+          .map((item) => ({ data: item.image!, mimeType: item.mimeType })),
+      };
+      // While the Agent works the message waits in the pending tray and is
+      // delivered in the user's queue/steer mode.
+      if (streamRunId) {
+        return {
+          kind: 'pending' as const,
+          pending: await api!.enqueuePending(id, message, signal),
+        };
+      }
       // The list follows this conversation even if we leave before the
       // request lands or its result is read.
       markConversationWorking(queryClient, origin!, id);
-      return api!.createRun(
-        {
-          sessionId: id,
-          ...selectedModel,
-          content: text ? [{ type: 'text', text }] : [],
-          attachmentIds,
-          images: files
-            .filter((item) => item.image)
-            .map((item) => ({ data: item.image!, mimeType: item.mimeType })),
-        },
-        signal,
-      );
+      return {
+        kind: 'run' as const,
+        run: await api!.createRun({ sessionId: id, ...message }, signal),
+      };
     },
     onSuccess: async (result) => {
       if (lifetimeSignal().aborted) return;
-      setOptimisticRun(result.runId);
+      if (result.kind === 'run') setOptimisticRun(result.run.runId);
+      else {
+        applyPending(result.pending.pending);
+        // The run had just ended: the server delivered the message at once.
+        if (result.pending.startedRunId) {
+          setOptimisticRun(result.pending.startedRunId);
+          markConversationWorking(queryClient, origin!, id);
+        }
+      }
       setDraft('');
       setFiles([]);
       setProblem(null);
@@ -392,6 +474,46 @@ function ConversationBody({
     },
     onSettled: () => {
       sending.current = false;
+    },
+  });
+  // Edit, cancel, send now and resume, one at a time per conversation.
+  const pendingKey = [origin, 'conversation-pending', id];
+  const pendingBusy = useIsMutating({ mutationKey: pendingKey }) > 0;
+  const pendingAction = useMutation({
+    mutationKey: pendingKey,
+    mutationFn: (
+      action:
+        | { kind: 'save'; messageId: string; text: string }
+        | { kind: 'cancel' | 'send-now'; messageId: string }
+        | { kind: 'resume' },
+    ) => {
+      const signal = lifetimeSignal();
+      if (action.kind === 'save')
+        return api!.updatePendingText(
+          id,
+          action.messageId,
+          action.text,
+          signal,
+        );
+      if (action.kind === 'cancel')
+        return api!.cancelPending(id, action.messageId, signal);
+      if (action.kind === 'send-now')
+        return api!.sendPendingNow(id, action.messageId, signal);
+      return api!.resumePending(id, signal);
+    },
+    onSuccess: async (result) => {
+      if (lifetimeSignal().aborted) return;
+      applyPending(result.pending);
+      if (result.startedRunId) {
+        setOptimisticRun(result.startedRunId);
+        markConversationWorking(queryClient, origin!, id);
+      }
+      await session.refetch();
+    },
+    onError: (error) => {
+      if (lifetimeSignal().aborted) return;
+      setProblem(errorText(error));
+      void session.refetch();
     },
   });
   const answer = useMutation({
@@ -580,10 +702,7 @@ function ConversationBody({
         ? 'Updates paused · still working'
         : 'Reconnecting…';
   const canSend =
-    !busy &&
-    !streamRunId &&
-    Boolean(selectedModel) &&
-    Boolean(draft.trim() || files.length);
+    !busy && Boolean(selectedModel) && Boolean(draft.trim() || files.length);
   return (
     <View
       ref={frame}
@@ -799,7 +918,11 @@ function ConversationBody({
                 >
                   {heldShown.rest.map(heldReply)}
                   {streamRunId ? (
-                    <LiveTranscript state={stream.state} status={status} />
+                    <LiveTranscript
+                      state={stream.state}
+                      status={status}
+                      steerImages={steerImages}
+                    />
                   ) : null}
                   {ask && runId ? (
                     answerSubmitted ? (
@@ -944,6 +1067,53 @@ function ConversationBody({
               composerScroll.current?.scrollToEnd({ animated: false })
             }
           >
+            {detail?.pending ? (
+              <PendingTray
+                pending={{
+                  ...detail.pending,
+                  // The live reply already shows messages the run took in;
+                  // the snapshot catches up when the reply ends.
+                  messages: detail.pending.messages.filter(
+                    (message) =>
+                      !stream.state.blocks.some(
+                        (block) =>
+                          block.kind === 'steer' && block.id === message.id,
+                      ),
+                  ),
+                }}
+                busy={pendingBusy}
+                onSave={async (messageId, text) => {
+                  try {
+                    await pendingAction.mutateAsync({
+                      kind: 'save',
+                      messageId,
+                      text,
+                    });
+                    return true;
+                  } catch {
+                    return false;
+                  }
+                }}
+                onCancel={(messageId) =>
+                  pendingAction.mutate({ kind: 'cancel', messageId })
+                }
+                onSendNow={(messageId) =>
+                  Alert.alert(
+                    'Send this message now?',
+                    'The current reply stops; work already completed is kept.',
+                    [
+                      { text: 'Keep waiting', style: 'cancel' },
+                      {
+                        text: 'Send now',
+                        onPress: () =>
+                          pendingAction.mutate({ kind: 'send-now', messageId }),
+                      },
+                    ],
+                  )
+                }
+                onResume={() => pendingAction.mutate({ kind: 'resume' })}
+              />
+            ) : null}
             {problem ? (
               <View
                 style={{
@@ -1039,7 +1209,7 @@ function ConversationBody({
               unavailable={busy}
               placeholder={
                 runId
-                  ? 'Draft your next message…'
+                  ? 'Message while your Agent works…'
                   : 'What would you like to make?'
               }
             />

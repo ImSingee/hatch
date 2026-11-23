@@ -9,7 +9,14 @@ import {
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconSparkles } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 import { composerDisplayText, hasComposerText } from '~agent/composer-content';
 import { nextUserTurn } from '~agent/user-turns';
@@ -29,9 +36,16 @@ import {
   isActiveRunStatus,
   persistedWorkPhase,
   replyMessage,
+  replySegments,
+  segmentTimings,
   userMessageIndexOfTurn,
 } from './chat-turns';
 import { MessageView } from './message-view';
+import {
+  enqueuePendingMessage,
+  type PendingMessagesResult,
+} from './pending-api';
+import { PendingTray } from './pending-tray';
 import { useLastSelectedModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
@@ -61,6 +75,11 @@ import classes from './chat.module.css';
  */
 function workStateKey(runKey: string, phase: WorkPhase): string {
   return `${runKey}:${phase === 'running' ? 'live' : 'ended'}`;
+}
+
+/** The work a reply did before its `segment`-th steered message. */
+function segmentWorkKey(runKey: string, segment: number): string {
+  return `${runKey}:before-steer-${segment}`;
 }
 
 /**
@@ -186,6 +205,42 @@ export function Chat({ sessionId }: { sessionId: string }) {
   } = stream;
 
   const session = sessionQuery.data;
+  // Images of messages that were in the tray, for the live bubble that shows
+  // them once the run takes them in (its event carries no image data).
+  const steerImagesRef = useRef(new Map<string, ComposerImage[]>());
+  // Claimed messages leave the tray before their event reaches the live
+  // reply; their images stay cached until the reply shows them.
+  const steerAwaitingRef = useRef(new Set<string>());
+  const pendingMessages = session?.pending?.messages;
+  const liveSteerIds = useMemo(
+    () =>
+      streamState.blocks
+        .flatMap((block) => (block.kind === 'steer' ? [block.pendingId] : []))
+        .join('\n'),
+    [streamState.blocks],
+  );
+  useEffect(() => {
+    const cache = steerImagesRef.current;
+    const awaiting = steerAwaitingRef.current;
+    const keep = new Set(liveSteerIds ? liveSteerIds.split('\n') : []);
+    for (const id of keep) awaiting.delete(id);
+    for (const message of pendingMessages ?? []) {
+      // Always overwrite: an edit can remove every image.
+      cache.set(message.id, message.images);
+      keep.add(message.id);
+      if (message.status === 'claimed') awaiting.add(message.id);
+      else awaiting.delete(message.id);
+    }
+    // Drop images no tray row, live reply or claimed handover still needs,
+    // such as those of cancelled messages.
+    for (const id of cache.keys()) {
+      if (!keep.has(id) && !awaiting.has(id)) cache.delete(id);
+    }
+  }, [pendingMessages, liveSteerIds]);
+  const steerImages = useCallback(
+    (pendingId: string) => steerImagesRef.current.get(pendingId),
+    [],
+  );
   const activeRun = session?.activeRun;
   const activeRunId = activeRun?.id ?? null;
   const clockOffsetMs = session?.clockOffsetMs ?? 0;
@@ -346,6 +401,52 @@ export function Chat({ sessionId }: { sessionId: string }) {
     (Boolean(activeRun) && !activeRunSettled);
   const busy = runBusy || retrying;
 
+  const sessionKey = sessionQueryOptions(sessionId).queryKey;
+  // Show the tray an operation returned at once; the refetch confirms it and
+  // picks up a run the operation started.
+  const applyPendingResult = useCallback(
+    (result: PendingMessagesResult) => {
+      qc.setQueryData(sessionKey, (old) =>
+        old ? { ...old, pending: result.pending } : old,
+      );
+      revalidateSession();
+    },
+    [qc, revalidateSession, sessionKey],
+  );
+
+  // While the Agent works, a message waits as a pending message and is
+  // delivered in the user's queue/steer mode.
+  const sendWhileBusy = useCallback(
+    async (
+      content: ComposerSubmit['content'],
+      images: ComposerImage[],
+      files: ComposerFile[],
+      model: { providerId: string; modelId: string },
+    ): Promise<boolean> => {
+      let attachments;
+      try {
+        attachments = await uploadAgentFiles(sessionId, files);
+        applyPendingResult(
+          await enqueuePendingMessage(sessionId, {
+            content,
+            images,
+            attachmentIds: attachments.map((attachment) => attachment.id),
+            ...model,
+          }),
+        );
+        return true;
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Could not send the message.',
+        );
+        return false;
+      }
+    },
+    [applyPendingResult, sessionId],
+  );
+
   const send = useCallback(
     async (
       content: ComposerSubmit['content'],
@@ -353,7 +454,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
       files: ComposerFile[],
       modelValue: string,
     ): Promise<boolean> => {
-      if (runBusy) return false;
       if (
         !hasComposerText(content) &&
         images.length === 0 &&
@@ -362,6 +462,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
         return false;
       const parsed = splitModelValue(modelValue);
       if (!parsed) return false;
+      if (busy) return sendWhileBusy(content, images, files, parsed);
 
       let attachments;
       try {
@@ -434,12 +535,13 @@ export function Chat({ sessionId }: { sessionId: string }) {
       return true;
     },
     [
+      busy,
       messages,
       qc,
       revalidateSession,
       retryIdentity,
-      runBusy,
       sendRun,
+      sendWhileBusy,
       sessionId,
     ],
   );
@@ -540,7 +642,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
     sessionId,
   ]);
 
-  const sessionKey = sessionQueryOptions(sessionId).queryKey;
   const stopAutoRetry = useMutation({
     mutationFn: () => stopAgentAutoRetryRequest(sessionId),
     onMutate: async () => {
@@ -679,26 +780,77 @@ export function Chat({ sessionId }: { sessionId: string }) {
         if (liveUserTurn !== null && turn.userTurn === liveUserTurn) return [];
         const run =
           turn.userTurn === null ? undefined : runsByTurn.get(turn.userTurn);
-        return [
-          <MessageView
-            key={turn.key}
-            message={replyMessage(
-              turn.blocks,
-              turn.stopReason,
-              turn.errorMessage,
-              run,
-            )}
-            toolResults={toolResults}
-            apps={appsQuery.data}
-            workflows={workflowsQuery.data}
-            {...retryControls(turn.userTurn)}
-            work={workFrame(
-              run?.id ?? turn.key,
-              persistedWorkPhase(run, turn.stopReason),
-              run ? runTiming(run.startedAt, run.completedAt) : null,
-            )}
-          />,
-        ];
+        const runKey = run?.id ?? turn.key;
+        // Each steered message is a message of its own between the work
+        // before it and the reply after it (see `replySegments`).
+        const segments = replySegments(
+          turn.blocks,
+          (block) => block.type === 'steer',
+        );
+        const steers = segments.flatMap((segment) => {
+          const block =
+            segment.steer === undefined
+              ? undefined
+              : turn.blocks[segment.steer];
+          return block?.type === 'steer' ? [block.message] : [];
+        });
+        const timings = segmentTimings(
+          run ? runTiming(run.startedAt, run.completedAt) : null,
+          steers.map((message) => message.injectedAt),
+        );
+        return segments.flatMap((segment, index) => {
+          const rows: ReactElement[] = [];
+          const blocks = turn.blocks.slice(segment.start, segment.end);
+          const last = index === segments.length - 1;
+          if (last) {
+            rows.push(
+              <MessageView
+                key={turn.key}
+                message={replyMessage(
+                  blocks,
+                  turn.stopReason,
+                  turn.errorMessage,
+                  run,
+                )}
+                toolResults={toolResults}
+                apps={appsQuery.data}
+                workflows={workflowsQuery.data}
+                {...retryControls(turn.userTurn)}
+                work={workFrame(
+                  runKey,
+                  persistedWorkPhase(run, turn.stopReason),
+                  timings[index],
+                )}
+              />,
+            );
+          } else if (blocks.length > 0) {
+            rows.push(
+              <MessageView
+                key={`${turn.key}:segment-${index}`}
+                message={{ role: 'assistant', content: blocks }}
+                toolResults={toolResults}
+                apps={appsQuery.data}
+                workflows={workflowsQuery.data}
+                work={workFrame(
+                  segmentWorkKey(runKey, index),
+                  'completed',
+                  timings[index],
+                )}
+              />,
+            );
+          }
+          if (!last) {
+            rows.push(
+              <MessageView
+                key={`${turn.key}:steer-${index}`}
+                message={steers[index]}
+                toolResults={toolResults}
+                onUserMessageToggle={onUserMessageToggle}
+              />,
+            );
+          }
+          return rows;
+        });
       }),
     [
       answeredTurns,
@@ -729,6 +881,13 @@ export function Chat({ sessionId }: { sessionId: string }) {
           startedAt: liveStarted,
           ...(liveEnded === undefined ? {} : { endedAt: liveEnded }),
         },
+  );
+
+  const liveRunKey = streamState.runId ?? 'pending';
+  const liveEarlierWork = useCallback(
+    (segment: number, timing: WorkTiming) =>
+      workFrame(segmentWorkKey(liveRunKey, segment), 'completed', timing),
+    [liveRunKey, workFrame],
   );
 
   // Return acceptance so the composer keeps the draft if the run fails to start
@@ -1002,6 +1161,8 @@ export function Chat({ sessionId }: { sessionId: string }) {
                     onAnswer={answer}
                     onSubmitEnv={submitEnv}
                     work={liveWork}
+                    earlierWork={liveEarlierWork}
+                    steerImages={steerImages}
                     retry={
                       liveRunId && retryState?.runId === liveRunId
                         ? retryControls(liveUserTurn)
@@ -1016,8 +1177,18 @@ export function Chat({ sessionId }: { sessionId: string }) {
 
         <Box className={classes.composer}>
           <Box className={classes.composerInner}>
+            {session?.pending ? (
+              <PendingTray
+                sessionId={sessionId}
+                pending={session.pending}
+                apps={appsQuery.data}
+                workflows={workflowsQuery.data}
+                onResult={applyPendingResult}
+              />
+            ) : null}
             <Composer
               onSubmit={onComposerSubmit}
+              queueWhileBusy
               apps={appsQuery.data}
               appsLoading={appsQuery.isLoading}
               appsError={appsQuery.isError}

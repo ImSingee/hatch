@@ -47,17 +47,26 @@ export function sessionQueryOptions(sessionId: string) {
         clockOffsetMs: Date.parse(session.serverTime) - midpoint,
       };
     },
-    // The platform starts a scheduled automatic retry on its own. Re-read the
-    // session when it is due, then shortly after until the new run appears.
+    // The platform starts runs on its own: a scheduled automatic retry, and
+    // the run delivering waiting messages once the session is idle. Re-read
+    // the session until the new run appears.
     refetchInterval: (query) => {
       const session = query.state.data;
-      const nextRetryAt = session?.retry?.nextRetryAt;
-      if (!session || !nextRetryAt || session.activeRun) return false;
-      const dueInMs =
-        Date.parse(nextRetryAt) - (Date.now() + session.clockOffsetMs);
-      return dueInMs > 0 ? dueInMs + 500 : AUTO_RETRY_POLL_MS;
+      if (!session || session.activeRun) return false;
+      const nextRetryAt = session.retry?.nextRetryAt;
+      if (nextRetryAt) {
+        const dueInMs =
+          Date.parse(nextRetryAt) - (Date.now() + session.clockOffsetMs);
+        return dueInMs > 0 ? dueInMs + 500 : AUTO_RETRY_POLL_MS;
+      }
+      const pending = session.pending;
+      return pending && !pending.paused && pending.messages.length > 0
+        ? DELIVERY_POLL_MS
+        : false;
     },
   });
 }
 
 const AUTO_RETRY_POLL_MS = 1000;
+/** How often an idle session with waiting messages is re-read. */
+const DELIVERY_POLL_MS = 1500;

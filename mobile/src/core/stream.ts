@@ -1,6 +1,7 @@
 import { MobileError, throwIfAborted } from './security';
 import type {
   AgentStreamEvent,
+  Attachment,
   JsonValue,
   PendingAsk,
   PendingEnv,
@@ -21,7 +22,15 @@ export type ToolState = {
 export type StreamBlock =
   | { kind: 'text'; text: string }
   | { kind: 'thinking'; text: string }
-  | { kind: 'tool'; id: string };
+  | { kind: 'tool'; id: string }
+  /** A steer message the run took in, where it was injected. */
+  | {
+      kind: 'steer';
+      id: string;
+      text: string;
+      imageCount: number;
+      attachments: Attachment[];
+    };
 export type StreamState = {
   lastSeq: number;
   text: string;
@@ -153,6 +162,24 @@ export function reduceStreamEvent(
             : tool,
         ),
       };
+    case 'user_message':
+      return state.blocks.some(
+        (block) => block.kind === 'steer' && block.id === event.pendingId,
+      )
+        ? next
+        : {
+            ...next,
+            blocks: [
+              ...state.blocks,
+              {
+                kind: 'steer',
+                id: event.pendingId,
+                text: event.text,
+                imageCount: event.images?.length ?? 0,
+                attachments: event.attachments ?? [],
+              },
+            ],
+          };
     case 'done':
     case 'cancelled':
     case 'error':
@@ -240,6 +267,20 @@ function validEvent(value: unknown): value is AgentStreamEvent {
         typeof value.id === 'string' &&
         typeof value.name === 'string' &&
         'args' in value
+      );
+    case 'user_message':
+      return (
+        typeof value.pendingId === 'string' &&
+        typeof value.text === 'string' &&
+        (value.images === undefined || Array.isArray(value.images)) &&
+        (value.attachments === undefined ||
+          (Array.isArray(value.attachments) &&
+            value.attachments.every(
+              (item) =>
+                record(item) &&
+                typeof item.id === 'string' &&
+                typeof item.name === 'string',
+            )))
       );
     case 'tool_update':
       return (

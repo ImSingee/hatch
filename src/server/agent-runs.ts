@@ -61,6 +61,7 @@ import {
   isSteeredUserMessage,
   nextUserTurn,
   parseUserTurn,
+  stampSteerInjectionTimes,
 } from '~agent/user-turns';
 import type { SteerMessage } from '~agent/protocol';
 import { AppError } from '~server/errors';
@@ -1805,7 +1806,13 @@ export async function ingestRunnerEvent(
   runnerId: string,
   message: { runId: string; runnerSeq: number; event: AgentStreamEvent },
 ): Promise<IngestResult> {
-  const event = storageSafeJson(message.event);
+  const received = storageSafeJson(message.event);
+  // The platform clock dates an injection, the same clock as the run's start
+  // and end, so the chat can time the work before and after it.
+  const event: AgentStreamEvent =
+    received.type === 'user_message'
+      ? { ...received, injectedAt: new Date().toISOString() }
+      : received;
   return enqueueRunTask(message.runId, async () => {
     const run = await getAgentRun(message.runId);
     if (!run || run.runnerId !== runnerId) return { status: 'stale' };
@@ -2028,9 +2035,23 @@ export async function completeRunFromRunner(
       });
       const persisted = message.messages.length > 0 && !newerRun;
       if (persisted) {
+        const injections = await tx
+          .select({ payload: schema.agentRunEvents.payload })
+          .from(schema.agentRunEvents)
+          .where(
+            and(
+              eq(schema.agentRunEvents.runId, run.id),
+              eq(schema.agentRunEvents.type, 'user_message'),
+            ),
+          );
         await tx
           .update(schema.agentSessions)
-          .set({ messages: message.messages as JsonValue[] })
+          .set({
+            messages: stampSteerInjectionTimes(
+              message.messages as JsonValue[],
+              injections.map((row) => row.payload),
+            ),
+          })
           .where(eq(schema.agentSessions.id, run.sessionId));
       }
       // Steer messages this transcript holds are delivered; anything else

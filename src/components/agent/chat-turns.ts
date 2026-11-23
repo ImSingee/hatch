@@ -1,8 +1,9 @@
 import type { StopReason } from '@earendil-works/pi-ai';
 import type { AgentRunStatus } from '~/db/schema';
 import type { SessionRunTiming } from '~server/agent-runs';
+import { isUserTurnMessage } from '~agent/user-turns';
 import type { AssistantBlock, ChatMessage } from './types';
-import type { WorkPhase } from './work-process';
+import type { WorkPhase, WorkTiming } from './work-process';
 
 export type RenderTurn =
   | { kind: 'user'; key: string; userTurn: number; message: ChatMessage }
@@ -30,7 +31,22 @@ export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
   const turns: RenderTurn[] = [];
   let userTurns = 0;
   messages.forEach((message, index) => {
-    if (message.role === 'user') {
+    if (message.role === 'user' && message.steered) {
+      // A steered message belongs to the reply of the run it was injected
+      // into: it never starts a user turn (see `~agent/user-turns`).
+      const block: AssistantBlock = { type: 'steer', message };
+      const last = turns.at(-1);
+      if (last?.kind === 'assistant') {
+        last.blocks = [...last.blocks, block];
+      } else {
+        turns.push({
+          kind: 'assistant',
+          key: `m${index}`,
+          userTurn: userTurns > 0 ? userTurns - 1 : null,
+          blocks: [block],
+        });
+      }
+    } else if (message.role === 'user') {
       turns.push({
         kind: 'user',
         key: `m${index}`,
@@ -165,9 +181,65 @@ export function userMessageIndexOfTurn(
 ): number {
   let turn = -1;
   for (let index = 0; index < messages.length; index++) {
-    if (messages[index]?.role !== 'user') continue;
+    if (!isUserTurnMessage(messages[index])) continue;
     turn += 1;
     if (turn === userTurn) return index;
   }
   return -1;
+}
+
+/** A stretch of one reply between the steered messages injected into it. */
+export type ReplySegment = {
+  /** Block range of the segment's own work, `[start, end)`. */
+  start: number;
+  end: number;
+  /** Index of the steered message that ends it; absent on the last one. */
+  steer?: number;
+};
+
+/**
+ * Split a reply at its steered messages. The chat shows each injected message
+ * as a message of its own and frames the work before and after it apart.
+ */
+export function replySegments<Block>(
+  blocks: readonly Block[],
+  isSteer: (block: Block) => boolean,
+): ReplySegment[] {
+  const segments: ReplySegment[] = [];
+  let start = 0;
+  blocks.forEach((block, index) => {
+    if (!isSteer(block)) return;
+    segments.push({ start, end: index, steer: index });
+    start = index + 1;
+  });
+  segments.push({ start, end: blocks.length });
+  return segments;
+}
+
+/**
+ * The time each segment of a reply worked: the run's start to the first
+ * injection, between injections, then to the run's end. A segment next to an
+ * undated injection has no reliable time.
+ */
+export function segmentTimings(
+  timing: WorkTiming,
+  injectedAt: readonly (string | undefined)[],
+): WorkTiming[] {
+  const marks = injectedAt.map((value) => {
+    const time = value === undefined ? Number.NaN : Date.parse(value);
+    return Number.isNaN(time) ? null : time;
+  });
+  return Array.from({ length: marks.length + 1 }, (_, index) => {
+    if (!timing) return null;
+    const startedAt = index === 0 ? timing.startedAt : marks[index - 1];
+    if (startedAt === null) return null;
+    if (index === marks.length) {
+      return {
+        startedAt,
+        ...(timing.endedAt === undefined ? {} : { endedAt: timing.endedAt }),
+      };
+    }
+    const endedAt = marks[index];
+    return endedAt === null ? null : { startedAt, endedAt };
+  });
 }

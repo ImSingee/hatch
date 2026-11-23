@@ -38,9 +38,11 @@ export function terminalReplyIndexes(messages: JsonValue[]): Set<number> {
   const terminal = new Set<number>();
   let pending = -1;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const role = record(messages[index])?.role;
+    const message = record(messages[index]);
+    const role = message?.role;
     if (role === 'assistant' && pending === -1) pending = index;
-    if (role === 'user' && pending !== -1) {
+    // A steered message joins the running reply; it ends no turn.
+    if (role === 'user' && message?.steered !== true && pending !== -1) {
       terminal.add(pending);
       pending = -1;
     }

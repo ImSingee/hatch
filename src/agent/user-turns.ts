@@ -49,3 +49,38 @@ export function parseUserTurn(value: unknown): number | null {
     ? turn
     : null;
 }
+
+/**
+ * Date each steered message by its `user_message` event: the platform clock
+ * received the injection, the clock the chat times a run's work with. A
+ * message keeps a time it already has (an earlier run injected it) and stays
+ * undated when no event names it.
+ */
+export function stampSteerInjectionTimes<Message>(
+  messages: readonly Message[],
+  events: readonly unknown[],
+): Message[] {
+  const times = new Map<string, string>();
+  for (const event of events) {
+    const { pendingId, injectedAt } = (event ?? {}) as {
+      pendingId?: unknown;
+      injectedAt?: unknown;
+    };
+    if (typeof pendingId === 'string' && typeof injectedAt === 'string') {
+      times.set(pendingId, injectedAt);
+    }
+  }
+  return messages.map((message) => {
+    if (!isSteeredUserMessage(message)) return message;
+    const record = message as {
+      pendingMessageId?: unknown;
+      injectedAt?: unknown;
+    };
+    if (typeof record.injectedAt === 'string') return message;
+    const injectedAt =
+      typeof record.pendingMessageId === 'string'
+        ? times.get(record.pendingMessageId)
+        : undefined;
+    return injectedAt ? ({ ...message, injectedAt } as Message) : message;
+  });
+}

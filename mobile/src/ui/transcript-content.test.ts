@@ -78,3 +78,22 @@ describe('terminal reply indexes', () => {
     ).toEqual(new Set([1]));
   });
 });
+
+describe('steered messages', () => {
+  it('do not end the reply they joined', () => {
+    const user = { role: 'user', content: 'Build it' };
+    const assistant = (stopReason: string) => ({
+      role: 'assistant',
+      content: [],
+      stopReason,
+    });
+    expect(
+      terminalReplyIndexes([
+        user,
+        assistant('toolUse'),
+        { role: 'user', content: 'Use blue', steered: true },
+        assistant('stop'),
+      ]),
+    ).toEqual(new Set([3]));
+  });
+});

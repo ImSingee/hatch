@@ -12,6 +12,7 @@ import {
   WorkflowService,
   WorkspaceService,
   NotificationService,
+  PreferenceService,
   PublicErrorSchema,
   answersToMessages,
   type ReplyAnswers,
@@ -38,6 +39,7 @@ import { streamRunEvents } from './stream';
 import type { StreamOptions, StreamResult } from './stream';
 import type { InstanceVault } from './vault';
 import type {
+  AgentMessageMode,
   AppDetail,
   AppSummary,
   AskAnswer,
@@ -46,6 +48,7 @@ import type {
   AgentModelCatalog,
   NotificationDetail,
   NotificationSummary,
+  PendingMessagesResult,
   PushDevice,
   PushRegistration,
   RunCreated,
@@ -62,7 +65,7 @@ export type ClientOptions = InstanceUrlOptions & {
   onUnauthorized?: (origin: string) => void;
 };
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: BodyInit;
   headers?: HeadersInit;
   signal?: AbortSignal;
@@ -105,6 +108,7 @@ export class HatchApiClient {
   private readonly workflowRpc: Client<typeof WorkflowService>;
   private readonly workspaceRpc: Client<typeof WorkspaceService>;
   private readonly notificationRpc: Client<typeof NotificationService>;
+  private readonly preferenceRpc: Client<typeof PreferenceService>;
   private readonly onUnauthorized?: (origin: string) => void;
   constructor(options: ClientOptions) {
     this.origin = canonicalizeInstanceUrl(options.origin, options);
@@ -137,6 +141,7 @@ export class HatchApiClient {
     this.workflowRpc = createClient(WorkflowService, transport);
     this.workspaceRpc = createClient(WorkspaceService, transport);
     this.notificationRpc = createClient(NotificationService, transport);
+    this.preferenceRpc = createClient(PreferenceService, transport);
   }
 
   private async fetchResponse(
@@ -601,6 +606,111 @@ export class HatchApiClient {
       }
       throw error;
     }
+  }
+  /** Send a message while the run works, in the user's queue/steer mode. */
+  async enqueuePending(
+    sessionId: string,
+    input: Omit<Extract<CreateRunInput, { content: unknown }>, 'sessionId'>,
+    signal?: AbortSignal,
+  ): Promise<PendingMessagesResult> {
+    return this.pendingResult(
+      await this.post(
+        `/api/agent/sessions/${pathId(sessionId)}/pending`,
+        input,
+        signal,
+      ),
+    );
+  }
+  /** Replace a waiting message's text; its images and files stay. */
+  async updatePendingText(
+    sessionId: string,
+    messageId: string,
+    text: string,
+    signal?: AbortSignal,
+  ): Promise<PendingMessagesResult> {
+    return this.pendingResult(
+      await this.request(
+        `/api/agent/sessions/${pathId(sessionId)}/pending/${pathId(messageId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ content: [{ type: 'text', text }] }),
+          headers: { 'content-type': 'application/json' },
+          signal,
+        },
+      ),
+    );
+  }
+  async cancelPending(
+    sessionId: string,
+    messageId: string,
+    signal?: AbortSignal,
+  ): Promise<PendingMessagesResult> {
+    return this.pendingResult(
+      await this.request(
+        `/api/agent/sessions/${pathId(sessionId)}/pending/${pathId(messageId)}`,
+        { method: 'DELETE', signal },
+      ),
+    );
+  }
+  /** Stop the active run (its tools too) and start one with this message. */
+  async sendPendingNow(
+    sessionId: string,
+    messageId: string,
+    signal?: AbortSignal,
+  ): Promise<PendingMessagesResult> {
+    return this.pendingResult(
+      await this.post(
+        `/api/agent/sessions/${pathId(sessionId)}/pending/${pathId(messageId)}/send-now`,
+        {},
+        signal,
+      ),
+    );
+  }
+  async resumePending(
+    sessionId: string,
+    signal?: AbortSignal,
+  ): Promise<PendingMessagesResult> {
+    return this.pendingResult(
+      await this.post(
+        `/api/agent/sessions/${pathId(sessionId)}/pending/resume`,
+        {},
+        signal,
+      ),
+    );
+  }
+  private pendingResult(value: unknown): PendingMessagesResult {
+    const result = value as Partial<PendingMessagesResult> | null;
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !result.pending ||
+      !Array.isArray(result.pending.messages) ||
+      typeof result.pending.paused !== 'boolean' ||
+      (result.startedRunId !== null && typeof result.startedRunId !== 'string')
+    )
+      throw new MobileError(
+        'invalid_response',
+        'The instance returned an invalid message list.',
+      );
+    return result as PendingMessagesResult;
+  }
+  async agentMessageMode(signal?: AbortSignal): Promise<AgentMessageMode> {
+    const response = await this.rpcRequest(
+      (signal) => this.preferenceRpc.getAgentPreferences({}, { signal }),
+      signal,
+    );
+    return response.preferences?.messageMode === 'queue' ? 'queue' : 'steer';
+  }
+  async setAgentMessageMode(
+    messageMode: AgentMessageMode,
+    signal?: AbortSignal,
+  ): Promise<AgentMessageMode> {
+    const response = await this.rpcRequest(
+      (signal) =>
+        this.preferenceRpc.updateAgentPreferences({ messageMode }, { signal }),
+      signal,
+    );
+    return response.preferences?.messageMode === 'queue' ? 'queue' : 'steer';
   }
   cancelRun(runId: string, signal?: AbortSignal): Promise<{ ok: boolean }> {
     return this.post(`/api/agent/runs/${pathId(runId)}/cancel`, {}, signal);

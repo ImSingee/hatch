@@ -73,6 +73,31 @@ export function sessionProjection(session: AgentSession): SessionDetail {
     updatedAt: session.updatedAt,
     serverTime: session.serverTime,
     messages: session.messages.map((message) => toJson(ValueSchema, message)),
+    pending: {
+      paused: session.pending?.paused ?? false,
+      messages: (session.pending?.messages ?? []).map((message) => ({
+        id: message.id,
+        mode: message.mode === 'queue' ? 'queue' : 'steer',
+        status:
+          message.status === 'claimed' || message.status === 'sending'
+            ? message.status
+            : 'pending',
+        content: message.content.map((part) => toJson(ValueSchema, part)),
+        text: message.text,
+        images: message.images.map((image) => ({
+          data: image.data,
+          mimeType: image.mimeType,
+        })),
+        attachments: message.attachments.map((attachment) => ({
+          id: attachment.id,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+        })),
+        providerId: message.providerId,
+        modelId: message.modelId,
+      })),
+    },
     activeRun: active
       ? {
           id: active.id,
