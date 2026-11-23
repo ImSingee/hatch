@@ -19,6 +19,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -76,6 +77,11 @@ import { Glyph } from '../ui/glyph';
 import { LiveTranscript, TranscriptMessage } from '../ui/transcript';
 import { PendingTray } from '../ui/pending-tray';
 import { terminalReplyIndexes } from '../ui/transcript-content';
+import {
+  defaultWorkExpanded,
+  toolResultsByCall,
+  transcriptRows,
+} from '../ui/work-layout';
 import { Busy, Notice, errorText } from '../ui/primitives';
 import { AppTile, GlyphTile } from '../ui/rows';
 import { Text, type } from '../ui/text';
@@ -373,16 +379,57 @@ function ConversationBody({
   // Only the last assistant message of a turn carries its end state;
   // an intermediate `toolUse` is a normal step while tools run.
   const terminalReplies = terminalReplyIndexes(detail?.messages ?? []);
+  // Each reply's process folds under its work line, as on the web.
+  const rows = useMemo(
+    () => transcriptRows(detail?.messages ?? [], detail?.runs ?? []),
+    [detail?.messages, detail?.runs],
+  );
+  const results = useMemo(
+    () => toolResultsByCall(detail?.messages ?? []),
+    [detail?.messages],
+  );
+  const [workOpen, setWorkOpen] = useState<Record<string, boolean>>({});
+  // Rows re-render when a hold or a work line's open state changes.
+  const listExtra = useMemo(() => ({ held, workOpen }), [held, workOpen]);
+  const toggleWork = useCallback(
+    (key: string, expanded: boolean) =>
+      setWorkOpen((current) => ({ ...current, [key]: !expanded })),
+    [],
+  );
+  // Server clock minus this phone's, for the line counting a live run.
+  const clockOffset = detail
+    ? Date.parse(detail.serverTime) - session.dataUpdatedAt
+    : 0;
+  const runTime = (run: string | null | undefined) => {
+    const found = detail?.runs.find((item) => item.id === run);
+    const started =
+      found?.startedAt ??
+      (detail?.activeRun?.id === run
+        ? detail?.activeRun?.startedAt
+        : undefined);
+    return {
+      startedAt: started ? Date.parse(started) : null,
+      endedAt: found?.completedAt ? Date.parse(found.completedAt) : null,
+    };
+  };
   const heldReply = (entry: HeldReply) => (
     <LiveTranscript
       key={entry.runId}
       state={entry.state}
       steerImages={steerImages}
       settled
-      status={
+      {...runTime(entry.runId)}
+      expanded={workOpen[`held:${entry.runId}`] ?? true}
+      onToggle={() =>
+        toggleWork(
+          `held:${entry.runId}`,
+          workOpen[`held:${entry.runId}`] ?? true,
+        )
+      }
+      note={
         checksSpent(entry)
-          ? 'Stopped · this reply isn’t saved on your server yet'
-          : 'Stopped · checking for the saved reply'
+          ? 'This reply isn’t saved on your server yet'
+          : 'Checking for the saved reply'
       }
       action={
         checksSpent(entry)
@@ -738,10 +785,10 @@ function ConversationBody({
     !Array.isArray(lastMessage) &&
     lastMessage.role === 'assistant' &&
     lastMessage.stopReason === 'error';
-  const status = !runId
+  const note = !runId
     ? 'Stopping…'
     : stream.connection === 'live'
-      ? 'Working on your server'
+      ? undefined
       : stream.connection === 'paused'
         ? 'Updates paused · still working'
         : 'Reconnecting…';
@@ -813,13 +860,12 @@ function ConversationBody({
               contentInsetAdjustmentBehavior="automatic"
               ref={list}
               data={detail?.messages ?? []}
-              extraData={held}
+              extraData={listExtra}
               keyExtractor={(_, index) => String(index)}
               contentContainerStyle={{
                 paddingHorizontal: 16,
                 paddingTop: 12,
                 paddingBottom: transcriptPaddingBottom,
-                gap: 18,
               }}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
@@ -893,19 +939,29 @@ function ConversationBody({
               }}
               renderItem={({ item, index }) => {
                 const after = heldShown.after.get(index);
-                return after ? (
-                  <View style={{ gap: 18 }}>
-                    <TranscriptMessage
-                      value={item}
-                      terminal={terminalReplies.has(index)}
-                    />
-                    {after.map(heldReply)}
-                  </View>
-                ) : (
+                const row = rows[index];
+                const work = row?.kind === 'reply' ? row.segment : undefined;
+                const expanded = work
+                  ? (workOpen[work.key] ?? defaultWorkExpanded(work.phase))
+                  : false;
+                const message = (
                   <TranscriptMessage
                     value={item}
                     terminal={terminalReplies.has(index)}
+                    row={row}
+                    first={index === 0}
+                    expanded={expanded}
+                    onToggle={() => work && toggleWork(work.key, expanded)}
+                    results={results}
                   />
+                );
+                return after ? (
+                  <View style={{ gap: 18 }}>
+                    {message}
+                    {after.map(heldReply)}
+                  </View>
+                ) : (
+                  message
                 );
               }}
               ListEmptyComponent={
@@ -952,7 +1008,9 @@ function ConversationBody({
               }
               ListFooterComponent={
                 <View
-                  style={{ gap: 16 }}
+                  // Rows space themselves (see `TranscriptMessage`); this is
+                  // the space the list's gap used to give the footer.
+                  style={{ gap: 16, marginTop: 18 }}
                   onLayout={(event) => {
                     footer.current.height = event.nativeEvent.layout.height;
                     recordFooter();
@@ -962,8 +1020,17 @@ function ConversationBody({
                   {streamRunId ? (
                     <LiveTranscript
                       state={stream.state}
-                      status={status}
+                      note={note}
                       steerImages={steerImages}
+                      {...runTime(streamRunId)}
+                      clockOffset={clockOffset}
+                      expanded={workOpen[`live:${streamRunId}`] ?? true}
+                      onToggle={() =>
+                        toggleWork(
+                          `live:${streamRunId}`,
+                          workOpen[`live:${streamRunId}`] ?? true,
+                        )
+                      }
                     />
                   ) : null}
                   {ask && runId ? (
