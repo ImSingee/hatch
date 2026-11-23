@@ -244,6 +244,7 @@ test('reuses its unbound session when the first run start fails', async () => {
       attachmentIds: [],
       providerId: 'provider-b',
       modelId: 'model-b',
+      clientMessageId: expect.any(String),
     },
     {
       sessionId: 'new-session',
@@ -252,8 +253,11 @@ test('reuses its unbound session when the first run start fails', async () => {
       attachmentIds: [],
       providerId: 'provider-b',
       modelId: 'model-b',
+      clientMessageId: expect.any(String),
     },
   ]);
+  // The failed start's response may have been lost: resend the same message.
+  expect(bodies[1].clientMessageId).toBe(bodies[0].clientMessageId);
 });
 
 test('uploads a non-image file first and retains the draft when upload fails', async () => {
@@ -342,5 +346,6 @@ test('uploads a non-image file first and retains the draft when upload fails', a
     attachmentIds: [uploadedIds[0]],
     providerId: 'provider-a',
     modelId: 'model-a',
+    clientMessageId: expect.any(String),
   });
 });

@@ -17,6 +17,7 @@ vi.mock('~server/agent-runs', () => ({
 }));
 
 const { postAgentRun } = await import('./runs');
+const { MessageQueuedError } = await import('~server/agent-message-body');
 
 const baseBody = {
   sessionId: 'session-1',
@@ -126,6 +127,38 @@ describe('POST /api/agent/runs', () => {
     expect(response.status).toBe(400);
     await expect(response.text()).resolves.toBe('Bad request');
     expect(mocks.startAgentRun).not.toHaveBeenCalled();
+  });
+
+  it('forwards a clientMessageId and rejects a malformed one', async () => {
+    const message = { ...baseBody, content: [{ type: 'text', text: 'Hi' }] };
+    const accepted = await postAgentRun({
+      request: runRequest({ ...message, clientMessageId: 'draft-0001' }),
+    });
+    expect(accepted.status).toBe(200);
+    expect(mocks.startAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ clientMessageId: 'draft-0001' }),
+    );
+
+    for (const clientMessageId of ['', 'short', 'has spaces in it', 42]) {
+      const rejected = await postAgentRun({
+        request: runRequest({ ...message, clientMessageId }),
+      });
+      expect(rejected.status).toBe(400);
+    }
+    expect(mocks.startAgentRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a resend of a message already in the tray as queued', async () => {
+    mocks.startAgentRun.mockRejectedValueOnce(new MessageQueuedError());
+    const response = await postAgentRun({
+      request: runRequest({
+        ...baseBody,
+        content: [{ type: 'text', text: 'Hi' }],
+        clientMessageId: 'draft-0001',
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ queued: true });
   });
 
   it('keeps platform-scheduled retries out of client requests', async () => {

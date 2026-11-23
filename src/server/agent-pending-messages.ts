@@ -17,7 +17,7 @@
  * operation here is serialized with it per session.
  */
 import { and, eq, inArray } from 'drizzle-orm';
-import { db, schema, type TX } from '~/db';
+import { db, schema, type DB, type TX } from '~/db';
 import type { JsonValue } from '~/db/schema';
 import type { AgentAttachmentRef } from '~agent/attachments';
 import {
@@ -45,6 +45,12 @@ import {
   notifyActiveRunOfSteer,
   startAgentRun,
 } from './agent-runs';
+import {
+  deletePendingReceipt,
+  findMessageReceipt,
+  messageFingerprint,
+  recordMessageReceipt,
+} from './agent-message-receipts';
 import { AppError } from './errors';
 
 export type PendingMessageInput = {
@@ -52,6 +58,16 @@ export type PendingMessageInput = {
   images?: SendImage[];
   attachmentIds?: string[];
 };
+
+/** A run an earlier send of a message started, while it is still active. */
+async function activeRunOf(executor: DB | TX, runId: string | null) {
+  if (!runId) return null;
+  const run = await executor.query.agentRuns.findFirst({
+    where: { id: runId, status: { in: ['running', 'blocked'] } },
+    columns: { id: true },
+  });
+  return run?.id ?? null;
+}
 
 /** The tray after an operation, and the run it started, if any. */
 export type PendingMessagesResult = {
@@ -113,6 +129,10 @@ async function result(
 /**
  * Add a message in the sender's preferred mode. When the session is idle
  * (and not paused) it is delivered right away.
+ *
+ * With a `clientMessageId`, a resend of a message sent before (to this
+ * endpoint or as a run start) adds nothing and returns the current tray, with
+ * the run that message started while it is still active.
  */
 export async function enqueuePendingMessage(input: {
   sessionId: string;
@@ -120,12 +140,48 @@ export async function enqueuePendingMessage(input: {
   providerId: string;
   modelId: string;
   message: PendingMessageInput;
+  clientMessageId?: string;
 }): Promise<PendingMessagesResult> {
-  await assertAgentModelAvailable(input.providerId, input.modelId);
-  const { messageMode: mode } = await readAgentPreferences(input.userId);
+  const receiptKey = input.clientMessageId
+    ? {
+        clientMessageId: input.clientMessageId,
+        fingerprint: messageFingerprint(input.message),
+      }
+    : null;
+  // The message is already in. An idle session's earlier send may have
+  // failed before delivering it, so delivery is resumed (it adds nothing).
+  const replay = async (runId: string | null) => {
+    const started = await dispatchPendingMessages(input.sessionId);
+    return result(
+      input.sessionId,
+      (await activeRunOf(db, runId)) ?? started?.runId ?? null,
+    );
+  };
   return enqueuePendingTask(input.sessionId, async () => {
-    await db.transaction(async (tx) => {
+    // Before the checks only a new message must pass (its model may have
+    // been disabled since the first send).
+    if (receiptKey) {
+      const receipt = await findMessageReceipt(
+        db,
+        input.sessionId,
+        receiptKey.clientMessageId,
+        receiptKey.fingerprint,
+      );
+      if (receipt) return replay(receipt.runId);
+    }
+    await assertAgentModelAvailable(input.providerId, input.modelId);
+    const { messageMode: mode } = await readAgentPreferences(input.userId);
+    const replayed = await db.transaction(async (tx) => {
       await lockSession(tx, input.sessionId);
+      if (receiptKey) {
+        const receipt = await findMessageReceipt(
+          tx,
+          input.sessionId,
+          receiptKey.clientMessageId,
+          receiptKey.fingerprint,
+        );
+        if (receipt) return { runId: receipt.runId };
+      }
       const attachmentIds = [...new Set(input.message.attachmentIds ?? [])];
       const rows =
         attachmentIds.length > 0
@@ -166,17 +222,29 @@ export async function enqueuePendingMessage(input: {
           .set({ attachedAt: new Date() })
           .where(inArray(schema.agentAttachments.id, attachmentIds));
       }
-      await tx.insert(schema.agentPendingMessages).values({
-        sessionId: input.sessionId,
-        userId: input.userId,
-        mode,
-        content: input.message.content as unknown as JsonValue[],
-        images: (input.message.images ?? []) as unknown as JsonValue[],
-        attachments: attachments as unknown as JsonValue[],
-        providerId: input.providerId,
-        modelId: input.modelId,
-      });
+      const [inserted] = await tx
+        .insert(schema.agentPendingMessages)
+        .values({
+          sessionId: input.sessionId,
+          userId: input.userId,
+          mode,
+          content: input.message.content as unknown as JsonValue[],
+          images: (input.message.images ?? []) as unknown as JsonValue[],
+          attachments: attachments as unknown as JsonValue[],
+          providerId: input.providerId,
+          modelId: input.modelId,
+        })
+        .returning({ id: schema.agentPendingMessages.id });
+      if (receiptKey) {
+        await recordMessageReceipt(tx, {
+          sessionId: input.sessionId,
+          ...receiptKey,
+          pendingMessageId: inserted.id,
+        });
+      }
+      return null;
     });
+    if (replayed) return replay(replayed.runId);
     if (mode === 'steer') await notifyActiveRunOfSteer(input.sessionId);
     const started = await dispatchPendingMessages(input.sessionId);
     return result(input.sessionId, started?.runId ?? null);
@@ -270,6 +338,7 @@ export async function cancelPendingMessage(input: {
       await tx
         .delete(schema.agentPendingMessages)
         .where(eq(schema.agentPendingMessages.id, input.messageId));
+      await deletePendingReceipt(tx, input.sessionId, input.messageId);
     });
     return result(input.sessionId);
   });

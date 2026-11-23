@@ -2,6 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import {
   agentMessageFields,
+  clientMessageIdSchema,
+  MessageQueuedError,
   MAX_BODY_BYTES,
   normalizeLegacyUserText,
   readCappedJson,
@@ -20,6 +22,8 @@ const startBodySchema = z.preprocess(
       retry: z.literal(false).optional(),
       providerId: z.string().min(1),
       modelId: z.string().min(1),
+      /** Reused when resending the same draft; see agent-message-receipts. */
+      clientMessageId: clientMessageIdSchema.optional(),
       ...agentMessageFields,
     }),
   ),
@@ -64,6 +68,10 @@ export async function postAgentRun({
     const result = await startAgentRun({ ...parsed, userId: session.user.id });
     return Response.json(result);
   } catch (error) {
+    // A resend of a message already waiting in the tray was accepted then.
+    if (error instanceof MessageQueuedError) {
+      return Response.json({ queued: true });
+    }
     // AppError carries its own status (409 for an already-running turn,
     // 404 for a missing session); anything untagged is a bad request.
     return errorResponse(error, 400);

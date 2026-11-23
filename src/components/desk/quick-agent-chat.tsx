@@ -9,7 +9,10 @@ import {
 import dayjs from 'dayjs';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { uploadAgentFiles } from '~components/agent/attachment-api';
+import {
+  createDraftSendTracker,
+  uploadDraftFiles,
+} from '~components/agent/draft-send';
 import { Composer, type ComposerSubmit } from '~components/agent/composer';
 import { useLastSelectedModel } from '~components/agent/model-preference';
 import { ModelPicker } from '~components/agent/model-picker';
@@ -42,6 +45,7 @@ export function QuickAgentChat() {
   // A failed first send keeps its session so a retry does not leave empty
   // sessions behind.
   const createdSession = useRef<string | null>(null);
+  const [draftSends] = useState(createDraftSendTracker);
   const effectiveModel = resolveEffectiveModel(model, null, available, first);
   const recent = (sessions.data ?? []).slice(0, 3);
 
@@ -57,8 +61,10 @@ export function QuickAgentChat() {
     try {
       const id = createdSession.current ?? (await createEmptyAgentSession()).id;
       createdSession.current = id;
-      const attachments = await uploadAgentFiles(id, files);
+      const draft = draftSends.begin(id, { content, images, files });
+      const attachments = await uploadDraftFiles(id, files, draft);
       await startAgentRunRequest({
+        clientMessageId: draft.clientMessageId,
         sessionId: id,
         content,
         images,
@@ -66,6 +72,7 @@ export function QuickAgentChat() {
         providerId: parsed.providerId,
         modelId: parsed.modelId,
       });
+      draftSends.settle(draft);
       await queryClient.invalidateQueries({
         queryKey: sessionsQueryOptions.queryKey,
       });

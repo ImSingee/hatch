@@ -225,6 +225,7 @@ test('sends a message while the Agent works to the pending tray', async () => {
         attachmentIds: [],
         providerId: 'provider-1',
         modelId: 'model-1',
+        clientMessageId: expect.any(String),
       },
     },
   ]);
@@ -232,6 +233,223 @@ test('sends a message while the Agent works to the pending tray', async () => {
   await expect
     .element(screen.getByRole('button', { name: 'Stop' }))
     .toBeVisible();
+});
+
+test('resends a draft whose response was lost as the same message', async () => {
+  let lost = true;
+  const { calls } = stubFetch((call) => {
+    if (lost) {
+      // The server took the message; its response never arrived.
+      lost = false;
+      throw new TypeError('Failed to fetch');
+    }
+    const body = call.body as { content: { text: string }[] };
+    return {
+      paused: false,
+      messages: [pendingMessage('pending-1', body.content[0].text)],
+    };
+  });
+  const screen = await renderChat();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Use blue');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => calls.length).toBe(1);
+  // The draft is kept; sending it again names the same message.
+  await expect.element(input).toHaveTextContent('Use blue');
+  await userEvent.keyboard('{Enter}');
+  const tray = screen.getByRole('region', { name: 'Pending messages' });
+  await expect.element(tray.getByText('Use blue')).toBeVisible();
+
+  await input.click();
+  await userEvent.keyboard('And dark');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => calls.length).toBe(3);
+  const ids = calls.map(
+    (call) => (call.body as { clientMessageId: string }).clientMessageId,
+  );
+  expect(ids[1]).toBe(ids[0]);
+  // A new draft is a new message.
+  expect(ids[2]).not.toBe(ids[0]);
+});
+
+test('resends a draft whose files the lost send already attached', async () => {
+  const uploads: string[] = [];
+  const enqueued: { clientMessageId: string; attachmentIds: string[] }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), 'https://hatch.example.test');
+      if (url.pathname.endsWith('/events')) {
+        return new Response(new ReadableStream(), { status: 200 });
+      }
+      if (url.pathname.includes('/attachments/')) {
+        const id = decodeURIComponent(url.pathname.split('/').at(-1)!);
+        uploads.push(id);
+        // The first send attached it before its response was lost.
+        if (uploads.length > 1) {
+          return new Response('Attachment id is already in use.', {
+            status: 409,
+          });
+        }
+        return Response.json({
+          attachment: {
+            id,
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            size: 3,
+          },
+        });
+      }
+      if (url.pathname.endsWith('/pending')) {
+        enqueued.push(JSON.parse(String(init?.body)));
+        if (enqueued.length === 1) throw new TypeError('Failed to fetch');
+        return Response.json({
+          pending: { paused: false, messages: [] },
+          startedRunId: null,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url.pathname}`);
+    }),
+  );
+  const screen = await renderChat();
+  await expect
+    .element(screen.getByRole('button', { name: 'Stop' }))
+    .toBeVisible();
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error('Missing attachment input');
+  const transfer = new DataTransfer();
+  transfer.items.add(new File(['abc'], 'notes.txt', { type: 'text/plain' }));
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: transfer.files,
+  });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await expect.element(screen.getByText('notes.txt')).toBeVisible();
+
+  const send = screen.getByRole('button', { name: 'Send' });
+  await send.click();
+  await expect.poll(() => enqueued.length).toBe(1);
+  await expect.element(screen.getByText('notes.txt')).toBeVisible();
+  await send.click();
+  await expect.poll(() => enqueued.length).toBe(2);
+
+  // Uploaded again (a pruned upload would come back); the one in use is
+  // still sent as the same message with the same attachment.
+  expect(uploads).toHaveLength(2);
+  expect(uploads[1]).toBe(uploads[0]);
+  expect(enqueued[1]).toMatchObject({
+    clientMessageId: enqueued[0].clientMessageId,
+    attachmentIds: [uploads[0]],
+  });
+  expect(enqueued[0].attachmentIds).toEqual([uploads[0]]);
+});
+
+test('uploads a file again for an edited draft the lost send attached', async () => {
+  const attached = new Set<string>();
+  const uploads: string[] = [];
+  const enqueued: { clientMessageId: string; attachmentIds: string[] }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), 'https://hatch.example.test');
+      if (url.pathname.endsWith('/events')) {
+        return new Response(new ReadableStream(), { status: 200 });
+      }
+      if (url.pathname.includes('/attachments/')) {
+        const id = decodeURIComponent(url.pathname.split('/').at(-1)!);
+        uploads.push(id);
+        if (attached.has(id)) {
+          return new Response('Attachment id is already in use.', {
+            status: 409,
+          });
+        }
+        return Response.json({
+          attachment: {
+            id,
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            size: 3,
+          },
+        });
+      }
+      if (url.pathname.endsWith('/pending')) {
+        const body = JSON.parse(String(init?.body));
+        enqueued.push(body);
+        // The server took the first send and attached its file.
+        for (const id of body.attachmentIds) attached.add(id);
+        if (enqueued.length === 1) throw new TypeError('Failed to fetch');
+        return Response.json({
+          pending: { paused: false, messages: [] },
+          startedRunId: null,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url.pathname}`);
+    }),
+  );
+  const screen = await renderChat();
+  await expect
+    .element(screen.getByRole('button', { name: 'Stop' }))
+    .toBeVisible();
+  const fileInput =
+    document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!fileInput) throw new Error('Missing attachment input');
+  const transfer = new DataTransfer();
+  transfer.items.add(new File(['abc'], 'notes.txt', { type: 'text/plain' }));
+  Object.defineProperty(fileInput, 'files', {
+    configurable: true,
+    value: transfer.files,
+  });
+  fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+  await expect.element(screen.getByText('notes.txt')).toBeVisible();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Read this');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => enqueued.length).toBe(1);
+
+  // Edited: a new message, which cannot share the first one's upload.
+  await input.click();
+  await userEvent.keyboard(' too');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => enqueued.length).toBe(2);
+  expect(uploads).toHaveLength(3);
+  expect(uploads[1]).toBe(uploads[0]);
+  expect(uploads[2]).not.toBe(uploads[0]);
+  expect(enqueued[1].clientMessageId).not.toBe(enqueued[0].clientMessageId);
+  expect(enqueued[1].attachmentIds).toEqual([uploads[2]]);
+});
+
+test('settles a resend the server says already waits in the tray', async () => {
+  // Stopped with delivery paused; the message an earlier send queued waits.
+  fixtures.session.activeRun = null;
+  fixtures.session.pending = {
+    paused: true,
+    messages: [pendingMessage('pending-1', 'Use blue')],
+  };
+  const starts: unknown[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), 'https://hatch.example.test');
+      if (url.pathname === '/api/agent/runs') {
+        starts.push(JSON.parse(String(init?.body)));
+        return Response.json({ queued: true });
+      }
+      throw new Error(`Unexpected fetch: ${url.pathname}`);
+    }),
+  );
+  const screen = await renderChat();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Use blue');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => starts.length).toBe(1);
+  // Accepted: the draft clears and no run is followed.
+  await expect.element(input).toHaveTextContent('');
+  await expect
+    .element(screen.getByRole('button', { name: 'Stop' }))
+    .not.toBeInTheDocument();
 });
 
 test('edits, sends now and cancels pending messages', async () => {

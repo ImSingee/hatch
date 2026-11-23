@@ -23,7 +23,11 @@ import { nextUserTurn } from '~agent/user-turns';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionQueryOptions, sessionsQueryOptions } from '~queries/agent';
 import { workflowsQueryOptions } from '~queries/workflows';
-import { uploadAgentFiles } from './attachment-api';
+import {
+  createDraftSendTracker,
+  uploadDraftFiles,
+  type DraftSend,
+} from './draft-send';
 import {
   Composer,
   type ComposerFile,
@@ -401,6 +405,8 @@ export function Chat({ sessionId }: { sessionId: string }) {
     (Boolean(activeRun) && !activeRunSettled);
   const busy = runBusy || retrying;
 
+  const [draftSends] = useState(createDraftSendTracker);
+
   const sessionKey = sessionQueryOptions(sessionId).queryKey;
   // Show the tray an operation returned at once; the refetch confirms it and
   // picks up a run the operation started.
@@ -422,16 +428,18 @@ export function Chat({ sessionId }: { sessionId: string }) {
       images: ComposerImage[],
       files: ComposerFile[],
       model: { providerId: string; modelId: string },
+      draft: DraftSend,
     ): Promise<boolean> => {
       let attachments;
       try {
-        attachments = await uploadAgentFiles(sessionId, files);
+        attachments = await uploadDraftFiles(sessionId, files, draft);
         applyPendingResult(
           await enqueuePendingMessage(sessionId, {
             content,
             images,
             attachmentIds: attachments.map((attachment) => attachment.id),
             ...model,
+            clientMessageId: draft.clientMessageId,
           }),
         );
         return true;
@@ -462,11 +470,18 @@ export function Chat({ sessionId }: { sessionId: string }) {
         return false;
       const parsed = splitModelValue(modelValue);
       if (!parsed) return false;
-      if (busy) return sendWhileBusy(content, images, files, parsed);
+      // A resend of a draft whose outcome is unknown (the response was lost)
+      // names the same message, whichever path it takes now.
+      const draft = draftSends.begin(sessionId, { content, images, files });
+      if (busy) {
+        const sent = await sendWhileBusy(content, images, files, parsed, draft);
+        if (sent) draftSends.settle(draft);
+        return sent;
+      }
 
       let attachments;
       try {
-        attachments = await uploadAgentFiles(sessionId, files);
+        attachments = await uploadDraftFiles(sessionId, files, draft);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : 'Could not upload files.',
@@ -494,16 +509,28 @@ export function Chat({ sessionId }: { sessionId: string }) {
         attachmentIds: attachments.map((attachment) => attachment.id),
         providerId: parsed.providerId,
         modelId: parsed.modelId,
+        clientMessageId: draft.clientMessageId,
       });
       if (!started) {
         setPendingMessage(null);
         return false;
       }
+      draftSends.settle(draft);
+      if ('queued' in started) {
+        // An earlier send of this draft already put it in the tray.
+        setPendingMessage(null);
+        revalidateSession();
+        return true;
+      }
+      // A replayed resend answers the turn its first send already added.
+      const runTurn = started.userTurn ?? userTurn;
+      const replayed = runTurn < userTurn;
       // A successful start has consumed this exact failure revision even if the
       // new user message cannot be refetched yet (or the run ends before the
       // active state is observed). Any later failure has a new session revision;
-      // atomic Retry uses the separate cache-replacement path below.
-      if (retryIdentity) setConsumedRetryIdentity(retryIdentity);
+      // atomic Retry uses the separate cache-replacement path below. A replay
+      // started nothing new, so a failure it returns stays retryable.
+      if (retryIdentity && !replayed) setConsumedRetryIdentity(retryIdentity);
       // Surface the run immediately so the connection effect subscribes without
       // waiting for the session refetch round-trip.
       const sessionOptions = sessionQueryOptions(sessionId);
@@ -513,7 +540,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
           ? {
               ...old,
               messages:
-                nextUserTurn(old.messages) === userTurn
+                nextUserTurn(old.messages) === runTurn
                   ? ([...old.messages, message] as typeof old.messages)
                   : old.messages,
               providerId: parsed.providerId,
@@ -523,7 +550,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 id: started.runId,
                 status: 'running' as const,
                 startedAt: started.startedAt,
-                userTurn,
+                userTurn: runTurn,
                 pendingAsk: null,
                 pendingEnvRequest: null,
               },
@@ -536,6 +563,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
     },
     [
       busy,
+      draftSends,
       messages,
       qc,
       revalidateSession,

@@ -194,7 +194,10 @@ session and have no `hatch` CLI commands. Pending chat messages (the queue/steer
 tray: send while a run works, edit, cancel, Send now, resume) belong to the same
 gap: like sending a message, they are only `/api/agent/sessions/<id>/pending`
 HTTP routes for the Web and mobile chat, and `AgentService/GetSession` returns
-the tray read-only. Both are pending: add their CLI
+the tray read-only. Both routes take an optional `clientMessageId` that makes a
+resend after a lost response return the first outcome
+(`src/server/agent-message-receipts.ts`); a CLI send command must expose it
+too, so an Agent can retry a send safely. Both are pending: add their CLI
 commands and remove the session-only gate in `src/server/platform-api/router.ts`
 together, so Run credentials gain the same authority. `AuthService.CreateHandoff`
 stays session-only because it exchanges the caller's native login session for

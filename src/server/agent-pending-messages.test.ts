@@ -787,3 +787,236 @@ describe('retry', () => {
     expect(restored.mode).toBe('steer');
   });
 });
+
+describe('resending a message after a lost response', () => {
+  const resendStart = (clientMessageId: string, prompt: string) =>
+    runs.startAgentRun({
+      sessionId: SESSION,
+      content: text(prompt),
+      ...MODEL,
+      userId: USER,
+      clientMessageId,
+    });
+  const resendEnqueue = (clientMessageId: string, message: string) =>
+    pending.enqueuePendingMessage({
+      sessionId: SESSION,
+      userId: USER,
+      ...MODEL,
+      message: { content: text(message) },
+      clientMessageId,
+    });
+  const userMessages = async () => {
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    return (session!.messages as { role?: string }[]).filter(
+      (message) => message.role === 'user',
+    ).length;
+  };
+
+  it('starts one run when a start is sent again, even while it works', async () => {
+    await db.insert(schema.agentAttachments).values({
+      id: 'a1',
+      sessionId: SESSION,
+      name: 'a1.txt',
+      contentType: 'text/plain',
+      size: 3,
+    });
+    const send = () =>
+      runs.startAgentRun({
+        sessionId: SESSION,
+        content: text('Build a tracker'),
+        attachmentIds: ['a1'],
+        ...MODEL,
+        userId: USER,
+        clientMessageId: 'draft-0001',
+      });
+    const first = await send();
+    // Its run is active and its attachment attached: neither rejects it.
+    const again = await send();
+    expect(again).toEqual(first);
+    expect(first.userTurn).toBe(0);
+    expect(started).toHaveLength(1);
+    expect(await db.select().from(schema.agentRuns)).toHaveLength(1);
+    expect(await userMessages()).toBe(1);
+
+    await finish(first.runId);
+    expect(await send()).toEqual(first);
+    expect(started).toHaveLength(1);
+  });
+
+  it('adds one pending message, before and after it is delivered', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const first = await startRun('Build a tracker');
+    await resendEnqueue('draft-0002', 'Add a chart');
+    const again = await resendEnqueue('draft-0002', 'Add a chart');
+    expect(again.pending.messages.map((message) => message.text)).toEqual([
+      'Add a chart',
+    ]);
+    expect(again.startedRunId).toBeNull();
+
+    await finish(first);
+    const delivered = await activeRunId();
+    expect(started.at(-1)?.userText).toBe('Add a chart');
+    // The row is gone; the receipt still names the run it became.
+    const afterDelivery = await resendEnqueue('draft-0002', 'Add a chart');
+    expect(afterDelivery).toEqual({
+      pending: { paused: false, messages: [] },
+      startedRunId: delivered,
+    });
+
+    await finish(delivered!);
+    const afterRun = await resendEnqueue('draft-0002', 'Add a chart');
+    expect(afterRun.startedRunId).toBeNull();
+    expect(afterRun.pending.messages).toEqual([]);
+    expect(started).toHaveLength(2);
+    expect(await userMessages()).toBe(2);
+  });
+
+  it('recognizes a message resent through the other endpoint', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    // Sent idle, resent once the session looked busy.
+    const { runId } = await resendStart('draft-0003', 'Build a tracker');
+    const asPending = await resendEnqueue('draft-0003', 'Build a tracker');
+    expect(asPending).toEqual({
+      pending: { paused: false, messages: [] },
+      startedRunId: runId,
+    });
+
+    // Sent busy, resent once the session looked idle.
+    await resendEnqueue('draft-0004', 'Add a chart');
+    await finish(runId);
+    const delivered = await activeRunId();
+    await finish(delivered!);
+    expect(await resendStart('draft-0004', 'Add a chart')).toMatchObject({
+      runId: delivered,
+    });
+    expect(started).toHaveLength(2);
+    expect(await userMessages()).toBe(2);
+
+    // Still waiting in a paused tray: no run to return, and none started.
+    const third = await startRun('Deploy it');
+    await resendEnqueue('draft-0005', 'Then share it');
+    await runs.cancelAgentRun(third);
+    await runs.pendingDispatchesSettled();
+    await expect(
+      resendStart('draft-0005', 'Then share it'),
+    ).rejects.toMatchObject({ status: 409, name: 'MessageQueuedError' });
+    expect((await tray()).messages).toHaveLength(1);
+    expect(started).toHaveLength(3);
+  });
+
+  it('returns the run a steered message was injected into', async () => {
+    const runId = await startRun('Build a tracker');
+    await resendEnqueue('draft-0008', 'Use blue');
+    const [claimed] = await runs.claimSteerMessages(RUNNER, runId);
+    await runs.ingestRunnerEvent(RUNNER, {
+      runId,
+      runnerSeq: 1,
+      event: {
+        type: 'user_message',
+        pendingId: claimed.id,
+        text: claimed.userText,
+        images: [],
+      },
+    });
+    expect((await resendEnqueue('draft-0008', 'Use blue')).pending).toEqual({
+      paused: false,
+      messages: [],
+    });
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    await finish(runId, 'completed', [
+      ...(session!.messages as JsonValue[]),
+      {
+        role: 'user',
+        content: text('Use blue'),
+        steered: true,
+        pendingMessageId: claimed.id,
+      },
+      { role: 'assistant', content: text('Done.') },
+    ]);
+
+    // Resent through either endpoint once the session is idle again.
+    expect(await resendEnqueue('draft-0008', 'Use blue')).toEqual({
+      pending: { paused: false, messages: [] },
+      startedRunId: null,
+    });
+    expect(await resendStart('draft-0008', 'Use blue')).toMatchObject({
+      runId,
+    });
+    expect(started).toHaveLength(1);
+    expect(await db.select().from(schema.agentPendingMessages)).toEqual([]);
+  });
+
+  it('resumes delivery when an idle send failed after accepting the message', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    // Accepted, then its delivery failed: no Runner took it.
+    vi.mocked(hub.connectedRunnerCount).mockReturnValue(0);
+    await resendEnqueue('draft-0009', 'Add a chart').catch(() => null);
+    await runs.pendingDispatchesSettled();
+    expect(await activeRunId()).toBeNull();
+    expect((await tray()).messages).toHaveLength(1);
+
+    vi.mocked(hub.connectedRunnerCount).mockReturnValue(1);
+    const resent = await resendEnqueue('draft-0009', 'Add a chart');
+    await runs.pendingDispatchesSettled();
+    expect(resent.startedRunId).toBe(await activeRunId());
+    expect(resent.pending.messages).toEqual([]);
+    expect(started.map((payload) => payload.userText)).toEqual(['Add a chart']);
+  });
+
+  it('replays a message whose model was disabled since it was sent', async () => {
+    await startRun('Build a tracker');
+    const first = await resendEnqueue('draft-0010', 'Add a chart');
+    await db
+      .update(schema.agentModels)
+      .set({ enabled: false })
+      .where(eq(schema.agentModels.modelId, MODEL.modelId));
+    const again = await resendEnqueue('draft-0010', 'Add a chart');
+    expect(again.pending).toEqual(first.pending);
+    // A new message still needs an available model.
+    await expect(resendEnqueue('draft-0011', 'Other')).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it('returns the first run to a copy that saw it only once it was active', async () => {
+    const first = await resendStart('draft-0012', 'Build a tracker');
+    // This copy looked the receipt up just before the first one committed.
+    vi.spyOn(db.query.agentMessageReceipts, 'findFirst').mockResolvedValueOnce(
+      undefined,
+    );
+    expect(await resendStart('draft-0012', 'Build a tracker')).toEqual(first);
+    // Another message is still refused while the run works.
+    await expect(
+      resendStart('draft-0013', 'Something else'),
+    ).rejects.toMatchObject({ status: 409, name: 'ActiveRunConflictError' });
+    expect(started).toHaveLength(1);
+  });
+
+  it('sends a cancelled message again as a new one', async () => {
+    await startRun('Build a tracker');
+    const sent = await resendEnqueue('draft-0006', 'Add a chart');
+    await pending.cancelPendingMessage({
+      sessionId: SESSION,
+      messageId: sent.pending.messages[0].id,
+    });
+    const again = await resendEnqueue('draft-0006', 'Add a chart');
+    expect(again.pending.messages.map((message) => message.text)).toEqual([
+      'Add a chart',
+    ]);
+  });
+
+  it('rejects a different message under an id already used', async () => {
+    await resendStart('draft-0007', 'Build a tracker');
+    await expect(
+      resendEnqueue('draft-0007', 'Something else'),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      resendStart('draft-0007', 'Something else'),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(started).toHaveLength(1);
+  });
+});

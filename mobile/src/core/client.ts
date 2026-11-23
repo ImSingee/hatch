@@ -52,6 +52,7 @@ import type {
   PushDevice,
   PushRegistration,
   RunCreated,
+  RunQueued,
   SessionDetail,
   SessionHandoff,
   SessionSummary,
@@ -568,17 +569,34 @@ export class HatchApiClient {
       signal,
     });
   }
+  createRun(
+    input: Extract<CreateRunInput, { retry: true }>,
+    signal?: AbortSignal,
+  ): Promise<RunCreated>;
+  createRun(
+    input: CreateRunInput,
+    signal?: AbortSignal,
+  ): Promise<RunCreated | RunQueued>;
   async createRun(
     input: CreateRunInput,
     signal?: AbortSignal,
-  ): Promise<RunCreated> {
+  ): Promise<RunCreated | RunQueued> {
     try {
-      const result = await this.post<RunCreated>(
+      const result = await this.post<RunCreated | RunQueued>(
         '/api/agent/runs',
         input,
         signal,
       );
+      // Only a resend that names its message can be already queued.
       if (
+        'queued' in result &&
+        result.queued === true &&
+        'clientMessageId' in input &&
+        input.clientMessageId
+      )
+        return { queued: true };
+      if (
+        !('runId' in result) ||
         typeof result.runId !== 'string' ||
         !/^[A-Za-z0-9_-]{1,256}$/.test(result.runId) ||
         typeof result.startedAt !== 'string' ||

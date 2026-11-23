@@ -23,6 +23,17 @@ type ChatDraft = {
   files: Picked[];
   model?: ModelChoice | null;
   writer?: string;
+  /**
+   * The message this draft was last sent as, while its outcome is unknown:
+   * resending the same draft (`key`) names the same message, so the server
+   * recognizes it instead of delivering it twice.
+   */
+  send?: {
+    key: string;
+    clientMessageId: string;
+    /** Attachment id each file was uploaded under by this send, by file id. */
+    uploads: Record<string, string>;
+  };
 };
 const emptyDraft: ChatDraft = { text: '', files: [] };
 
@@ -69,6 +80,47 @@ export function useChatDraft(id: string) {
         writer,
       }));
     },
+    /** The id to send this draft (`key`) as; a changed draft gets a new one. */
+    clientMessageIdFor: (key: string, create: () => string) => {
+      const current = client.getQueryData<ChatDraft>(queryKey);
+      if (current?.send?.key === key) return current.send.clientMessageId;
+      const send = { key, clientMessageId: create(), uploads: {} };
+      client.setQueryData<ChatDraft>(queryKey, (previous = emptyDraft) => ({
+        ...previous,
+        send,
+      }));
+      return send.clientMessageId;
+    },
+    /** The attachment id this send uploaded the file under, if it did. */
+    sentUploadId: (clientMessageId: string, fileId: string) => {
+      const send = client.getQueryData<ChatDraft>(queryKey)?.send;
+      return send?.clientMessageId === clientMessageId
+        ? send.uploads[fileId]
+        : undefined;
+    },
+    recordUpload: (
+      clientMessageId: string,
+      fileId: string,
+      attachmentId: string,
+    ) =>
+      client.setQueryData<ChatDraft>(queryKey, (previous = emptyDraft) =>
+        previous.send?.clientMessageId === clientMessageId
+          ? {
+              ...previous,
+              send: {
+                ...previous.send,
+                uploads: { ...previous.send.uploads, [fileId]: attachmentId },
+              },
+            }
+          : previous,
+      ),
+    /** The draft was accepted: whatever is sent next is a new message. */
+    settleSend: (clientMessageId: string) =>
+      client.setQueryData<ChatDraft>(queryKey, (previous = emptyDraft) =>
+        previous.send?.clientMessageId === clientMessageId
+          ? { ...previous, send: undefined }
+          : previous,
+      ),
     setFiles: (files: SetStateAction<Picked[]>) => {
       client.setQueryData<ChatDraft>(queryKey, (previous = emptyDraft) => ({
         ...previous,

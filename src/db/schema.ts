@@ -752,6 +752,41 @@ export const agentPendingMessages = snakeCase.table(
   ],
 );
 
+/**
+ * One row per chat message a client sent with a `clientMessageId`, so a
+ * resend after a lost response returns the original outcome instead of
+ * delivering the message again (see `~server/agent-message-receipts`). It
+ * outlives the pending row, which is deleted once delivered.
+ */
+export const agentMessageReceipts = snakeCase.table(
+  'agent_message_receipts',
+  {
+    sessionId: ulid('session_id')
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: 'cascade' }),
+    clientMessageId: text('client_message_id').notNull(),
+    /** Hash of the message as first sent; a resend must match it. */
+    fingerprint: text().notNull(),
+    /**
+     * The pending message it became, when sent while a run worked. Not a
+     * foreign key: the receipt stays after that row is delivered.
+     */
+    pendingMessageId: ulid('pending_message_id'),
+    /** The run that delivered the message (its prompt or a steer), once one did. */
+    runId: ulid('run_id').references(() => agentRuns.id, {
+      onDelete: 'set null',
+    }),
+    createdAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.clientMessageId] }),
+    index('agent_message_receipts_pending_idx').on(
+      table.sessionId,
+      table.pendingMessageId,
+    ),
+  ],
+);
+
 export const agentRunEvents = snakeCase.table(
   'agent_run_events',
   {

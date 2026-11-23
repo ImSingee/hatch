@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { composerInputSchema, hasComposerText } from '~agent/composer-content';
+import { AppError } from './errors';
 
 /** ~25 MB: comfortably fits the composer's downscaled images plus prose. */
 export const MAX_BODY_BYTES = 25_000_000;
@@ -94,6 +95,27 @@ export const agentMessageImagesSchema = z
 export const agentMessageAttachmentIdsSchema = z
   .array(z.string().min(1))
   .max(MAX_ATTACHMENTS);
+
+/**
+ * Names one message across resends of the same draft, so a send repeated
+ * after a lost response is recognized (see `~server/agent-message-receipts`).
+ */
+/**
+ * A run start resent for a message an earlier send already put in the tray,
+ * where it still waits (delivery is paused, or its Runner is away). The start
+ * endpoint answers `{ queued: true }`: the message was accepted, nothing new
+ * was delivered or started.
+ */
+export class MessageQueuedError extends AppError {
+  constructor() {
+    super('This message is already waiting to be delivered.', 409);
+    this.name = 'MessageQueuedError';
+  }
+}
+
+export const clientMessageIdSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{8,128}$/, 'Invalid clientMessageId.');
 
 /** Fields of a user message, shared by run starts and pending messages. */
 export const agentMessageFields = {
