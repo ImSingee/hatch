@@ -42,6 +42,8 @@ const symbols: Record<GlyphName, AndroidSymbol> = {
   bell: 'notifications',
   settings: 'settings',
   trash: 'delete',
+  edit: 'edit',
+  pause: 'pause',
 };
 
 // Decorative symbol in a square box; the surrounding control owns its

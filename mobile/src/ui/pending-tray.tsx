@@ -3,10 +3,11 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { PendingMessage, PendingMessages } from '../core';
 import { Button, IconButton } from './button';
+import { useAccent } from './accent';
 import { Glyph } from './glyph';
 import { NativeField, type NativeFieldRef } from './native-field';
 import { Text, type } from './text';
-import { palette as c, radii } from './theme';
+import { palette as c, radii, weights } from './theme';
 
 const MODE_LABEL = { queue: 'Queued', steer: 'Steer' } as const;
 
@@ -34,6 +35,7 @@ function PendingRow({
   onCancel: () => void;
   onSendNow: () => void;
 }) {
+  const accent = useAccent();
   const [draft, setDraft] = useState<string | null>(null);
   // Native text can change before its event reaches JavaScript; Save reads
   // the field itself.
@@ -52,7 +54,7 @@ function PendingRow({
       style={{
         gap: 8,
         padding: 10,
-        borderRadius: radii.tile,
+        borderRadius: radii.lg,
         backgroundColor: c.card,
       }}
     >
@@ -61,8 +63,8 @@ function PendingRow({
           style={[
             type.meta,
             {
-              color: message.mode === 'steer' ? c.moss : c.inkSoft,
-              fontWeight: '600',
+              color: message.mode === 'steer' ? accent.ink : c.inkSoft,
+              fontWeight: weights.label,
             },
           ]}
         >
@@ -175,7 +177,7 @@ export function PendingTray({
       style={{
         gap: 6,
         padding: 6,
-        borderRadius: radii.tile + 4,
+        borderRadius: radii.xl,
         backgroundColor: c.sunken,
       }}
     >
