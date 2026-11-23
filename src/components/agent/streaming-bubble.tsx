@@ -17,7 +17,7 @@ import {
   StreamingThinkingStep,
   StreamingToolStep,
 } from './steps';
-import type { StreamBlock, StreamState } from './use-agent-stream';
+import type { SendImage, StreamBlock, StreamState } from './use-agent-stream';
 import { type WorkFrame, WorkProcess } from './work-process';
 import classes from './chat.module.css';
 
@@ -31,8 +31,11 @@ export function StreamingBubble({
   onSubmitEnv,
   work,
   retry,
+  steerImages,
 }: {
   state: StreamState;
+  /** Images of a pending message, known from the tray before injection. */
+  steerImages?: (pendingId: string) => SendImage[] | undefined;
   onAnswer: (askId: string, answers: AskAnswer[]) => void;
   onSubmitEnv: (requestId: string, entries: EnvEntry[]) => Promise<boolean>;
   /**
@@ -95,12 +98,28 @@ export function StreamingBubble({
         );
       } else if (block.kind === 'steer') {
         flush();
+        const images = steerImages?.(block.pendingId) ?? [];
+        // Without the image data, say the message had images.
+        const text =
+          images.length === 0 && block.imageCount > 0
+            ? [
+                block.text,
+                block.imageCount === 1
+                  ? '1 image'
+                  : `${block.imageCount} images`,
+              ]
+                .filter(Boolean)
+                .join('\n')
+            : block.text;
         out.push(
           <UserMessage
             key={index}
             message={{
               role: 'user',
-              content: [{ type: 'text', text: block.text }],
+              content: [
+                { type: 'text', text },
+                ...images.map((image) => ({ type: 'image', ...image })),
+              ],
               ...(block.composerContent
                 ? { composerContent: block.composerContent }
                 : {}),

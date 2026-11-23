@@ -75,29 +75,6 @@ function workStateKey(runKey: string, phase: WorkPhase): string {
  */
 const SETTLED_REFRESH_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
-/** How often an idle session with waiting messages is re-read. */
-const DELIVERY_POLL_MS = 1500;
-
-function awaitsDelivery(
-  session:
-    | {
-        activeRun: unknown;
-        pending?: { paused: boolean; messages: unknown[] };
-        retry: { nextRetryAt: string | null } | null;
-      }
-    | null
-    | undefined,
-): boolean {
-  return Boolean(
-    session &&
-    !session.activeRun &&
-    session.pending &&
-    !session.pending.paused &&
-    session.pending.messages.length > 0 &&
-    !session.retry?.nextRetryAt,
-  );
-}
-
 function runTiming(startedAt: string, completedAt: string | null): WorkTiming {
   return {
     startedAt: Date.parse(startedAt),
@@ -107,13 +84,7 @@ function runTiming(startedAt: string, completedAt: string | null): WorkTiming {
 
 export function Chat({ sessionId }: { sessionId: string }) {
   const qc = useQueryClient();
-  const sessionQuery = useQuery({
-    ...sessionQueryOptions(sessionId),
-    // The platform starts the run that delivers waiting messages on its own
-    // once the session is idle; follow it until that run shows up.
-    refetchInterval: (query) =>
-      awaitsDelivery(query.state.data) ? DELIVERY_POLL_MS : false,
-  });
+  const sessionQuery = useQuery(sessionQueryOptions(sessionId));
   const appsQuery = useQuery(appsQueryOptions);
   const workflowsQuery = useQuery(workflowsQueryOptions);
   const { groups, first, available } = useModelOptions();
@@ -220,6 +191,20 @@ export function Chat({ sessionId }: { sessionId: string }) {
   } = stream;
 
   const session = sessionQuery.data;
+  // Images of messages that were in the tray, for the live bubble that shows
+  // them once the run takes them in (its event carries no image data).
+  const steerImagesRef = useRef(new Map<string, ComposerImage[]>());
+  const pendingMessages = session?.pending?.messages;
+  useEffect(() => {
+    for (const message of pendingMessages ?? []) {
+      if (message.images.length > 0)
+        steerImagesRef.current.set(message.id, message.images);
+    }
+  }, [pendingMessages]);
+  const steerImages = useCallback(
+    (pendingId: string) => steerImagesRef.current.get(pendingId),
+    [],
+  );
   const activeRun = session?.activeRun;
   const activeRunId = activeRun?.id ?? null;
   const clockOffsetMs = session?.clockOffsetMs ?? 0;
@@ -1064,6 +1049,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
                     onAnswer={answer}
                     onSubmitEnv={submitEnv}
                     work={liveWork}
+                    steerImages={steerImages}
                     retry={
                       liveRunId && retryState?.runId === liveRunId
                         ? retryControls(liveUserTurn)

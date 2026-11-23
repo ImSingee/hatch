@@ -1,10 +1,10 @@
 /** Messages sent while the Agent works, waiting above the composer. */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { PendingMessage, PendingMessages } from '../core';
 import { Button, IconButton } from './button';
 import { Glyph } from './glyph';
-import { NativeField } from './native-field';
+import { NativeField, type NativeFieldRef } from './native-field';
 import { Text, type } from './text';
 import { palette as c, radii } from './theme';
 
@@ -35,6 +35,9 @@ function PendingRow({
   onSendNow: () => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  // Native text can change before its event reaches JavaScript; Save reads
+  // the field itself.
+  const field = useRef<NativeFieldRef>(null);
   const editable = message.status === 'pending';
   const files = message.images.length + message.attachments.length;
   return (
@@ -106,6 +109,7 @@ function PendingRow({
       {draft !== null ? (
         <View style={{ gap: 8 }}>
           <NativeField
+            ref={field}
             label="Edit message"
             value={draft}
             onChange={setDraft}
@@ -129,7 +133,7 @@ function PendingRow({
               busy={busy}
               disabled={!draft.trim() && files === 0}
               onPress={() =>
-                void onSave(draft).then((saved) => {
+                void onSave(field.current?.getText() ?? draft).then((saved) => {
                   if (saved) setDraft(null);
                 })
               }

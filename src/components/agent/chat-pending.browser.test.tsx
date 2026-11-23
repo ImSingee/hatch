@@ -409,3 +409,30 @@ test('keeps reply pairing when history holds a steered message', async () => {
   ).toBeTruthy();
   fixtures.session.runs = [];
 });
+
+test('shows the images of a steered message once the run takes it in', async () => {
+  fixtures.session.pending = {
+    paused: false,
+    messages: [
+      {
+        ...pendingMessage('pending-1', ''),
+        images: [{ data: 'aW1hZ2U=', mimeType: 'image/png' }],
+      },
+    ],
+  };
+  const { push } = stubFetch();
+  const screen = await renderChat();
+  await expect
+    .element(screen.getByRole('region', { name: 'Pending messages' }))
+    .toBeVisible();
+  await vi.waitFor(() => push({ type: 'assistant_start' }));
+  push({
+    type: 'user_message',
+    pendingId: 'pending-1',
+    text: '',
+    images: [{ mimeType: 'image/png' }],
+  });
+  await expect
+    .element(screen.getByRole('img', { name: 'Attached image' }))
+    .toBeVisible();
+});

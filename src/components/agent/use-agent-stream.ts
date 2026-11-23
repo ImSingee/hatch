@@ -59,6 +59,8 @@ export type StreamSteerBlock = {
   text: string;
   composerContent?: AgentComposerContentPart[];
   attachments?: AgentAttachmentRef[];
+  /** The event carries image metadata only; the data comes from the tray. */
+  imageCount: number;
 };
 export type StreamCompactBlock = {
   kind: 'compact';
@@ -539,6 +541,7 @@ export function reduceStreamState(
                 ...(event.attachments
                   ? { attachments: event.attachments }
                   : {}),
+                imageCount: event.images.length,
               },
             ],
           };

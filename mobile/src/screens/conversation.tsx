@@ -1021,7 +1021,18 @@ function ConversationBody({
           >
             {detail?.pending ? (
               <PendingTray
-                pending={detail.pending}
+                pending={{
+                  ...detail.pending,
+                  // The live reply already shows messages the run took in;
+                  // the snapshot catches up when the reply ends.
+                  messages: detail.pending.messages.filter(
+                    (message) =>
+                      !stream.state.blocks.some(
+                        (block) =>
+                          block.kind === 'steer' && block.id === message.id,
+                      ),
+                  ),
+                }}
                 busy={pendingBusy}
                 onSave={async (messageId, text) => {
                   try {
