@@ -290,6 +290,11 @@ function assistantText(block: AssistantBlock): string | undefined {
   return block.type === 'text' ? block.text : undefined;
 }
 
+/** A step the work line counts (see `WorkSummary`). */
+function isStepBlock(block: AssistantBlock): boolean {
+  return block.type === 'toolCall' || block.type === 'compaction';
+}
+
 /** Whether any block renders something (whitespace-only blocks render nothing). */
 function hasVisibleBlocks(blocks: AssistantBlock[]): boolean {
   return blocks.some((block) =>
@@ -379,6 +384,7 @@ export function MessageView({
           <WorkProcess
             frame={work}
             hasProcess={hasVisibleBlocks(processBlocks)}
+            summary={{ steps: processBlocks.filter(isStepBlock).length }}
           >
             <AssistantBlocks blocks={processBlocks} toolResults={toolResults} />
           </WorkProcess>

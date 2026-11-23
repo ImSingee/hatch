@@ -339,7 +339,7 @@ test('keeps a live tool request inspectable from running through failure', async
     JSON.parse(runningRequest.element().lastElementChild?.textContent ?? ''),
   ).toStrictEqual(args);
   expect(
-    screen.getByRole('button', { name: /Query app KV/ }).query(),
+    screen.getByRole('button', { name: /^Query app KV/ }).query(),
   ).toBeNull();
 
   emit({
@@ -349,7 +349,7 @@ test('keeps a live tool request inspectable from running through failure', async
     isError: true,
     output: error,
   });
-  const toggle = screen.getByRole('button', { name: /Query app KV/ });
+  const toggle = screen.getByRole('button', { name: /^Query app KV/ });
   await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect
     .poll(() => screen.getByRole('region', { name: 'Request' }).query())
