@@ -244,6 +244,8 @@ export type SessionRunTiming = {
  * The session's latest run failed and its turn can be replayed. `attempt` is
  * the consecutive failure streak; `nextRetryAt` is set while an automatic
  * retry is scheduled and null once it was stopped or the limit was reached.
+ * `waitingForRunner` marks an automatic retry held until the Runner that may
+ * still be executing the failed run settles it (no time is known yet).
  */
 export type SessionRetryState = {
   runId: string;
@@ -252,6 +254,7 @@ export type SessionRetryState = {
   attempt: number;
   maxAttempts: number;
   nextRetryAt: string | null;
+  waitingForRunner: boolean;
 };
 
 type Subscriber = (event: AgentRunStreamEvent) => void;
@@ -858,6 +861,11 @@ export async function getSessionRetryState(
     attempt: target.run.failureStreak,
     maxAttempts: AGENT_AUTO_RETRY_MAX_ATTEMPTS,
     nextRetryAt: target.run.autoRetryAt?.toISOString() ?? null,
+    waitingForRunner:
+      target.run.autoRetryAt == null &&
+      target.run.runnerConfirmationPending &&
+      isAutoRetryStatus(target.run.status) &&
+      shouldAutoRetry(target.run.failureStreak),
   };
 }
 
@@ -1648,6 +1656,12 @@ export type RunnerReconciliation = {
    * missing terminal stream event (crash between finishRun and appendEvent).
    */
   resumed: string[];
+  /**
+   * Resumed runs that already ended on the platform. The Runner may still be
+   * executing one (a turn waiting on an answer has nothing to resend, so no
+   * stale event would cancel it): it is told to stop, then reports it.
+   */
+  ended: string[];
   /** Runs this runner does not own (anymore): abort + discard locally. */
   stale: string[];
   /** Answers submitted while the runner was offline, to deliver now. */
@@ -1665,6 +1679,7 @@ export async function reconcileRunnerRuns(
   claimedRunIds: string[],
 ): Promise<RunnerReconciliation> {
   const resumed: string[] = [];
+  const ended: string[] = [];
   const stale: string[] = [];
   const pendingAnswers: RunnerReconciliation['pendingAnswers'] = [];
   const claimed = new Set(claimedRunIds);
@@ -1717,8 +1732,10 @@ export async function reconcileRunnerRuns(
     // and repairs a missing done/cancelled/error stream event, then the
     // finish ack clears the runner's buffer. Any stream events it resends
     // first are ingested as stale (terminal status) and answered with
-    // run.cancel, so a still-executing turn also winds down here.
+    // run.cancel; the hub also cancels it outright, since a turn with nothing
+    // to resend (waiting on an answer) would otherwise keep running.
     resumed.push(runId);
+    ended.push(runId);
   }
 
   if (resumed.length > 0) {
@@ -1771,7 +1788,7 @@ export async function reconcileRunnerRuns(
     }
   }
 
-  return { resumed, stale, pendingAnswers };
+  return { resumed, ended, stale, pendingAnswers };
 }
 
 export type IngestResult =

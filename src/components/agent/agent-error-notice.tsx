@@ -18,6 +18,8 @@ export type AutoRetryStatus = {
   maxAttempts: number;
   /** Epoch ms of the scheduled retry; null once stopped or exhausted. */
   nextRetryAt: number | null;
+  /** A retry is held until the Agent Runner settles the failed run. */
+  waitingForRunner: boolean;
 };
 
 function formatRemaining(ms: number): string {
@@ -38,13 +40,15 @@ function AutoRetryLine({
   });
 
   let text: string;
+  const progress = `attempt ${status.attempt} of ${status.maxAttempts}`;
   if (scheduledAt !== null) {
     const remaining = scheduledAt - now;
-    const progress = `attempt ${status.attempt} of ${status.maxAttempts}`;
     text =
       remaining > 0
         ? `Retrying automatically in ${formatRemaining(remaining)} · ${progress}`
         : `Retrying now · ${progress}`;
+  } else if (status.waitingForRunner) {
+    text = `Retrying automatically once the Agent Runner reconnects · ${progress}`;
   } else if (status.attempt > status.maxAttempts) {
     text = `Stopped after ${status.maxAttempts} automatic retries.`;
   } else {
@@ -83,6 +87,12 @@ export function AgentErrorNotice({
 }) {
   const scheduledAt =
     autoRetry && autoRetry.attempt > 0 ? autoRetry.nextRetryAt : null;
+  // An automatic retry is pending, with or without a known time.
+  const retryPending =
+    scheduledAt !== null ||
+    (autoRetry !== undefined &&
+      autoRetry.attempt > 0 &&
+      autoRetry.waitingForRunner);
   return (
     <Alert
       className={classes.agentErrorNotice}
@@ -116,9 +126,9 @@ export function AgentErrorNotice({
               disabled={retrying || retryDisabled}
               aria-busy={retrying || undefined}
             >
-              {scheduledAt !== null ? 'Retry now' : 'Retry'}
+              {retryPending ? 'Retry now' : 'Retry'}
             </Button>
-            {scheduledAt !== null && onStopAutoRetry ? (
+            {retryPending && onStopAutoRetry ? (
               <Button
                 type="button"
                 size="compact-sm"

@@ -58,6 +58,8 @@ export type RunnerHubHandlers = {
     claimedRunIds: string[],
   ): Promise<{
     resumed: string[];
+    /** Resumed runs that already ended: tell the Runner to stop them. */
+    ended: string[];
     stale: string[];
     pendingAnswers: {
       runId: string;
@@ -774,6 +776,9 @@ async function registerRunner(
       answers: pending.answers,
     });
   }
+  // A run that ended while the Runner was away may still execute there; its
+  // final report follows the cancel.
+  for (const runId of runs.ended) send(conn, { type: 'run.cancel', runId });
   // Steer hints sent while the runner was offline were lost; repeat them.
   for (const runId of steerHints) send(conn, { type: 'run.steer', runId });
   console.log(`[runner-hub] runner ${hello.runnerId} awaiting workspace ready`);

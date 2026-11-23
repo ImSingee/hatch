@@ -107,6 +107,7 @@ beforeEach(() => {
   handlers.reconcileRunnerRuns.mockResolvedValue({
     resumed: [],
     stale: [],
+    ended: [],
     pendingAnswers: [],
   });
   handlers.reconcileRunnerWorkspaces.mockImplementation(
@@ -338,6 +339,7 @@ describe('workspace-affine dispatch', () => {
     handlers.reconcileRunnerRuns.mockResolvedValue({
       resumed: [runPayload.runId],
       stale: [],
+      ended: [],
       pendingAnswers: [],
     });
     const reconnected = await connectRunner('runner-a', [runPayload.runId]);
@@ -351,6 +353,24 @@ describe('workspace-affine dispatch', () => {
       { runnerId: 'runner-a', activeRunCount: 1 },
     ]);
     consoleWarn.mockRestore();
+  });
+
+  it('cancels runs that ended while their reconnecting Runner was away', async () => {
+    handlers.reconcileRunnerRuns.mockResolvedValue({
+      resumed: ['run-live', 'run-ended'],
+      ended: ['run-ended'],
+      stale: [],
+      pendingAnswers: [],
+    });
+    const socket = await connectRunner('runner-a', ['run-live', 'run-ended']);
+
+    // The ended run is kept for its final report but told to stop.
+    expect(
+      socket.sent.find((message) => message.type === 'hub.hello_ack'),
+    ).toMatchObject({ resumedRunIds: ['run-live', 'run-ended'] });
+    expect(
+      socket.sent.filter((message) => message.type === 'run.cancel'),
+    ).toEqual([{ type: 'run.cancel', runId: 'run-ended' }]);
   });
 
   it('keeps a run with its connection when the accepted run cannot be committed', async () => {
@@ -500,6 +520,7 @@ describe('runner connection snapshot', () => {
     vi.mocked(handlers.reconcileRunnerRuns).mockResolvedValueOnce({
       resumed: ['run-1', 'run-2'],
       stale: [],
+      ended: [],
       pendingAnswers: [],
     });
     await connectRunner('runner-a', ['run-1', 'run-2']);
@@ -838,6 +859,7 @@ describe('steer messages', () => {
     handlers.reconcileRunnerRuns.mockResolvedValue({
       resumed: ['run-owned'],
       stale: [],
+      ended: [],
       pendingAnswers: [],
     });
     handlers.claimSteerMessages.mockResolvedValue([steer]);
@@ -872,6 +894,7 @@ describe('steer messages', () => {
     handlers.reconcileRunnerRuns.mockResolvedValue({
       resumed: ['run-1', 'run-2'],
       stale: [],
+      ended: [],
       pendingAnswers: [],
     });
     // Nothing may be awaited after hello_ack: the Runner answers it with

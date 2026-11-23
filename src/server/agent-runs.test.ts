@@ -1275,6 +1275,7 @@ describe('automatic retry', () => {
       attempt: 6,
       maxAttempts: 5,
       nextRetryAt: null,
+      waitingForRunner: false,
     });
 
     // A manual retry still works, and a completed run resets the streak.
@@ -1509,6 +1510,13 @@ describe('unconfirmed dispatch', () => {
     return rows.map((row) => row.id);
   }
 
+  async function retryState() {
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION_ID },
+    });
+    return getSessionRetryState(SESSION_ID, session!.messages);
+  }
+
   async function expireLease(runId: string) {
     await db
       .update(schema.agentRuns)
@@ -1533,7 +1541,7 @@ describe('unconfirmed dispatch', () => {
     });
 
     const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
-    expect(reconciled.resumed).toEqual([runId]);
+    expect(reconciled).toMatchObject({ resumed: [runId], ended: [] });
     expect(await run(runId)).toMatchObject({
       status: 'running',
       runnerConfirmationPending: false,
@@ -1593,6 +1601,10 @@ describe('unconfirmed dispatch', () => {
     });
     await fireDueAgentAutoRetries(FAR_FUTURE());
     expect(await runIds()).toEqual([runId]);
+    await expect(retryState()).resolves.toMatchObject({
+      nextRetryAt: null,
+      waitingForRunner: true,
+    });
 
     // A different Runner reconnecting settles nothing.
     await reconcileRunnerRuns('runner-other', []);
@@ -1614,7 +1626,7 @@ describe('unconfirmed dispatch', () => {
     // The Runner comes back still holding the run; it is resumed only to
     // deliver its final report, and the replay waits for that report.
     const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
-    expect(reconciled.resumed).toEqual([runId]);
+    expect(reconciled).toMatchObject({ resumed: [runId], ended: [runId] });
     expect((await run(runId)).autoRetryAt).toBeNull();
     await fireDueAgentAutoRetries(FAR_FUTURE());
     expect(await runIds()).toEqual([runId]);
@@ -1635,6 +1647,22 @@ describe('unconfirmed dispatch', () => {
     expect(settled.autoRetryAt).not.toBeNull();
     await fireDueAgentAutoRetries(FAR_FUTURE());
     expect(await runIds()).toHaveLength(2);
+  });
+
+  it('lets the user stop a retry held for the Runner', async () => {
+    loseAcceptance();
+    const runId = await send();
+    await expireLease(runId);
+
+    await stopAgentAutoRetry(SESSION_ID);
+    await expect(retryState()).resolves.toMatchObject({
+      nextRetryAt: null,
+      waitingForRunner: false,
+    });
+    await reconcileRunnerRuns(RUNNER_ID, []);
+    expect((await run(runId)).autoRetryAt).toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
   });
 
   it('settles a held run that the late final report completed', async () => {
@@ -1676,7 +1704,7 @@ describe('unconfirmed dispatch', () => {
       .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
       .where(eq(schema.agentRuns.id, runId));
     const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
-    expect(reconciled.resumed).toEqual([runId]);
+    expect(reconciled).toMatchObject({ resumed: [runId], ended: [runId] });
     expect(await run(runId)).toMatchObject({
       status: 'interrupted',
       runnerConfirmationPending: true,
