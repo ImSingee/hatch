@@ -89,8 +89,26 @@ struct Shared {
     completion: Mutex<Option<(Url, Url)>>,
     /// The app itself asked for the bundled page (see `policy`).
     bundled_requested: AtomicBool,
-    /// Bumped to abandon a browser sign-in that is still polling.
-    sign_in_generation: AtomicU64,
+    /// The current session flow (see `Flow`).
+    flow: AtomicU64,
+}
+
+/// One session action: launch or retry, connect, browser sign-in, cancel,
+/// switch instance, sign out, or a session found ended. Starting one
+/// abandons any other still awaiting the instance, so a late answer can
+/// never undo what the person did since (show an old instance, or sign back
+/// in after Sign Out).
+#[derive(Clone, Copy)]
+struct Flow(u64);
+
+impl Flow {
+    fn begin(app: &AppHandle) -> Self {
+        Self(shared(app).flow.fetch_add(1, Ordering::SeqCst) + 1)
+    }
+
+    fn current(self, app: &AppHandle) -> bool {
+        shared(app).flow.load(Ordering::SeqCst) == self.0
+    }
 }
 
 fn shared(app: &AppHandle) -> tauri::State<'_, Shared> {
@@ -180,6 +198,7 @@ fn allow_instance_drag(app: &AppHandle, origin: &str) {
 
 /// Launch, or retry: show the saved instance with its saved session.
 async fn start(app: AppHandle) {
+    let flow = Flow::begin(&app);
     let Some(origin) = instance_origin(&app) else {
         set_screen(
             &app,
@@ -192,7 +211,7 @@ async fn start(app: AppHandle) {
     };
     allow_instance_drag(&app, &origin);
     match keychain::get(&origin) {
-        Ok(Some(token)) => restore(app, origin, token).await,
+        Ok(Some(token)) => restore(app, origin, token, flow).await,
         Ok(None) => set_screen(
             &app,
             Screen::SignIn {
@@ -212,7 +231,7 @@ async fn start(app: AppHandle) {
 
 /// Signs the window in with a saved session and opens the start page (or a
 /// pending deep link).
-async fn restore(app: AppHandle, origin: String, token: String) {
+async fn restore(app: AppHandle, origin: String, token: String, flow: Flow) {
     set_screen(
         &app,
         Screen::Working {
@@ -230,6 +249,9 @@ async fn restore(app: AppHandle, origin: String, token: String) {
         instance.handoff(&token).await
     }
     .await;
+    if !flow.current(&app) {
+        return;
+    }
     match result {
         Ok(handoff) => {
             tauri::async_runtime::spawn(refresh_accent(app.clone(), origin.clone(), token));
@@ -296,19 +318,23 @@ async fn session_ended(app: AppHandle, origin: String) {
     if !matches!(*shared(&app).screen.lock().unwrap(), Screen::Instance) {
         return;
     }
+    let flow = Flow::begin(&app);
     let saved = keychain::get(&origin).ok().flatten();
     if let Some(token) = saved {
         let http = shared(&app).http.clone();
-        match (Instance {
+        let status = (Instance {
             http: &http,
             origin: &origin,
         })
         .status(&token)
-        .await
-        {
+        .await;
+        if !flow.current(&app) {
+            return;
+        }
+        match status {
             // The window lost its cookie but the session lives: sign the
             // window in again.
-            Ok(_) => return restore(app, origin, token).await,
+            Ok(_) => return restore(app, origin, token, flow).await,
             Err(ApiError::Unauthorized) => {
                 let _ = keychain::remove(&origin);
             }
@@ -368,6 +394,9 @@ fn on_url_change(app: &AppHandle, raw: &str) {
 }
 
 async fn sign_out(app: AppHandle) {
+    // Also abandons a browser sign-in still waiting for approval, which would
+    // otherwise sign the app back in.
+    let flow = Flow::begin(&app);
     let Some(origin) = instance_origin(&app) else {
         return;
     };
@@ -394,13 +423,15 @@ async fn sign_out(app: AppHandle) {
     if let Some(window) = main_window(&app) {
         let _ = window.clear_all_browsing_data();
     }
-    set_screen(
-        &app,
-        Screen::SignIn {
-            instance: origin,
-            error: None,
-        },
-    );
+    if flow.current(&app) {
+        set_screen(
+            &app,
+            Screen::SignIn {
+                instance: origin,
+                error: None,
+            },
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +447,7 @@ async fn connect(app: AppHandle, address: String) -> Result<(), String> {
     let origin = policy::canonical_instance(&address).map_err(|_| {
         "Enter the instance's address, like hatch.example.com. Plain http:// works only for this Mac (localhost).".to_owned()
     })?;
+    let flow = Flow::begin(&app);
     set_screen(
         &app,
         Screen::Working {
@@ -424,13 +456,16 @@ async fn connect(app: AppHandle, address: String) -> Result<(), String> {
         },
     );
     let http = shared(&app).http.clone();
-    if let Err(error) = (Instance {
+    let probed = (Instance {
         http: &http,
         origin: &origin,
     })
     .probe()
-    .await
-    {
+    .await;
+    if !flow.current(&app) {
+        return Ok(());
+    }
+    if let Err(error) = probed {
         set_screen(
             &app,
             Screen::Connect {
@@ -456,12 +491,8 @@ async fn connect(app: AppHandle, address: String) -> Result<(), String> {
 #[tauri::command]
 async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
     let origin = instance_origin(&app).ok_or("Choose an instance first.")?;
-    let generation = shared(&app)
-        .sign_in_generation
-        .fetch_add(1, Ordering::SeqCst)
-        + 1;
-    let current =
-        |app: &AppHandle| shared(app).sign_in_generation.load(Ordering::SeqCst) == generation;
+    let flow = Flow::begin(&app);
+    let current = |app: &AppHandle| flow.current(app);
     let http = shared(&app).http.clone();
     let instance = Instance {
         http: &http,
@@ -477,9 +508,8 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
         );
     };
 
-    // Every result that arrives after an await is dropped once the request
-    // was abandoned (Cancel, Switch Instance…, a newer request): whatever
-    // abandoned it has already shown its own screen.
+    // Every result that arrives after an await is dropped once another
+    // session action began (see `Flow`): it has already shown its own screen.
     let requested = instance.device_code().await;
     if !current(&app) {
         return Ok(());
@@ -528,7 +558,7 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
                     fail(&app, error);
                     return Ok(());
                 }
-                restore(app, origin, token).await;
+                restore(app, origin, token, flow).await;
                 return Ok(());
             }
             Ok(DevicePoll::Denied) => {
@@ -550,9 +580,7 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn cancel_sign_in(app: AppHandle) {
-    shared(&app)
-        .sign_in_generation
-        .fetch_add(1, Ordering::SeqCst);
+    Flow::begin(&app);
     if let Some(origin) = instance_origin(&app) {
         set_screen(
             &app,
@@ -566,9 +594,7 @@ fn cancel_sign_in(app: AppHandle) {
 
 #[tauri::command]
 fn change_instance(app: AppHandle) {
-    shared(&app)
-        .sign_in_generation
-        .fetch_add(1, Ordering::SeqCst);
+    Flow::begin(&app);
     let instance = instance_origin(&app);
     set_screen(
         &app,
@@ -879,7 +905,7 @@ pub fn run() {
                 pending_path: Mutex::new(None),
                 completion: Mutex::new(None),
                 bundled_requested: AtomicBool::new(false),
-                sign_in_generation: AtomicU64::new(0),
+                flow: AtomicU64::new(0),
             });
 
             app.set_menu(menu::build(&handle)?)?;
