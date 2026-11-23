@@ -342,6 +342,18 @@ const definitions: readonly CliCommandDefinition[] = [
       'Take a widget off a dashboard. The App and its widget stay available and can be added again.',
   },
   {
+    path: ['preferences', 'get'],
+    usage: 'preferences get',
+    description:
+      "Show the caller's personal preferences: agentMessageMode (queue or steer). With a Run credential, the preferences of the user who sent the run's prompt.",
+  },
+  {
+    path: ['preferences', 'set'],
+    usage: 'preferences set --agent-message-mode queue|steer',
+    description:
+      'Set how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish. Applies to messages sent afterwards; already pending ones keep their mode.',
+  },
+  {
     path: ['notification', 'list'],
     usage:
       'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',

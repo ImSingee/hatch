@@ -8,6 +8,7 @@ import {
   connectedRunnerCount,
   dispatchRun,
   handleRunnerSocket,
+  RunNotStartedError,
   listConnectedRunners,
   sendRunEnvAndWait,
   type RunDispatchPlan,
@@ -23,6 +24,9 @@ const handlers = {
   renewRunnerLeases: vi.fn<RunnerHubHandlers['renewRunnerLeases']>(),
   ingestRunnerEvent: vi.fn<RunnerHubHandlers['ingestRunnerEvent']>(),
   completeRunFromRunner: vi.fn<RunnerHubHandlers['completeRunFromRunner']>(),
+  claimSteerMessages: vi.fn<RunnerHubHandlers['claimSteerMessages']>(),
+  steerPendingRunIds: vi.fn<RunnerHubHandlers['steerPendingRunIds']>(),
+  runnerReady: vi.fn<RunnerHubHandlers['runnerReady']>(),
 } satisfies RunnerHubHandlers;
 
 const dispatch = {
@@ -112,6 +116,9 @@ beforeEach(() => {
     sessionId: 'session-from-event',
   });
   handlers.completeRunFromRunner.mockResolvedValue(null);
+  handlers.claimSteerMessages.mockResolvedValue([]);
+  handlers.steerPendingRunIds.mockResolvedValue([]);
+  handlers.runnerReady.mockResolvedValue();
   dispatch.assign.mockResolvedValue();
   dispatch.finalize.mockResolvedValue(runPayload.sessionId);
   // Fake only Date so lastSeen deltas are deterministic; timers stay real
@@ -308,7 +315,9 @@ describe('workspace-affine dispatch', () => {
         reason: 'busy',
       }),
     );
+    // A rejection is definite: the run never started on any Runner.
     await expect(rejectedDispatch).rejects.toThrow('busy');
+    await expect(rejectedDispatch).rejects.toBeInstanceOf(RunNotStartedError);
     expect(dispatch.finalize).not.toHaveBeenCalled();
 
     delete (globalThis as { __hatchRunnerHub__?: unknown }).__hatchRunnerHub__;
@@ -321,9 +330,9 @@ describe('workspace-affine dispatch', () => {
       throw new Error('send failed');
     };
 
-    await expect(dispatchRun(runPayload, dispatchPlan())).rejects.toThrow(
-      'connection is closed',
-    );
+    const closed = dispatchRun(runPayload, dispatchPlan());
+    await expect(closed).rejects.toThrow('connection is closed');
+    await expect(closed).rejects.toBeInstanceOf(RunNotStartedError);
     expect(dispatch.finalize).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -718,5 +727,103 @@ describe('transient environment delivery', () => {
       ok: false,
       errorCode: 'runner_unavailable',
     });
+  });
+});
+
+describe('steer messages', () => {
+  const steer = {
+    id: 'pending-1',
+    userText: 'Use blue',
+    composerContent: [],
+    images: [],
+    attachments: [],
+  };
+
+  it('answers a claim only for a run the connection carries', async () => {
+    handlers.reconcileRunnerRuns.mockResolvedValue({
+      resumed: ['run-owned'],
+      stale: [],
+      pendingAnswers: [],
+    });
+    handlers.claimSteerMessages.mockResolvedValue([steer]);
+    const socket = await connectRunner('runner-a', ['run-owned']);
+    const reply = (requestId: string) =>
+      socket.sent.find(
+        (message) =>
+          message.type === 'run.steer_claimed' &&
+          message.requestId === requestId,
+      );
+
+    for (const [runId, requestId] of [
+      ['run-owned', 'claim-1'],
+      ['run-elsewhere', 'claim-2'],
+    ]) {
+      socket.emit(
+        'message',
+        JSON.stringify({ type: 'run.steer_claim', runId, requestId }),
+      );
+    }
+    await vi.waitFor(() => expect(reply('claim-2')).toBeDefined());
+    await vi.waitFor(() => expect(reply('claim-1')).toBeDefined());
+    expect(reply('claim-1')).toMatchObject({ messages: [steer] });
+    expect(reply('claim-2')).toMatchObject({ messages: [] });
+    expect(handlers.claimSteerMessages).toHaveBeenCalledExactlyOnceWith(
+      'runner-a',
+      'run-owned',
+    );
+  });
+
+  it('repeats steer hints for resumed runs and reports readiness', async () => {
+    handlers.reconcileRunnerRuns.mockResolvedValue({
+      resumed: ['run-1', 'run-2'],
+      stale: [],
+      pendingAnswers: [],
+    });
+    // Nothing may be awaited after hello_ack: the Runner answers it with
+    // runner.ready at once, which must find the connection registered.
+    let release!: (runIds: string[]) => void;
+    handlers.steerPendingRunIds.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const socket = new FakeSocket();
+    handleRunnerSocket(socket.asWebSocket(), {
+      betaFeatures: DEFAULT_BETA_FEATURES,
+      handlers,
+    });
+    socket.emit(
+      'message',
+      JSON.stringify({
+        type: 'runner.hello',
+        runnerId: 'runner-a',
+        protocolVersion: PROTOCOL_VERSION,
+        activeRunIds: ['run-1', 'run-2'],
+        workspaceSessionIds: [],
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(handlers.steerPendingRunIds).toHaveBeenCalledWith([
+        'run-1',
+        'run-2',
+      ]),
+    );
+    expect(socket.sent.some((m) => m.type === 'hub.hello_ack')).toBe(false);
+    release(['run-2']);
+    await vi.waitFor(() =>
+      expect(socket.sent.some((m) => m.type === 'hub.hello_ack')).toBe(true),
+    );
+    socket.emit('message', JSON.stringify({ type: 'runner.ready' }));
+    await vi.waitFor(() =>
+      expect(socket.sent.some((m) => m.type === 'hub.ready_ack')).toBe(true),
+    );
+    expect(socket.closed).toBeNull();
+    expect(
+      socket.sent.filter((message) => message.type === 'run.steer'),
+    ).toEqual([{ type: 'run.steer', runId: 'run-2' }]);
+    await vi.waitFor(() =>
+      expect(handlers.runnerReady).toHaveBeenCalledWith('runner-a'),
+    );
   });
 });

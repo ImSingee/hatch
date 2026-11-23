@@ -51,6 +51,7 @@ import {
   type WidgetLayout,
   type WidgetSize,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/dashboard_pb';
+import { PreferenceService } from '../../hatch-platform-api/gen/hatch/platform/v1/preference_pb';
 import { type AppIcon } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
@@ -399,6 +400,12 @@ export function cliClient(transport: Transport) {
   const themes = createClient(ThemeService, transport);
   const pins = createClient(PinService, transport);
   const dashboards = createClient(DashboardService, transport);
+  const preferences = createClient(PreferenceService, transport);
+  const agentPreferences = (
+    value: { messageMode: string } | undefined,
+  ): { agentMessageMode: string } => ({
+    agentMessageMode: required(value).messageMode,
+  });
   return {
     dashboards: {
       list: async (page: { limit: number; cursor?: string }) => {
@@ -584,6 +591,20 @@ export function cliClient(transport: Transport) {
         });
         return { dashboardId: result.id, pinned: result.pinned };
       },
+    },
+    preferences: {
+      get: async () =>
+        agentPreferences(
+          (await preferences.getAgentPreferences({})).preferences,
+        ),
+      update: async (input: { agentMessageMode: string }) =>
+        agentPreferences(
+          (
+            await preferences.updateAgentPreferences({
+              messageMode: input.agentMessageMode,
+            })
+          ).preferences,
+        ),
     },
     images: {
       model: async () => imageModel((await images.getImageModel({})).state),

@@ -116,6 +116,7 @@ function retryFor(
 function snapshot(overrides: Partial<SessionSnapshot>): SessionSnapshot {
   return {
     retry: retryFor(overrides.runs, overrides.activeRun),
+    pending: { paused: false, messages: [] },
     id: 'session-1',
     title: 'Tracker',
     appIds: [],

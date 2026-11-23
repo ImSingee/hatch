@@ -19,8 +19,12 @@ import {
   withOverflowRecovery,
 } from './auto-compaction';
 import { formatAttachmentPrompt, type AgentAttachmentRef } from './attachments';
-import type { AgentComposerContentPart } from './composer-content';
+import {
+  composerDisplayText,
+  type AgentComposerContentPart,
+} from './composer-content';
 import type { AgentStreamEvent } from './events';
+import type { SteerMessage } from './protocol';
 import { SKILLS_DIR } from './paths';
 import type { PlatformClient } from './platform-client';
 import type { ResolvedModel } from './remote-models';
@@ -169,6 +173,80 @@ function addToolStartDetailsToTranscript(
   });
 }
 
+/**
+ * Steer messages the user sent while this run is working. The platform owns
+ * them until `claim` hands them over, so edits and cancels stay exact up to
+ * the tool-call boundary where they are injected.
+ */
+export type SteerBridge = {
+  /** True when the platform said steer messages wait for this run. */
+  pending(): boolean;
+  /** Claim the waiting messages now; resolves [] when none or unreachable. */
+  claim(): Promise<SteerMessage[]>;
+};
+
+function asRecord(value: JsonValue): Record<string, JsonValue> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : null;
+}
+
+/**
+ * Put Hatch metadata back onto the user messages this run added. Only the
+ * run's prompt and the steer messages injected into it are new user
+ * messages, so the last `steered.length` of them are the steered ones (in
+ * injection order) and the one before is the prompt.
+ */
+export function annotateRunUserMessages(
+  messages: JsonValue[],
+  run: {
+    attachments: AgentAttachmentRef[];
+    composerContent: AgentComposerContentPart[];
+    steered: readonly SteerMessage[];
+  },
+): JsonValue[] {
+  const userIndexes: number[] = [];
+  for (const [index, message] of messages.entries()) {
+    if (asRecord(message)?.role === 'user') userIndexes.push(index);
+  }
+  const steeredIndexes = userIndexes.slice(
+    Math.max(0, userIndexes.length - run.steered.length),
+  );
+  const result = [...messages];
+  steeredIndexes.forEach((index, position) => {
+    const steer =
+      run.steered[run.steered.length - steeredIndexes.length + position];
+    result[index] = {
+      ...asRecord(result[index])!,
+      steered: true,
+      pendingMessageId: steer.id,
+      ...(steer.attachments.length > 0
+        ? { attachments: steer.attachments as unknown as JsonValue }
+        : {}),
+      ...(steer.composerContent.length > 0
+        ? { composerContent: steer.composerContent as unknown as JsonValue }
+        : {}),
+    };
+  });
+  const promptIndex =
+    userIndexes[userIndexes.length - steeredIndexes.length - 1];
+  if (
+    promptIndex !== undefined &&
+    (run.attachments.length > 0 || run.composerContent.length > 0)
+  ) {
+    result[promptIndex] = {
+      ...asRecord(result[promptIndex])!,
+      ...(run.attachments.length > 0
+        ? { attachments: run.attachments as unknown as JsonValue }
+        : {}),
+      ...(run.composerContent.length > 0
+        ? { composerContent: run.composerContent as unknown as JsonValue }
+        : {}),
+    };
+  }
+  return result;
+}
+
 export type RunAgentTurnOptions = {
   commandCredentials?: CommandCredentials;
   appUrl: string;
@@ -186,6 +264,7 @@ export type RunAgentTurnOptions = {
   signal: AbortSignal;
   ask?: AskBridge;
   requestEnv?: EnvBridge;
+  steer?: SteerBridge;
   emit: (event: AgentStreamEvent) => void;
 };
 
@@ -301,6 +380,8 @@ export async function runAgentTurn(
     resources: { skills },
     systemPrompt,
     thinkingLevel,
+    // Every steer message claimed at a boundary is injected together.
+    steeringMode: 'all',
   });
 
   // Every provider request passes through here with the session already
@@ -356,11 +437,64 @@ export async function runAgentTurn(
   // final `thinking_end`. We track this per block so we can backfill.
   let sawThinkingDelta = false;
 
-  const unsubscribe = harness.subscribe((event) => {
+  // Steer messages handed to the harness, waiting for pi to inject them, and
+  // the ones already injected (in order) for the transcript.
+  const awaitingInjection: SteerMessage[] = [];
+  const injected: SteerMessage[] = [];
+
+  // `turn_end` listeners are awaited before pi polls its steering queue, so
+  // messages claimed here are injected at this exact boundary: after the
+  // assistant message and all of its tool calls, before the next LLM call.
+  const claimSteerMessages = async (stopReason: string | undefined) => {
+    // An errored or aborted turn ends the loop without polling steering.
+    if (!opts.steer?.pending() || signal.aborted) return;
+    if (stopReason === 'error' || stopReason === 'aborted') return;
+    const messages = await opts.steer.claim();
+    for (const message of messages) {
+      if (signal.aborted) return;
+      const images = message.images.map((image) => ({
+        type: 'image' as const,
+        data: image.data,
+        mimeType: image.mimeType,
+      }));
+      await harness.steer(
+        formatAttachmentPrompt(message.userText, message.attachments),
+        images.length > 0 ? { images } : undefined,
+      );
+      awaitingInjection.push(message);
+    }
+  };
+
+  const unsubscribe = harness.subscribe(async (event) => {
     switch (event.type) {
       case 'message_start': {
-        if ('message' in event && event.message.role === 'assistant') {
+        if (!('message' in event)) break;
+        if (event.message.role === 'assistant') {
           emit({ type: 'assistant_start' });
+        } else if (
+          event.message.role === 'user' &&
+          awaitingInjection.length > 0
+        ) {
+          // The run's own prompt starts before anything can be claimed, so a
+          // user message while claimed messages wait is the next one of them.
+          const message = awaitingInjection.shift()!;
+          injected.push(message);
+          emit({
+            type: 'user_message',
+            pendingId: message.id,
+            text: message.composerContent.length
+              ? composerDisplayText(message.composerContent)
+              : message.userText,
+            ...(message.composerContent.length > 0
+              ? { composerContent: message.composerContent }
+              : {}),
+            ...(message.attachments.length > 0
+              ? { attachments: message.attachments }
+              : {}),
+            images: message.images.map((image) => ({
+              mimeType: image.mimeType,
+            })),
+          });
         }
         break;
       }
@@ -443,6 +577,18 @@ export async function runAgentTurn(
       }
       case 'turn_end': {
         emit({ type: 'turn_end' });
+        try {
+          await claimSteerMessages(
+            event.message.role === 'assistant'
+              ? event.message.stopReason
+              : undefined,
+          );
+        } catch (error) {
+          // A failed hand-over must not fail the run: whatever was claimed
+          // but not injected returns to the user's pending messages when the
+          // platform settles this run.
+          console.error('[agent] steer messages could not be injected:', error);
+        }
         break;
       }
       default:
@@ -461,32 +607,11 @@ export async function runAgentTurn(
       await transcript.serialize(),
       toolStartDetailsById,
     );
-    const attachments = opts.attachments ?? [];
-    const composerContent = opts.composerContent ?? [];
-    if (attachments.length === 0 && composerContent.length === 0) {
-      return messages;
-    }
-    for (let index = messages.length - 1; index >= 0; index--) {
-      const message = messages[index];
-      if (
-        message &&
-        typeof message === 'object' &&
-        !Array.isArray(message) &&
-        message.role === 'user'
-      ) {
-        messages[index] = {
-          ...message,
-          ...(attachments.length > 0
-            ? { attachments: attachments as unknown as JsonValue }
-            : {}),
-          ...(composerContent.length > 0
-            ? { composerContent: composerContent as unknown as JsonValue }
-            : {}),
-        };
-        break;
-      }
-    }
-    return messages;
+    return annotateRunUserMessages(messages, {
+      attachments: opts.attachments ?? [],
+      composerContent: opts.composerContent ?? [],
+      steered: injected,
+    });
   };
 
   try {

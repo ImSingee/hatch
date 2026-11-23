@@ -23,7 +23,7 @@ import { isReservedEnvKey } from './env-keys';
 
 export { DEFAULT_INTERNAL_PORT, RUNNER_WS_PATH } from './runner-constants';
 
-export const PROTOCOL_VERSION = 20;
+export const PROTOCOL_VERSION = 21;
 
 /** How long a run lease stays valid without renewal (heartbeat/events renew). */
 export const RUN_LEASE_TTL_MS = 90_000;
@@ -166,6 +166,15 @@ export const agentStreamEventSchema = z
     }),
     z.strictObject({ type: z.literal('turn_end') }),
     z.strictObject({
+      type: z.literal('user_message'),
+      pendingId: z.string().min(1),
+      text: z.string(),
+      composerContent: agentComposerContentSchema.optional(),
+      attachments: z.array(agentAttachmentRefSchema).optional(),
+      /** Image metadata only; the base64 data stays in the transcript. */
+      images: z.array(z.strictObject({ mimeType: z.string().min(1) })),
+    }),
+    z.strictObject({
       type: z.literal('compact'),
       reason: z.enum(['threshold', 'overflow']),
       phase: z.enum(['start', 'done', 'failed']),
@@ -251,6 +260,13 @@ export const runEventMessageSchema = z.object({
   event: agentStreamEventSchema,
 });
 
+/** Ask the platform for the pending steer messages to inject now. */
+export const runSteerClaimSchema = z.object({
+  type: z.literal('run.steer_claim'),
+  runId: z.string().min(1),
+  requestId: z.string().min(1).max(128),
+});
+
 export const runFinishedMessageSchema = z.object({
   type: z.literal('run.finished'),
   runId: z.string().min(1),
@@ -293,6 +309,7 @@ export const runnerMessageSchema = z.discriminatedUnion('type', [
   runEventMessageSchema,
   runFinishedMessageSchema,
   runEnvResultSchema,
+  runSteerClaimSchema,
 ]);
 export type RunnerMessage = z.infer<typeof runnerMessageSchema>;
 
@@ -333,6 +350,8 @@ export const runStartSchema = z.object({
   /** Persisted pi AgentMessage[] history for the session. */
   priorMessages: z.array(z.unknown()),
   model: runModelConfigSchema,
+  /** Steer messages already wait for this run (see `run.steer`). */
+  steerPending: z.boolean().optional(),
 });
 export type RunStartPayload = Omit<z.infer<typeof runStartSchema>, 'type'>;
 
@@ -340,6 +359,34 @@ export const runCancelSchema = z.object({
   type: z.literal('run.cancel'),
   runId: z.string().min(1),
   userInitiated: z.boolean().optional(),
+});
+
+/**
+ * Steer messages wait for this run. The Runner claims them with
+ * `run.steer_claim` at its next tool-call boundary; until then the platform
+ * keeps them editable.
+ */
+export const runSteerSchema = z.object({
+  type: z.literal('run.steer'),
+  runId: z.string().min(1),
+});
+
+/** One steer message handed to the Runner for injection. */
+export const steerMessageSchema = z.object({
+  id: z.string().min(1),
+  userText: z.string(),
+  composerContent: agentComposerContentSchema,
+  images: z.array(sendImageSchema),
+  attachments: z.array(agentAttachmentRefSchema),
+});
+export type SteerMessage = z.infer<typeof steerMessageSchema>;
+
+/** Reply to `run.steer_claim`; the claimed messages are in send order. */
+export const runSteerClaimedSchema = z.object({
+  type: z.literal('run.steer_claimed'),
+  runId: z.string().min(1),
+  requestId: z.string().min(1).max(128),
+  messages: z.array(steerMessageSchema),
 });
 
 export const runAnswerSchema = z.object({
@@ -426,6 +473,8 @@ export const hubMessageSchema = z.union([
   hubPongSchema,
   runStartSchema,
   runCancelSchema,
+  runSteerSchema,
+  runSteerClaimedSchema,
   runAnswerSchema,
   runEnvSchema,
   runEventAckSchema,

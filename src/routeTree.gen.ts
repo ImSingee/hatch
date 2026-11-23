@@ -67,6 +67,7 @@ import { Route as ApiAgentRunsRunIdCancelRouteImport } from './routes/api/agent/
 import { Route as ApiAgentRunsRunIdEnvRouteImport } from './routes/api/agent/runs/$runId/env'
 import { Route as ApiAgentRunsRunIdEventsRouteImport } from './routes/api/agent/runs/$runId/events'
 import { Route as ApiAgentSessionsSessionIdAutoRetryRouteImport } from './routes/api/agent/sessions/$sessionId/auto-retry'
+import { Route as ApiAgentSessionsSessionIdPendingRouteImport } from './routes/api/agent/sessions/$sessionId/pending'
 import { Route as ApiAppAppIdAppSplatRouteImport } from './routes/api/app/$appId/app/$'
 import { Route as ApiAppAppIdDataSplatRouteImport } from './routes/api/app/$appId/data/$'
 import { Route as ApiAppAppIdHookSplatRouteImport } from './routes/api/app/$appId/hook/$'
@@ -76,6 +77,9 @@ import { Route as ApiAppAppIdRpcSplatRouteImport } from './routes/api/app/$appId
 import { Route as ApiAppAppIdWidgetWidgetIdRouteImport } from './routes/api/app/$appId/widget/$widgetId'
 import { Route as ApiNotificationsChannelChannelIdActionRouteImport } from './routes/api/notifications/channel/$channelId/$action'
 import { Route as ApiAgentSessionsSessionIdAttachmentsAttachmentIdRouteImport } from './routes/api/agent/sessions/$sessionId/attachments/$attachmentId'
+import { Route as ApiAgentSessionsSessionIdPendingMessageIdRouteImport } from './routes/api/agent/sessions/$sessionId/pending/$messageId'
+import { Route as ApiAgentSessionsSessionIdPendingResumeRouteImport } from './routes/api/agent/sessions/$sessionId/pending/resume'
+import { Route as ApiAgentSessionsSessionIdPendingMessageIdSendNowRouteImport } from './routes/api/agent/sessions/$sessionId/pending/$messageId/send-now'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -381,6 +385,12 @@ const ApiAgentSessionsSessionIdAutoRetryRoute =
     path: '/api/agent/sessions/$sessionId/auto-retry',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAgentSessionsSessionIdPendingRoute =
+  ApiAgentSessionsSessionIdPendingRouteImport.update({
+    id: '/api/agent/sessions/$sessionId/pending',
+    path: '/api/agent/sessions/$sessionId/pending',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAppAppIdAppSplatRoute = ApiAppAppIdAppSplatRouteImport.update({
   id: '/api/app/$appId/app/$',
   path: '/api/app/$appId/app/$',
@@ -429,6 +439,24 @@ const ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute =
     id: '/api/agent/sessions/$sessionId/attachments/$attachmentId',
     path: '/api/agent/sessions/$sessionId/attachments/$attachmentId',
     getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAgentSessionsSessionIdPendingMessageIdRoute =
+  ApiAgentSessionsSessionIdPendingMessageIdRouteImport.update({
+    id: '/$messageId',
+    path: '/$messageId',
+    getParentRoute: () => ApiAgentSessionsSessionIdPendingRoute,
+  } as any)
+const ApiAgentSessionsSessionIdPendingResumeRoute =
+  ApiAgentSessionsSessionIdPendingResumeRouteImport.update({
+    id: '/resume',
+    path: '/resume',
+    getParentRoute: () => ApiAgentSessionsSessionIdPendingRoute,
+  } as any)
+const ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute =
+  ApiAgentSessionsSessionIdPendingMessageIdSendNowRouteImport.update({
+    id: '/send-now',
+    path: '/send-now',
+    getParentRoute: () => ApiAgentSessionsSessionIdPendingMessageIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -488,6 +516,7 @@ export interface FileRoutesByFullPath {
   '/api/agent/runs/$runId/env': typeof ApiAgentRunsRunIdEnvRoute
   '/api/agent/runs/$runId/events': typeof ApiAgentRunsRunIdEventsRoute
   '/api/agent/sessions/$sessionId/auto-retry': typeof ApiAgentSessionsSessionIdAutoRetryRoute
+  '/api/agent/sessions/$sessionId/pending': typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   '/api/app/$appId/app/$': typeof ApiAppAppIdAppSplatRoute
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
@@ -498,6 +527,9 @@ export interface FileRoutesByFullPath {
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
+  '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
+  '/api/agent/sessions/$sessionId/pending/resume': typeof ApiAgentSessionsSessionIdPendingResumeRoute
+  '/api/agent/sessions/$sessionId/pending/$messageId/send-now': typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -554,6 +586,7 @@ export interface FileRoutesByTo {
   '/api/agent/runs/$runId/env': typeof ApiAgentRunsRunIdEnvRoute
   '/api/agent/runs/$runId/events': typeof ApiAgentRunsRunIdEventsRoute
   '/api/agent/sessions/$sessionId/auto-retry': typeof ApiAgentSessionsSessionIdAutoRetryRoute
+  '/api/agent/sessions/$sessionId/pending': typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   '/api/app/$appId/app/$': typeof ApiAppAppIdAppSplatRoute
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
@@ -564,6 +597,9 @@ export interface FileRoutesByTo {
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/workflow/$workflowSlug/executions': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
+  '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
+  '/api/agent/sessions/$sessionId/pending/resume': typeof ApiAgentSessionsSessionIdPendingResumeRoute
+  '/api/agent/sessions/$sessionId/pending/$messageId/send-now': typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -624,6 +660,7 @@ export interface FileRoutesById {
   '/api/agent/runs/$runId/env': typeof ApiAgentRunsRunIdEnvRoute
   '/api/agent/runs/$runId/events': typeof ApiAgentRunsRunIdEventsRoute
   '/api/agent/sessions/$sessionId/auto-retry': typeof ApiAgentSessionsSessionIdAutoRetryRoute
+  '/api/agent/sessions/$sessionId/pending': typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   '/api/app/$appId/app/$': typeof ApiAppAppIdAppSplatRoute
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
@@ -634,6 +671,9 @@ export interface FileRoutesById {
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/_app/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
+  '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
+  '/api/agent/sessions/$sessionId/pending/resume': typeof ApiAgentSessionsSessionIdPendingResumeRoute
+  '/api/agent/sessions/$sessionId/pending/$messageId/send-now': typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -694,6 +734,7 @@ export interface FileRouteTypes {
     | '/api/agent/runs/$runId/env'
     | '/api/agent/runs/$runId/events'
     | '/api/agent/sessions/$sessionId/auto-retry'
+    | '/api/agent/sessions/$sessionId/pending'
     | '/api/app/$appId/app/$'
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
@@ -704,6 +745,9 @@ export interface FileRouteTypes {
     | '/api/notifications/channel/$channelId/$action'
     | '/workflow/$workflowSlug/executions/'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
+    | '/api/agent/sessions/$sessionId/pending/$messageId'
+    | '/api/agent/sessions/$sessionId/pending/resume'
+    | '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -760,6 +804,7 @@ export interface FileRouteTypes {
     | '/api/agent/runs/$runId/env'
     | '/api/agent/runs/$runId/events'
     | '/api/agent/sessions/$sessionId/auto-retry'
+    | '/api/agent/sessions/$sessionId/pending'
     | '/api/app/$appId/app/$'
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
@@ -770,6 +815,9 @@ export interface FileRouteTypes {
     | '/api/notifications/channel/$channelId/$action'
     | '/workflow/$workflowSlug/executions'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
+    | '/api/agent/sessions/$sessionId/pending/$messageId'
+    | '/api/agent/sessions/$sessionId/pending/resume'
+    | '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
   id:
     | '__root__'
     | '/'
@@ -829,6 +877,7 @@ export interface FileRouteTypes {
     | '/api/agent/runs/$runId/env'
     | '/api/agent/runs/$runId/events'
     | '/api/agent/sessions/$sessionId/auto-retry'
+    | '/api/agent/sessions/$sessionId/pending'
     | '/api/app/$appId/app/$'
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
@@ -839,6 +888,9 @@ export interface FileRouteTypes {
     | '/api/notifications/channel/$channelId/$action'
     | '/_app/workflow/$workflowSlug/executions/'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
+    | '/api/agent/sessions/$sessionId/pending/$messageId'
+    | '/api/agent/sessions/$sessionId/pending/resume'
+    | '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -869,6 +921,7 @@ export interface RootRouteChildren {
   ApiWorkflowWorkflowIdRunRoute: typeof ApiWorkflowWorkflowIdRunRoute
   AppAppSlugEmbedSplatRoute: typeof AppAppSlugEmbedSplatRoute
   ApiAgentSessionsSessionIdAutoRetryRoute: typeof ApiAgentSessionsSessionIdAutoRetryRoute
+  ApiAgentSessionsSessionIdPendingRoute: typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   ApiAppAppIdAppSplatRoute: typeof ApiAppAppIdAppSplatRoute
   ApiAppAppIdDataSplatRoute: typeof ApiAppAppIdDataSplatRoute
   ApiAppAppIdHookSplatRoute: typeof ApiAppAppIdHookSplatRoute
@@ -1286,6 +1339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgentSessionsSessionIdAutoRetryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/agent/sessions/$sessionId/pending': {
+      id: '/api/agent/sessions/$sessionId/pending'
+      path: '/api/agent/sessions/$sessionId/pending'
+      fullPath: '/api/agent/sessions/$sessionId/pending'
+      preLoaderRoute: typeof ApiAgentSessionsSessionIdPendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/app/$appId/app/$': {
       id: '/api/app/$appId/app/$'
       path: '/api/app/$appId/app/$'
@@ -1348,6 +1408,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/agent/sessions/$sessionId/attachments/$attachmentId'
       preLoaderRoute: typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/agent/sessions/$sessionId/pending/$messageId': {
+      id: '/api/agent/sessions/$sessionId/pending/$messageId'
+      path: '/$messageId'
+      fullPath: '/api/agent/sessions/$sessionId/pending/$messageId'
+      preLoaderRoute: typeof ApiAgentSessionsSessionIdPendingMessageIdRouteImport
+      parentRoute: typeof ApiAgentSessionsSessionIdPendingRoute
+    }
+    '/api/agent/sessions/$sessionId/pending/resume': {
+      id: '/api/agent/sessions/$sessionId/pending/resume'
+      path: '/resume'
+      fullPath: '/api/agent/sessions/$sessionId/pending/resume'
+      preLoaderRoute: typeof ApiAgentSessionsSessionIdPendingResumeRouteImport
+      parentRoute: typeof ApiAgentSessionsSessionIdPendingRoute
+    }
+    '/api/agent/sessions/$sessionId/pending/$messageId/send-now': {
+      id: '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
+      path: '/send-now'
+      fullPath: '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
+      preLoaderRoute: typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRouteImport
+      parentRoute: typeof ApiAgentSessionsSessionIdPendingMessageIdRoute
     }
   }
 }
@@ -1483,6 +1564,39 @@ const ApiNotificationsChannelChannelIdRouteWithChildren =
     ApiNotificationsChannelChannelIdRouteChildren,
   )
 
+interface ApiAgentSessionsSessionIdPendingMessageIdRouteChildren {
+  ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute: typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
+}
+
+const ApiAgentSessionsSessionIdPendingMessageIdRouteChildren: ApiAgentSessionsSessionIdPendingMessageIdRouteChildren =
+  {
+    ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute:
+      ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute,
+  }
+
+const ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren =
+  ApiAgentSessionsSessionIdPendingMessageIdRoute._addFileChildren(
+    ApiAgentSessionsSessionIdPendingMessageIdRouteChildren,
+  )
+
+interface ApiAgentSessionsSessionIdPendingRouteChildren {
+  ApiAgentSessionsSessionIdPendingMessageIdRoute: typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
+  ApiAgentSessionsSessionIdPendingResumeRoute: typeof ApiAgentSessionsSessionIdPendingResumeRoute
+}
+
+const ApiAgentSessionsSessionIdPendingRouteChildren: ApiAgentSessionsSessionIdPendingRouteChildren =
+  {
+    ApiAgentSessionsSessionIdPendingMessageIdRoute:
+      ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren,
+    ApiAgentSessionsSessionIdPendingResumeRoute:
+      ApiAgentSessionsSessionIdPendingResumeRoute,
+  }
+
+const ApiAgentSessionsSessionIdPendingRouteWithChildren =
+  ApiAgentSessionsSessionIdPendingRoute._addFileChildren(
+    ApiAgentSessionsSessionIdPendingRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   R404Route: R404Route,
@@ -1513,6 +1627,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppAppSlugEmbedSplatRoute: AppAppSlugEmbedSplatRoute,
   ApiAgentSessionsSessionIdAutoRetryRoute:
     ApiAgentSessionsSessionIdAutoRetryRoute,
+  ApiAgentSessionsSessionIdPendingRoute:
+    ApiAgentSessionsSessionIdPendingRouteWithChildren,
   ApiAppAppIdAppSplatRoute: ApiAppAppIdAppSplatRoute,
   ApiAppAppIdDataSplatRoute: ApiAppAppIdDataSplatRoute,
   ApiAppAppIdHookSplatRoute: ApiAppAppIdHookSplatRoute,

@@ -8,6 +8,7 @@ import { runData } from './data';
 import { runBackend } from './backend';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
+import { parsePreferencesCommand, runPreferences } from './preferences';
 import { runNotification } from './notifications';
 import { runImage } from './image';
 import { runTheme } from './theme';
@@ -59,6 +60,8 @@ try {
     throw new CliError('unknown_command', 'Unknown command. Use hatch help.');
   // Every online command accepts Run credentials; only help and version are
   // offline.
+  // Reject bad arguments before a Run credential refresh can mask them.
+  if (!help && name === 'preferences') parsePreferencesCommand(args, offset);
   if (!help && !['version', '--version'].includes(name))
     await refreshRunEnvironment(process.env, controller.signal);
   if (help) {
@@ -136,6 +139,8 @@ try {
   else if (name === 'pin') await runPin(args, offset, controller.signal);
   else if (name === 'dashboard')
     await runDashboard(args, offset, controller.signal);
+  else if (name === 'preferences')
+    await runPreferences(args, offset, controller.signal);
   else
     throw new CliError(
       'unknown_command',

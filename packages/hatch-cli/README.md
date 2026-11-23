@@ -576,6 +576,27 @@ placement; `BAD_REQUEST` (2) for a size the widget does not support, named in
 the message; `CONFLICT` (6) for a widget that is already on the dashboard or
 deleting the last dashboard.
 
+## Preferences
+
+```sh
+hatch preferences get --json
+hatch preferences set --agent-message-mode queue
+```
+
+`preferences` reads and writes the caller's personal preferences. With a Run
+credential they are the preferences of the user who sent the prompt the run
+answers. `agentMessageMode` decides how a chat message sent while the Agent is
+working is delivered: `steer` (the default) injects it into the running run
+after its current tool calls finish, and several waiting messages go together;
+`queue` waits until the run completes and then starts one run per message, in
+send order. A change applies to messages sent afterwards.
+
+Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
+a missing `--agent-message-mode`, a value other than `queue` or `steer`, or a
+positional argument). Platform errors: `CONFLICT` (6) for a Run credential
+whose run has no recorded user (created before preferences, or the user was
+deleted).
+
 ## Notifications
 
 `hatch notification ...` manages the notification center with a user session,

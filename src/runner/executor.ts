@@ -18,13 +18,25 @@ import { agentWorkDir } from '~agent/paths';
 import { buildRunModels } from '~agent/remote-models';
 import { runAgentTurn } from '~agent/runtime';
 import type { PlatformClient } from '~agent/platform-client';
-import type { EnvEntry, RunnerMessage, RunStartPayload } from '~agent/protocol';
+import type {
+  EnvEntry,
+  RunnerMessage,
+  RunStartPayload,
+  SteerMessage,
+} from '~agent/protocol';
 import { prepareAgentSessionSandbox } from '~agent/shell-sandbox';
 import type { StoredEnvVariable } from '~agent/tools/request-env';
 import { RunEventQueue } from './event-queue';
 
 /** Resend an unacked `run.finished` this often while connected. */
 const FINISH_RETRY_MS = 30_000;
+/**
+ * How long a tool-call boundary waits for the platform to hand over steer
+ * messages. On timeout the run continues; a late reply is injected at the
+ * next boundary, and anything never injected returns to the user's pending
+ * messages when the platform settles the run.
+ */
+export const STEER_CLAIM_TIMEOUT_MS = 5_000;
 
 type FinishedPayload = {
   status: 'completed' | 'failed' | 'cancelled';
@@ -54,6 +66,12 @@ type ActiveRun = {
   };
   /** Safe, bounded delivery idempotency memory; never stores values. */
   completedEnvDeliveries: Map<string, string>;
+  /** The platform said steer messages wait (`run.steer`). */
+  steerPending: boolean;
+  /** Outstanding `run.steer_claim` requests by request id. */
+  steerClaims: Map<string, (messages: SteerMessage[]) => void>;
+  /** Claimed messages whose reply arrived after its boundary timed out. */
+  lateSteer: SteerMessage[];
   done: Promise<void>;
 };
 
@@ -113,6 +131,9 @@ export class RunnerExecutor {
         discarded: false,
         emit: () => {},
         completedEnvDeliveries: new Map(),
+        steerPending: payload.steerPending ?? false,
+        steerClaims: new Map(),
+        lateSteer: [],
         done: Promise.resolve(),
       };
       this.runs.set(payload.runId, run);
@@ -231,6 +252,10 @@ export class RunnerExecutor {
         signal: run.controller.signal,
         ask,
         requestEnv,
+        steer: {
+          pending: () => run.steerPending || run.lateSteer.length > 0,
+          claim: () => this.claimSteer(run),
+        },
         emit,
       })
         .then((result) => {
@@ -289,6 +314,72 @@ export class RunnerExecutor {
       return;
     }
     run.controller.abort();
+  }
+
+  /** Steer messages wait for this run; claim them at the next boundary. */
+  steerHint(runId: string): void {
+    const run = this.runs.get(runId);
+    if (run && !run.finished) run.steerPending = true;
+  }
+
+  /** The platform's reply to one `run.steer_claim`. */
+  steerClaimed(
+    runId: string,
+    requestId: string,
+    messages: SteerMessage[],
+  ): void {
+    const run = this.runs.get(runId);
+    if (!run) return;
+    const resolve = run.steerClaims.get(requestId);
+    if (resolve) {
+      resolve(messages);
+      return;
+    }
+    // The boundary stopped waiting; inject these at the next one.
+    if (!run.finished) run.lateSteer.push(...messages);
+  }
+
+  private claimSteer(run: ActiveRun): Promise<SteerMessage[]> {
+    const late = run.lateSteer.splice(0);
+    if (!run.steerPending) return Promise.resolve(late);
+    // A hint that arrives while this claim is in flight sets it again.
+    run.steerPending = false;
+    const requestId = crypto.randomUUID();
+    return new Promise<SteerMessage[]>((resolve) => {
+      const signal = run.controller.signal;
+      const settle = (messages: SteerMessage[]) => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+        run.steerClaims.delete(requestId);
+        // Replies to older claims that arrived while this one waited come
+        // first, so a later correction is never injected before them.
+        resolve([...late, ...run.lateSteer.splice(0), ...messages]);
+      };
+      // A stopped run injects nothing more; whatever the platform claimed
+      // returns to the tray when it settles the run.
+      const onAbort = () => settle([]);
+      const timer = setTimeout(() => {
+        run.steerPending = true;
+        // A reply after this point is kept for the next boundary.
+        settle([]);
+      }, STEER_CLAIM_TIMEOUT_MS);
+      run.steerClaims.set(requestId, settle);
+      if (signal.aborted) {
+        settle([]);
+        return;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
+      if (
+        !this.opts.send({
+          type: 'run.steer_claim',
+          runId: run.runId,
+          requestId,
+        })
+      ) {
+        run.steerPending = true;
+        settle([]);
+      }
+    });
   }
 
   /** Deliver the user's answers to a waiting ask (idempotent). */

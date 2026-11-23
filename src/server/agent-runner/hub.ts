@@ -23,6 +23,7 @@ import {
   type RunnerMessage,
   type RunStartPayload,
   type EnvEntry,
+  type SteerMessage,
 } from '~agent/protocol';
 
 type RunnerConn = {
@@ -80,6 +81,12 @@ export type RunnerHubHandlers = {
     runnerId: string,
     message: Extract<RunnerMessage, { type: 'run.finished' }>,
   ): Promise<string | null>;
+  /** Hand the run's waiting steer messages to its Runner for injection. */
+  claimSteerMessages(runnerId: string, runId: string): Promise<SteerMessage[]>;
+  /** Resumed runs whose sessions have steer messages waiting. */
+  steerPendingRunIds(runIds: string[]): Promise<string[]>;
+  /** A Runner became ready: deliver messages that waited for one. */
+  runnerReady(runnerId: string): Promise<void>;
 };
 
 /** Workspace ownership and persistence steps for one run dispatch. */
@@ -191,6 +198,18 @@ function ownerConn(runnerId: string | null | undefined): RunnerConn | null {
   return hubState().runners.get(runnerId) ?? null;
 }
 
+/**
+ * The run definitely never started on any Runner: `run.start` was not sent,
+ * or the Runner rejected it. Other dispatch failures (an acceptance timeout,
+ * a disconnect after sending) leave it uncertain whether the Runner runs it.
+ */
+export class RunNotStartedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RunNotStartedError';
+  }
+}
+
 /** Pick the connected runner with the fewest active runs. */
 function pickRunner(): RunnerConn | null {
   let best: RunnerConn | null = null;
@@ -215,14 +234,14 @@ export async function dispatchRun(
   const { ownerRunnerId } = plan;
   const conn = ownerRunnerId !== null ? ownerConn(ownerRunnerId) : pickRunner();
   if (!conn) {
-    throw new Error(
+    throw new RunNotStartedError(
       ownerRunnerId !== null
         ? 'The Agent Runner that owns this chat workspace is unavailable.'
         : 'No Agent Runner is connected to the platform.',
     );
   }
   if (!conn.ready) {
-    throw new Error(
+    throw new RunNotStartedError(
       'The Agent Runner that owns this chat workspace is unavailable.',
     );
   }
@@ -230,12 +249,18 @@ export async function dispatchRun(
     ownerRunnerId !== null &&
     !conn.workspaceSessionIds.has(payload.sessionId)
   ) {
-    throw new Error(
+    throw new RunNotStartedError(
       'The Agent Runner that owns this chat workspace did not report its local data.',
     );
   }
 
-  await plan.assign(conn.runnerId);
+  try {
+    await plan.assign(conn.runnerId);
+  } catch (error) {
+    throw new RunNotStartedError(
+      error instanceof Error ? error.message : 'Could not assign the run.',
+    );
+  }
   conn.activeRunIds.add(payload.runId);
 
   const state = hubState();
@@ -260,7 +285,7 @@ export async function dispatchRun(
     settleDispatch(
       payload.runId,
       conn,
-      new Error('Runner connection is closed.'),
+      new RunNotStartedError('Runner connection is closed.'),
     );
   }
 
@@ -323,6 +348,16 @@ export function sendRunCancel(
   const conn = ownerConn(runnerId);
   if (!conn) return false;
   return send(conn, { type: 'run.cancel', runId, userInitiated: true });
+}
+
+/** Tell the executing runner that steer messages wait (no-op when offline). */
+export function sendRunSteer(
+  runnerId: string | null | undefined,
+  runId: string,
+): boolean {
+  const conn = ownerConn(runnerId);
+  if (!conn) return false;
+  return send(conn, { type: 'run.steer', runId });
 }
 
 /** Forward the user's answers to the runner (no-op when offline). */
@@ -622,6 +657,7 @@ async function registerRunner(
   let workspace: Awaited<
     ReturnType<RunnerHubHandlers['reconcileRunnerWorkspaces']>
   >;
+  let steerHints: string[];
   try {
     runs = await handlers.reconcileRunnerRuns(
       hello.runnerId,
@@ -634,6 +670,9 @@ async function registerRunner(
       hello.workspaceSessionIds,
     );
     conn.workspaceSessionIds = new Set(workspace.ownedSessionIds);
+    // Read before hello_ack: from then on the Runner may send runner.ready,
+    // which must find this connection registered (nothing may await below).
+    steerHints = await handlers.steerPendingRunIds(runs.resumed);
   } catch (error) {
     if (state.runners.get(hello.runnerId) === conn) {
       state.runners.delete(hello.runnerId);
@@ -678,6 +717,8 @@ async function registerRunner(
       answers: pending.answers,
     });
   }
+  // Steer hints sent while the runner was offline were lost; repeat them.
+  for (const runId of steerHints) send(conn, { type: 'run.steer', runId });
   console.log(`[runner-hub] runner ${hello.runnerId} awaiting workspace ready`);
   return conn;
 }
@@ -700,6 +741,7 @@ async function handleMessage(
         `[runner-hub] runner ${conn.runnerId} connected ` +
           `(${conn.activeRunIds.size} active run(s))`,
       );
+      await handlers.runnerReady(conn.runnerId);
       return;
     }
     case 'runner.ping': {
@@ -715,7 +757,7 @@ async function handleMessage(
       settleDispatch(
         message.runId,
         conn,
-        new Error(`Runner rejected the run: ${message.reason}`),
+        new RunNotStartedError(`Runner rejected the run: ${message.reason}`),
       );
       return;
     }
@@ -738,6 +780,19 @@ async function handleMessage(
         type: 'run.event_ack',
         runId: message.runId,
         runnerSeq: message.runnerSeq,
+      });
+      return;
+    }
+    case 'run.steer_claim': {
+      // Only the run's own Runner may claim; another gets nothing.
+      const messages = conn.activeRunIds.has(message.runId)
+        ? await handlers.claimSteerMessages(conn.runnerId, message.runId)
+        : [];
+      send(conn, {
+        type: 'run.steer_claimed',
+        runId: message.runId,
+        requestId: message.requestId,
+        messages,
       });
       return;
     }

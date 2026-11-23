@@ -31,7 +31,9 @@ import {
   type AgentAttachmentRef,
 } from '~agent/attachments';
 import {
+  compactComposerInput,
   composerDisplayText,
+  composerInputSchema,
   composerModelText,
   hasComposerReference,
   type AgentComposerContentPart,
@@ -45,7 +47,12 @@ import {
   type RunModelConfig,
   type SendImage,
 } from '~agent/protocol';
-import { nextUserTurn, parseUserTurn } from '~agent/user-turns';
+import {
+  isSteeredUserMessage,
+  nextUserTurn,
+  parseUserTurn,
+} from '~agent/user-turns';
+import type { SteerMessage } from '~agent/protocol';
 import { AppError } from '~server/errors';
 import {
   AGENT_AUTO_RETRY_MAX_ATTEMPTS,
@@ -56,15 +63,32 @@ import {
 } from './agent-auto-retry';
 import {
   parseRetryableAgentTurn,
+  parseUserMessageInput,
   type RetryableAgentTurn,
 } from './agent-retry';
 import {
+  claimSteerRows,
+  effectivePendingStatus,
+  hasClaimableSteer,
+  hasPendingMessages,
+  loadPendingRows,
+  markPendingMessageInjected,
+  pendingRowContent,
+  releaseSettledClaims,
+  setPendingPaused,
+  settleRunPendingMessages,
+  toSteerMessage,
+} from './agent-pending-store';
+import {
   connectedRunnerCount,
+  listConnectedRunners,
   dispatchRun,
   sendRunAnswer,
   sendRunCancel,
   sendRunEnvAndWait,
+  sendRunSteer,
   waitForRunFinished,
+  RunNotStartedError,
 } from './agent-runner/hub';
 
 // PostgreSQL rejects NUL and unpaired surrogates, even inside JSON strings.
@@ -92,6 +116,8 @@ export type AgentRunInput =
       expectedSessionUpdatedAt: string;
       providerId: string;
       modelId: string;
+      /** User who asked for the run (see `agentRuns.userId`). */
+      userId?: string | null;
     }
   | {
       sessionId: string;
@@ -109,7 +135,51 @@ export type AgentRunInput =
       attachmentIds?: string[];
       providerId: string;
       modelId: string;
+      userId?: string | null;
+      pendingMessageIds?: never;
+    }
+  | {
+      sessionId: string;
+      retry?: false;
+      /**
+       * Deliver these pending messages (server-side input only), combined in
+       * send order. They are removed in the run's commit, and their
+       * attachments, already committed to them, become this run's.
+       */
+      pendingMessageIds: string[];
+      providerId: string;
+      modelId: string;
+      userId?: string | null;
+      /**
+       * Automatic delivery (not Send now): defers, under the session lock,
+       * when delivery was paused or an automatic retry is scheduled.
+       */
+      automatic?: boolean;
     };
+
+/** Another run is active in the session. */
+export class ActiveRunConflictError extends AppError {
+  constructor() {
+    super('This chat already has a running Agent turn.', 409);
+    this.name = 'ActiveRunConflictError';
+  }
+}
+
+/** Automatic delivery must wait: delivery is paused or a retry is due. */
+export class PendingDeliveryDeferredError extends AppError {
+  constructor() {
+    super('Pending messages wait for the session.', 409);
+    this.name = 'PendingDeliveryDeferredError';
+  }
+}
+
+/** The pending messages a run was asked to deliver changed meanwhile. */
+export class PendingMessagesChangedError extends AppError {
+  constructor() {
+    super('The pending message changed. Try again.', 409);
+    this.name = 'PendingMessagesChangedError';
+  }
+}
 
 export type PendingAskPayload = {
   askId: string;
@@ -362,6 +432,7 @@ async function finishRunInTx(
   runId: string,
   status: AgentRunStatus,
   error?: string,
+  options: FinishOptions = {},
 ): Promise<FinishedRun> {
   const now = new Date();
   const [row] = await tx
@@ -407,18 +478,45 @@ async function finishRunInTx(
       .set({ failureStreak, autoRetryAt })
       .where(eq(schema.agentRuns.id, runId));
   }
+  // Messages sent while the run worked stop being delivered automatically
+  // when the user stopped it or it failed for good (no retry follows).
+  const pause =
+    status === 'cancelled'
+      ? options.pausePending !== false
+      : status !== 'completed' && !autoRetryAt;
+  if (pause && (await hasPendingMessages(tx, row.sessionId))) {
+    await setPendingPaused(tx, row.sessionId, true);
+  }
   return { finished: true, autoRetryAt };
 }
 
+type FinishOptions = {
+  /** A user Stop pauses pending messages; Send now does not. */
+  pausePending?: boolean;
+};
+
+/** Lock the run's session, then finish the run (session-then-run order). */
 async function finishRun(
   runId: string,
   status: AgentRunStatus,
   error?: string,
+  options: FinishOptions = {},
 ): Promise<boolean> {
-  const result = await db.transaction((tx) =>
-    finishRunInTx(tx, runId, status, error),
-  );
+  const owner = await db.query.agentRuns.findFirst({
+    where: { id: runId },
+    columns: { sessionId: true },
+  });
+  if (!owner) return false;
+  const result = await db.transaction(async (tx) => {
+    await tx
+      .select({ id: schema.agentSessions.id })
+      .from(schema.agentSessions)
+      .where(eq(schema.agentSessions.id, owner.sessionId))
+      .for('update');
+    return finishRunInTx(tx, runId, status, error, options);
+  });
   if (result.autoRetryAt) wakeAgentAutoRetryScheduler(result.autoRetryAt);
+  if (result.finished) kickPendingDispatch(owner.sessionId);
   return result.finished;
 }
 
@@ -577,6 +675,29 @@ async function resolveRunModelConfig(
 
 /** ================== start / dispatch ================== */
 
+/** Reject a provider/model pair no run could start with. */
+export async function assertAgentModelAvailable(
+  providerId: string,
+  modelId: string,
+): Promise<void> {
+  await resolveRunModelConfig(providerId, modelId);
+}
+
+/** Images and attachments one message (and so one delivered run) carries. */
+const MAX_PENDING_RUN_FILES = 6;
+
+/** Several pending messages delivered as one run read as separate paragraphs. */
+export function combinePendingContent(
+  contents: ComposerInputPart[][],
+): ComposerInputPart[] {
+  const parts: ComposerInputPart[] = [];
+  contents.forEach((content, index) => {
+    if (index > 0) parts.push({ type: 'text', text: '\n\n' });
+    parts.push(...content);
+  });
+  return compactComposerInput(parts);
+}
+
 const NO_RETRYABLE_TURN = 'There is no failed Agent turn to retry.';
 
 type RetryTarget = {
@@ -640,7 +761,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
 
   const activeRun = await getActiveAgentRun(input.sessionId);
   if (activeRun) {
-    throw new AppError('This chat already has a running Agent turn.', 409);
+    throw new ActiveRunConflictError();
   }
 
   const autoRetryOfRunId =
@@ -672,6 +793,23 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
   // An automatic retry still creates its run without a Runner: the dispatch
   // failure below counts as another consecutive failure and backs off again,
   // instead of silently dropping the schedule.
+  // Automatic delivery waits for the Runner owning the chat's workspace
+  // instead of consuming the messages into a run that cannot be dispatched;
+  // that Runner's return delivers them (see deliverPendingAfterRunnerReady).
+  if ('automatic' in input && input.automatic === true) {
+    const affinity = await getSessionWorkspaceAffinity(input.sessionId);
+    if (
+      affinity.runnerId !== null &&
+      !listConnectedRunners().some(
+        (runner) => runner.runnerId === affinity.runnerId,
+      )
+    ) {
+      throw new AppError(
+        'The Agent Runner that owns this chat workspace is unavailable.',
+        503,
+      );
+    }
+  }
   if (autoRetryOfRunId === null && connectedRunnerCount() === 0) {
     throw new AppError(
       'No Agent Runner is connected. Start the agent-runner service, then retry.',
@@ -681,6 +819,8 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
 
   type PreparedRun = {
     run: typeof schema.agentRuns.$inferSelect;
+    /** Pending rows an automatic delivery consumed, to restore on failure. */
+    consumed: ConsumedDelivery | null;
     baseMessages: JsonValue[];
     userText: string;
     composerContent: AgentComposerContentPart[];
@@ -712,8 +852,25 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         )
         .limit(1);
       if (lockedActiveRun) {
-        throw new AppError('This chat already has a running Agent turn.', 409);
+        throw new ActiveRunConflictError();
       }
+      const automatic = 'automatic' in input && input.automatic === true;
+      if (automatic) {
+        // Re-read under the lock: a Stop or a failure scheduling a retry can
+        // commit after the dispatcher's unlocked checks.
+        const retrying = await tx.query.agentRuns.findFirst({
+          where: {
+            sessionId: input.sessionId,
+            autoRetryAt: { isNotNull: true },
+          },
+          columns: { id: true },
+        });
+        if (lockedSession.pendingPaused || retrying) {
+          throw new PendingDeliveryDeferredError();
+        }
+      }
+      // No run is active, so no older run can deliver what it claimed.
+      await releaseSettledClaims(tx, input.sessionId);
 
       if (
         input.retry === true &&
@@ -731,6 +888,13 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
       let images: SendImage[];
       let requestedAttachmentIds: string[];
       let isRetry = false;
+      // Attachments already committed to the pending messages this run takes.
+      const preattachedIds = new Set<string>();
+      let consumed: PreparedRun['consumed'] = null;
+      let userId: string | null =
+        input.retry === true && 'autoRetryOfRunId' in input
+          ? null
+          : (input.userId ?? null);
       if (input.retry === true) {
         const target = await findRetryTarget(
           tx,
@@ -739,6 +903,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         );
         if (!target) throw new AppError(NO_RETRYABLE_TURN, 409);
         if (autoRetryOfRunId !== null) {
+          userId = target.run.userId;
           // Claim the schedule in the same commit as the replacement run, so
           // a stop, a newer run, or a concurrent scheduler pass wins cleanly.
           const claimed = await tx
@@ -768,6 +933,93 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
           (attachment) => attachment.id,
         );
         isRetry = true;
+        // Steer messages injected into the failed run go back to the tray:
+        // the replay starts from the turn's own message, and injects them
+        // again at its first tool-call boundary.
+        const steered = sessionMessages
+          .slice(retry.baseMessages.length + 1)
+          .filter(isSteeredUserMessage);
+        for (const message of steered) {
+          const restored = parseUserMessageInput(message);
+          if (!restored) continue;
+          // Keep the original id: rows are ordered by id, so the restored
+          // message stays ahead of steer messages sent after it.
+          const originalId = (message as { pendingMessageId?: unknown })
+            .pendingMessageId;
+          await tx
+            .insert(schema.agentPendingMessages)
+            .values({
+              ...(typeof originalId === 'string' && originalId.length > 0
+                ? { id: originalId }
+                : {}),
+              sessionId: input.sessionId,
+              userId,
+              mode: 'steer',
+              content: (restored.composerContent.length > 0
+                ? restored.composerContent
+                : [{ type: 'text', text: restored.userText }]) as JsonValue[],
+              images: restored.images as unknown as JsonValue[],
+              attachments: restored.attachments as unknown as JsonValue[],
+              providerId: model.providerId,
+              modelId: model.model.id,
+            })
+            .onConflictDoNothing();
+        }
+      } else if ('pendingMessageIds' in input && input.pendingMessageIds) {
+        const rows = await loadPendingRows(tx, input.sessionId, {
+          forUpdate: true,
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        const now = Date.now();
+        const taken = input.pendingMessageIds.map((id) => {
+          const row = byId.get(id);
+          const status = row
+            ? effectivePendingStatus(row, row.claimedRunStatus, now)
+            : null;
+          if (
+            !row ||
+            (status !== 'pending' && status !== 'sending') ||
+            row.providerId !== input.providerId ||
+            row.modelId !== input.modelId
+          ) {
+            throw new PendingMessagesChangedError();
+          }
+          return pendingRowContent(row);
+        });
+        if (taken.length === 0) throw new PendingMessagesChangedError();
+        if ('automatic' in input && input.automatic === true) {
+          consumed = {
+            rows: input.pendingMessageIds.map((id) => {
+              const { claimedRunStatus: _status, ...row } = byId.get(id)!;
+              return { ...row, status: 'pending' as const, claimedRunId: null };
+            }),
+            before: {
+              title: lockedSession.title,
+              providerId: lockedSession.providerId,
+              modelId: lockedSession.modelId,
+            },
+            // Filled in once this start has set them (below).
+            after: { title: '', providerId: null, modelId: null },
+          };
+        }
+        const content = combinePendingContent(taken.map((row) => row.content));
+        baseMessages = sessionMessages;
+        userText = composerModelText(content);
+        displayText = composerDisplayText(content);
+        composerContent = hasComposerReference(content) ? content : [];
+        images = taken.flatMap((row) => row.images);
+        requestedAttachmentIds = taken.flatMap((row) =>
+          row.attachments.map((attachment) => attachment.id),
+        );
+        for (const id of requestedAttachmentIds) preattachedIds.add(id);
+        await tx
+          .delete(schema.agentPendingMessages)
+          .where(
+            and(
+              eq(schema.agentPendingMessages.sessionId, input.sessionId),
+              inArray(schema.agentPendingMessages.id, input.pendingMessageIds),
+            ),
+          );
       } else {
         baseMessages = sessionMessages;
         // Resource mentions are user-provided context, not capabilities. Keep
@@ -811,7 +1063,12 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
       if (attachmentRows.length !== attachmentIds.length) {
         throw new AppError('One or more attachments were not found.', 404);
       }
-      if (!isRetry && attachmentRows.some((row) => row.attachedAt != null)) {
+      if (
+        !isRetry &&
+        attachmentRows.some(
+          (row) => row.attachedAt != null && !preattachedIds.has(row.id),
+        )
+      ) {
         throw new AppError(
           'One or more attachments are already attached.',
           409,
@@ -838,6 +1095,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         .insert(schema.agentRuns)
         .values({
           sessionId: input.sessionId,
+          userId,
           providerId: model.providerId,
           modelId: model.model.id,
           status: 'running',
@@ -876,6 +1134,12 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         })
         .where(eq(schema.agentSessions.id, input.sessionId));
 
+      // A run the user started (rather than an automatic retry) resumes
+      // delivery of messages that were paused.
+      if (autoRetryOfRunId === null) {
+        await setPendingPaused(tx, input.sessionId, false);
+      }
+
       if (!isRetry && attachmentIds.length > 0) {
         await tx
           .update(schema.agentAttachments)
@@ -889,8 +1153,16 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
           );
       }
 
+      if (consumed) {
+        consumed.after = {
+          title,
+          providerId: model.providerId,
+          modelId: model.model.id,
+        };
+      }
       return {
         run: inserted,
+        consumed,
         baseMessages,
         userText,
         composerContent,
@@ -900,15 +1172,24 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     });
   } catch (error) {
     if (isActiveRunConflict(error)) {
-      throw new AppError('This chat already has a running Agent turn.', 409);
+      throw new ActiveRunConflictError();
     }
     throw error;
   }
-  const { run, baseMessages, userText, composerContent, images, attachments } =
-    prepared;
+  const {
+    run,
+    consumed,
+    baseMessages,
+    userText,
+    composerContent,
+    images,
+    attachments,
+  } = prepared;
 
+  let dispatchedWithoutSteer = false;
   try {
     const affinity = await getSessionWorkspaceAffinity(input.sessionId);
+    const steerPending = await hasClaimableSteer(db, input.sessionId);
     await dispatchRun(
       {
         runId: run.id,
@@ -919,6 +1200,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         attachments,
         priorMessages: baseMessages,
         model,
+        ...(steerPending ? { steerPending } : {}),
       },
       {
         ownerRunnerId: affinity.runnerId,
@@ -928,6 +1210,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
           finalizeRunWorkspaceAffinity(run.id, runnerId, input.sessionId),
       },
     );
+    dispatchedWithoutSteer = !steerPending;
   } catch (error) {
     // Dispatch failed (runner vanished between the check and the send, or
     // never accepted). Fail the run gracefully: the client's SSE connection
@@ -935,6 +1218,18 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     // on the per-run chain against any events the runner did manage to send.
     const message =
       error instanceof Error ? error.message : 'Failed to dispatch the run.';
+    // An automatic delivery that no Runner took puts its messages back in
+    // the tray (still editable) instead of leaving them in a failed turn.
+    if (
+      consumed &&
+      error instanceof RunNotStartedError &&
+      (await undoUndispatchedDelivery(run.id, consumed, baseMessages))
+    ) {
+      throw new AppError(
+        'The Agent Runner that owns this chat workspace is unavailable.',
+        503,
+      );
+    }
     await enqueueRunTask(run.id, async () => {
       if (await finishRun(run.id, 'failed', message)) {
         await appendEvent(run.id, { type: 'error', message });
@@ -942,7 +1237,109 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     });
   }
 
+  // A steer message sent while the run was being dispatched found no Runner
+  // to notify; tell the accepting one now.
+  if (dispatchedWithoutSteer) {
+    try {
+      if (await hasClaimableSteer(db, input.sessionId)) {
+        await notifyActiveRunOfSteer(input.sessionId);
+      }
+    } catch (error) {
+      console.error('[agent-runs] steer hint after dispatch failed:', error);
+    }
+  }
+
   return { runId: run.id, startedAt: run.createdAt.toISOString() };
+}
+
+type SessionSettings = {
+  title: string;
+  providerId: string | null;
+  modelId: string | null;
+};
+
+/** Pending rows an automatic delivery consumed, to restore if it fails. */
+type ConsumedDelivery = {
+  rows: (typeof schema.agentPendingMessages.$inferSelect)[];
+  /** Session settings before this start, and the ones it set. */
+  before: SessionSettings;
+  after: SessionSettings;
+};
+
+/**
+ * Reverse an automatic delivery whose run definitely never started: remove the run
+ * and its prompt, and return the messages to the tray. Only when nothing
+ * happened since (the run is still unaccepted-active, no newer run, the
+ * transcript unchanged); otherwise the caller fails the run as usual.
+ */
+async function undoUndispatchedDelivery(
+  runId: string,
+  consumed: ConsumedDelivery,
+  baseMessages: JsonValue[],
+): Promise<boolean> {
+  const run = await getAgentRun(runId);
+  if (!run) return false;
+  return enqueueRunTask(runId, () =>
+    db.transaction(async (tx) => {
+      const [session] = await tx
+        .select({
+          messages: schema.agentSessions.messages,
+          title: schema.agentSessions.title,
+          providerId: schema.agentSessions.providerId,
+          modelId: schema.agentSessions.modelId,
+        })
+        .from(schema.agentSessions)
+        .where(eq(schema.agentSessions.id, run.sessionId))
+        .for('update');
+      const [current] = await tx
+        .select({ status: schema.agentRuns.status })
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.id, runId))
+        .for('update');
+      const newer = await tx.query.agentRuns.findFirst({
+        where: { sessionId: run.sessionId, id: { gt: runId } },
+        columns: { id: true },
+      });
+      const events = await tx.query.agentRunEvents.findFirst({
+        where: { runId },
+        columns: { id: true },
+      });
+      if (
+        !session ||
+        !current ||
+        !ACTIVE_STATUSES.includes(current.status) ||
+        newer ||
+        events ||
+        session.messages.length !== baseMessages.length + 1
+      ) {
+        return false;
+      }
+      await tx.delete(schema.agentRuns).where(eq(schema.agentRuns.id, runId));
+      await tx
+        .update(schema.agentSessions)
+        .set({
+          messages: baseMessages,
+          // Restore only what this start set; keep a rename or model
+          // change made meanwhile.
+          ...(session.title === consumed.after.title
+            ? { title: consumed.before.title }
+            : {}),
+          ...(session.providerId === consumed.after.providerId &&
+          session.modelId === consumed.after.modelId
+            ? {
+                providerId: consumed.before.providerId,
+                modelId: consumed.before.modelId,
+              }
+            : {}),
+        })
+        .where(eq(schema.agentSessions.id, run.sessionId));
+      await tx
+        .insert(schema.agentPendingMessages)
+        .values(consumed.rows)
+        .onConflictDoNothing();
+      return true;
+    }),
+  );
 }
 
 /** ================== hub callbacks (runner lifecycle) ================== */
@@ -1319,6 +1716,17 @@ async function applyRunnerEventSideEffects(
           inArray(schema.agentRuns.status, ACTIVE_STATUSES),
         ),
       );
+  } else if (event.type === 'user_message') {
+    await markPendingMessageInjected(db, runId, event.pendingId);
+    await db
+      .update(schema.agentRuns)
+      .set({ leaseExpiresAt: leaseDeadline(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.agentRuns.id, runId),
+          inArray(schema.agentRuns.status, ACTIVE_STATUSES),
+        ),
+      );
   } else if (event.type === 'env_stored') {
     const updated = await db
       .update(schema.agentRuns)
@@ -1432,6 +1840,14 @@ export async function completeRunFromRunner(
           .set({ messages: message.messages as JsonValue[] })
           .where(eq(schema.agentSessions.id, run.sessionId));
       }
+      // Steer messages this transcript holds are delivered; anything else
+      // the run claimed returns to the tray.
+      await settleRunPendingMessages(
+        tx,
+        run.sessionId,
+        run.id,
+        persisted ? message.messages : null,
+      );
 
       if (!isTerminalAgentRunStatus(current.status)) {
         const finished = await finishRunInTx(
@@ -1470,6 +1886,7 @@ export async function completeRunFromRunner(
       return { kind: 'terminal' as const, ...current };
     });
     if (!outcome) return null;
+    kickPendingDispatch(run.sessionId);
 
     if (outcome.kind === 'terminal') {
       // Retry of a final report whose ack was lost. A crash between finishRun
@@ -1747,7 +2164,10 @@ export async function submitAgentEnv(
 
 /** ================== cancel / interrupt / sweep ================== */
 
-export async function cancelAgentRun(runId: string): Promise<void> {
+export async function cancelAgentRun(
+  runId: string,
+  options: FinishOptions = {},
+): Promise<void> {
   const run = await getAgentRun(runId);
   if (!run || isTerminalAgentRunStatus(run.status)) return;
 
@@ -1756,7 +2176,7 @@ export async function cancelAgentRun(runId: string): Promise<void> {
   // close the stream at the first terminal event. (The hub wait below stays
   // OFF the chain — completeRunFromRunner needs it to make progress.)
   await enqueueRunTask(runId, async () => {
-    if (await finishRun(runId, 'cancelled')) {
+    if (await finishRun(runId, 'cancelled', undefined, options)) {
       await appendEvent(runId, { type: 'cancelled' });
     }
   });
@@ -1792,6 +2212,10 @@ export async function interruptAgentRun(
  * SURVIVE platform restarts as long as the runner keeps running.
  */
 export async function sweepExpiredAgentRuns(): Promise<void> {
+  // A delivery whose kick was lost (a platform restart during Send now, a
+  // Runner that was away) is picked up again here; ineligible sessions exit
+  // the dispatch check at once.
+  await deliverPendingAfterRunnerReady();
   const rows = await db.query.agentRuns.findMany({
     where: { status: { in: ACTIVE_STATUSES } },
   });
@@ -1822,15 +2246,38 @@ export function ensureAgentRunSweeper(): void {
 
 /** Stop the session's scheduled automatic retry, if any. */
 export async function stopAgentAutoRetry(sessionId: string): Promise<void> {
-  await db
-    .update(schema.agentRuns)
-    .set({ autoRetryAt: null })
-    .where(
-      and(
-        eq(schema.agentRuns.sessionId, sessionId),
-        isNotNull(schema.agentRuns.autoRetryAt),
-      ),
-    );
+  await abandonAutoRetry(sessionId);
+}
+
+/**
+ * Drop the session's retry schedule (one run, or all of them). The failed
+ * turn then stays failed, so pending messages stop being delivered.
+ */
+async function abandonAutoRetry(
+  sessionId: string,
+  runId?: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .select({ id: schema.agentSessions.id })
+      .from(schema.agentSessions)
+      .where(eq(schema.agentSessions.id, sessionId))
+      .for('update');
+    const cleared = await tx
+      .update(schema.agentRuns)
+      .set({ autoRetryAt: null })
+      .where(
+        and(
+          eq(schema.agentRuns.sessionId, sessionId),
+          runId ? eq(schema.agentRuns.id, runId) : undefined,
+          isNotNull(schema.agentRuns.autoRetryAt),
+        ),
+      )
+      .returning({ id: schema.agentRuns.id });
+    if (cleared.length > 0 && (await hasPendingMessages(tx, sessionId))) {
+      await setPendingPaused(tx, sessionId, true);
+    }
+  });
 }
 
 async function fireAgentAutoRetry(run: {
@@ -1877,10 +2324,7 @@ async function fireAgentAutoRetry(run: {
     if (!(error instanceof AppError && error.status === 409)) {
       console.error('[agent-runs] automatic retry failed to start:', error);
     }
-    await db
-      .update(schema.agentRuns)
-      .set({ autoRetryAt: null })
-      .where(eq(schema.agentRuns.id, run.id));
+    await abandonAutoRetry(run.sessionId, run.id);
   }
 }
 
@@ -1981,4 +2425,269 @@ export function ensureAgentAutoRetryScheduler(): void {
   const state: AutoRetryScheduler = { running: false };
   g.__hatchAgentAutoRetryScheduler__ = state;
   void runAutoRetryCycle(state);
+}
+
+/** ================== pending messages (queue / steer) ================== */
+
+type PendingDispatchGlobal = typeof globalThis & {
+  /** Per-session dispatch chains: one delivery decision at a time. */
+  __hatchPendingDispatchChains__?: Map<string, Promise<void>>;
+};
+
+function pendingDispatchChains(): Map<string, Promise<void>> {
+  const g = globalThis as PendingDispatchGlobal;
+  g.__hatchPendingDispatchChains__ ??= new Map();
+  return g.__hatchPendingDispatchChains__;
+}
+
+/** Serialize work on one session's pending messages, in call order. */
+export function enqueuePendingTask<T>(
+  sessionId: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const chains = pendingDispatchChains();
+  const tail = chains.get(sessionId) ?? Promise.resolve();
+  const result = tail.then(task, task);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  chains.set(sessionId, settled);
+  void settled.then(() => {
+    if (chains.get(sessionId) === settled) chains.delete(sessionId);
+  });
+  return result;
+}
+
+/** Deliver the session's next pending messages in the background. */
+export function kickPendingDispatch(sessionId: string): void {
+  void enqueuePendingTask(sessionId, () =>
+    dispatchPendingMessages(sessionId),
+  ).catch((error: unknown) => {
+    console.error('[agent-runs] pending message delivery failed:', error);
+  });
+}
+
+/** Resolves once every scheduled pending delivery has finished. */
+export async function pendingDispatchesSettled(): Promise<void> {
+  for (;;) {
+    const chains = [...pendingDispatchChains().values()];
+    if (chains.length === 0) return;
+    await Promise.all(chains);
+  }
+}
+
+/**
+ * Start the run that delivers the session's next pending messages, when the
+ * session is idle: every waiting steer message together (they were meant
+ * for the run that just ended), otherwise the oldest queued message alone.
+ * Nothing is delivered while a run is active, delivery is paused, an
+ * automatic retry is scheduled, or a Send now is starting its own run.
+ */
+export async function dispatchPendingMessages(
+  sessionId: string,
+): Promise<{ runId: string } | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: sessionId },
+      columns: { pendingPaused: true },
+    });
+    if (!session || session.pendingPaused) return null;
+    if (await getActiveAgentRun(sessionId)) return null;
+    const retrying = await db.query.agentRuns.findFirst({
+      where: { sessionId, autoRetryAt: { isNotNull: true } },
+      columns: { id: true },
+    });
+    if (retrying) return null;
+
+    const now = Date.now();
+    const rows = (await loadPendingRows(db, sessionId)).map((row) => ({
+      row,
+      status: effectivePendingStatus(row, row.claimedRunStatus, now),
+    }));
+    if (rows.some(({ status }) => status === 'sending')) return null;
+    const waiting = rows
+      .filter(({ status }) => status === 'pending')
+      .map(({ row }) => row);
+    const steer = waiting.filter((row) => row.mode === 'steer');
+    const batch = steer.length > 0 ? steer : waiting.slice(0, 1);
+    const first = batch[0];
+    if (!first) return null;
+    // One run uses one model and one message's limits: deliver the leading
+    // messages that fit. Steer messages left over are injected into that run.
+    const sameModel: typeof batch = [];
+    for (const row of batch) {
+      if (row.providerId !== first.providerId || row.modelId !== first.modelId)
+        break;
+      const candidate = [...sameModel, row];
+      const content = combinePendingContent(
+        candidate.map((item) => pendingRowContent(item).content),
+      );
+      const files = candidate.reduce(
+        (count, item) =>
+          count +
+          pendingRowContent(item).images.length +
+          pendingRowContent(item).attachments.length,
+        0,
+      );
+      if (
+        sameModel.length > 0 &&
+        (!composerInputSchema.safeParse(content).success ||
+          files > MAX_PENDING_RUN_FILES)
+      ) {
+        break;
+      }
+      sameModel.push(row);
+    }
+
+    const latestBefore = await db.query.agentRuns.findFirst({
+      where: { sessionId },
+      orderBy: { id: 'desc' },
+      columns: { id: true },
+    });
+    try {
+      const { runId } = await startAgentRun({
+        sessionId,
+        pendingMessageIds: sameModel.map((row) => row.id),
+        providerId: first.providerId,
+        modelId: first.modelId,
+        userId: first.userId,
+        automatic: true,
+      });
+      return { runId };
+    } catch (error) {
+      // Edited or cancelled meanwhile: decide again from fresh rows.
+      if (error instanceof PendingMessagesChangedError) continue;
+      // Paused or a retry is due after all: the messages keep waiting.
+      if (error instanceof PendingDeliveryDeferredError) return null;
+      // Another run is (or just was) active: decide again from fresh state.
+      // A conflict never pauses delivery.
+      if (error instanceof ActiveRunConflictError) continue;
+      // No Runner yet: deliver once one connects.
+      if (error instanceof AppError && error.status === 503) return null;
+      // A deadlock or lost connection says nothing about the messages: they
+      // stay deliverable, and the lease sweeper tries again.
+      if (isTransientDatabaseError(error)) {
+        console.error('[agent-runs] pending delivery will try again:', error);
+        return null;
+      }
+      // The messages cannot start a run (for example their model was
+      // removed); stop delivering until the user resumes or sends one now.
+      // Decide under the session lock: a run another start created
+      // meanwhile delivers them later, and edited or sent messages are no
+      // longer this batch.
+      const batch = sameModel.map((row) => row.id);
+      const paused = await db.transaction(async (tx) => {
+        await tx
+          .select({ id: schema.agentSessions.id })
+          .from(schema.agentSessions)
+          .where(eq(schema.agentSessions.id, sessionId))
+          .for('update');
+        const [active] = await tx
+          .select({ id: schema.agentRuns.id })
+          .from(schema.agentRuns)
+          .where(
+            and(
+              eq(schema.agentRuns.sessionId, sessionId),
+              inArray(schema.agentRuns.status, ACTIVE_STATUSES),
+            ),
+          )
+          .limit(1);
+        if (active) return false;
+        // A run that started (and maybe already ended) since this attempt
+        // read the session explains the failure: decide again.
+        const latest = await tx.query.agentRuns.findFirst({
+          where: { sessionId },
+          orderBy: { id: 'desc' },
+          columns: { id: true },
+        });
+        if (latest?.id !== latestBefore?.id) return false;
+        const rows = await loadPendingRows(tx, sessionId);
+        const stillWaiting = batch.every((id) => {
+          const row = rows.find((candidate) => candidate.id === id);
+          return (
+            row !== undefined &&
+            effectivePendingStatus(row, row.claimedRunStatus) === 'pending'
+          );
+        });
+        if (!stillWaiting) return false;
+        await setPendingPaused(tx, sessionId, true);
+        return true;
+      });
+      if (paused) {
+        console.error('[agent-runs] pending messages could not start:', error);
+        return null;
+      }
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * Hand the run's waiting steer messages to its Runner. They stay editable
+ * until this claim; it returns nothing unless the run is active and owned
+ * by this Runner.
+ */
+export async function claimSteerMessages(
+  runnerId: string,
+  runId: string,
+): Promise<SteerMessage[]> {
+  const owner = await getAgentRun(runId);
+  if (!owner || owner.runnerId !== runnerId) return [];
+  return db.transaction(async (tx) => {
+    await tx
+      .select({ id: schema.agentSessions.id })
+      .from(schema.agentSessions)
+      .where(eq(schema.agentSessions.id, owner.sessionId))
+      .for('update');
+    const [run] = await tx
+      .select({
+        status: schema.agentRuns.status,
+        runnerId: schema.agentRuns.runnerId,
+      })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, runId))
+      .for('update');
+    if (
+      !run ||
+      run.runnerId !== runnerId ||
+      !ACTIVE_STATUSES.includes(run.status)
+    ) {
+      return [];
+    }
+    const rows = await claimSteerRows(tx, owner.sessionId, runId);
+    return rows.map(toSteerMessage);
+  });
+}
+
+/** Tell the session's active run, if any, that steer messages wait. */
+export async function notifyActiveRunOfSteer(sessionId: string): Promise<void> {
+  const active = await db.query.agentRuns.findFirst({
+    where: { sessionId, status: { in: ACTIVE_STATUSES } },
+    columns: { id: true, runnerId: true },
+  });
+  if (active) sendRunSteer(active.runnerId, active.id);
+}
+
+/** Of these runs, the active ones whose sessions have steer messages waiting. */
+export async function steerPendingRunIds(runIds: string[]): Promise<string[]> {
+  if (runIds.length === 0) return [];
+  const runs = await db.query.agentRuns.findMany({
+    where: { id: { in: runIds }, status: { in: ACTIVE_STATUSES } },
+    columns: { id: true, sessionId: true },
+  });
+  const result: string[] = [];
+  for (const run of runs) {
+    if (await hasClaimableSteer(db, run.sessionId)) result.push(run.id);
+  }
+  return result;
+}
+
+/** A Runner became ready: deliver messages that waited for one. */
+export async function deliverPendingAfterRunnerReady(): Promise<void> {
+  const sessions = await db
+    .selectDistinct({ sessionId: schema.agentPendingMessages.sessionId })
+    .from(schema.agentPendingMessages);
+  for (const { sessionId } of sessions) kickPendingDispatch(sessionId);
 }
