@@ -21,8 +21,12 @@ function usePeek(enabled: boolean) {
       const limit = window.innerHeight;
       const cells = main.querySelectorAll<HTMLElement>('[data-widget-cell]');
       cells.forEach((cell, index) => {
-        const bottom = cell.getBoundingClientRect().bottom;
-        cell.style.visibility = index === 0 || bottom <= limit ? '' : 'hidden';
+        const hidden = index > 0 && cell.getBoundingClientRect().bottom > limit;
+        // Opacity, not visibility: a widget's own content may set itself
+        // visible again, and a hidden cell keeps its place in the grid.
+        cell.style.opacity = hidden ? '0' : '';
+        cell.inert = hidden;
+        cell.toggleAttribute('aria-hidden', hidden);
       });
     };
     fit();
