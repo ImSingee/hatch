@@ -1,4 +1,5 @@
-import { Button, Checkbox, Text } from '@mantine/core';
+import { Alert, Anchor, Button, Checkbox, Text } from '@mantine/core';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import { useState } from 'react';
 import { DEVICE_CLIENTS } from '~auth/device-clients';
 import type { DeviceDecision, DeviceRequest } from './device-api';
@@ -12,6 +13,11 @@ type RequestReviewProps = {
   /** The decision currently in flight, if any. */
   pending: DeviceDecision | null;
   onDecide: (decision: DeviceDecision) => void;
+  /** Releasing the claim to switch account is in flight or done. */
+  switching: boolean;
+  /** The last attempt to switch account failed; this account is still in. */
+  switchFailed: boolean;
+  onSwitchAccount: () => void;
 };
 
 /**
@@ -23,9 +29,12 @@ export function RequestReview({
   account,
   pending,
   onDecide,
+  switching,
+  switchFailed,
+  onSwitchAccount,
 }: RequestReviewProps) {
   const [confirmed, setConfirmed] = useState(false);
-  const busy = pending !== null;
+  const busy = pending !== null || switching;
 
   return (
     <>
@@ -52,6 +61,17 @@ export function RequestReview({
           It will get <strong>full access to your Hatch account</strong>, the
           same as signing in here, until it signs out.
         </Text>
+
+        {switchFailed ? (
+          <Alert
+            color="red"
+            variant="light"
+            icon={<IconAlertTriangle size={18} stroke={1.75} />}
+            role="alert"
+          >
+            Couldn’t switch account, so you’re still signed in here. Try again.
+          </Alert>
+        ) : null}
 
         <div className={classes.decision}>
           <Checkbox
@@ -90,6 +110,18 @@ export function RequestReview({
       <Text size="sm" c="dimmed" ta="center" className={classes.footnote}>
         Didn’t start this? Deny it. Approving would let someone else use your
         account.
+      </Text>
+      <Text size="sm" c="dimmed" ta="center">
+        Not {account ?? 'the right account'}?{' '}
+        <Anchor
+          component="button"
+          type="button"
+          size="sm"
+          disabled={busy}
+          onClick={onSwitchAccount}
+        >
+          Use a different account
+        </Anchor>
       </Text>
     </>
   );

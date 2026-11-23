@@ -3,6 +3,7 @@ import { authClient } from '~auth/client';
 import { DeviceApproval } from '~components/cli-auth/device-approval';
 import { normalizeUserCode } from '~components/cli-auth/device-api';
 import { hasActiveSession } from '~server/auth';
+import { releaseDeviceClaim } from '~server/device-claims';
 
 /** Same-origin path back to this page; it carries only the user code. */
 function returnPath(userCode: string): string {
@@ -54,9 +55,12 @@ function AuthorizePage() {
       account={session.data?.user.email ?? null}
       onSignIn={signIn}
       onSwitchAccount={async (userCode) => {
-        await authClient.signOut();
+        // Better Auth reports a failed sign-out in the result, not by throwing.
+        const result = await authClient.signOut().catch(() => null);
+        if (!result || result.error) throw new Error('Could not sign out');
         await signIn(userCode);
       }}
+      releaseClaim={(userCode) => releaseDeviceClaim({ data: { userCode } })}
     />
   );
 }

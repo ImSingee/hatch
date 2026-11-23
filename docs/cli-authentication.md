@@ -119,20 +119,30 @@ The CLI uses Better Auth's device authorization plugin unchanged
 
 Better Auth owns the grant table (`device_code`) and its lifecycle: polling
 deletes expired and denied grants, and a successful redemption consumes the
-grant. A CLI session is a row in `session` like a browser sign-in, so a future
+grant. The one write outside Better Auth is releasing a claim (see the approval
+page below). A CLI session is a row in `session` like a browser sign-in, so a future
 device list can show both from one table.
 
 ## Approval page (`/cli/authorize`)
 
 `src/routes/cli/authorize.tsx`, components in `src/components/cli-auth/`.
 
-- Opening a verification link only prefills the code; headless devices can type
-  it instead. Anonymous visitors go through the existing `/login` with a
+- A verification link with a complete code goes straight to the review;
+  headless devices can type the code instead and press Continue. Anonymous
+  visitors go through the existing `/login` with a
   same-origin return path that carries only `user_code`; the page never asks for
   a password.
-- An explicit "Review request" calls `GET /api/auth/device?user_code=…`, which
+- Opening the review calls `GET /api/auth/device?user_code=…` once, which
   claims a pending request for the signed-in account. Only that account gets the
   request details back; another account sees "Claimed by another account".
+- Better Auth has no way to undo a claim, and a browser can be signed in to the
+  wrong account when the link opens. "Use a different account" on the review
+  first releases the claim (`releaseDeviceClaim`, `src/server/device-claims.ts`:
+  clears `user_id` only for the caller's own pending claim), then signs out and
+  returns through `/login`, where the chosen account claims it. If the release
+  is not confirmed, the page stays signed in on the review and says so. If
+  signing out fails after the release, the page claims the request again for
+  the same account and says the switch failed.
 - The review shows the account, the origin, the code to compare and that
   approving grants full access to the account. Approve requires confirming that
   the person started the request and the code matches; Deny does not. Decisions

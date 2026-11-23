@@ -107,7 +107,7 @@ export function CodeEntry({
           </Alert>
         ) : null}
         <Button type="submit" size="md" fullWidth loading={pending}>
-          Review request
+          Continue
         </Button>
       </form>
 

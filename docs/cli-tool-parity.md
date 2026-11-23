@@ -186,6 +186,15 @@ action, including the force stop the UI offers for draining instances
 (`stop --force`), and additionally offers `restart --force`. No Agent Tool is
 added.
 
+## Device login approval: browser only
+
+The `/cli/authorize` page approves a CLI or mobile device login for the
+browser's signed-in account, so it is bound to that browser session and has no
+CLI command: the CLI is the device asking to be approved. This includes
+releasing the page's own claim before switching account
+(`releaseDeviceClaim` in `src/server/device-claims.ts`), which acts only on the
+claim the browser's account holds.
+
 ## Known gaps
 
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`

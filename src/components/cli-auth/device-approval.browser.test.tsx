@@ -21,9 +21,31 @@ const claimed = { user_code: CODE, status: 'pending', client_id: 'hatch-cli' };
 type Reply = Response | Promise<Response> | 'network-error';
 let replies: Record<string, Reply>;
 let calls: { action: string; url: URL; init: RequestInit }[];
+let releaseClaim: ReturnType<typeof vi.fn<(userCode: string) => Promise<void>>>;
+let onSwitchAccount: ReturnType<
+  typeof vi.fn<(userCode: string) => Promise<void>>
+>;
 
 beforeEach(() => {
   calls = [];
+  releaseClaim = vi.fn<(userCode: string) => Promise<void>>(
+    async (userCode) => {
+      calls.push({
+        action: 'release',
+        url: new URL(`release:${userCode}`),
+        init: {},
+      });
+    },
+  );
+  onSwitchAccount = vi.fn<(userCode: string) => Promise<void>>(
+    async (userCode) => {
+      calls.push({
+        action: 'switch',
+        url: new URL(`switch:${userCode}`),
+        init: {},
+      });
+    },
+  );
   replies = { claim: Response.json(claimed) };
   vi.spyOn(window, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), window.location.origin);
@@ -48,16 +70,17 @@ function page(client: QueryClient, initialCode: string) {
           initialCode={initialCode}
           account="owner@example.com"
           onSignIn={() => {}}
-          onSwitchAccount={() => {}}
+          onSwitchAccount={onSwitchAccount}
+          releaseClaim={releaseClaim}
         />
       </QueryClientProvider>
     </MantineProvider>
   );
 }
 
-async function renderPage() {
+async function renderPage(initialCode = CODE) {
   const client = new QueryClient();
-  const screen = await render(page(client, CODE));
+  const screen = await render(page(client, initialCode));
   /** Simulate the route receiving another `user_code` in its URL. */
   const openCode = (code: string) => screen.rerender(page(client, code));
   return Object.assign(screen, { openCode });
@@ -65,24 +88,17 @@ async function renderPage() {
 
 async function openReview() {
   const screen = await renderPage();
-  await screen.getByRole('button', { name: 'Review request' }).click();
   await expect
     .element(screen.getByRole('heading', { name: 'Approve Hatch CLI?' }))
     .toBeVisible();
   return screen;
 }
 
-test('a prefilled link never contacts the server until the person asks to review', async () => {
-  const screen = await renderPage();
+test('a link with a complete code opens the decision with one claim', async () => {
+  const screen = await openReview();
   await expect
-    .element(screen.getByRole('textbox', { name: 'Device code' }))
-    .toHaveValue('WDJB-4K7M');
-  expect(calls).toEqual([]);
-
-  await screen.getByRole('button', { name: 'Review request' }).click();
-  await expect
-    .element(screen.getByRole('heading', { name: 'Approve Hatch CLI?' }))
-    .toBeVisible();
+    .element(screen.getByRole('button', { name: 'Approve' }))
+    .toBeDisabled();
   expect(calls).toHaveLength(1);
   expect(calls[0].action).toBe('claim');
   expect(calls[0].url.searchParams.get('user_code')).toBe(CODE);
@@ -91,6 +107,22 @@ test('a prefilled link never contacts the server until the person asks to review
     redirect: 'error',
     referrerPolicy: 'no-referrer',
   });
+});
+
+test('without a complete code, nothing is sent until the code is entered', async () => {
+  const screen = await renderPage('WDJB');
+  const field = screen.getByRole('textbox', { name: 'Device code' });
+  await expect.element(field).toHaveValue('WDJB');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(calls).toEqual([]);
+
+  await field.fill('WDJB-4K7M');
+  await screen.getByRole('button', { name: 'Continue' }).click();
+  await expect
+    .element(screen.getByRole('heading', { name: 'Approve Hatch CLI?' }))
+    .toBeVisible();
+  expect(calls.map((call) => call.action)).toEqual(['claim']);
+  expect(calls[0].url.searchParams.get('user_code')).toBe(CODE);
 });
 
 test('approval requires confirmation and sends exactly one decision', async () => {
@@ -193,19 +225,20 @@ test('a different code in the URL starts a separate flow', async () => {
   const screen = await openReview();
   await screen.getByRole('checkbox').click();
 
+  replies.claim = Response.json({ ...claimed, user_code: 'XYZW5678' });
   await screen.openCode('XYZW5678');
   await expect
-    .element(screen.getByRole('textbox', { name: 'Device code' }))
-    .toHaveValue('XYZW-5678');
-  expect(screen.container.querySelector('input[type="checkbox"]')).toBeNull();
-  expect(calls.map((call) => call.action)).toEqual(['claim']);
+    .element(screen.getByRole('heading', { name: 'Approve Hatch CLI?' }))
+    .toBeVisible();
+  await expect.element(screen.getByRole('checkbox')).not.toBeChecked();
+  expect(calls.map((call) => call.action)).toEqual(['claim', 'claim']);
+  expect(calls[1].url.searchParams.get('user_code')).toBe('XYZW5678');
 });
 
 test('a request claimed by another account cannot be reviewed here', async () => {
   replies.claim = Response.json({ user_code: CODE, status: 'pending' });
   replies.session = Response.json({ user: { id: 'owner' } });
   const screen = await renderPage();
-  await screen.getByRole('button', { name: 'Review request' }).click();
   await expect
     .element(
       screen.getByRole('heading', { name: 'Claimed by another account' }),
@@ -220,7 +253,6 @@ test('a rate-limited review reports the server’s remaining wait', async () => 
     { status: 429, headers: { 'X-Retry-After': '420' } },
   );
   const screen = await renderPage();
-  await screen.getByRole('button', { name: 'Review request' }).click();
   await expect
     .element(screen.getByRole('alert'))
     .toHaveTextContent('Too many attempts. Try again in about 7 minutes.');
@@ -229,7 +261,6 @@ test('a rate-limited review reports the server’s remaining wait', async () => 
 test('the verified mobile client identity is displayed before approval', async () => {
   replies.claim = Response.json({ ...claimed, client_id: 'hatch-mobile' });
   const screen = await renderPage();
-  await screen.getByRole('button', { name: 'Review request' }).click();
   await expect
     .element(screen.getByRole('heading', { name: 'Approve Hatch Mobile?' }))
     .toBeVisible();
@@ -239,11 +270,57 @@ test('the verified mobile client identity is displayed before approval', async (
   expect(calls.map((call) => call.action)).toEqual(['claim']);
 });
 
+test('switching account from the review releases the claim first', async () => {
+  const screen = await openReview();
+  await screen.getByRole('button', { name: 'Use a different account' }).click();
+  await expect
+    .poll(() => calls.map((call) => call.action))
+    .toEqual(['claim', 'release', 'switch']);
+  expect(releaseClaim).toHaveBeenCalledWith(CODE);
+  expect(onSwitchAccount).toHaveBeenCalledWith(CODE);
+});
+
+test('an unconfirmed release keeps the account and the review', async () => {
+  releaseClaim.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  const screen = await openReview();
+  await screen.getByRole('button', { name: 'Use a different account' }).click();
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent(
+      'Couldn’t switch account, so you’re still signed in here. Try again.',
+    );
+  expect(onSwitchAccount).not.toHaveBeenCalled();
+  await expect
+    .element(screen.getByRole('button', { name: 'Deny' }))
+    .toBeEnabled();
+});
+
+test('a failed sign-out after the release claims the request again', async () => {
+  onSwitchAccount.mockRejectedValueOnce(new Error('Could not sign out'));
+  const screen = await openReview();
+  await screen.getByRole('button', { name: 'Use a different account' }).click();
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent(
+      'Couldn’t switch account, so you’re still signed in here. Try again.',
+    );
+  expect(calls.map((call) => call.action)).toEqual([
+    'claim',
+    'release',
+    'claim',
+  ]);
+  await expect
+    .element(screen.getByRole('button', { name: 'Deny' }))
+    .toBeEnabled();
+  await expect
+    .element(screen.getByRole('button', { name: 'Use a different account' }))
+    .toBeEnabled();
+});
+
 test('approving the desktop app sends the browser back to it', async () => {
   replies.claim = Response.json({ ...claimed, client_id: 'hatch-desktop' });
   replies.approve = Response.json({ success: true });
   const screen = await renderPage();
-  await screen.getByRole('button', { name: 'Review request' }).click();
   await expect
     .element(screen.getByRole('heading', { name: 'Approve Hatch for Mac?' }))
     .toBeVisible();
