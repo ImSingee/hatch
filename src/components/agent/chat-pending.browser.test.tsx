@@ -273,6 +273,78 @@ test('resends a draft whose response was lost as the same message', async () => 
   expect(ids[2]).not.toBe(ids[0]);
 });
 
+test('resends a draft whose files the lost send already attached', async () => {
+  const uploads: string[] = [];
+  const enqueued: { clientMessageId: string; attachmentIds: string[] }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), 'https://hatch.example.test');
+      if (url.pathname.endsWith('/events')) {
+        return new Response(new ReadableStream(), { status: 200 });
+      }
+      if (url.pathname.includes('/attachments/')) {
+        const id = decodeURIComponent(url.pathname.split('/').at(-1)!);
+        uploads.push(id);
+        // The first send attached it before its response was lost.
+        if (uploads.length > 1) {
+          return new Response('Attachment id is already in use.', {
+            status: 409,
+          });
+        }
+        return Response.json({
+          attachment: {
+            id,
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            size: 3,
+          },
+        });
+      }
+      if (url.pathname.endsWith('/pending')) {
+        enqueued.push(JSON.parse(String(init?.body)));
+        if (enqueued.length === 1) throw new TypeError('Failed to fetch');
+        return Response.json({
+          pending: { paused: false, messages: [] },
+          startedRunId: null,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url.pathname}`);
+    }),
+  );
+  const screen = await renderChat();
+  await expect
+    .element(screen.getByRole('button', { name: 'Stop' }))
+    .toBeVisible();
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error('Missing attachment input');
+  const transfer = new DataTransfer();
+  transfer.items.add(new File(['abc'], 'notes.txt', { type: 'text/plain' }));
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: transfer.files,
+  });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await expect.element(screen.getByText('notes.txt')).toBeVisible();
+
+  const send = screen.getByRole('button', { name: 'Send' });
+  await send.click();
+  await expect.poll(() => enqueued.length).toBe(1);
+  await expect.element(screen.getByText('notes.txt')).toBeVisible();
+  await send.click();
+  await expect.poll(() => enqueued.length).toBe(2);
+
+  // Uploaded again (a pruned upload would come back); the one in use is
+  // still sent as the same message with the same attachment.
+  expect(uploads).toHaveLength(2);
+  expect(uploads[1]).toBe(uploads[0]);
+  expect(enqueued[1]).toMatchObject({
+    clientMessageId: enqueued[0].clientMessageId,
+    attachmentIds: [uploads[0]],
+  });
+  expect(enqueued[0].attachmentIds).toEqual([uploads[0]]);
+});
+
 test('edits, sends now and cancels pending messages', async () => {
   fixtures.session.pending = {
     paused: false,

@@ -45,12 +45,13 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import type {
-  AskAnswer,
-  JsonValue,
-  PendingAsk,
-  SessionDetail,
-  StreamState,
+import {
+  MobileError,
+  type AskAnswer,
+  type JsonValue,
+  type PendingAsk,
+  type SessionDetail,
+  type StreamState,
 } from '../core';
 import { useSession } from '../state/session';
 import {
@@ -112,8 +113,16 @@ function ConversationBody({
   const { api, origin } = useSession();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { draft, setDraft, files, setFiles, model, setModel } =
-    useChatDraft(id);
+  const {
+    draft,
+    setDraft,
+    files,
+    setFiles,
+    model,
+    setModel,
+    clientMessageIdFor,
+    settleSend,
+  } = useChatDraft(id);
   const [problem, setProblem] = useConversationProblem(origin, id);
   const [optimisticRun, setOptimisticRun] = useState<string | null>(null);
   const [submittedAnswer, setSubmittedAnswer] = useSubmittedAnswer(origin, id);
@@ -205,14 +214,6 @@ function ConversationBody({
   const frame = useRef<ViewInstance>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const sending = useRef(false);
-  // Every send of one unchanged draft names the same message, so resending
-  // it after a lost response returns the first outcome instead of a second
-  // message or run; files an earlier attempt uploaded are not uploaded again.
-  const draftSend = useRef<{
-    key: string;
-    clientMessageId: string;
-    uploaded: Set<string>;
-  } | null>(null);
   const composer = useRef<NativeFieldRef>(null);
   const composerScroll = useRef<ScrollViewInstance>(null);
   // Work outlives a fold or unfold that moves this conversation to another
@@ -412,18 +413,19 @@ function ConversationBody({
       const signal = lifetimeSignal();
       const text = (composer.current?.getText() ?? draft).trim();
       if (!selectedModel) throw new Error('Choose a configured model first.');
-      const key = JSON.stringify([id, text, files.map((file) => file.id)]);
-      if (draftSend.current?.key !== key)
-        draftSend.current = {
-          key,
-          clientMessageId: Crypto.randomUUID(),
-          uploaded: new Set(),
-        };
-      const sendOnce = draftSend.current;
+      // Every send of one unchanged draft names the same message, so a
+      // resend after a lost response returns the first outcome instead of a
+      // second message or run. The id lives with the conversation's draft,
+      // so a fold or unfold before resending keeps it.
+      const clientMessageId = clientMessageIdFor(
+        JSON.stringify([text, files.map((file) => file.id)]),
+        Crypto.randomUUID,
+      );
       const attachmentIds: string[] = [];
       for (const file of files.filter((item) => !item.image)) {
-        if (!sendOnce.uploaded.has(file.id)) {
-          const blob = new File(file.uri);
+        const blob = new File(file.uri);
+        try {
+          // Uploaded on every attempt, so an upload pruned meanwhile returns.
           await api!.uploadAttachment(
             id,
             file.id,
@@ -432,13 +434,17 @@ function ConversationBody({
             file.mimeType,
             signal,
           );
-          sendOnce.uploaded.add(file.id);
+        } catch (error) {
+          // File ids are unique per pick: an id already in use was attached
+          // by an earlier send of this draft, which the server recognizes.
+          if (!(error instanceof MobileError && error.status === 409))
+            throw error;
         }
         attachmentIds.push(file.id);
       }
       const message = {
         ...selectedModel,
-        clientMessageId: sendOnce.clientMessageId,
+        clientMessageId,
         content: text ? [{ type: 'text' as const, text }] : [],
         attachmentIds,
         images: files
@@ -449,6 +455,7 @@ function ConversationBody({
       // delivered in the user's queue/steer mode.
       if (streamRunId) {
         return {
+          clientMessageId,
           kind: 'pending' as const,
           pending: await api!.enqueuePending(id, message, signal),
         };
@@ -457,12 +464,13 @@ function ConversationBody({
       // request lands or its result is read.
       markConversationWorking(queryClient, origin!, id);
       return {
+        clientMessageId,
         kind: 'run' as const,
         run: await api!.createRun({ sessionId: id, ...message }, signal),
       };
     },
     onSuccess: async (result) => {
-      draftSend.current = null;
+      settleSend(result.clientMessageId);
       if (lifetimeSignal().aborted) return;
       if (result.kind === 'run') setOptimisticRun(result.run.runId);
       else {

@@ -62,7 +62,7 @@ export function QuickAgentChat() {
       const id = createdSession.current ?? (await createEmptyAgentSession()).id;
       createdSession.current = id;
       const draft = draftSends.begin(id, { content, images, files });
-      const attachments = await uploadDraftFiles(id, files, draft);
+      const attachments = await uploadDraftFiles(id, files);
       await startAgentRunRequest({
         clientMessageId: draft.clientMessageId,
         sessionId: id,

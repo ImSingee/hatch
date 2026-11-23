@@ -2,18 +2,13 @@
  * Sending a chat draft again after a lost response, without delivering it
  * twice. Every send of one unchanged draft carries the same
  * `clientMessageId`, so the server returns the first send's outcome instead
- * of a second message or run, and files an earlier attempt uploaded (which
- * that send may have attached) are not uploaded again.
+ * of a second message or run.
  */
 import type { AgentAttachmentRef } from '~agent/attachments';
-import { uploadAgentFiles } from './attachment-api';
+import { AttachmentInUseError, uploadAgentFiles } from './attachment-api';
 import type { ComposerFile, ComposerImage, ComposerSubmit } from './composer';
 
-export type DraftSend = {
-  clientMessageId: string;
-  /** Uploaded files of this draft, by composer file id. */
-  uploaded: Map<string, AgentAttachmentRef>;
-};
+export type DraftSend = { clientMessageId: string };
 
 type Draft = {
   content: ComposerSubmit['content'];
@@ -39,11 +34,7 @@ export function createDraftSendTracker(): DraftSendTracker {
         draft.files.map((file) => file.id),
       ]);
       if (current?.key !== key) {
-        current = {
-          key,
-          clientMessageId: crypto.randomUUID(),
-          uploaded: new Map(),
-        };
+        current = { key, clientMessageId: crypto.randomUUID() };
       }
       return current;
     },
@@ -53,16 +44,30 @@ export function createDraftSendTracker(): DraftSendTracker {
   };
 }
 
-/** Upload the draft's files that no earlier attempt uploaded. */
+/**
+ * Upload the draft's files on every attempt, so an upload the server pruned
+ * meanwhile comes back. Composer file ids are unique, so an id a message in
+ * this session already holds was attached by an earlier send of this draft,
+ * whose resend the server recognizes.
+ */
 export async function uploadDraftFiles(
   sessionId: string,
   files: ComposerFile[],
-  send: DraftSend,
 ): Promise<AgentAttachmentRef[]> {
-  const missing = files.filter((file) => !send.uploaded.has(file.id));
-  const uploaded = await uploadAgentFiles(sessionId, missing);
-  uploaded.forEach((attachment, index) =>
-    send.uploaded.set(missing[index].id, attachment),
+  return Promise.all(
+    files.map(async (file) => {
+      try {
+        const [attachment] = await uploadAgentFiles(sessionId, [file]);
+        return attachment;
+      } catch (error) {
+        if (!(error instanceof AttachmentInUseError)) throw error;
+        return {
+          id: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          size: file.size,
+        };
+      }
+    }),
   );
-  return files.map((file) => send.uploaded.get(file.id)!);
 }

@@ -1,6 +1,14 @@
 import type { AgentAttachmentRef } from '~agent/attachments';
 import type { ComposerFile } from './composer';
 
+/** The upload's id is taken: in this session, a message already holds it. */
+export class AttachmentInUseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AttachmentInUseError';
+  }
+}
+
 export async function uploadAgentFiles(
   sessionId: string,
   files: ComposerFile[],
@@ -20,9 +28,10 @@ export async function uploadAgentFiles(
         },
       );
       if (!res.ok) {
-        throw new Error(
-          (await res.text()) || `Attachment upload failed (${res.status})`,
-        );
+        const message =
+          (await res.text()) || `Attachment upload failed (${res.status})`;
+        if (res.status === 409) throw new AttachmentInUseError(message);
+        throw new Error(message);
       }
       const payload = (await res.json()) as {
         attachment: AgentAttachmentRef;
