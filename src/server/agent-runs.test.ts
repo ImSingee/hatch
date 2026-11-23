@@ -1665,6 +1665,36 @@ describe('unconfirmed dispatch', () => {
     expect(await runIds()).toEqual([runId]);
   });
 
+  it('holds the retry of a lapsed run its reconnecting Runner still lists', async () => {
+    loseAcceptance();
+    const runId = await send();
+    // The Runner reconnects after the lease ran out but before the sweeper
+    // ended the run: it is interrupted, and the Runner keeps it until its
+    // final report.
+    await db
+      .update(schema.agentRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.agentRuns.id, runId));
+    const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
+    expect(reconciled.resumed).toEqual([runId]);
+    expect(await run(runId)).toMatchObject({
+      status: 'interrupted',
+      runnerConfirmationPending: true,
+      autoRetryAt: null,
+    });
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+
+    await completeRunFromRunner(RUNNER_ID, {
+      runId,
+      status: 'cancelled',
+      messages: [],
+    });
+    expect((await run(runId)).autoRetryAt).not.toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toHaveLength(2);
+  });
+
   it('retries a run that definitely never started as before', async () => {
     vi.mocked(hub.dispatchRun).mockImplementationOnce(
       async (_payload, plan) => {

@@ -484,6 +484,47 @@ describe('review regressions', () => {
     expect(rows.find((row) => row.id !== runId)?.status).toBe('running');
   });
 
+  it('holds queued messages while a retry waits for the Runner to settle a run', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    vi.mocked(hub.dispatchRun).mockImplementationOnce(async (payload, plan) => {
+      started.push(payload);
+      await plan.assign(RUNNER);
+      throw new hub.RunDispatchUncertainError(
+        'Runner did not accept the run in time.',
+      );
+    });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+
+    // The lease ran out while the Runner may still execute the run: neither
+    // the retry nor the queued message may start yet, and nothing pauses.
+    await db
+      .update(schema.agentRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.agentRuns.id, runId));
+    await runs.sweepExpiredAgentRuns();
+    await runs.pendingDispatchesSettled();
+    expect(await activeRunId()).toBeNull();
+    expect(started).toHaveLength(1);
+    expect((await tray()).messages.map((message) => message.text)).toEqual([
+      'Add a chart',
+    ]);
+    expect((await tray()).paused).toBe(false);
+
+    // The Runner comes back without it: the turn is replayed first, then the
+    // queued message follows.
+    await runs.reconcileRunnerRuns(RUNNER, []);
+    await runs.pendingDispatchesSettled();
+    expect(started).toHaveLength(1);
+    await runs.fireDueAgentAutoRetries(new Date(Date.now() + 60 * 60_000));
+    expect(started.at(-1)?.userText).toBe('Build a tracker');
+    const replay = await activeRunId();
+    expect(replay).not.toBe(runId);
+    await finish(replay!);
+    expect(started.at(-1)?.userText).toBe('Add a chart');
+    expect((await tray()).messages).toEqual([]);
+  });
+
   it('keeps a rename made while an undone delivery was dispatching', async () => {
     await updateAgentPreferences(USER, { messageMode: 'queue' });
     const runId = await startRun('Build a tracker');
