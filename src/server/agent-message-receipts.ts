@@ -82,7 +82,7 @@ export async function recordMessageReceipt(
   await tx.insert(schema.agentMessageReceipts).values(receipt);
 }
 
-/** Pending messages a run took as its prompt now point at that run. */
+/** Pending messages a run delivered (as its prompt or by steering) point at it. */
 export async function bindReceiptsToRun(
   tx: TX,
   sessionId: string,
