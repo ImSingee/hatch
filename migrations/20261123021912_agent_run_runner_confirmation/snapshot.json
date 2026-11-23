@@ -1,0 +1,42 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "9ec99215-e0ac-46d2-a178-704e1803da5e",
+  "prevIds": ["e6ada229-e9f0-4656-a0d5-5be0b2742417"],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "agent_runs",
+        "runner_confirmation_pending"
+      ],
+      "writes": [
+        "s|col|public.agent_runs.runner_confirmation_pending",
+        "n|col|public.agent_runs.runner_confirmation_pending",
+        "e|col|public.agent_runs.runner_confirmation_pending"
+      ],
+      "reads": ["n|tbl|public.agent_runs", "n|sch|public"]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "agent_runs",
+        "name": "runner_confirmation_pending",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

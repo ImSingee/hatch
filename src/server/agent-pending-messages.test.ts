@@ -11,7 +11,9 @@ vi.mock('~/db', async () => {
 vi.mock('~server/agent-runner/hub', () => {
   type Hub = typeof import('~server/agent-runner/hub');
   class RunNotStartedError extends Error {}
+  class RunDispatchUncertainError extends Error {}
   return {
+    RunDispatchUncertainError,
     RunNotStartedError,
     connectedRunnerCount: vi.fn<Hub['connectedRunnerCount']>(() => 1),
     listConnectedRunners: vi.fn<Hub['listConnectedRunners']>(),
@@ -477,18 +479,62 @@ describe('review regressions', () => {
     expect((await tray()).messages).toEqual([]);
   });
 
-  it('fails, rather than redelivers, a delivery the Runner may have started', async () => {
+  it('keeps, rather than redelivers, a delivery the Runner may have started', async () => {
     await updateAgentPreferences(USER, { messageMode: 'queue' });
     const runId = await startRun('Build a tracker');
     await send('Add a chart');
-    // Sent, but the acceptance never arrived: the Runner may be running it.
+    // Sent, but the acceptance never arrived: the Runner may be running it,
+    // so the run stays with it until the Runner settles it.
     vi.mocked(hub.dispatchRun).mockRejectedValueOnce(
-      new Error('Runner did not accept the run in time.'),
+      new hub.RunDispatchUncertainError(
+        'Runner did not accept the run in time.',
+      ),
     );
     await finish(runId);
     expect((await tray()).messages).toEqual([]);
     const rows = await db.select().from(schema.agentRuns);
-    expect(rows.find((row) => row.id !== runId)?.status).toBe('failed');
+    expect(rows.find((row) => row.id !== runId)?.status).toBe('running');
+  });
+
+  it('holds queued messages while a retry waits for the Runner to settle a run', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    vi.mocked(hub.dispatchRun).mockImplementationOnce(async (payload, plan) => {
+      started.push(payload);
+      await plan.assign(RUNNER);
+      throw new hub.RunDispatchUncertainError(
+        'Runner did not accept the run in time.',
+      );
+    });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+
+    // The lease ran out while the Runner may still execute the run: neither
+    // the retry nor the queued message may start yet, and nothing pauses.
+    await db
+      .update(schema.agentRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.agentRuns.id, runId));
+    await runs.sweepExpiredAgentRuns();
+    await runs.pendingDispatchesSettled();
+    expect(await activeRunId()).toBeNull();
+    expect(started).toHaveLength(1);
+    expect((await tray()).messages.map((message) => message.text)).toEqual([
+      'Add a chart',
+    ]);
+    expect((await tray()).paused).toBe(false);
+
+    // The Runner comes back without it: the turn is replayed first, then the
+    // queued message follows.
+    await runs.reconcileRunnerRuns(RUNNER, []);
+    await runs.pendingDispatchesSettled();
+    expect(started).toHaveLength(1);
+    await runs.fireDueAgentAutoRetries(new Date(Date.now() + 60 * 60_000));
+    expect(started.at(-1)?.userText).toBe('Build a tracker');
+    const replay = await activeRunId();
+    expect(replay).not.toBe(runId);
+    await finish(replay!);
+    expect(started.at(-1)?.userText).toBe('Add a chart');
+    expect((await tray()).messages).toEqual([]);
   });
 
   it('keeps a rename made while an undone delivery was dispatching', async () => {

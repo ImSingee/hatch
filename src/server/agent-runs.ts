@@ -14,7 +14,17 @@
  *   A sweeper interrupts active runs whose lease expired (runner died).
  */
 import { toUSVString } from 'node:util';
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { db, schema, type DB, type TX } from '~/db';
 import type { AgentRunStatus, JsonObject, JsonValue } from '~/db/schema';
@@ -89,6 +99,7 @@ import {
   sendRunEnvAndWait,
   sendRunSteer,
   waitForRunFinished,
+  RunDispatchUncertainError,
   RunNotStartedError,
 } from './agent-runner/hub';
 
@@ -234,6 +245,8 @@ export type SessionRunTiming = {
  * The session's latest run failed and its turn can be replayed. `attempt` is
  * the consecutive failure streak; `nextRetryAt` is set while an automatic
  * retry is scheduled and null once it was stopped or the limit was reached.
+ * `waitingForRunner` marks an automatic retry held until the Runner that may
+ * still be executing the failed run settles it (no time is known yet).
  */
 export type SessionRetryState = {
   runId: string;
@@ -242,6 +255,7 @@ export type SessionRetryState = {
   attempt: number;
   maxAttempts: number;
   nextRetryAt: string | null;
+  waitingForRunner: boolean;
 };
 
 type Subscriber = (event: AgentRunStreamEvent) => void;
@@ -423,10 +437,18 @@ async function appendEvent(
 
 type FinishedRun = { finished: boolean; autoRetryAt: Date | null };
 
+function isAutoRetryStatus(status: AgentRunStatus): boolean {
+  return (AGENT_AUTO_RETRY_STATUSES as readonly string[]).includes(status);
+}
+
 /**
  * Make an active run terminal and record its failure streak, scheduling an
  * automatic retry when it failed. Callers that already hold the session row
  * lock pass their transaction; the lock order is always session, then run.
+ *
+ * A failed run whose Runner may still be executing it (see
+ * `runnerConfirmationPending`) gets no retry yet: {@link releaseDeferredRetry}
+ * schedules it once the Runner settles the run.
  */
 async function finishRunInTx(
   tx: TX,
@@ -436,6 +458,7 @@ async function finishRunInTx(
   options: FinishOptions = {},
 ): Promise<FinishedRun> {
   const now = new Date();
+  const failed = isAutoRetryStatus(status);
   const [row] = await tx
     .update(schema.agentRuns)
     .set({
@@ -444,6 +467,10 @@ async function finishRunInTx(
       pendingAsk: null,
       pendingAnswer: null,
       pendingEnvRequest: null,
+      // Only a retry waits on the Runner; other outcomes need no answer.
+      ...(options.runnerSettled || !failed
+        ? { runnerConfirmationPending: false }
+        : {}),
       completedAt: now,
       updatedAt: now,
     })
@@ -453,7 +480,10 @@ async function finishRunInTx(
         inArray(schema.agentRuns.status, ACTIVE_STATUSES),
       ),
     )
-    .returning({ sessionId: schema.agentRuns.sessionId });
+    .returning({
+      sessionId: schema.agentRuns.sessionId,
+      runnerConfirmationPending: schema.agentRuns.runnerConfirmationPending,
+    });
   if (!row) return { finished: false, autoRetryAt: null };
 
   // Only one run per session is active, so the previous run is terminal
@@ -464,13 +494,11 @@ async function finishRunInTx(
     columns: { failureStreak: true },
   });
   const previousStreak = previous?.failureStreak ?? 0;
-  const failed = (AGENT_AUTO_RETRY_STATUSES as readonly string[]).includes(
-    status,
-  );
   const failureStreak =
     status === 'completed' ? 0 : failed ? previousStreak + 1 : previousStreak;
+  const deferred = failed && row.runnerConfirmationPending;
   const autoRetryAt =
-    failed && shouldAutoRetry(failureStreak)
+    failed && !deferred && shouldAutoRetry(failureStreak)
       ? new Date(now.getTime() + agentAutoRetryDelayMs(failureStreak))
       : null;
   if (failureStreak !== 0 || autoRetryAt) {
@@ -480,11 +508,12 @@ async function finishRunInTx(
       .where(eq(schema.agentRuns.id, runId));
   }
   // Messages sent while the run worked stop being delivered automatically
-  // when the user stopped it or it failed for good (no retry follows).
+  // when the user stopped it or it failed for good (no retry follows). A
+  // deferred retry decides that once the Runner settles the run.
   const pause =
     status === 'cancelled'
       ? options.pausePending !== false
-      : status !== 'completed' && !autoRetryAt;
+      : status !== 'completed' && !autoRetryAt && !deferred;
   if (pause && (await hasPendingMessages(tx, row.sessionId))) {
     await setPendingPaused(tx, row.sessionId, true);
   }
@@ -494,7 +523,92 @@ async function finishRunInTx(
 type FinishOptions = {
   /** A user Stop pauses pending messages; Send now does not. */
   pausePending?: boolean;
+  /**
+   * The assigned Runner is known not to be executing the run (it was never
+   * sent, was rejected, or the reconnected Runner did not list it), so a
+   * failure may be retried at once.
+   */
+  runnerSettled?: boolean;
 };
+
+/**
+ * Schedule the automatic retry a run deferred while its Runner might still
+ * have been executing it, now that the Runner has settled it (a final report,
+ * or a reconnect that no longer lists it). The caller holds the session lock.
+ * Nothing is scheduled when a newer run superseded the turn.
+ */
+async function releaseDeferredRetry(
+  tx: TX,
+  runId: string,
+): Promise<Date | null> {
+  const [row] = await tx
+    .update(schema.agentRuns)
+    .set({ runnerConfirmationPending: false })
+    .where(
+      and(
+        eq(schema.agentRuns.id, runId),
+        eq(schema.agentRuns.runnerConfirmationPending, true),
+        notInArray(schema.agentRuns.status, ACTIVE_STATUSES),
+      ),
+    )
+    .returning({
+      sessionId: schema.agentRuns.sessionId,
+      status: schema.agentRuns.status,
+      failureStreak: schema.agentRuns.failureStreak,
+    });
+  if (!row || !isAutoRetryStatus(row.status)) return null;
+  const newer = await tx.query.agentRuns.findFirst({
+    where: { sessionId: row.sessionId, id: { gt: runId } },
+    columns: { id: true },
+  });
+  if (newer) return null;
+  const autoRetryAt = shouldAutoRetry(row.failureStreak)
+    ? new Date(Date.now() + agentAutoRetryDelayMs(row.failureStreak))
+    : null;
+  if (autoRetryAt) {
+    await tx
+      .update(schema.agentRuns)
+      .set({ autoRetryAt })
+      .where(eq(schema.agentRuns.id, runId));
+  } else if (await hasPendingMessages(tx, row.sessionId)) {
+    await setPendingPaused(tx, row.sessionId, true);
+  }
+  return autoRetryAt;
+}
+
+/** Lock the run's session, then release its deferred retry. */
+async function releaseDeferredRetryForRun(
+  runId: string,
+  sessionId: string,
+): Promise<void> {
+  const autoRetryAt = await db.transaction(async (tx) => {
+    await tx
+      .select({ id: schema.agentSessions.id })
+      .from(schema.agentSessions)
+      .where(eq(schema.agentSessions.id, sessionId))
+      .for('update');
+    return releaseDeferredRetry(tx, runId);
+  });
+  if (autoRetryAt) wakeAgentAutoRetryScheduler(autoRetryAt);
+  kickPendingDispatch(sessionId);
+}
+
+/**
+ * A scheduled retry, or one deferred until the Runner settles a run, holds
+ * the session's turn: pending messages wait for it.
+ */
+function retryHoldFilter(sessionId: string) {
+  return {
+    sessionId,
+    OR: [
+      { autoRetryAt: { isNotNull: true as const } },
+      {
+        runnerConfirmationPending: true,
+        status: { in: [...AGENT_AUTO_RETRY_STATUSES] as AgentRunStatus[] },
+      },
+    ],
+  };
+}
 
 /** Lock the run's session, then finish the run (session-then-run order). */
 async function finishRun(
@@ -748,6 +862,11 @@ export async function getSessionRetryState(
     attempt: target.run.failureStreak,
     maxAttempts: AGENT_AUTO_RETRY_MAX_ATTEMPTS,
     nextRetryAt: target.run.autoRetryAt?.toISOString() ?? null,
+    waitingForRunner:
+      target.run.autoRetryAt == null &&
+      target.run.runnerConfirmationPending &&
+      isAutoRetryStatus(target.run.status) &&
+      shouldAutoRetry(target.run.failureStreak),
   };
 }
 
@@ -860,10 +979,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
         // Re-read under the lock: a Stop or a failure scheduling a retry can
         // commit after the dispatcher's unlocked checks.
         const retrying = await tx.query.agentRuns.findFirst({
-          where: {
-            sessionId: input.sessionId,
-            autoRetryAt: { isNotNull: true },
-          },
+          where: retryHoldFilter(input.sessionId),
           columns: { id: true },
         });
         if (lockedSession.pendingPaused || retrying) {
@@ -1036,14 +1152,18 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
       }
 
       // Any new run (a message, a manual retry, or this automatic one)
-      // supersedes every pending automatic retry in the session.
+      // supersedes every pending automatic retry in the session, including
+      // one deferred until a Runner settles its run (no run is active here).
       await tx
         .update(schema.agentRuns)
-        .set({ autoRetryAt: null })
+        .set({ autoRetryAt: null, runnerConfirmationPending: false })
         .where(
           and(
             eq(schema.agentRuns.sessionId, input.sessionId),
-            isNotNull(schema.agentRuns.autoRetryAt),
+            or(
+              isNotNull(schema.agentRuns.autoRetryAt),
+              eq(schema.agentRuns.runnerConfirmationPending, true),
+            ),
           ),
         );
 
@@ -1213,10 +1333,20 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
     );
     dispatchedWithoutSteer = !steerPending;
   } catch (error) {
-    // Dispatch failed (runner vanished between the check and the send, or
-    // never accepted). Fail the run gracefully: the client's SSE connection
-    // replays the error event instead of hanging on "Thinking…". Serialized
-    // on the per-run chain against any events the runner did manage to send.
+    if (error instanceof RunDispatchUncertainError) {
+      // The Runner may be executing the run. It stays active and assigned:
+      // the Runner's events or final report continue it, and its reconnect
+      // either resumes it or (when it does not hold it) interrupts it for a
+      // retry. Failing it here could replay the turn beside a live copy.
+      console.warn(
+        `[agent-runs] dispatch of ${run.id} is unconfirmed: ${error.message}`,
+      );
+      return { runId: run.id, startedAt: run.createdAt.toISOString() };
+    }
+    // The run never started (no Runner took it, or the work before sending
+    // it failed). Fail it gracefully: the client's SSE connection replays the
+    // error event instead of hanging on "Thinking…". Serialized on the
+    // per-run chain against any events the runner did manage to send.
     const message =
       error instanceof Error ? error.message : 'Failed to dispatch the run.';
     // An automatic delivery that no Runner took puts its messages back in
@@ -1232,7 +1362,7 @@ export async function startAgentRun(input: AgentRunInput): Promise<{
       );
     }
     await enqueueRunTask(run.id, async () => {
-      if (await finishRun(run.id, 'failed', message)) {
+      if (await finishRun(run.id, 'failed', message, { runnerSettled: true })) {
         await appendEvent(run.id, { type: 'error', message });
       }
     });
@@ -1408,7 +1538,13 @@ export async function assignRunToRunner(
 
     const assigned = await tx
       .update(schema.agentRuns)
-      .set({ runnerId, leaseExpiresAt: leaseDeadline(), updatedAt: new Date() })
+      .set({
+        runnerId,
+        // From here until the Runner answers, it may hold the run.
+        runnerConfirmationPending: true,
+        leaseExpiresAt: leaseDeadline(),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(schema.agentRuns.id, runId),
@@ -1468,6 +1604,18 @@ export async function finalizeRunWorkspaceAffinity(
     ) {
       throw new Error('Agent run is no longer assigned to this Runner.');
     }
+    // The Runner answered for the run it holds. A run that already ended
+    // keeps its flag: completeRunFromRunner releases its deferred retry.
+    await tx
+      .update(schema.agentRuns)
+      .set({ runnerConfirmationPending: false })
+      .where(
+        and(
+          eq(schema.agentRuns.id, runId),
+          eq(schema.agentRuns.runnerConfirmationPending, true),
+          inArray(schema.agentRuns.status, ACTIVE_STATUSES),
+        ),
+      );
 
     if (session.workspaceAffinityState === 'claimed') {
       if (session.workspaceRunnerId !== runnerId) {
@@ -1509,6 +1657,12 @@ export type RunnerReconciliation = {
    * missing terminal stream event (crash between finishRun and appendEvent).
    */
   resumed: string[];
+  /**
+   * Resumed runs that already ended on the platform. The Runner may still be
+   * executing one (a turn waiting on an answer has nothing to resend, so no
+   * stale event would cancel it): it is told to stop, then reports it.
+   */
+  ended: string[];
   /** Runs this runner does not own (anymore): abort + discard locally. */
   stale: string[];
   /** Answers submitted while the runner was offline, to deliver now. */
@@ -1526,6 +1680,7 @@ export async function reconcileRunnerRuns(
   claimedRunIds: string[],
 ): Promise<RunnerReconciliation> {
   const resumed: string[] = [];
+  const ended: string[] = [];
   const stale: string[] = [];
   const pendingAnswers: RunnerReconciliation['pendingAnswers'] = [];
   const claimed = new Set(claimedRunIds);
@@ -1554,7 +1709,18 @@ export async function reconcileRunnerRuns(
       // The claim is real but the lease lapsed: the run is past the grace
       // window and the sweeper/SSE path may already have raced to kill it.
       // Resuming would make the outcome depend on who runs first, so
-      // enforce the lease contract deterministically instead.
+      // enforce the lease contract deterministically instead. The Runner
+      // still executes it until the stale events below cancel it, so its
+      // retry waits for the final report.
+      await db
+        .update(schema.agentRuns)
+        .set({ runnerConfirmationPending: true })
+        .where(
+          and(
+            eq(schema.agentRuns.id, runId),
+            inArray(schema.agentRuns.status, ACTIVE_STATUSES),
+          ),
+        );
       await interruptAgentRun(
         runId,
         'Agent run was interrupted because its Agent Runner stayed ' +
@@ -1567,16 +1733,23 @@ export async function reconcileRunnerRuns(
     // and repairs a missing done/cancelled/error stream event, then the
     // finish ack clears the runner's buffer. Any stream events it resends
     // first are ingested as stale (terminal status) and answered with
-    // run.cancel, so a still-executing turn also winds down here.
+    // run.cancel; the hub also cancels it outright, since a turn with nothing
+    // to resend (waiting on an answer) would otherwise keep running.
     resumed.push(runId);
+    ended.push(runId);
   }
 
   if (resumed.length > 0) {
     // Only truly active runs get a fresh lease; terminal runs resumed for
-    // their final report must not resurface in lease bookkeeping.
+    // their final report must not resurface in lease bookkeeping. Listing
+    // an active run confirms the Runner holds it.
     await db
       .update(schema.agentRuns)
-      .set({ leaseExpiresAt: leaseDeadline(), updatedAt: new Date() })
+      .set({
+        leaseExpiresAt: leaseDeadline(),
+        runnerConfirmationPending: false,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           inArray(schema.agentRuns.id, resumed),
@@ -1590,14 +1763,33 @@ export async function reconcileRunnerRuns(
   });
   for (const run of owned) {
     if (!claimed.has(run.id)) {
+      // The Runner does not hold it, so it may be retried at once.
       await interruptAgentRun(
         run.id,
         'Agent run was interrupted because the Agent Runner restarted.',
+        { runnerSettled: true },
       );
     }
   }
 
-  return { resumed, stale, pendingAnswers };
+  // Runs that ended while this Runner might still have been executing them
+  // (an unconfirmed dispatch, or a lease that lapsed while it was away).
+  // Not listing one now settles it: its deferred retry can start.
+  const unsettled = await db.query.agentRuns.findMany({
+    where: {
+      runnerId,
+      runnerConfirmationPending: true,
+      status: { notIn: ACTIVE_STATUSES },
+    },
+    columns: { id: true, sessionId: true },
+  });
+  for (const run of unsettled) {
+    if (!claimed.has(run.id)) {
+      await releaseDeferredRetryForRun(run.id, run.sessionId);
+    }
+  }
+
+  return { resumed, ended, stale, pendingAnswers };
 }
 
 export type IngestResult =
@@ -1830,6 +2022,7 @@ export async function completeRunFromRunner(
         .select({
           status: schema.agentRuns.status,
           error: schema.agentRuns.error,
+          runnerConfirmationPending: schema.agentRuns.runnerConfirmationPending,
         })
         .from(schema.agentRuns)
         .where(eq(schema.agentRuns.id, run.id))
@@ -1896,20 +2089,34 @@ export async function completeRunFromRunner(
             error: null,
             failureStreak: 0,
             autoRetryAt: null,
+            runnerConfirmationPending: false,
           })
           .where(eq(schema.agentRuns.id, run.id));
         return {
           kind: 'terminal' as const,
           status: 'completed' as const,
           error: null,
+          autoRetryAt: null,
         };
       }
-      return { kind: 'terminal' as const, ...current };
+      // The Runner no longer executes the run: a retry it deferred may run.
+      const autoRetryAt = current.runnerConfirmationPending
+        ? await releaseDeferredRetry(tx, run.id)
+        : null;
+      return {
+        kind: 'terminal' as const,
+        status: current.status,
+        error: current.error,
+        autoRetryAt,
+      };
     });
     if (!outcome) return null;
     kickPendingDispatch(run.sessionId);
 
     if (outcome.kind === 'terminal') {
+      if (outcome.autoRetryAt) {
+        wakeAgentAutoRetryScheduler(outcome.autoRetryAt);
+      }
       // Retry of a final report whose ack was lost. A crash between finishRun
       // and appendEvent leaves the run terminal without a terminal event, so
       // SSE clients would treat the closed stream as a disconnect — repair it.
@@ -2215,12 +2422,13 @@ export async function cancelAgentRun(
 export async function interruptAgentRun(
   runId: string,
   message = 'Agent run was interrupted.',
+  options: FinishOptions = {},
 ): Promise<void> {
   const run = await getAgentRun(runId);
   if (!run || isTerminalAgentRunStatus(run.status)) return;
   // Same per-run serialization as cancelAgentRun (see comment there).
   await enqueueRunTask(runId, async () => {
-    if (await finishRun(runId, 'interrupted', message)) {
+    if (await finishRun(runId, 'interrupted', message, options)) {
       await appendEvent(runId, { type: 'error', message });
     }
   });
@@ -2284,14 +2492,19 @@ async function abandonAutoRetry(
       .from(schema.agentSessions)
       .where(eq(schema.agentSessions.id, sessionId))
       .for('update');
+    // A retry deferred until a Runner settles its ended run goes too.
     const cleared = await tx
       .update(schema.agentRuns)
-      .set({ autoRetryAt: null })
+      .set({ autoRetryAt: null, runnerConfirmationPending: false })
       .where(
         and(
           eq(schema.agentRuns.sessionId, sessionId),
           runId ? eq(schema.agentRuns.id, runId) : undefined,
-          isNotNull(schema.agentRuns.autoRetryAt),
+          notInArray(schema.agentRuns.status, ACTIVE_STATUSES),
+          or(
+            isNotNull(schema.agentRuns.autoRetryAt),
+            eq(schema.agentRuns.runnerConfirmationPending, true),
+          ),
         ),
       )
       .returning({ id: schema.agentRuns.id });
@@ -2516,7 +2729,7 @@ export async function dispatchPendingMessages(
     if (!session || session.pendingPaused) return null;
     if (await getActiveAgentRun(sessionId)) return null;
     const retrying = await db.query.agentRuns.findFirst({
-      where: { sessionId, autoRetryAt: { isNotNull: true } },
+      where: retryHoldFilter(sessionId),
       columns: { id: true },
     });
     if (retrying) return null;

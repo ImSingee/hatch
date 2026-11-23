@@ -157,6 +157,9 @@ message AgentRetryState {
   int32 max_attempts = 4;
   // Set while an automatic retry is scheduled; absent once stopped or exhausted.
   optional string next_retry_at = 5;
+  // An automatic retry waits until the Agent Runner that may still be
+  // executing the failed run reconnects or reports it; stopping it is allowed.
+  bool waiting_for_runner = 6;
 }
 message AgentPendingAsk {
   string ask_id = 1;

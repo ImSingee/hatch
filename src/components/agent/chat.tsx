@@ -385,6 +385,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
             nextRetryAt: retryState.nextRetryAt
               ? Date.parse(retryState.nextRetryAt) - clockOffsetMs
               : null,
+            waitingForRunner: retryState.waitingForRunner,
           }
         : undefined,
     [clockOffsetMs, retryState],
@@ -648,7 +649,14 @@ export function Chat({ sessionId }: { sessionId: string }) {
       await qc.cancelQueries({ queryKey: sessionKey });
       qc.setQueryData(sessionKey, (old) =>
         old?.retry
-          ? { ...old, retry: { ...old.retry, nextRetryAt: null } }
+          ? {
+              ...old,
+              retry: {
+                ...old.retry,
+                nextRetryAt: null,
+                waitingForRunner: false,
+              },
+            }
           : old,
       );
     },
