@@ -19,6 +19,7 @@ export { isDeepLink, isDevClientLink } from '@hatch/platform-api';
  * opens the same page in this app:
  *
  *   hatch://app/sales#/reports              an App page, at its own route
+ *   hatch://app/sales/manage                the App's own page
  *   hatch://agent/<conversation id>
  *   hatch://workflow/nightly?instance=hatch.example.com
  *
@@ -34,6 +35,8 @@ export type LinkTarget =
   | { kind: 'dashboard'; id: string }
   /** `hash` is the App's own route, as after `#` in its web address. */
   | { kind: 'app'; slug: string; hash?: string }
+  /** The App's own page: status, the way in, and web management. */
+  | { kind: 'appPage'; slug: string }
   | { kind: 'conversation'; id: string }
   | { kind: 'workflow'; slug: string }
   | { kind: 'notifications' }
@@ -42,7 +45,13 @@ export type LinkTarget =
   /** An instance page this app has no screen for. */
   | { kind: 'web'; path: string; search?: string; hash?: string };
 
-export type PhonePage = 'tabs' | 'instance' | 'notifications';
+export type PhonePage =
+  | 'tabs'
+  | 'instance'
+  | 'notifications'
+  /** The pickers that pin an App or a Workflow to Home. */
+  | 'pin-app'
+  | 'pin-workflow';
 export type DeepLink = {
   /** Canonical origin the link names, or null for the instance in use. */
   instance: string | null;
@@ -54,7 +63,13 @@ const SLUG = /^[A-Za-z0-9_-]{1,191}$/;
 const ID = /^[A-Za-z0-9_-]{1,256}$/;
 // Addresses are read with the same length bound as links.
 const MAX_ADDRESS_LENGTH = 4096;
-const PHONE_PAGES = new Set<string>(['tabs', 'instance', 'notifications']);
+const PHONE_PAGES = new Set<string>([
+  'tabs',
+  'instance',
+  'notifications',
+  'pin-app',
+  'pin-workflow',
+]);
 
 /** The page a web path names, or null when it names none that may open. */
 export function platformTarget(
@@ -92,6 +107,10 @@ export function platformTarget(
       // The web page and the App's own embed address are the same App.
       if (count === 2 || (count === 3 && third === 'embed'))
         return { kind: 'app', slug: second, ...(hash ? { hash } : {}) };
+      // The phone's App page stands for the web management page; its own
+      // sections (data, schedules, …) stay on the web.
+      if (count === 3 && third === 'manage')
+        return { kind: 'appPage', slug: second };
       return web();
     case 'agent':
       if (count === 1) return { kind: 'tab', tab: 'agent' };
@@ -220,6 +239,8 @@ function segmentsOf(target: LinkTarget): string[] {
       return ['dashboard', target.id];
     case 'app':
       return ['app', target.slug];
+    case 'appPage':
+      return ['app', target.slug, 'manage'];
     case 'conversation':
       return ['agent', target.id];
     case 'workflow':

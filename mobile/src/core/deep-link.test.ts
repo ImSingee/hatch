@@ -25,6 +25,7 @@ describe('deep links', () => {
       ['hatch://mobile/dashboard/d_1', { kind: 'dashboard', id: 'd_1' }],
       ['hatch://apps', { kind: 'tab', tab: 'apps' }],
       ['hatch://app/sales', { kind: 'app', slug: 'sales' }],
+      ['hatch://app/sales/manage', { kind: 'appPage', slug: 'sales' }],
       ['hatch://agent', { kind: 'tab', tab: 'agent' }],
       ['hatch://agent/s-42', { kind: 'conversation', id: 's-42' }],
       ['hatch://workflows', { kind: 'tab', tab: 'workflows' }],
@@ -35,6 +36,8 @@ describe('deep links', () => {
       ['hatch://more/tabs', { kind: 'phone', page: 'tabs' }],
       ['hatch://more/instance', { kind: 'phone', page: 'instance' }],
       ['hatch://more/notifications', { kind: 'phone', page: 'notifications' }],
+      ['hatch://more/pin-app', { kind: 'phone', page: 'pin-app' }],
+      ['hatch://more/pin-workflow', { kind: 'phone', page: 'pin-workflow' }],
     ];
     for (const [link, page] of pages) {
       expect({ link, page: target(link) }).toEqual({ link, page });
@@ -65,9 +68,9 @@ describe('deep links', () => {
   });
 
   it('opens instance pages without a phone screen in the browser', () => {
-    expect(target('hatch://app/sales/manage')).toEqual({
+    expect(target('hatch://app/sales/manage/data')).toEqual({
       kind: 'web',
-      path: '/app/sales/manage',
+      path: '/app/sales/manage/data',
     });
     expect(target('hatch://workflow/nightly/execution/r1#log')).toEqual({
       kind: 'web',
@@ -242,7 +245,9 @@ describe('deep links', () => {
       { kind: 'workflow', slug: 'nightly' },
       { kind: 'notifications' },
       { kind: 'notification', id: 'n1' },
+      { kind: 'appPage', slug: 'sales' },
       { kind: 'phone', page: 'instance' },
+      { kind: 'phone', page: 'pin-workflow' },
       { kind: 'web', path: '/settings/providers', hash: 'keys' },
       { kind: 'web', path: '/settings/users', search: '?q=ada' },
     ];

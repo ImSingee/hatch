@@ -80,7 +80,8 @@ which needs every scheme declared in `LSApplicationQueriesSchemes` (iOS) or
 boundaries covered by its tests.
 
 Deep links name pages by their Hatch web paths (`hatch://app/<slug>#<route>`,
-`hatch://agent/<id>`, optional `?instance=<origin>`); phone-only pages live
+`hatch://app/<slug>/manage` for the App page, `hatch://agent/<id>`, optional
+`?instance=<origin>`); phone-only pages (such as `/more/pin-app`) live
 under `/more`. `src/core/deep-link.ts` owns the grammar and the path table:
 a new screen gets a path there and in its tests, never a route of its own in
 Expo Router's linking. `app/+native-intent.ts` hands system links to the
