@@ -181,7 +181,7 @@ export type AgentStreamEvent =
       attachments?: Attachment[];
     }
   | {
-      /** Auto-compaction lifecycle. Accepted so the stream keeps advancing. */
+      /** Auto-compaction lifecycle, shown as a step of the live reply. */
       type: 'compact';
       reason: 'threshold' | 'overflow';
       phase: 'start' | 'done' | 'failed';

@@ -79,11 +79,13 @@ function persistedPhase(
 ): WorkPhase {
   if (run && isActive(run.status)) return 'running';
   if (stopReason === 'error') return 'failed';
-  if (stopReason === 'aborted') return 'cancelled';
-  if (run?.status === 'cancelled') return 'cancelled';
+  // An interrupted run saves its partial reply as aborted; the person did
+  // not stop it, so the run's own failure wins over that stop reason.
   if (run?.status === 'failed' || run?.status === 'interrupted') {
     return 'failed';
   }
+  if (stopReason === 'aborted') return 'cancelled';
+  if (run?.status === 'cancelled') return 'cancelled';
   if (
     stopReason === 'length' ||
     stopReason === 'toolUse' ||
@@ -122,8 +124,10 @@ export function transcriptRows(
   let reply: Reply | null = null;
   messages.forEach((value, index) => {
     const message = record(value);
-    const role = message?.role;
-    if (role === 'user' && message?.steered !== true) {
+    // A malformed row keeps its index but belongs to no reply.
+    if (!message) return;
+    const role = message.role;
+    if (role === 'user' && message.steered !== true) {
       userTurns += 1;
       reply = null;
       return;
@@ -186,20 +190,18 @@ export function transcriptRows(
               ? answerBlock
               : 0;
         answerFrom.set(index, from);
+        // Steps count the whole part, also a tool after the answer text, so
+        // the line matches what the reply shows (as on the web).
         if (message.role === 'compactionSummary') {
-          if (from > 0) {
-            steps += 1;
-            hasProcess = true;
-          }
+          steps += 1;
+          if (from > 0) hasProcess = true;
           return;
         }
         if (message.role !== 'assistant') return;
-        contentOf(message)
-          .slice(0, from)
-          .forEach((block) => {
-            if (record(block)?.type === 'toolCall') steps += 1;
-            if (visible(block)) hasProcess = true;
-          });
+        contentOf(message).forEach((block, blockIndex) => {
+          if (record(block)?.type === 'toolCall') steps += 1;
+          if (blockIndex < from && visible(block)) hasProcess = true;
+        });
       });
       // Before a steer the part ends when that message was injected.
       const steerAt =
@@ -245,7 +247,13 @@ export function livePhase(
   settled: boolean,
   runStatus?: RunStatus,
 ): WorkPhase {
-  if (state.terminal === 'error') return 'failed';
+  // A stream error can be a dropped connection while the run goes on; it is
+  // a failure once the run says so, or once the reply is held as ended.
+  if (state.terminal === 'error') {
+    return settled || runStatus === 'failed' || runStatus === 'interrupted'
+      ? 'failed'
+      : 'running';
+  }
   if (state.terminal === 'cancelled') return 'cancelled';
   if (state.terminal === 'done') {
     return state.stopReason === 'length' ||

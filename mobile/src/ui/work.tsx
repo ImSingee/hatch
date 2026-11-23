@@ -244,7 +244,10 @@ export function StepRow({
   detail?: string;
   body?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  // A running step shows its detail until the reader folds it; a finished
+  // one starts folded. One value drives the slip, chevron and state.
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const open = choice ?? state === 'running';
   const icon =
     state === 'running' ? (
       <ActivityIndicator
@@ -306,7 +309,7 @@ export function StepRow({
           accessibilityState={{ expanded: open }}
           accessibilityLabel={detail ? `${label}, ${detail}` : label}
           accessibilityValue={status ? { text: status } : undefined}
-          onPress={() => setOpen(!open)}
+          onPress={() => setChoice(!open)}
           style={({ pressed }) => [
             rowStyle,
             {
@@ -327,7 +330,7 @@ export function StepRow({
           {row}
         </View>
       )}
-      {body && (open || state === 'running') ? (
+      {body && open ? (
         <View
           style={{
             marginLeft: 24,

@@ -180,6 +180,45 @@ describe('transcript rows', () => {
     });
   });
 
+  it('counts a tool after the answer text and keeps it out of the fold', () => {
+    const rows = transcriptRows(
+      [
+        user('Run the checks'),
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Running them now.' }, call('c')],
+          stopReason: 'toolUse',
+        },
+      ],
+      [run(0, 'completed')],
+    );
+    expect(rows[1]).toMatchObject({
+      kind: 'reply',
+      answerFrom: 0,
+      segment: { phase: 'incomplete', steps: 1, hasProcess: false },
+    });
+  });
+
+  it('skips a malformed row without breaking the reply around it', () => {
+    const rows = transcriptRows(
+      [user('Hi'), null, { role: 'assistant', content: 'Hello.' }],
+      [],
+    );
+    expect(rows[1]).toEqual({ kind: 'speaker' });
+    expect(rows[2]).toMatchObject({ kind: 'reply', leads: true });
+  });
+
+  it('shows an interrupted run as failed even when its reply was aborted', () => {
+    const rows = transcriptRows(
+      [
+        user('Go'),
+        { role: 'assistant', content: [call('x')], stopReason: 'aborted' },
+      ],
+      [{ ...run(0, 'completed'), status: 'interrupted' }],
+    );
+    expect(rows[1].kind === 'reply' && rows[1].segment.phase).toBe('failed');
+  });
+
   it('pairs only results whose call is in the transcript', () => {
     const results = toolResultsByCall([...messages, result('orphan')]);
     expect([...results.keys()]).toEqual(['a', 'b']);
@@ -196,7 +235,10 @@ describe('live phase', () => {
     expect(livePhase(live(null), false)).toBe('running');
     expect(livePhase(live('done'), false)).toBe('completed');
     expect(livePhase(live('done', 'length'), false)).toBe('incomplete');
-    expect(livePhase(live('error'), false)).toBe('failed');
+    expect(livePhase(live('error'), false, 'failed')).toBe('failed');
+    // A dropped connection while the run is still active is not a failure.
+    expect(livePhase(live('error'), false)).toBe('running');
+    expect(livePhase(live('error'), false, 'running')).toBe('running');
     expect(livePhase(live('cancelled'), true)).toBe('cancelled');
   });
 

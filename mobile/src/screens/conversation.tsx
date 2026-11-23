@@ -403,9 +403,19 @@ function ConversationBody({
     setWorkOpen((current) => ({ ...current, [key]: !expanded }));
   };
   // Server clock minus this phone's, for the line counting a live run.
-  const clockOffset = detail
-    ? Date.parse(detail.serverTime) - session.dataUpdatedAt
-    : 0;
+  // Taken when a fetched snapshot brings a new server time: a local write
+  // (the pending tray) keeps that time but moves `dataUpdatedAt`.
+  const [clock, setClock] = useState<{
+    serverTime: string;
+    offset: number;
+  } | null>(null);
+  if (detail && clock?.serverTime !== detail.serverTime) {
+    setClock({
+      serverTime: detail.serverTime,
+      offset: Date.parse(detail.serverTime) - session.dataUpdatedAt,
+    });
+  }
+  const clockOffset = clock?.offset ?? 0;
   const runTime = (run: string | null | undefined) => {
     const found = detail?.runs.find((item) => item.id === run);
     const started =

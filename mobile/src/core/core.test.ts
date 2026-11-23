@@ -1063,6 +1063,25 @@ describe('device login lifecycle', () => {
 });
 
 describe('stream replay and recovery', () => {
+  it('keeps each context compaction as a step of the live reply', () => {
+    const compact = (seq: number, phase: 'start' | 'done' | 'failed') =>
+      ({
+        seq,
+        event: { type: 'compact', reason: 'threshold', phase },
+      }) as RunStreamEvent;
+    let state = initialStreamState();
+    for (const packet of [
+      compact(1, 'start'),
+      compact(2, 'done'),
+      compact(3, 'start'),
+      compact(4, 'failed'),
+    ])
+      state = reduceStreamEvent(state, packet);
+    expect(state.blocks).toEqual([
+      { kind: 'compact', status: 'done' },
+      { kind: 'compact', status: 'failed' },
+    ]);
+  });
   it('parses chunked UTF-8, CRLF split across chunks, comments, and multiline data', () => {
     const received: string[] = [];
     const parser = new SseParser((value) => received.push(value));

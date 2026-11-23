@@ -270,7 +270,7 @@ export function StreamingBubble({
                     hasProcess={process.length > 0 || indicator !== null}
                     summary={{
                       steps: state.blocks
-                        .slice(segment.start, processEnd)
+                        .slice(segment.start, segment.end)
                         .filter(isStreamStep).length,
                       ...(last ? { current: currentStep } : {}),
                     }}

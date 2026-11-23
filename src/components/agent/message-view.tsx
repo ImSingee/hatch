@@ -384,7 +384,7 @@ export function MessageView({
           <WorkProcess
             frame={work}
             hasProcess={hasVisibleBlocks(processBlocks)}
-            summary={{ steps: processBlocks.filter(isStepBlock).length }}
+            summary={{ steps: message.content.filter(isStepBlock).length }}
           >
             <AssistantBlocks blocks={processBlocks} toolResults={toolResults} />
           </WorkProcess>

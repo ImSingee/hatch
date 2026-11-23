@@ -23,6 +23,8 @@ export type StreamBlock =
   | { kind: 'text'; text: string }
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; id: string }
+  /** A context compaction, a step of its own; the newest open one closes. */
+  | { kind: 'compact'; status: 'running' | 'done' | 'failed' }
   /** A steer message the run took in, where it was injected. */
   | {
       kind: 'steer';
@@ -162,6 +164,27 @@ export function reduceStreamEvent(
             : tool,
         ),
       };
+    case 'compact': {
+      if (event.phase === 'start') {
+        return {
+          ...next,
+          blocks: [...state.blocks, { kind: 'compact', status: 'running' }],
+        };
+      }
+      let open = state.blocks.length - 1;
+      while (open >= 0) {
+        const block = state.blocks[open];
+        if (block.kind === 'compact' && block.status === 'running') break;
+        open -= 1;
+      }
+      if (open === -1) return next;
+      const blocks = [...state.blocks];
+      blocks[open] = {
+        kind: 'compact',
+        status: event.phase === 'done' ? 'done' : 'failed',
+      };
+      return { ...next, blocks };
+    }
     case 'user_message':
       return state.blocks.some(
         (block) => block.kind === 'steer' && block.id === event.pendingId,

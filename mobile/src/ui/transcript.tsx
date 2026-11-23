@@ -389,6 +389,8 @@ function currentStep(state: StreamState): string {
   if (running) return toolStepLabel(running.name, running.args, running.label);
   const last = state.blocks.at(-1);
   if (!last) return 'Starting';
+  if (last.kind === 'compact' && last.status === 'running')
+    return 'Compacting context';
   return last.kind === 'text' ? 'Writing' : 'Thinking';
 }
 
@@ -422,63 +424,115 @@ export function LiveTranscript({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const steps = state.blocks.filter((block) => block.kind === 'tool').length;
-  const hasProcess = state.blocks.some(
-    (block) =>
-      block.kind !== 'steer' && (block.kind === 'tool' || block.text.trim()),
-  );
+  const phase = livePhase(state, settled, runStatus);
+  const steps = state.blocks.filter(
+    (block) => block.kind === 'tool' || block.kind === 'compact',
+  ).length;
+  // Once the reply has ended, its last text since the latest steered message
+  // is the answer: it stays out of the fold, as in the saved transcript.
+  let answerFrom = state.blocks.length;
+  if (phase !== 'running') {
+    for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
+      const block = state.blocks[index];
+      if (block.kind === 'steer') break;
+      if (block.kind === 'text' && block.text.trim()) {
+        answerFrom = index;
+        break;
+      }
+    }
+  }
+  const hasProcess = state.blocks
+    .slice(0, answerFrom)
+    .some(
+      (block) =>
+        block.kind === 'tool' ||
+        block.kind === 'compact' ||
+        ((block.kind === 'text' || block.kind === 'thinking') &&
+          Boolean(block.text.trim())),
+    );
+  const stepOf = (block: StreamBlock, index: number): ReactNode => {
+    if (block.kind === 'text') {
+      return block.text.trim() ? (
+        <Text
+          key={index}
+          selectable
+          style={[type.callout, { color: c.ink, paddingVertical: 4 }]}
+        >
+          {block.text.trim()}
+        </Text>
+      ) : null;
+    }
+    if (block.kind === 'thinking') {
+      return block.text.trim() ? (
+        <StepRow
+          key={index}
+          state="thinking"
+          label="Thinking"
+          body={<StepSlip output={block.text.trim()} />}
+        />
+      ) : null;
+    }
+    if (block.kind === 'compact') {
+      return (
+        <StepRow
+          key={index}
+          state={block.status}
+          label={
+            block.status === 'running'
+              ? 'Compacting context'
+              : block.status === 'failed'
+                ? 'Context compaction failed'
+                : 'Compacted context'
+          }
+        />
+      );
+    }
+    if (block.kind !== 'tool') return null;
+    const tool = state.tools.find((item) => item.id === block.id);
+    return tool ? (
+      <StepRow
+        key={index}
+        state={!tool.done ? 'running' : tool.isError ? 'failed' : 'done'}
+        label={toolStepLabel(tool.name, tool.args, tool.label)}
+        detail={toolStepDetail(tool.args)}
+        body={
+          <StepSlip
+            request={tool.args ?? {}}
+            output={tool.output ?? tool.summary}
+            error={tool.isError}
+          />
+        }
+      />
+    ) : null;
+  };
   // Consecutive process blocks share one rail; a steered message breaks it.
   const groups: {
     steer?: Extract<StreamBlock, { kind: 'steer' }>;
     blocks: ReactNode[];
   }[] = [{ blocks: [] }];
-  state.blocks.forEach((block, index) => {
+  state.blocks.slice(0, answerFrom).forEach((block, index) => {
     if (block.kind === 'steer') {
       groups.push({ steer: block, blocks: [] });
       return;
     }
     if (!expanded) return;
-    const group = groups.at(-1)!;
+    const step = stepOf(block, index);
+    if (step) groups.at(-1)!.blocks.push(step);
+  });
+  // The answer, and anything the reply did after it, stays visible.
+  const answer = state.blocks.slice(answerFrom).map((block, offset) => {
+    const index = answerFrom + offset;
     if (block.kind === 'text') {
-      if (block.text.trim())
-        group.blocks.push(
-          <Text
-            key={index}
-            selectable
-            style={[type.callout, { color: c.ink, paddingVertical: 4 }]}
-          >
+      return block.text.trim() ? (
+        <Bubble key={index}>
+          <Text selectable style={[type.body, { lineHeight: 24 }]}>
             {block.text.trim()}
-          </Text>,
-        );
-    } else if (block.kind === 'thinking') {
-      if (block.text.trim())
-        group.blocks.push(
-          <StepRow
-            key={index}
-            state="thinking"
-            label="Thinking"
-            body={<StepSlip output={block.text.trim()} />}
-          />,
-        );
-    } else {
-      const tool = state.tools.find((item) => item.id === block.id);
-      if (tool)
-        group.blocks.push(
-          <StepRow
-            key={index}
-            state={!tool.done ? 'running' : tool.isError ? 'failed' : 'done'}
-            label={toolStepLabel(tool.name, tool.args, tool.label)}
-            detail={toolStepDetail(tool.args)}
-            body={
-              <StepSlip
-                request={tool.args ?? {}}
-                output={tool.output ?? tool.summary}
-                error={tool.isError}
-              />
-            }
-          />,
-        );
+          </Text>
+        </Bubble>
+      ) : null;
     }
+    const step = stepOf(block, index);
+    return step ? <WorkRail key={index}>{step}</WorkRail> : null;
   });
   const steer = (block: Extract<StreamBlock, { kind: 'steer' }>) => {
     // An event without images shows none, even if a stale cache has some.
@@ -512,7 +566,7 @@ export function LiveTranscript({
   return (
     <View style={{ gap: ANSWER_GAP, paddingVertical: 4 }}>
       <WorkLine
-        phase={livePhase(state, settled, runStatus)}
+        phase={phase}
         startedAt={startedAt}
         endedAt={endedAt}
         clockOffset={clockOffset}
@@ -547,6 +601,7 @@ export function LiveTranscript({
           {group.blocks.length ? <WorkRail>{group.blocks}</WorkRail> : null}
         </Fragment>
       ))}
+      {answer}
       {state.error ? (
         <Text style={[type.small, { color: hue.danger.ink }]}>
           {state.error}

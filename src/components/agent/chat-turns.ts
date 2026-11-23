@@ -137,11 +137,13 @@ export function persistedWorkPhase(
 ): WorkPhase {
   if (run && isActiveRunStatus(run.status)) return 'running';
   if (stopReason === 'error') return 'failed';
-  if (stopReason === 'aborted') return 'cancelled';
-  if (run?.status === 'cancelled') return 'cancelled';
+  // An interrupted run saves its partial reply as aborted; the person did
+  // not stop it, so the run's own failure wins over that stop reason.
   if (run?.status === 'failed' || run?.status === 'interrupted') {
     return 'failed';
   }
+  if (stopReason === 'aborted') return 'cancelled';
+  if (run?.status === 'cancelled') return 'cancelled';
   if (isIncompleteStopReason(stopReason)) return 'incomplete';
   return 'completed';
 }
