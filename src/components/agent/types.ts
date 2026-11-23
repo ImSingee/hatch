@@ -58,6 +58,8 @@ export type ChatMessage =
       composerContent?: AgentComposerContentPart[];
       /** Injected into a running run (see `~agent/user-turns`). */
       steered?: boolean;
+      /** When a steered message was injected (server clock, ISO 8601). */
+      injectedAt?: string;
     }
   | {
       role: 'assistant';

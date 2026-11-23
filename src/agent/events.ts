@@ -100,6 +100,11 @@ export type AgentStreamEvent =
       composerContent?: AgentComposerContentPart[];
       attachments?: AgentAttachmentRef[];
       images: { mimeType: string }[];
+      /**
+       * When the platform received it (server clock, ISO 8601). Set by the
+       * platform, never by the Runner; absent on events stored before it.
+       */
+      injectedAt?: string;
     }
   | {
       /**

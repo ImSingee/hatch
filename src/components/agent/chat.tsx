@@ -9,7 +9,14 @@ import {
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconSparkles } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 import { composerDisplayText, hasComposerText } from '~agent/composer-content';
 import { nextUserTurn } from '~agent/user-turns';
@@ -29,6 +36,8 @@ import {
   isActiveRunStatus,
   persistedWorkPhase,
   replyMessage,
+  replySegments,
+  segmentTimings,
   userMessageIndexOfTurn,
 } from './chat-turns';
 import { MessageView } from './message-view';
@@ -66,6 +75,11 @@ import classes from './chat.module.css';
  */
 function workStateKey(runKey: string, phase: WorkPhase): string {
   return `${runKey}:${phase === 'running' ? 'live' : 'ended'}`;
+}
+
+/** The work a reply did before its `segment`-th steered message. */
+function segmentWorkKey(runKey: string, segment: number): string {
+  return `${runKey}:before-steer-${segment}`;
 }
 
 /**
@@ -758,26 +772,77 @@ export function Chat({ sessionId }: { sessionId: string }) {
         if (liveUserTurn !== null && turn.userTurn === liveUserTurn) return [];
         const run =
           turn.userTurn === null ? undefined : runsByTurn.get(turn.userTurn);
-        return [
-          <MessageView
-            key={turn.key}
-            message={replyMessage(
-              turn.blocks,
-              turn.stopReason,
-              turn.errorMessage,
-              run,
-            )}
-            toolResults={toolResults}
-            apps={appsQuery.data}
-            workflows={workflowsQuery.data}
-            {...retryControls(turn.userTurn)}
-            work={workFrame(
-              run?.id ?? turn.key,
-              persistedWorkPhase(run, turn.stopReason),
-              run ? runTiming(run.startedAt, run.completedAt) : null,
-            )}
-          />,
-        ];
+        const runKey = run?.id ?? turn.key;
+        // Each steered message is a message of its own between the work
+        // before it and the reply after it (see `replySegments`).
+        const segments = replySegments(
+          turn.blocks,
+          (block) => block.type === 'steer',
+        );
+        const steers = segments.flatMap((segment) => {
+          const block =
+            segment.steer === undefined
+              ? undefined
+              : turn.blocks[segment.steer];
+          return block?.type === 'steer' ? [block.message] : [];
+        });
+        const timings = segmentTimings(
+          run ? runTiming(run.startedAt, run.completedAt) : null,
+          steers.map((message) => message.injectedAt),
+        );
+        return segments.flatMap((segment, index) => {
+          const rows: ReactElement[] = [];
+          const blocks = turn.blocks.slice(segment.start, segment.end);
+          const last = index === segments.length - 1;
+          if (last) {
+            rows.push(
+              <MessageView
+                key={turn.key}
+                message={replyMessage(
+                  blocks,
+                  turn.stopReason,
+                  turn.errorMessage,
+                  run,
+                )}
+                toolResults={toolResults}
+                apps={appsQuery.data}
+                workflows={workflowsQuery.data}
+                {...retryControls(turn.userTurn)}
+                work={workFrame(
+                  runKey,
+                  persistedWorkPhase(run, turn.stopReason),
+                  timings[index],
+                )}
+              />,
+            );
+          } else if (blocks.length > 0) {
+            rows.push(
+              <MessageView
+                key={`${turn.key}:segment-${index}`}
+                message={{ role: 'assistant', content: blocks }}
+                toolResults={toolResults}
+                apps={appsQuery.data}
+                workflows={workflowsQuery.data}
+                work={workFrame(
+                  segmentWorkKey(runKey, index),
+                  'completed',
+                  timings[index],
+                )}
+              />,
+            );
+          }
+          if (!last) {
+            rows.push(
+              <MessageView
+                key={`${turn.key}:steer-${index}`}
+                message={steers[index]}
+                toolResults={toolResults}
+                onUserMessageToggle={onUserMessageToggle}
+              />,
+            );
+          }
+          return rows;
+        });
       }),
     [
       answeredTurns,
@@ -808,6 +873,13 @@ export function Chat({ sessionId }: { sessionId: string }) {
           startedAt: liveStarted,
           ...(liveEnded === undefined ? {} : { endedAt: liveEnded }),
         },
+  );
+
+  const liveRunKey = streamState.runId ?? 'pending';
+  const liveEarlierWork = useCallback(
+    (segment: number, timing: WorkTiming) =>
+      workFrame(segmentWorkKey(liveRunKey, segment), 'completed', timing),
+    [liveRunKey, workFrame],
   );
 
   // Return acceptance so the composer keeps the draft if the run fails to start
@@ -1081,6 +1153,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
                     onAnswer={answer}
                     onSubmitEnv={submitEnv}
                     work={liveWork}
+                    earlierWork={liveEarlierWork}
                     steerImages={steerImages}
                     retry={
                       liveRunId && retryState?.runId === liveRunId

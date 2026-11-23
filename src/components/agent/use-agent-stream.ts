@@ -61,6 +61,8 @@ export type StreamSteerBlock = {
   attachments?: AgentAttachmentRef[];
   /** The event carries image metadata only; the data comes from the tray. */
   imageCount: number;
+  /** When the platform received it (server clock, ISO 8601). */
+  injectedAt?: string;
 };
 export type StreamCompactBlock = {
   kind: 'compact';
@@ -542,6 +544,7 @@ export function reduceStreamState(
                   ? { attachments: event.attachments }
                   : {}),
                 imageCount: event.images.length,
+                ...(event.injectedAt ? { injectedAt: event.injectedAt } : {}),
               },
             ],
           };

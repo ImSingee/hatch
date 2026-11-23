@@ -354,7 +354,7 @@ test('offers Resume when delivery is paused and hides actions while sending', as
   ]);
 });
 
-test('shows a steered message inside the reply it joined, live and in history', async () => {
+test('shows a steered message as its own message between the work around it', async () => {
   const { push } = stubFetch();
   const screen = await renderChat();
   await vi.waitFor(() => push({ type: 'assistant_start' }));
@@ -370,7 +370,11 @@ test('shows a steered message inside the reply it joined, live and in history', 
   await expect.element(screen.getByText('Switched to blue.')).toBeVisible();
   const live = screen.getByText('Use blue');
   await expect.element(live).toBeVisible();
-  // One reply: the steered message sits between its two parts.
+  // The steered message stands apart: the work before it is finished and
+  // framed on its own, and the reply goes on below it.
+  await expect
+    .element(screen.getByRole('button', { name: /Working/ }))
+    .toBeVisible();
   const order = [
     screen.getByText('Working on it.').element(),
     live.element(),
@@ -400,6 +404,7 @@ test('keeps reply pairing when history holds a steered message', async () => {
       content: [{ type: 'text', text: 'Use blue' }],
       steered: true,
       pendingMessageId: 'pending-1',
+      injectedAt: '2026-11-20T12:00:10.000Z',
     },
     {
       role: 'assistant',
@@ -429,11 +434,23 @@ test('keeps reply pairing when history holds a steered message', async () => {
   stubFetch();
   const screen = await renderChat();
   await expect.element(screen.getByText('Done in blue.')).toBeVisible();
-  await screen
-    .getByRole('button', { name: /Worked/ })
-    .first()
-    .click();
+  // The steered message is a message of its own, and the work before and
+  // after it is timed apart: start to injection, injection to end.
   await expect.element(screen.getByText('Use blue')).toBeVisible();
+  await expect.element(screen.getByText('10s', { exact: true })).toBeVisible();
+  await expect.element(screen.getByText('20s', { exact: true })).toBeVisible();
+  const order = [
+    screen.getByText('Started.').element(),
+    screen.getByText('Use blue').element(),
+    screen.getByText('20s', { exact: true }).element(),
+    screen.getByText('Done in blue.').element(),
+  ];
+  for (let index = 1; index < order.length; index += 1) {
+    expect(
+      order[index - 1].compareDocumentPosition(order[index]) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  }
   // The failure belongs to "Thanks" (user turn 1), not to the steered message.
   await expect.element(screen.getByText('Provider unavailable')).toBeVisible();
   const thanks = screen.getByText('Thanks').element();

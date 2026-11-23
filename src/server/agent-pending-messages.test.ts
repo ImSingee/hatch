@@ -240,6 +240,18 @@ describe('steer messages', () => {
     ]);
     expect((await tray()).messages).toEqual([]);
     expect(await db.select().from(schema.agentPendingMessages)).toEqual([]);
+    // The saved steered messages carry the platform time of their injection,
+    // so the chat can time the work before and after each one.
+    const saved = (await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    }))!.messages as { steered?: boolean; injectedAt?: unknown }[];
+    const injectedAt = saved
+      .filter((message) => message.steered)
+      .map((message) => message.injectedAt);
+    expect(injectedAt).toHaveLength(2);
+    for (const value of injectedAt) {
+      expect(Number.isNaN(Date.parse(String(value)))).toBe(false);
+    }
     // Steered messages belong to the run's reply, not new user turns.
     expect(await activeRunId()).toBeNull();
     expect((await loadSessionDetail(SESSION))!.runs).toHaveLength(1);
