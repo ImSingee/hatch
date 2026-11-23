@@ -492,16 +492,19 @@ describe('pending messages and preferences', () => {
   });
 
   it('shows a steered message where the run took it in, once', async () => {
-    const fetcher = vi
-      .fn<FetchLike>()
-      .mockResolvedValue(
-        stream([
-          event(1, { type: 'text', delta: 'Working.' }),
-          event(2, { type: 'user_message', pendingId: 'p1', text: 'Use blue' }),
-          event(3, { type: 'user_message', pendingId: 'p1', text: 'Use blue' }),
-          event(4, { type: 'done' }),
-        ]),
-      );
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(
+      stream([
+        event(1, { type: 'text', delta: 'Working.' }),
+        event(2, {
+          type: 'user_message',
+          pendingId: 'p1',
+          text: 'Use blue',
+          images: [{ mimeType: 'image/png' }],
+        }),
+        event(3, { type: 'user_message', pendingId: 'p1', text: 'Use blue' }),
+        event(4, { type: 'done' }),
+      ]),
+    );
     const { client, vault } = setup(fetcher);
     await vault.set(origin, 'fixture-token');
     let state = initialStreamState();
@@ -512,7 +515,7 @@ describe('pending messages and preferences', () => {
     });
     expect(state.blocks).toEqual([
       { kind: 'text', text: 'Working.' },
-      { kind: 'steer', id: 'p1', text: 'Use blue' },
+      { kind: 'steer', id: 'p1', text: 'Use blue', imageCount: 1 },
     ]);
   });
 });

@@ -23,7 +23,7 @@ export type StreamBlock =
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; id: string }
   /** A steer message the run took in, where it was injected. */
-  | { kind: 'steer'; id: string; text: string };
+  | { kind: 'steer'; id: string; text: string; imageCount: number };
 export type StreamState = {
   lastSeq: number;
   text: string;
@@ -164,7 +164,12 @@ export function reduceStreamEvent(
             ...next,
             blocks: [
               ...state.blocks,
-              { kind: 'steer', id: event.pendingId, text: event.text },
+              {
+                kind: 'steer',
+                id: event.pendingId,
+                text: event.text,
+                imageCount: event.images?.length ?? 0,
+              },
             ],
           };
     case 'done':
@@ -257,7 +262,9 @@ function validEvent(value: unknown): value is AgentStreamEvent {
       );
     case 'user_message':
       return (
-        typeof value.pendingId === 'string' && typeof value.text === 'string'
+        typeof value.pendingId === 'string' &&
+        typeof value.text === 'string' &&
+        (value.images === undefined || Array.isArray(value.images))
       );
     case 'tool_update':
       return (

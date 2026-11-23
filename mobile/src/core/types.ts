@@ -167,6 +167,8 @@ export type AgentStreamEvent =
       type: 'user_message';
       pendingId: string;
       text: string;
+      /** Image metadata only; the data is known from the pending tray. */
+      images?: { mimeType: string }[];
     }
   | {
       /** Auto-compaction lifecycle. Accepted so the stream keeps advancing. */

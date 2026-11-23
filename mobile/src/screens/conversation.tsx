@@ -310,6 +310,22 @@ function ConversationBody({
     [refresh],
   );
   const stream = useRunStream(api, streamRunId, reconcile);
+  // Images of messages that were in the tray, for the live reply that shows
+  // them once the run takes them in (its event carries no image data).
+  const steerImagesRef = useRef(
+    new Map<string, { data: string; mimeType: string }[]>(),
+  );
+  const pendingMessages = detail?.pending?.messages;
+  useEffect(() => {
+    for (const message of pendingMessages ?? []) {
+      if (message.images.length)
+        steerImagesRef.current.set(message.id, message.images);
+    }
+  }, [pendingMessages]);
+  const steerImages = useCallback(
+    (pendingId: string) => steerImagesRef.current.get(pendingId) ?? [],
+    [],
+  );
   const heldShown = placeHeldReplies(
     detail?.messages ?? [],
     shownHeldReplies(held, id, detail),
@@ -874,7 +890,11 @@ function ConversationBody({
                 >
                   {heldShown.rest.map(heldReply)}
                   {streamRunId ? (
-                    <LiveTranscript state={stream.state} status={status} />
+                    <LiveTranscript
+                      state={stream.state}
+                      status={status}
+                      steerImages={steerImages}
+                    />
                   ) : null}
                   {ask && runId ? (
                     answerSubmitted ? (
