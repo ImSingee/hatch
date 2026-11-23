@@ -824,9 +824,18 @@ export const ComposerEditor = forwardRef<
     editor?.setEditable(!disabled);
   }, [disabled, editor]);
 
+  // Read at seed time only: a new array with the same content must not
+  // replace what the user typed since.
+  const seedContentRef = useRef(seedContent);
+  seedContentRef.current = seedContent;
   useEffect(() => {
     if (!editor || seedNonce === undefined) return;
-    editor.commands.setContent(plainTextComposerDocument(seedText ?? ''));
+    const content = seedContentRef.current;
+    editor.commands.setContent(
+      content
+        ? composerDocumentFromParts(content)
+        : plainTextComposerDocument(seedText ?? ''),
+    );
     editor.commands.focus('end');
   }, [editor, seedNonce, seedText]);
 

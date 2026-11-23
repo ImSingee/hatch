@@ -294,6 +294,40 @@ test('edits, sends now and cancels pending messages', async () => {
   });
 });
 
+test('closes an open edit once the run takes the message in', async () => {
+  fixtures.session.pending = {
+    paused: false,
+    messages: [
+      pendingMessage('pending-1', 'Use blue'),
+      pendingMessage('pending-2', 'Deploy it', 'queue'),
+    ],
+  };
+  // Cancelling the second message returns a tray where the run has already
+  // claimed the first one.
+  stubFetch(() => ({
+    paused: false,
+    messages: [
+      { ...pendingMessage('pending-1', 'Use blue'), status: 'claimed' },
+    ],
+  }));
+  const screen = await renderChat();
+  const tray = screen.getByRole('region', { name: 'Pending messages' });
+  const rows = tray.getByTestId('pending-message');
+  await rows.nth(0).getByRole('button', { name: 'Edit message' }).click();
+  await expect
+    .element(tray.getByRole('textbox', { name: 'Edit message…' }))
+    .toBeVisible();
+
+  await rows.nth(1).getByRole('button', { name: 'Cancel message' }).click();
+  await expect.element(tray.getByText('Sending…')).toBeVisible();
+  await expect
+    .element(tray.getByRole('textbox', { name: 'Edit message…' }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(tray.getByRole('button', { name: 'Save' }))
+    .not.toBeInTheDocument();
+});
+
 test('offers Resume when delivery is paused and hides actions while sending', async () => {
   fixtures.session.activeRun = null;
   fixtures.session.pending = {

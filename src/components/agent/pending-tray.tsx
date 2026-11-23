@@ -206,6 +206,12 @@ function PendingRow({
       toast.error(errorText(error, 'Could not send the message now.')),
   });
   const editable = message.status === 'pending';
+  // A run taking the message in ends any edit: it can no longer change.
+  const [wasEditable, setWasEditable] = useState(editable);
+  if (wasEditable !== editable) {
+    setWasEditable(editable);
+    if (!editable) setEditing(false);
+  }
   const working = cancel.isPending || sendNow.isPending;
   const files = message.images.length + message.attachments.length;
 
@@ -226,13 +232,15 @@ function PendingRow({
             {MODE_LABEL[message.mode]}
           </Badge>
         </Tooltip>
-        {editing ? (
+        {editing && editable ? (
           <Box className={classes.body}>
             <PendingEdit
               message={message}
               mentions={mentions}
               saving={update.isPending}
-              onSave={(changes) => update.mutate(changes)}
+              onSave={(changes) => {
+                if (editable) update.mutate(changes);
+              }}
               onCancel={() => setEditing(false)}
             />
           </Box>

@@ -295,7 +295,11 @@ export function LiveTranscript({
         if (block.kind === 'thinking')
           return <Details key={index} title="Reasoning" text={block.text} />;
         if (block.kind === 'steer') {
-          const images = steerImages?.(block.id) ?? [];
+          // An event without images shows none, even if a stale cache has
+          // some.
+          const images = block.imageCount
+            ? (steerImages?.(block.id) ?? [])
+            : [];
           // Without the image data, say the message had images.
           const text =
             !images.length && block.imageCount

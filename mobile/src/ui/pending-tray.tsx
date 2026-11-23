@@ -39,6 +39,13 @@ function PendingRow({
   // the field itself.
   const field = useRef<NativeFieldRef>(null);
   const editable = message.status === 'pending';
+  // A run taking the message in ends any edit: it can no longer change.
+  const [wasEditable, setWasEditable] = useState(editable);
+  if (wasEditable !== editable) {
+    setWasEditable(editable);
+    if (!editable) setDraft(null);
+  }
+  const editing = editable && draft !== null;
   const files = message.images.length + message.attachments.length;
   return (
     <View
@@ -61,7 +68,7 @@ function PendingRow({
         >
           {MODE_LABEL[message.mode]}
         </Text>
-        {draft === null ? (
+        {!editing ? (
           <Text style={[type.callout, { flex: 1 }]} numberOfLines={2}>
             {message.text || (files ? 'Attachments only' : '')}
           </Text>
@@ -70,7 +77,7 @@ function PendingRow({
         )}
         {!editable ? (
           <Text style={type.meta}>Sending…</Text>
-        ) : draft === null ? (
+        ) : !editing ? (
           <View style={{ flexDirection: 'row' }}>
             {plainText(message) ? (
               <IconButton
@@ -101,12 +108,12 @@ function PendingRow({
           </View>
         ) : null}
       </View>
-      {files && draft === null ? (
+      {files && !editing ? (
         <Text style={type.meta}>
           {files === 1 ? '1 attachment' : `${files} attachments`}
         </Text>
       ) : null}
-      {draft !== null ? (
+      {editable && draft !== null ? (
         <View style={{ gap: 8 }}>
           <NativeField
             ref={field}
@@ -132,11 +139,12 @@ function PendingRow({
               size="small"
               busy={busy}
               disabled={!draft.trim() && files === 0}
-              onPress={() =>
+              onPress={() => {
+                if (!editable) return;
                 void onSave(field.current?.getText() ?? draft).then((saved) => {
                   if (saved) setDraft(null);
-                })
-              }
+                });
+              }}
             />
           </View>
         </View>

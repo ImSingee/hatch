@@ -315,12 +315,40 @@ function ConversationBody({
   const steerImagesRef = useRef(
     new Map<string, { data: string; mimeType: string }[]>(),
   );
+  // Claimed messages leave the tray before their event reaches the live
+  // reply; their images stay cached until a reply shows them.
+  const steerAwaitingRef = useRef(new Set<string>());
   const pendingMessages = detail?.pending?.messages;
+  const liveSteerIds = [
+    stream.state,
+    ...held.entries.map((entry) => entry.state),
+  ]
+    .flatMap((state) =>
+      state.blocks.flatMap((block) =>
+        block.kind === 'steer' ? [block.id] : [],
+      ),
+    )
+    .join('\n');
   useEffect(() => {
-    // Always overwrite: an edit can remove every image.
-    for (const message of pendingMessages ?? [])
-      steerImagesRef.current.set(message.id, message.images);
-  }, [pendingMessages]);
+    const cache = steerImagesRef.current;
+    const awaiting = steerAwaitingRef.current;
+    const keep = new Set(liveSteerIds ? liveSteerIds.split('\n') : []);
+    for (const pendingId of keep) awaiting.delete(pendingId);
+    for (const message of pendingMessages ?? []) {
+      // Always overwrite: an edit can remove every image.
+      cache.set(message.id, message.images);
+      keep.add(message.id);
+      if (message.status === 'claimed') awaiting.add(message.id);
+      else awaiting.delete(message.id);
+    }
+    // Drop images no tray row, live or held reply, or claimed handover still
+    // needs, such as those of cancelled messages.
+    for (const pendingId of cache.keys()) {
+      if (!keep.has(pendingId) && !awaiting.has(pendingId)) {
+        cache.delete(pendingId);
+      }
+    }
+  }, [pendingMessages, liveSteerIds]);
   const steerImages = useCallback(
     (pendingId: string) => steerImagesRef.current.get(pendingId) ?? [],
     [],

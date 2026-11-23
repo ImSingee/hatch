@@ -98,26 +98,16 @@ export function StreamingBubble({
         );
       } else if (block.kind === 'steer') {
         flush();
-        const images = steerImages?.(block.pendingId) ?? [];
-        // Without the image data, say the message had images.
-        const text =
-          images.length === 0 && block.imageCount > 0
-            ? [
-                block.text,
-                block.imageCount === 1
-                  ? '1 image'
-                  : `${block.imageCount} images`,
-              ]
-                .filter(Boolean)
-                .join('\n')
-            : block.text;
+        // An event without images shows none, even if a stale cache has some.
+        const images =
+          block.imageCount > 0 ? (steerImages?.(block.pendingId) ?? []) : [];
         out.push(
           <UserMessage
             key={index}
             message={{
               role: 'user',
               content: [
-                { type: 'text', text },
+                { type: 'text', text: block.text },
                 ...images.map((image) => ({ type: 'image', ...image })),
               ],
               ...(block.composerContent
@@ -128,6 +118,17 @@ export function StreamingBubble({
             }}
           />,
         );
+        if (images.length === 0 && block.imageCount > 0) {
+          // Without the image data, say the message had images. Kept apart
+          // from the bubble, whose text may come from composer content.
+          out.push(
+            <Text key={`${index}-images`} size="xs" c="dimmed" ta="right">
+              {block.imageCount === 1
+                ? '1 image'
+                : `${block.imageCount} images`}
+            </Text>,
+          );
+        }
       } else if (block.kind === 'compact') {
         steps.push(
           <CompactionStep
