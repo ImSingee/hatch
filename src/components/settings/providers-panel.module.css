@@ -1,19 +1,15 @@
-/* Flat provider blocks separated by hairlines — no card framing. */
+/* One outlined group per provider, flat on the window's ground. */
 .providerList {
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .provider {
-  padding-block: var(--mantine-spacing-lg);
-}
-
-.provider:first-child {
-  padding-top: 0;
-}
-
-.provider:not(:first-child) {
-  border-top: 1px solid var(--mantine-color-default-border);
+  padding: 16px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--surface-raised);
 }
 
 .providerHead {

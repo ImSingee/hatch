@@ -1,24 +1,18 @@
-import { auroraTheme } from '../aurora-theme/theme';
-import { blueTheme } from '../blue-theme/theme';
-import { orangeTheme } from '../orange-theme/theme';
-import { emberTheme } from '../ember-theme/theme';
 import { cssVariablesResolver } from './cssVariableResolver';
-import { baseTheme } from './base-theme';
+import { deskTheme } from './theme';
 import type { CSSVariablesResolver, MantineThemeOverride } from '@mantine/core';
 
-export type AppThemeName = 'zinc' | 'aurora' | 'blue' | 'orange' | 'ember';
+export { ACCENT_CSS, TILE_COLORS, accentRamp, deskThemeFor } from './theme';
+export {
+  ACCENT_COLORS,
+  ACCENT_NAMES,
+  DEFAULT_ACCENT,
+  isAccentName,
+} from './accents';
+export type { AccentName } from './accents';
+export { ACCENT_BOOT_SCRIPT, applyAccent, useAccent } from './accent-store';
+export { NATIVE_HOST_BOOT_SCRIPT, useNativeHostDocument } from './native-host';
 
-export const themes: Record<AppThemeName, MantineThemeOverride> = {
-  zinc: baseTheme,
-  aurora: auroraTheme,
-  blue: blueTheme,
-  orange: orangeTheme,
-  ember: emberTheme,
-};
-
-// Single switch point: change this value to change the whole app theme.
-export const defaultThemeName: AppThemeName = 'ember';
-
-export const appTheme: MantineThemeOverride = themes[defaultThemeName];
+export const appTheme: MantineThemeOverride = deskTheme;
 export const appCssVariablesResolver: CSSVariablesResolver =
   cssVariablesResolver;

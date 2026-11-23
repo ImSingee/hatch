@@ -143,7 +143,7 @@ test('the native host drives refresh and opens Apps outside the canvas router', 
   };
   window.addEventListener('click', intercept);
   (
-    screen.getByRole('link', { name: 'Open app' }).element() as HTMLElement
+    screen.getByRole('link', { name: 'Open App' }).element() as HTMLElement
   ).click();
   window.removeEventListener('click', intercept);
   expect(routed).toBe(false);

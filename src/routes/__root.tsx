@@ -14,9 +14,19 @@ import {
 import { Toaster } from 'sonner';
 import { NavigationProgress } from '@mantine/nprogress';
 import { ModalsProvider } from '@mantine/modals';
-import type { QueryClient } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import appCss from '~styles.css?url';
-import { appCssVariablesResolver, appTheme } from '~ui/theme';
+import { themeQueryOptions } from '~queries/theme';
+import {
+  ACCENT_BOOT_SCRIPT,
+  ACCENT_CSS,
+  NATIVE_HOST_BOOT_SCRIPT,
+  appCssVariablesResolver,
+  applyAccent,
+  deskThemeFor,
+  useAccent,
+} from '~ui/theme';
 
 /**
  * One SPA document serves every page, so a per-route policy cannot cover
@@ -69,19 +79,6 @@ export const Route = createRootRouteWithContext<{
         href: '/manifest.json',
       },
       {
-        rel: 'preconnect',
-        href: 'https://fonts.googleapis.com',
-      },
-      {
-        rel: 'preconnect',
-        href: 'https://fonts.gstatic.com',
-        crossOrigin: 'anonymous',
-      },
-      {
-        rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..560&display=swap',
-      },
-      {
         rel: 'stylesheet',
         href: appCss,
       },
@@ -91,19 +88,37 @@ export const Route = createRootRouteWithContext<{
   shellComponent: RootDocument,
 });
 
+/**
+ * Keeps this browser on the instance accent: applies the stored setting as
+ * soon as it is fetched, and again whenever the query is refreshed.
+ */
+function AccentSync() {
+  const { data } = useQuery(themeQueryOptions);
+  const accent = data?.accent;
+  useEffect(() => {
+    if (accent) applyAccent(accent);
+  }, [accent]);
+  return null;
+}
+
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const accent = useAccent();
   return (
     <html lang="en" {...mantineHtmlProps}>
       <head>
         <HeadContent />
         <ColorSchemeScript forceColorScheme="light" />
+        <style dangerouslySetInnerHTML={{ __html: ACCENT_CSS }} />
+        <script dangerouslySetInnerHTML={{ __html: ACCENT_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: NATIVE_HOST_BOOT_SCRIPT }} />
       </head>
       <body>
         <MantineProvider
-          theme={appTheme}
+          theme={deskThemeFor(accent)}
           cssVariablesResolver={appCssVariablesResolver}
           forceColorScheme="light"
         >
+          <AccentSync />
           <ModalsProvider>{children}</ModalsProvider>
 
           <Toaster position="top-center" richColors />

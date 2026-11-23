@@ -70,7 +70,7 @@ export function UsersPanel() {
     <Stack gap="md">
       <Group justify="space-between" gap="md" py="xs" wrap="nowrap">
         <Stack gap={2}>
-          <Text fw={600}>Allow sign-up</Text>
+          <Text fw={700}>Allow sign-up</Text>
           <Text size="sm" c="dimmed">
             Let anyone who can reach this space create an account. Every account
             gets full access, so keep this off unless you are inviting someone.
@@ -144,7 +144,7 @@ function UserRow({
           />
           <Stack gap={0} miw={0}>
             <Group gap={6} wrap="nowrap">
-              <Text size="sm" fw={600} truncate>
+              <Text size="sm" fw={700} truncate>
                 {user.name || user.email}
               </Text>
               {isCurrent && (

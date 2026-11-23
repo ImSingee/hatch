@@ -1,0 +1,74 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  font-weight: var(--font-weight-strong);
+}
+
+.switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 260px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-text);
+  font-size: 13px;
+  font-weight: var(--font-weight-label);
+  transition: background-color var(--transition-fast);
+}
+
+.switcher:hover,
+.switcher[aria-expanded='true'] {
+  background: var(--surface-hover);
+}
+
+.switcherName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The heading carries New app on the ultrawide desk and below 768. */
+@media (min-width: 120em) {
+  :global([data-companion]) .actions [data-toolbar-new-app] {
+    display: none;
+  }
+}
+
+@media (max-width: 48em) {
+  .toolbar {
+    justify-content: space-between;
+  }
+
+  .meta {
+    margin-left: -8px;
+  }
+
+  /* Narrow: Edit widgets stays in the "…" menu only. */
+  .actions [data-toolbar-new-app],
+  .actions [data-toolbar-edit] {
+    display: none;
+  }
+}

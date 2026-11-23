@@ -115,7 +115,7 @@ export function CodeEntry({
         {account ? (
           <>
             Signed in as{' '}
-            <Text span size="sm" fw={500} c="var(--mantine-color-text)">
+            <Text span size="sm" fw={600} c="var(--mantine-color-text)">
               {account}
             </Text>
             .{' '}

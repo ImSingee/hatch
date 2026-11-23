@@ -98,7 +98,7 @@ export function AgentRunnerPanel({
 
       <Stack gap="xs">
         <Group justify="space-between" align="baseline">
-          <Text fw={600}>Runners</Text>
+          <Text fw={700}>Runners</Text>
           <Text size="xs" c="dimmed">
             Heartbeat every{' '}
             {formatDuration(snapshot.summary.heartbeatIntervalMs)} · lease TTL{' '}
@@ -121,7 +121,7 @@ export function AgentRunnerPanel({
       </Stack>
 
       <Stack gap="xs">
-        <Text fw={600}>Active runs</Text>
+        <Text fw={700}>Active runs</Text>
         {snapshot.activeRuns.length === 0 ? (
           <Text size="sm" c="dimmed">
             No agent runs are running or waiting right now.
@@ -164,7 +164,7 @@ function Stat({ label, value }: { label: string; value: number }) {
       <Text size="xs" c="dimmed">
         {label}
       </Text>
-      <Text fz={26} fw={600} lh={1.2}>
+      <Text fz={26} fw={700} lh={1.2}>
         {value}
       </Text>
     </Stack>
@@ -244,7 +244,7 @@ function ActiveRunsTable({ runs }: { runs: ActiveAgentRunInfo[] }) {
               <Table.Td maw={280}>
                 <Text
                   size="sm"
-                  fw={500}
+                  fw={600}
                   truncate
                   renderRoot={(props) => (
                     <Link

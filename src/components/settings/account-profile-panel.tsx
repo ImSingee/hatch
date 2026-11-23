@@ -88,7 +88,7 @@ function ProfileForm({ user }: { user: Session['user'] }) {
     >
       <Stack gap="md">
         <Stack gap={2}>
-          <Text fw={600}>Profile</Text>
+          <Text fw={700}>Profile</Text>
           <Text size="sm" c="dimmed">
             Choose the name displayed for your account.
           </Text>

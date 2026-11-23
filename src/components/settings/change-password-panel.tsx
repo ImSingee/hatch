@@ -58,7 +58,7 @@ export function ChangePasswordPanel() {
   return (
     <Stack gap="md" align="flex-start">
       <Stack gap={2}>
-        <Text fw={600}>Password</Text>
+        <Text fw={700}>Password</Text>
         <Text size="sm" c="dimmed">
           Update the password you use to sign in.
         </Text>

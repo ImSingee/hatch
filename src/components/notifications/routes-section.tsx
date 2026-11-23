@@ -147,7 +147,7 @@ function RouteModal({ onClose }: { onClose: () => void }) {
       <form onSubmit={submit}>
         <Stack gap="md">
           <Stack gap={6}>
-            <Text size="sm" fw={500}>
+            <Text size="sm" fw={600}>
               When a notification comes from
             </Text>
             <SegmentedControl
@@ -284,74 +284,76 @@ export function RoutesSection() {
           No routes yet, so notifications are recorded but not delivered.
         </Text>
       ) : (
-        <Table verticalSpacing="sm" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Match</Table.Th>
-              <Table.Th w="30%">Deliver to</Table.Th>
-              <Table.Th w={90}>Enabled</Table.Th>
-              <Table.Th w={48} aria-label="Actions" />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {routes.map((route) => (
-              <Table.Tr key={route.id}>
-                <Table.Td>
-                  <Stack gap={0} miw={0}>
-                    <Text size="sm" fw={500} truncate>
-                      {sourceLabel(route)} · {kindLabel(route)}
-                    </Text>
-                    {route.name ? (
-                      <Text size="xs" c="dimmed" truncate>
-                        {route.name}
-                      </Text>
-                    ) : null}
-                  </Stack>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={6} wrap="nowrap">
-                    <IconArrowRight
-                      size={14}
-                      stroke={1.6}
-                      color="var(--mantine-color-dimmed)"
-                    />
-                    <Text size="sm" truncate>
-                      {targets.label(route)}
-                    </Text>
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Switch
-                    checked={
-                      toggle.isPending && toggle.variables?.id === route.id
-                        ? toggle.variables.enabled
-                        : route.enabled
-                    }
-                    onChange={(event) =>
-                      toggle.mutate({
-                        id: route.id,
-                        enabled: event.currentTarget.checked,
-                      })
-                    }
-                    aria-label="Enable route"
-                  />
-                </Table.Td>
-                <Table.Td>
-                  <Tooltip label="Delete route" withArrow>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      aria-label="Delete route"
-                      onClick={() => confirmDelete(route)}
-                    >
-                      <IconTrash size={16} stroke={1.6} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Table.Td>
+        <Table.ScrollContainer minWidth={620} type="native">
+          <Table verticalSpacing="sm" layout="fixed">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Match</Table.Th>
+                <Table.Th w="30%">Deliver to</Table.Th>
+                <Table.Th w={90}>Enabled</Table.Th>
+                <Table.Th w={48} aria-label="Actions" />
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {routes.map((route) => (
+                <Table.Tr key={route.id}>
+                  <Table.Td>
+                    <Stack gap={0} miw={0}>
+                      <Text size="sm" fw={600} truncate>
+                        {sourceLabel(route)} · {kindLabel(route)}
+                      </Text>
+                      {route.name ? (
+                        <Text size="xs" c="dimmed" truncate>
+                          {route.name}
+                        </Text>
+                      ) : null}
+                    </Stack>
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap={6} wrap="nowrap">
+                      <IconArrowRight
+                        size={14}
+                        stroke={1.6}
+                        color="var(--mantine-color-dimmed)"
+                      />
+                      <Text size="sm" truncate>
+                        {targets.label(route)}
+                      </Text>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Switch
+                      checked={
+                        toggle.isPending && toggle.variables?.id === route.id
+                          ? toggle.variables.enabled
+                          : route.enabled
+                      }
+                      onChange={(event) =>
+                        toggle.mutate({
+                          id: route.id,
+                          enabled: event.currentTarget.checked,
+                        })
+                      }
+                      aria-label="Enable route"
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Tooltip label="Delete route" withArrow>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        aria-label="Delete route"
+                        onClick={() => confirmDelete(route)}
+                      >
+                        <IconTrash size={16} stroke={1.6} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {creating ? <RouteModal onClose={() => setCreating(false)} /> : null}

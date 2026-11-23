@@ -1,0 +1,223 @@
+.bar {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-hairline);
+  backdrop-filter: blur(14px);
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nav {
+  display: flex;
+  gap: 2px;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-text);
+  font-size: 13px;
+  font-weight: var(--font-weight-strong);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast);
+}
+
+.item:hover,
+.item[aria-expanded='true'] {
+  background: var(--surface-hover);
+}
+
+.item[aria-current='page'] {
+  background: var(--surface-hover);
+  font-weight: var(--font-weight-label);
+}
+
+.icon {
+  min-width: 30px;
+  padding: 0;
+}
+
+.brand {
+  padding: 0 8px;
+}
+
+/* The router marks the brand link current on the desk; only the navigation
+   shows where you are. */
+.brand[aria-current='page'] {
+  background: transparent;
+}
+
+.brand[aria-current='page']:hover {
+  background: var(--surface-hover);
+}
+
+.divider {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--border-hairline);
+}
+
+/* Shown only while no runner is connected: a red warning chip. */
+.runner {
+  gap: 7px;
+  margin-right: 4px;
+  padding: 0 10px 0 9px;
+  border-radius: 999px;
+  background: var(--mantine-color-red-light);
+  color: var(--mantine-color-red-light-color);
+  font-size: 12px;
+}
+
+.runner:hover {
+  background: var(--mantine-color-red-light-hover);
+}
+
+.runnerDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.runnerLabel {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search {
+  gap: 6px;
+  color: var(--mantine-color-gray-7);
+}
+
+.kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-xs);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.paletteIcon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--surface-hover);
+  color: var(--mantine-color-text);
+}
+
+.paletteIcon > svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+}
+
+/* Shown in place of the navigation once it folds into the menu. */
+.fold,
+.section {
+  display: none;
+}
+
+.section {
+  overflow: hidden;
+  color: var(--mantine-color-gray-7);
+  font-size: 14px;
+  font-weight: var(--font-weight-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date {
+  padding: 0 8px;
+  color: var(--mantine-color-gray-7);
+  font-size: 13px;
+  font-weight: var(--font-weight-strong);
+  white-space: nowrap;
+}
+
+.account {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  min-height: 30px;
+  border-radius: var(--mantine-radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.account:hover,
+.account[aria-expanded='true'] {
+  background: var(--surface-hover);
+}
+
+@media (max-width: 48em) {
+  .bar {
+    height: 44px;
+    padding: 0 8px;
+  }
+
+  .item {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+
+  .account {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .fold {
+    display: inline-flex;
+    padding: 0;
+  }
+
+  .section {
+    display: inline;
+  }
+
+  .nav,
+  .date,
+  .kbd,
+  .runnerLabel {
+    display: none;
+  }
+
+  .runner,
+  .runner:hover {
+    min-width: 36px;
+    margin-right: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* Without a section label there is nothing for the divider to separate. */
+  .side:not(:has(.section)) .divider {
+    display: none;
+  }
+}

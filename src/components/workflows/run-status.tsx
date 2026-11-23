@@ -5,7 +5,7 @@ import type { WorkflowRunStatus, WorkflowRunStepStatus } from '~/db/schema';
 
 /**
  * Run/step status visuals. The theme avoids green badges, so a healthy
- * "succeeded" reads as the warm ember accent (paired with a check icon) rather
+ * "succeeded" reads as the accent (paired with a check icon) rather
  * than the conventional green.
  */
 const RUN_META: Record<
@@ -19,12 +19,12 @@ const RUN_META: Record<
   },
   running: {
     label: 'Running',
-    color: 'ember',
-    icon: <Loader size={9} color="ember" />,
+    color: 'primary',
+    icon: <Loader size={9} color="primary" />,
   },
   succeeded: {
     label: 'Succeeded',
-    color: 'ember',
+    color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   failed: {
@@ -70,7 +70,7 @@ export function RunStatusBullet({
   filled?: boolean;
 }) {
   const color =
-    status === 'failed' ? 'red' : status === 'running' ? 'gray' : 'ember';
+    status === 'failed' ? 'red' : status === 'running' ? 'gray' : 'primary';
   const icon =
     status === 'failed' ? (
       <IconX size={11} stroke={2.5} />

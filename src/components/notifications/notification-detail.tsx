@@ -123,7 +123,7 @@ export function NotificationDetail({ id }: { id: string }) {
         ) : null}
         {data.data ? (
           <Stack gap={6} mt="lg">
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={700}>
               Data
             </Text>
             <Code block style={{ fontSize: 'var(--mantine-font-size-xs)' }}>
@@ -137,7 +137,7 @@ export function NotificationDetail({ id }: { id: string }) {
         <>
           <Divider />
           <Box component="section">
-            <Text fw={600} fz="lg" mb="xs">
+            <Text fw={700} fz="lg" mb="xs">
               Reply
             </Text>
             <ReplySection
@@ -148,7 +148,7 @@ export function NotificationDetail({ id }: { id: string }) {
             />
             {data.response ? (
               <Box mt="lg">
-                <Text fw={600} size="sm" mb="xs">
+                <Text fw={700} size="sm" mb="xs">
                   Answer deliveries
                 </Text>
                 {data.responseDeliveryList.length === 0 ? (
@@ -172,7 +172,7 @@ export function NotificationDetail({ id }: { id: string }) {
       <Divider />
 
       <Box component="section">
-        <Text fw={600} fz="lg" mb="xs">
+        <Text fw={700} fz="lg" mb="xs">
           Deliveries
         </Text>
         {data.deliveryList.length === 0 ? (
@@ -202,27 +202,29 @@ function DeliveryTable({
   deliveries: DeliveryView[];
 }) {
   return (
-    <Table verticalSpacing="sm" layout="fixed">
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Destination</Table.Th>
-          <Table.Th w={130}>Status</Table.Th>
-          <Table.Th w={80}>Attempts</Table.Th>
-          <Table.Th>Outcome</Table.Th>
-          <Table.Th w={110} aria-label="Actions" />
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {deliveries.map((delivery) => (
-          <DeliveryRow
-            key={delivery.id}
-            notificationId={notificationId}
-            revision={revision}
-            delivery={delivery}
-          />
-        ))}
-      </Table.Tbody>
-    </Table>
+    <Table.ScrollContainer minWidth={620} type="native">
+      <Table verticalSpacing="sm" layout="fixed">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Destination</Table.Th>
+            <Table.Th w={130}>Status</Table.Th>
+            <Table.Th w={80}>Attempts</Table.Th>
+            <Table.Th>Outcome</Table.Th>
+            <Table.Th w={110} aria-label="Actions" />
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {deliveries.map((delivery) => (
+            <DeliveryRow
+              key={delivery.id}
+              notificationId={notificationId}
+              revision={revision}
+              delivery={delivery}
+            />
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }
 
@@ -258,7 +260,7 @@ function DeliveryRow({
             <DestinationTypeIcon type={delivery.destinationType} />
           </Box>
           <Stack gap={0} miw={0}>
-            <Text size="sm" fw={500} truncate>
+            <Text size="sm" fw={600} truncate>
               {delivery.destinationName}
             </Text>
             <Text size="xs" c="dimmed">

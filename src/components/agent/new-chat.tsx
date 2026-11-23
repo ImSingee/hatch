@@ -1,18 +1,16 @@
-import {
-  Box,
-  Button,
-  Card,
-  Group,
-  Stack,
-  Text,
-  ThemeIcon,
-  Title,
-} from '@mantine/core';
+import { Box, Button, ThemeIcon } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { IconPlugConnected, IconSparkles } from '@tabler/icons-react';
+import {
+  IconBookmark,
+  IconCalendarCheck,
+  IconChartBar,
+  IconPlugConnected,
+  IconReceipt,
+} from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { EmptyState, Section } from '~components/page/page';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import { workflowsQueryOptions } from '~queries/workflows';
@@ -27,10 +25,26 @@ import { startAgentRunRequest } from './use-agent-stream';
 import classes from './chat.module.css';
 
 const EXAMPLE_PROMPTS = [
-  'A daily habit tracker',
-  'A personal bookmarks manager',
-  'A workout log with charts',
-  'A simple expense tracker',
+  {
+    text: 'A daily habit tracker',
+    color: 'green',
+    icon: <IconCalendarCheck size={18} stroke={1.8} />,
+  },
+  {
+    text: 'A personal bookmarks manager',
+    color: 'blue',
+    icon: <IconBookmark size={18} stroke={1.8} />,
+  },
+  {
+    text: 'A workout log with charts',
+    color: 'orange',
+    icon: <IconChartBar size={18} stroke={1.8} />,
+  },
+  {
+    text: 'A simple expense tracker',
+    color: 'violet',
+    icon: <IconReceipt size={18} stroke={1.8} />,
+  },
 ];
 
 /**
@@ -52,7 +66,7 @@ export function NewChat({
   const [model, setModel] = useLastSelectedModel();
   const [creating, setCreating] = useState(false);
   // Reuse a session created by a failed first attempt so a retry doesn't leave
-  // a trail of empty "New chat" shells in the sidebar.
+  // a trail of empty "New chat" shells in the chat list.
   const createdSessionRef = useRef<string | null>(null);
   const [seed, setSeed] = useState({
     text: initialPrompt ?? '',
@@ -104,41 +118,34 @@ export function NewChat({
 
   return (
     <Box className={classes.hero}>
-      <Stack className={classes.heroInner} gap="lg">
-        <Stack gap={8} align="center">
-          <ThemeIcon size={56} radius="xl" variant="light" color="ember">
-            <IconSparkles size={28} stroke={1.5} />
-          </ThemeIcon>
-          <Title order={2} className={classes.heroTitle}>
-            What do you want to build?
-          </Title>
-          <Text c="dimmed" ta="center" maw={440}>
-            Describe an app in plain language. The Agent scaffolds, builds, and
-            deploys it for you — then it lives in your sidebar and dashboards.
-          </Text>
-        </Stack>
+      <Box className={classes.heroInner}>
+        <div>
+          <h2 className={classes.heroTitle}>What do you want to build?</h2>
+          <p className={classes.heroLead}>
+            Describe an app in plain language. The Agent writes the code, sets
+            up its database and deploys it — then it lives in your dock and on
+            your desk.
+          </p>
+        </div>
 
         {first === null ? (
-          <Card withBorder radius="lg" padding="lg" className={classes.guard}>
-            <Stack align="center" gap="xs">
-              <ThemeIcon size={44} radius="xl" variant="light" color="gray">
-                <IconPlugConnected size={22} stroke={1.6} />
-              </ThemeIcon>
-              <Text fw={600}>Connect an AI provider to start</Text>
-              <Text size="sm" c="dimmed" ta="center" maw={380}>
-                Add a provider and enable a model in Settings, then come back to
-                start building.
-              </Text>
+          <EmptyState
+            variant="dashed"
+            icon={<IconPlugConnected size={20} stroke={1.8} />}
+            title="Connect an AI provider to start"
+            actions={
               <Button
                 component={Link}
                 to="/settings/providers"
-                mt="xs"
                 leftSection={<IconPlugConnected size={16} stroke={1.7} />}
               >
                 Go to Settings
               </Button>
-            </Stack>
-          </Card>
+            }
+          >
+            Add a provider and enable a model in Settings, then come back to
+            start building.
+          </EmptyState>
         ) : (
           <>
             <Composer
@@ -164,24 +171,31 @@ export function NewChat({
               }
             />
 
-            <Group gap="xs" justify="center">
-              {EXAMPLE_PROMPTS.map((prompt) => (
-                <Button
-                  key={prompt}
-                  variant="default"
-                  size="xs"
-                  radius="xl"
-                  onClick={() =>
-                    setSeed((s) => ({ text: prompt, nonce: s.nonce + 1 }))
-                  }
-                >
-                  {prompt}
-                </Button>
-              ))}
-            </Group>
+            <Section title="Try these">
+              <div className={classes.suggestions}>
+                {EXAMPLE_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt.text}
+                    type="button"
+                    className={classes.suggestion}
+                    onClick={() =>
+                      setSeed((s) => ({
+                        text: prompt.text,
+                        nonce: s.nonce + 1,
+                      }))
+                    }
+                  >
+                    <ThemeIcon size={34} radius="md" color={prompt.color}>
+                      {prompt.icon}
+                    </ThemeIcon>
+                    {prompt.text}
+                  </button>
+                ))}
+              </div>
+            </Section>
           </>
         )}
-      </Stack>
+      </Box>
     </Box>
   );
 }

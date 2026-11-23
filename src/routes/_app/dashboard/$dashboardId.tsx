@@ -1,16 +1,7 @@
-import {
-  ActionIcon,
-  Box,
-  Button,
-  Center,
-  Divider,
-  Group,
-  Loader,
-  Menu,
-  Text,
-  Tooltip,
-} from '@mantine/core';
-import { modals } from '@mantine/modals';
+import { rememberDashboard } from '~components/desk/last-dashboard';
+import { routeErrorMessage } from '~components/system/route-error';
+import { Button, Skeleton, Text } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import {
   useMutation,
   useQueryClient,
@@ -18,55 +9,45 @@ import {
 } from '@tanstack/react-query';
 import {
   createFileRoute,
+  Link,
   redirect,
   useBlocker,
-  useNavigate,
+  useRouter,
+  type ErrorComponentProps,
 } from '@tanstack/react-router';
-import {
-  IconAlertCircle,
-  IconCheck,
-  IconChevronDown,
-  IconRefresh,
-} from '@tabler/icons-react';
-import { Suspense, useEffect, useState } from 'react';
+import { IconAlertTriangle, IconPlus, IconRefresh } from '@tabler/icons-react';
+import dayjs from 'dayjs';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Page } from '~components/app-shell/page';
-import { AddWidgetPicker } from '~components/dashboard/add-widget-picker';
+import { authClient } from '~auth/client';
+import { AddWidgetPanel } from '~components/dashboard/add-widget-panel';
 import { DashboardGrid } from '~components/dashboard/dashboard-grid';
 import { DashboardGridStage } from '~components/dashboard/dashboard-grid-stage';
-import { DashboardLayoutPreview } from '~components/dashboard/dashboard-layout-preview';
-import { DashboardOptionsMenu } from '~components/dashboard/dashboard-options-menu';
+import { DeskToolbar } from '~components/dashboard/desk-toolbar';
+import { EditorHeading } from '~components/dashboard/editor-heading';
 import {
   DashboardEmptyState,
   type DashboardEmptyStateKind,
 } from '~components/dashboard/empty-state';
-import {
-  REFRESH_PRESETS,
-  formatInterval,
-} from '~components/dashboard/refresh-presets';
-import {
-  type DashboardDraftStatus,
-  useDashboardDraft,
-} from '~components/dashboard/use-dashboard-draft';
-import { openTextPromptModal } from '~components/system/text-prompt-modal';
+import { useDashboardDraft } from '~components/dashboard/use-dashboard-draft';
+import { useLiveDashboard } from '~components/dashboard/use-live-dashboard';
+import { WidgetPager } from '~components/dashboard/widget-pager';
+import { DeskHome } from '~components/desk/desk-home';
+import { DeskTiles } from '~components/desk/desk-tiles';
+import { QuickAgentChat } from '~components/desk/quick-agent-chat';
+import { TodayPanel } from '~components/desk/today-panel';
 import { appsQueryOptions } from '~queries/apps';
 import {
   availableWidgetsQueryOptions,
   dashboardQueryOptions,
   dashboardsQueryOptions,
 } from '~queries/dashboards';
+import { setDashboardAutoRefresh } from '~server/dashboards';
 import {
-  type Dashboard,
-  deleteDashboard,
-  renameDashboard,
-  setDashboardAutoRefresh,
-  setDashboardDescription,
-} from '~server/dashboards';
-import type { DashboardBreakpoint } from '~/lib/dashboard-layout';
+  dashboardBreakpointForWidth,
+  type DashboardBreakpoint,
+} from '~/lib/dashboard-layout';
 import classes from './dashboard.module.css';
-
-const DEFAULT_DASHBOARD_DESCRIPTION =
-  'A home for the widgets and apps you care about.';
 
 export const Route = createFileRoute('/_app/dashboard/$dashboardId')({
   loader: async ({ context, params }) => {
@@ -90,26 +71,52 @@ export const Route = createFileRoute('/_app/dashboard/$dashboardId')({
       ),
     ]);
   },
+  pendingComponent: DeskSkeleton,
+  errorComponent: DeskError,
   component: DashboardPage,
 });
 
 function DashboardPage() {
   const { dashboardId } = Route.useParams();
+  return <DashboardWorkspace key={dashboardId} dashboardId={dashboardId} />;
+}
 
+/** "Good afternoon, Sam" from the time of day and the first name. */
+function useGreeting(): string {
+  const { data } = authClient.useSession();
+  const hour = dayjs().hour();
+  const part =
+    hour < 5
+      ? 'evening'
+      : hour < 12
+        ? 'morning'
+        : hour < 18
+          ? 'afternoon'
+          : 'evening';
+  const name = data?.user.name?.trim().split(/\s+/)[0];
+  return name ? `Good ${part}, ${name}` : `Good ${part}`;
+}
+
+function HeadingActions({ appCount }: { appCount: number }) {
   return (
-    <Suspense
-      fallback={
-        <Center h="100%">
-          <Loader />
-        </Center>
-      }
-    >
-      <DashboardWorkspace key={dashboardId} dashboardId={dashboardId} />
-    </Suspense>
+    <>
+      <Button
+        component={Link}
+        to="/agent"
+        leftSection={<IconPlus size={15} stroke={2.2} />}
+      >
+        New app
+      </Button>
+      <Button component={Link} to="/apps" variant="default">
+        All apps ({appCount})
+      </Button>
+    </>
   );
 }
 
 function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
+  const queryClient = useQueryClient();
+  const greeting = useGreeting();
   const { data: dashboards } = useSuspenseQuery(dashboardsQueryOptions);
   const { data: dashboardData } = useSuspenseQuery(
     dashboardQueryOptions(dashboardId),
@@ -117,16 +124,21 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
   const { data: available } = useSuspenseQuery(availableWidgetsQueryOptions);
   const { data: apps } = useSuspenseQuery(appsQueryOptions);
   const current = dashboards.find((dashboard) => dashboard.id === dashboardId);
-  const description = current?.description?.trim() || undefined;
+  useEffect(() => {
+    // "Pin to desk" elsewhere targets the desk shown last.
+    rememberDashboard(dashboardId);
+  }, [dashboardId]);
   const [editing, setEditing] = useState(false);
   const [previewBreakpoint, setPreviewBreakpoint] =
     useState<DashboardBreakpoint>('desktop');
-  const [addWidgetOpened, setAddWidgetOpened] = useState(false);
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [showAllWidgets, setShowAllWidgets] = useState(false);
+  const phone = useMediaQuery('(max-width: 35em)');
   const editor = useDashboardDraft({
     dashboardId,
     initialData: dashboardData,
   });
+  useLiveDashboard(dashboardId, editing);
   useBlocker({
     shouldBlockFn: () =>
       editing &&
@@ -145,343 +157,196 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
     return () => window.clearInterval(id);
   }, [autoRefreshSeconds, dashboardId, editing]);
 
+  const setAutoRefresh = useMutation({
+    mutationFn: (seconds: number) =>
+      setDashboardAutoRefresh({ data: { id: dashboardId, seconds } }),
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: dashboardsQueryOptions.queryKey,
+      }),
+  });
+
   const beginEditing = () => {
     editor.reset(dashboardData);
-    setPreviewBreakpoint('desktop');
+    // Start on the layout the current width shows, so the preview fits.
+    setPreviewBreakpoint(
+      dashboardBreakpointForWidth(Math.min(window.innerWidth, 1200) - 40),
+    );
     setEditing(true);
   };
-  const openAddWidget = () => {
-    if (!editing) beginEditing();
-    setAddWidgetOpened(true);
+  const finish = (saved: boolean) => {
+    if (!saved) return;
+    setEditing(false);
+    toast.success('Dashboard changes saved');
   };
   const cancelEditing = () => {
     if (!editor.cancel()) return;
-    setAddWidgetOpened(false);
     setEditing(false);
   };
-  const saveEditing = async () => {
-    if (!(await editor.save())) return;
-    setAddWidgetOpened(false);
-    setEditing(false);
-    toast.success('Dashboard changes saved');
-  };
-  const checkSaveStatus = async () => {
-    if (!(await editor.checkStatus())) return;
-    setAddWidgetOpened(false);
-    setEditing(false);
-    toast.success('Dashboard changes saved');
+  const done = async () => {
+    if (!editor.dirty) {
+      setEditing(false);
+      return;
+    }
+    finish(await editor.save());
   };
 
-  const emptyState: DashboardEmptyStateKind =
-    apps.length === 0
+  const liveApps = apps.filter((app) => app.status !== 'archived');
+  const emptyState: DashboardEmptyStateKind = editing
+    ? 'editing'
+    : liveApps.length === 0
       ? 'no-apps'
       : available.length === 0
         ? 'no-widgets'
         : 'empty-dashboard';
 
   const activeData = editing ? editor.draft : dashboardData;
-  const renderGrid = (transformScale: number) =>
-    activeData.widgets.length > 0 ? (
-      <DashboardGrid
-        items={activeData.widgets}
-        layouts={activeData.layouts}
-        editing={editing}
-        previewBreakpoint={editing ? previewBreakpoint : undefined}
-        transformScale={transformScale}
-        refreshSignal={refreshSignal}
-        removeDisabled={editor.locked}
-        interactionDisabled={editor.locked}
-        onRemove={editor.removeWidget}
-        onLayoutCommit={editor.commitLayout}
-      />
-    ) : (
+  const widgets =
+    activeData.widgets.length === 0 ? (
       <DashboardEmptyState
         state={emptyState}
         onAddWidget={
-          emptyState === 'empty-dashboard' ? openAddWidget : undefined
+          emptyState === 'empty-dashboard' ? beginEditing : undefined
         }
       />
+    ) : phone && !editing && !showAllWidgets ? (
+      <WidgetPager
+        items={activeData.widgets}
+        layouts={activeData.layouts}
+        refreshSignal={refreshSignal}
+        onShowAll={() => setShowAllWidgets(true)}
+      />
+    ) : (
+      <DashboardGridStage
+        editing={editing}
+        previewBreakpoint={previewBreakpoint}
+      >
+        {(transformScale) => (
+          <DashboardGrid
+            items={activeData.widgets}
+            layouts={activeData.layouts}
+            editing={editing}
+            previewBreakpoint={editing ? previewBreakpoint : undefined}
+            transformScale={transformScale}
+            refreshSignal={refreshSignal}
+            removeDisabled={editor.locked}
+            interactionDisabled={editor.locked}
+            onRemove={editor.removeWidget}
+            onLayoutCommit={editor.commitLayout}
+          />
+        )}
+      </DashboardGridStage>
     );
 
   return (
-    <Page
-      title={current?.name ?? 'Dashboard'}
-      description={description}
-      size={editing ? 1360 : 1180}
-      hideHeader={editing}
-      actions={
-        editing ? undefined : (
-          <>
-            <Tooltip label="Refresh all widgets" withArrow>
-              <ActionIcon
-                variant="default"
-                size="input-sm"
-                aria-label="Refresh all widgets"
-                onClick={() => setRefreshSignal((signal) => signal + 1)}
-              >
-                <IconRefresh size={18} stroke={1.7} />
-              </ActionIcon>
-            </Tooltip>
-            {current ? <AutoRefreshMenu dashboard={current} /> : null}
-            {current ? (
-              <DashboardMenu dashboard={current} onEdit={beginEditing} />
-            ) : null}
-          </>
-        )
+    <DeskHome
+      title={greeting}
+      description={current?.description?.trim() || undefined}
+      editing={editing}
+      actions={<HeadingActions appCount={liveApps.length} />}
+      toolbar={
+        current ? (
+          <DeskToolbar
+            dashboard={current}
+            onEdit={beginEditing}
+            onRefresh={() => setRefreshSignal((signal) => signal + 1)}
+          />
+        ) : null
       }
-    >
-      <Box>
-        {editing ? (
-          <Box
-            className={classes.editorToolbar}
-            role="toolbar"
-            aria-label="Dashboard editor"
-          >
-            <Box className={classes.editorToolbarScroll}>
-              <Group
-                justify="space-between"
-                gap="md"
-                wrap="nowrap"
-                className={classes.editorToolbarRow}
-              >
-                <Group gap="sm" wrap="nowrap">
-                  <DashboardLayoutPreview
-                    value={previewBreakpoint}
-                    onChange={setPreviewBreakpoint}
-                  />
-                  <Divider
-                    orientation="vertical"
-                    className={classes.editorDivider}
-                  />
-                  <AddWidgetPicker
-                    available={available}
-                    placed={editor.draft.widgets}
-                    opened={addWidgetOpened}
-                    onOpenedChange={setAddWidgetOpened}
-                    onAdd={editor.addWidget}
-                    disabled={editor.locked}
-                  />
-                </Group>
-                <Group gap="sm" wrap="nowrap">
-                  <DraftStatus
-                    status={editor.status}
-                    onCheckStatus={() => void checkSaveStatus()}
-                  />
-                  <Button
-                    type="button"
-                    variant="subtle"
-                    color="gray"
-                    disabled={editor.cancelDisabled}
-                    onClick={cancelEditing}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    leftSection={<IconCheck size={16} stroke={1.9} />}
-                    loading={editor.status.state === 'saving'}
-                    disabled={!editor.dirty || editor.locked}
-                    onClick={() => void saveEditing()}
-                  >
-                    Save changes
-                  </Button>
-                </Group>
-              </Group>
-            </Box>
-          </Box>
-        ) : null}
-        <DashboardGridStage
-          editing={editing}
+      editor={
+        <EditorHeading
+          dashboardName={current?.name ?? 'Dashboard'}
+          autoRefreshSeconds={autoRefreshSeconds}
+          widgetCount={editor.draft.widgets.length}
           previewBreakpoint={previewBreakpoint}
-        >
-          {renderGrid}
-        </DashboardGridStage>
-      </Box>
-    </Page>
-  );
-}
-
-function DraftStatus({
-  status,
-  onCheckStatus,
-}: {
-  status: DashboardDraftStatus;
-  onCheckStatus: () => void;
-}) {
-  if (
-    status.state === 'conflict' ||
-    status.state === 'error' ||
-    status.state === 'unknown'
-  ) {
-    return (
-      <Group gap="xs" className={classes.draftError} wrap="nowrap">
-        <IconAlertCircle size={16} stroke={1.8} />
-        <Text size="sm" fw={500}>
-          {status.message}
-        </Text>
-        {status.state === 'unknown' ? (
-          <Button
-            type="button"
-            variant="subtle"
-            color="red"
-            size="compact-xs"
-            onClick={onCheckStatus}
-          >
-            Check status
-          </Button>
-        ) : null}
-      </Group>
-    );
-  }
-
-  if (status.state === 'checking') {
-    return (
-      <Group gap={6} className={classes.draftStatus} aria-live="polite">
-        <Loader size={14} />
-        <Text size="sm" fw={500}>
-          Checking save status
-        </Text>
-      </Group>
-    );
-  }
-
-  return null;
-}
-
-function AutoRefreshMenu({ dashboard }: { dashboard: Dashboard }) {
-  const queryClient = useQueryClient();
-  const setAuto = useMutation({
-    mutationFn: (seconds: number) =>
-      setDashboardAutoRefresh({ data: { id: dashboard.id, seconds } }),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: dashboardsQueryOptions.queryKey,
-      }),
-  });
-  const active = dashboard.autoRefreshSeconds > 0;
-
-  return (
-    <Menu position="bottom-end" withArrow shadow="md" width={160}>
-      <Menu.Target>
-        <Tooltip label="Auto refresh interval" withArrow>
-          <Button
-            type="button"
-            variant={active ? 'light' : 'default'}
-            rightSection={<IconChevronDown size={14} stroke={1.8} />}
-          >
-            {active ? formatInterval(dashboard.autoRefreshSeconds) : 'Off'}
-          </Button>
-        </Tooltip>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Label>Auto refresh</Menu.Label>
-        {REFRESH_PRESETS.map((preset) => (
-          <Menu.Item
-            key={preset.seconds}
-            rightSection={
-              preset.seconds === dashboard.autoRefreshSeconds ? (
-                <IconCheck size={14} stroke={2} />
-              ) : null
-            }
-            onClick={() => setAuto.mutate(preset.seconds)}
-          >
-            {preset.label}
-          </Menu.Item>
-        ))}
-      </Menu.Dropdown>
-    </Menu>
-  );
-}
-
-function DashboardMenu({
-  dashboard,
-  onEdit,
-}: {
-  dashboard: Dashboard;
-  onEdit: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const { data: dashboards } = useSuspenseQuery(dashboardsQueryOptions);
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: dashboardsQueryOptions.queryKey,
-    });
-
-  const rename = useMutation({
-    mutationFn: (name: string) =>
-      renameDashboard({ data: { id: dashboard.id, name } }),
-    onSuccess: async () => {
-      await invalidate();
-      toast.success('Dashboard renamed');
-    },
-  });
-
-  const saveDescription = useMutation({
-    mutationFn: (description: string) =>
-      setDashboardDescription({ data: { id: dashboard.id, description } }),
-    onSuccess: async () => {
-      await invalidate();
-      toast.success('Description updated');
-    },
-  });
-
-  const remove = useMutation({
-    mutationFn: () => deleteDashboard({ data: dashboard.id }),
-    onSuccess: async () => {
-      const next = dashboards.find((item) => item.id !== dashboard.id);
-      if (next) {
-        await navigate({
-          to: '/dashboard/$dashboardId',
-          params: { dashboardId: next.id },
-        });
+          onPreviewChange={setPreviewBreakpoint}
+          status={editor.status}
+          onCheckStatus={() => void editor.checkStatus().then(finish)}
+          onDone={() => void done()}
+          doneDisabled={editor.locked}
+        />
       }
-      await invalidate();
-      toast.success('Dashboard deleted');
-    },
-  });
+      editorPanel={
+        <AddWidgetPanel
+          available={available}
+          placed={editor.draft.widgets}
+          apps={liveApps}
+          onAdd={editor.addWidget}
+          disabled={editor.locked}
+          autoRefreshSeconds={autoRefreshSeconds}
+          onAutoRefreshChange={(seconds) => setAutoRefresh.mutate(seconds)}
+          onCancel={cancelEditing}
+          onDone={() => void done()}
+          cancelDisabled={editor.cancelDisabled}
+          saving={editor.status.state === 'saving'}
+        />
+      }
+      tiles={<DeskTiles />}
+      today={<TodayPanel />}
+      companion={<QuickAgentChat />}
+    >
+      {widgets}
+    </DeskHome>
+  );
+}
 
-  const openRename = () =>
-    openTextPromptModal({
-      title: 'Rename dashboard',
-      label: 'Name',
-      initialValue: dashboard.name,
-      onSubmit: (name) => rename.mutateAsync(name),
-    });
-
-  const openDescription = () =>
-    openTextPromptModal({
-      title: 'Edit description',
-      label: 'Description',
-      placeholder: DEFAULT_DASHBOARD_DESCRIPTION,
-      initialValue: dashboard.description ?? '',
-      multiline: true,
-      allowEmpty: true,
-      onSubmit: (description) => saveDescription.mutateAsync(description),
-    });
-
-  const confirmDelete = () =>
-    modals.openConfirmModal({
-      title: 'Delete dashboard',
-      centered: true,
-      children: (
-        <Text size="sm">
-          Delete "{dashboard.name}"? Its widget layouts will be removed.
-        </Text>
-      ),
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => remove.mutate(),
-    });
-
+/** While the desk loads: its shape, with nothing to read yet. */
+function DeskSkeleton() {
   return (
-    <DashboardOptionsMenu
-      onEdit={onEdit}
-      onRename={openRename}
-      onEditDescription={openDescription}
-      onDelete={confirmDelete}
-      deleteDisabled={dashboards.length <= 1}
-    />
+    <div
+      className={classes.state}
+      aria-busy="true"
+      aria-label="Loading the desk"
+    >
+      <div className={classes.skeletonHeading}>
+        <Skeleton height={14} width={150} radius="sm" />
+        <Skeleton height={34} width={300} radius="md" />
+      </div>
+      <div className={classes.skeletonGrid}>
+        {[2, 1, 1, 1, 2].map((span, index) => (
+          <div
+            key={index}
+            className={classes.skeletonPanel}
+            style={{ gridColumn: `span ${span}` }}
+          >
+            <Skeleton height={26} width="45%" radius="md" />
+            <Skeleton height={44} width="30%" radius="md" />
+            <Skeleton height={10} radius="sm" />
+            <Skeleton height={10} width="70%" radius="sm" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The desk could not be read: say so on the desk and offer a retry. */
+function DeskError({ error, reset }: ErrorComponentProps) {
+  const router = useRouter();
+  useEffect(() => {
+    console.error(error);
+  }, [error]);
+  return (
+    <div className={classes.state}>
+      <div className={classes.errorPanel} role="alert">
+        <span className={classes.errorTile} aria-hidden>
+          <IconAlertTriangle size={26} stroke={1.7} />
+        </span>
+        <h1 className={classes.errorTitle}>The desk didn’t load</h1>
+        <Text c="dimmed" ta="center" maw={420}>
+          {routeErrorMessage(error)}
+        </Text>
+        <Button
+          type="button"
+          leftSection={<IconRefresh size={16} stroke={2} />}
+          onClick={() => {
+            reset();
+            void router.invalidate();
+          }}
+        >
+          Try again
+        </Button>
+      </div>
+    </div>
   );
 }

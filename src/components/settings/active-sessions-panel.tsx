@@ -99,7 +99,7 @@ export function ActiveSessionsPanel() {
   return (
     <Stack gap="md">
       <Stack gap={2}>
-        <Text fw={600}>Active sessions</Text>
+        <Text fw={700}>Active sessions</Text>
         <Text size="sm" c="dimmed">
           Every session signed in to your account right now. Each browser or CLI
           sign-in is listed separately, so one device can appear more than once.
@@ -182,7 +182,7 @@ function ActiveSessionRow({
           <Group gap={8} wrap="nowrap" miw={0}>
             <Text
               size="sm"
-              fw={600}
+              fw={700}
               truncate
               title={session.userAgent ?? undefined}
             >

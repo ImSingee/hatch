@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { render } from 'vitest-browser-react';
+import { render as renderBare } from 'vitest-browser-react';
+import { themeQueryOptions } from '~queries/theme';
 import { useAppDeploymentUpdate } from '~components/apps/use-app-deployment-update';
 import type { PlatformEvent } from '~server/platform-events';
 import {
@@ -8,6 +10,25 @@ import {
   usePlatformEvent,
   usePlatformResync,
 } from './platform-events';
+
+// Server Functions cannot load in the browser project.
+vi.mock('~server/theme', () => ({
+  getThemeFn: async () => ({
+    accent: 'indigo',
+    defaultAccent: 'indigo',
+    accents: [],
+  }),
+}));
+
+let queryClient = new QueryClient();
+
+/** The provider refreshes the theme query, so it needs a query client. */
+function render(ui: ReactNode) {
+  queryClient = new QueryClient();
+  return renderBare(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
 
 class FakeEventSource extends EventTarget {
   static instances: FakeEventSource[] = [];
@@ -338,4 +359,34 @@ test('ignores a reconciliation response from the previously viewed app', async (
     .element(screen.getByTestId('available'))
     .toHaveTextContent('false');
   await expect.element(screen.getByTestId('pending')).toHaveTextContent('none');
+});
+
+test('re-reads the theme when it changes and after every reconnect', async () => {
+  installEventSource();
+  await render(
+    <PlatformEventsProvider>
+      <SubscriptionProbe name="probe" />
+    </PlatformEventsProvider>,
+  );
+  await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+  const source = FakeEventSource.instances[0];
+  const stale = () =>
+    queryClient.getQueryState(themeQueryOptions.queryKey)?.isInvalidated;
+  const markFresh = () =>
+    queryClient.setQueryData(themeQueryOptions.queryKey, {
+      accent: 'indigo',
+      defaultAccent: 'indigo',
+      accents: [],
+    });
+
+  markFresh();
+  source?.emit('platform', {
+    type: 'theme.updated',
+    accent: 'teal',
+  } satisfies PlatformEvent);
+  await vi.waitFor(() => expect(stale()).toBe(true));
+
+  markFresh();
+  source?.emit('resync');
+  await vi.waitFor(() => expect(stale()).toBe(true));
 });

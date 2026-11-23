@@ -55,7 +55,7 @@ export function MobileDashboardCanvas({
     <Box p="sm" component="main" aria-label="Dashboard canvas">
       {data.data.widgets.length === 0 ? (
         <Stack align="center" justify="center" p="xl" mih="60dvh" gap="sm">
-          <Text size="xl" fw={600}>
+          <Text size="xl" fw={700}>
             No widgets yet
           </Text>
           <Text c="dimmed" ta="center">

@@ -13,6 +13,9 @@ import type { DashboardItem } from '~server/dashboards';
 import {
   DASHBOARD_COLUMNS,
   dashboardBreakpointForWidth,
+  moveDashboardLayoutItem,
+  placeDashboardLayoutItem,
+  supportedSizesForBreakpoint,
   type DashboardBreakpoint,
   type DashboardLayoutItem,
   type DashboardLayouts,
@@ -23,7 +26,10 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import classes from './dashboard-grid.module.css';
 
-const ROW_HEIGHT = 80;
+/** Height of one grid row, in px. */
+export const WIDGET_ROW_HEIGHT = 80;
+/** Gap between rows on the mobile grid, in px. */
+export const WIDGET_ROW_GAP = 14;
 
 export function DashboardGrid({
   items,
@@ -71,8 +77,9 @@ export function DashboardGrid({
   const gridConfig = useMemo<Partial<GridConfig>>(
     () => ({
       cols: DASHBOARD_COLUMNS[breakpoint],
-      rowHeight: ROW_HEIGHT,
-      margin: breakpoint === 'mobile' ? [12, 12] : [16, 16],
+      rowHeight: WIDGET_ROW_HEIGHT,
+      margin:
+        breakpoint === 'mobile' ? [WIDGET_ROW_GAP, WIDGET_ROW_GAP] : [16, 16],
       containerPadding: [0, 0],
     }),
     [breakpoint],
@@ -98,6 +105,21 @@ export function DashboardGrid({
     () => new Map(activeLayout.map((item) => [item.id, item])),
     [activeLayout],
   );
+
+  // Size buttons and keyboard moves place one item the way a drop does:
+  // whatever it lands on moves down, then rows close up.
+  const place = (item: DashboardLayoutItem) =>
+    onLayoutCommit(breakpoint, placeDashboardLayoutItem(activeLayout, item));
+  const move = (geometry: DashboardLayoutItem, dx: number, dy: number) => {
+    const next = moveDashboardLayoutItem(
+      activeLayout,
+      geometry.id,
+      dx,
+      dy,
+      DASHBOARD_COLUMNS[breakpoint],
+    );
+    if (next) onLayoutCommit(breakpoint, next);
+  };
 
   const commit = (next: Layout) =>
     onLayoutCommit(
@@ -144,6 +166,21 @@ export function DashboardGrid({
                   onRemove={() => onRemove(item.id)}
                   refreshSignal={refreshSignal}
                   nativeHost={nativeHost}
+                  sizes={supportedSizesForBreakpoint(
+                    item.supportedSizes,
+                    breakpoint,
+                  )}
+                  onSizeChange={(size) =>
+                    place({
+                      ...geometry,
+                      ...size,
+                      x: Math.min(
+                        geometry.x,
+                        DASHBOARD_COLUMNS[breakpoint] - size.w,
+                      ),
+                    })
+                  }
+                  onMove={(dx, dy) => move(geometry, dx, dy)}
                 />
               </div>
             );

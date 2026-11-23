@@ -393,34 +393,32 @@ export function Composer({
         justify="space-between"
         wrap="nowrap"
       >
-        <Group gap={4} wrap="nowrap">
-          <Tooltip label="Attach files" withArrow>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              radius="xl"
-              size="lg"
-              aria-label="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <IconPaperclip size={18} stroke={1.7} />
-            </ActionIcon>
-          </Tooltip>
+        <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size={28}
+            radius="md"
+            aria-label="Attach files"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <IconPaperclip size={16} stroke={1.8} />
+          </ActionIcon>
+          {modelControl}
         </Group>
 
-        <Group gap="xs" wrap="nowrap">
-          {modelControl}
+        <Group gap={6} wrap="nowrap">
           {busy ? (
             <Tooltip label="Stop" withArrow>
               <ActionIcon
-                variant={queueWhileBusy ? 'light' : 'filled'}
                 color="red"
+                variant={queueWhileBusy ? 'light' : 'filled'}
+                size={30}
                 radius="xl"
-                size="lg"
                 aria-label="Stop"
                 onClick={onStop}
               >
-                <IconPlayerStopFilled size={16} />
+                <IconPlayerStopFilled size={13} />
               </ActionIcon>
             </Tooltip>
           ) : null}
@@ -431,15 +429,13 @@ export function Composer({
               disabled={!busy}
             >
               <ActionIcon
-                variant="filled"
-                color="ember"
+                size={30}
                 radius="xl"
-                size="lg"
                 aria-label="Send"
                 disabled={!canSend}
                 onClick={() => void submit()}
               >
-                <IconArrowUp size={18} stroke={2} />
+                <IconArrowUp size={16} stroke={2.2} />
               </ActionIcon>
             </Tooltip>
           ) : null}

@@ -220,7 +220,7 @@ function PendingRow({
           <Badge
             size="xs"
             variant="light"
-            color={message.mode === 'steer' ? 'ember' : 'gray'}
+            color={message.mode === 'steer' ? 'primary' : 'gray'}
             className={classes.mode}
           >
             {MODE_LABEL[message.mode]}
@@ -249,12 +249,13 @@ function PendingRow({
               ) : null}
             </Box>
             {editable ? (
-              <Group gap={2} wrap="nowrap">
+              <Group gap={2} wrap="nowrap" className={classes.actions}>
                 <Tooltip label="Edit" withArrow>
                   <ActionIcon
                     variant="subtle"
                     color="gray"
-                    size="sm"
+                    size={26}
+                    radius="md"
                     aria-label="Edit message"
                     disabled={working}
                     onClick={() => setEditing(true)}
@@ -266,7 +267,8 @@ function PendingRow({
                   <ActionIcon
                     variant="subtle"
                     color="gray"
-                    size="sm"
+                    size={26}
+                    radius="md"
                     aria-label="Send now"
                     loading={sendNow.isPending}
                     disabled={working}
@@ -279,7 +281,8 @@ function PendingRow({
                   <ActionIcon
                     variant="subtle"
                     color="gray"
-                    size="sm"
+                    size={26}
+                    radius="md"
                     aria-label="Cancel message"
                     loading={cancel.isPending}
                     disabled={working}

@@ -2,7 +2,6 @@ import {
   ActionIcon,
   Anchor,
   Badge,
-  Box,
   Center,
   Code,
   Collapse,
@@ -21,6 +20,7 @@ import copy from 'copy-to-clipboard';
 import { toast } from 'sonner';
 import type { ProtoFile, RpcServiceApi } from '~server/apps/manifest';
 import { normalizedManifestQueryOptions } from '~queries/apps';
+import { GroupCard, Section } from '~components/page/page';
 import { workflowsQueryOptions } from '~queries/workflows';
 
 /** Local-name of a fully-qualified proto type (drops the package prefix). */
@@ -33,7 +33,7 @@ function MethodRow({ method }: { method: RpcServiceApi['methods'][number] }) {
   return (
     <Table.Tr>
       <Table.Td>
-        <Text size="sm" fw={500} ff="monospace">
+        <Text size="sm" fw={600} ff="monospace">
           {method.name}
         </Text>
       </Table.Td>
@@ -72,7 +72,7 @@ function ServiceBlock({ service }: { service: RpcServiceApi }) {
   return (
     <Stack gap={6}>
       <Group gap={8} wrap="nowrap" align="baseline">
-        <Text fw={600} size="sm" ff="monospace">
+        <Text fw={700} size="sm" ff="monospace">
           {service.name}
         </Text>
         <Text size="xs" c="dimmed">
@@ -164,14 +164,13 @@ export function ApiPanel({ appId }: { appId: string }) {
 
   if (query.isLoading) {
     return (
-      <Box component="section">
-        <Text fw={600} fz="lg" mb="md">
-          API
-        </Text>
-        <Center py="lg">
-          <Loader size="sm" />
-        </Center>
-      </Box>
+      <Section id="api" title="API">
+        <GroupCard padded>
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
+        </GroupCard>
+      </Section>
     );
   }
 
@@ -183,91 +182,90 @@ export function ApiPanel({ appId }: { appId: string }) {
   );
 
   return (
-    <Box component="section">
-      <Text fw={600} fz="lg" mb="md">
-        API
-      </Text>
-      {!manifest ? (
-        <Text size="sm" c="dimmed">
-          Deploy this app to capture its declared API.
-        </Text>
-      ) : (
-        <Stack gap="lg">
-          {!api || api.services.length === 0 ? (
-            <Text size="sm" c="dimmed">
-              No RPC services declared in the proto.
-            </Text>
-          ) : (
-            <>
+    <Section id="api" title="API">
+      <GroupCard padded>
+        {!manifest ? (
+          <Text size="sm" c="dimmed">
+            Deploy this app to capture its declared API.
+          </Text>
+        ) : (
+          <Stack gap="lg">
+            {!api || api.services.length === 0 ? (
               <Text size="sm" c="dimmed">
-                Connect RPC services this app exposes, captured from its proto
-                on deploy.
+                No RPC services declared in the proto.
               </Text>
-              {api.services.map((service) => (
-                <ServiceBlock key={service.name} service={service} />
-              ))}
-              {api.protoFiles.length > 0 ? (
-                <Stack gap={6}>
-                  <Text fw={600} size="sm">
-                    Proto source
-                  </Text>
-                  {api.protoFiles.map((file) => (
-                    <ProtoSource key={file.path} file={file} />
-                  ))}
-                </Stack>
-              ) : null}
-            </>
-          )}
-          {workflows.length > 0 ? (
-            <Stack gap={6}>
-              <Text fw={600} size="sm">
-                Workflow calls
-              </Text>
-              <Text size="xs" c="dimmed">
-                Top-level workflows this app&apos;s backend can invoke. The
-                platform injects each call&apos;s URL + secret at runtime.
-              </Text>
-              <Table withTableBorder verticalSpacing={6} highlightOnHover>
-                <Table.Tbody>
-                  {workflows.map((w) => {
-                    const workflow = workflowById.get(w.workflow);
-                    return (
-                      <Table.Tr key={w.alias}>
-                        <Table.Td>
-                          <Text size="sm" fw={500} ff="monospace">
-                            {w.alias}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td>
-                          {workflow ? (
-                            <Anchor
-                              size="xs"
-                              ff="monospace"
-                              renderRoot={(props) => (
-                                <Link
-                                  to="/workflow/$workflowSlug"
-                                  params={{ workflowSlug: workflow.slug }}
-                                  {...props}
-                                />
-                              )}
-                            >
-                              {w.workflow}
-                            </Anchor>
-                          ) : (
-                            <Text size="xs" ff="monospace">
-                              {w.workflow}
+            ) : (
+              <>
+                <Text size="sm" c="dimmed">
+                  Connect RPC services this app exposes, captured from its proto
+                  on deploy.
+                </Text>
+                {api.services.map((service) => (
+                  <ServiceBlock key={service.name} service={service} />
+                ))}
+                {api.protoFiles.length > 0 ? (
+                  <Stack gap={6}>
+                    <Text fw={700} size="sm">
+                      Proto source
+                    </Text>
+                    {api.protoFiles.map((file) => (
+                      <ProtoSource key={file.path} file={file} />
+                    ))}
+                  </Stack>
+                ) : null}
+              </>
+            )}
+            {workflows.length > 0 ? (
+              <Stack gap={6}>
+                <Text fw={700} size="sm">
+                  Workflow calls
+                </Text>
+                <Text size="xs" c="dimmed">
+                  Top-level workflows this app&apos;s backend can invoke. The
+                  platform injects each call&apos;s URL + secret at runtime.
+                </Text>
+                <Table withTableBorder verticalSpacing={6} highlightOnHover>
+                  <Table.Tbody>
+                    {workflows.map((w) => {
+                      const workflow = workflowById.get(w.workflow);
+                      return (
+                        <Table.Tr key={w.alias}>
+                          <Table.Td>
+                            <Text size="sm" fw={600} ff="monospace">
+                              {w.alias}
                             </Text>
-                          )}
-                        </Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
-            </Stack>
-          ) : null}
-        </Stack>
-      )}
-    </Box>
+                          </Table.Td>
+                          <Table.Td>
+                            {workflow ? (
+                              <Anchor
+                                size="xs"
+                                ff="monospace"
+                                renderRoot={(props) => (
+                                  <Link
+                                    to="/workflow/$workflowSlug"
+                                    params={{ workflowSlug: workflow.slug }}
+                                    {...props}
+                                  />
+                                )}
+                              >
+                                {w.workflow}
+                              </Anchor>
+                            ) : (
+                              <Text size="xs" ff="monospace">
+                                {w.workflow}
+                              </Text>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </Stack>
+            ) : null}
+          </Stack>
+        )}
+      </GroupCard>
+    </Section>
   );
 }

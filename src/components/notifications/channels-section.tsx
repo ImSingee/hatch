@@ -304,105 +304,107 @@ export function ChannelsSection() {
           No channels yet.
         </Text>
       ) : (
-        <Table verticalSpacing="sm" layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th w="32%">Channel</Table.Th>
-              <Table.Th>Kinds</Table.Th>
-              <Table.Th w={90}>Enabled</Table.Th>
-              <Table.Th w={48} aria-label="Actions" />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {channels.map((channel) => (
-              <Table.Tr key={channel.id}>
-                <Table.Td>
-                  <Text size="sm" fw={600} truncate>
-                    {channel.name}
-                  </Text>
-                  {channel.description ? (
-                    <Text size="xs" c="dimmed" truncate>
-                      {channel.description}
-                    </Text>
-                  ) : null}
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={6}>
-                    {channel.kinds.map((entry) => (
-                      <Badge
-                        key={entry.kind}
-                        variant="light"
-                        color="gray"
-                        radius="sm"
-                        title={entry.kind}
-                      >
-                        {entry.name}
-                      </Badge>
-                    ))}
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Switch
-                    checked={
-                      toggle.isPending && toggle.variables?.id === channel.id
-                        ? toggle.variables.enabled
-                        : channel.enabled
-                    }
-                    onChange={(event) =>
-                      toggle.mutate({
-                        id: channel.id,
-                        enabled: event.currentTarget.checked,
-                      })
-                    }
-                    aria-label={`Enable ${channel.name}`}
-                  />
-                </Table.Td>
-                <Table.Td>
-                  <Menu position="bottom-end" withinPortal>
-                    <Menu.Target>
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        aria-label={`Actions for ${channel.name}`}
-                      >
-                        <IconDotsVertical size={16} stroke={1.6} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item
-                        leftSection={<IconCode size={14} stroke={1.6} />}
-                        onClick={() =>
-                          setInstructions({ channel, token: null })
-                        }
-                      >
-                        How to push
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<IconPencil size={14} stroke={1.6} />}
-                        onClick={() => setModal({ editing: channel })}
-                      >
-                        Edit
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<IconKey size={14} stroke={1.6} />}
-                        onClick={() => confirmRotate(channel)}
-                      >
-                        Rotate token
-                      </Menu.Item>
-                      <Menu.Item
-                        color="red"
-                        leftSection={<IconTrash size={14} stroke={1.6} />}
-                        onClick={() => confirmDelete(channel)}
-                      >
-                        Delete
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                </Table.Td>
+        <Table.ScrollContainer minWidth={620} type="native">
+          <Table verticalSpacing="sm" layout="fixed">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th w="32%">Channel</Table.Th>
+                <Table.Th>Kinds</Table.Th>
+                <Table.Th w={90}>Enabled</Table.Th>
+                <Table.Th w={48} aria-label="Actions" />
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {channels.map((channel) => (
+                <Table.Tr key={channel.id}>
+                  <Table.Td>
+                    <Text size="sm" fw={700} truncate>
+                      {channel.name}
+                    </Text>
+                    {channel.description ? (
+                      <Text size="xs" c="dimmed" truncate>
+                        {channel.description}
+                      </Text>
+                    ) : null}
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap={6}>
+                      {channel.kinds.map((entry) => (
+                        <Badge
+                          key={entry.kind}
+                          variant="light"
+                          color="gray"
+                          radius="sm"
+                          title={entry.kind}
+                        >
+                          {entry.name}
+                        </Badge>
+                      ))}
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Switch
+                      checked={
+                        toggle.isPending && toggle.variables?.id === channel.id
+                          ? toggle.variables.enabled
+                          : channel.enabled
+                      }
+                      onChange={(event) =>
+                        toggle.mutate({
+                          id: channel.id,
+                          enabled: event.currentTarget.checked,
+                        })
+                      }
+                      aria-label={`Enable ${channel.name}`}
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Actions for ${channel.name}`}
+                        >
+                          <IconDotsVertical size={16} stroke={1.6} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<IconCode size={14} stroke={1.6} />}
+                          onClick={() =>
+                            setInstructions({ channel, token: null })
+                          }
+                        >
+                          How to push
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconPencil size={14} stroke={1.6} />}
+                          onClick={() => setModal({ editing: channel })}
+                        >
+                          Edit
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconKey size={14} stroke={1.6} />}
+                          onClick={() => confirmRotate(channel)}
+                        >
+                          Rotate token
+                        </Menu.Item>
+                        <Menu.Item
+                          color="red"
+                          leftSection={<IconTrash size={14} stroke={1.6} />}
+                          onClick={() => confirmDelete(channel)}
+                        >
+                          Delete
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       {modal ? (

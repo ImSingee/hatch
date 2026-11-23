@@ -1,0 +1,42 @@
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The brand is not a link here: there is no desk to go back to yet. */
+.brand:hover {
+  background: transparent;
+}
+
+.date {
+  padding: 0 8px;
+  color: var(--mantine-color-gray-7);
+  font-size: 13px;
+  font-weight: var(--font-weight-strong);
+  white-space: nowrap;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.stage {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  min-height: 100%;
+  padding: 40px 16px 64px;
+}
+
+.stage[data-align='start'] {
+  align-items: start;
+  padding-top: 56px;
+}
+
+@media (max-width: 35em) {
+  .stage {
+    padding: 24px 16px 40px;
+  }
+}

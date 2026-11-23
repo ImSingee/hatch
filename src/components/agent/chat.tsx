@@ -1,7 +1,6 @@
 import {
   Box,
   Center,
-  Group,
   Loader,
   ScrollArea,
   Stack,
@@ -41,6 +40,7 @@ import { PendingTray } from './pending-tray';
 import { useLastSelectedModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
+import { SessionHeader } from './session-header';
 import { resolveEffectiveModel, splitModelValue } from './model-value';
 import { StreamingBubble } from './streaming-bubble';
 import { type ChatMessage, pairToolResults } from './types';
@@ -277,6 +277,15 @@ export function Chat({ sessionId }: { sessionId: string }) {
     session?.providerId && session?.modelId
       ? `${session.providerId}:${session.modelId}`
       : null;
+  // The model the chat last ran with, by name when the catalog still has it.
+  const sessionModelName = session?.modelId
+    ? (groups
+        .flatMap((group) => group.items)
+        .find((item) => item.value === sessionModel)?.label ?? session.modelId)
+    : null;
+  const sessionApps = (appsQuery.data ?? [])
+    .filter((app) => session?.appIds.includes(app.id))
+    .sort((left, right) => left.name.localeCompare(right.name));
   const effectiveModel = resolveEffectiveModel(
     model,
     sessionModel,
@@ -1009,16 +1018,12 @@ export function Chat({ sessionId }: { sessionId: string }) {
         >
           {envAnnouncement}
         </Text>
-        <Box className={classes.chatHead}>
-          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-            <ThemeIcon variant="light" color="ember" radius="md" size="md">
-              <IconSparkles size={16} stroke={1.7} />
-            </ThemeIcon>
-            <Text fw={600} truncate>
-              {session?.title ?? 'Chat'}
-            </Text>
-          </Group>
-        </Box>
+        <SessionHeader
+          title={session?.title ?? 'Chat'}
+          model={sessionModelName}
+          runnerId={session?.runnerId ?? null}
+          apps={sessionApps}
+        />
 
         <ScrollArea className={classes.messages} viewportRef={viewportRef}>
           <Box className={classes.messagesInner} ref={messagesInnerRef}>
@@ -1030,10 +1035,15 @@ export function Chat({ sessionId }: { sessionId: string }) {
               !streamState.active &&
               !streamState.outcome ? (
               <Stack align="center" gap={6} py={80}>
-                <ThemeIcon size={48} radius="xl" variant="light" color="ember">
+                <ThemeIcon
+                  size={48}
+                  radius="xl"
+                  variant="light"
+                  color="primary"
+                >
                   <IconSparkles size={24} stroke={1.5} />
                 </ThemeIcon>
-                <Text fw={600}>Describe an app to build</Text>
+                <Text fw={700}>Describe an app to build</Text>
                 <Text size="sm" c="dimmed" ta="center" maw={360}>
                   Ask the Agent to create a tracker, a notes app, a dashboard —
                   anything. It will scaffold, build, and deploy it for you.

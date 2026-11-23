@@ -37,7 +37,7 @@ export function RequestReview({
         focus
       >
         Signing in as{' '}
-        <Text span inherit fw={500} c="var(--mantine-color-text)">
+        <Text span inherit fw={600} c="var(--mantine-color-text)">
           {account ?? 'your account'}
         </Text>{' '}
         on {window.location.host}

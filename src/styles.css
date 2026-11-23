@@ -7,8 +7,11 @@
 @import '@mantine/dropzone/styles.css';
 @import '@mantine/nprogress/styles.css';
 
-@import './ui/theme/style.css';
-@import './ui/ember-theme/style.css';
+@import '@fontsource-variable/nunito/wght.css';
+@import '@fontsource-variable/nunito/wght-italic.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+@import './ui/theme/desk.css';
 
 html {
   scroll-behavior: smooth;

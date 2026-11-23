@@ -1,17 +1,19 @@
-import { Stack, Text, Title, VisuallyHidden } from '@mantine/core';
+import { VisuallyHidden } from '@mantine/core';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Brand } from '~components/app-shell/brand';
+import { Brand } from '~components/desk/brand';
+import { DeskStandalone } from '~components/desk/desk-standalone';
+import {
+  StandaloneWindow,
+  WindowHero,
+} from '~components/page/standalone-window';
 import { USER_CODE_LENGTH } from './device-api';
 import classes from './device-approval.module.css';
 
 export function DeviceLayout({ children }: { children: ReactNode }) {
   return (
-    <div className={classes.root}>
-      <main className={classes.column}>
-        <Brand size="lg" withWordmark={false} />
-        {children}
-      </main>
-    </div>
+    <DeskStandalone align="start">
+      <StandaloneWindow title="Approve a device">{children}</StandaloneWindow>
+    </DeskStandalone>
   );
 }
 
@@ -33,16 +35,13 @@ export function ViewHeader({
     if (focus) ref.current?.focus();
   }, [focus]);
   return (
-    <Stack gap={8} align="center" className={classes.header}>
-      <Title ref={ref} order={1} size="h2" tabIndex={-1} ta="center">
-        {title}
-      </Title>
-      {children ? (
-        <Text c="dimmed" ta="center" className={classes.lead}>
-          {children}
-        </Text>
-      ) : null}
-    </Stack>
+    <WindowHero
+      tile={<Brand size="lg" withWordmark={false} />}
+      title={title}
+      titleRef={ref}
+    >
+      {children}
+    </WindowHero>
   );
 }
 

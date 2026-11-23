@@ -1,17 +1,16 @@
-import { AppShell, Burger, Group } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
 import {
   Outlet,
   createFileRoute,
   redirect,
+  useParams,
   useRouterState,
 } from '@tanstack/react-router';
-import { useEffect } from 'react';
-import { Brand } from '~components/app-shell/brand';
-import { Sidebar } from '~components/app-shell/sidebar';
+import { useMemo } from 'react';
+import { DeskShell } from '~components/desk/desk-shell';
+import type { DockOpenItem } from '~components/desk/dock-item';
+import { LivePins } from '~components/desk/use-live-pins';
 import { PlatformEventsProvider } from '~components/system/platform-events';
 import { hasActiveSession } from '~server/auth';
-import classes from './_app.module.css';
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: async ({ location }) => {
@@ -29,45 +28,35 @@ export const Route = createFileRoute('/_app')({
   component: AppLayout,
 });
 
-function AppLayout() {
-  const [opened, { toggle, close }] = useDisclosure(false);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+/** Windows that keep the tab bar below 560 wide: the tab destinations. */
+const TAB_DESTINATIONS = ['/apps', '/settings'];
 
-  // Collapse the mobile nav overlay whenever navigation occurs.
-  useEffect(() => {
-    close();
-  }, [pathname, close]);
+function AppLayout() {
+  // The URL is the only record of what is open. The shell derives the view
+  // and the dock's markers from it and hands them down; nothing below keeps a
+  // "current App" of its own.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const route = useRouterState({ select: (s) => s.location.hash });
+  const { dashboardId, appSlug, workflowSlug } = useParams({ strict: false });
+
+  const openItems = useMemo<DockOpenItem[]>(() => {
+    if (appSlug) return [{ kind: 'app', slug: appSlug, route }];
+    if (workflowSlug) return [{ kind: 'workflow', slug: workflowSlug }];
+    return [];
+  }, [appSlug, workflowSlug, route]);
 
   return (
     <PlatformEventsProvider>
-      <AppShell
-        className={classes.shell}
-        padding={0}
-        navbar={{
-          width: 272,
-          breakpoint: 'sm',
-          collapsed: { mobile: !opened, desktop: false },
-        }}
-        header={{ height: 56 }}
+      <LivePins />
+      <DeskShell
+        view={dashboardId ? 'home' : 'window'}
+        tabDestination={TAB_DESTINATIONS.some(
+          (to) => pathname === to || pathname.startsWith(`${to}/`),
+        )}
+        openItems={openItems}
       >
-        <AppShell.Header withBorder className={classes.header}>
-          <Group h="100%" px="sm" gap="sm" wrap="nowrap">
-            <Burger
-              opened={opened}
-              onClick={toggle}
-              size="sm"
-              aria-label="Toggle navigation"
-            />
-            <Brand />
-          </Group>
-        </AppShell.Header>
-        <AppShell.Navbar withBorder>
-          <Sidebar />
-        </AppShell.Navbar>
-        <AppShell.Main style={{ height: '100dvh', overflow: 'hidden' }}>
-          <Outlet />
-        </AppShell.Main>
-      </AppShell>
+        <Outlet />
+      </DeskShell>
     </PlatformEventsProvider>
   );
 }

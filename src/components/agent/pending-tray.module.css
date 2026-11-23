@@ -5,35 +5,29 @@
   gap: 2px;
   margin-bottom: 6px;
   padding: 4px;
-  border: 1px solid var(--mantine-color-default-border);
-  border-radius: var(--mantine-radius-lg);
-  background-color: color-mix(
-    in srgb,
-    var(--mantine-color-text) 2%,
-    var(--mantine-color-body)
-  );
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-xl);
+  background-color: var(--surface-raised);
+  box-shadow: var(--shadow-card);
   max-height: 40vh;
   overflow-y: auto;
 }
 
 .paused {
-  padding: 4px 8px;
-  border-radius: var(--mantine-radius-md);
+  padding: 6px 10px;
+  border-radius: var(--mantine-radius-lg);
   background-color: var(--mantine-color-yellow-light);
   color: var(--mantine-color-yellow-light-color);
 }
 
 .row {
-  padding: 6px 8px;
-  border-radius: var(--mantine-radius-md);
+  padding: 6px 8px 6px 10px;
+  border-radius: var(--mantine-radius-lg);
+  transition: background-color var(--transition-fast);
 }
 
 .row:hover {
-  background-color: color-mix(
-    in srgb,
-    var(--mantine-color-text) 4%,
-    transparent
-  );
+  background-color: var(--surface-hover);
 }
 
 .mode {
@@ -51,6 +45,10 @@
   overflow-wrap: anywhere;
 }
 
+.actions {
+  flex: none;
+}
+
 .edit {
   display: flex;
   flex-direction: column;
@@ -58,14 +56,15 @@
 }
 
 .editor {
-  border: 1px solid var(--mantine-color-default-border);
-  border-radius: var(--mantine-radius-md);
-  background-color: var(--mantine-color-default);
+  border: 1px solid var(--border-input);
+  border-radius: var(--mantine-radius-lg);
+  background-color: var(--surface-raised);
   padding: 0 4px 6px;
+  transition: border-color var(--transition-fast);
 }
 
 .editor:focus-within {
-  border-color: var(--mantine-color-ember-filled);
+  border-color: var(--focus-ring);
 }
 
 .thumb {
@@ -89,6 +88,6 @@
 
 .file {
   padding: 2px 4px 2px 8px;
-  border: 1px solid var(--mantine-color-default-border);
+  border: 1px solid var(--border-hairline);
   border-radius: var(--mantine-radius-sm);
 }

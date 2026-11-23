@@ -29,6 +29,7 @@ import copy from 'copy-to-clipboard';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { formatRelative } from '~lib/format';
+import { GroupCard, Section } from '~components/page/page';
 import classes from './deployment-history.module.css';
 
 /**
@@ -56,12 +57,12 @@ const STATUS_META: Record<
   { color: string; label: string; icon: ReactNode }
 > = {
   building: {
-    color: 'ember',
+    color: 'primary',
     label: 'Building',
     icon: <IconLoader size={11} stroke={2.5} />,
   },
   deployed: {
-    color: 'ember',
+    color: 'primary',
     label: 'Deployed',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
@@ -177,7 +178,7 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
             v{deployment.version}
           </Text>
           {deployment.isCurrent ? (
-            <Badge size="xs" variant="filled" radius="sm" color="ember">
+            <Badge size="xs" variant="filled" radius="sm" color="primary">
               Live
             </Badge>
           ) : null}
@@ -271,7 +272,7 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
               size={14}
               className={`${classes.chevron} ${open ? classes.chevronOpen : ''}`}
             />
-            <Text size="xs" c="dimmed" fw={500}>
+            <Text size="xs" c="dimmed" fw={600}>
               {deployment.status === 'failed' ? 'Error log' : 'Build log'}
             </Text>
           </UnstyledButton>
@@ -354,49 +355,50 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
   ) => ReactNode;
 }) {
   return (
-    <Box component="section">
-      <Group gap={8} mb="md" align="baseline">
-        <Text fw={600} fz="lg">
-          Deployment history
-        </Text>
-        {deployments.length > 0 ? (
+    <Section
+      id="deployments"
+      title="Deployments"
+      meta={
+        deployments.length > 0
+          ? `${deployments.length} version${deployments.length === 1 ? '' : 's'}`
+          : undefined
+      }
+    >
+      <GroupCard padded>
+        {isLoading ? (
+          <Center py="lg">
+            <Loader size="sm" />
+          </Center>
+        ) : deployments.length === 0 ? (
           <Text size="sm" c="dimmed">
-            {deployments.length}
+            No deployments yet. Deploy this {emptyNoun} to create the first
+            version.
           </Text>
-        ) : null}
-      </Group>
-
-      {isLoading ? (
-        <Center py="lg">
-          <Loader size="sm" />
-        </Center>
-      ) : deployments.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No deployments yet. Deploy this {emptyNoun} to create the first
-          version.
-        </Text>
-      ) : (
-        <Timeline
-          bulletSize={20}
-          lineWidth={2}
-          active={-1}
-          color="gray"
-          styles={{ itemBody: { paddingBottom: 'var(--mantine-spacing-md)' } }}
-        >
-          {deployments.map((deployment) => (
-            <DeploymentItem
-              key={deployment.id}
-              deployment={deployment}
-              onRollback={onRollback}
-              rolling={rollingId === deployment.id}
-              renderArtifact={renderArtifact}
-              renderBuildLog={renderBuildLog}
-              renderVersionMeta={renderVersionMeta}
-              renderRollbackAction={renderRollbackAction}
-            />
-          ))}
-        </Timeline>
-      )}
-    </Box>
+        ) : (
+          <Timeline
+            bulletSize={20}
+            lineWidth={2}
+            active={-1}
+            color="gray"
+            styles={{
+              itemBody: { paddingBottom: 'var(--mantine-spacing-md)' },
+            }}
+          >
+            {deployments.map((deployment) => (
+              <DeploymentItem
+                key={deployment.id}
+                deployment={deployment}
+                onRollback={onRollback}
+                rolling={rollingId === deployment.id}
+                renderArtifact={renderArtifact}
+                renderBuildLog={renderBuildLog}
+                renderVersionMeta={renderVersionMeta}
+                renderRollbackAction={renderRollbackAction}
+              />
+            ))}
+          </Timeline>
+        )}
+      </GroupCard>
+    </Section>
   );
 }
