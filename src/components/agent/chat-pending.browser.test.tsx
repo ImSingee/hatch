@@ -345,6 +345,81 @@ test('resends a draft whose files the lost send already attached', async () => {
   expect(enqueued[0].attachmentIds).toEqual([uploads[0]]);
 });
 
+test('uploads a file again for an edited draft the lost send attached', async () => {
+  const attached = new Set<string>();
+  const uploads: string[] = [];
+  const enqueued: { clientMessageId: string; attachmentIds: string[] }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), 'https://hatch.example.test');
+      if (url.pathname.endsWith('/events')) {
+        return new Response(new ReadableStream(), { status: 200 });
+      }
+      if (url.pathname.includes('/attachments/')) {
+        const id = decodeURIComponent(url.pathname.split('/').at(-1)!);
+        uploads.push(id);
+        if (attached.has(id)) {
+          return new Response('Attachment id is already in use.', {
+            status: 409,
+          });
+        }
+        return Response.json({
+          attachment: {
+            id,
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            size: 3,
+          },
+        });
+      }
+      if (url.pathname.endsWith('/pending')) {
+        const body = JSON.parse(String(init?.body));
+        enqueued.push(body);
+        // The server took the first send and attached its file.
+        for (const id of body.attachmentIds) attached.add(id);
+        if (enqueued.length === 1) throw new TypeError('Failed to fetch');
+        return Response.json({
+          pending: { paused: false, messages: [] },
+          startedRunId: null,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url.pathname}`);
+    }),
+  );
+  const screen = await renderChat();
+  await expect
+    .element(screen.getByRole('button', { name: 'Stop' }))
+    .toBeVisible();
+  const fileInput =
+    document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!fileInput) throw new Error('Missing attachment input');
+  const transfer = new DataTransfer();
+  transfer.items.add(new File(['abc'], 'notes.txt', { type: 'text/plain' }));
+  Object.defineProperty(fileInput, 'files', {
+    configurable: true,
+    value: transfer.files,
+  });
+  fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+  await expect.element(screen.getByText('notes.txt')).toBeVisible();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Read this');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => enqueued.length).toBe(1);
+
+  // Edited: a new message, which cannot share the first one's upload.
+  await input.click();
+  await userEvent.keyboard(' too');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => enqueued.length).toBe(2);
+  expect(uploads).toHaveLength(3);
+  expect(uploads[1]).toBe(uploads[0]);
+  expect(uploads[2]).not.toBe(uploads[0]);
+  expect(enqueued[1].clientMessageId).not.toBe(enqueued[0].clientMessageId);
+  expect(enqueued[1].attachmentIds).toEqual([uploads[2]]);
+});
+
 test('settles a resend the server says already waits in the tray', async () => {
   // Stopped with delivery paused; the message an earlier send queued waits.
   fixtures.session.activeRun = null;

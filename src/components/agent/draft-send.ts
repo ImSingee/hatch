@@ -8,7 +8,11 @@ import type { AgentAttachmentRef } from '~agent/attachments';
 import { AttachmentInUseError, uploadAgentFiles } from './attachment-api';
 import type { ComposerFile, ComposerImage, ComposerSubmit } from './composer';
 
-export type DraftSend = { clientMessageId: string };
+export type DraftSend = {
+  clientMessageId: string;
+  /** Attachment id each file was uploaded under by this send, by file id. */
+  uploads: Map<string, string>;
+};
 
 type Draft = {
   content: ComposerSubmit['content'];
@@ -34,7 +38,11 @@ export function createDraftSendTracker(): DraftSendTracker {
         draft.files.map((file) => file.id),
       ]);
       if (current?.key !== key) {
-        current = { key, clientMessageId: crypto.randomUUID() };
+        current = {
+          key,
+          clientMessageId: crypto.randomUUID(),
+          uploads: new Map(),
+        };
       }
       return current;
     },
@@ -46,27 +54,37 @@ export function createDraftSendTracker(): DraftSendTracker {
 
 /**
  * Upload the draft's files on every attempt, so an upload the server pruned
- * meanwhile comes back. Composer file ids are unique, so an id a message in
- * this session already holds was attached by an earlier send of this draft,
- * whose resend the server recognizes.
+ * meanwhile comes back. An upload id already in use was attached by an
+ * earlier send: by this one (the same message, which the server recognizes),
+ * it is reused; by an earlier version of an edited draft, the file is
+ * uploaded again under a new id, since one upload belongs to one message.
  */
 export async function uploadDraftFiles(
   sessionId: string,
   files: ComposerFile[],
+  send: DraftSend,
 ): Promise<AgentAttachmentRef[]> {
+  const upload = async (file: ComposerFile, id: string) => {
+    const [attachment] = await uploadAgentFiles(sessionId, [{ ...file, id }]);
+    send.uploads.set(file.id, id);
+    return attachment;
+  };
   return Promise.all(
     files.map(async (file) => {
+      const id = send.uploads.get(file.id) ?? file.id;
       try {
-        const [attachment] = await uploadAgentFiles(sessionId, [file]);
-        return attachment;
+        return await upload(file, id);
       } catch (error) {
         if (!(error instanceof AttachmentInUseError)) throw error;
-        return {
-          id: file.id,
-          name: file.name,
-          mimeType: file.mimeType,
-          size: file.size,
-        };
+        if (send.uploads.get(file.id) === id) {
+          return {
+            id,
+            name: file.name,
+            mimeType: file.mimeType,
+            size: file.size,
+          };
+        }
+        return upload(file, crypto.randomUUID());
       }
     }),
   );

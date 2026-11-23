@@ -432,7 +432,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
     ): Promise<boolean> => {
       let attachments;
       try {
-        attachments = await uploadDraftFiles(sessionId, files);
+        attachments = await uploadDraftFiles(sessionId, files, draft);
         applyPendingResult(
           await enqueuePendingMessage(sessionId, {
             content,
@@ -481,7 +481,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
 
       let attachments;
       try {
-        attachments = await uploadDraftFiles(sessionId, files);
+        attachments = await uploadDraftFiles(sessionId, files, draft);
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : 'Could not upload files.',

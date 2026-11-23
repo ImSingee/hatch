@@ -944,6 +944,16 @@ export async function startAgentRun(
 
   const activeRun = await getActiveAgentRun(input.sessionId);
   if (activeRun) {
+    // A concurrent copy of this send may have committed since the lookup.
+    const receipt =
+      receiptKey &&
+      (await findMessageReceipt(
+        db,
+        input.sessionId,
+        receiptKey.clientMessageId,
+        receiptKey.fingerprint,
+      ));
+    if (receipt) return replayStartedRun(db, receipt);
     throw new ActiveRunConflictError();
   }
 

@@ -950,6 +950,52 @@ describe('resending a message after a lost response', () => {
     expect(await db.select().from(schema.agentPendingMessages)).toEqual([]);
   });
 
+  it('resumes delivery when an idle send failed after accepting the message', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    // Accepted, then its delivery failed: no Runner took it.
+    vi.mocked(hub.connectedRunnerCount).mockReturnValue(0);
+    await resendEnqueue('draft-0009', 'Add a chart').catch(() => null);
+    await runs.pendingDispatchesSettled();
+    expect(await activeRunId()).toBeNull();
+    expect((await tray()).messages).toHaveLength(1);
+
+    vi.mocked(hub.connectedRunnerCount).mockReturnValue(1);
+    const resent = await resendEnqueue('draft-0009', 'Add a chart');
+    await runs.pendingDispatchesSettled();
+    expect(resent.startedRunId).toBe(await activeRunId());
+    expect(resent.pending.messages).toEqual([]);
+    expect(started.map((payload) => payload.userText)).toEqual(['Add a chart']);
+  });
+
+  it('replays a message whose model was disabled since it was sent', async () => {
+    await startRun('Build a tracker');
+    const first = await resendEnqueue('draft-0010', 'Add a chart');
+    await db
+      .update(schema.agentModels)
+      .set({ enabled: false })
+      .where(eq(schema.agentModels.modelId, MODEL.modelId));
+    const again = await resendEnqueue('draft-0010', 'Add a chart');
+    expect(again.pending).toEqual(first.pending);
+    // A new message still needs an available model.
+    await expect(resendEnqueue('draft-0011', 'Other')).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it('returns the first run to a copy that saw it only once it was active', async () => {
+    const first = await resendStart('draft-0012', 'Build a tracker');
+    // This copy looked the receipt up just before the first one committed.
+    vi.spyOn(db.query.agentMessageReceipts, 'findFirst').mockResolvedValueOnce(
+      undefined,
+    );
+    expect(await resendStart('draft-0012', 'Build a tracker')).toEqual(first);
+    // Another message is still refused while the run works.
+    await expect(
+      resendStart('draft-0013', 'Something else'),
+    ).rejects.toMatchObject({ status: 409, name: 'ActiveRunConflictError' });
+    expect(started).toHaveLength(1);
+  });
+
   it('sends a cancelled message again as a new one', async () => {
     await startRun('Build a tracker');
     const sent = await resendEnqueue('draft-0006', 'Add a chart');

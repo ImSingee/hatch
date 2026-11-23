@@ -94,7 +94,7 @@ export function NewChat({
         createdSessionRef.current ?? (await createEmptyAgentSession()).id;
       createdSessionRef.current = id;
       const draft = draftSends.begin(id, { content, images, files });
-      const attachments = await uploadDraftFiles(id, files);
+      const attachments = await uploadDraftFiles(id, files, draft);
       await startAgentRunRequest({
         clientMessageId: draft.clientMessageId,
         sessionId: id,

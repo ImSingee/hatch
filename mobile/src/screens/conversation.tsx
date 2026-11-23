@@ -121,6 +121,8 @@ function ConversationBody({
     model,
     setModel,
     clientMessageIdFor,
+    sentUploadId,
+    recordUpload,
     settleSend,
   } = useChatDraft(id);
   const [problem, setProblem] = useConversationProblem(origin, id);
@@ -423,24 +425,33 @@ function ConversationBody({
       );
       const attachmentIds: string[] = [];
       for (const file of files.filter((item) => !item.image)) {
-        const blob = new File(file.uri);
-        try {
-          // Uploaded on every attempt, so an upload pruned meanwhile returns.
+        const upload = async (attachmentId: string) => {
           await api!.uploadAttachment(
             id,
-            file.id,
-            blob,
+            attachmentId,
+            new File(file.uri),
             file.name,
             file.mimeType,
             signal,
           );
+          recordUpload(clientMessageId, file.id, attachmentId);
+          return attachmentId;
+        };
+        const sent = sentUploadId(clientMessageId, file.id);
+        let attachmentId = sent ?? file.id;
+        try {
+          // Uploaded on every attempt, so an upload pruned meanwhile returns.
+          await upload(attachmentId);
         } catch (error) {
-          // File ids are unique per pick: an id already in use was attached
-          // by an earlier send of this draft, which the server recognizes.
           if (!(error instanceof MobileError && error.status === 409))
             throw error;
+          // In use: attached by this send (the same message, which the
+          // server recognizes), or by an earlier version of an edited
+          // draft, which needs its own upload.
+          if (sent !== attachmentId)
+            attachmentId = await upload(Crypto.randomUUID());
         }
-        attachmentIds.push(file.id);
+        attachmentIds.push(attachmentId);
       }
       const message = {
         ...selectedModel,

@@ -17,7 +17,7 @@
  * operation here is serialized with it per session.
  */
 import { and, eq, inArray } from 'drizzle-orm';
-import { db, schema, type TX } from '~/db';
+import { db, schema, type DB, type TX } from '~/db';
 import type { JsonValue } from '~/db/schema';
 import type { AgentAttachmentRef } from '~agent/attachments';
 import {
@@ -60,9 +60,9 @@ export type PendingMessageInput = {
 };
 
 /** A run an earlier send of a message started, while it is still active. */
-async function activeRunOf(tx: TX, runId: string | null) {
+async function activeRunOf(executor: DB | TX, runId: string | null) {
   if (!runId) return null;
-  const run = await tx.query.agentRuns.findFirst({
+  const run = await executor.query.agentRuns.findFirst({
     where: { id: runId, status: { in: ['running', 'blocked'] } },
     columns: { id: true },
   });
@@ -142,15 +142,35 @@ export async function enqueuePendingMessage(input: {
   message: PendingMessageInput;
   clientMessageId?: string;
 }): Promise<PendingMessagesResult> {
-  await assertAgentModelAvailable(input.providerId, input.modelId);
-  const { messageMode: mode } = await readAgentPreferences(input.userId);
   const receiptKey = input.clientMessageId
     ? {
         clientMessageId: input.clientMessageId,
         fingerprint: messageFingerprint(input.message),
       }
     : null;
+  // The message is already in. An idle session's earlier send may have
+  // failed before delivering it, so delivery is resumed (it adds nothing).
+  const replay = async (runId: string | null) => {
+    const started = await dispatchPendingMessages(input.sessionId);
+    return result(
+      input.sessionId,
+      (await activeRunOf(db, runId)) ?? started?.runId ?? null,
+    );
+  };
   return enqueuePendingTask(input.sessionId, async () => {
+    // Before the checks only a new message must pass (its model may have
+    // been disabled since the first send).
+    if (receiptKey) {
+      const receipt = await findMessageReceipt(
+        db,
+        input.sessionId,
+        receiptKey.clientMessageId,
+        receiptKey.fingerprint,
+      );
+      if (receipt) return replay(receipt.runId);
+    }
+    await assertAgentModelAvailable(input.providerId, input.modelId);
+    const { messageMode: mode } = await readAgentPreferences(input.userId);
     const replayed = await db.transaction(async (tx) => {
       await lockSession(tx, input.sessionId);
       if (receiptKey) {
@@ -160,8 +180,7 @@ export async function enqueuePendingMessage(input: {
           receiptKey.clientMessageId,
           receiptKey.fingerprint,
         );
-        if (receipt)
-          return { startedRunId: await activeRunOf(tx, receipt.runId) };
+        if (receipt) return { runId: receipt.runId };
       }
       const attachmentIds = [...new Set(input.message.attachmentIds ?? [])];
       const rows =
@@ -225,7 +244,7 @@ export async function enqueuePendingMessage(input: {
       }
       return null;
     });
-    if (replayed) return result(input.sessionId, replayed.startedRunId);
+    if (replayed) return replay(replayed.runId);
     if (mode === 'steer') await notifyActiveRunOfSteer(input.sessionId);
     const started = await dispatchPendingMessages(input.sessionId);
     return result(input.sessionId, started?.runId ?? null);
