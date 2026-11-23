@@ -56,11 +56,22 @@ With room for two columns (an unfolded iPhone Duo, landscape), Home puts the
 widgets in the leading column and the pins in the trailing one, and Agent shows
 the list beside the conversation. Columns split on the fold when there is one.
 
+The app runs natively on iPad. Wide screens (iPad, an unfolded Duo) get the
+same two-column layouts; pages that stay one column (sign-in, an App or
+Workflow page, settings, notifications) keep their content to a reading width
+and centre it.
+
 The dashboard canvas is shown in a transparent WebView, so the ground shapes
 run behind the widgets; the `/mobile/` pages paint no background of their own
 under the native-host mark. The view stays hidden until the requested page has
 loaded, so the sign-in pages before it never show. App screens keep an opaque
 white surface.
+
+Home asks for the canvas with `#peek`: the page then shows only the widgets
+that fit its box whole and does not scroll; the Widgets page shows them all.
+Android's WebView composites translucent content over a transparent view with
+its alpha applied twice, so on Android the widget panels are drawn opaque white
+(`data-host-platform="android"`); iOS keeps the translucent panels.
 
 ### App icons
 
@@ -100,6 +111,10 @@ The merged authentication contract is resource-independent:
 1. Call `AuthService.CreateHandoff({})` with the existing user session.
 2. In a fresh browser/WebView, POST a form containing only `ticket` to the
    response `url`. Never put the ticket or session token in a URL.
+   Android's WebView sends this native POST with `Origin: null` and
+   `Sec-Fetch-Site: none` (no initiating page). The consume endpoint accepts
+   exactly that browser-initiated navigation; issuing a ticket and completing
+   sign-in keep the strict origin check.
 3. Wait for the response's exact `completionUrl` to load successfully. This
    establishes the original session as an HttpOnly cookie.
 4. Navigate within that same browser to `/mobile/dashboard/:dashboardId`, using
