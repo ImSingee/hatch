@@ -14,6 +14,12 @@
   backdrop-filter: blur(12px);
 }
 
+/* Android's transparent WebView darkens translucent panels; see
+   `native-host.ts`. */
+:global(:root[data-host-platform='android']) .panel {
+  background: var(--mantine-color-white);
+}
+
 /* In the editor the area is a drop zone as tall as a small widget. */
 .dropZone {
   display: grid;
