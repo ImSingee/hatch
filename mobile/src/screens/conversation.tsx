@@ -163,6 +163,8 @@ function ConversationBody({
   // ends programmatic scrolls with a momentum event; a restore while text
   // reflows lands mid-way and must not be taken for the reader's place.
   const dragged = useRef(false);
+  // The list's latest offset, which a work line toggle saves as the place.
+  const scrollTop = useRef<number | null>(null);
   const width = useRef<number | null>(null);
   const list = useRef<FlatList<JsonValue>>(null);
   // The native end: the list's own estimate leaves out the content padding
@@ -391,13 +393,15 @@ function ConversationBody({
   const [workOpen, setWorkOpen] = useState<Record<string, boolean>>({});
   // Rows re-render when a hold or a work line's open state changes.
   const listExtra = useMemo(() => ({ held, workOpen }), [held, workOpen]);
-  const toggleWork = useCallback((key: string, expanded: boolean) => {
-    // The reader's own toggle stops following the end, like a drag: the
-    // line they tapped stays where it is while the process opens or folds.
+  const toggleWork = (key: string, expanded: boolean) => {
+    // The reader's own toggle takes over the place, like a drag: the line
+    // they tapped stays where it is while the process opens or folds, and a
+    // later resize or return restores this place instead of the end.
     settle.current = null;
-    setAtBottom(false);
+    if (scrollTop.current === null) setAtBottom(false);
+    else keepPlace(scrollTop.current, false);
     setWorkOpen((current) => ({ ...current, [key]: !expanded }));
-  }, []);
+  };
   // Server clock minus this phone's, for the line counting a live run.
   const clockOffset = detail
     ? Date.parse(detail.serverTime) - session.dataUpdatedAt
@@ -872,6 +876,10 @@ function ConversationBody({
               }}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={32}
+              onScroll={(event) => {
+                scrollTop.current = event.nativeEvent.contentOffset.y;
+              }}
               onLayout={(event) => {
                 const next = event.nativeEvent.layout.width;
                 if (width.current !== null && width.current !== next) {

@@ -188,7 +188,7 @@ export function WorkLine({
     </>
   );
   const style = {
-    minHeight: 32,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -199,7 +199,6 @@ export function WorkLine({
       accessibilityRole="button"
       accessibilityState={{ expanded }}
       accessibilityLabel={words.lead + words.rest}
-      hitSlop={6}
       onPress={onToggle}
       style={style}
     >
@@ -221,8 +220,8 @@ export function WorkRail({ children }: PropsWithChildren) {
         paddingLeft: GUTTER - RAIL - 0.5,
         borderLeftWidth: 1,
         borderLeftColor: c.hairline,
+        // Each step is a full 44-point target; they stack without a gap.
         paddingVertical: 2,
-        gap: 2,
       }}
     >
       {children}
@@ -294,7 +293,7 @@ export function StepRow({
     </>
   );
   const rowStyle = {
-    minHeight: 32,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -307,7 +306,6 @@ export function StepRow({
           accessibilityState={{ expanded: open }}
           accessibilityLabel={detail ? `${label}, ${detail}` : label}
           accessibilityValue={status ? { text: status } : undefined}
-          hitSlop={{ top: 6, bottom: 6 }}
           onPress={() => setOpen(!open)}
           style={({ pressed }) => [
             rowStyle,
