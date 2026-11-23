@@ -65,11 +65,11 @@ import {
 } from '~agent/user-turns';
 import type { SteerMessage } from '~agent/protocol';
 import { AppError } from '~server/errors';
+import { MessageQueuedError } from './agent-message-body';
 import {
   bindReceiptsToRun,
   findMessageReceipt,
   messageFingerprint,
-  MessageAlreadySentError,
   recordMessageReceipt,
   type AgentMessageReceipt,
 } from './agent-message-receipts';
@@ -209,8 +209,8 @@ async function replayStartedRun(
         where: { id: receipt.runId },
       })
     : null;
-  // Still waiting in the tray, or delivered without a run of its own.
-  if (!run) throw new MessageAlreadySentError();
+  // Accepted into the tray by an earlier send, where it still waits.
+  if (!run) throw new MessageQueuedError();
   return startedRun(run);
 }
 

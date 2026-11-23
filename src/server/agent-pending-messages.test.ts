@@ -901,7 +901,7 @@ describe('resending a message after a lost response', () => {
     await runs.pendingDispatchesSettled();
     await expect(
       resendStart('draft-0005', 'Then share it'),
-    ).rejects.toMatchObject({ status: 409, name: 'MessageAlreadySentError' });
+    ).rejects.toMatchObject({ status: 409, name: 'MessageQueuedError' });
     expect((await tray()).messages).toHaveLength(1);
     expect(started).toHaveLength(3);
   });

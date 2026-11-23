@@ -621,6 +621,25 @@ describe('request lifecycle races', () => {
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
+  it('accepts an already-queued answer only for a resend that names its message', async () => {
+    const fetcher = vi.fn<FetchLike>(async () => json({ queued: true }));
+    const { client, vault } = setup(fetcher);
+    await vault.set(origin, 'fixture-token');
+    const message = {
+      sessionId: 'session-1',
+      providerId: 'p',
+      modelId: 'm',
+      content: [{ type: 'text' as const, text: 'Keep this draft' }],
+    };
+    await expect(
+      client.createRun({ ...message, clientMessageId: 'draft-0001' }),
+    ).resolves.toEqual({ queued: true });
+    // Without an id the answer cannot be about this message.
+    await expect(client.createRun(message)).rejects.toMatchObject({
+      code: 'ambiguous_run',
+    });
+  });
+
   it('signs out the original credential without revoking a concurrently replaced login', async () => {
     const fetcher = vi
       .fn<FetchLike>()

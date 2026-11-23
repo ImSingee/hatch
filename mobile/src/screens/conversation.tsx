@@ -472,8 +472,10 @@ function ConversationBody({
     onSuccess: async (result) => {
       settleSend(result.clientMessageId);
       if (lifetimeSignal().aborted) return;
-      if (result.kind === 'run') setOptimisticRun(result.run.runId);
-      else {
+      if (result.kind === 'run') {
+        // A resend the earlier send already put in the tray starts nothing.
+        if ('runId' in result.run) setOptimisticRun(result.run.runId);
+      } else {
         applyPending(result.pending.pending);
         // The run had just ended: the server delivered the message at once.
         if (result.pending.startedRunId) {

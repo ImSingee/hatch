@@ -38,14 +38,6 @@ export function messageFingerprint(message: {
     .digest('base64url');
 }
 
-/** The message was sent before and is not (or no longer) waiting to run. */
-export class MessageAlreadySentError extends AppError {
-  constructor() {
-    super('This message was already sent.', 409);
-    this.name = 'MessageAlreadySentError';
-  }
-}
-
 /**
  * The receipt of an earlier send of this message, if any. A different
  * message under the same id is a client bug, rejected rather than dropped.

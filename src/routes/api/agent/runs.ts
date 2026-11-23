@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   agentMessageFields,
   clientMessageIdSchema,
+  MessageQueuedError,
   MAX_BODY_BYTES,
   normalizeLegacyUserText,
   readCappedJson,
@@ -67,6 +68,10 @@ export async function postAgentRun({
     const result = await startAgentRun({ ...parsed, userId: session.user.id });
     return Response.json(result);
   } catch (error) {
+    // A resend of a message already waiting in the tray was accepted then.
+    if (error instanceof MessageQueuedError) {
+      return Response.json({ queued: true });
+    }
     // AppError carries its own status (409 for an already-running turn,
     // 404 for a missing session); anything untagged is a bad request.
     return errorResponse(error, 400);

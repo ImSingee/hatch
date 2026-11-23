@@ -516,6 +516,12 @@ export function Chat({ sessionId }: { sessionId: string }) {
         return false;
       }
       draftSends.settle(draft);
+      if ('queued' in started) {
+        // An earlier send of this draft already put it in the tray.
+        setPendingMessage(null);
+        revalidateSession();
+        return true;
+      }
       // A replayed resend answers the turn its first send already added.
       const runTurn = started.userTurn ?? userTurn;
       const replayed = runTurn < userTurn;

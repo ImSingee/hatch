@@ -126,6 +126,11 @@ export type CreateRunInput = {
   | { retry: true; expectedSessionUpdatedAt: string }
 );
 export type RunCreated = { runId: string; startedAt: string };
+/**
+ * A message resent after a lost response that the earlier send already put
+ * in the pending tray, where it still waits: accepted, and no run started.
+ */
+export type RunQueued = { queued: true };
 /** Resource-free browser sign-in; the client chooses where to go afterwards. */
 export type SessionHandoff = {
   url: string;

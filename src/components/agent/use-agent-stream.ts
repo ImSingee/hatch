@@ -603,9 +603,15 @@ export type StartedRun = {
   userTurn: number | null;
 };
 
+/**
+ * A resent message an earlier send already put in the pending tray, where it
+ * still waits: it was accepted, and no run started.
+ */
+export type QueuedStart = { queued: true };
+
 export async function startAgentRunRequest(
   params: StartParams,
-): Promise<StartedRun> {
+): Promise<StartedRun | QueuedStart> {
   const res = await fetch('/api/agent/runs', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -614,7 +620,7 @@ export async function startAgentRunRequest(
   if (!res.ok) {
     throw new Error((await res.text()) || `Request failed (${res.status})`);
   }
-  return (await res.json()) as StartedRun;
+  return (await res.json()) as StartedRun | QueuedStart;
 }
 
 /** Stop the session's scheduled automatic retry. */
@@ -1089,7 +1095,7 @@ export function useAgentStream({
   );
 
   const start = useCallback(
-    async (params: StartParams): Promise<StartedRun | null> => {
+    async (params: StartParams): Promise<StartedRun | QueuedStart | null> => {
       setEnvAnnouncement('');
       const requestId = startRequestIdRef.current + 1;
       startRequestIdRef.current = requestId;
@@ -1098,6 +1104,14 @@ export function useAgentStream({
       try {
         setState({ ...IDLE, active: true });
         const started = await startAgentRunRequest(params);
+        if ('queued' in started) {
+          if (pendingStartRef.current?.requestId === requestId) {
+            pendingStartRef.current = null;
+          }
+          setState(IDLE);
+          handleSessionChanged();
+          return started;
+        }
         const { runId } = started;
         const pending = pendingStartRef.current;
         const shouldCancel =
@@ -1143,7 +1157,11 @@ export function useAgentStream({
 
   const send = useCallback((params: SendParams) => start(params), [start]);
   const retry = useCallback(
-    (params: RetryParams) => start({ ...params, retry: true }),
+    // A retry names no message, so it is never an already-queued resend.
+    async (params: RetryParams) => {
+      const started = await start({ ...params, retry: true });
+      return started && 'queued' in started ? null : started;
+    },
     [start],
   );
 

@@ -345,6 +345,38 @@ test('resends a draft whose files the lost send already attached', async () => {
   expect(enqueued[0].attachmentIds).toEqual([uploads[0]]);
 });
 
+test('settles a resend the server says already waits in the tray', async () => {
+  // Stopped with delivery paused; the message an earlier send queued waits.
+  fixtures.session.activeRun = null;
+  fixtures.session.pending = {
+    paused: true,
+    messages: [pendingMessage('pending-1', 'Use blue')],
+  };
+  const starts: unknown[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), 'https://hatch.example.test');
+      if (url.pathname === '/api/agent/runs') {
+        starts.push(JSON.parse(String(init?.body)));
+        return Response.json({ queued: true });
+      }
+      throw new Error(`Unexpected fetch: ${url.pathname}`);
+    }),
+  );
+  const screen = await renderChat();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Use blue');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => starts.length).toBe(1);
+  // Accepted: the draft clears and no run is followed.
+  await expect.element(input).toHaveTextContent('');
+  await expect
+    .element(screen.getByRole('button', { name: 'Stop' }))
+    .not.toBeInTheDocument();
+});
+
 test('edits, sends now and cancels pending messages', async () => {
   fixtures.session.pending = {
     paused: false,
