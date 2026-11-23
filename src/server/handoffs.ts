@@ -23,8 +23,34 @@ type HandoffSession = { id: string; expiresAt: Date };
 const ticketId = (ticket: string) =>
   PREFIX + createHash('sha256').update(ticket).digest('hex');
 
-function requestOrigin(request: Request) {
+/**
+ * A top-level navigation the browser started itself, not a page: Android's
+ * WebView sends its native form POST (`postUrl`) like this, with no initiator
+ * origin. `Sec-Fetch-*` are forbidden header names, so no web page can send
+ * `site=none`; a page with an opaque origin (sandboxed frame, `data:`) is
+ * `cross-site`. iOS's WebView sends no `Origin` for the same POST.
+ */
+function isBrowserInitiatedNavigation(request: Request) {
+  const headers = request.headers;
+  return (
+    headers.get('origin') === 'null' &&
+    headers.get('sec-fetch-site') === 'none' &&
+    headers.get('sec-fetch-mode') === 'navigate' &&
+    headers.get('sec-fetch-dest') === 'document'
+  );
+}
+
+function requestOrigin(
+  request: Request,
+  { browserNavigation = false }: { browserNavigation?: boolean } = {},
+) {
   const origin = new URL(request.url).origin;
+  if (
+    browserNavigation &&
+    isTrustedSessionOrigin(origin) &&
+    isBrowserInitiatedNavigation(request)
+  )
+    return origin;
   if (
     !isTrustedSessionOrigin(origin) ||
     sessionOriginError(request) ||
@@ -74,7 +100,9 @@ export async function createHandoff(request: Request, session: HandoffSession) {
  * ticket is only sent in the POST body, never a URL, redirect, or JS bridge.
  */
 async function consumeHandoff(request: Request) {
-  const origin = requestOrigin(request);
+  // Only the ticket POST is a native WebView navigation; issuing a ticket
+  // and completing sign-in keep the strict origin check.
+  const origin = requestOrigin(request, { browserNavigation: true });
   if (
     request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !==
     'application/x-www-form-urlencoded'

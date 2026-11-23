@@ -140,6 +140,13 @@ async function handoff() {
     expiresAt: string;
   };
 }
+/** The headers an Android WebView sends with its native form POST. */
+const androidNavigation = {
+  origin: 'null',
+  'sec-fetch-site': 'none',
+  'sec-fetch-mode': 'navigate',
+  'sec-fetch-dest': 'document',
+};
 function consume(
   ticket: string,
   options: {
@@ -967,7 +974,19 @@ describe('resource-independent session handoff', () => {
       [{ method: 'GET' }, 405],
       [{ headers: { 'content-type': 'application/json' } }, 415],
       [{ headers: { origin: 'https://evil.example' } }, 403],
+      [{ headers: { origin: 'null' } }, 403],
       [{ headers: { origin: 'null', 'sec-fetch-site': 'none' } }, 403],
+      // An opaque-origin page (sandboxed frame, data: URL) is cross-site.
+      [
+        { headers: { ...androidNavigation, 'sec-fetch-site': 'cross-site' } },
+        403,
+      ],
+      [
+        { headers: { ...androidNavigation, 'sec-fetch-site': 'same-origin' } },
+        403,
+      ],
+      [{ headers: { ...androidNavigation, 'sec-fetch-mode': 'cors' } }, 403],
+      [{ headers: { ...androidNavigation, 'sec-fetch-dest': 'iframe' } }, 403],
       [{ headers: { origin, 'sec-fetch-site': 'cross-site' } }, 403],
     ] as const) {
       const response = await consume(ticket, options);
@@ -979,6 +998,31 @@ describe('resource-independent session handoff', () => {
       (await consume(ticket, { headers: { origin, 'sec-fetch-site': 'none' } }))
         .status,
     ).toBe(303);
+  });
+
+  it('accepts the Android WebView native POST only on the ticket endpoint', async () => {
+    // Android's WebView `postUrl` has no initiator: Origin null, site none.
+    expect(
+      (
+        await call('AuthService/CreateHandoff', {
+          body,
+          headers: androidNavigation,
+        })
+      ).status,
+    ).toBe(403);
+    const { ticket, completionUrl } = await handoff();
+    const response = await consume(ticket, { headers: androidNavigation });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe(completionPath);
+    expect(
+      (
+        await handleHandoffCompletion(
+          new Request(completionUrl, {
+            headers: { cookie: cookies(response), ...androidNavigation },
+          }),
+        )
+      ).status,
+    ).toBe(403);
   });
 
   it('establishes authentication without resources or after resources change', async () => {
