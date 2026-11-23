@@ -477,7 +477,14 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
         );
     };
 
-    let grant = match instance.device_code().await {
+    // Every result that arrives after an await is dropped once the request
+    // was abandoned (Cancel, Switch Instance…, a newer request): whatever
+    // abandoned it has already shown its own screen.
+    let requested = instance.device_code().await;
+    if !current(&app) {
+        return Ok(());
+    }
+    let grant = match requested {
         Ok(grant) => grant,
         Err(error) => {
             fail(&app, error.message());
@@ -505,13 +512,14 @@ async fn sign_in_with_browser(app: AppHandle) -> Result<(), String> {
         if !current(&app) {
             return Ok(());
         }
-        match instance.device_poll(&grant.device_code).await {
+        let polled = instance.device_poll(&grant.device_code).await;
+        if !current(&app) {
+            return Ok(());
+        }
+        match polled {
             Ok(DevicePoll::Pending | DevicePoll::Unavailable) => {}
             Ok(DevicePoll::SlowDown) => interval += std::time::Duration::from_secs(5),
             Ok(DevicePoll::Approved(token)) => {
-                if !current(&app) {
-                    return Ok(());
-                }
                 if let Some(window) = main_window(&app) {
                     let _ = window.show();
                     let _ = window.set_focus();
