@@ -14,7 +14,7 @@ import { EmptyState, Section } from '~components/page/page';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import { workflowsQueryOptions } from '~queries/workflows';
-import { uploadAgentFiles } from './attachment-api';
+import { createDraftSendTracker, uploadDraftFiles } from './draft-send';
 import { Composer, type ComposerSubmit } from './composer';
 import { useLastSelectedModel } from './model-preference';
 import { ModelPicker } from './model-picker';
@@ -68,6 +68,7 @@ export function NewChat({
   // Reuse a session created by a failed first attempt so a retry doesn't leave
   // a trail of empty "New chat" shells in the chat list.
   const createdSessionRef = useRef<string | null>(null);
+  const [draftSends] = useState(createDraftSendTracker);
   const [seed, setSeed] = useState({
     text: initialPrompt ?? '',
     nonce: initialPrompt ? 1 : 0,
@@ -92,8 +93,10 @@ export function NewChat({
       const id =
         createdSessionRef.current ?? (await createEmptyAgentSession()).id;
       createdSessionRef.current = id;
-      const attachments = await uploadAgentFiles(id, files);
+      const draft = draftSends.begin(id, { content, images, files });
+      const attachments = await uploadDraftFiles(id, files, draft);
       await startAgentRunRequest({
+        clientMessageId: draft.clientMessageId,
         sessionId: id,
         content,
         images,
@@ -101,6 +104,7 @@ export function NewChat({
         providerId,
         modelId,
       });
+      draftSends.settle(draft);
       await qc.invalidateQueries({ queryKey: sessionsQueryOptions.queryKey });
       onStart(id);
       return true;

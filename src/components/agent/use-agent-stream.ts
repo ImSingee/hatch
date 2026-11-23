@@ -583,6 +583,8 @@ export type SendParams = {
   attachmentIds?: string[];
   providerId: string;
   modelId: string;
+  /** Reused when resending the same draft (see `./draft-send`). */
+  clientMessageId?: string;
 };
 
 export type RetryParams = {
@@ -594,7 +596,12 @@ export type RetryParams = {
 
 type StartParams = SendParams | (RetryParams & { retry: true });
 
-export type StartedRun = { runId: string; startedAt: string };
+export type StartedRun = {
+  runId: string;
+  startedAt: string;
+  /** User turn the run answers; an earlier turn when a resend was replayed. */
+  userTurn: number | null;
+};
 
 export async function startAgentRunRequest(
   params: StartParams,

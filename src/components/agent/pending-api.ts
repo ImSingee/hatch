@@ -48,6 +48,8 @@ export function enqueuePendingMessage(
     attachmentIds: string[];
     providerId: string;
     modelId: string;
+    /** Reused when resending the same draft (see `./draft-send`). */
+    clientMessageId: string;
   },
 ) {
   return request(base(sessionId), { method: 'POST', body: message });

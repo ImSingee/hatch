@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import {
   agentMessageFields,
+  clientMessageIdSchema,
   MAX_BODY_BYTES,
   readCappedJson,
   refineAgentMessage,
@@ -18,6 +19,8 @@ const enqueueBodySchema = refineAgentMessage(
   z.object({
     providerId: z.string().min(1),
     modelId: z.string().min(1),
+    /** Reused when resending the same draft; see agent-message-receipts. */
+    clientMessageId: clientMessageIdSchema.optional(),
     ...agentMessageFields,
   }),
 );
@@ -73,7 +76,7 @@ export async function postAgentPendingMessage({
   }
 
   try {
-    const { providerId, modelId, ...message } = parsed;
+    const { providerId, modelId, clientMessageId, ...message } = parsed;
     return Response.json(
       await enqueuePendingMessage({
         sessionId,
@@ -81,6 +84,7 @@ export async function postAgentPendingMessage({
         providerId,
         modelId,
         message,
+        clientMessageId,
       }),
     );
   } catch (error) {

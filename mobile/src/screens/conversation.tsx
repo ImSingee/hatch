@@ -205,6 +205,14 @@ function ConversationBody({
   const frame = useRef<ViewInstance>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const sending = useRef(false);
+  // Every send of one unchanged draft names the same message, so resending
+  // it after a lost response returns the first outcome instead of a second
+  // message or run; files an earlier attempt uploaded are not uploaded again.
+  const draftSend = useRef<{
+    key: string;
+    clientMessageId: string;
+    uploaded: Set<string>;
+  } | null>(null);
   const composer = useRef<NativeFieldRef>(null);
   const composerScroll = useRef<ScrollViewInstance>(null);
   // Work outlives a fold or unfold that moves this conversation to another
@@ -404,21 +412,33 @@ function ConversationBody({
       const signal = lifetimeSignal();
       const text = (composer.current?.getText() ?? draft).trim();
       if (!selectedModel) throw new Error('Choose a configured model first.');
+      const key = JSON.stringify([id, text, files.map((file) => file.id)]);
+      if (draftSend.current?.key !== key)
+        draftSend.current = {
+          key,
+          clientMessageId: Crypto.randomUUID(),
+          uploaded: new Set(),
+        };
+      const sendOnce = draftSend.current;
       const attachmentIds: string[] = [];
       for (const file of files.filter((item) => !item.image)) {
-        const blob = new File(file.uri);
-        await api!.uploadAttachment(
-          id,
-          file.id,
-          blob,
-          file.name,
-          file.mimeType,
-          signal,
-        );
+        if (!sendOnce.uploaded.has(file.id)) {
+          const blob = new File(file.uri);
+          await api!.uploadAttachment(
+            id,
+            file.id,
+            blob,
+            file.name,
+            file.mimeType,
+            signal,
+          );
+          sendOnce.uploaded.add(file.id);
+        }
         attachmentIds.push(file.id);
       }
       const message = {
         ...selectedModel,
+        clientMessageId: sendOnce.clientMessageId,
         content: text ? [{ type: 'text' as const, text }] : [],
         attachmentIds,
         images: files
@@ -442,6 +462,7 @@ function ConversationBody({
       };
     },
     onSuccess: async (result) => {
+      draftSend.current = null;
       if (lifetimeSignal().aborted) return;
       if (result.kind === 'run') setOptimisticRun(result.run.runId);
       else {

@@ -126,4 +126,98 @@ describe.skipIf(!adminUrl)('pending messages on PostgreSQL', () => {
     expect(next?.input).toMatchObject({ userText: 'Use blue\n\nAnd dark' });
     expect(next?.userId).toBe('user-pg');
   });
+
+  it('delivers a message sent twice at once only once', async () => {
+    const { db, schema } = platform;
+    await db
+      .insert(schema.user)
+      .values({ id: 'user-pg', name: 'Ada', email: 'ada@pg.test' })
+      .onConflictDoNothing();
+    await db
+      .insert(schema.agentProviders)
+      .values({
+        id: 'provider-pg',
+        name: 'Provider',
+        apiType: 'openai-responses',
+        baseUrl: 'https://api.example.test/v1',
+        apiKey: 'key',
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(schema.agentModels)
+      .values({
+        providerId: 'provider-pg',
+        modelId: 'model-pg',
+        name: 'Model',
+        contextWindow: 128_000,
+        maxTokens: 8_192,
+      })
+      .onConflictDoNothing();
+    const model = { providerId: 'provider-pg', modelId: 'model-pg' };
+    const content = [{ type: 'text' as const, text: 'Build it' }];
+    const start = (sessionId: string) =>
+      runs.startAgentRun({
+        sessionId,
+        content,
+        ...model,
+        userId: 'user-pg',
+        clientMessageId: 'draft-pg-0001',
+      });
+    const enqueue = (sessionId: string) =>
+      pending.enqueuePendingMessage({
+        sessionId,
+        userId: 'user-pg',
+        ...model,
+        message: { content },
+        clientMessageId: 'draft-pg-0001',
+      });
+    const delivered = async (sessionId: string) => {
+      const session = await db.query.agentSessions.findFirst({
+        where: { id: sessionId },
+      });
+      return {
+        runs: (await db.query.agentRuns.findMany({ where: { sessionId } }))
+          .length,
+        userMessages: (session!.messages as { role?: string }[]).filter(
+          (message) => message.role === 'user',
+        ).length,
+        pending: (await pending.getPendingMessages(sessionId)).messages.length,
+      };
+    };
+
+    // Two starts race on the session lock; the second returns the first run.
+    await db.insert(schema.agentSessions).values({ id: 'session-pg-starts' });
+    const [a, b] = await Promise.all([
+      start('session-pg-starts'),
+      start('session-pg-starts'),
+    ]);
+    expect(b.runId).toBe(a.runId);
+    expect(await delivered('session-pg-starts')).toEqual({
+      runs: 1,
+      userMessages: 1,
+      pending: 0,
+    });
+
+    // A start and an enqueue of the same message race.
+    await db.insert(schema.agentSessions).values({ id: 'session-pg-mixed' });
+    await Promise.allSettled([
+      start('session-pg-mixed'),
+      enqueue('session-pg-mixed'),
+    ]);
+    await runs.pendingDispatchesSettled();
+    expect(await delivered('session-pg-mixed')).toEqual({
+      runs: 1,
+      userMessages: 1,
+      pending: 0,
+    });
+
+    // The primary key holds even without the session lock.
+    await expect(
+      db.insert(schema.agentMessageReceipts).values({
+        sessionId: 'session-pg-starts',
+        clientMessageId: 'draft-pg-0001',
+        fingerprint: 'other',
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23505' } });
+  });
 });
