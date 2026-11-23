@@ -71,6 +71,7 @@ const fixtures = vi.hoisted(() => ({
       attempt: number;
       maxAttempts: number;
       nextRetryAt: string | null;
+      waitingForRunner: boolean;
     },
     serverTime: '2026-07-11T12:00:00.000Z',
     clockOffsetMs: 0,
@@ -188,6 +189,7 @@ beforeEach(() => {
     attempt: 0,
     maxAttempts: 5,
     nextRetryAt: null,
+    waitingForRunner: false,
   };
   for (const provider of fixtures.providers) {
     provider.enabled = true;
@@ -624,6 +626,7 @@ test('counts down a scheduled automatic retry for an interrupted turn and stops 
     attempt: 2,
     maxAttempts: 5,
     nextRetryAt: new Date(Date.now() + 90_000).toISOString(),
+    waitingForRunner: false,
   };
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
@@ -634,6 +637,7 @@ test('counts down a scheduled automatic retry for an interrupted turn and stops 
       fixtures.session.retry = {
         ...fixtures.session.retry!,
         nextRetryAt: null,
+        waitingForRunner: false,
       };
       return Response.json({ ok: true });
     }
@@ -667,6 +671,57 @@ test('counts down a scheduled automatic retry for an interrupted turn and stops 
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
+test('lets the user stop a retry held until the Agent Runner reconnects', async () => {
+  fixtures.session.runs = [
+    {
+      id: 'run-failed',
+      status: 'interrupted',
+      userTurn: 0,
+      startedAt: '2026-07-11T11:59:00.000Z',
+      completedAt: '2026-07-11T11:59:30.000Z',
+      error: 'Agent run was interrupted because its Agent Runner went away.',
+    },
+  ];
+  fixtures.session.retry = {
+    runId: 'run-failed',
+    userTurn: 0,
+    attempt: 1,
+    maxAttempts: 5,
+    nextRetryAt: null,
+    waitingForRunner: true,
+  };
+  const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+    const url = String(input);
+    if (
+      url === '/api/agent/sessions/session-1/auto-retry' &&
+      init?.method === 'DELETE'
+    ) {
+      fixtures.session.retry = {
+        ...fixtures.session.retry!,
+        waitingForRunner: false,
+      };
+      return Response.json({ ok: true });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const screen = await renderChat();
+
+  const status = screen.getByTestId('agent-auto-retry-status');
+  await expect
+    .element(status)
+    .toHaveTextContent(
+      'Retrying automatically once the Agent Runner reconnects · attempt 1 of 5',
+    );
+  await screen.getByRole('button', { name: 'Stop retrying' }).click();
+
+  await expect.element(status).toHaveTextContent('Automatic retry stopped.');
+  await expect
+    .element(screen.getByRole('button', { name: 'Retry' }))
+    .toBeVisible();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 test('starts a scheduled retry immediately with Retry now', async () => {
   fixtures.session.retry = {
     runId: 'run-failed',
@@ -674,6 +729,7 @@ test('starts a scheduled retry immediately with Retry now', async () => {
     attempt: 1,
     maxAttempts: 5,
     nextRetryAt: new Date(Date.now() + 10_000).toISOString(),
+    waitingForRunner: false,
   };
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
@@ -712,6 +768,7 @@ test('offers a manual Retry once automatic retries are exhausted', async () => {
     attempt: 6,
     maxAttempts: 5,
     nextRetryAt: null,
+    waitingForRunner: false,
   };
   vi.stubGlobal(
     'fetch',

@@ -109,6 +109,7 @@ function retryFor(
         attempt: 0,
         maxAttempts: 5,
         nextRetryAt: null,
+        waitingForRunner: false,
       }
     : null;
 }
@@ -734,6 +735,7 @@ test('keeps an interrupted turn and its notice when its transcript never arrives
       attempt: 1,
       maxAttempts: 5,
       nextRetryAt: iso(Date.now() + 60_000),
+      waitingForRunner: false,
     },
   });
   stream.emit({ type: 'error', message: interruption });
@@ -783,6 +785,7 @@ test('keeps an interrupted turn and its notice when its transcript never arrives
       attempt: 2,
       maxAttempts: 5,
       nextRetryAt: iso(Date.now() + 90_000),
+      waitingForRunner: false,
     },
   });
   await invalidateSession(queryClient);

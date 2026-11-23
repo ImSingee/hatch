@@ -676,6 +676,16 @@ export const agentRuns = snakeCase.table(
      * when the retry fires, the user stops it, or any newer run starts.
      */
     autoRetryAt: timestamp('auto_retry_at'),
+    /**
+     * True while `runnerId` may be executing this run without having said
+     * so: set when the run is assigned to a Runner, cleared once that Runner
+     * accepts it, reports it, or reconnects and lists (or omits) it. A run
+     * that ends while this is set gets no automatic retry until its Runner
+     * settles it, so a replay never overlaps a copy still executing.
+     */
+    runnerConfirmationPending: boolean('runner_confirmation_pending')
+      .notNull()
+      .default(false),
     createdAt,
     updatedAt,
   },

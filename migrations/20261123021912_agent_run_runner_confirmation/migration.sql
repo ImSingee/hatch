@@ -1,0 +1,1 @@
+ALTER TABLE "agent_runs" ADD COLUMN "runner_confirmation_pending" boolean DEFAULT false NOT NULL;

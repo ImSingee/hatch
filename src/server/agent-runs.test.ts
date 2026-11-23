@@ -12,7 +12,9 @@ vi.mock('~/db', async () => {
 vi.mock('~server/agent-runner/hub', () => {
   type Hub = typeof import('~server/agent-runner/hub');
   class RunNotStartedError extends Error {}
+  class RunDispatchUncertainError extends Error {}
   return {
+    RunDispatchUncertainError,
     RunNotStartedError,
     connectedRunnerCount: vi.fn<Hub['connectedRunnerCount']>(() => 1),
     dispatchRun: vi.fn<Hub['dispatchRun']>(async () => 'runner-test'),
@@ -38,7 +40,9 @@ const {
   getSessionWorkspaceAffinity,
   ingestRunnerEvent,
   interruptAgentRun,
+  reconcileRunnerRuns,
   startAgentRun,
+  sweepExpiredAgentRuns,
   stopAgentAutoRetry,
   submitAgentEnv,
 } = await import('./agent-runs');
@@ -1271,6 +1275,7 @@ describe('automatic retry', () => {
       attempt: 6,
       maxAttempts: 5,
       nextRetryAt: null,
+      waitingForRunner: false,
     });
 
     // A manual retry still works, and a completed run resets the streak.
@@ -1442,7 +1447,9 @@ describe('automatic retry', () => {
 
     vi.mocked(hub.connectedRunnerCount).mockReturnValue(0);
     vi.mocked(hub.dispatchRun).mockRejectedValue(
-      new Error('No Agent Runner is connected to the platform.'),
+      new hub.RunNotStartedError(
+        'No Agent Runner is connected to the platform.',
+      ),
     );
     await fireDueAgentAutoRetries(FAR_FUTURE());
 
@@ -1459,5 +1466,279 @@ describe('automatic retry', () => {
     expect(session?.messages).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'Request' }] },
     ]);
+  });
+});
+
+describe('unconfirmed dispatch', () => {
+  const SESSION_ID = 'session-unconfirmed-dispatch';
+  const RUNNER_ID = 'runner-test';
+  const FAR_FUTURE = () => new Date(Date.now() + 60 * 60_000);
+  const PROMPT = { role: 'user', content: [{ type: 'text', text: 'Request' }] };
+
+  /** `run.start` went out, then the acceptance was lost. */
+  function loseAcceptance() {
+    vi.mocked(hub.dispatchRun).mockImplementationOnce(
+      async (_payload, plan) => {
+        await plan.assign(RUNNER_ID);
+        throw new hub.RunDispatchUncertainError(
+          'Runner did not accept the run in time.',
+        );
+      },
+    );
+  }
+
+  async function send() {
+    const { runId } = await startAgentRun({
+      sessionId: SESSION_ID,
+      content: [{ type: 'text', text: 'Request' }],
+      providerId: PROVIDER_A_ID,
+      modelId: MODEL_A_ID,
+    });
+    return runId;
+  }
+
+  async function run(runId: string) {
+    return (await db.query.agentRuns.findFirst({ where: { id: runId } }))!;
+  }
+
+  async function runIds() {
+    const rows = await db.query.agentRuns.findMany({
+      where: { sessionId: SESSION_ID },
+      orderBy: { id: 'asc' },
+      columns: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  async function retryState() {
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION_ID },
+    });
+    return getSessionRetryState(SESSION_ID, session!.messages);
+  }
+
+  async function expireLease(runId: string) {
+    await db
+      .update(schema.agentRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.agentRuns.id, runId));
+    await sweepExpiredAgentRuns();
+  }
+
+  beforeEach(async () => {
+    await seedAvailableModels();
+    await seedSession(SESSION_ID, []);
+  });
+
+  it('continues the original run when the reconnecting Runner holds it', async () => {
+    loseAcceptance();
+    const runId = await send();
+    expect(await run(runId)).toMatchObject({
+      status: 'running',
+      runnerId: RUNNER_ID,
+      runnerConfirmationPending: true,
+      autoRetryAt: null,
+    });
+
+    const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
+    expect(reconciled).toMatchObject({ resumed: [runId], ended: [] });
+    expect(await run(runId)).toMatchObject({
+      status: 'running',
+      runnerConfirmationPending: false,
+    });
+
+    const reply = [
+      PROMPT,
+      { role: 'assistant', content: 'Done.', stopReason: 'stop' },
+    ];
+    await completeRunFromRunner(RUNNER_ID, {
+      runId,
+      status: 'completed',
+      messages: reply,
+    });
+    expect(await run(runId)).toMatchObject({ status: 'completed' });
+    await expect(
+      db.query.agentSessions.findFirst({ where: { id: SESSION_ID } }),
+    ).resolves.toMatchObject({ messages: reply });
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+  });
+
+  it('retries at once when the reconnecting Runner does not hold the run', async () => {
+    loseAcceptance();
+    const runId = await send();
+
+    await reconcileRunnerRuns(RUNNER_ID, []);
+    const interrupted = await run(runId);
+    expect(interrupted).toMatchObject({
+      status: 'interrupted',
+      runnerConfirmationPending: false,
+      failureStreak: 1,
+    });
+    expect(interrupted.autoRetryAt).not.toBeNull();
+
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    const ids = await runIds();
+    expect(ids).toHaveLength(2);
+    expect((await run(ids[1])).input).toMatchObject({
+      userText: 'Request',
+      userTurn: 0,
+    });
+  });
+
+  it('holds the retry of an expired run until its Runner reconnects without it', async () => {
+    loseAcceptance();
+    const runId = await send();
+
+    // The Runner stayed away past the lease, but it may still be executing
+    // the run: nothing replays it yet.
+    await expireLease(runId);
+    expect(await run(runId)).toMatchObject({
+      status: 'interrupted',
+      runnerConfirmationPending: true,
+      failureStreak: 1,
+      autoRetryAt: null,
+    });
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+    await expect(retryState()).resolves.toMatchObject({
+      nextRetryAt: null,
+      waitingForRunner: true,
+    });
+
+    // A different Runner reconnecting settles nothing.
+    await reconcileRunnerRuns('runner-other', []);
+    expect((await run(runId)).autoRetryAt).toBeNull();
+
+    await reconcileRunnerRuns(RUNNER_ID, []);
+    const released = await run(runId);
+    expect(released.runnerConfirmationPending).toBe(false);
+    expect(released.autoRetryAt).not.toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toHaveLength(2);
+  });
+
+  it('holds the retry of an expired run its Runner still executes until the final report', async () => {
+    loseAcceptance();
+    const runId = await send();
+    await expireLease(runId);
+
+    // The Runner comes back still holding the run; it is resumed only to
+    // deliver its final report, and the replay waits for that report.
+    const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
+    expect(reconciled).toMatchObject({ resumed: [runId], ended: [runId] });
+    expect((await run(runId)).autoRetryAt).toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+
+    await completeRunFromRunner(RUNNER_ID, {
+      runId,
+      status: 'cancelled',
+      messages: [
+        PROMPT,
+        { role: 'assistant', content: 'Partial', stopReason: 'aborted' },
+      ],
+    });
+    const settled = await run(runId);
+    expect(settled).toMatchObject({
+      status: 'interrupted',
+      runnerConfirmationPending: false,
+    });
+    expect(settled.autoRetryAt).not.toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toHaveLength(2);
+  });
+
+  it('lets the user stop a retry held for the Runner', async () => {
+    loseAcceptance();
+    const runId = await send();
+    await expireLease(runId);
+
+    await stopAgentAutoRetry(SESSION_ID);
+    await expect(retryState()).resolves.toMatchObject({
+      nextRetryAt: null,
+      waitingForRunner: false,
+    });
+    await reconcileRunnerRuns(RUNNER_ID, []);
+    expect((await run(runId)).autoRetryAt).toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+  });
+
+  it('settles a held run that the late final report completed', async () => {
+    loseAcceptance();
+    const runId = await send();
+    await expireLease(runId);
+
+    const reply = [
+      PROMPT,
+      { role: 'assistant', content: 'Done.', stopReason: 'stop' },
+    ];
+    await completeRunFromRunner(RUNNER_ID, {
+      runId,
+      status: 'completed',
+      messages: reply,
+    });
+    expect(await run(runId)).toMatchObject({
+      status: 'completed',
+      runnerConfirmationPending: false,
+      autoRetryAt: null,
+      failureStreak: 0,
+    });
+    await expect(
+      db.query.agentSessions.findFirst({ where: { id: SESSION_ID } }),
+    ).resolves.toMatchObject({ messages: reply });
+    await reconcileRunnerRuns(RUNNER_ID, []);
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+  });
+
+  it('holds the retry of a lapsed run its reconnecting Runner still lists', async () => {
+    loseAcceptance();
+    const runId = await send();
+    // The Runner reconnects after the lease ran out but before the sweeper
+    // ended the run: it is interrupted, and the Runner keeps it until its
+    // final report.
+    await db
+      .update(schema.agentRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.agentRuns.id, runId));
+    const reconciled = await reconcileRunnerRuns(RUNNER_ID, [runId]);
+    expect(reconciled).toMatchObject({ resumed: [runId], ended: [runId] });
+    expect(await run(runId)).toMatchObject({
+      status: 'interrupted',
+      runnerConfirmationPending: true,
+      autoRetryAt: null,
+    });
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toEqual([runId]);
+
+    await completeRunFromRunner(RUNNER_ID, {
+      runId,
+      status: 'cancelled',
+      messages: [],
+    });
+    expect((await run(runId)).autoRetryAt).not.toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toHaveLength(2);
+  });
+
+  it('retries a run that definitely never started as before', async () => {
+    vi.mocked(hub.dispatchRun).mockImplementationOnce(
+      async (_payload, plan) => {
+        await plan.assign(RUNNER_ID);
+        throw new hub.RunNotStartedError('Runner rejected the run: busy');
+      },
+    );
+    const runId = await send();
+    const failed = await run(runId);
+    expect(failed).toMatchObject({
+      status: 'failed',
+      runnerConfirmationPending: false,
+      failureStreak: 1,
+    });
+    expect(failed.autoRetryAt).not.toBeNull();
+    await fireDueAgentAutoRetries(FAR_FUTURE());
+    expect(await runIds()).toHaveLength(2);
   });
 });
