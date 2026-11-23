@@ -145,7 +145,9 @@ export function WorkLine({
     <>
       <View
         style={{
-          width: MARK,
+          // A larger text size scales the mark past its slot; the words
+          // then move over rather than run into it.
+          minWidth: MARK,
           marginRight: GUTTER - MARK,
           alignItems: 'center',
         }}
@@ -161,7 +163,7 @@ export function WorkLine({
           type.small,
           { flexShrink: 1, color: pressed ? c.ink : c.inkSoft },
         ]}
-        numberOfLines={1}
+        numberOfLines={2}
       >
         <Text
           style={{
@@ -266,10 +268,10 @@ export function StepRow({
         : undefined;
   const row = (
     <>
-      <View style={{ width: 16, alignItems: 'flex-start' }}>{icon}</View>
+      <View style={{ minWidth: 16, alignItems: 'flex-start' }}>{icon}</View>
       <Text
-        style={[type.small, { flexShrink: 0, maxWidth: '60%', color: c.ink }]}
-        numberOfLines={1}
+        style={[type.small, { flexShrink: 1, color: c.ink }]}
+        numberOfLines={2}
       >
         {label}
       </Text>

@@ -391,11 +391,13 @@ function ConversationBody({
   const [workOpen, setWorkOpen] = useState<Record<string, boolean>>({});
   // Rows re-render when a hold or a work line's open state changes.
   const listExtra = useMemo(() => ({ held, workOpen }), [held, workOpen]);
-  const toggleWork = useCallback(
-    (key: string, expanded: boolean) =>
-      setWorkOpen((current) => ({ ...current, [key]: !expanded })),
-    [],
-  );
+  const toggleWork = useCallback((key: string, expanded: boolean) => {
+    // The reader's own toggle stops following the end, like a drag: the
+    // line they tapped stays where it is while the process opens or folds.
+    settle.current = null;
+    setAtBottom(false);
+    setWorkOpen((current) => ({ ...current, [key]: !expanded }));
+  }, []);
   // Server clock minus this phone's, for the line counting a live run.
   const clockOffset = detail
     ? Date.parse(detail.serverTime) - session.dataUpdatedAt
@@ -410,6 +412,7 @@ function ConversationBody({
     return {
       startedAt: started ? Date.parse(started) : null,
       endedAt: found?.completedAt ? Date.parse(found.completedAt) : null,
+      runStatus: found?.status,
     };
   };
   const heldReply = (entry: HeldReply) => (

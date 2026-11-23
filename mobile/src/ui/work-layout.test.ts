@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { JsonValue } from '../core';
-import { transcriptRows, toolResultsByCall, workWords } from './work-layout';
+import {
+  livePhase,
+  transcriptRows,
+  toolResultsByCall,
+  workWords,
+} from './work-layout';
 
 const user = (text: string) => ({ role: 'user', content: text });
 const call = (id: string, name = 'write_file') => ({
@@ -178,5 +183,26 @@ describe('transcript rows', () => {
   it('pairs only results whose call is in the transcript', () => {
     const results = toolResultsByCall([...messages, result('orphan')]);
     expect([...results.keys()]).toEqual(['a', 'b']);
+  });
+});
+
+describe('live phase', () => {
+  const live = (
+    terminal: 'done' | 'cancelled' | 'error' | null,
+    stopReason: string | null = null,
+  ) => ({ terminal, stopReason });
+
+  it('runs until the stream ends, then says how it ended', () => {
+    expect(livePhase(live(null), false)).toBe('running');
+    expect(livePhase(live('done'), false)).toBe('completed');
+    expect(livePhase(live('done', 'length'), false)).toBe('incomplete');
+    expect(livePhase(live('error'), false)).toBe('failed');
+    expect(livePhase(live('cancelled'), true)).toBe('cancelled');
+  });
+
+  it("reads a held reply's run when its stream did not end", () => {
+    expect(livePhase(live(null), true, 'interrupted')).toBe('failed');
+    expect(livePhase(live(null), true, 'cancelled')).toBe('cancelled');
+    expect(livePhase(live(null), true)).toBe('cancelled');
   });
 });

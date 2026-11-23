@@ -1,4 +1,4 @@
-import type { JsonValue, RunStatus, SessionDetail } from '../core';
+import type { JsonValue, RunStatus, SessionDetail, StreamState } from '../core';
 
 /**
  * How the transcript folds each Agent reply's process (reasoning, tool calls,
@@ -233,6 +233,31 @@ export function transcriptRows(
     });
   }
   return rows;
+}
+
+/**
+ * How the live reply stands: running until its stream ends, then how it
+ * ended. A held reply (stopped or interrupted before it was saved) reads its
+ * run when the stream itself did not say.
+ */
+export function livePhase(
+  state: Pick<StreamState, 'terminal' | 'stopReason'>,
+  settled: boolean,
+  runStatus?: RunStatus,
+): WorkPhase {
+  if (state.terminal === 'error') return 'failed';
+  if (state.terminal === 'cancelled') return 'cancelled';
+  if (state.terminal === 'done') {
+    return state.stopReason === 'length' ||
+      state.stopReason === 'toolUse' ||
+      state.stopReason === 'pending'
+      ? 'incomplete'
+      : 'completed';
+  }
+  if (!settled) return 'running';
+  return runStatus === 'failed' || runStatus === 'interrupted'
+    ? 'failed'
+    : 'cancelled';
 }
 
 /** A finished reply folds its process; any other end stays open. */

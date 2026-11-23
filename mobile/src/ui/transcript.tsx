@@ -1,6 +1,6 @@
 import { Fragment, type PropsWithChildren, type ReactNode } from 'react';
 import { Image, View } from 'react-native';
-import type { JsonValue, StreamBlock, StreamState } from '../core';
+import type { JsonValue, RunStatus, StreamBlock, StreamState } from '../core';
 import { Button } from './button';
 import { Glyph } from './glyph';
 import { Text, type } from './text';
@@ -15,7 +15,7 @@ import {
   WorkLine,
   WorkRail,
 } from './work';
-import type { TranscriptRow } from './work-layout';
+import { livePhase, type TranscriptRow } from './work-layout';
 
 function record(
   value: JsonValue | undefined,
@@ -401,6 +401,7 @@ export function LiveTranscript({
   startedAt,
   endedAt = null,
   clockOffset = 0,
+  runStatus,
   expanded,
   onToggle,
 }: {
@@ -416,6 +417,8 @@ export function LiveTranscript({
   startedAt: number | null;
   endedAt?: number | null;
   clockOffset?: number;
+  /** The run's status, for how a held reply ended. */
+  runStatus?: RunStatus;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -509,7 +512,7 @@ export function LiveTranscript({
   return (
     <View style={{ gap: ANSWER_GAP, paddingVertical: 4 }}>
       <WorkLine
-        phase={settled ? 'cancelled' : 'running'}
+        phase={livePhase(state, settled, runStatus)}
         startedAt={startedAt}
         endedAt={endedAt}
         clockOffset={clockOffset}
