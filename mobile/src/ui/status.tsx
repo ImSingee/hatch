@@ -3,13 +3,13 @@ import { Tag } from './primitives';
 export function StatusTag({ status }: { status: string }) {
   switch (status) {
     case 'deployed':
-      return <Tag tone="lime" label="Live" />;
+      return <Tag tone="success" dot label="Live" />;
     case 'building':
-      return <Tag tone="outline" label="Building" />;
+      return <Tag tone="warning" dot label="Building" />;
     case 'failed':
-      return <Tag tone="danger" label="Failed" />;
+      return <Tag tone="danger" dot label="Failed" />;
     default:
-      return <Tag tone="quiet" label={status || 'Unknown'} />;
+      return <Tag tone="quiet" label={statusText(status || 'unknown')} />;
   }
 }
 

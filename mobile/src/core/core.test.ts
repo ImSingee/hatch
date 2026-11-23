@@ -87,6 +87,26 @@ afterEach(() => {
 });
 
 describe('instance and credential boundaries', () => {
+  it('requests App icons from this instance only, with the credential in a header', async () => {
+    const { client, vault } = setup(vi.fn<FetchLike>());
+    // Signed out: nothing to authenticate an image request with.
+    expect(await client.appIconSource('/api/app/a1/icon?v=k1', 128)).toBeNull();
+    await vault.set(origin, 'fixture-token');
+    expect(await client.appIconSource('/api/app/a1/icon?v=k1', 128)).toEqual({
+      uri: `${origin}/api/app/a1/icon?v=k1&size=128`,
+      headers: { authorization: 'Bearer fixture-token' },
+    });
+    // Anything but an icon address on this instance shows the monogram.
+    for (const path of [
+      'https://elsewhere.example/api/app/a1/icon?v=k1',
+      '//elsewhere.example/api/app/a1/icon?v=k1',
+      '/api/app/a1/icon?v=k1&next=//elsewhere.example',
+      '/api/app/../auth/session?v=k1',
+      '/api/apps',
+    ])
+      expect(await client.appIconSource(path, 128)).toBeNull();
+  });
+
   it('uses generated Connect clients and projects shared App/Agent messages for the UI', async () => {
     const app = {
       id: 'app-1',
@@ -96,6 +116,7 @@ describe('instance and credential boundaries', () => {
       status: 'deployed',
       createdAt: '2026-10-16T00:00:00Z',
       updatedAt: '2026-10-16T00:00:00Z',
+      iconPath: null,
     };
     const session = {
       id: 'session-1',

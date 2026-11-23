@@ -36,7 +36,7 @@ export function AnswerCard({
   const lines = describeAnswers(reply, answer.answers);
   return (
     <Card style={{ gap: 12 }}>
-      <Tag tone="lime" glyph="check" label="Answered" />
+      <Tag tone="success" glyph="check" label="Answered" />
       <Text style={type.small}>
         {answer.respondedByName} answered {viaLabels[answer.via] ?? ''} on{' '}
         {notificationTime(answer.respondedAt)}.
@@ -45,7 +45,7 @@ export function AnswerCard({
         const line = lines.find((entry) => entry.fieldId === field.id);
         return (
           <View key={field.id} style={{ gap: 2 }}>
-            <Text style={type.meta}>{field.label}</Text>
+            <Text style={type.small}>{field.label}</Text>
             <Text selectable style={type.body}>
               {line?.value ?? 'No answer'}
             </Text>
@@ -120,8 +120,8 @@ export function ReplyFormCard({
   };
 
   return (
-    <Card style={{ borderWidth: 2, borderColor: c.lime, gap: 16 }}>
-      <Tag tone="lime" glyph="question" label="Asks for an answer" />
+    <Card style={{ gap: 16 }}>
+      <Tag tone="accent" glyph="question" label="Asks for an answer" />
       {reply.fields.map((field) => (
         <View key={field.id} style={{ gap: 10 }}>
           <Text accessibilityRole="header" style={type.heading}>
@@ -180,7 +180,7 @@ export function ReplyFormCard({
               style={{ gap: 8 }}
             >
               {field.type === 'multiple' ? (
-                <Text style={type.meta}>
+                <Text style={type.small}>
                   {field.minSelected === field.maxSelected
                     ? `Choose ${field.minSelected}`
                     : `Choose ${field.minSelected}–${field.maxSelected}`}

@@ -1,27 +1,41 @@
 import { NativeTabs } from 'expo-router/native-tabs';
+import { Platform } from 'react-native';
 import { useNavigationPreferences } from '../../src/state/navigation';
-import { glyphs } from '../../src/ui/glyph.types';
-import { palette as c } from '../../src/ui/theme';
-import { tabDetails } from '../../src/ui/navigation';
+import { useAccent } from '../../src/ui/accent';
+import { meTab, tabDetails } from '../../src/ui/navigation';
+import { palette as c, weights } from '../../src/ui/theme';
 
+// The system tab bar: Home, Apps, Agent and Me by default. Which sections sit
+// in it, and in what order, stays the user's choice (Tabs & start page).
 export default function TabLayout() {
   const { preferences } = useNavigationPreferences();
+  const accent = useAccent();
   return (
     <NativeTabs
-      tintColor={c.moss}
-      iconColor={{ default: c.inkFaint, selected: c.moss }}
+      tintColor={accent.fill}
+      iconColor={{ default: c.inkSoft, selected: accent.fill }}
       labelStyle={{
-        default: { fontWeight: '600', color: c.inkFaint },
-        selected: { fontWeight: '700', color: c.moss },
+        default: { fontWeight: weights.strong, color: c.inkSoft },
+        selected: { fontWeight: weights.label, color: accent.fill },
       }}
       minimizeBehavior="onScrollDown"
+      // iOS keeps the system's glass bar. Android's navigation bar is drawn
+      // from the tokens: a sunken bar, an accent-tint pill under the open tab.
+      {...(Platform.OS === 'android'
+        ? {
+            backgroundColor: c.sunken,
+            indicatorColor: accent.tint,
+            rippleColor: c.pressed,
+            labelVisibilityMode: 'labeled' as const,
+          }
+        : null)}
     >
       {preferences.order.map((id) => (
         <NativeTabs.Trigger
           key={id}
           name={id}
           hidden={!preferences.visible.includes(id)}
-          contentStyle={{ backgroundColor: c.paper }}
+          contentStyle={{ backgroundColor: c.ground }}
         >
           <NativeTabs.Trigger.Label>
             {tabDetails[id].label}
@@ -34,10 +48,10 @@ export default function TabLayout() {
       ))}
       <NativeTabs.Trigger
         name="more"
-        contentStyle={{ backgroundColor: c.paper }}
+        contentStyle={{ backgroundColor: c.ground }}
       >
-        <NativeTabs.Trigger.Label>More</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={glyphs.more} md="more_horiz" />
+        <NativeTabs.Trigger.Label>{meTab.label}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={meTab.icon} md={meTab.androidIcon} />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

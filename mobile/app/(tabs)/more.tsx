@@ -5,7 +5,7 @@ import type { TabId } from '../../src/core/navigation-preferences';
 import { useNavigationPreferences } from '../../src/state/navigation';
 import { openSection } from '../../src/state/open-section';
 import { useSession } from '../../src/state/session';
-import { tabDetails } from '../../src/ui/navigation';
+import { meTab, tabDetails } from '../../src/ui/navigation';
 import { Tag, Wordmark } from '../../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
 import { Columns } from '../../src/ui/columns';
@@ -19,10 +19,10 @@ export default function MoreScreen() {
   const open = (id: TabId) => openSection(id, preferences);
   const start =
     preferences.defaultTab === 'more'
-      ? 'More'
+      ? meTab.label
       : tabDetails[preferences.defaultTab].label;
   return (
-    <ScrollScreen eyebrow={host} title="More">
+    <ScrollScreen eyebrow={host} title={meTab.label}>
       <View style={{ paddingHorizontal: 16 }}>
         <Columns
           leading={
@@ -41,7 +41,7 @@ export default function MoreScreen() {
                       leading={
                         <GlyphTile
                           glyph={tabDetails[id].glyph}
-                          tone={inTabs ? 'sunken' : 'lime'}
+                          tone={inTabs ? 'muted' : 'accent'}
                         />
                       }
                       trailing={
@@ -93,7 +93,7 @@ export default function MoreScreen() {
           <Text style={type.small}>
             Small software, grown on your own server.
           </Text>
-          <Text style={type.meta}>
+          <Text style={type.caption}>
             Version {Constants.expoConfig?.version ?? '—'}
           </Text>
         </View>

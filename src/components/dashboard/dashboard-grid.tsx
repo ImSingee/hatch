@@ -157,7 +157,7 @@ export function DashboardGrid({
             const geometry = geometryById.get(item.id);
             if (!geometry) return null;
             return (
-              <div key={item.id} className={classes.cell}>
+              <div key={item.id} className={classes.cell} data-widget-cell>
                 <WidgetCard
                   item={item}
                   geometry={geometry}

@@ -1,30 +1,74 @@
-import { Text } from 'react-native';
+import { SymbolView, type AndroidSymbol } from 'expo-symbols';
+import { useWindowDimensions, View } from 'react-native';
 import { palette } from './theme';
 import type { GlyphName, GlyphProps } from './glyph.types';
 
-// Android has no SF Symbols; keep a legible text mark until it gets its own set.
-const marks: Partial<Record<GlyphName, string>> = {
-  plus: '+',
-  chevron: '›',
-  clear: '×',
-  close: '×',
-  send: '↑',
-  up: '↑',
-  down: '↓',
-  refresh: '↻',
-  check: '✓',
-  warning: '!',
-  settings: '⚙',
+// Android draws each glyph with the Material symbol that plays the SF
+// Symbol's part on iOS.
+const symbols: Record<GlyphName, AndroidSymbol> = {
+  home: 'home',
+  dashboard: 'dashboard',
+  apps: 'apps',
+  agent: 'auto_awesome',
+  person: 'person',
+  workflows: 'account_tree',
+  more: 'more_horiz',
+  open: 'north_east',
+  refresh: 'refresh',
+  plus: 'add',
+  chevron: 'chevron_right',
+  search: 'search',
+  clear: 'cancel',
+  close: 'close',
+  send: 'arrow_upward',
+  attach: 'attach_file',
+  stop: 'stop',
+  pin: 'push_pin',
+  hash: 'tag',
+  sliders: 'tune',
+  server: 'dns',
+  up: 'arrow_upward',
+  down: 'arrow_downward',
+  browser: 'open_in_browser',
+  warning: 'warning',
+  check: 'check',
+  file: 'description',
+  photo: 'image',
+  signOut: 'logout',
+  model: 'memory',
+  question: 'help',
+  eyeSlash: 'visibility_off',
+  sparkle: 'auto_awesome',
+  bell: 'notifications',
+  settings: 'settings',
+  trash: 'delete',
+  edit: 'edit',
+  pause: 'pause',
 };
 
+// Decorative symbol in a square box; the surrounding control owns its
+// accessible name.
 export function Glyph({ name, size = 18, color = palette.ink }: GlyphProps) {
+  const { fontScale } = useWindowDimensions();
+  const scaled = Math.round(size * Math.min(Math.max(fontScale, 1), 1.6));
+  const box = Math.round(scaled * 1.25);
   return (
-    <Text
+    <View
       accessible={false}
-      importantForAccessibility="no"
-      style={{ color, fontSize: size, lineHeight: size * 1.2 }}
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={{
+        width: box,
+        height: box,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
-      {marks[name] ?? '•'}
-    </Text>
+      <SymbolView
+        name={{ android: symbols[name] }}
+        size={box}
+        tintColor={color}
+      />
+    </View>
   );
 }

@@ -30,8 +30,10 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-export type AppSummary = Omit<Plain<Resource>, 'description'> & {
+export type AppSummary = Omit<Plain<Resource>, 'description' | 'iconPath'> & {
   description: string | null;
+  /** Apps only: where the icon PNG is served; null while it shows a monogram. */
+  iconPath: string | null;
 };
 export type AppDetail = AppSummary;
 export type Model = Plain<AgentModel>;
@@ -249,4 +251,19 @@ export type PushRegistration = {
   apnsEnvironment: 'sandbox' | 'production';
   e2eKeyId: string;
   e2eKey: string;
+};
+
+/** One pin of an App: its own label and destination, even for the same App. */
+export type AppPin = {
+  id: string;
+  appId: string;
+  appSlug: string;
+  label: string;
+  /** The App's own route without `#`; empty opens the App root. */
+  entryHash: string;
+  appStatus: string;
+};
+export type Pins = {
+  apps: AppPin[];
+  workflows: { id: string; slug: string; name: string }[];
 };

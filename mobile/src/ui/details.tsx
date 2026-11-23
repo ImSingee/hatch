@@ -3,7 +3,8 @@ import { Pressable, View } from 'react-native';
 import { Glyph } from './glyph';
 import type { DetailProps } from './native-controls.types';
 import { Text, type } from './text';
-import { fonts, palette as c } from './theme';
+import { useAccent } from './accent';
+import { palette as c, pill, radii, status as hue, weights } from './theme';
 
 /** Collapsed tool, request and reasoning detail. Expands into a mono slip. */
 export function Details({
@@ -12,6 +13,7 @@ export function Details({
   error,
   state,
 }: DetailProps & { state?: 'working' | 'done' | 'failed' }) {
+  const accent = useAccent();
   const [expanded, setExpanded] = useState(false);
   const failed = state === 'failed' || error;
   // The dot's color is not announced, so screen readers hear the status too.
@@ -25,19 +27,17 @@ export function Details({
           : undefined;
   const dot =
     state === 'working'
-      ? c.lime
+      ? accent.fill
       : failed
-        ? c.danger
+        ? hue.danger.fill
         : state === 'done'
-          ? c.moss
-          : c.rule;
+          ? hue.success.fill
+          : c.idle;
   return (
     <View
       style={{
-        borderRadius: 14,
-        backgroundColor: expanded ? c.card : 'transparent',
-        borderWidth: 1,
-        borderColor: c.rule,
+        borderRadius: radii.lg,
+        backgroundColor: c.card,
         overflow: 'hidden',
       }}
     >
@@ -54,20 +54,28 @@ export function Details({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 10,
-          backgroundColor: pressed ? c.limeSoft : 'transparent',
+          backgroundColor: pressed ? c.hover : 'transparent',
         })}
       >
         <View
-          style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: pill,
+            backgroundColor: dot,
+          }}
         />
         <Text
-          style={[type.small, { flex: 1, color: c.ink, fontWeight: '600' }]}
+          style={[
+            type.small,
+            { flex: 1, color: c.ink, fontWeight: weights.label },
+          ]}
           numberOfLines={2}
         >
           {title}
         </Text>
         <View style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
-          <Glyph name="chevron" size={11} color={c.inkFaint} />
+          <Glyph name="chevron" size={11} color={c.inkSoft} />
         </View>
       </Pressable>
       {expanded ? (
@@ -76,18 +84,13 @@ export function Details({
             margin: 8,
             marginTop: 0,
             padding: 12,
-            borderRadius: 10,
-            backgroundColor: c.paper,
+            borderRadius: radii.sm,
+            backgroundColor: c.muted,
           }}
         >
           <Text
             selectable
-            style={{
-              fontFamily: fonts.mono,
-              fontSize: 12,
-              lineHeight: 18,
-              color: error ? c.danger : c.inkSoft,
-            }}
+            style={[type.mono, error && { color: hue.danger.ink }]}
           >
             {text || 'No output.'}
           </Text>

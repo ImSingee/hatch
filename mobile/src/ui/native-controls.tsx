@@ -9,6 +9,7 @@ import type {
   RefreshMenuProps,
 } from './native-controls.types';
 import { Text, type } from './text';
+import { useAccent } from './accent';
 import { palette as c, radii } from './theme';
 
 /**
@@ -35,6 +36,7 @@ function OptionSheet({
   disabled?: boolean;
   lead?: { label: string; onPress: () => void; disabled?: boolean };
 }) {
+  const accent = useAccent();
   return (
     <Modal
       visible={open}
@@ -52,7 +54,7 @@ function OptionSheet({
           style={{
             position: 'absolute',
             inset: 0,
-            backgroundColor: 'rgba(17, 26, 20, 0.32)',
+            backgroundColor: c.scrim,
           }}
         />
         <SafeAreaView
@@ -65,7 +67,7 @@ function OptionSheet({
               maxHeight: '80%',
               margin: 8,
               padding: 8,
-              borderRadius: radii.sheet,
+              borderRadius: radii.window,
               backgroundColor: c.card,
             }}
           >
@@ -110,13 +112,13 @@ function OptionSheet({
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 12,
-                      borderRadius: 14,
-                      backgroundColor: pressed ? c.limeSoft : 'transparent',
+                      borderRadius: radii.md,
+                      backgroundColor: pressed ? c.hover : 'transparent',
                     })}
                   >
                     <Text style={[type.body, { flex: 1 }]}>{option.label}</Text>
                     {selected ? (
-                      <Glyph name="check" size={16} color={c.moss} />
+                      <Glyph name="check" size={16} color={accent.ink} />
                     ) : null}
                   </Pressable>
                 );

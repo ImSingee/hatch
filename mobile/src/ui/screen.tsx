@@ -1,12 +1,7 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-  type ScrollViewProps,
-} from 'react-native';
+import { Platform, ScrollView, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ground } from './ground';
 import { Text, type } from './text';
 import { palette as c } from './theme';
 
@@ -23,6 +18,18 @@ export const pageScrollProps = {
 } as const satisfies ScrollViewProps;
 
 /**
+ * A single-column page's content on a wide screen (iPad, an unfolded phone):
+ * as wide as the screen up to a comfortable reading width, then centred.
+ * Pages that split into columns on a wide screen do not use it. Layout
+ * geometry, like the 320-point columns in `columns.tsx`.
+ */
+export const readable = {
+  width: '100%',
+  maxWidth: 640,
+  alignSelf: 'center',
+} as const;
+
+/**
  * Root of a scrolling page. Vertical insets belong to the scroll view on iOS
  * (see `pageScrollProps`) and to the stack header or tab bar on Android, so
  * only a top-level Android page pads its status bar here.
@@ -33,7 +40,7 @@ export function PageRoot({
 }: PropsWithChildren<{ nested?: boolean }>) {
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.paper }}
+      style={{ flex: 1, backgroundColor: c.ground }}
       edges={
         Platform.OS === 'ios' || nested
           ? ['left', 'right']
@@ -41,6 +48,7 @@ export function PageRoot({
       }
     >
       {children}
+      <Ground />
     </SafeAreaView>
   );
 }
@@ -60,7 +68,7 @@ export function Screen({
 }>) {
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.paper }}
+      style={{ flex: 1, backgroundColor: c.ground }}
       edges={nested ? ['left', 'right'] : ['top', 'left', 'right']}
     >
       <Masthead
@@ -70,6 +78,7 @@ export function Screen({
         nested={nested}
       />
       {children}
+      <Ground />
     </SafeAreaView>
   );
 }
@@ -80,6 +89,7 @@ export function ScrollScreen({
   title,
   actions,
   nested = false,
+  readable: narrow = false,
   children,
   contentContainerStyle,
   ...scrollProps
@@ -89,6 +99,8 @@ export function ScrollScreen({
     title: string;
     actions?: ReactNode;
     nested?: boolean;
+    /** Keep the content to the reading width (see `readable`). */
+    readable?: boolean;
   } & Omit<ScrollViewProps, 'children'>
 >) {
   return (
@@ -97,7 +109,11 @@ export function ScrollScreen({
         {...pageScrollProps}
         {...scrollProps}
         style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingBottom: 32 }, contentContainerStyle]}
+        contentContainerStyle={[
+          { paddingBottom: 32 },
+          narrow && readable,
+          contentContainerStyle,
+        ]}
       >
         <Masthead
           eyebrow={eyebrow}
@@ -133,9 +149,9 @@ export function Masthead({
         gap: 12,
       }}
     >
-      <View style={{ flex: 1, gap: 6 }}>
+      <View style={{ flex: 1, gap: 4 }}>
         {eyebrow ? (
-          <Text style={type.meta} numberOfLines={2}>
+          <Text style={type.small} numberOfLines={2}>
             {eyebrow}
           </Text>
         ) : null}
@@ -149,15 +165,13 @@ export function Masthead({
         </Text>
       </View>
       {actions ? (
-        <View style={{ flexDirection: 'row', gap: 4, paddingBottom: 0 }}>
-          {actions}
-        </View>
+        <View style={{ flexDirection: 'row', gap: 4 }}>{actions}</View>
       ) : null}
     </View>
   );
 }
 
-/** Mono section heading with a hairline that runs to an optional count. */
+/** Group label above a list or grid, with an optional count. */
 export function SectionLabel({
   children,
   count,
@@ -170,22 +184,13 @@ export function SectionLabel({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        marginTop: 22,
+        marginTop: 24,
         marginBottom: 10,
+        paddingHorizontal: 4,
       }}
     >
-      <Text style={[type.meta, { color: c.ink }]}>{children}</Text>
-      <View
-        style={{
-          flex: 1,
-          height: StyleSheet.hairlineWidth,
-          backgroundColor: c.inkFaint,
-          opacity: 0.5,
-        }}
-      />
-      {count !== undefined ? (
-        <Text style={type.meta}>{String(count).padStart(2, '0')}</Text>
-      ) : null}
+      <Text style={[type.meta, { flex: 1 }]}>{children}</Text>
+      {count !== undefined ? <Text style={type.caption}>{count}</Text> : null}
     </View>
   );
 }

@@ -24,6 +24,86 @@ the existing idempotent `default` / `My Dashboard` initialization. Rejected
 requests do not initialize it. This is a single-tenant shared workspace, not
 per-user resource ownership.
 
+## Native app structure
+
+The native app (`mobile/`) follows Desk, the visual system in `DESIGN.md`, and
+reads every colour, radius, font, weight and shadow from
+`packages/hatch-design-tokens/tokens.json`. It uses the workspace like this:
+
+| Screen                 | Data                                                              | Shows                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Home (`dashboard` tab) | `GetWorkspace`, `ListApps`, `ListWorkflows`, the dashboard canvas | One dashboard's widgets in a sheet, page dots to switch dashboard, then the pinned Apps and Workflows grid |
+| Widgets                | the dashboard canvas                                              | The same dashboard at full height; opened from Home with "All widgets"                                     |
+| Apps                   | `ListApps`, `ListWorkflows`, `GetWorkspace`                       | Every App, then every Workflow, searchable, by name or by latest change; pinned rows carry a pin           |
+| Workflows              | `ListWorkflows`, `GetWorkspace`                                   | Workflows alone; hidden from the tab bar by default                                                        |
+| App page               | `GetApp`, `GetWorkspace`                                          | Icon, name, status, Open, and a link to the web management page                                            |
+| App                    | the App's `/app/:slug/embed/` page                                | The App itself, in an authenticated WebView                                                                |
+| Agent                  | the `AgentService` session RPCs                                   | Conversations; beside the open one when the width allows                                                   |
+| Me (`more` tab)        | local preferences                                                 | Every section, notifications, Tabs & start page, the instance                                              |
+
+The tab bar is the system one. By default it holds Home, Apps, Agent and Me;
+which sections sit in it, their order and the start page are the user's choice
+and are stored on the phone. Tab ids did not change with the redesign (`dashboard`
+is Home, `more` is Me), so saved orders and `hatch://` links keep working.
+
+Home pages by dashboard, not by widget: widgets are web content rendered by the
+dashboard canvas, one WebView per dashboard. The pinned grid uses `appPins` as
+described above: one tile per pin, keyed by pin `id`, opening the App at the
+pin's `entryHash`. A tile on Home opens the App directly; a row in Apps opens
+the App page first.
+
+With room for two columns (an unfolded iPhone Duo, landscape), Home puts the
+widgets in the leading column and the pins in the trailing one, and Agent shows
+the list beside the conversation. Columns split on the fold when there is one.
+
+The app runs natively on iPad. Wide screens (iPad, an unfolded Duo) get the
+same two-column layouts; pages that stay one column (sign-in, an App or
+Workflow page, settings, notifications) keep their content to a reading width
+and centre it.
+
+The dashboard canvas is shown in a transparent WebView, so the ground shapes
+run behind the widgets; the `/mobile/` pages paint no background of their own
+under the native-host mark. The view stays hidden until the requested page has
+loaded, so the sign-in pages before it never show. App screens keep an opaque
+white surface.
+
+Home asks for the canvas with `#peek`: the page then shows only the widgets
+that fit its box whole and does not scroll; the Widgets page shows them all.
+Android's WebView composites translucent content over a transparent view with
+its alpha applied twice, so on Android the widget panels are drawn opaque white
+(`data-host-platform="android"`); iOS keeps the translucent panels.
+
+### App icons
+
+`ListApps` and `GetApp` return `iconPath` for an App with a stored icon. Append
+`&size=64`, `128` or `256` and request it from the instance with the session in
+an `Authorization: Bearer` header; never put the credential in the address. An
+App without `iconPath`, a Workflow, or an icon that fails to load shows the
+monogram: the first character of the name on a `tiles` colour chosen by the
+same hash of the id as the web `AppGlyph`, so an App has one tint everywhere.
+Icons are kept in memory only.
+
+### Pins
+
+The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
+(`ifAbsent`), `UnpinApp` (by pin id) and `SetWorkflowPinned`. An "Add" tile
+after each grid opens a picker of what is not pinned yet; touching and holding
+a tile offers to unpin it. Pins are shared by every client, so a change
+re-reads the pins and the lists that mark pinned rows. Reordering pins is not
+offered on the phone yet (`ReorderAppPins` exists).
+
+### Accent and ground
+
+The accent is the theme's single input. The app reads the instance's
+`ui.theme` accent through `ThemeService.GetTheme` after sign-in and again each
+time it returns to the foreground, and keeps the last value per instance on the
+phone so a cold start draws it from the first frame. An accent name the build's
+tokens do not define falls back to the default. The app does not consume the
+platform event stream, so a change made elsewhere shows on the next foreground.
+
+Every page draws the Desk ground shapes (`DESIGN.md`, "Ground shapes") from the
+`ground` tokens; the circle follows the accent.
+
 ## Browser session and dashboard canvas
 
 The merged authentication contract is resource-independent:
@@ -31,6 +111,10 @@ The merged authentication contract is resource-independent:
 1. Call `AuthService.CreateHandoff({})` with the existing user session.
 2. In a fresh browser/WebView, POST a form containing only `ticket` to the
    response `url`. Never put the ticket or session token in a URL.
+   Android's WebView sends this native POST with `Origin: null` and
+   `Sec-Fetch-Site: none` (no initiating page). The consume endpoint accepts
+   exactly that browser-initiated navigation; issuing a ticket and completing
+   sign-in keep the strict origin check.
 3. Wait for the response's exact `completionUrl` to load successfully. This
    establishes the original session as an HttpOnly cookie.
 4. Navigate within that same browser to `/mobile/dashboard/:dashboardId`, using

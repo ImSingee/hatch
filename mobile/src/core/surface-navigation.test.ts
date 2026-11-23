@@ -63,7 +63,14 @@ describe('surface navigation', () => {
       'block',
     );
     // Pages without a screen here need a browser session; they stay put.
-    expect(top(`${origin}/app/reading/manage`, dashboard).action).toBe('block');
+    expect(top(`${origin}/app/reading/manage/data`, dashboard).action).toBe(
+      'block',
+    );
+    // The App's management page opens as its page on the phone.
+    expect(top(`${origin}/app/reading/manage`, dashboard)).toEqual({
+      action: 'route',
+      link: { instance: origin, target: { kind: 'appPage', slug: 'reading' } },
+    });
     expect(top(`${origin}/api/rpc`, dashboard).action).toBe('block');
     expect(top(`${origin}/dashboard`).action).toBe('block');
     expect(top(`${origin}/login`).action).toBe('expired');

@@ -17,6 +17,9 @@ import {
   answersToMessages,
   type ReplyAnswers,
 } from '@hatch/platform-api';
+// The shared package's index does not re-export these two services yet.
+import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
+import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import {
   appProjection,
   catalogProjection,
@@ -49,6 +52,7 @@ import type {
   NotificationDetail,
   NotificationSummary,
   PendingMessagesResult,
+  Pins,
   PushDevice,
   PushRegistration,
   RunCreated,
@@ -110,6 +114,8 @@ export class HatchApiClient {
   private readonly workspaceRpc: Client<typeof WorkspaceService>;
   private readonly notificationRpc: Client<typeof NotificationService>;
   private readonly preferenceRpc: Client<typeof PreferenceService>;
+  private readonly pinRpc: Client<typeof PinService>;
+  private readonly themeRpc: Client<typeof ThemeService>;
   private readonly onUnauthorized?: (origin: string) => void;
   constructor(options: ClientOptions) {
     this.origin = canonicalizeInstanceUrl(options.origin, options);
@@ -143,6 +149,8 @@ export class HatchApiClient {
     this.workspaceRpc = createClient(WorkspaceService, transport);
     this.notificationRpc = createClient(NotificationService, transport);
     this.preferenceRpc = createClient(PreferenceService, transport);
+    this.pinRpc = createClient(PinService, transport);
+    this.themeRpc = createClient(ThemeService, transport);
   }
 
   private async fetchResponse(
@@ -364,6 +372,66 @@ export class HatchApiClient {
       signal,
     );
   }
+  /** The instance's accent name (`ui.theme`), shared by every client. */
+  async themeAccent(signal?: AbortSignal): Promise<string> {
+    const response = await this.rpcRequest(
+      (signal) => this.themeRpc.getTheme({}, { signal }),
+      signal,
+    );
+    if (!response.theme)
+      throw new MobileError(
+        'invalid_response',
+        'The instance returned no theme.',
+      );
+    return response.theme.accent;
+  }
+  /** Pinned Apps and Workflows, in the order every client shows them. */
+  async pins(signal?: AbortSignal): Promise<Pins> {
+    const response = await this.rpcRequest(
+      (signal) => this.pinRpc.listPins({}, { signal }),
+      signal,
+    );
+    return {
+      apps: response.appPins.map((pin) => ({
+        id: pin.id,
+        appId: pin.appId,
+        appSlug: pin.appSlug,
+        label: pin.label,
+        entryHash: pin.entryHash ?? '',
+        appStatus: pin.appStatus,
+      })),
+      workflows: response.workflows.map((workflow) => ({
+        id: workflow.id,
+        slug: workflow.slug,
+        name: workflow.name,
+      })),
+    };
+  }
+  /** Pins an App at its root; an App already pinned keeps its pin. */
+  pinApp(app: string, signal?: AbortSignal) {
+    return this.rpcRequest(
+      (signal) => this.pinRpc.pinApp({ app, ifAbsent: true }, { signal }),
+      signal,
+    ).then(() => undefined);
+  }
+  /** Removes one pin; other pins of the same App stay. */
+  unpinApp(pinId: string, signal?: AbortSignal) {
+    return this.rpcRequest(
+      (signal) =>
+        this.pinRpc.unpinApp(
+          { target: { case: 'pinId', value: pinId } },
+          { signal },
+        ),
+      signal,
+    ).then(() => undefined);
+  }
+  setWorkflowPinned(workflow: string, pinned: boolean, signal?: AbortSignal) {
+    return this.rpcRequest(
+      (signal) =>
+        this.pinRpc.setWorkflowPinned({ workflow, pinned }, { signal }),
+      signal,
+    ).then(() => undefined);
+  }
   setDashboardAutoRefresh(id: string, seconds: number, signal?: AbortSignal) {
     return this.rpcRequest(
       (signal) =>
@@ -498,6 +566,25 @@ export class HatchApiClient {
         'The instance returned no App.',
       );
     return appProjection(response.resource);
+  }
+  /**
+   * An App's icon as an authenticated image request. `iconPath` is the
+   * `icon_path` the instance returned for the App; anything that is not an
+   * icon address on this instance yields null, and the App shows its monogram.
+   * The credential travels in a header, never in the address.
+   */
+  async appIconSource(
+    iconPath: string,
+    size: 64 | 128 | 256,
+  ): Promise<{ uri: string; headers: Record<string, string> } | null> {
+    if (!/^\/api\/app\/[^/?#]+\/icon\?v=[A-Za-z0-9_-]+$/.test(iconPath))
+      return null;
+    const token = await this.vault.get(this.origin);
+    if (!token) return null;
+    return {
+      uri: apiPath(this.origin, `${iconPath}&size=${size}`),
+      headers: { authorization: `Bearer ${token}` },
+    };
   }
   async sessions(
     appId?: string,

@@ -7,11 +7,13 @@ import { Card, Notice, errorText } from '../../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
+import { useAccent } from '../../src/ui/accent';
 import { palette as c } from '../../src/ui/theme';
 
 /** Push switch and this phone's name on the connected instance. */
 export default function NotificationSettingsScreen() {
   const { origin, api } = useSession();
+  const accent = useAccent();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const local = useQuery({
@@ -105,7 +107,7 @@ export default function NotificationSettingsScreen() {
   };
 
   return (
-    <ScrollScreen nested eyebrow={host} title="Notification settings">
+    <ScrollScreen readable nested eyebrow={host} title="Notification settings">
       <View style={{ paddingHorizontal: 16 }}>
         {!pushSupported ? (
           <Notice
@@ -119,7 +121,7 @@ export default function NotificationSettingsScreen() {
               <View
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}
               >
-                <GlyphTile glyph="bell" size={36} />
+                <GlyphTile glyph="bell" />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={type.heading}>Push notifications</Text>
                   <Text style={type.small}>
@@ -131,8 +133,9 @@ export default function NotificationSettingsScreen() {
                   accessibilityLabel="Push notifications from this instance"
                   value={on}
                   disabled={saving || !known}
-                  trackColor={{ true: c.moss, false: c.rule }}
-                  ios_backgroundColor={c.rule}
+                  trackColor={{ true: accent.fill, false: c.idle }}
+                  thumbColor={c.card}
+                  ios_backgroundColor={c.idle}
                   onValueChange={toggle}
                 />
               </View>

@@ -18,10 +18,12 @@ import {
 import { Group } from '../../src/ui/rows';
 import { ScrollScreen } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
+import { useAccent } from '../../src/ui/accent';
 import { palette as c } from '../../src/ui/theme';
 
 export default function NotificationsScreen() {
   const { api, origin } = useSession();
+  const accent = useAccent();
   const query = useInfiniteQuery({
     queryKey: [origin, 'notifications'],
     queryFn: ({ pageParam, signal }) =>
@@ -36,6 +38,7 @@ export default function NotificationsScreen() {
   const host = origin?.replace(/^https?:\/\//, '') ?? '';
   return (
     <ScrollScreen
+      readable
       nested
       eyebrow={host}
       title="Notifications"
@@ -43,7 +46,7 @@ export default function NotificationsScreen() {
         <RefreshControl
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
-          tintColor={c.moss}
+          tintColor={accent.fill}
         />
       }
     >
@@ -70,6 +73,7 @@ export default function NotificationsScreen() {
         ) : null}
         {query.data && items.length === 0 ? (
           <EmptyState
+            glyph="bell"
             title="No notifications yet"
             detail="Apps and channels on this instance send notifications here. Routing is set up in Hatch on the web."
           />
@@ -98,17 +102,17 @@ export default function NotificationsScreen() {
                           <View
                             style={[
                               styles.row,
-                              pressed && { backgroundColor: c.limeSoft },
+                              pressed && { backgroundColor: c.hover },
                             ]}
                           >
                             <View style={styles.header}>
                               <Text
-                                style={[type.meta, styles.grow]}
+                                style={[type.caption, styles.grow]}
                                 numberOfLines={1}
                               >
                                 {item.sourceName} · {item.kindName}
                               </Text>
-                              <Text style={type.meta}>
+                              <Text style={type.caption}>
                                 {notificationTime(item.occurredAt)}
                               </Text>
                             </View>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { palette as c, pigments } from './theme';
+import {
+  accentNames,
+  accentOf,
+  defaultAccent,
+  knownAccent,
+  palette as c,
+  status,
+  tiles,
+} from './theme';
 
 function luminance(hex: string) {
   const [r, g, b] = [1, 3, 5].map((start) => {
@@ -17,24 +25,49 @@ function contrast(a: string, b: string) {
   return (light + 0.05) / (dark + 0.05);
 }
 
+// The values come from the shared token file; this guards that whatever it
+// holds stays readable in the pairings the native app actually draws.
 describe('mobile readable color contract', () => {
-  it.each([c.paper, c.card, c.sunken, c.lime, c.limeSoft])(
-    'keeps body, secondary, meta, action and error text readable on %s',
+  it.each([c.ground, c.card, c.muted, c.sunken])(
+    'keeps body, secondary and error text readable on %s',
     (surface) => {
-      for (const ink of [c.ink, c.inkSoft, c.inkFaint, c.moss, c.danger]) {
+      for (const ink of [c.ink, c.inkSoft, status.danger.ink])
         expect(contrast(ink, surface)).toBeGreaterThanOrEqual(4.5);
-      }
     },
   );
 
-  it('keeps filled action and message labels readable', () => {
-    expect(contrast(c.onMoss, c.moss)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(c.card, c.ink)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(c.lime, c.ink)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(c.danger, c.dangerSoft)).toBeGreaterThanOrEqual(4.5);
+  it.each(accentNames)('keeps the %s accent readable', (name) => {
+    const accent = accentOf(name);
+    // Filled buttons, the user's chat bubble, the selected conversation.
+    expect(contrast(accent.onFill, accent.fill)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(accent.onFill, accent.pressed)).toBeGreaterThanOrEqual(4.5);
+    // Links and quiet buttons on every surface, and labels on the tint.
+    for (const surface of [c.ground, c.card, c.muted, accent.tint])
+      expect(contrast(accent.ink, surface)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(pigments)('keeps monogram ink readable on %s', (pigment) => {
-    expect(contrast(c.ink, pigment)).toBeGreaterThanOrEqual(4.5);
+  it.each(accentNames)(
+    'keeps text readable on the ground shapes with %s',
+    (name) => {
+      // Page titles, dates and tile labels lie directly on the shapes.
+      for (const shape of [accentOf(name).ground, c.groundWarm, c.groundFresh])
+        for (const ink of [c.ink, c.inkSoft, accentOf(name).ink])
+          expect(contrast(ink, shape)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it('falls back to the default for an accent this build does not define', () => {
+    expect(knownAccent(accentNames.at(-1))).toBe(accentNames.at(-1));
+    for (const value of ['magenta', '', undefined, null, 7, 'toString'])
+      expect(knownAccent(value)).toBe(defaultAccent);
+  });
+
+  it.each(Object.entries(status))('keeps %s chips readable', (_name, hue) => {
+    expect(contrast(hue.ink, hue.tint)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(hue.ink, hue.tintStrong)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(tiles)('keeps the monogram readable on tile %s', (tile) => {
+    expect(contrast(c.onFill, tile)).toBeGreaterThanOrEqual(4.5);
   });
 });
