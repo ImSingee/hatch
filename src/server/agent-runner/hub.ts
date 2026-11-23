@@ -210,6 +210,21 @@ export class RunNotStartedError extends Error {
   }
 }
 
+/**
+ * `run.start` may have reached the Runner, which may be executing the run:
+ * it was sent and then the acceptance timed out, the connection closed or was
+ * replaced, or the Runner accepted but the platform could not commit it. Only
+ * the Runner can settle this, by reporting the run or by reconnecting and
+ * listing (or omitting) it in `runner.hello`; the caller must keep the run
+ * assigned to it and must not replay it until then.
+ */
+export class RunDispatchUncertainError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RunDispatchUncertainError';
+  }
+}
+
 /** Pick the connected runner with the fewest active runs. */
 function pickRunner(): RunnerConn | null {
   let best: RunnerConn | null = null;
@@ -224,8 +239,14 @@ function pickRunner(): RunnerConn | null {
 
 /**
  * Dispatch a run to a connected runner: assign the lease, send `run.start`,
- * and wait for the runner to accept. Throws when no runner is available, the
- * runner rejects, or the accept times out — the caller fails the run.
+ * and wait for the runner to accept. Throws {@link RunNotStartedError} when
+ * the run definitely never started (no runner, assignment failed, send
+ * failed, or the runner rejected it) and {@link RunDispatchUncertainError}
+ * otherwise.
+ *
+ * An acceptance that times out on a live connection drops that connection:
+ * the Runner reconnects and its `runner.hello` says whether it holds the run,
+ * which is the only answer the platform can trust.
  */
 export async function dispatchRun(
   payload: RunStartPayload,
@@ -269,7 +290,10 @@ export async function dispatchRun(
     const timer = setTimeout(() => {
       if (state.dispatchWaiters.get(payload.runId) !== waiter) return;
       state.dispatchWaiters.delete(payload.runId);
-      reject(new Error('Runner did not accept the run in time.'));
+      reject(
+        new RunDispatchUncertainError('Runner did not accept the run in time.'),
+      );
+      dropConnection(conn, 'Run acceptance timed out.');
     }, DISPATCH_ACCEPT_TIMEOUT_MS);
     Object.assign(waiter, {
       conn,
@@ -292,10 +316,37 @@ export async function dispatchRun(
   try {
     await accepted;
   } catch (error) {
-    conn.activeRunIds.delete(payload.runId);
-    throw error;
+    if (error instanceof RunNotStartedError) {
+      conn.activeRunIds.delete(payload.runId);
+      throw error;
+    }
+    // The connection may still carry the run (an acceptance whose commit
+    // failed), so it keeps tracking it for steer claims and its reports.
+    throw error instanceof RunDispatchUncertainError
+      ? error
+      : new RunDispatchUncertainError(
+          error instanceof Error ? error.message : 'Run dispatch failed.',
+        );
   }
   return conn.runnerId;
+}
+
+/**
+ * Stop using a connection whose state the platform can no longer trust. The
+ * Runner reconnects, and reconciliation of its `runner.hello` settles every
+ * run it was given on this connection.
+ */
+function dropConnection(conn: RunnerConn, reason: string): void {
+  const state = hubState();
+  if (state.runners.get(conn.runnerId) !== conn) return;
+  state.runners.delete(conn.runnerId);
+  console.warn(`[runner-hub] dropping runner ${conn.runnerId}: ${reason}`);
+  settleEnvResultWaitersForConnection(conn);
+  settleDispatchWaitersForConnection(
+    conn,
+    new RunDispatchUncertainError('Runner connection was dropped.'),
+  );
+  conn.socket.terminate();
 }
 
 function settleDispatch(runId: string, conn: RunnerConn, error?: Error): void {
@@ -332,10 +383,16 @@ async function acceptDispatch(conn: RunnerConn, runId: string): Promise<void> {
     conn.workspaceSessionIds.add(sessionId);
     waiter.resolve();
   } catch (error) {
+    // The Runner holds the run; its later events and final report retry
+    // the commit, so the run must stay with it.
+    console.error(
+      `[runner-hub] could not commit acceptance of ${runId}:`,
+      error,
+    );
     waiter.reject(
-      error instanceof Error
-        ? error
-        : new Error('Could not finalize Runner workspace affinity.'),
+      new RunDispatchUncertainError(
+        'Could not finalize Runner workspace affinity.',
+      ),
     );
   }
 }
@@ -596,7 +653,7 @@ export function handleRunnerSocket(
     settleEnvResultWaitersForConnection(registered);
     settleDispatchWaitersForConnection(
       registered,
-      new Error('Runner disconnected.'),
+      new RunDispatchUncertainError('Runner disconnected.'),
     );
     // Only forget the runner when THIS socket is still its registered one —
     // a replacement connection (runner restart) must not be unregistered by
@@ -630,7 +687,7 @@ async function registerRunner(
     settleEnvResultWaitersForConnection(existing);
     settleDispatchWaitersForConnection(
       existing,
-      new Error('Runner connection was replaced.'),
+      new RunDispatchUncertainError('Runner connection was replaced.'),
     );
     existing.socket.terminate();
     state.runners.delete(hello.runnerId);

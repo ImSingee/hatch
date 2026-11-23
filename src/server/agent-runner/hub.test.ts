@@ -1,13 +1,18 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket } from 'ws';
-import { PROTOCOL_VERSION, type RunStartPayload } from '~agent/protocol';
+import {
+  DISPATCH_ACCEPT_TIMEOUT_MS,
+  PROTOCOL_VERSION,
+  type RunStartPayload,
+} from '~agent/protocol';
 
 import {
   broadcastSessionWorkspaceCleanup,
   connectedRunnerCount,
   dispatchRun,
   handleRunnerSocket,
+  RunDispatchUncertainError,
   RunNotStartedError,
   listConnectedRunners,
   sendRunEnvAndWait,
@@ -276,7 +281,7 @@ describe('workspace-affine dispatch', () => {
     await connectRunner('runner-a');
 
     const error = await outcome;
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(RunDispatchUncertainError);
     expect((error as Error).message).toContain('connection was replaced');
     expect(dispatch.finalize).not.toHaveBeenCalled();
   });
@@ -294,9 +299,99 @@ describe('workspace-affine dispatch', () => {
     selected.emit('close');
 
     const error = await outcome;
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(RunDispatchUncertainError);
     expect((error as Error).message).toContain('Runner disconnected');
     expect(dispatch.finalize).not.toHaveBeenCalled();
+  });
+
+  it('drops a connection whose acceptance timed out and settles the run on reconnect', async () => {
+    const selected = await connectRunner('runner-a');
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const outcome = dispatchRun(runPayload, dispatchPlan()).catch(
+      (error: unknown) => error,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(selected.sent.some((message) => message.type === 'run.start')).toBe(
+      true,
+    );
+    await vi.advanceTimersByTimeAsync(DISPATCH_ACCEPT_TIMEOUT_MS);
+
+    // The Runner may hold the run, so this is not a definite failure, and
+    // only its reconnect can say which it is.
+    const error = await outcome;
+    expect(error).toBeInstanceOf(RunDispatchUncertainError);
+    expect(error).not.toBeInstanceOf(RunNotStartedError);
+    expect(selected.readyState).not.toBe(selected.OPEN);
+    expect(connectedRunnerCount()).toBe(0);
+    // Frames still buffered on the dropped connection are ignored.
+    selected.emit(
+      'message',
+      JSON.stringify({ type: 'run.accepted', runId: runPayload.runId }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatch.finalize).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+    handlers.reconcileRunnerRuns.mockResolvedValue({
+      resumed: [runPayload.runId],
+      stale: [],
+      pendingAnswers: [],
+    });
+    const reconnected = await connectRunner('runner-a', [runPayload.runId]);
+    expect(handlers.reconcileRunnerRuns).toHaveBeenCalledWith('runner-a', [
+      runPayload.runId,
+    ]);
+    expect(
+      reconnected.sent.find((message) => message.type === 'hub.hello_ack'),
+    ).toMatchObject({ resumedRunIds: [runPayload.runId] });
+    expect(listConnectedRunners()).toMatchObject([
+      { runnerId: 'runner-a', activeRunCount: 1 },
+    ]);
+    consoleWarn.mockRestore();
+  });
+
+  it('keeps a run with its connection when the accepted run cannot be committed', async () => {
+    const selected = await connectRunner('runner-a');
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    dispatch.finalize.mockRejectedValueOnce(new Error('database unavailable'));
+    const outcome = dispatchRun(runPayload, dispatchPlan()).catch(
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() =>
+      expect(
+        selected.sent.some((message) => message.type === 'run.start'),
+      ).toBe(true),
+    );
+    selected.emit(
+      'message',
+      JSON.stringify({ type: 'run.accepted', runId: runPayload.runId }),
+    );
+
+    // The Runner accepted it and is executing it: the run stays on this
+    // connection for its events, steer claims and final report.
+    expect(await outcome).toBeInstanceOf(RunDispatchUncertainError);
+    expect(selected.readyState).toBe(selected.OPEN);
+    expect(connectedRunnerCount()).toBe(1);
+    selected.emit(
+      'message',
+      JSON.stringify({
+        type: 'run.steer_claim',
+        runId: runPayload.runId,
+        requestId: 'claim-1',
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(handlers.claimSteerMessages).toHaveBeenCalledWith(
+        'runner-a',
+        runPayload.runId,
+      ),
+    );
+    consoleError.mockRestore();
   });
 
   it('does not finalize affinity when the selected runner rejects or send fails', async () => {

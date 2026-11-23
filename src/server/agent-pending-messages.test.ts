@@ -11,7 +11,9 @@ vi.mock('~/db', async () => {
 vi.mock('~server/agent-runner/hub', () => {
   type Hub = typeof import('~server/agent-runner/hub');
   class RunNotStartedError extends Error {}
+  class RunDispatchUncertainError extends Error {}
   return {
+    RunDispatchUncertainError,
     RunNotStartedError,
     connectedRunnerCount: vi.fn<Hub['connectedRunnerCount']>(() => 1),
     listConnectedRunners: vi.fn<Hub['listConnectedRunners']>(),
@@ -465,18 +467,21 @@ describe('review regressions', () => {
     expect((await tray()).messages).toEqual([]);
   });
 
-  it('fails, rather than redelivers, a delivery the Runner may have started', async () => {
+  it('keeps, rather than redelivers, a delivery the Runner may have started', async () => {
     await updateAgentPreferences(USER, { messageMode: 'queue' });
     const runId = await startRun('Build a tracker');
     await send('Add a chart');
-    // Sent, but the acceptance never arrived: the Runner may be running it.
+    // Sent, but the acceptance never arrived: the Runner may be running it,
+    // so the run stays with it until the Runner settles it.
     vi.mocked(hub.dispatchRun).mockRejectedValueOnce(
-      new Error('Runner did not accept the run in time.'),
+      new hub.RunDispatchUncertainError(
+        'Runner did not accept the run in time.',
+      ),
     );
     await finish(runId);
     expect((await tray()).messages).toEqual([]);
     const rows = await db.select().from(schema.agentRuns);
-    expect(rows.find((row) => row.id !== runId)?.status).toBe('failed');
+    expect(rows.find((row) => row.id !== runId)?.status).toBe('running');
   });
 
   it('keeps a rename made while an undone delivery was dispatching', async () => {
