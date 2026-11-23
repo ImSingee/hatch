@@ -28,10 +28,10 @@ export function BackendsPanel() {
   if (backends.length === 0) {
     return (
       <Stack align="center" gap="xs" py={80} px="md">
-        <ThemeIcon size={52} radius="xl" variant="light" color="ember">
+        <ThemeIcon size={52} radius="xl" variant="light" color="primary">
           <IconServerBolt size={26} stroke={1.5} />
         </ThemeIcon>
-        <Text fw={600} mt="xs">
+        <Text fw={700} mt="xs">
           No app backends
         </Text>
         <Text size="sm" c="dimmed" ta="center" maw={440}>
@@ -82,7 +82,7 @@ function BackendRow({ backend }: { backend: AppBackendView }) {
           <Stack gap={0} miw={0}>
             <Text
               size="sm"
-              fw={600}
+              fw={700}
               truncate
               renderRoot={(props) => (
                 <Link
@@ -107,7 +107,7 @@ function BackendRow({ backend }: { backend: AppBackendView }) {
         <Badge
           size="sm"
           variant="light"
-          color={backend.mode === 'long-running' ? 'ember' : 'gray'}
+          color={backend.mode === 'long-running' ? 'primary' : 'gray'}
         >
           {backend.mode}
         </Badge>

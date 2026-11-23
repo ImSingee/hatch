@@ -1,16 +1,14 @@
-/* Flat list row: a hairline separator between items instead of a stacked card
-   per row. Hover gives a quiet warm wash; the whole row is draggable. */
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--mantine-spacing-md);
-  padding: 10px 12px;
-  border-radius: var(--mantine-radius-md);
-  border-bottom: 1px solid var(--mantine-color-default-border);
-  transition: background-color 120ms ease;
+/* Rows come from the shared Item; SortableList wraps each in its own
+   draggable element, so the hairline between rows is drawn here. */
+.list > * + * {
+  border-top: 1px solid var(--border-hairline);
 }
 
-.row:hover {
-  background-color: var(--surface-panel);
+.list > [draggable] {
+  cursor: grab;
+}
+
+.grip {
+  flex: none;
+  color: var(--mantine-color-dimmed);
 }

@@ -1,83 +1,222 @@
+/* A Desk widget panel: translucent white over the ground, the widget radius,
+   a white edge and the card shadow (DESIGN.md, Widget panel). */
 .card {
+  position: relative;
   display: flex;
   height: 100%;
   flex-direction: column;
-  overflow: hidden;
+  gap: 10px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--mantine-color-white);
+  border-radius: var(--radius-widget);
+  background: var(--surface-widget);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
   transition:
     border-color var(--transition-fast),
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow var(--transition-base),
+    transform var(--transition-base);
 }
 
+/* Edit state: a dashed accent outline marks every widget as movable, and the
+   panel lifts on hover so the one under the pointer is clear. */
 .card[data-editing] {
-  background: var(--mantine-color-body);
+  border: 2px dashed var(--mantine-primary-color-filled);
+  padding: 12px 17px 17px;
 }
 
-.card[data-editing]:hover {
-  border-color: var(--mantine-color-secondary-3);
+.card[data-editing]:hover,
+.card[data-editing]:focus-within {
+  border-style: solid;
+  box-shadow: var(--shadow-dock);
 }
 
-/* Lift the card while it is actively dragged or resized. */
+/* Lift the panel while it is dragged or resized. */
 :global(.react-grid-item.react-draggable-dragging) .card,
 :global(.react-grid-item.react-grid-item--resizing) .card {
-  border-color: var(--mantine-color-secondary-4);
-  box-shadow: 0 12px 32px -12px rgba(28, 25, 23, 0.28);
+  border-style: solid;
+  box-shadow: var(--shadow-window);
 }
 
-/* Quiet at rest; the destructive tint appears on intent. */
-.removeAction:not(:disabled):hover {
-  color: var(--mantine-color-red-6);
-  background-color: var(--mantine-color-red-0);
-}
-
-.dragHeader,
-.dragHeader * {
-  cursor: grab;
-}
-
-.dragHeader:active,
-.dragHeader:active *,
-:global(.react-draggable-dragging) .dragHeader,
-:global(.react-draggable-dragging) .dragHeader * {
-  cursor: grabbing;
-}
-
-.dragHeader .actions,
-.dragHeader .actions * {
+.remove {
+  position: absolute;
   cursor: pointer;
+  top: -11px;
+  right: -11px;
+  z-index: 2;
+  border: 2px solid var(--mantine-color-white);
+  box-shadow: var(--shadow-dock);
 }
 
-.dragHeader {
-  margin-top: calc(-1 * var(--mantine-spacing-sm));
-  margin-inline: calc(-1 * var(--mantine-spacing-sm));
-  padding: var(--mantine-spacing-sm) var(--mantine-spacing-sm) 6px;
+.remove:not(:disabled):hover {
+  background: var(--mantine-color-red-filled);
+}
+
+.editBar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border-hairline);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
+.editBar,
+.editBar * {
+  cursor: grab;
+}
+
+.editBar:active,
+.editBar:active *,
+:global(.react-draggable-dragging) .editBar,
+:global(.react-draggable-dragging) .editBar * {
+  cursor: grabbing;
+}
+
 .grip {
-  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-hover);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  transition: background-color var(--transition-fast);
+}
+
+.grip:hover {
+  background: var(--surface-pressed);
+}
+
+.sizes {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-sunken);
+}
+
+.sizes,
+.sizes * {
+  cursor: pointer;
+}
+
+.size {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-gray-7);
+  font-size: 12px;
+  font-weight: var(--font-weight-heading);
+}
+
+.size:hover {
+  color: var(--mantine-color-text);
+}
+
+.size[aria-pressed='true'] {
+  background: var(--mantine-color-white);
+  color: var(--mantine-color-text);
+  box-shadow: var(--shadow-card);
+}
+
+.sizeReadout {
   color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  min-width: 0;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: var(--font-weight-heading);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  flex: none;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
 }
 
 .actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 50%;
+}
+
+/* Refresh is a secondary action: quiet until the panel is pointed at. */
+.refresh {
   opacity: 0;
-  pointer-events: none;
   transition: opacity var(--transition-fast);
 }
 
-.card:hover .actions,
-.card:focus-within .actions,
-.actions[data-visible] {
+.card:hover .refresh,
+.card:focus-within .refresh,
+.refresh[aria-busy='true'] {
   opacity: 1;
-  pointer-events: auto;
+}
+
+.appLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 4px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  text-decoration: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.appLink:hover {
+  background: var(--surface-hover);
+  color: var(--mantine-color-text);
+}
+
+.appName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .frameContainer {
   position: relative;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .frame {
@@ -95,18 +234,53 @@
 .overlay {
   position: absolute;
   inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.skeletonLines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The failed state is the shared dashed empty state, filling the panel. */
+.overlay[role='alert'] > * {
+  flex: 1;
 }
 
 @media (hover: none) {
-  .actions {
+  .refresh {
     opacity: 1;
-    pointer-events: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .actions {
+  .grip,
+  .refresh,
+  .appLink {
     transition-duration: 0.01ms;
   }
+}
+
+/* Focus inside the widget's frame: the shared ring, drawn inside the panel
+ * because the container clips anything outside it. The parent page cannot
+ * tell keyboard from pointer focus in a frame, so a click into the widget
+ * shows it too, which says where the keys now go. */
+.frameContainer[data-focused]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--mantine-radius-lg);
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+  pointer-events: none;
 }

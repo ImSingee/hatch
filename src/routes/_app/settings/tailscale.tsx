@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { GroupCard } from '~components/page/page';
 import { SectionHead } from '~components/settings/section-head';
 import { TailscaleSettings } from '~components/settings/tailscale-panel';
 import { tailscaleQueryOptions } from '~queries/tailscale';
@@ -12,7 +13,9 @@ export const Route = createFileRoute('/_app/settings/tailscale')({
         title="Tailscale"
         description="Open Hatch privately from devices on your tailnet. Access follows your tailnet rules, and visitors still sign in to Hatch."
       />
-      <TailscaleSettings />
+      <GroupCard padded>
+        <TailscaleSettings />
+      </GroupCard>
     </>
   ),
 });

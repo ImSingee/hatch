@@ -2,6 +2,7 @@ import { Button, Center, Loader } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { IconPlus } from '@tabler/icons-react';
 import { Suspense, useState } from 'react';
+import { GroupCard } from '~components/page/page';
 import { SectionHead } from '~components/settings/section-head';
 import {
   ProviderFormModal,
@@ -41,7 +42,9 @@ function ProvidersRoute() {
         }
       >
         <ProvidersPanel onAddProvider={() => setCreateOpen(true)} />
-        <ImageModelPanel />
+        <GroupCard padded>
+          <ImageModelPanel />
+        </GroupCard>
       </Suspense>
 
       {createOpen && (

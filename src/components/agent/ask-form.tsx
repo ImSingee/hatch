@@ -66,10 +66,10 @@ export function AskForm({
   };
 
   return (
-    <Paper className={classes.askCard} radius="md" p="md" withBorder>
+    <Paper className={classes.askCard} radius="xl" p="md" withBorder>
       <Group gap={6} mb="xs">
         <IconHelpCircle size={16} className={classes.askIcon} />
-        <Text size="xs" fw={600} c="ember" tt="uppercase">
+        <Text size="xs" fw={700} c="primary" tt="uppercase">
           Agent needs your input
         </Text>
       </Group>
@@ -81,7 +81,7 @@ export function AskForm({
             <Stack key={q.id} gap={8}>
               {/* Markdown, so a question can show what it asks about (for
                   example generated image candidates). */}
-              <Box fw={600}>
+              <Box fw={700}>
                 <Markdownish text={q.prompt} />
               </Box>
               {q.allowMultiple ? (
@@ -137,7 +137,7 @@ export function AskForm({
           <Button
             type="button"
             size="sm"
-            color="ember"
+            color="primary"
             disabled={!complete || disabled}
             onClick={submit}
           >

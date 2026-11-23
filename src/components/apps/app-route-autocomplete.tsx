@@ -47,7 +47,7 @@ export function AppRouteAutocomplete({
       maxDropdownHeight={280}
       renderOption={({ option }) => (
         <Stack gap={1} py={2}>
-          <Text ff="monospace" fw={500} size="sm">
+          <Text ff="monospace" fw={600} size="sm">
             {option.value}
           </Text>
           <Text c="dimmed" size="xs">

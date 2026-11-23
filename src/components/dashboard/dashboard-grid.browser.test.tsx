@@ -17,10 +17,16 @@ vi.mock('./widget-card', () => ({
     item,
     geometry,
     editing,
+    sizes = [],
+    onSizeChange,
+    onMove,
   }: {
     item: DashboardItem;
     geometry: DashboardLayoutItem;
     editing: boolean;
+    sizes?: { w: number; h: number }[];
+    onSizeChange?: (size: { w: number; h: number }) => void;
+    onMove?: (dx: number, dy: number) => void;
   }) => (
     <div
       className="widget-drag-handle"
@@ -28,6 +34,24 @@ vi.mock('./widget-card', () => ({
       data-widget-id={item.id}
     >
       {item.name}:{geometry.w}x{geometry.h}
+      {/* Kept in a corner so drags that start mid-widget hit the handle. */}
+      <span
+        className="widget-no-drag"
+        style={{ position: 'absolute', top: 0, right: 0, fontSize: 6 }}
+      >
+        <button type="button" onClick={() => onMove?.(1, 0)}>
+          Move {item.id} right
+        </button>
+        {sizes.map((size) => (
+          <button
+            key={`${size.w}x${size.h}`}
+            type="button"
+            onClick={() => onSizeChange?.(size)}
+          >
+            Size {item.id} {size.w}x{size.h}
+          </button>
+        ))}
+      </span>
     </div>
   ),
 }));
@@ -255,4 +279,31 @@ test('commits a resize when the preview is scaled', async () => {
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+// Size buttons and keyboard moves change one widget the way a drop does:
+// whatever it lands on moves down, and only the edited breakpoint changes.
+test('size buttons and moves commit the edited breakpoint', async () => {
+  const onLayoutCommit = vi.fn<OnLayoutCommit>();
+  const screen = await render(
+    <Harness
+      width={1200}
+      editing
+      previewBreakpoint="desktop"
+      onLayoutCommit={onLayoutCommit}
+    />,
+  );
+
+  await screen.getByRole('button', { name: 'Size b 4x2' }).click();
+  expect(onLayoutCommit).toHaveBeenLastCalledWith('desktop', [
+    { id: 'a', x: 0, y: 0, w: 6, h: 2 },
+    { id: 'b', x: 6, y: 0, w: 4, h: 2 },
+  ]);
+
+  await screen.getByRole('button', { name: 'Move a right' }).click();
+  expect(onLayoutCommit).toHaveBeenLastCalledWith('desktop', [
+    { id: 'a', x: 1, y: 0, w: 6, h: 2 },
+    { id: 'b', x: 6, y: 2, w: 6, h: 2 },
+  ]);
+  expect(onLayoutCommit).toHaveBeenCalledTimes(2);
 });

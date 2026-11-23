@@ -54,7 +54,7 @@ export function KindsEditor({
 
   return (
     <Stack gap="xs">
-      <Text size="sm" fw={500}>
+      <Text size="sm" fw={600}>
         Kinds
       </Text>
       <Text size="xs" c="dimmed">

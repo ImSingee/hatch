@@ -28,7 +28,7 @@ export function ExtraPermissionsDetails({
         <Alert
           color="orange"
           title={
-            <Text size="sm" fw={600} c="orange.8">
+            <Text size="sm" fw={700} c="orange.8">
               Host access
             </Text>
           }

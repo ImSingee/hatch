@@ -1,5 +1,5 @@
-import { Stack } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
+import { Column, Columns, GroupCard } from '~components/page/page';
 import { ApiKeysPanel } from '~components/settings/api-keys-panel';
 import { AccountProfilePanel } from '~components/settings/account-profile-panel';
 import { ActiveSessionsPanel } from '~components/settings/active-sessions-panel';
@@ -23,14 +23,30 @@ function AccountRoute() {
         title="Account"
         description="Manage your profile and how you sign in to this space."
       />
-      <Stack gap="4xl">
-        <AccountProfilePanel />
-        <HomepagePanel />
-        <ChangePasswordPanel />
-        <PasskeysPanel appOrigin={appOrigin} />
-        <ApiKeysPanel />
-        <ActiveSessionsPanel />
-      </Stack>
+      <Columns>
+        <Column basis={380}>
+          <GroupCard padded>
+            <AccountProfilePanel />
+          </GroupCard>
+          <GroupCard padded>
+            <HomepagePanel />
+          </GroupCard>
+          <GroupCard padded>
+            <ChangePasswordPanel />
+          </GroupCard>
+        </Column>
+        <Column basis={380}>
+          <GroupCard padded>
+            <PasskeysPanel appOrigin={appOrigin} />
+          </GroupCard>
+          <GroupCard padded>
+            <ApiKeysPanel />
+          </GroupCard>
+          <GroupCard padded>
+            <ActiveSessionsPanel />
+          </GroupCard>
+        </Column>
+      </Columns>
     </>
   );
 }

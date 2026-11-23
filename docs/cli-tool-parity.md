@@ -153,18 +153,19 @@ path and lock, so both leave the same normalized layouts. Every change, from
 either surface, is published as `dashboards.updated`, so an open desk
 refetches without a reload. Web operation to command:
 
-| Web UI                                         | CLI                                           | RPC                          |
-| ---------------------------------------------- | --------------------------------------------- | ---------------------------- |
-| Dashboard switcher, Manage dashboards          | dashboard list [--limit --cursor]             | ListDashboards (paged)       |
-| The desk: widgets and their layout             | dashboard get                                 | GetDashboard                 |
-| New dashboard                                  | dashboard create                              | CreateDashboard              |
-| Rename, edit description, auto-refresh menu    | dashboard update                              | UpdateDashboard              |
-| Delete dashboard                               | dashboard delete --yes                        | DeleteDashboard              |
-| Add widget panel: widgets on offer             | dashboard widget available [--limit --cursor] | ListAvailableWidgets (paged) |
-| Add widget                                     | dashboard widget add                          | AddDashboardWidget           |
-| Drag, resize or size buttons, per layout width | dashboard widget layout --breakpoint …        | SetDashboardWidgetLayout     |
-| Remove widget                                  | dashboard widget remove                       | RemoveDashboardWidget        |
-| Pin, unpin, reorder dashboards                 | pin add / remove / reorder --dashboard        | PinService                   |
+| Web UI                                         | CLI                                                | RPC                          |
+| ---------------------------------------------- | -------------------------------------------------- | ---------------------------- |
+| Dashboard switcher, Manage dashboards          | dashboard list [--limit --cursor]                  | ListDashboards (paged)       |
+| The desk: widgets and their layout             | dashboard get                                      | GetDashboard                 |
+| New dashboard                                  | dashboard create                                   | CreateDashboard              |
+| Rename, edit description, auto-refresh menu    | dashboard update                                   | UpdateDashboard              |
+| Delete dashboard                               | dashboard delete --yes                             | DeleteDashboard              |
+| Add widget panel: widgets on offer             | dashboard widget available [--limit --cursor]      | ListAvailableWidgets (paged) |
+| All apps, App detail: Pin to desk              | dashboard widget add <dashboard-id> --app --widget | AddDashboardWidget           |
+| Add widget                                     | dashboard widget add                               | AddDashboardWidget           |
+| Drag, resize or size buttons, per layout width | dashboard widget layout --breakpoint …             | SetDashboardWidgetLayout     |
+| Remove widget                                  | dashboard widget remove                            | RemoveDashboardWidget        |
+| Pin, unpin, reorder dashboards                 | pin add / remove / reorder --dashboard             | PinService                   |
 
 The editor snaps a drag to the nearest valid footprint; the CLI instead
 rejects a size the widget does not declare and names the sizes it does.
@@ -198,3 +199,8 @@ commands and remove the session-only gate in `src/server/platform-api/router.ts`
 together, so Run credentials gain the same authority. `AuthService.CreateHandoff`
 stays session-only because it exchanges the caller's native login session for
 a browser session.
+
+The desk menu bar's "Runner offline" warning reads the same Agent Runner
+status as `/settings/agent-runner`, which has no CLI command either. The
+`runner_id` that the session header shows is returned by
+`AgentService.GetSession`.

@@ -145,11 +145,10 @@ export function ApiKeysPanel() {
       <Group
         justify="space-between"
         align="flex-start"
-        wrap="nowrap"
         className={classes.header}
       >
-        <Stack gap={2}>
-          <Text fw={600}>API keys</Text>
+        <Stack gap={2} style={{ flex: '1 1 220px' }}>
+          <Text fw={700}>API keys</Text>
           <Text size="sm" c="dimmed">
             Let the Hatch CLI and your scripts build and manage Apps and
             Workflows on your behalf.
@@ -204,7 +203,7 @@ export function ApiKeysPanel() {
             <IconTerminal2 size={21} stroke={1.7} />
           </ThemeIcon>
           <Stack gap={2} align="center">
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={700}>
               No API keys yet
             </Text>
             <Text size="sm" c="dimmed" ta="center">
@@ -270,7 +269,7 @@ function ApiKeyRow({
         </ThemeIcon>
         <Stack gap={4} miw={0} flex={1}>
           <Group gap={8} wrap="nowrap" miw={0}>
-            <Text size="sm" fw={600} truncate>
+            <Text size="sm" fw={700} truncate>
               {apiKey.name}
             </Text>
             {expiry.badge && (

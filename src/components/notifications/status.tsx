@@ -45,7 +45,7 @@ const NOTIFICATION_META: Record<
   },
   delivered: {
     label: 'Delivered',
-    color: 'ember',
+    color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   partial: {
@@ -93,12 +93,12 @@ const DELIVERY_META: Record<
   },
   in_progress: {
     label: 'Sending',
-    color: 'ember',
-    icon: <Loader size={9} color="ember" />,
+    color: 'primary',
+    icon: <Loader size={9} color="primary" />,
   },
   succeeded: {
     label: 'Delivered',
-    color: 'ember',
+    color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   failed: {
@@ -184,7 +184,7 @@ export function NotificationReplyBadge({
   if (respondedAt) {
     return (
       <Badge
-        color="ember"
+        color="primary"
         variant="outline"
         radius="sm"
         leftSection={
@@ -255,7 +255,7 @@ const PRIORITY_META: Record<
   1: {
     label: 'High',
     effect: 'time-sensitive on phones',
-    color: 'ember',
+    color: 'primary',
     icon: <IconArrowUp size={11} stroke={2.5} />,
     description:
       'Priority 1: time-sensitive on phones, shown during Focus and Do Not Disturb.',

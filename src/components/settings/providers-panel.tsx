@@ -67,7 +67,7 @@ function ProviderAvatar({ apiType }: { apiType: string }) {
       size={PROVIDER_AVATAR_SIZE}
       radius="xl"
       variant="light"
-      color="ember"
+      color="primary"
     >
       <IconRobot size={22} stroke={1.5} />
     </ThemeIcon>
@@ -374,7 +374,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
           <ProviderAvatar apiType={provider.apiType} />
           <Stack gap={3} style={{ minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap">
-              <Text fw={600} truncate>
+              <Text fw={700} truncate>
                 {provider.name}
               </Text>
               {provider.enabled ? null : (
@@ -444,7 +444,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
             {provider.models.map((m) => (
               <div key={m.id} className={classes.modelRow}>
                 <Group gap="sm" wrap="nowrap" className={classes.modelMain}>
-                  <Text size="sm" fw={500} className={classes.modelName}>
+                  <Text size="sm" fw={600} className={classes.modelName}>
                     {m.name}
                   </Text>
                   <Text
@@ -542,10 +542,10 @@ export function ProvidersPanel({
   if (providers.length === 0) {
     return (
       <Stack align="center" gap="xs" py={64} px="md">
-        <ThemeIcon size={52} radius="xl" variant="light" color="ember">
+        <ThemeIcon size={52} radius="xl" variant="light" color="primary">
           <IconRobot size={26} stroke={1.5} />
         </ThemeIcon>
-        <Text fw={600} mt="xs">
+        <Text fw={700} mt="xs">
           No providers yet
         </Text>
         <Text size="sm" c="dimmed" ta="center" maw={420}>

@@ -1,6 +1,7 @@
-import { Group, Stack, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
+import { PageHeading } from '~components/page/page';
 
+/** The heading of a settings section: what it is and its main action. */
 export function SectionHead({
   title,
   description,
@@ -11,22 +12,6 @@ export function SectionHead({
   action?: ReactNode;
 }) {
   return (
-    <Group
-      justify="space-between"
-      align="flex-end"
-      wrap="nowrap"
-      gap="md"
-      mb="lg"
-    >
-      <Stack gap={2}>
-        <Text fw={600} fz="lg">
-          {title}
-        </Text>
-        <Text size="sm" c="dimmed">
-          {description}
-        </Text>
-      </Stack>
-      {action}
-    </Group>
+    <PageHeading title={title} description={description} actions={action} />
   );
 }

@@ -1,24 +1,26 @@
 import {
   ActionIcon,
-  Card,
-  Group,
+  Button,
   Skeleton,
-  Stack,
   Text,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import {
-  IconAppWindow,
+  IconAlertTriangle,
+  IconChevronRight,
   IconGripVertical,
   IconRefresh,
   IconX,
 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { EmptyState } from '~components/page/page';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { DashboardLayoutItem } from '~/lib/dashboard-layout';
+import type { GridSize } from '~server/apps/manifest';
 import type { DashboardItem } from '~server/dashboards';
 import {
   WIDGET_CHANNEL,
@@ -35,6 +37,9 @@ export function WidgetCard({
   onRemove,
   refreshSignal = 0,
   nativeHost = false,
+  sizes = [],
+  onSizeChange,
+  onMove,
 }: {
   item: DashboardItem;
   geometry: DashboardLayoutItem;
@@ -53,8 +58,17 @@ export function WidgetCard({
    * so the embedded router and history never change.
    */
   nativeHost?: boolean;
+  /**
+   * Footprints offered as buttons while editing, for the breakpoint being
+   * edited. Fewer than two means the widget is resized with the handle.
+   */
+  sizes?: GridSize[];
+  onSizeChange?: (size: GridSize) => void;
+  /** Move by whole grid cells, for keyboard users of the drag handle. */
+  onMove?: (dx: number, dy: number) => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const frameFocused = useFrameFocused(frameRef);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     'loading',
   );
@@ -65,6 +79,8 @@ export function WidgetCard({
   const activeRefreshRequestRef = useRef<string | null>(null);
   const refreshSequenceRef = useRef(0);
   const frameGenerationRef = useRef<string | null>(null);
+  // Bumped by "Try again" so the frame loads the bundle afresh.
+  const [attempt, setAttempt] = useState(0);
 
   // Read the latest grid units inside the (url-keyed) load effect without
   // rebuilding the frame when only the size changes — those go down as `units`
@@ -175,7 +191,7 @@ export function WidgetCard({
       window.removeEventListener('message', onMessage);
       frame.srcdoc = '';
     };
-  }, [code, getUnits]);
+  }, [attempt, code, getUnits]);
 
   const effectiveStatus = bundle.isError ? 'error' : status;
 
@@ -237,105 +253,150 @@ export function WidgetCard({
     requestRefresh();
   }, [refreshSignal, requestRefresh]);
 
+  const retry = () => {
+    if (bundle.isError) void bundle.refetch();
+    else setAttempt((value) => value + 1);
+  };
+
+  const sizeLabel = (size: GridSize) => `${size.w}×${size.h}`;
+  const moveKeys: Record<string, [number, number]> = {
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    ArrowUp: [0, -1],
+    ArrowDown: [0, 1],
+  };
+
   return (
-    <Card
-      withBorder
-      radius="md"
-      padding="sm"
+    <article
       className={classes.card}
       data-editing={editing || undefined}
+      data-status={effectiveStatus}
+      aria-label={item.name}
+      aria-busy={effectiveStatus === 'loading' || undefined}
     >
-      <Group
-        justify="space-between"
-        mb={editing ? 0 : 6}
-        wrap="nowrap"
-        className={editing ? `widget-drag-handle ${classes.dragHeader}` : ''}
-      >
-        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
-          {editing ? (
-            <IconGripVertical size={17} stroke={1.7} className={classes.grip} />
-          ) : null}
-          <AppGlyph name={item.appName} seed={item.appId} size="sm" />
-          <Text size="sm" fw={600} truncate>
-            {item.name}
+      {editing ? (
+        <>
+          <Tooltip label="Remove from dashboard" withArrow>
+            <ActionIcon
+              variant="filled"
+              color="dark"
+              radius="xl"
+              size={30}
+              aria-label="Remove widget"
+              className={`widget-no-drag ${classes.remove}`}
+              disabled={removeDisabled}
+              onClick={onRemove}
+            >
+              <IconX size={15} stroke={2.4} />
+            </ActionIcon>
+          </Tooltip>
+          <div className={`widget-drag-handle ${classes.editBar}`}>
+            <UnstyledButton
+              className={classes.grip}
+              aria-label={`Move ${item.name}`}
+              aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown"
+              onKeyDown={(event) => {
+                const delta = moveKeys[event.key];
+                if (!delta || !onMove) return;
+                event.preventDefault();
+                onMove(...delta);
+              }}
+            >
+              <IconGripVertical size={15} stroke={2} aria-hidden />
+              Drag
+            </UnstyledButton>
+            {sizes.length > 1 ? (
+              <fieldset
+                aria-label={`${item.name} size`}
+                className={`widget-no-drag ${classes.sizes}`}
+              >
+                {sizes.map((size) => {
+                  const current =
+                    size.w === geometry.w && size.h === geometry.h;
+                  return (
+                    <UnstyledButton
+                      key={sizeLabel(size)}
+                      className={classes.size}
+                      aria-pressed={current}
+                      disabled={removeDisabled}
+                      onClick={() => {
+                        if (!current) onSizeChange?.(size);
+                      }}
+                    >
+                      {sizeLabel(size)}
+                    </UnstyledButton>
+                  );
+                })}
+              </fieldset>
+            ) : (
+              <span className={classes.sizeReadout}>{sizeLabel(geometry)}</span>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      <header className={classes.header}>
+        <AppGlyph name={item.appName} seed={item.appId} size="widget" />
+        <h2 className={classes.title}>{item.name}</h2>
+        {effectiveStatus === 'loading' ? (
+          <Text component="span" className={classes.meta}>
+            Loading…
           </Text>
-        </Group>
-        <Group
-          gap={2}
-          wrap="nowrap"
-          className={`widget-no-drag ${classes.actions}`}
-          data-visible={editing || undefined}
-        >
-          {!nativeHost && !editing && (refreshSupported || refreshing) ? (
-            <Tooltip label={refreshing ? 'Refreshing' : 'Refresh'} withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                aria-label="Refresh widget"
-                aria-busy={refreshing}
-                loading={refreshing}
-                disabled={effectiveStatus !== 'ready'}
-                onClick={requestRefresh}
+        ) : null}
+        {!editing ? (
+          <div className={`widget-no-drag ${classes.actions}`}>
+            {!nativeHost && (refreshSupported || refreshing) ? (
+              <Tooltip label={refreshing ? 'Refreshing' : 'Refresh'} withArrow>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  aria-label="Refresh widget"
+                  aria-busy={refreshing}
+                  loading={refreshing}
+                  disabled={effectiveStatus !== 'ready'}
+                  onClick={requestRefresh}
+                  className={classes.refresh}
+                >
+                  <IconRefresh size={15} />
+                </ActionIcon>
+              </Tooltip>
+            ) : null}
+            {nativeHost ? (
+              <a
+                href={`/app/${encodeURIComponent(item.appSlug)}`}
+                className={classes.appLink}
+                aria-label={`Open ${item.appName}`}
               >
-                <IconRefresh size={15} />
-              </ActionIcon>
-            </Tooltip>
-          ) : null}
-          {!editing ? (
-            <Tooltip label="Open app" withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                aria-label="Open app"
-                renderRoot={({ children, ...props }) =>
-                  nativeHost ? (
-                    <a
-                      href={`/app/${encodeURIComponent(item.appSlug)}`}
-                      {...props}
-                    >
-                      {children}
-                    </a>
-                  ) : (
-                    <Link
-                      to="/app/$appSlug"
-                      params={{ appSlug: item.appSlug }}
-                      {...props}
-                    >
-                      {children}
-                    </Link>
-                  )
-                }
+                <span className={classes.appName}>{item.appName}</span>
+                <IconChevronRight size={13} stroke={2.4} aria-hidden />
+              </a>
+            ) : (
+              <Link
+                to="/app/$appSlug"
+                params={{ appSlug: item.appSlug }}
+                className={classes.appLink}
+                aria-label={`Open ${item.appName}`}
               >
-                <IconAppWindow size={15} />
-              </ActionIcon>
-            </Tooltip>
-          ) : (
-            <Tooltip label="Remove from dashboard" withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                aria-label="Remove widget"
-                className={classes.removeAction}
-                disabled={removeDisabled}
-                onClick={onRemove}
-              >
-                <IconX size={16} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-        </Group>
-      </Group>
+                <span className={classes.appName}>{item.appName}</span>
+                <IconChevronRight size={13} stroke={2.4} aria-hidden />
+              </Link>
+            )}
+          </div>
+        ) : null}
+      </header>
 
       {/* The iframe stays laid out under any loading/error overlay so the
           widget's in-frame ResizeObserver measures its real pixel size from the
           first mount (a display:none frame would report 0x0 until shown). */}
-      <div className={classes.frameContainer}>
+      <div
+        className={classes.frameContainer}
+        data-focused={frameFocused || undefined}
+      >
         <iframe
           ref={frameRef}
-          title={item.name}
+          // Several Apps can offer a widget of the same name.
+          title={`${item.name} from ${item.appName}`}
           // allow-scripts + allow-same-origin: scripts run and the widget keeps
           // the same-origin session its Connect client needs, while the
           // omitted tokens still block top-navigation and popups. See
@@ -349,18 +410,79 @@ export function WidgetCard({
           }}
         />
         {effectiveStatus === 'loading' ? (
-          <Stack gap="xs" px={4} py={2} className={classes.overlay}>
-            <Skeleton height={26} width="55%" radius="sm" />
-            <Skeleton height={11} radius="sm" />
-            <Skeleton height={11} width="80%" radius="sm" />
-          </Stack>
+          <div className={classes.overlay} aria-hidden>
+            <div className={classes.skeletonRow}>
+              <Skeleton circle height={64} />
+              <div className={classes.skeletonLines}>
+                <Skeleton height={12} width="70%" radius="sm" />
+                <Skeleton height={12} width="45%" radius="sm" />
+              </div>
+            </div>
+            <Skeleton height={10} radius="sm" />
+            <Skeleton height={10} width="82%" radius="sm" />
+          </div>
         ) : null}
         {effectiveStatus === 'error' ? (
-          <Text size="xs" c="red" py="sm" className={classes.overlay}>
-            Failed to load widget. Try redeploying the app.
-          </Text>
+          <div className={classes.overlay} role="alert">
+            <EmptyState
+              variant="dashed"
+              compact
+              tone="danger"
+              icon={<IconAlertTriangle size={17} stroke={1.8} />}
+              title="This widget didn’t load"
+              actions={
+                editing ? null : (
+                  <Button
+                    type="button"
+                    size="compact-sm"
+                    variant="default"
+                    leftSection={<IconRefresh size={14} stroke={2} />}
+                    className="widget-no-drag"
+                    onClick={retry}
+                  >
+                    Try again
+                  </Button>
+                )
+              }
+            >
+              Try again, or redeploy {item.appName} if it keeps failing.
+            </EmptyState>
+          </div>
         ) : null}
       </div>
-    </Card>
+    </article>
   );
+}
+
+/**
+ * Whether keyboard focus is inside the frame. The parent document matches no
+ * focus pseudo-class on a frame whose content has focus, so this follows the
+ * document's active element: focus entering a frame blurs this window, and
+ * focus coming back raises `focusin` here.
+ */
+function useFrameFocused(frameRef: RefObject<HTMLIFrameElement | null>) {
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = () =>
+      setFocused(
+        frameRef.current !== null &&
+          document.activeElement === frameRef.current,
+      );
+    // The active element changes just after the window's blur event.
+    const onBlur = () => {
+      clearTimeout(timer);
+      timer = setTimeout(update, 0);
+    };
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', update);
+    document.addEventListener('focusin', update);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', update);
+      document.removeEventListener('focusin', update);
+    };
+  }, [frameRef]);
+  return focused;
 }

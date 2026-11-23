@@ -41,7 +41,7 @@ export function DeleteDatabaseForm({
           {managed
             ? 'This permanently deletes all managed Data Table data for '
             : 'This permanently deletes the database for '}
-          <Text span fw={600} style={{ overflowWrap: 'anywhere' }}>
+          <Text span fw={700} style={{ overflowWrap: 'anywhere' }}>
             {appName}
           </Text>
           {managed
@@ -61,7 +61,7 @@ export function DeleteDatabaseForm({
               type="button"
               aria-label={`Fill app name ${appName}`}
               fz="sm"
-              fw={600}
+              fw={700}
               disabled={remove.isPending}
               style={{ overflowWrap: 'anywhere', textDecoration: 'underline' }}
               onClick={() => {

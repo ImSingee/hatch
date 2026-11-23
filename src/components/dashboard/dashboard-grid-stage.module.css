@@ -20,7 +20,7 @@
 .canvas {
   min-width: 0;
   padding: var(--mantine-spacing-md);
-  border: 1px solid var(--mantine-color-stone-2);
+  border: 1px solid var(--border-hairline);
   border-radius: var(--mantine-radius-lg);
   background: var(--mantine-color-body);
   transform-origin: top left;

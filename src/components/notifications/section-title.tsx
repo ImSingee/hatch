@@ -14,7 +14,7 @@ export function SectionTitle({
   return (
     <Group justify="space-between" wrap="nowrap" align="flex-end" gap="md">
       <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-        <Text fw={600}>{title}</Text>
+        <Text fw={700}>{title}</Text>
         <Text size="sm" c="dimmed">
           {description}
         </Text>

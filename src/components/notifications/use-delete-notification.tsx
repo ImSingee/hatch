@@ -84,7 +84,7 @@ export function useDeleteNotification(
       centered: true,
       children: (
         <Stack gap="xs">
-          <Text size="sm" fw={500} lineClamp={2}>
+          <Text size="sm" fw={600} lineClamp={2}>
             {notification.title}
           </Text>
           <Text size="sm">

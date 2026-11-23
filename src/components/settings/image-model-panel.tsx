@@ -3,7 +3,6 @@ import {
   Autocomplete,
   Button,
   Group,
-  Paper,
   Select,
   Stack,
   Text,
@@ -51,10 +50,10 @@ export function ImageModelPanel() {
   });
 
   return (
-    <Paper withBorder radius="md" p="md" mt="xl">
+    <div>
       <Stack gap="sm">
         <Stack gap={2}>
-          <Text fw={600}>Image model</Text>
+          <Text fw={700}>Image model</Text>
           <Text size="sm" c="dimmed">
             Lets the Agent generate images, such as app icons. Uses the API key
             of the provider you pick.
@@ -118,6 +117,6 @@ export function ImageModelPanel() {
           </>
         )}
       </Stack>
-    </Paper>
+    </div>
   );
 }

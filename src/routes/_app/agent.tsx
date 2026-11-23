@@ -1,4 +1,12 @@
-import { ActionIcon, Box, Center, Drawer, Loader, Text } from '@mantine/core';
+import {
+  ActionIcon,
+  Box,
+  Center,
+  Drawer,
+  Loader,
+  Text,
+  ThemeIcon,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
   Outlet,
@@ -6,9 +14,11 @@ import {
   useNavigate,
   useParams,
 } from '@tanstack/react-router';
-import { IconMessages } from '@tabler/icons-react';
+import { IconMessages, IconSparkles } from '@tabler/icons-react';
 import { Suspense } from 'react';
 import { SessionsPanel } from '~components/agent/sessions-panel';
+import { DeskWindow } from '~components/desk/window';
+import { InsideWindowProvider } from '~components/page/window-context';
 import { providersQueryOptions, sessionsQueryOptions } from '~queries/agent';
 import classes from '~components/agent/chat.module.css';
 
@@ -37,48 +47,61 @@ function AgentLayout() {
   };
 
   return (
-    <Box className={classes.root}>
-      <Suspense
-        fallback={
-          <Center style={{ flex: 1 }}>
-            <Loader />
-          </Center>
-        }
-      >
-        <Box className={classes.sessionsRail}>
-          <SessionsPanel selected={threadId ?? null} onSelect={select} />
-        </Box>
-
-        <Drawer
-          opened={drawerOpened}
-          onClose={drawer.close}
-          position="left"
-          size={300}
-          title="Chats"
-          padding="md"
-          classNames={{ body: classes.drawerBody }}
+    <DeskWindow
+      fill
+      maxWidth={1360}
+      title="Agent"
+      tile={
+        <ThemeIcon size={22} radius="xs" color="primary">
+          <IconSparkles size={13} stroke={2.4} />
+        </ThemeIcon>
+      }
+    >
+      <Box className={classes.root}>
+        <Suspense
+          fallback={
+            <Center style={{ flex: 1 }}>
+              <Loader />
+            </Center>
+          }
         >
-          <SessionsPanel selected={threadId ?? null} onSelect={select} />
-        </Drawer>
-
-        <Box className={classes.agentMain}>
-          <Box className={classes.mobileBar}>
-            <ActionIcon
-              variant="default"
-              radius="md"
-              aria-label="Open chats"
-              onClick={drawer.open}
-            >
-              <IconMessages size={18} stroke={1.6} />
-            </ActionIcon>
-            <Text fw={600} size="sm" truncate>
-              {threadId ? 'Chat' : 'New chat'}
-            </Text>
+          <Box className={classes.sessionsRail}>
+            <SessionsPanel selected={threadId ?? null} onSelect={select} />
           </Box>
 
-          <Outlet />
-        </Box>
-      </Suspense>
-    </Box>
+          <Drawer
+            opened={drawerOpened}
+            onClose={drawer.close}
+            position="left"
+            size={300}
+            title="Chats"
+            padding="md"
+            classNames={{ body: classes.drawerBody }}
+          >
+            <SessionsPanel selected={threadId ?? null} onSelect={select} />
+          </Drawer>
+
+          <Box className={classes.agentMain}>
+            <Box className={classes.mobileBar}>
+              <ActionIcon
+                variant="default"
+                radius="md"
+                aria-label="Open chats"
+                onClick={drawer.open}
+              >
+                <IconMessages size={18} stroke={1.6} />
+              </ActionIcon>
+              <Text fw={700} size="sm" truncate>
+                {threadId ? 'Chat' : 'New chat'}
+              </Text>
+            </Box>
+
+            <InsideWindowProvider value>
+              <Outlet />
+            </InsideWindowProvider>
+          </Box>
+        </Suspense>
+      </Box>
+    </DeskWindow>
   );
 }

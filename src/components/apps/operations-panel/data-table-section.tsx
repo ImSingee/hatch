@@ -426,7 +426,7 @@ export function DataTableSection({ appId }: { appId: string }) {
               {info.data.migrations.map((migration) => (
                 <Stack key={migration.id} gap={3}>
                   <Group gap="xs">
-                    <Text size="xs" fw={600}>
+                    <Text size="xs" fw={700}>
                       #{migration.id}
                     </Text>
                     {migration.destructive ? (

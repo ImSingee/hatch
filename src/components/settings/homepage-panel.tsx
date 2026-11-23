@@ -185,7 +185,7 @@ function HomepageForm({
     >
       <Stack gap="md">
         <Stack gap={2}>
-          <Text fw={600}>Homepage</Text>
+          <Text fw={700}>Homepage</Text>
           <Text size="sm" c="dimmed">
             Choose where Hatch opens for your account. Your homepage follows you
             across devices.

@@ -39,7 +39,7 @@ export function CompatibilityNotice({
           This {resourceName} uses compatibility v{compatibility.version}, below
           the minimum supported v{compatibility.minimumSupportedVersion}. Its
           runtime is disabled. Use the{' '}
-          <Anchor component={Link} to="/agent" fw={600}>
+          <Anchor component={Link} to="/agent" fw={700}>
             Agent
           </Anchor>{' '}
           to update and redeploy it.
@@ -59,7 +59,7 @@ export function CompatibilityNotice({
         This {resourceName} uses compatibility v{compatibility.version}; the
         latest is v{compatibility.latestVersion}. It can keep running, but use
         the{' '}
-        <Anchor component={Link} to="/agent" fw={600}>
+        <Anchor component={Link} to="/agent" fw={700}>
           Agent
         </Anchor>{' '}
         to redeploy it for the current platform.

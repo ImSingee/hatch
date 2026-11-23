@@ -1,0 +1,59 @@
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-xs);
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mantine-spacing-2xs);
+  min-width: 84px;
+  padding: var(--mantine-spacing-sm);
+  border: 1px solid transparent;
+  border-radius: var(--mantine-radius-lg);
+  position: relative;
+  color: var(--mantine-color-text);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.swatch:hover {
+  background-color: var(--surface-hover);
+}
+
+.swatch:has(.input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.swatch:has(.input:checked) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-hairline);
+}
+
+/* Kept in the accessibility tree and focusable; the label is the target. */
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--mantine-color-white);
+}
+
+.name {
+  font-size: var(--mantine-font-size-sm);
+  font-weight: var(--font-weight-label);
+  text-transform: capitalize;
+}

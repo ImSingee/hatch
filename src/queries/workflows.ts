@@ -4,6 +4,7 @@ import {
   getWorkflowOps,
   getWorkflowRun,
   listAllWorkflowRuns,
+  listLatestRunPerWorkflow,
   listWorkflowDeployments,
   listWorkflowRuns,
   listWorkflows,
@@ -43,6 +44,13 @@ export const workflowRunsQueryOptions = (id: string) =>
     queryKey: ['workflows', id, 'runs'],
     queryFn: () => listWorkflowRuns({ data: id }),
   });
+
+/** The newest execution of each workflow, under the `workflow-runs` key so
+ * the same invalidations refresh it. */
+export const latestWorkflowRunsQueryOptions = queryOptions({
+  queryKey: ['workflow-runs', 'latest'],
+  queryFn: () => listLatestRunPerWorkflow(),
+});
 
 export const allWorkflowRunsQueryOptions = queryOptions({
   queryKey: ['workflow-runs', 'all'],

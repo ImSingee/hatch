@@ -8,7 +8,7 @@ export function AboutPanel() {
   return (
     <Stack gap="xl">
       <Stack gap="xs">
-        <Text size="sm" fw={600}>
+        <Text size="sm" fw={700}>
           Commit
         </Text>
         {commit ? (
@@ -37,7 +37,7 @@ export function AboutPanel() {
         )}
       </Stack>
       <Stack gap="xs">
-        <Text size="sm" fw={600}>
+        <Text size="sm" fw={700}>
           Commit time
         </Text>
         <Text size="sm">

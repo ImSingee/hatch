@@ -130,7 +130,7 @@ export function KvSection({ appId }: { appId: string }) {
       children: (
         <Text size="sm">
           Permanently delete{' '}
-          <Text span fw={600} ff="monospace">
+          <Text span fw={700} ff="monospace">
             {key}
           </Text>
           ? This cannot be undone.

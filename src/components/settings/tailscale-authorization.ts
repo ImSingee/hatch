@@ -1,3 +1,4 @@
+import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 /** Reserve a window during the click, before asynchronous enrollment starts. */
 export function openTailscaleAuthorization(): Window | null {
   let popup: Window | null;
@@ -18,11 +19,13 @@ export function openTailscaleAuthorization(): Window | null {
   referrer.content = 'no-referrer';
   doc.head.append(referrer);
   const main = doc.createElement('main');
-  main.style.cssText =
-    'max-width:28rem;margin:18vh auto;padding:2rem;font:16px/1.6 system-ui,sans-serif;color:#292524;background:#fff';
+  // The popup is a blank document outside the Mantine tree, so it reads the
+  // design tokens directly instead of the theme's CSS variables.
+  doc.body.style.background = tokens.light.background;
+  main.style.cssText = `max-width:28rem;margin:18vh auto;padding:2rem;font:16px/1.6 system-ui,sans-serif;color:${tokens.light.foreground}`;
   const title = doc.createElement('h1');
   title.textContent = 'Connecting to Tailscale…';
-  title.style.cssText = 'font-size:1.5rem;font-weight:600;line-height:1.3';
+  title.style.cssText = 'font-size:1.5rem;font-weight:800;line-height:1.3';
   const message = doc.createElement('p');
   message.textContent =
     'Keep this window open. Authorization will appear here if needed. If this device is already authorized, this window will close automatically.';

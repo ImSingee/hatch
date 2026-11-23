@@ -1,6 +1,7 @@
 import { Center, Loader } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { Suspense } from 'react';
+import { GroupCard } from '~components/page/page';
 import { BackendsPanel } from '~components/apps/backends-panel';
 import { SectionHead } from '~components/settings/section-head';
 import { appBackendsQueryOptions } from '~queries/apps';
@@ -25,7 +26,9 @@ function BackendsRoute() {
           </Center>
         }
       >
-        <BackendsPanel />
+        <GroupCard padded>
+          <BackendsPanel />
+        </GroupCard>
       </Suspense>
     </>
   );

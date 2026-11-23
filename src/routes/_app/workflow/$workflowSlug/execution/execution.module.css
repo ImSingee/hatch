@@ -1,0 +1,23 @@
+/* Values a run carries, shown as code blocks on the window's ground. */
+.code,
+.log,
+.error {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--surface-raised);
+  font-size: var(--mantine-font-size-xs);
+}
+
+.log {
+  white-space: pre-wrap;
+}
+
+.error {
+  color: var(--mantine-color-red-7);
+}
+
+.capitalize {
+  text-transform: capitalize;
+}

@@ -1,22 +1,5 @@
-.root {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--mantine-spacing-sm);
-  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
-  border-bottom: 1px solid var(--mantine-color-default-border);
-}
-
 .update {
   display: inline-flex;
-  margin-inline-end: 4px;
   animation: update-in var(--transition-base) both;
 }
 
@@ -42,34 +25,12 @@
   }
 }
 
-.frameWrap {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.frame {
-  flex: 1;
-  width: 100%;
-  border: 0;
-  min-height: 0;
-}
-
-.overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--mantine-color-body);
-}
-
 .empty {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 320px;
 }
 
 @media (prefers-reduced-motion: reduce) {
