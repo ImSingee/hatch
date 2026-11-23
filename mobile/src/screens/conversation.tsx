@@ -398,21 +398,30 @@ function ConversationBody({
     // they tapped stays where it is while the process opens or folds, and a
     // later resize or return restores this place instead of the end.
     settle.current = null;
-    if (scrollTop.current === null) setAtBottom(false);
-    else keepPlace(scrollTop.current, false);
+    if (scrollTop.current !== null) keepPlace(scrollTop.current, false);
+    else {
+      // Nothing has scrolled yet: keep the place the screen opened at, no
+      // longer following the end.
+      anchor.current = { ...anchor.current, atBottom: false };
+      reading.save(anchor.current);
+      setAtBottom(false);
+    }
     setWorkOpen(key, !expanded);
   };
   // Server clock minus this phone's, for the line counting a live run.
   // Taken when a fetched snapshot brings a new server time: a local write
-  // (the pending tray) keeps that time but moves `dataUpdatedAt`.
+  // (the pending tray) keeps that time but moves `dataUpdatedAt`. A slower
+  // delivery understates it, so the largest sample (the fastest one) is
+  // kept, and a running timer never steps back.
   const [clock, setClock] = useState<{
     serverTime: string;
     offset: number;
   } | null>(null);
   if (detail && clock?.serverTime !== detail.serverTime) {
+    const sample = Date.parse(detail.serverTime) - session.dataUpdatedAt;
     setClock({
       serverTime: detail.serverTime,
-      offset: Date.parse(detail.serverTime) - session.dataUpdatedAt,
+      offset: clock ? Math.max(clock.offset, sample) : sample,
     });
   }
   const clockOffset = clock?.offset ?? 0;
