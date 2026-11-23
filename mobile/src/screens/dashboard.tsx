@@ -1,8 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { REFRESH_PRESETS, formatInterval } from '@hatch/platform-api';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIsFocused, useLocalSearchParams } from 'expo-router';
-import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  View,
+  type ScrollViewInstance,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dashboardDestination, type BrowserDestination } from '../core';
 import { useSession } from '../state/session';
@@ -163,14 +170,42 @@ export function DashboardRefresh({ board }: { board: Dashboards }) {
  * Page dots, one per dashboard: the one on show is a short accent bar. Each
  * dot is a tab named after its dashboard.
  */
-export function DashboardPager({ board }: { board: Dashboards }) {
+/** Each dashboard's dot is a full touch target. */
+const PAGER_TARGET = 44;
+
+/**
+ * One dot per dashboard. Every dot keeps a 44-point target, so a long list
+ * scrolls sideways within `visible` targets instead of leaving the screen,
+ * and the selected one is scrolled into view.
+ */
+export function DashboardPager({
+  board,
+  visible = 4,
+}: {
+  board: Dashboards;
+  visible?: number;
+}) {
   const accent = useAccent();
+  const scroller = useRef<ScrollViewInstance>(null);
+  const index = board.dashboards.findIndex(
+    (dashboard) => dashboard.id === board.current?.id,
+  );
+  useEffect(() => {
+    if (index < 0) return;
+    scroller.current?.scrollTo({
+      x: Math.max(0, (index - Math.floor(visible / 2)) * PAGER_TARGET),
+      animated: true,
+    });
+  }, [index, visible]);
   if (board.dashboards.length < 2) return null;
   return (
-    <View
+    <ScrollView
+      ref={scroller}
+      horizontal
+      showsHorizontalScrollIndicator={false}
       accessibilityRole="tablist"
       accessibilityLabel="Dashboards"
-      style={{ flexDirection: 'row', alignItems: 'center' }}
+      style={{ flexGrow: 0, maxWidth: visible * PAGER_TARGET }}
     >
       {board.dashboards.map((dashboard) => {
         const selected = dashboard.id === board.current?.id;
@@ -182,8 +217,8 @@ export function DashboardPager({ board }: { board: Dashboards }) {
             accessibilityState={{ selected }}
             onPress={() => board.select(dashboard.id)}
             style={{
-              minWidth: selected ? 30 : 20,
-              height: 44,
+              width: PAGER_TARGET,
+              height: PAGER_TARGET,
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -199,7 +234,7 @@ export function DashboardPager({ board }: { board: Dashboards }) {
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -305,7 +340,7 @@ export function DashboardScreen({ nested = false }: { nested?: boolean }) {
       </View>
       {board.dashboards.length > 1 ? (
         <View style={{ alignItems: 'center' }}>
-          <DashboardPager board={board} />
+          <DashboardPager board={board} visible={7} />
         </View>
       ) : null}
       <WidgetSheet
