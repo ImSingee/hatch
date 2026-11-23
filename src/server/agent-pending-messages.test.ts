@@ -10,7 +10,9 @@ vi.mock('~/db', async () => {
 
 vi.mock('~server/agent-runner/hub', () => {
   type Hub = typeof import('~server/agent-runner/hub');
+  class RunNotStartedError extends Error {}
   return {
+    RunNotStartedError,
     connectedRunnerCount: vi.fn<Hub['connectedRunnerCount']>(() => 1),
     listConnectedRunners: vi.fn<Hub['listConnectedRunners']>(),
     dispatchRun: vi.fn<Hub['dispatchRun']>(),
@@ -440,11 +442,10 @@ describe('review regressions', () => {
     await updateAgentPreferences(USER, { messageMode: 'queue' });
     const runId = await startRun('Build a tracker');
     await send('Add a chart');
-    // The owner passes the check, then the dispatch fails.
+    // The owner passes the check, then the dispatch fails before
+    // `run.start` is sent.
     vi.mocked(hub.dispatchRun).mockRejectedValueOnce(
-      new Error(
-        'The Agent Runner that owns this chat workspace is unavailable.',
-      ),
+      new hub.RunNotStartedError('Runner connection is closed.'),
     );
     await finish(runId);
     expect(await activeRunId()).toBeNull();
@@ -462,6 +463,39 @@ describe('review regressions', () => {
     await runs.pendingDispatchesSettled();
     expect(started.at(-1)?.userText).toBe('Add a chart');
     expect((await tray()).messages).toEqual([]);
+  });
+
+  it('fails, rather than redelivers, a delivery the Runner may have started', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+    // Sent, but the acceptance never arrived: the Runner may be running it.
+    vi.mocked(hub.dispatchRun).mockRejectedValueOnce(
+      new Error('Runner did not accept the run in time.'),
+    );
+    await finish(runId);
+    expect((await tray()).messages).toEqual([]);
+    const rows = await db.select().from(schema.agentRuns);
+    expect(rows.find((row) => row.id !== runId)?.status).toBe('failed');
+  });
+
+  it('keeps a rename made while an undone delivery was dispatching', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    await send('Add a chart');
+    vi.mocked(hub.dispatchRun).mockImplementationOnce(async () => {
+      await db
+        .update(schema.agentSessions)
+        .set({ title: 'Renamed meanwhile' })
+        .where(eq(schema.agentSessions.id, SESSION));
+      throw new hub.RunNotStartedError('Runner connection is closed.');
+    });
+    await finish(runId);
+    expect((await tray()).messages).toHaveLength(1);
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    expect(session?.title).toBe('Renamed meanwhile');
   });
 
   it('delivers again after an abandoned Send now reservation expires', async () => {

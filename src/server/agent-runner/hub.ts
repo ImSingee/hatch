@@ -198,6 +198,18 @@ function ownerConn(runnerId: string | null | undefined): RunnerConn | null {
   return hubState().runners.get(runnerId) ?? null;
 }
 
+/**
+ * The run definitely never started on any Runner: `run.start` was not sent,
+ * or the Runner rejected it. Other dispatch failures (an acceptance timeout,
+ * a disconnect after sending) leave it uncertain whether the Runner runs it.
+ */
+export class RunNotStartedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RunNotStartedError';
+  }
+}
+
 /** Pick the connected runner with the fewest active runs. */
 function pickRunner(): RunnerConn | null {
   let best: RunnerConn | null = null;
@@ -222,14 +234,14 @@ export async function dispatchRun(
   const { ownerRunnerId } = plan;
   const conn = ownerRunnerId !== null ? ownerConn(ownerRunnerId) : pickRunner();
   if (!conn) {
-    throw new Error(
+    throw new RunNotStartedError(
       ownerRunnerId !== null
         ? 'The Agent Runner that owns this chat workspace is unavailable.'
         : 'No Agent Runner is connected to the platform.',
     );
   }
   if (!conn.ready) {
-    throw new Error(
+    throw new RunNotStartedError(
       'The Agent Runner that owns this chat workspace is unavailable.',
     );
   }
@@ -237,12 +249,18 @@ export async function dispatchRun(
     ownerRunnerId !== null &&
     !conn.workspaceSessionIds.has(payload.sessionId)
   ) {
-    throw new Error(
+    throw new RunNotStartedError(
       'The Agent Runner that owns this chat workspace did not report its local data.',
     );
   }
 
-  await plan.assign(conn.runnerId);
+  try {
+    await plan.assign(conn.runnerId);
+  } catch (error) {
+    throw new RunNotStartedError(
+      error instanceof Error ? error.message : 'Could not assign the run.',
+    );
+  }
   conn.activeRunIds.add(payload.runId);
 
   const state = hubState();
@@ -267,7 +285,7 @@ export async function dispatchRun(
     settleDispatch(
       payload.runId,
       conn,
-      new Error('Runner connection is closed.'),
+      new RunNotStartedError('Runner connection is closed.'),
     );
   }
 
@@ -739,7 +757,7 @@ async function handleMessage(
       settleDispatch(
         message.runId,
         conn,
-        new Error(`Runner rejected the run: ${message.reason}`),
+        new RunNotStartedError(`Runner rejected the run: ${message.reason}`),
       );
       return;
     }

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 const adminUrl = process.env.HATCH_POSTGRES_TEST_DATABASE_URL;
 
 vi.mock('~server/agent-runner/hub', () => ({
+  RunNotStartedError: class extends Error {},
   sendRunCancel: () => false,
 }));
 

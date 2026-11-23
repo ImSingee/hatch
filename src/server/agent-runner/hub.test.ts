@@ -8,6 +8,7 @@ import {
   connectedRunnerCount,
   dispatchRun,
   handleRunnerSocket,
+  RunNotStartedError,
   listConnectedRunners,
   sendRunEnvAndWait,
   type RunDispatchPlan,
@@ -314,7 +315,9 @@ describe('workspace-affine dispatch', () => {
         reason: 'busy',
       }),
     );
+    // A rejection is definite: the run never started on any Runner.
     await expect(rejectedDispatch).rejects.toThrow('busy');
+    await expect(rejectedDispatch).rejects.toBeInstanceOf(RunNotStartedError);
     expect(dispatch.finalize).not.toHaveBeenCalled();
 
     delete (globalThis as { __hatchRunnerHub__?: unknown }).__hatchRunnerHub__;
@@ -327,9 +330,9 @@ describe('workspace-affine dispatch', () => {
       throw new Error('send failed');
     };
 
-    await expect(dispatchRun(runPayload, dispatchPlan())).rejects.toThrow(
-      'connection is closed',
-    );
+    const closed = dispatchRun(runPayload, dispatchPlan());
+    await expect(closed).rejects.toThrow('connection is closed');
+    await expect(closed).rejects.toBeInstanceOf(RunNotStartedError);
     expect(dispatch.finalize).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });

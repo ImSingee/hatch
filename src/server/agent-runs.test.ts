@@ -11,7 +11,9 @@ vi.mock('~/db', async () => {
 
 vi.mock('~server/agent-runner/hub', () => {
   type Hub = typeof import('~server/agent-runner/hub');
+  class RunNotStartedError extends Error {}
   return {
+    RunNotStartedError,
     connectedRunnerCount: vi.fn<Hub['connectedRunnerCount']>(() => 1),
     dispatchRun: vi.fn<Hub['dispatchRun']>(async () => 'runner-test'),
     sendRunAnswer: vi.fn<Hub['sendRunAnswer']>(),
