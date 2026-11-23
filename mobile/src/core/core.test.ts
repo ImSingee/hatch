@@ -500,6 +500,9 @@ describe('pending messages and preferences', () => {
           pendingId: 'p1',
           text: 'Use blue',
           images: [{ mimeType: 'image/png' }],
+          attachments: [
+            { id: 'f1', name: 'notes.txt', mimeType: 'text/plain', size: 3 },
+          ],
         }),
         event(3, { type: 'user_message', pendingId: 'p1', text: 'Use blue' }),
         event(4, { type: 'done' }),
@@ -515,7 +518,15 @@ describe('pending messages and preferences', () => {
     });
     expect(state.blocks).toEqual([
       { kind: 'text', text: 'Working.' },
-      { kind: 'steer', id: 'p1', text: 'Use blue', imageCount: 1 },
+      {
+        kind: 'steer',
+        id: 'p1',
+        text: 'Use blue',
+        imageCount: 1,
+        attachments: [
+          { id: 'f1', name: 'notes.txt', mimeType: 'text/plain', size: 3 },
+        ],
+      },
     ]);
   });
 });

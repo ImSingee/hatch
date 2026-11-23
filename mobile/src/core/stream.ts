@@ -1,6 +1,7 @@
 import { MobileError, throwIfAborted } from './security';
 import type {
   AgentStreamEvent,
+  Attachment,
   JsonValue,
   PendingAsk,
   PendingEnv,
@@ -23,7 +24,13 @@ export type StreamBlock =
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; id: string }
   /** A steer message the run took in, where it was injected. */
-  | { kind: 'steer'; id: string; text: string; imageCount: number };
+  | {
+      kind: 'steer';
+      id: string;
+      text: string;
+      imageCount: number;
+      attachments: Attachment[];
+    };
 export type StreamState = {
   lastSeq: number;
   text: string;
@@ -169,6 +176,7 @@ export function reduceStreamEvent(
                 id: event.pendingId,
                 text: event.text,
                 imageCount: event.images?.length ?? 0,
+                attachments: event.attachments ?? [],
               },
             ],
           };
@@ -264,7 +272,15 @@ function validEvent(value: unknown): value is AgentStreamEvent {
       return (
         typeof value.pendingId === 'string' &&
         typeof value.text === 'string' &&
-        (value.images === undefined || Array.isArray(value.images))
+        (value.images === undefined || Array.isArray(value.images)) &&
+        (value.attachments === undefined ||
+          (Array.isArray(value.attachments) &&
+            value.attachments.every(
+              (item) =>
+                record(item) &&
+                typeof item.id === 'string' &&
+                typeof item.name === 'string',
+            )))
       );
     case 'tool_update':
       return (

@@ -169,6 +169,7 @@ export type AgentStreamEvent =
       text: string;
       /** Image metadata only; the data is known from the pending tray. */
       images?: { mimeType: string }[];
+      attachments?: Attachment[];
     }
   | {
       /** Auto-compaction lifecycle. Accepted so the stream keeps advancing. */

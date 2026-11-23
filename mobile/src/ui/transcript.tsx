@@ -317,6 +317,9 @@ export function LiveTranscript({
                   { type: 'text', text },
                   ...images.map((image) => ({ type: 'image', ...image })),
                 ],
+                ...(block.attachments.length
+                  ? { attachments: block.attachments }
+                  : {}),
                 steered: true,
               }}
             />
