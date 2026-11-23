@@ -351,7 +351,9 @@ export class RunnerExecutor {
         clearTimeout(timer);
         signal.removeEventListener('abort', onAbort);
         run.steerClaims.delete(requestId);
-        resolve([...late, ...messages]);
+        // Replies to older claims that arrived while this one waited come
+        // first, so a later correction is never injected before them.
+        resolve([...late, ...run.lateSteer.splice(0), ...messages]);
       };
       // A stopped run injects nothing more; whatever the platform claimed
       // returns to the tray when it settles the run.

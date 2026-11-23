@@ -630,6 +630,56 @@ describe('RunnerExecutor steer messages', () => {
   });
 });
 
+describe('RunnerExecutor steer claim order', () => {
+  it('injects a late reply to an older claim before a newer reply', async () => {
+    vi.useFakeTimers();
+    try {
+      let steer: NonNullable<Parameters<typeof runAgentTurn>[0]['steer']>;
+      let release!: () => void;
+      vi.mocked(runAgentTurn).mockImplementationOnce(async (options) => {
+        steer = options.steer!;
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { messages: [] };
+      });
+      const { executor, sent } = setupExecutor();
+      executor.start({ ...payload, runId: 'run-order', steerPending: true });
+      await vi.waitFor(() => expect(steer!).toBeDefined());
+      const claims = () =>
+        sent.filter(
+          (item): item is Extract<RunnerMessage, { type: 'run.steer_claim' }> =>
+            item.type === 'run.steer_claim',
+        );
+      const message = (id: string) => ({
+        id,
+        userText: id,
+        composerContent: [],
+        images: [],
+        attachments: [],
+      });
+      const first = steer!.claim();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await first).toEqual([]);
+      const second = steer!.claim();
+      // The first reply arrives late, while the second claim waits.
+      executor.steerClaimed('run-order', claims()[0].requestId, [
+        message('use-blue'),
+      ]);
+      executor.steerClaimed('run-order', claims()[1].requestId, [
+        message('use-red'),
+      ]);
+      expect((await second).map((item) => item.id)).toEqual([
+        'use-blue',
+        'use-red',
+      ]);
+      release();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('RunnerExecutor steer claims on stop', () => {
   it('answers a pending claim with nothing as soon as the run is stopped', async () => {
     let steer: NonNullable<Parameters<typeof runAgentTurn>[0]['steer']>;

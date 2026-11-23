@@ -2565,6 +2565,12 @@ export async function dispatchPendingMessages(
       if (error instanceof ActiveRunConflictError) continue;
       // No Runner yet: deliver once one connects.
       if (error instanceof AppError && error.status === 503) return null;
+      // A deadlock or lost connection says nothing about the messages: they
+      // stay deliverable, and the lease sweeper tries again.
+      if (isTransientDatabaseError(error)) {
+        console.error('[agent-runs] pending delivery will try again:', error);
+        return null;
+      }
       // The messages cannot start a run (for example their model was
       // removed); stop delivering until the user resumes or sends one now.
       // Decide under the session lock: a run another start created
