@@ -1,4 +1,5 @@
 packages:
+  - desktop
   - mobile
   - packages/hatch-platform-api
 

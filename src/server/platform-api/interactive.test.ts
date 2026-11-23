@@ -798,55 +798,58 @@ describe('interactive Platform API contracts and authority', () => {
     ).toBe(429);
   });
 
-  it('authorizes hatch-mobile through the existing explicit browser device approval', async () => {
-    const started = await authCall('device/code', {
-      client_id: 'hatch-mobile',
-    });
-    expect(started.status).toBe(200);
-    const grant = (await started.json()) as {
-      user_code: string;
-      device_code: string;
-      verification_uri: string;
-    };
-    expect(grant.verification_uri).toBe(`${origin}/cli/authorize`);
-    const review = await authCall(
-      `device?user_code=${grant.user_code}`,
-      undefined,
-      { cookie },
-    );
-    expect(await review.json()).toMatchObject({
-      client_id: 'hatch-mobile',
-      status: 'pending',
-    });
-    expect(
-      (
-        await authCall(
-          'device/approve',
-          { userCode: grant.user_code },
-          { cookie },
-        )
-      ).status,
-    ).toBe(200);
-    const exchanged = await authCall('device/token', {
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      device_code: grant.device_code,
-      client_id: 'hatch-mobile',
-    });
-    expect(exchanged.status).toBe(200);
-    const mobileToken = ((await exchanged.json()) as { access_token: string })
-      .access_token;
-    expect(
-      (
-        await call('AppService/ListApps', {
-          headers: { authorization: `Bearer ${mobileToken}` },
-        })
-      ).status,
-    ).toBe(200);
-    expect(
-      (await authCall('device/code', { client_id: 'unrecognized-client' }))
-        .status,
-    ).toBe(400);
-  });
+  it.each(['hatch-mobile', 'hatch-desktop'])(
+    'authorizes %s through the existing explicit browser device approval',
+    async (clientId) => {
+      const started = await authCall('device/code', {
+        client_id: clientId,
+      });
+      expect(started.status).toBe(200);
+      const grant = (await started.json()) as {
+        user_code: string;
+        device_code: string;
+        verification_uri: string;
+      };
+      expect(grant.verification_uri).toBe(`${origin}/cli/authorize`);
+      const review = await authCall(
+        `device?user_code=${grant.user_code}`,
+        undefined,
+        { cookie },
+      );
+      expect(await review.json()).toMatchObject({
+        client_id: clientId,
+        status: 'pending',
+      });
+      expect(
+        (
+          await authCall(
+            'device/approve',
+            { userCode: grant.user_code },
+            { cookie },
+          )
+        ).status,
+      ).toBe(200);
+      const exchanged = await authCall('device/token', {
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        device_code: grant.device_code,
+        client_id: clientId,
+      });
+      expect(exchanged.status).toBe(200);
+      const nativeToken = ((await exchanged.json()) as { access_token: string })
+        .access_token;
+      expect(
+        (
+          await call('AppService/ListApps', {
+            headers: { authorization: `Bearer ${nativeToken}` },
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (await authCall('device/code', { client_id: 'unrecognized-client' }))
+          .status,
+      ).toBe(400);
+    },
+  );
 });
 
 describe('resource-independent session handoff', () => {

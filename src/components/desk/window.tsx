@@ -13,6 +13,7 @@ import {
   useId,
   useRef,
 } from 'react';
+import { useWindowFrame } from './desk-context';
 import { DESK_HOME } from './paths';
 import classes from './window.module.css';
 
@@ -90,6 +91,7 @@ export function DeskWindow({
 }: DeskWindowProps) {
   const titleId = useId();
   const frame = useRef<HTMLElement>(null);
+  const hosted = useWindowFrame() === 'host';
   const router = useRouter();
   const close = useEffectEvent(() => {
     void router.navigate(closeTo.link as never);
@@ -133,9 +135,15 @@ export function DeskWindow({
       aria-labelledby={titleId}
       className={classes.window}
       data-fill={fill || undefined}
+      data-frame={hosted ? 'host' : undefined}
       style={{ '--window-max-width': `${maxWidth}px` } as CSSProperties}
     >
-      <header className={classes.titleBar}>
+      <header
+        className={classes.titleBar}
+        // Tauri's drag script: the bar moves the native window, while its
+        // links and buttons stay clickable. Inert in a browser.
+        data-tauri-drag-region={hosted ? 'deep' : undefined}
+      >
         <Link
           {...closeTo.link}
           className={`${classes.button} ${classes.back}`}
@@ -156,20 +164,24 @@ export function DeskWindow({
         {badge ? <span className={classes.badge}>{badge}</span> : null}
         <span className={classes.spacer} />
         {toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
-        <Link
-          to={DESK_HOME}
-          className={`${classes.button} ${classes.wide}`}
-          aria-label="Minimise window, back to the desk"
-        >
-          <IconMinus size={14} stroke={2.4} aria-hidden />
-        </Link>
-        <Link
-          {...closeTo.link}
-          className={`${classes.button} ${classes.wide}`}
-          aria-label={`Close window, back to ${closeTo.label}`}
-        >
-          <IconX size={14} stroke={2.4} aria-hidden />
-        </Link>
+        {hosted ? null : (
+          <>
+            <Link
+              to={DESK_HOME}
+              className={`${classes.button} ${classes.wide}`}
+              aria-label="Minimise window, back to the desk"
+            >
+              <IconMinus size={14} stroke={2.4} aria-hidden />
+            </Link>
+            <Link
+              {...closeTo.link}
+              className={`${classes.button} ${classes.wide}`}
+              aria-label={`Close window, back to ${closeTo.label}`}
+            >
+              <IconX size={14} stroke={2.4} aria-hidden />
+            </Link>
+          </>
+        )}
       </header>
       <div className={classes.body}>{children}</div>
     </section>

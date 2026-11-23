@@ -179,6 +179,7 @@ function DeviceApprovalFlow({
           <OutcomeView
             outcome={stage.outcome}
             userCode={stage.request.userCode}
+            clientId={stage.request.clientId}
           />
         ) : (
           <ProblemView

@@ -11,7 +11,8 @@ import {
   IconWorldX,
   type Icon,
 } from '@tabler/icons-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
+import { DEVICE_CLIENTS, type DeviceClientId } from '~auth/device-clients';
 import { formatUserCode, type DeviceOutcome } from './device-api';
 import { ViewHeader } from './layout';
 import { retryWait, type Problem } from './problems';
@@ -147,11 +148,34 @@ export function ProblemView({
 export function OutcomeView({
   outcome,
   userCode,
+  clientId,
 }: {
   outcome: DeviceOutcome;
   userCode: string;
+  clientId: DeviceClientId;
 }) {
-  return <StatusLayout copy={OUTCOMES[outcome]} userCode={userCode} />;
+  const client = DEVICE_CLIENTS[clientId];
+  const returnUrl = outcome === 'approved' ? client.returnUrl : null;
+  // An app on this computer comes back to the front by itself; the button
+  // stays for a browser that asks before opening another app.
+  useEffect(() => {
+    if (returnUrl) window.location.assign(returnUrl);
+  }, [returnUrl]);
+  if (!returnUrl)
+    return <StatusLayout copy={OUTCOMES[outcome]} userCode={userCode} />;
+  return (
+    <StatusLayout
+      copy={{
+        ...OUTCOMES.approved,
+        body: `${client.name} is signed in. You can close this tab.`,
+      }}
+      userCode={userCode}
+    >
+      <Button component="a" href={returnUrl} radius="md">
+        Open {client.name}
+      </Button>
+    </StatusLayout>
+  );
 }
 
 function StatusLayout({

@@ -1,5 +1,6 @@
 import { Button, Checkbox, Text } from '@mantine/core';
 import { useState } from 'react';
+import { DEVICE_CLIENTS } from '~auth/device-clients';
 import type { DeviceDecision, DeviceRequest } from './device-api';
 import { DeviceCode, ViewHeader } from './layout';
 import classes from './device-approval.module.css';
@@ -29,11 +30,7 @@ export function RequestReview({
   return (
     <>
       <ViewHeader
-        title={
-          request.clientId === 'hatch-mobile'
-            ? 'Approve Hatch Mobile?'
-            : 'Approve Hatch CLI?'
-        }
+        title={`Approve ${DEVICE_CLIENTS[request.clientId].name}?`}
         focus
       >
         Signing in as{' '}

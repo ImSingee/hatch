@@ -16,6 +16,21 @@
   height: 100%;
 }
 
+/* Inside a native window (see `WindowFrame`): the page is the window. */
+.window[data-frame='host'] {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+.window[data-frame='host'] .titleBar {
+  min-height: 52px;
+  background: var(--surface-raised);
+}
+
 /* Focus lands here when a window opens; the frame is not a control. */
 .window:focus {
   outline: none;
