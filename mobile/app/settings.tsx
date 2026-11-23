@@ -10,7 +10,7 @@ import { Choice } from '../src/ui/native-controls';
 import { glyphs, type GlyphName } from '../src/ui/glyph.types';
 import { Card, Tag, errorText } from '../src/ui/primitives';
 import { GlyphTile } from '../src/ui/rows';
-import { Masthead, pageScrollProps } from '../src/ui/screen';
+import { Masthead, pageScrollProps, readable } from '../src/ui/screen';
 import { Text, type } from '../src/ui/text';
 import { palette as c } from '../src/ui/theme';
 
@@ -124,7 +124,7 @@ export default function SettingsScreen() {
     <ScrollView
       {...pageScrollProps}
       style={{ flex: 1, backgroundColor: c.ground }}
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ ...readable, paddingBottom: 32 }}
     >
       {/* Close leads the sheet's bar: horizontal at the top here, first on
           the vertical bar where iPhone Duo puts the bar on the side. */}

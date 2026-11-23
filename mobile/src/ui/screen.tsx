@@ -18,6 +18,18 @@ export const pageScrollProps = {
 } as const satisfies ScrollViewProps;
 
 /**
+ * A single-column page's content on a wide screen (iPad, an unfolded phone):
+ * as wide as the screen up to a comfortable reading width, then centred.
+ * Pages that split into columns on a wide screen do not use it. Layout
+ * geometry, like the 320-point columns in `columns.tsx`.
+ */
+export const readable = {
+  width: '100%',
+  maxWidth: 640,
+  alignSelf: 'center',
+} as const;
+
+/**
  * Root of a scrolling page. Vertical insets belong to the scroll view on iOS
  * (see `pageScrollProps`) and to the stack header or tab bar on Android, so
  * only a top-level Android page pads its status bar here.
@@ -77,6 +89,7 @@ export function ScrollScreen({
   title,
   actions,
   nested = false,
+  readable: narrow = false,
   children,
   contentContainerStyle,
   ...scrollProps
@@ -86,6 +99,8 @@ export function ScrollScreen({
     title: string;
     actions?: ReactNode;
     nested?: boolean;
+    /** Keep the content to the reading width (see `readable`). */
+    readable?: boolean;
   } & Omit<ScrollViewProps, 'children'>
 >) {
   return (
@@ -94,7 +109,11 @@ export function ScrollScreen({
         {...pageScrollProps}
         {...scrollProps}
         style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingBottom: 32 }, contentContainerStyle]}
+        contentContainerStyle={[
+          { paddingBottom: 32 },
+          narrow && readable,
+          contentContainerStyle,
+        ]}
       >
         <Masthead
           eyebrow={eyebrow}

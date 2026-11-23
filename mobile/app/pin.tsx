@@ -6,7 +6,7 @@ import { useSession } from '../src/state/session';
 import { useLifetimeSignal } from '../src/state/use-lifetime-signal';
 import { Busy, EmptyState, Notice, errorText } from '../src/ui/primitives';
 import { AppTile, Group, ListRow } from '../src/ui/rows';
-import { Masthead, pageScrollProps } from '../src/ui/screen';
+import { Masthead, pageScrollProps, readable } from '../src/ui/screen';
 import { palette as c, sizes } from '../src/ui/theme';
 
 /**
@@ -57,7 +57,7 @@ export default function PinPicker() {
     <ScrollView
       {...pageScrollProps}
       style={{ flex: 1, backgroundColor: c.ground }}
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ ...readable, paddingBottom: 32 }}
     >
       <Masthead
         nested

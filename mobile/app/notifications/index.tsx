@@ -38,6 +38,7 @@ export default function NotificationsScreen() {
   const host = origin?.replace(/^https?:\/\//, '') ?? '';
   return (
     <ScrollScreen
+      readable
       nested
       eyebrow={host}
       title="Notifications"

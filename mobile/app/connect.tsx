@@ -12,7 +12,7 @@ import {
 import { Button } from '../src/ui/button';
 import { Busy, Card, Wordmark, errorText } from '../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../src/ui/rows';
-import { SectionLabel } from '../src/ui/screen';
+import { SectionLabel, readable } from '../src/ui/screen';
 import { Text, type } from '../src/ui/text';
 import { useAccent } from '../src/ui/accent';
 import { palette as c, pill, weights } from '../src/ui/theme';
@@ -125,6 +125,7 @@ export default function ConnectScreen() {
       >
         <ScrollView
           contentContainerStyle={{
+            ...readable,
             paddingHorizontal: 22,
             paddingTop: 28,
             paddingBottom: 48,

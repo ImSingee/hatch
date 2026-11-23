@@ -107,7 +107,7 @@ export default function NotificationSettingsScreen() {
   };
 
   return (
-    <ScrollScreen nested eyebrow={host} title="Notification settings">
+    <ScrollScreen readable nested eyebrow={host} title="Notification settings">
       <View style={{ paddingHorizontal: 16 }}>
         {!pushSupported ? (
           <Notice

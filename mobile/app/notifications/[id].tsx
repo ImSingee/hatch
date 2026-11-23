@@ -117,6 +117,7 @@ export default function NotificationScreen() {
   if (!data) return <Busy label="Loading notification" />;
   return (
     <ScrollScreen
+      readable
       nested
       eyebrow={`${data.sourceName} · ${data.kindName}`}
       title={data.title}

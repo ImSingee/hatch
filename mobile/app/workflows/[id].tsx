@@ -10,7 +10,7 @@ import { useAccent } from '../../src/ui/accent';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
 import { Facts, ResourceHeader, when } from '../../src/ui/resource';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
-import { SectionLabel, pageScrollProps } from '../../src/ui/screen';
+import { SectionLabel, pageScrollProps, readable } from '../../src/ui/screen';
 import { statusText } from '../../src/ui/status';
 import { Text, type } from '../../src/ui/text';
 import { palette as c, status as hue } from '../../src/ui/theme';
@@ -63,6 +63,7 @@ export default function WorkflowScreen() {
       {...pageScrollProps}
       style={{ flex: 1, backgroundColor: c.ground }}
       contentContainerStyle={{
+        ...readable,
         paddingHorizontal: 20,
         paddingTop: 8,
         paddingBottom: 32,
