@@ -1,6 +1,7 @@
 import { Center, Loader } from '@mantine/core';
 import { useMutation } from '@tanstack/react-query';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CodeEntry } from './code-entry';
 import {
   claimDeviceRequest,
@@ -41,7 +42,8 @@ export type DeviceApprovalProps = {
   account: string | null;
   /** Leave for the existing login page, returning to this code afterwards. */
   onSignIn: (userCode: string) => void;
-  onSwitchAccount: (userCode: string) => void;
+  /** Sign out and go to sign-in; rejects if signing out failed. */
+  onSwitchAccount: (userCode: string) => Promise<void>;
   /**
    * Give up this account's claim on a request so another account can claim
    * it. Runs before switching away from a review; rejects if not confirmed.
@@ -119,11 +121,12 @@ function DeviceApprovalFlow({
     setStage(next);
   }, []);
 
-  const review = (userCode: string) => {
+  /** `switchFailed` reports a failed account switch on the review it reopens. */
+  const review = (userCode: string, switchFailed = false) => {
     if (inFlight.current) return;
     inFlight.current = true;
     claim.mutate(userCode, {
-      onSuccess: (request) => go({ kind: 'review', request }),
+      onSuccess: (request) => go({ kind: 'review', request, switchFailed }),
       onError: (error) => {
         const result = classifyClaimError(error);
         const retryAfter = retryAfterOf(error);
@@ -166,12 +169,19 @@ function DeviceApprovalFlow({
   };
 
   // Release before leaving: if the release is not confirmed, stay here, since
-  // signing in as another account could no longer claim the request.
+  // signing in as another account could no longer claim the request. If
+  // signing out fails after the release, this account is still signed in and
+  // the request is unclaimed, so claim it again to make the review usable.
   const switchFromReview = (request: DeviceRequest) => {
     if (inFlight.current) return;
     inFlight.current = true;
     release.mutate(request.userCode, {
-      onSuccess: () => onSwitchAccount(request.userCode),
+      onSuccess: () => {
+        onSwitchAccount(request.userCode).catch(() => {
+          release.reset();
+          review(request.userCode, true);
+        });
+      },
       onError: () => setStage({ kind: 'review', request, switchFailed: true }),
       onSettled: () => {
         inFlight.current = false;
@@ -214,7 +224,11 @@ function DeviceApprovalFlow({
             problem={stage.problem}
             retryAfter={stage.retryAfter ?? null}
             account={account}
-            onSwitchAccount={() => onSwitchAccount(code)}
+            onSwitchAccount={() => {
+              onSwitchAccount(code).catch(() => {
+                toast.error('Couldn’t sign out. Try again.');
+              });
+            }}
             focus={transitions > 0 || !code}
           />
         ) : stage.kind === 'review' ? (
@@ -233,6 +247,7 @@ function DeviceApprovalFlow({
           <OutcomeView
             outcome={stage.outcome}
             userCode={stage.request.userCode}
+            clientId={stage.request.clientId}
           />
         ) : (
           <ProblemView

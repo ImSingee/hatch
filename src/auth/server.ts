@@ -12,6 +12,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 // See https://github.com/better-auth/better-auth/issues/6373
 import { db, schema } from '../db';
 import { getPlatformEnv } from '../env';
+import { isDeviceClientId } from './device-clients';
 import { assertSignupAllowed } from './signup-gate';
 import { getPasskeyOriginError, getPasskeyRpId } from './passkey-origin';
 import { apiKeyOptions } from './api-key-options';
@@ -135,7 +136,7 @@ export const auth = betterAuth({
         requireSession: true,
       },
     }),
-    // CLI and mobile login: the device signs in through the browser approval page at
+    // CLI, mobile and desktop login: the device signs in through the browser approval page at
     // /cli/authorize and receives an ordinary session token, which it sends as
     // `Authorization: Bearer`. A native session has the same authority as a
     // browser session. Requests on the trusted Tailscale origin get this page
@@ -144,8 +145,7 @@ export const auth = betterAuth({
       expiresIn: '10m',
       interval: '5s',
       verificationUri: `${appUrl}/cli/authorize`,
-      validateClient: (clientId) =>
-        clientId === 'hatch-cli' || clientId === 'hatch-mobile',
+      validateClient: isDeviceClientId,
     }),
     bearer(),
     tanstackStartCookies(), // This should be the last plugin

@@ -140,7 +140,9 @@ device list can show both from one table.
   first releases the claim (`releaseDeviceClaim`, `src/server/device-claims.ts`:
   clears `user_id` only for the caller's own pending claim), then signs out and
   returns through `/login`, where the chosen account claims it. If the release
-  is not confirmed, the page stays signed in on the review and says so.
+  is not confirmed, the page stays signed in on the review and says so. If
+  signing out fails after the release, the page claims the request again for
+  the same account and says the switch failed.
 - The review shows the account, the origin, the code to compare and that
   approving grants full access to the account. Approve requires confirming that
   the person started the request and the code matches; Deny does not. Decisions

@@ -86,6 +86,30 @@ const placeIcon = (icon: ReactNode) => (
  * opened from the menu bar or with ⌘K / Ctrl+K anywhere in the shell.
  */
 export function CommandPalette() {
+  return (
+    <>
+      <UnstyledButton
+        className={`${classes.item} ${classes.search}`}
+        aria-label="Search apps, workflows and pages"
+        aria-keyshortcuts="Meta+K Control+K"
+        onClick={() => spotlight.open()}
+      >
+        <IconSearch size={17} stroke={1.9} aria-hidden />
+        <kbd className={classes.kbd} aria-hidden>
+          ⌘K
+        </kbd>
+      </UnstyledButton>
+      <SearchPalette />
+    </>
+  );
+}
+
+/**
+ * The palette itself, without the menu bar's trigger. Other shells (the macOS
+ * app's sidebar) mount it with a trigger of their own and open it with
+ * `spotlight.open()`.
+ */
+export function SearchPalette() {
   const navigate = useNavigate();
   const apps = useQuery(appsQueryOptions);
   const workflows = useQuery(workflowsQueryOptions);
@@ -146,35 +170,22 @@ export function CommandPalette() {
   );
 
   return (
-    <>
-      <UnstyledButton
-        className={`${classes.item} ${classes.search}`}
-        aria-label="Search apps, workflows and pages"
-        aria-keyshortcuts="Meta+K Control+K"
-        onClick={() => spotlight.open()}
-      >
-        <IconSearch size={17} stroke={1.9} aria-hidden />
-        <kbd className={classes.kbd} aria-hidden>
-          ⌘K
-        </kbd>
-      </UnstyledButton>
-      <Spotlight
-        actions={actions}
-        shortcut={['mod + K']}
-        // Nothing in the shell uses ⌘K inside a field, so the palette opens
-        // from search boxes and the Agent composer too.
-        tagsToIgnore={[]}
-        triggerOnContentEditable
-        nothingFound="Nothing matches. Try an App, Workflow or page name."
-        highlightQuery
-        scrollable
-        maxHeight={420}
-        searchProps={{
-          leftSection: <IconSearch size={18} stroke={1.8} />,
-          placeholder: 'Search apps, workflows and pages',
-          'aria-label': 'Search apps, workflows and pages',
-        }}
-      />
-    </>
+    <Spotlight
+      actions={actions}
+      shortcut={['mod + K']}
+      // Nothing in the shell uses ⌘K inside a field, so the palette opens
+      // from search boxes and the Agent composer too.
+      tagsToIgnore={[]}
+      triggerOnContentEditable
+      nothingFound="Nothing matches. Try an App, Workflow or page name."
+      highlightQuery
+      scrollable
+      maxHeight={420}
+      searchProps={{
+        leftSection: <IconSearch size={18} stroke={1.8} />,
+        placeholder: 'Search apps, workflows and pages',
+        'aria-label': 'Search apps, workflows and pages',
+      }}
+    />
   );
 }

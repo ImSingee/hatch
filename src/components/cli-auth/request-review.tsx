@@ -1,6 +1,7 @@
 import { Alert, Anchor, Button, Checkbox, Text } from '@mantine/core';
 import { IconAlertTriangle } from '@tabler/icons-react';
 import { useState } from 'react';
+import { DEVICE_CLIENTS } from '~auth/device-clients';
 import type { DeviceDecision, DeviceRequest } from './device-api';
 import { DeviceCode, ViewHeader } from './layout';
 import classes from './device-approval.module.css';
@@ -14,7 +15,7 @@ type RequestReviewProps = {
   onDecide: (decision: DeviceDecision) => void;
   /** Releasing the claim to switch account is in flight or done. */
   switching: boolean;
-  /** The last attempt to release the claim was not confirmed. */
+  /** The last attempt to switch account failed; this account is still in. */
   switchFailed: boolean;
   onSwitchAccount: () => void;
 };
@@ -38,11 +39,7 @@ export function RequestReview({
   return (
     <>
       <ViewHeader
-        title={
-          request.clientId === 'hatch-mobile'
-            ? 'Approve Hatch Mobile?'
-            : 'Approve Hatch CLI?'
-        }
+        title={`Approve ${DEVICE_CLIENTS[request.clientId].name}?`}
         focus
       >
         Signing in as{' '}
@@ -72,8 +69,7 @@ export function RequestReview({
             icon={<IconAlertTriangle size={18} stroke={1.75} />}
             role="alert"
           >
-            Couldn’t release this request, so you’re still signed in here. Try
-            again.
+            Couldn’t switch account, so you’re still signed in here. Try again.
           </Alert>
         ) : null}
 

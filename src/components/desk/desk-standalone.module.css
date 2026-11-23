@@ -3,6 +3,13 @@
   flex-direction: column;
 }
 
+/* The macOS app (`data-host="desktop"`, see desktop-host/host.ts) draws its
+   traffic lights over this bar's left end. */
+:global(:root[data-host='desktop']) .bar {
+  height: 52px;
+  padding-left: 84px;
+}
+
 /* The brand is not a link here: there is no desk to go back to yet. */
 .brand:hover {
   background: transparent;

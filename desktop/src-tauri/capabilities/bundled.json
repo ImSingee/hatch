@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "bundled",
+  "description": "The bundled first-run page: instance address and sign-in. No shell, filesystem or HTTP access; the instance's own pages get only window dragging, added at runtime.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "allow-get-screen",
+    "allow-connect",
+    "allow-sign-in-with-browser",
+    "allow-cancel-sign-in",
+    "allow-change-instance",
+    "allow-retry",
+    "allow-open-instance-in-browser"
+  ]
+}

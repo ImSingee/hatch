@@ -12,3 +12,19 @@ export const InsideDeskShellProvider = InsideDeskShell.Provider;
 export function useInsideDeskShell() {
   return useContext(InsideDeskShell);
 }
+
+/**
+ * How a `DeskWindow` is framed. `desk`: a window floating on the desk.
+ * `host`: the page fills a native window that brings its own frame (the macOS
+ * app's sidebar layout), so it drops its radius, shadow, minimise and close,
+ * and its title bar moves the native window.
+ */
+export type WindowFrame = 'desk' | 'host';
+
+const WindowFrameContext = createContext<WindowFrame>('desk');
+
+export const WindowFrameProvider = WindowFrameContext.Provider;
+
+export function useWindowFrame() {
+  return useContext(WindowFrameContext);
+}

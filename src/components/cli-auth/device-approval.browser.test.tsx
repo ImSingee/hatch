@@ -22,7 +22,9 @@ type Reply = Response | Promise<Response> | 'network-error';
 let replies: Record<string, Reply>;
 let calls: { action: string; url: URL; init: RequestInit }[];
 let releaseClaim: ReturnType<typeof vi.fn<(userCode: string) => Promise<void>>>;
-let onSwitchAccount: ReturnType<typeof vi.fn<(userCode: string) => void>>;
+let onSwitchAccount: ReturnType<
+  typeof vi.fn<(userCode: string) => Promise<void>>
+>;
 
 beforeEach(() => {
   calls = [];
@@ -35,13 +37,15 @@ beforeEach(() => {
       });
     },
   );
-  onSwitchAccount = vi.fn<(userCode: string) => void>((userCode) => {
-    calls.push({
-      action: 'switch',
-      url: new URL(`switch:${userCode}`),
-      init: {},
-    });
-  });
+  onSwitchAccount = vi.fn<(userCode: string) => Promise<void>>(
+    async (userCode) => {
+      calls.push({
+        action: 'switch',
+        url: new URL(`switch:${userCode}`),
+        init: {},
+      });
+    },
+  );
   replies = { claim: Response.json(claimed) };
   vi.spyOn(window, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), window.location.origin);
@@ -283,10 +287,50 @@ test('an unconfirmed release keeps the account and the review', async () => {
   await expect
     .element(screen.getByRole('alert'))
     .toHaveTextContent(
-      'Couldn’t release this request, so you’re still signed in here. Try again.',
+      'Couldn’t switch account, so you’re still signed in here. Try again.',
     );
   expect(onSwitchAccount).not.toHaveBeenCalled();
   await expect
     .element(screen.getByRole('button', { name: 'Deny' }))
     .toBeEnabled();
+});
+
+test('a failed sign-out after the release claims the request again', async () => {
+  onSwitchAccount.mockRejectedValueOnce(new Error('Could not sign out'));
+  const screen = await openReview();
+  await screen.getByRole('button', { name: 'Use a different account' }).click();
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent(
+      'Couldn’t switch account, so you’re still signed in here. Try again.',
+    );
+  expect(calls.map((call) => call.action)).toEqual([
+    'claim',
+    'release',
+    'claim',
+  ]);
+  await expect
+    .element(screen.getByRole('button', { name: 'Deny' }))
+    .toBeEnabled();
+  await expect
+    .element(screen.getByRole('button', { name: 'Use a different account' }))
+    .toBeEnabled();
+});
+
+test('approving the desktop app sends the browser back to it', async () => {
+  replies.claim = Response.json({ ...claimed, client_id: 'hatch-desktop' });
+  replies.approve = Response.json({ success: true });
+  const screen = await renderPage();
+  await expect
+    .element(screen.getByRole('heading', { name: 'Approve Hatch for Mac?' }))
+    .toBeVisible();
+  await screen.getByRole('checkbox').click();
+  await screen.getByRole('button', { name: 'Approve' }).click();
+  await expect
+    .element(screen.getByRole('heading', { name: 'Device approved' }))
+    .toBeVisible();
+  // The link only brings the app forward; it carries no code or session.
+  await expect
+    .element(screen.getByRole('link', { name: 'Open Hatch for Mac' }))
+    .toHaveAttribute('href', 'hatch://');
 });
