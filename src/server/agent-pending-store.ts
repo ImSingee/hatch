@@ -17,6 +17,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { db, schema, type DB, type TX } from '~/db';
+import { bindReceiptsToRun } from './agent-message-receipts';
 import type {
   AgentMessageMode,
   AgentPendingMessageStatus,
@@ -227,7 +228,7 @@ export async function settleRunPendingMessages(
     // Only rows still claimed by this run match what it delivered. A late
     // report must not remove a message the user edited (or sent) after the
     // run stopped: those changes released the claim.
-    await tx
+    const removed = await tx
       .delete(schema.agentPendingMessages)
       .where(
         and(
@@ -235,7 +236,15 @@ export async function settleRunPendingMessages(
           eq(schema.agentPendingMessages.claimedRunId, runId),
           inArray(schema.agentPendingMessages.id, delivered),
         ),
-      );
+      )
+      .returning({ id: schema.agentPendingMessages.id });
+    // A resend of an injected message returns the run that delivered it.
+    await bindReceiptsToRun(
+      tx,
+      sessionId,
+      removed.map((row) => row.id),
+      runId,
+    );
   }
   await tx
     .update(schema.agentPendingMessages)

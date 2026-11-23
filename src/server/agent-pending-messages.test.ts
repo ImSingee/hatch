@@ -901,12 +901,53 @@ describe('resending a message after a lost response', () => {
     await runs.pendingDispatchesSettled();
     await expect(
       resendStart('draft-0005', 'Then share it'),
-    ).rejects.toMatchObject({
-      status: 409,
-      message: 'This message was already sent.',
-    });
+    ).rejects.toMatchObject({ status: 409, name: 'MessageAlreadySentError' });
     expect((await tray()).messages).toHaveLength(1);
     expect(started).toHaveLength(3);
+  });
+
+  it('returns the run a steered message was injected into', async () => {
+    const runId = await startRun('Build a tracker');
+    await resendEnqueue('draft-0008', 'Use blue');
+    const [claimed] = await runs.claimSteerMessages(RUNNER, runId);
+    await runs.ingestRunnerEvent(RUNNER, {
+      runId,
+      runnerSeq: 1,
+      event: {
+        type: 'user_message',
+        pendingId: claimed.id,
+        text: claimed.userText,
+        images: [],
+      },
+    });
+    expect((await resendEnqueue('draft-0008', 'Use blue')).pending).toEqual({
+      paused: false,
+      messages: [],
+    });
+    const session = await db.query.agentSessions.findFirst({
+      where: { id: SESSION },
+    });
+    await finish(runId, 'completed', [
+      ...(session!.messages as JsonValue[]),
+      {
+        role: 'user',
+        content: text('Use blue'),
+        steered: true,
+        pendingMessageId: claimed.id,
+      },
+      { role: 'assistant', content: text('Done.') },
+    ]);
+
+    // Resent through either endpoint once the session is idle again.
+    expect(await resendEnqueue('draft-0008', 'Use blue')).toEqual({
+      pending: { paused: false, messages: [] },
+      startedRunId: null,
+    });
+    expect(await resendStart('draft-0008', 'Use blue')).toMatchObject({
+      runId,
+    });
+    expect(started).toHaveLength(1);
+    expect(await db.select().from(schema.agentPendingMessages)).toEqual([]);
   });
 
   it('sends a cancelled message again as a new one', async () => {

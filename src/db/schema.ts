@@ -772,7 +772,7 @@ export const agentMessageReceipts = snakeCase.table(
      * foreign key: the receipt stays after that row is delivered.
      */
     pendingMessageId: ulid('pending_message_id'),
-    /** The run that took the message as its prompt, once one did. */
+    /** The run that delivered the message (its prompt or a steer), once one did. */
     runId: ulid('run_id').references(() => agentRuns.id, {
       onDelete: 'set null',
     }),

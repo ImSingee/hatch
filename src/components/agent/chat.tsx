@@ -518,11 +518,13 @@ export function Chat({ sessionId }: { sessionId: string }) {
       draftSends.settle(draft);
       // A replayed resend answers the turn its first send already added.
       const runTurn = started.userTurn ?? userTurn;
+      const replayed = runTurn < userTurn;
       // A successful start has consumed this exact failure revision even if the
       // new user message cannot be refetched yet (or the run ends before the
       // active state is observed). Any later failure has a new session revision;
-      // atomic Retry uses the separate cache-replacement path below.
-      if (retryIdentity) setConsumedRetryIdentity(retryIdentity);
+      // atomic Retry uses the separate cache-replacement path below. A replay
+      // started nothing new, so a failure it returns stays retryable.
+      if (retryIdentity && !replayed) setConsumedRetryIdentity(retryIdentity);
       // Surface the run immediately so the connection effect subscribes without
       // waiting for the session refetch round-trip.
       const sessionOptions = sessionQueryOptions(sessionId);
