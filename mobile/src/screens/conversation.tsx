@@ -390,7 +390,7 @@ function ConversationBody({
     () => toolResultsByCall(detail?.messages ?? []),
     [detail?.messages],
   );
-  const [workOpen, setWorkOpen] = useState<Record<string, boolean>>({});
+  const [workOpen, setWorkOpen] = useWorkOpen(origin, id);
   // Rows re-render when a hold or a work line's open state changes.
   const listExtra = useMemo(() => ({ held, workOpen }), [held, workOpen]);
   const toggleWork = (key: string, expanded: boolean) => {
@@ -400,7 +400,7 @@ function ConversationBody({
     settle.current = null;
     if (scrollTop.current === null) setAtBottom(false);
     else keepPlace(scrollTop.current, false);
-    setWorkOpen((current) => ({ ...current, [key]: !expanded }));
+    setWorkOpen(key, !expanded);
   };
   // Server clock minus this phone's, for the line counting a live run.
   // Taken when a fetched snapshot brings a new server time: a local write
@@ -1578,6 +1578,33 @@ function RecordingCell({
     </View>
   );
 }
+
+/**
+ * Which work lines the reader opened or folded in a conversation. Kept like
+ * the reading place, so a fold or unfold that moves the conversation to
+ * another screen shows the same lines open before that place is restored.
+ */
+function useWorkOpen(origin: string | null, id: string) {
+  const client = useQueryClient();
+  const { data } = useQuery<Record<string, boolean>>({
+    queryKey: [origin, 'work-open', id],
+    queryFn: skipToken,
+    initialData: {},
+    gcTime: Infinity,
+    staleTime: Infinity,
+  });
+  const set = useCallback(
+    (key: string, open: boolean) =>
+      client.setQueryData<Record<string, boolean>>(
+        [origin, 'work-open', id],
+        (current) => ({ ...current, [key]: open }),
+      ),
+    [client, origin, id],
+  );
+  return [data ?? noWorkOpen, set] as const;
+}
+
+const noWorkOpen: Record<string, boolean> = {};
 
 /**
  * The transcript position of a conversation, read when a screen showing it
