@@ -26,7 +26,6 @@ function usePeek(enabled: boolean) {
         // visible again, and a hidden cell keeps its place in the grid.
         cell.style.opacity = hidden ? '0' : '';
         cell.inert = hidden;
-        cell.toggleAttribute('aria-hidden', hidden);
       });
     };
     fit();
