@@ -3,7 +3,7 @@ import { Appearance } from 'react-native';
 import { useEffect, type PropsWithChildren } from 'react';
 import { InstanceAccent } from '../src/state/accent';
 import { useAccent } from '../src/ui/accent';
-import { fonts, palette as c, weights } from '../src/ui/theme';
+import { palette as c } from '../src/ui/theme';
 import { SessionProvider, useSession } from '../src/state/session';
 import { useDeepLinkLifecycle } from '../src/state/deep-links';
 import { usePushLifecycle } from '../src/state/push';
@@ -27,11 +27,8 @@ function Navigation() {
         statusBarStyle: 'dark',
         headerStyle: { backgroundColor: c.ground },
         headerTintColor: c.ink,
-        headerTitleStyle: {
-          color: c.ink,
-          fontFamily: fonts.sans,
-          fontWeight: weights.heading,
-        },
+        // Navigation bars keep the system font and title weight.
+        headerTitleStyle: { color: c.ink },
         headerShadowVisible: false,
         headerBackButtonDisplayMode: 'minimal',
       }}
