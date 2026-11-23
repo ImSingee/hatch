@@ -63,19 +63,16 @@
   color: var(--mantine-color-gray-7);
 }
 
-.search:focus-within {
-  border-color: var(--mantine-color-primary-6);
+.search:hover {
+  border-color: var(--mantine-color-gray-4);
 }
 
-.search input {
+.searchLabel {
   flex: 1;
   min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--mantine-color-text);
-  font: inherit;
+  color: var(--mantine-color-dimmed);
   font-size: 13px;
+  text-align: left;
 }
 
 .kbd {

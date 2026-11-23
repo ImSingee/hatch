@@ -17,7 +17,9 @@ The web UI draws the sidebar layout (the `Mac-App` artboard) instead of the
 desk's menu bar and dock when the user agent contains `HatchDesktop/<version>`,
 which this app sends. Menu commands reach the page as a
 `hatch:desktop-command` event (`src/components/desktop-host/host.ts`). Nothing
-here re-implements a page.
+here re-implements a page: the sidebar's search and `⌘K` open the desk's own
+search palette, and pages use the desk's windows, framed flat by the
+`WindowFrame` context.
 
 ## Sign-in and the session
 
