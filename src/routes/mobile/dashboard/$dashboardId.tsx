@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute, redirect, useLocation } from '@tanstack/react-router';
 import { MobileDashboardCanvas } from '~components/dashboard/mobile-dashboard-canvas';
 import { hasActiveSession } from '~server/auth';
 import { useNativeHostDocument } from '~ui/theme';
@@ -13,7 +13,15 @@ export const Route = createFileRoute('/mobile/dashboard/$dashboardId')({
 
 function MobileDashboard() {
   const { dashboardId } = Route.useParams();
+  // `#peek`: the home screen's box, which shows only whole widgets.
+  const peek = useLocation({ select: (location) => location.hash === 'peek' });
   // The native app draws the ground behind this page; see native-host.ts.
   useNativeHostDocument();
-  return <MobileDashboardCanvas key={dashboardId} dashboardId={dashboardId} />;
+  return (
+    <MobileDashboardCanvas
+      key={dashboardId}
+      dashboardId={dashboardId}
+      peek={peek}
+    />
+  );
 }

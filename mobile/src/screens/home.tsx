@@ -35,6 +35,8 @@ import {
 
 const TILE = sizes.deskTile;
 const GUTTER = 20;
+/** Three 80 px widget rows, their two gaps and the canvas padding. */
+const PEEK_HEIGHT = 300;
 
 function greeting(hour: number) {
   return hour < 5
@@ -59,8 +61,8 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const { fontScale } = useWindowDimensions();
   const queryClient = useQueryClient();
   const lifetime = useLifetimeSignal();
-  const board = useDashboards(focused);
-  const { onLayout, onFolds, split, width } = useFoldSplit({
+  const board = useDashboards(focused, { peek: true });
+  const { onLayout, onFolds, split } = useFoldSplit({
     minColumn: 320,
     gap: GUTTER,
   });
@@ -123,10 +125,10 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     day: 'numeric',
     month: 'long',
   });
-  const column = split ? split.leading : width;
   const sheetHeight = split
     ? Math.max(280, height - 210)
-    : Math.min(300, Math.max(210, column * 0.62));
+    : // Room for a widget three rows tall, the canvas's common size.
+      PEEK_HEIGHT;
   // Large text needs wider tiles for their one-line labels.
   const tile = { minTile: fontScale > 1.3 ? 104 : 76, gap: 8 };
 

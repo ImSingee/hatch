@@ -1,15 +1,56 @@
 import { Box, Button, Center, Loader, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { dashboardQueryOptions } from '~queries/dashboards';
 import { DashboardGrid } from './dashboard-grid';
+
+/**
+ * In a peek the native home screen shows this page in a box of its own
+ * height: only the widgets that fit whole are shown and the page does not
+ * scroll, so no widget is cut by the box's edge. The first widget always
+ * shows. The full page lists every widget.
+ */
+function usePeek(enabled: boolean) {
+  // The canvas mounts only once its dashboard has loaded.
+  const [main, setMain] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!enabled || !main) return;
+    const root = document.documentElement;
+    root.style.overflow = 'hidden';
+    const fit = () => {
+      const limit = window.innerHeight;
+      const cells = main.querySelectorAll<HTMLElement>('[data-widget-cell]');
+      cells.forEach((cell, index) => {
+        const bottom = cell.getBoundingClientRect().bottom;
+        cell.style.visibility = index === 0 || bottom <= limit ? '' : 'hidden';
+      });
+    };
+    fit();
+    // Widgets settle their size after mounting; refit whenever they do.
+    const observer = new ResizeObserver(fit);
+    observer.observe(main);
+    const mutations = new MutationObserver(fit);
+    mutations.observe(main, { childList: true, subtree: true });
+    window.addEventListener('resize', fit);
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      window.removeEventListener('resize', fit);
+      root.style.overflow = '';
+    };
+  }, [enabled, main]);
+  return setMain;
+}
 
 /** Reuse the real widget runtime without exposing layout editing or navigation. */
 export function MobileDashboardCanvas({
   dashboardId,
+  peek = false,
 }: {
   dashboardId: string;
+  peek?: boolean;
 }) {
+  const peekRef = usePeek(peek);
   const data = useQuery(dashboardQueryOptions(dashboardId));
   const [refreshSignal, setRefreshSignal] = useState(0);
   const refetch = data.refetch;
@@ -52,7 +93,7 @@ export function MobileDashboardCanvas({
     );
 
   return (
-    <Box p="sm" component="main" aria-label="Dashboard canvas">
+    <Box ref={peekRef} p="sm" component="main" aria-label="Dashboard canvas">
       {data.data.widgets.length === 0 ? (
         <Stack align="center" justify="center" p="xl" mih="60dvh" gap="sm">
           <Text size="xl" fw={700}>

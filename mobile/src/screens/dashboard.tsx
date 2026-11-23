@@ -27,10 +27,13 @@ import { palette as c, pill, radii, shadows } from '../ui/theme';
 
 /**
  * The dashboards of the instance and the one on show. Widgets are web
- * content: a dashboard is one web canvas, shown in a sheet on the home screen
- * and at full height on the Widgets page.
+ * content: a dashboard is one web canvas, peeked at on the home screen and
+ * shown at full height on the Widgets page.
  */
-export function useDashboards(focused: boolean) {
+export function useDashboards(
+  focused: boolean,
+  { peek = false }: { peek?: boolean } = {},
+) {
   const { api, origin, epoch } = useSession();
   const queryClient = useQueryClient();
   const lifetime = useLifetimeSignal();
@@ -64,7 +67,13 @@ export function useDashboards(focused: boolean) {
   let destination: BrowserDestination | null = null;
   let invalid: unknown = null;
   try {
-    destination = current ? dashboardDestination(current.id) : null;
+    // In a peek the canvas shows only the widgets that fit its box whole.
+    destination = current
+      ? {
+          ...dashboardDestination(current.id),
+          ...(peek ? { hash: 'peek' } : {}),
+        }
+      : null;
   } catch (error) {
     invalid = error;
   }
