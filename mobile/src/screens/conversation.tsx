@@ -317,10 +317,9 @@ function ConversationBody({
   );
   const pendingMessages = detail?.pending?.messages;
   useEffect(() => {
-    for (const message of pendingMessages ?? []) {
-      if (message.images.length)
-        steerImagesRef.current.set(message.id, message.images);
-    }
+    // Always overwrite: an edit can remove every image.
+    for (const message of pendingMessages ?? [])
+      steerImagesRef.current.set(message.id, message.images);
   }, [pendingMessages]);
   const steerImages = useCallback(
     (pendingId: string) => steerImagesRef.current.get(pendingId) ?? [],
