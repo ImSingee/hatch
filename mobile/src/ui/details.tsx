@@ -4,7 +4,7 @@ import { Glyph } from './glyph';
 import type { DetailProps } from './native-controls.types';
 import { Text, type } from './text';
 import { useAccent } from './accent';
-import { palette as c, pill, radii, status as hue } from './theme';
+import { palette as c, pill, radii, status as hue, weights } from './theme';
 
 /** Collapsed tool, request and reasoning detail. Expands into a mono slip. */
 export function Details({
@@ -65,7 +65,13 @@ export function Details({
             backgroundColor: dot,
           }}
         />
-        <Text style={[type.small, { flex: 1, color: c.ink }]} numberOfLines={2}>
+        <Text
+          style={[
+            type.small,
+            { flex: 1, color: c.ink, fontWeight: weights.label },
+          ]}
+          numberOfLines={2}
+        >
           {title}
         </Text>
         <View style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>

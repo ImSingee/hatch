@@ -40,6 +40,13 @@ function usePeek(enabled: boolean) {
       mutations.disconnect();
       window.removeEventListener('resize', fit);
       root.style.overflow = '';
+      // Leaving the peek shows every widget again.
+      main
+        .querySelectorAll<HTMLElement>('[data-widget-cell]')
+        .forEach((cell) => {
+          cell.style.opacity = '';
+          cell.inert = false;
+        });
     };
   }, [enabled, main]);
   return setMain;

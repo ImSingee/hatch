@@ -189,6 +189,7 @@ export function ListRow({
   trailing,
   mark,
   onPress,
+  disabled = false,
   accessibilityLabel,
   accessibilityHint,
 }: {
@@ -199,6 +200,7 @@ export function ListRow({
   /** A small glyph after the title, e.g. the pin of a pinned App. */
   mark?: { glyph: GlyphName; label: string };
   onPress: () => void;
+  disabled?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
 }) {
@@ -210,6 +212,8 @@ export function ListRow({
         [title, mark?.label, detail].filter(Boolean).join(', ')
       }
       accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         rowStyles.row,

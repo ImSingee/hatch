@@ -76,6 +76,18 @@ export default function PinPicker() {
               tone="danger"
               title={pin.error ? `Couldn’t pin this ${noun}` : 'Couldn’t load'}
               detail={errorText(failure)}
+              // A failed pin is retried by choosing the row again.
+              action={
+                pin.error
+                  ? undefined
+                  : {
+                      label: 'Try again',
+                      onPress: () => {
+                        void items.refetch();
+                        void pinned.refetch();
+                      },
+                    }
+              }
             />
           ) : null}
           {items.isPending || pinned.isPending ? (
@@ -97,6 +109,7 @@ export default function PinPicker() {
                       size={sizes.dockTile}
                     />
                   }
+                  disabled={pin.isPending}
                   onPress={() => {
                     if (!pin.isPending) pin.mutate(item);
                   }}

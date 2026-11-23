@@ -45,7 +45,7 @@ export function ScopeTabs<T extends string>({
             hitSlop={{ top: 5, bottom: 5 }}
             style={{
               flex: 1,
-              minHeight: 34,
+              minHeight: 44,
               paddingHorizontal: 8,
               flexDirection: 'row',
               alignItems: 'center',

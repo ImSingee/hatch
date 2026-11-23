@@ -202,7 +202,15 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
             tone="danger"
             title={unpin.error ? 'Couldn’t unpin' : 'Couldn’t load your pins'}
             detail={errorText(failure)}
-            action={{ label: 'Try again', onPress: pull.onRefresh }}
+            action={
+              // A failed unpin retries that removal; a failed load re-reads.
+              unpin.error && unpin.variables
+                ? {
+                    label: 'Try again',
+                    onPress: () => unpin.mutate(unpin.variables!),
+                  }
+                : { label: 'Try again', onPress: pull.onRefresh }
+            }
           />
         </View>
       ) : null}
