@@ -393,21 +393,30 @@ fn on_url_change(app: &AppHandle, raw: &str) {
     }
 }
 
+/// Signs out: everything local happens at once, before any await, so a
+/// session action the person takes while the instance answers is never
+/// undone (its cookies cleared, its new token removed). Ending the session
+/// on the instance follows in the background.
 async fn sign_out(app: AppHandle) {
     // Also abandons a browser sign-in still waiting for approval, which would
     // otherwise sign the app back in.
-    let flow = Flow::begin(&app);
+    Flow::begin(&app);
     let Some(origin) = instance_origin(&app) else {
         return;
     };
+    let token = keychain::get(&origin).ok().flatten();
+    let _ = keychain::remove(&origin);
+    if let Some(window) = main_window(&app) {
+        let _ = window.clear_all_browsing_data();
+    }
     set_screen(
         &app,
-        Screen::Working {
-            instance: Some(origin.clone()),
-            message: "Signing out…".into(),
+        Screen::SignIn {
+            instance: origin.clone(),
+            error: None,
         },
     );
-    if let Ok(Some(token)) = keychain::get(&origin) {
+    if let Some(token) = token {
         let http = shared(&app).http.clone();
         if let Err(error) = (Instance {
             http: &http,
@@ -418,19 +427,6 @@ async fn sign_out(app: AppHandle) {
         {
             eprintln!("hatch: {}", error.message());
         }
-    }
-    let _ = keychain::remove(&origin);
-    if let Some(window) = main_window(&app) {
-        let _ = window.clear_all_browsing_data();
-    }
-    if flow.current(&app) {
-        set_screen(
-            &app,
-            Screen::SignIn {
-                instance: origin,
-                error: None,
-            },
-        );
     }
 }
 
