@@ -195,4 +195,13 @@ describe('persistedWorkPhase', () => {
       persistedWorkPhase({ ...completedRun, status: 'failed' }, 'length'),
     ).toBe('failed');
   });
+
+  it('shows an interrupted run as failed even when its reply was aborted', () => {
+    expect(
+      persistedWorkPhase({ ...completedRun, status: 'interrupted' }, 'aborted'),
+    ).toBe('failed');
+    expect(
+      persistedWorkPhase({ ...completedRun, status: 'cancelled' }, 'aborted'),
+    ).toBe('cancelled');
+  });
 });

@@ -201,43 +201,57 @@
   overflow-wrap: anywhere;
 }
 
-/* ---------- work process (the frame around a reply's process) ---------- */
+/* ---------- work process (the line over a reply's process) ---------- */
 
+/* Not a message: no fill, border or bubble radius. The mark hangs in a
+   gutter as wide as the reply bubble's inline padding, so the words line up
+   with the reply's text below, and the expanded steps hang off a hairline
+   rail drawn through the mark's centre. */
 .work {
+  --work-gutter: 14px;
+  --work-mark: 12px;
+  --work-rail: calc(var(--work-mark) / 2);
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.workHeader {
-  display: inline-flex;
+.workLine {
+  display: flex;
   align-items: center;
-  gap: 8px;
   align-self: flex-start;
   max-width: 100%;
   min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--surface-bubble);
-  font-size: var(--mantine-font-size-xs);
-  color: var(--mantine-color-gray-7);
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-dimmed);
   text-align: left;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
+  transition: color var(--transition-fast);
 }
 
-button.workHeader:hover {
-  background-color: var(--mantine-color-gray-2);
+button.workLine {
+  border-radius: var(--mantine-radius-sm);
+}
+
+button.workLine:hover {
   color: var(--mantine-color-text);
 }
 
-.workIcon {
+.workMark {
+  flex: 0 0 var(--work-mark);
+  margin-right: calc(var(--work-gutter) - var(--work-mark));
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 }
 
-.workLabel {
+.workText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workLead {
   font-weight: var(--font-weight-label);
 }
 
@@ -245,28 +259,104 @@ button.workHeader:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.workNote {
-  white-space: nowrap;
-}
-
 .workChevron {
   flex-shrink: 0;
-  transition: transform 150ms ease;
+  margin-left: 4px;
+  transition: transform var(--transition-fast);
 }
 
-.workChevronOpen {
-  composes: workChevron;
+button.workLine[aria-expanded='true'] .workChevron {
   transform: rotate(90deg);
+}
+
+/* How a reply ended is said in words; the mark and the lead word only
+   repeat it in colour. */
+.work[data-phase='failed'] .workMark,
+.work[data-phase='failed'] .workLead {
+  color: var(--mantine-color-red-7);
+}
+
+.work[data-phase='incomplete'] .workMark,
+.work[data-phase='incomplete'] .workLead {
+  color: var(--mantine-color-yellow-8);
+}
+
+.work[data-phase='cancelled'] .workMark {
+  color: var(--mantine-color-dimmed);
+}
+
+/* The running marker: an accent dot with a slow ring that fades out. */
+.workLive {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mantine-primary-color-filled);
+}
+
+.workLive::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--mantine-primary-color-filled);
+  animation: workLivePulse 1.6s var(--ease-out-quart) infinite;
+}
+
+@keyframes workLivePulse {
+  from {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workLive::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .workBody {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  margin: 8px 0 4px 14px;
-  padding-left: 12px;
-  border-left: 2px solid var(--mantine-color-default-border);
+  margin: 2px 0 6px calc(var(--work-rail) - 0.5px);
+  padding-left: calc(var(--work-gutter) - var(--work-rail) - 0.5px);
+  border-left: 1px solid var(--border-hairline);
+}
+
+/* Steps keep their own hover row; pull it back so each step's icon sits on
+   the reply's text column, under the line's words. */
+.workBody .steps {
+  margin-left: -6px;
+}
+
+.workBody .stepHeader {
+  padding-inline: 6px;
+}
+
+/* Prose said along the way reads as a note on the rail, not a bubble. */
+.workBody > .markdown {
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-text);
+}
+
+/* The wait between steps, in the same shape as a step row. */
+.workWaiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  color: var(--mantine-color-dimmed);
 }
 
 /* ---------- agent process steps (thinking / tool calls + results) ---------- */
@@ -350,9 +440,9 @@ button.stepHeader:hover {
 
 .stepBody {
   min-width: 0;
-  margin: 2px 0 6px 15px;
-  padding: 2px 0 2px 12px;
-  border-left: 2px solid var(--mantine-color-default-border);
+  margin: 2px 0 6px 14px;
+  padding: 2px 0 2px 13px;
+  border-left: 1px solid var(--border-hairline);
 }
 
 .stepBodySection {

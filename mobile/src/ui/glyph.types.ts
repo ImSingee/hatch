@@ -24,6 +24,7 @@ export const glyphs = {
   down: 'arrow.down',
   browser: 'safari',
   warning: 'exclamationmark.triangle',
+  alert: 'exclamationmark.circle',
   check: 'checkmark',
   file: 'doc',
   photo: 'photo',

@@ -45,7 +45,7 @@ later.
 | Dock panel      | `surfaces.dock`             | white 82%    | The dock and the tab bar, which sit over the ground shapes |
 | Widget panel    | `surfaces.widget`           | white 80%    | Desk widget panels and the desk's own panels on the ground |
 | Window body     | `surfaces.window`           | `#FAF9F6`    | The pale body of a window that grouped cards sit on        |
-| Bubble          | `surfaces.bubble`           | `#F3F2EE`    | The Agent's chat bubble and the work pill                  |
+| Bubble          | `surfaces.bubble`           | `#F3F2EE`    | The Agent's chat bubble                                    |
 | Composer border | `surfaces.composerBorder`   | `#DEDBD3`    | The 1.5 px outline of the Agent composer                   |
 | Hairline        | `surfaces.hairline`         | ink 14%      | Dividers and outlines; reads on ground and sheet           |
 | Field border    | `light.input`               | `#D5D1C8`    | Border of a field                                          |
@@ -349,6 +349,30 @@ pager with page dots and "All widgets".
 - At most one primary button and one subtle button.
 - Inside a list or table the empty state shrinks to one muted line of 12–14
   text in place of the rows.
+
+### Agent work line
+
+The Agent's process for one reply (reasoning, tool calls, prose said along
+the way) sits above its answer as one line, not as a message. It has no
+fill, border or bubble radius.
+
+- Line: min height 28, Body 14 in muted ink, then a chevron 14 that turns
+  90° when open. A 12 mark sits in a 14 gutter, so the words line up with the
+  text inside the reply bubble below. Hover turns the line to ink.
+- Words: the lead word in 700, then the time, then one detail after `·`.
+  Running: "Working for 42s · Build the App", the detail being the current
+  step ("Thinking", "Writing", "Waiting for you" or the tool's label). Ended:
+  "Worked for 1m 12s · 6 steps", where steps count tool calls and context
+  compactions. "Failed after", "Stopped after" and "Ended early after" name
+  the other ends. Without a known time the line is the lead word and detail.
+- Mark: running is the running marker, a 7 dot in the accent with a ring that
+  fades out over 1.6 s (still under reduced motion). Failed: alert triangle,
+  red shade 7, which also colours the lead word. Ended early: alert circle,
+  amber shade 8, likewise. Stopped: a filled stop square in muted ink.
+  Worked: no mark.
+- Open: the steps hang off a 1 px hairline rail through the mark's centre;
+  step icons sit on the text column. A finished reply folds; a running,
+  failed, stopped or ended-early one stays open.
 
 ### Menu, popover, tooltip
 

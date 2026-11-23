@@ -15,7 +15,6 @@ export type AttachmentMenuProps = {
   disabled: boolean;
   onChoose: (kind: 'photo' | 'file') => void;
 };
-export type DetailProps = { title: string; text?: string; error?: boolean };
 export type RefreshMenuProps = {
   /** What a refresh refreshes, e.g. "Refresh dashboard". */
   label: string;

@@ -1,5 +1,5 @@
 /** Live assistant turn: streams blocks in arrival order plus pending asks. */
-import { Box, Group, Loader, Text } from '@mantine/core';
+import { Box, Loader, Text } from '@mantine/core';
 import { Fragment, type ReactNode } from 'react';
 import type { AskAnswer } from '~agent/events';
 import {
@@ -17,6 +17,7 @@ import {
   StreamingThinkingStep,
   StreamingToolStep,
 } from './steps';
+import { toolDisplayLabel } from './types';
 import type {
   SendImage,
   StreamBlock,
@@ -28,6 +29,11 @@ import classes from './chat.module.css';
 
 function streamText(block: StreamBlock): string | undefined {
   return block.kind === 'text' ? block.text : undefined;
+}
+
+/** A step the work line counts (see `WorkSummary`). */
+function isStreamStep(block: StreamBlock): boolean {
+  return block.kind === 'tool' || block.kind === 'compact';
 }
 
 export function StreamingBubble({
@@ -159,13 +165,31 @@ export function StreamingBubble({
     !anyToolRunning &&
     !anyCompactRunning;
   const workingIndicator = working ? (
-    <Group gap={8} c="dimmed">
-      <Loader size="xs" type="dots" />
-      <Text size="sm" c="dimmed">
-        Thinking…
-      </Text>
-    </Group>
+    <Box className={classes.workWaiting}>
+      <Loader size={11} color="gray" />
+      <span>Thinking…</span>
+    </Box>
   ) : null;
+
+  // What the running reply is doing now, for its work line. The newest
+  // unfinished step wins; a wait for the user names the user.
+  const runningTool = state.blocks
+    .flatMap((b) => (b.kind === 'tool' && !b.tool.done ? [b.tool] : []))
+    .at(-1);
+  const currentStep =
+    ask || envRequest
+      ? 'Waiting for you'
+      : runningTool
+        ? toolDisplayLabel(
+            runningTool.name,
+            runningTool.args,
+            runningTool.label,
+          )
+        : anyCompactRunning
+          ? 'Compacting context'
+          : state.textActive && !thinkingVisible
+            ? 'Writing'
+            : 'Thinking';
 
   // Each steered message is a message of its own: the work before it is
   // finished and framed apart, and the reply goes on after it.
@@ -244,6 +268,12 @@ export function StreamingBubble({
                   <WorkProcess
                     frame={frame}
                     hasProcess={process.length > 0 || indicator !== null}
+                    summary={{
+                      steps: state.blocks
+                        .slice(segment.start, segment.end)
+                        .filter(isStreamStep).length,
+                      ...(last ? { current: currentStep } : {}),
+                    }}
                   >
                     {process}
                     {indicator}

@@ -1,11 +1,16 @@
 /**
- * The collapsible "Working / Worked" frame around an Agent reply's process:
+ * The collapsible "Working / Worked" line over an Agent reply's process:
  * reasoning, tool calls and intermediate prose. Shared by the live stream and
  * the persisted transcript so a reply keeps one shape from start to history.
  */
-import { Box, Collapse, Loader, UnstyledButton } from '@mantine/core';
+import { Box, Collapse, UnstyledButton } from '@mantine/core';
 import { useReducedMotion } from '@mantine/hooks';
-import { IconChevronRight } from '@tabler/icons-react';
+import {
+  IconAlertCircle,
+  IconAlertTriangle,
+  IconChevronRight,
+  IconPlayerStopFilled,
+} from '@tabler/icons-react';
 import {
   createContext,
   type ReactNode,
@@ -74,12 +79,34 @@ function useServerNow(anchor: number | null): number {
   return now;
 }
 
+/** What the work line says about the process inside it. */
+export type WorkSummary = {
+  /** Tool calls and context compactions inside the process. */
+  steps: number;
+  /** What a running reply is doing now, such as a tool's label. */
+  current?: string;
+};
+
+/**
+ * The words that open the line: what happened, then how long it took. A
+ * running reply counts up; an ended one says how it ended.
+ */
+const PHASE_WORDS: Record<WorkPhase, { lead: string; span: string }> = {
+  running: { lead: 'Working', span: 'for' },
+  completed: { lead: 'Worked', span: 'for' },
+  failed: { lead: 'Failed', span: 'after' },
+  cancelled: { lead: 'Stopped', span: 'after' },
+  incomplete: { lead: 'Ended early', span: 'after' },
+};
+
 function WorkDuration({
   timing,
   running,
+  span,
 }: {
   timing: WorkTiming;
   running: boolean;
+  span: string;
 }) {
   const ticking = running && timing !== null && timing.endedAt === undefined;
   const now = useServerNow(ticking ? timing.startedAt : null);
@@ -87,80 +114,112 @@ function WorkDuration({
   const end = timing.endedAt ?? (ticking ? now : undefined);
   if (end === undefined) return null;
   return (
-    <span className={classes.workDuration}>
-      {formatElapsed(end - timing.startedAt)}
-    </span>
+    <>
+      {` ${span} `}
+      <span className={classes.workDuration}>
+        {formatElapsed(end - timing.startedAt)}
+      </span>
+    </>
   );
 }
 
-const ENDED_NOTE: Partial<Record<WorkPhase, string>> = {
-  failed: 'Failed',
-  cancelled: 'Stopped',
-  incomplete: 'Ended early',
-};
+/** The mark before the words: a live dot while working, else how it ended. */
+function WorkMark({ phase }: { phase: WorkPhase }) {
+  switch (phase) {
+    case 'running':
+      return <span className={classes.workLive} />;
+    case 'failed':
+      return <IconAlertTriangle size={12} stroke={2} />;
+    case 'cancelled':
+      return <IconPlayerStopFilled size={10} />;
+    case 'incomplete':
+      return <IconAlertCircle size={12} stroke={2} />;
+    case 'completed':
+      return null;
+  }
+}
 
+function stepCountLabel(steps: number): string {
+  return steps === 1 ? '1 step' : `${steps} steps`;
+}
+
+/**
+ * A reply's process as one quiet line in the Agent's column: no surface of
+ * its own, so it reads as part of the turn rather than another message.
+ * Expanded, the steps hang off a hairline rail under the line's mark.
+ */
 export function WorkProcess({
   frame,
   hasProcess,
+  summary,
   children,
 }: {
   frame: WorkFrame;
-  /** False when nothing precedes the final answer; the header is then static. */
+  /** False when nothing precedes the final answer; the line is then static. */
   hasProcess: boolean;
+  summary: WorkSummary;
   children?: ReactNode;
 }) {
   const bodyId = useId();
   const reduceMotion = useReducedMotion();
   const running = frame.phase === 'running';
-  const note = ENDED_NOTE[frame.phase];
+  const words = PHASE_WORDS[frame.phase];
   // A finished reply with nothing before its answer and no known duration
   // (legacy history) has nothing to show here.
   if (!hasProcess && frame.timing === null && frame.phase === 'completed') {
     return null;
   }
+  // A running line names its current step; an ended one counts its steps.
+  const detail = running
+    ? summary.current
+    : summary.steps > 0
+      ? stepCountLabel(summary.steps)
+      : undefined;
   // Spaces between the parts keep the copied text and accessible name
-  // readable; the flex layout ignores them visually.
-  const header = (
+  // readable ("Worked for 1m 12s · 6 steps").
+  const line = (
     <>
-      {running ? (
-        <span className={classes.workIcon}>
-          <Loader size={11} color="gray" />
-        </span>
-      ) : null}
-      <span className={classes.workLabel}>
-        {running ? 'Working' : 'Worked'}
-      </span>{' '}
-      <WorkDuration timing={frame.timing} running={running} />
-      {note ? (
-        <>
-          {' '}
-          <span className={classes.workNote}>· {note}</span>
-        </>
-      ) : null}
+      <span className={classes.workMark} aria-hidden>
+        <WorkMark phase={frame.phase} />
+      </span>
+      <span className={classes.workText}>
+        <span className={classes.workLead}>{words.lead}</span>
+        <WorkDuration
+          timing={frame.timing}
+          running={running}
+          span={words.span}
+        />
+        {detail ? (
+          <>
+            {' '}
+            <span className={classes.workDetail}>· {detail}</span>
+          </>
+        ) : null}
+      </span>
       {hasProcess ? (
         <IconChevronRight
           size={14}
-          className={
-            frame.expanded ? classes.workChevronOpen : classes.workChevron
-          }
+          stroke={2}
+          aria-hidden
+          className={classes.workChevron}
         />
       ) : null}
     </>
   );
 
   return (
-    <Box className={classes.work}>
+    <Box className={classes.work} data-phase={frame.phase}>
       {hasProcess ? (
         <UnstyledButton
-          className={classes.workHeader}
+          className={classes.workLine}
           aria-expanded={frame.expanded}
           aria-controls={bodyId}
           onClick={frame.onToggle}
         >
-          {header}
+          {line}
         </UnstyledButton>
       ) : (
-        <Box className={classes.workHeader}>{header}</Box>
+        <Box className={classes.workLine}>{line}</Box>
       )}
       {hasProcess ? (
         <Collapse

@@ -89,7 +89,7 @@ vi.mock('~queries/workflows', () => ({
   },
 }));
 
-const WORK_HEADER = /^Work(ing|ed)\b/;
+const WORK_HEADER = /^(Working|Worked|Failed|Stopped|Ended early)\b/;
 
 function iso(ms: number): string {
   return new Date(ms).toISOString();
@@ -286,7 +286,9 @@ test('keeps a running reply open through every phase and folds its process once 
   const { screen, queryClient } = await renderChat();
 
   const header = screen.getByRole('button', { name: WORK_HEADER });
-  await expect.element(header).toHaveAccessibleName(/^Working \d+s$/);
+  await expect
+    .element(header)
+    .toHaveAccessibleName(/^Working for \d+s · Thinking$/);
   await expect.element(header).toHaveAttribute('aria-expanded', 'true');
   await expect
     .element(screen.getByText('Thinking…', { exact: true }))
@@ -367,7 +369,9 @@ test('keeps a running reply open through every phase and folds its process once 
   stream.emit({ type: 'done' });
 
   // Settled live turn: process folded once, final answer outside, no blank.
-  await expect.element(header).toHaveAccessibleName(/^Worked \d+s$/);
+  await expect
+    .element(header)
+    .toHaveAccessibleName(/^Worked for \d+s · 1 step$/);
   await expect.element(header).toHaveAttribute('aria-expanded', 'false');
   await expect
     .element(screen.getByText('Your tracker is ready.'))
@@ -382,7 +386,9 @@ test('keeps a running reply open through every phase and folds its process once 
   // History replaces it with the server-measured duration and no duplicate.
   fixtures.sessionGate = null;
   refetch.resolve();
-  await expect.element(header).toHaveAccessibleName('Worked 1m 20s');
+  await expect
+    .element(header)
+    .toHaveAccessibleName('Worked for 1m 20s · 1 step');
   await expect.element(header).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByText('Your tracker is ready.').all()).toHaveLength(1);
   await expect
@@ -404,7 +410,7 @@ test('keeps a running reply open through every phase and folds its process once 
   await screen.unmount();
   const revisit = await renderChat();
   const revisitedHeader = revisit.screen.getByRole('button', {
-    name: 'Worked 1m 20s',
+    name: 'Worked for 1m 20s · 1 step',
   });
   await expect
     .element(revisitedHeader)
@@ -528,7 +534,9 @@ test('shows history with run-bound defaults and keeps essential actions outside'
   );
   const { screen } = await renderChat();
 
-  const deployed = screen.getByRole('button', { name: 'Worked 1m 20s' });
+  const deployed = screen.getByRole('button', {
+    name: 'Worked for 1m 20s · 1 step',
+  });
   await expect.element(deployed).toHaveAttribute('aria-expanded', 'false');
   await expect.element(screen.getByText('The tracker is live.')).toBeVisible();
   await expect.element(screen.getByText('Deploying it now.')).not.toBeVisible();
@@ -551,18 +559,20 @@ test('shows history with run-bound defaults and keeps essential actions outside'
     'Pong.',
   );
 
-  await expect.element(screen.getByText('Worked 2s')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Worked 2s' }).query()).toBeNull();
+  await expect.element(screen.getByText('Worked for 2s')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Worked for 2s' }).query(),
+  ).toBeNull();
   await expect.element(screen.getByText('Hi there.')).toBeVisible();
 
-  const listed = screen.getByRole('button', { name: 'Worked 3s' });
+  const listed = screen.getByRole('button', { name: 'Worked for 3s · 1 step' });
   await expect.element(listed).toHaveAttribute('aria-expanded', 'false');
   await expect.element(screen.getByText('List apps')).not.toBeVisible();
 
-  await expect.element(screen.getByText('Worked 4s · Failed')).toBeVisible();
+  await expect.element(screen.getByText('Failed after 4s')).toBeVisible();
   await expect.element(screen.getByText(interruption)).toBeVisible();
 
-  const failed = screen.getByRole('button', { name: 'Worked 5s · Failed' });
+  const failed = screen.getByRole('button', { name: 'Failed after 5s' });
   await expect.element(failed).toHaveAttribute('aria-expanded', 'true');
   const reasoning = screen.getByRole('button', { name: 'Thinking' });
   await expect.element(reasoning).toBeVisible();
@@ -604,12 +614,12 @@ test('counts a live run from the server start and freezes it when the run fails'
   const { screen } = await renderChat();
 
   const header = screen.getByRole('button', { name: WORK_HEADER });
-  await expect.element(header).toHaveAccessibleName(/^Working 1m [56]s$/);
+  await expect.element(header).toHaveAccessibleName(/^Working for 1m [56]s · /);
   const first = header.element().textContent;
   await vi.waitFor(() => expect(header.element().textContent).not.toBe(first), {
     timeout: 2_500,
   });
-  await expect.element(header).toHaveAccessibleName(/^Working 1m [67]s$/);
+  await expect.element(header).toHaveAccessibleName(/^Working for 1m [67]s · /);
 
   // Human input stays reachable while the process is folded.
   stream.emit({ type: 'thinking', delta: 'Checking the GitHub scopes.' });
@@ -640,9 +650,7 @@ test('counts a live run from the server start and freezes it when the run fails'
   await expect
     .element(screen.getByRole('alert'))
     .toMatchTextContent('Provider unavailable');
-  await expect
-    .element(header)
-    .toHaveAccessibleName(/^Worked 1m \d+s · Failed$/);
+  await expect.element(header).toHaveAccessibleName(/^Failed after 1m \d+s$/);
   await expect.element(header).toHaveAttribute('aria-expanded', 'true');
   const frozen = header.element().textContent;
   await new Promise((resolve) => setTimeout(resolve, 1_200));
@@ -759,7 +767,7 @@ test('keeps an interrupted turn and its notice when its transcript never arrives
     .element(screen.getByRole('button', { name: 'Retry now' }))
     .toBeVisible();
   await expect
-    .element(screen.getByRole('button', { name: 'Worked 3s · Failed' }))
+    .element(screen.getByRole('button', { name: 'Failed after 3s' }))
     .toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByText(interruption).all()).toHaveLength(1);
   expect(toast.error).not.toHaveBeenCalled();
@@ -809,7 +817,7 @@ test('keeps an interrupted turn and its notice when its transcript never arrives
   await screen.unmount();
   const revisit = await renderChat();
   await expect
-    .element(revisit.screen.getByText('Worked 3s · Failed'))
+    .element(revisit.screen.getByText('Failed after 3s'))
     .toBeVisible();
   await expect
     .element(revisit.screen.getByRole('note'))
@@ -831,7 +839,7 @@ test('hands a failed run that showed nothing to its history notice', async () =>
 
   await expect.element(screen.getByRole('note')).toMatchTextContent(rejected);
   await expect.element(screen.getByRole('alert')).not.toBeInTheDocument();
-  await expect.element(screen.getByText('Worked 3s · Failed')).toBeVisible();
+  await expect.element(screen.getByText('Failed after 3s')).toBeVisible();
   expect(toast.error).not.toHaveBeenCalled();
 });
 
@@ -860,7 +868,7 @@ test('folds earlier assistant messages even while history is unavailable', async
   stream.emit({ type: 'done' });
 
   const header = screen.getByRole('button', { name: WORK_HEADER });
-  await expect.element(header).toHaveAccessibleName(/^Worked \d+s$/);
+  await expect.element(header).toHaveAccessibleName(/^Worked for \d+s/);
   await expect.element(header).toHaveAttribute('aria-expanded', 'false');
   await expect.element(screen.getByText('Final answer.')).toBeVisible();
   await expect
@@ -897,7 +905,7 @@ test('freezes a stopped run until its partial reply is persisted', async () => {
 
   await screen.getByRole('button', { name: 'Stop' }).click();
   const header = screen.getByRole('button', { name: WORK_HEADER });
-  await expect.element(header).toHaveAccessibleName(/^Worked \d+s · Stopped$/);
+  await expect.element(header).toHaveAccessibleName(/^Stopped after \d+s$/);
   await expect.element(header).toHaveAttribute('aria-expanded', 'true');
   await expect
     .element(screen.getByText('Drafting the introduction.'))
@@ -928,7 +936,7 @@ test('freezes a stopped run until its partial reply is persisted', async () => {
   });
   cancel.resolve();
 
-  await expect.element(header).toHaveAccessibleName('Worked 6s · Stopped');
+  await expect.element(header).toHaveAccessibleName('Stopped after 6s');
   await expect.element(header).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByText('Drafting the introduction.').all()).toHaveLength(1);
   await expect
@@ -972,7 +980,7 @@ test('keeps a remotely stopped turn until its late partial transcript arrives', 
 
   const header = screen.getByRole('button', { name: WORK_HEADER });
   // The canonical end is used once history knows it.
-  await expect.element(header).toHaveAccessibleName('Worked 6s · Stopped');
+  await expect.element(header).toHaveAccessibleName('Stopped after 6s');
   await new Promise((resolve) => setTimeout(resolve, 300));
   await expect
     .element(screen.getByText('Drafting the introduction.'))
@@ -1002,7 +1010,7 @@ test('keeps a remotely stopped turn until its late partial transcript arrives', 
     .element(screen.getByText('Drafting the introduction.'))
     .toBeVisible();
   expect(screen.getByText('Drafting the introduction.').all()).toHaveLength(1);
-  await expect.element(header).toHaveAccessibleName('Worked 6s · Stopped');
+  await expect.element(header).toHaveAccessibleName('Stopped after 6s');
   await expect.element(header).toHaveAttribute('aria-expanded', 'true');
 });
 
@@ -1302,15 +1310,15 @@ test('retries a failed turn without resurrecting its superseded failure', async 
 
   // Only the replacement run speaks for the retried turn.
   await expect
-    .element(screen.getByRole('button', { name: /^Working \d+s$/ }))
+    .element(screen.getByRole('button', { name: /^Working for \d+s · / }))
     .toBeVisible();
   expect(document.body.textContent).not.toContain('Old provider error');
-  expect(document.body.textContent).not.toContain('· Failed');
+  expect(document.body.textContent).not.toContain('Failed after');
   expect(document.body.textContent).not.toContain('Starting on dark mode.');
   expect(screen.getByText('Add a dark mode').all()).toHaveLength(1);
   // The earlier turn keeps its own run.
   await expect
-    .element(screen.getByRole('button', { name: 'Worked 1m 20s' }))
+    .element(screen.getByRole('button', { name: 'Worked for 1m 20s · 1 step' }))
     .toHaveAttribute('aria-expanded', 'false');
   await expect.element(screen.getByText('The tracker is live.')).toBeVisible();
 
@@ -1319,9 +1327,9 @@ test('retries a failed turn without resurrecting its superseded failure', async 
   await expect
     .element(screen.getByRole('alert'))
     .toMatchTextContent('New provider error');
-  expect(screen.getByRole('button', { name: /· Failed$/ }).all()).toHaveLength(
-    1,
-  );
+  expect(
+    screen.getByRole('button', { name: /^Failed after/ }).all(),
+  ).toHaveLength(1);
   expect(document.body.textContent).not.toContain('Old provider error');
 
   // History catches up with the new failure and replaces the live turn.
@@ -1364,7 +1372,7 @@ test('retries a failed turn without resurrecting its superseded failure', async 
     .element(screen.getByRole('button', { name: 'Retry' }))
     .toBeVisible();
   await expect
-    .element(screen.getByRole('button', { name: 'Worked 1m 20s' }))
+    .element(screen.getByRole('button', { name: 'Worked for 1m 20s · 1 step' }))
     .toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -1413,7 +1421,9 @@ test('keeps a reopened work process in place instead of following to the bottom'
     }),
   );
   const { screen } = await renderChat();
-  const header = screen.getByRole('button', { name: 'Worked 1m 20s' });
+  const header = screen.getByRole('button', {
+    name: 'Worked for 1m 20s · 30 steps',
+  });
   await expect.element(header).toBeInViewport();
 
   // Opening a finished reply is reading: the taller transcript must not pull

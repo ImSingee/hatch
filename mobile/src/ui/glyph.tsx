@@ -31,6 +31,7 @@ const symbols: Record<GlyphName, AndroidSymbol> = {
   down: 'arrow_downward',
   browser: 'open_in_browser',
   warning: 'warning',
+  alert: 'error',
   check: 'check',
   file: 'description',
   photo: 'image',
