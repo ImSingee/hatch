@@ -10,7 +10,12 @@ import { useAccent } from '../../src/ui/accent';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
 import { Facts, ResourceHeader, when } from '../../src/ui/resource';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
-import { SectionLabel, pageScrollProps, readable } from '../../src/ui/screen';
+import {
+  SectionLabel,
+  pageScrollProps,
+  readable,
+  PageRoot,
+} from '../../src/ui/screen';
 import { statusText } from '../../src/ui/status';
 import { Text, type } from '../../src/ui/text';
 import { palette as c, status as hue } from '../../src/ui/theme';
@@ -59,83 +64,86 @@ export default function WorkflowScreen() {
     );
   if (!data) return <Busy label="Loading workflow" />;
   return (
-    <ScrollView
-      {...pageScrollProps}
-      style={{ flex: 1, backgroundColor: c.ground }}
-      contentContainerStyle={{
-        ...readable,
-        paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 32,
-      }}
-      refreshControl={
-        <RefreshControl
-          refreshing={pull.refreshing}
-          onRefresh={pull.onRefresh}
-          tintColor={accent.fill}
-        />
-      }
-    >
-      <ResourceHeader
-        workflow
-        name={data.name}
-        seed={data.id}
-        description={
-          data.description || 'An automation that runs on your Hatch instance.'
+    <PageRoot nested>
+      <ScrollView
+        {...pageScrollProps}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          ...readable,
+          paddingHorizontal: 20,
+          paddingTop: 8,
+          paddingBottom: 32,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
+            tintColor={accent.fill}
+          />
         }
-        status={data.status}
-        pinned={pinned}
-      />
-      {query.error ? (
-        <View style={{ marginTop: 16 }}>
-          <Notice
-            tone="danger"
-            title="Couldn’t refresh"
-            detail={errorText(query.error)}
-            action={{
-              label: 'Try again',
-              onPress: () => void query.refetch(),
+      >
+        <ResourceHeader
+          workflow
+          name={data.name}
+          seed={data.id}
+          description={
+            data.description ||
+            'An automation that runs on your Hatch instance.'
+          }
+          status={data.status}
+          pinned={pinned}
+        />
+        {query.error ? (
+          <View style={{ marginTop: 16 }}>
+            <Notice
+              tone="danger"
+              title="Couldn’t refresh"
+              detail={errorText(query.error)}
+              action={{
+                label: 'Try again',
+                onPress: () => void query.refetch(),
+              }}
+            />
+          </View>
+        ) : null}
+        <SectionLabel>At a glance</SectionLabel>
+        <Facts
+          items={[
+            ['Status', statusText(data.status)],
+            ['Updated', when(data.updatedAt)],
+            ['Created', when(data.createdAt)],
+          ]}
+        />
+        <SectionLabel>Manage</SectionLabel>
+        <Group>
+          <ListRow
+            title="Manage on the web"
+            detail="Triggers, run history and settings"
+            leading={<GlyphTile glyph="browser" tone="fill" />}
+            accessibilityHint="Opens this Workflow in the browser"
+            onPress={() => {
+              setProblem(null);
+              void WebBrowser.openBrowserAsync(
+                `${origin}/workflow/${encodeURIComponent(data.slug)}`,
+              ).catch((error: unknown) => setProblem(errorText(error)));
             }}
           />
-        </View>
-      ) : null}
-      <SectionLabel>At a glance</SectionLabel>
-      <Facts
-        items={[
-          ['Status', statusText(data.status)],
-          ['Updated', when(data.updatedAt)],
-          ['Created', when(data.createdAt)],
-        ]}
-      />
-      <SectionLabel>Manage</SectionLabel>
-      <Group>
-        <ListRow
-          title="Manage on the web"
-          detail="Triggers, run history and settings"
-          leading={<GlyphTile glyph="browser" tone="fill" />}
-          accessibilityHint="Opens this Workflow in the browser"
-          onPress={() => {
-            setProblem(null);
-            void WebBrowser.openBrowserAsync(
-              `${origin}/workflow/${encodeURIComponent(data.slug)}`,
-            ).catch((error: unknown) => setProblem(errorText(error)));
-          }}
-        />
-      </Group>
-      {problem ? (
+        </Group>
+        {problem ? (
+          <Text
+            accessibilityRole="alert"
+            style={[type.small, { color: hue.danger.ink, marginTop: 8 }]}
+          >
+            {problem}
+          </Text>
+        ) : null}
         <Text
-          accessibilityRole="alert"
-          style={[type.small, { color: hue.danger.ink, marginTop: 8 }]}
+          selectable
+          style={[type.mono, { marginTop: 12, paddingHorizontal: 4 }]}
         >
-          {problem}
+          {data.slug} · {data.id}
         </Text>
-      ) : null}
-      <Text
-        selectable
-        style={[type.mono, { marginTop: 12, paddingHorizontal: 4 }]}
-      >
-        {data.slug} · {data.id}
-      </Text>
-    </ScrollView>
+      </ScrollView>
+    </PageRoot>
   );
 }

@@ -10,9 +10,13 @@ import { Choice } from '../src/ui/native-controls';
 import { glyphs, type GlyphName } from '../src/ui/glyph.types';
 import { Card, Tag, errorText } from '../src/ui/primitives';
 import { GlyphTile } from '../src/ui/rows';
-import { Masthead, pageScrollProps, readable } from '../src/ui/screen';
+import {
+  Masthead,
+  pageScrollProps,
+  readable,
+  PageRoot,
+} from '../src/ui/screen';
 import { Text, type } from '../src/ui/text';
-import { palette as c } from '../src/ui/theme';
 
 const notes: { glyph: GlyphName; title: string; detail: string }[] = [
   {
@@ -121,68 +125,73 @@ export default function SettingsScreen() {
       ],
     );
   return (
-    <ScrollView
-      {...pageScrollProps}
-      style={{ flex: 1, backgroundColor: c.ground }}
-      contentContainerStyle={{ ...readable, paddingBottom: 32 }}
-    >
-      {/* Close leads the sheet's bar: horizontal at the top here, first on
+    <PageRoot nested>
+      <ScrollView
+        {...pageScrollProps}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ ...readable, paddingBottom: 32 }}
+      >
+        {/* Close leads the sheet's bar: horizontal at the top here, first on
           the vertical bar where iPhone Duo puts the bar on the side. */}
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button icon={glyphs.close} onPress={() => router.back()}>
-          Close
-        </Stack.Toolbar.Button>
-      </Stack.Toolbar>
-      <Masthead nested eyebrow="Connected instance" title="Your instance" />
-      <View style={{ paddingHorizontal: 16, gap: 14 }}>
-        <Card style={{ gap: 14 }}>
-          <Tag tone="success" dot label="Signed in on this phone" />
-          <Text selectable style={type.title}>
-            {host}
-          </Text>
-          <Button
-            variant="secondary"
-            glyph="browser"
-            label="Open Hatch on the web"
-            fullWidth
-            onPress={() => {
-              if (origin)
-                void WebBrowser.openBrowserAsync(origin).catch(
-                  (error: unknown) =>
-                    Alert.alert('Couldn’t open browser', errorText(error)),
-                );
-            }}
-          />
-        </Card>
-        <MessageModeCard />
-        <Card style={{ gap: 18 }}>
-          {notes.map((note) => (
-            <View
-              key={note.title}
-              style={{
-                flexDirection: 'row',
-                gap: 14,
-                alignItems: 'flex-start',
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button
+            icon={glyphs.close}
+            onPress={() => router.back()}
+          >
+            Close
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+        <Masthead nested eyebrow="Connected instance" title="Your instance" />
+        <View style={{ paddingHorizontal: 16, gap: 14 }}>
+          <Card style={{ gap: 14 }}>
+            <Tag tone="success" dot label="Signed in on this phone" />
+            <Text selectable style={type.title}>
+              {host}
+            </Text>
+            <Button
+              variant="secondary"
+              glyph="browser"
+              label="Open Hatch on the web"
+              fullWidth
+              onPress={() => {
+                if (origin)
+                  void WebBrowser.openBrowserAsync(origin).catch(
+                    (error: unknown) =>
+                      Alert.alert('Couldn’t open browser', errorText(error)),
+                  );
               }}
-            >
-              <GlyphTile glyph={note.glyph} />
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={type.heading}>{note.title}</Text>
-                <Text style={type.small}>{note.detail}</Text>
+            />
+          </Card>
+          <MessageModeCard />
+          <Card style={{ gap: 18 }}>
+            {notes.map((note) => (
+              <View
+                key={note.title}
+                style={{
+                  flexDirection: 'row',
+                  gap: 14,
+                  alignItems: 'flex-start',
+                }}
+              >
+                <GlyphTile glyph={note.glyph} />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={type.heading}>{note.title}</Text>
+                  <Text style={type.small}>{note.detail}</Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </Card>
-        <Button
-          variant="danger"
-          glyph="signOut"
-          label={busy ? 'Signing out…' : 'Sign out'}
-          busy={busy}
-          fullWidth
-          onPress={signOut}
-        />
-        <Button fullWidth label="Done" onPress={() => router.back()} />
-      </View>
-    </ScrollView>
+            ))}
+          </Card>
+          <Button
+            variant="danger"
+            glyph="signOut"
+            label={busy ? 'Signing out…' : 'Sign out'}
+            busy={busy}
+            fullWidth
+            onPress={signOut}
+          />
+          <Button fullWidth label="Done" onPress={() => router.back()} />
+        </View>
+      </ScrollView>
+    </PageRoot>
   );
 }
