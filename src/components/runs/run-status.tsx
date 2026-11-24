@@ -40,6 +40,20 @@ const RUN_META: Record<
   },
 };
 
+const TRIGGER_LABELS: Record<string, PlainTranslationKey> = {
+  manual: 'runTrigger.manual',
+  cron: 'runTrigger.cron',
+  webhook: 'runTrigger.webhook',
+  app: 'runTrigger.app',
+};
+
+/** How a run started, translated; an unknown trigger shows as recorded. */
+export function RunTriggerLabel({ trigger }: { trigger: string }) {
+  const { t } = useI18n();
+  const key = TRIGGER_LABELS[trigger];
+  return key ? t(key) : trigger;
+}
+
 export function runStatusColor(status: RunStatus): string {
   return RUN_META[status].color;
 }

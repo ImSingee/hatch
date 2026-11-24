@@ -10,8 +10,8 @@ import {
   WindowBody,
 } from '~components/page/page';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { RunStatusBadge } from '~components/runs/run-status';
-import { type PlainTranslationKey, useI18n } from '~i18n';
+import { RunStatusBadge, RunTriggerLabel } from '~components/runs/run-status';
+import { useI18n } from '~i18n';
 import { formatDuration, formatRelative } from '~lib/format';
 import { isActiveRun, type RunListItem } from '~lib/runs';
 import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
@@ -21,13 +21,6 @@ export const Route = createFileRoute('/_app/executions')({
   loader: () => listRecentTaskRunsFn(),
   component: ExecutionsPage,
 });
-
-const TRIGGER_LABEL: Record<string, PlainTranslationKey> = {
-  manual: 'runTrigger.manual',
-  cron: 'runTrigger.cron',
-  webhook: 'runTrigger.webhook',
-  app: 'runTrigger.app',
-};
 
 /** Fast refresh while a run is in flight; slow idle poll picks up new ones. */
 const pollActive = (runs: { status: RunListItem['status'] }[] | undefined) =>
@@ -130,9 +123,7 @@ function ExecutionsPage() {
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">
-                      {TRIGGER_LABEL[run.trigger]
-                        ? t(TRIGGER_LABEL[run.trigger])
-                        : run.trigger}
+                      <RunTriggerLabel trigger={run.trigger} />
                     </Text>
                   </Table.Td>
                   <Table.Td>
