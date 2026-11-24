@@ -22,6 +22,7 @@ import {
   type ReplyField,
   type ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
+import { useI18n } from '~/i18n';
 import { formatExact, formatRelative } from '~lib/format';
 import {
   respondToNotificationFn,
@@ -118,6 +119,7 @@ function ReplyFormView({
   notificationId: string;
   reply: ReplyForm;
 }) {
+  const { t } = useI18n();
   const [answers, setAnswers] = useState<ReplyAnswers>({});
   const [error, setError] = useState<{
     field: string | null;
@@ -126,7 +128,7 @@ function ReplyFormView({
   const respond = useNotificationMutation(
     (input: ReplyAnswers) =>
       respondToNotificationFn({ data: { id: notificationId, answers: input } }),
-    { success: 'Answer sent' },
+    { success: t('notifications.reply.sent') },
   );
   // One required buttons field answers with a single click, like on the phone.
   const [only] = reply.fields;
@@ -148,7 +150,7 @@ function ReplyFormView({
         field: caught.field,
         message:
           reason === 'is required'
-            ? 'Answer this question.'
+            ? t('notifications.reply.required')
             : `${reason[0]?.toUpperCase() ?? ''}${reason.slice(1)}.`,
       });
     }
@@ -190,15 +192,19 @@ function ReplyFormView({
                     title: field.label,
                     children: (
                       <Text size="sm">
-                        Answer “
-                        {field.type === 'buttons'
-                          ? field.options.find((o) => o.id === optionId)?.label
-                          : optionId}
-                        ”? A notification takes one answer, and it cannot be
-                        changed.
+                        {t('notifications.reply.confirm', {
+                          answer:
+                            field.type === 'buttons'
+                              ? (field.options.find((o) => o.id === optionId)
+                                  ?.label ?? optionId)
+                              : optionId,
+                        })}
                       </Text>
                     ),
-                    labels: { confirm: 'Send answer', cancel: 'Cancel' },
+                    labels: {
+                      confirm: t('notifications.reply.send'),
+                      cancel: t('notifications.reply.cancel'),
+                    },
                     onConfirm: () => submit({ [field.id]: optionId }),
                   })
               : undefined
@@ -216,7 +222,7 @@ function ReplyFormView({
             {reply.submitLabel}
           </Button>
           <Text size="xs" c="dimmed">
-            One answer is accepted, and it cannot be changed.
+            {t('notifications.reply.final')}
           </Text>
         </Group>
       )}
@@ -240,6 +246,7 @@ function FieldInput({
   /** Set when choosing a button submits the form at once. */
   onPick?: (optionId: string) => void;
 }) {
+  const { t } = useI18n();
   const label = field.label;
   const description = field.description;
   const required = field.required;
@@ -266,8 +273,11 @@ function FieldInput({
   if (field.type === 'multiple') {
     const range =
       field.minSelected === field.maxSelected
-        ? `Choose ${field.minSelected}`
-        : `Choose ${field.minSelected}–${field.maxSelected}`;
+        ? t('notifications.reply.chooseExactly', { count: field.minSelected })
+        : t('notifications.reply.chooseRange', {
+            min: field.minSelected,
+            max: field.maxSelected,
+          });
     return (
       <Checkbox.Group
         label={label}
@@ -320,7 +330,7 @@ function FieldInput({
               disabled={disabled}
               onClick={() => onChange(undefined)}
             >
-              Clear answer
+              {t('notifications.reply.clear')}
             </Anchor>
           ) : null}
         </Stack>

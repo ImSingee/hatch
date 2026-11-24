@@ -114,6 +114,10 @@ is bound to the device as well; the CLI answers the same forms with
 `hatch notification respond`, and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
 tokens) are printed only by the create/rotate commands that mint them.
 
+`notification list --order activity` lists in the web timeline's order (last
+push or content/alerting edit first) and prints that time; it uses the same
+`ListNotifications` RPC and cursor rules as the timeline.
+
 `notification update <id>` updates content and alerts phones again by default,
 including when the content is unchanged or no content flags are supplied.
 `--silent` maps to `UpdateNotification.silent` and only changes content; it

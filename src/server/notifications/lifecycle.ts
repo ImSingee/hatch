@@ -231,6 +231,9 @@ export async function updateNotification(
           ? {}
           : { alertRevision: current.revision + 1 }),
         ...(changed ? { editedAt: now } : {}),
+        // Only a changed or re-alerting edit gets here; either one moves the
+        // notification to the end of the timeline.
+        activityAt: now,
       })
       .where(eq(schema.notifications.id, current.id))
       .returning({ revision: schema.notifications.revision });

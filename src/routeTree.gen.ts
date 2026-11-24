@@ -28,7 +28,7 @@ import { Route as AppAppsIndexRouteImport } from './routes/_app/apps/index'
 import { Route as AppDashboardIndexRouteImport } from './routes/_app/dashboard/index'
 import { Route as AppDashboardDashboardIdRouteImport } from './routes/_app/dashboard/$dashboardId'
 import { Route as AppNotificationsIndexRouteImport } from './routes/_app/notifications/index'
-import { Route as AppNotificationsNotificationIdRouteImport } from './routes/_app/notifications/$notificationId'
+import { Route as AppNotificationsLogRouteImport } from './routes/_app/notifications/log'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAboutRouteImport } from './routes/_app/settings/about'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
@@ -49,6 +49,8 @@ import { Route as ApiRpcSplatRouteImport } from './routes/api/rpc/$'
 import { Route as MobileDashboardDashboardIdRouteImport } from './routes/mobile/dashboard/$dashboardId'
 import { Route as AppAppAppSlugIndexRouteImport } from './routes/_app/app/$appSlug/index'
 import { Route as AppAppAppSlugManageRouteImport } from './routes/_app/app/$appSlug/manage'
+import { Route as AppNotificationsLogIndexRouteImport } from './routes/_app/notifications/log/index'
+import { Route as AppNotificationsLogNotificationIdRouteImport } from './routes/_app/notifications/log/$notificationId'
 import { Route as AppWorkflowWorkflowSlugIndexRouteImport } from './routes/_app/workflow/$workflowSlug/index'
 import { Route as AppWorkflowWorkflowSlugManageRouteImport } from './routes/_app/workflow/$workflowSlug/manage'
 import { Route as ApiAgentAttachmentsAttachmentIdRouteImport } from './routes/api/agent/attachments/$attachmentId'
@@ -184,12 +186,11 @@ const AppNotificationsIndexRoute = AppNotificationsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppNotificationsRoute,
 } as any)
-const AppNotificationsNotificationIdRoute =
-  AppNotificationsNotificationIdRouteImport.update({
-    id: '/$notificationId',
-    path: '/$notificationId',
-    getParentRoute: () => AppNotificationsRoute,
-  } as any)
+const AppNotificationsLogRoute = AppNotificationsLogRouteImport.update({
+  id: '/log',
+  path: '/log',
+  getParentRoute: () => AppNotificationsRoute,
+} as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -293,6 +294,18 @@ const AppAppAppSlugManageRoute = AppAppAppSlugManageRouteImport.update({
   path: '/app/$appSlug/manage',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsLogIndexRoute =
+  AppNotificationsLogIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppNotificationsLogRoute,
+  } as any)
+const AppNotificationsLogNotificationIdRoute =
+  AppNotificationsLogNotificationIdRouteImport.update({
+    id: '/$notificationId',
+    path: '/$notificationId',
+    getParentRoute: () => AppNotificationsLogRoute,
+  } as any)
 const AppWorkflowWorkflowSlugIndexRoute =
   AppWorkflowWorkflowSlugIndexRouteImport.update({
     id: '/workflow/$workflowSlug/',
@@ -532,7 +545,7 @@ export interface FileRoutesByFullPath {
   '/cli/authorize': typeof CliAuthorizeRoute
   '/agent/$threadId': typeof AppAgentThreadIdRoute
   '/dashboard/$dashboardId': typeof AppDashboardDashboardIdRoute
-  '/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
+  '/notifications/log': typeof AppNotificationsLogRouteWithChildren
   '/settings/about': typeof AppSettingsAboutRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
@@ -556,6 +569,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof AppSettingsIndexRoute
   '/workflows/': typeof AppWorkflowsIndexRoute
   '/app/$appSlug/manage': typeof AppAppAppSlugManageRoute
+  '/notifications/log/$notificationId': typeof AppNotificationsLogNotificationIdRoute
   '/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
@@ -570,6 +584,7 @@ export interface FileRoutesByFullPath {
   '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug/': typeof AppAppAppSlugIndexRoute
+  '/notifications/log/': typeof AppNotificationsLogIndexRoute
   '/workflow/$workflowSlug/': typeof AppWorkflowWorkflowSlugIndexRoute
   '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
   '/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
@@ -610,7 +625,6 @@ export interface FileRoutesByTo {
   '/cli/authorize': typeof CliAuthorizeRoute
   '/agent/$threadId': typeof AppAgentThreadIdRoute
   '/dashboard/$dashboardId': typeof AppDashboardDashboardIdRoute
-  '/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
   '/settings/about': typeof AppSettingsAboutRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
@@ -634,6 +648,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsIndexRoute
   '/workflows': typeof AppWorkflowsIndexRoute
   '/app/$appSlug/manage': typeof AppAppAppSlugManageRoute
+  '/notifications/log/$notificationId': typeof AppNotificationsLogNotificationIdRoute
   '/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
@@ -648,6 +663,7 @@ export interface FileRoutesByTo {
   '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug': typeof AppAppAppSlugIndexRoute
+  '/notifications/log': typeof AppNotificationsLogIndexRoute
   '/workflow/$workflowSlug': typeof AppWorkflowWorkflowSlugIndexRoute
   '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
   '/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
@@ -693,7 +709,7 @@ export interface FileRoutesById {
   '/cli/authorize': typeof CliAuthorizeRoute
   '/_app/agent/$threadId': typeof AppAgentThreadIdRoute
   '/_app/dashboard/$dashboardId': typeof AppDashboardDashboardIdRoute
-  '/_app/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
+  '/_app/notifications/log': typeof AppNotificationsLogRouteWithChildren
   '/_app/settings/about': typeof AppSettingsAboutRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
@@ -717,6 +733,7 @@ export interface FileRoutesById {
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/workflows/': typeof AppWorkflowsIndexRoute
   '/_app/app/$appSlug/manage': typeof AppAppAppSlugManageRoute
+  '/_app/notifications/log/$notificationId': typeof AppNotificationsLogNotificationIdRoute
   '/_app/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
@@ -731,6 +748,7 @@ export interface FileRoutesById {
   '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/_app/app/$appSlug/': typeof AppAppAppSlugIndexRoute
+  '/_app/notifications/log/': typeof AppNotificationsLogIndexRoute
   '/_app/workflow/$workflowSlug/': typeof AppWorkflowWorkflowSlugIndexRoute
   '/_app/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
   '/_app/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
@@ -776,7 +794,7 @@ export interface FileRouteTypes {
     | '/cli/authorize'
     | '/agent/$threadId'
     | '/dashboard/$dashboardId'
-    | '/notifications/$notificationId'
+    | '/notifications/log'
     | '/settings/about'
     | '/settings/account'
     | '/settings/agent-runner'
@@ -800,6 +818,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/workflows/'
     | '/app/$appSlug/manage'
+    | '/notifications/log/$notificationId'
     | '/workflow/$workflowSlug/manage'
     | '/api/agent/attachments/$attachmentId'
     | '/api/app/$appId/download'
@@ -814,6 +833,7 @@ export interface FileRouteTypes {
     | '/api/workflow/$workflowId/run'
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug/'
+    | '/notifications/log/'
     | '/workflow/$workflowSlug/'
     | '/app/$appSlug/tasks/$taskName'
     | '/workflow/$workflowSlug/execution/$runId'
@@ -854,7 +874,6 @@ export interface FileRouteTypes {
     | '/cli/authorize'
     | '/agent/$threadId'
     | '/dashboard/$dashboardId'
-    | '/notifications/$notificationId'
     | '/settings/about'
     | '/settings/account'
     | '/settings/agent-runner'
@@ -878,6 +897,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/workflows'
     | '/app/$appSlug/manage'
+    | '/notifications/log/$notificationId'
     | '/workflow/$workflowSlug/manage'
     | '/api/agent/attachments/$attachmentId'
     | '/api/app/$appId/download'
@@ -892,6 +912,7 @@ export interface FileRouteTypes {
     | '/api/workflow/$workflowId/run'
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug'
+    | '/notifications/log'
     | '/workflow/$workflowSlug'
     | '/app/$appSlug/tasks/$taskName'
     | '/workflow/$workflowSlug/execution/$runId'
@@ -936,7 +957,7 @@ export interface FileRouteTypes {
     | '/cli/authorize'
     | '/_app/agent/$threadId'
     | '/_app/dashboard/$dashboardId'
-    | '/_app/notifications/$notificationId'
+    | '/_app/notifications/log'
     | '/_app/settings/about'
     | '/_app/settings/account'
     | '/_app/settings/agent-runner'
@@ -960,6 +981,7 @@ export interface FileRouteTypes {
     | '/_app/settings/'
     | '/_app/workflows/'
     | '/_app/app/$appSlug/manage'
+    | '/_app/notifications/log/$notificationId'
     | '/_app/workflow/$workflowSlug/manage'
     | '/api/agent/attachments/$attachmentId'
     | '/api/app/$appId/download'
@@ -974,6 +996,7 @@ export interface FileRouteTypes {
     | '/api/workflow/$workflowId/run'
     | '/app/$appSlug/embed/$'
     | '/_app/app/$appSlug/'
+    | '/_app/notifications/log/'
     | '/_app/workflow/$workflowSlug/'
     | '/_app/app/$appSlug/tasks/$taskName'
     | '/_app/workflow/$workflowSlug/execution/$runId'
@@ -1179,11 +1202,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotificationsIndexRouteImport
       parentRoute: typeof AppNotificationsRoute
     }
-    '/_app/notifications/$notificationId': {
-      id: '/_app/notifications/$notificationId'
-      path: '/$notificationId'
-      fullPath: '/notifications/$notificationId'
-      preLoaderRoute: typeof AppNotificationsNotificationIdRouteImport
+    '/_app/notifications/log': {
+      id: '/_app/notifications/log'
+      path: '/log'
+      fullPath: '/notifications/log'
+      preLoaderRoute: typeof AppNotificationsLogRouteImport
       parentRoute: typeof AppNotificationsRoute
     }
     '/_app/settings/': {
@@ -1325,6 +1348,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/$appSlug/manage'
       preLoaderRoute: typeof AppAppAppSlugManageRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/notifications/log/': {
+      id: '/_app/notifications/log/'
+      path: '/'
+      fullPath: '/notifications/log/'
+      preLoaderRoute: typeof AppNotificationsLogIndexRouteImport
+      parentRoute: typeof AppNotificationsLogRoute
+    }
+    '/_app/notifications/log/$notificationId': {
+      id: '/_app/notifications/log/$notificationId'
+      path: '/$notificationId'
+      fullPath: '/notifications/log/$notificationId'
+      preLoaderRoute: typeof AppNotificationsLogNotificationIdRouteImport
+      parentRoute: typeof AppNotificationsLogRoute
     }
     '/_app/workflow/$workflowSlug/': {
       id: '/_app/workflow/$workflowSlug/'
@@ -1623,13 +1660,27 @@ const AppAgentRouteWithChildren = AppAgentRoute._addFileChildren(
   AppAgentRouteChildren,
 )
 
+interface AppNotificationsLogRouteChildren {
+  AppNotificationsLogNotificationIdRoute: typeof AppNotificationsLogNotificationIdRoute
+  AppNotificationsLogIndexRoute: typeof AppNotificationsLogIndexRoute
+}
+
+const AppNotificationsLogRouteChildren: AppNotificationsLogRouteChildren = {
+  AppNotificationsLogNotificationIdRoute:
+    AppNotificationsLogNotificationIdRoute,
+  AppNotificationsLogIndexRoute: AppNotificationsLogIndexRoute,
+}
+
+const AppNotificationsLogRouteWithChildren =
+  AppNotificationsLogRoute._addFileChildren(AppNotificationsLogRouteChildren)
+
 interface AppNotificationsRouteChildren {
-  AppNotificationsNotificationIdRoute: typeof AppNotificationsNotificationIdRoute
+  AppNotificationsLogRoute: typeof AppNotificationsLogRouteWithChildren
   AppNotificationsIndexRoute: typeof AppNotificationsIndexRoute
 }
 
 const AppNotificationsRouteChildren: AppNotificationsRouteChildren = {
-  AppNotificationsNotificationIdRoute: AppNotificationsNotificationIdRoute,
+  AppNotificationsLogRoute: AppNotificationsLogRouteWithChildren,
   AppNotificationsIndexRoute: AppNotificationsIndexRoute,
 }
 

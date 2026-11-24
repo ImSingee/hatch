@@ -58,7 +58,11 @@ import {
   updateNotification,
   type LifecycleResult,
 } from './lifecycle';
-import { loadResponseView, type NotificationResponseView } from './responses';
+import {
+  loadResponseView,
+  loadResponseViews,
+  type NotificationResponseView,
+} from './responses';
 import {
   encryptDeviceKey,
   encryptWebhookSecret,
@@ -137,6 +141,11 @@ export type NotificationSummaryView = {
   priority: number;
   occurredAt: string;
   createdAt: string;
+  /**
+   * When the source last pushed or edited it; the timeline's order. Answers
+   * and recalls leave it unchanged.
+   */
+  activityAt: string;
   /** 1 for the original; every edit and the recall increment it. */
   revision: number;
   editedAt: string | null;
@@ -144,6 +153,8 @@ export type NotificationSummaryView = {
   /** Form people answer once; null when the notification asks nothing. */
   reply: ReplyForm | null;
   respondedAt: string | null;
+  /** The answer to `reply`; null until someone answers. */
+  response: NotificationResponseView | null;
   status: NotificationStatus;
   deliveries: DeliveryCounts;
 };
@@ -177,7 +188,6 @@ export type NotificationDetailView = NotificationSummaryView & {
   data: Record<string, unknown> | null;
   dedupeKey: string | null;
   deliveryList: DeliveryView[];
-  response: NotificationResponseView | null;
   /** Deliveries of the answer to response route destinations. */
   responseDeliveryList: DeliveryView[];
 };
@@ -334,6 +344,7 @@ type NotificationRow = typeof schema.notifications.$inferSelect;
 function summaryView(
   row: NotificationRow,
   counts: DeliveryCounts | undefined,
+  response: NotificationResponseView | null,
 ): NotificationSummaryView {
   const deliveries = counts ?? {
     pending: 0,
@@ -355,11 +366,13 @@ function summaryView(
     priority: row.priority,
     occurredAt: iso(row.occurredAt),
     createdAt: iso(row.createdAt),
+    activityAt: iso(row.activityAt),
     revision: row.revision,
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
     reply: row.reply,
     respondedAt: isoOrNull(row.respondedAt),
+    response,
     status: deliveryStatus(deliveries),
     deliveries,
   };
@@ -373,10 +386,31 @@ export type ListNotificationsInput = {
   kind?: string;
   status?: NotificationStatus;
   replyState?: NotificationReplyState;
-  /** Return notifications older than this id (ids are time-ordered ULIDs). */
+  /**
+   * `created` (default): newest pushed first. `activity`: most recently
+   * pushed or edited first, the timeline's order.
+   */
+  order?: NotificationListOrder;
+  /** The `nextCursor` of the previous page, for the same `order`. */
   cursor?: string;
   limit?: number;
 };
+
+export type NotificationListOrder = 'created' | 'activity';
+
+/**
+ * An `activity` cursor names the last row of a page by its activity time and
+ * id, since several notifications can share one activity time.
+ */
+function activityCursor(row: NotificationRow): string {
+  return `${row.activityAt.getTime()}.${row.id}`;
+}
+
+function parseActivityCursor(cursor: string): { at: Date; id: string } {
+  const match = /^(\d{1,15})\.([0-9A-Za-z]{26})$/.exec(cursor);
+  if (!match) throw new AppError('Invalid cursor for activity order.', 400);
+  return { at: new Date(Number(match[1])), id: match[2]! };
+}
 
 function statusFilter(status: NotificationStatus): SQL {
   const d = schema.notificationDeliveries;
@@ -422,13 +456,20 @@ export async function listNotifications(
 ): Promise<{ items: NotificationSummaryView[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(input.limit || 50, 1), LIST_LIMIT_MAX);
   const n = schema.notifications;
+  const byActivity = input.order === 'activity';
+  const after =
+    byActivity && input.cursor ? parseActivityCursor(input.cursor) : null;
   const conditions: (SQL | undefined)[] = [
     input.sourceType ? eq(n.sourceType, input.sourceType) : undefined,
     input.sourceId
       ? sql`coalesce(${n.appId}, ${n.channelId}, ${n.userId}) = ${input.sourceId}`
       : undefined,
     input.kind ? eq(n.kind, input.kind) : undefined,
-    input.cursor ? lt(n.id, input.cursor) : undefined,
+    after
+      ? sql`(${n.activityAt}, ${n.id}) < (${after.at}, ${after.id})`
+      : !byActivity && input.cursor
+        ? lt(n.id, input.cursor)
+        : undefined,
     input.status ? statusFilter(input.status) : undefined,
     input.replyState === 'awaiting'
       ? and(isNotNull(n.reply), isNull(n.respondedAt), isNull(n.recalledAt))
@@ -440,13 +481,25 @@ export async function listNotifications(
     .select()
     .from(n)
     .where(and(...conditions))
-    .orderBy(desc(n.id))
+    .orderBy(...(byActivity ? [desc(n.activityAt), desc(n.id)] : [desc(n.id)]))
     .limit(limit + 1);
   const page = rows.slice(0, limit);
-  const counts = await deliveryCounts(page.map((row) => row.id));
+  const ids = page.map((row) => row.id);
+  const [counts, responses] = await Promise.all([
+    deliveryCounts(ids),
+    loadResponseViews(ids),
+  ]);
+  const last = page.at(-1);
   return {
-    items: page.map((row) => summaryView(row, counts.get(row.id))),
-    nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+    items: page.map((row) =>
+      summaryView(row, counts.get(row.id), responses.get(row.id) ?? null),
+    ),
+    nextCursor:
+      rows.length > limit && last
+        ? byActivity
+          ? activityCursor(last)
+          : last.id
+        : null,
   };
 }
 
@@ -496,11 +549,10 @@ export async function getNotification(
   ]);
   const counts = (await deliveryCounts([id])).get(id);
   return {
-    ...summaryView(row, counts),
+    ...summaryView(row, counts, response),
     data: row.data,
     dedupeKey: row.dedupeKey,
     deliveryList: deliveries.map(deliveryView),
-    response,
     responseDeliveryList: responseDeliveries.map(deliveryView),
   };
 }

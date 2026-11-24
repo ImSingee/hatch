@@ -490,10 +490,15 @@ const specs: Record<string, Spec> = {
       kind: { type: 'string' },
       status: { type: 'string' },
       'reply-state': { type: 'string' },
+      order: { type: 'string' },
       limit: { type: 'string' },
       cursor: { type: 'string' },
     },
     build: (_positionals, values) => {
+      const order = str(values, 'order');
+      if (order !== undefined && !['created', 'activity'].includes(order))
+        invalid('--order must be created or activity.');
+      const byActivity = order === 'activity';
       const replyState = str(values, 'reply-state');
       if (
         replyState !== undefined &&
@@ -523,6 +528,7 @@ const specs: Record<string, Spec> = {
           kind: str(values, 'kind'),
           status,
           replyState,
+          order,
           cursor: str(values, 'cursor'),
           limit: pageLimit(values),
         },
@@ -531,7 +537,7 @@ const specs: Record<string, Spec> = {
             table(
               rows(response.notifications).map((row) => [
                 field(row, 'id'),
-                field(row, 'createdAt'),
+                field(row, byActivity ? 'activityAt' : 'createdAt'),
                 [revisionLabel(row), replyLabel(row)]
                   .filter(Boolean)
                   .join(', '),

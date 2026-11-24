@@ -1162,6 +1162,12 @@ export const notifications = snakeCase.table(
     alertRevision: integer('alert_revision').notNull().default(0),
     /** Last time the source edited the content. */
     editedAt: timestamp('edited_at'),
+    /**
+     * When the source last pushed or edited it, with an edit that changed the
+     * content or asked to alert again. Orders the timeline, so an update moves
+     * the notification to the end; answers and recalls leave it in place.
+     */
+    activityAt: timestamp('activity_at').notNull().defaultNow(),
     /** Set once when the source recalls the notification. */
     recalledAt: timestamp('recalled_at'),
     /** Form the notification asks people to answer; fixed once sent. */
@@ -1177,6 +1183,7 @@ export const notifications = snakeCase.table(
   },
   (table) => [
     index('notifications_created_idx').on(table.createdAt),
+    index('notifications_activity_idx').on(table.activityAt, table.id),
     index('notifications_app_created_idx').on(table.appId, table.createdAt),
     index('notifications_channel_created_idx').on(
       table.channelId,

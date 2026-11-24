@@ -53,6 +53,7 @@ import {
   type DeliveryView,
   type DestinationView,
   type DirectSender,
+  type NotificationListOrder,
   type NotificationReplyState,
   type NotificationStatus,
   type NotificationSummaryView,
@@ -106,6 +107,7 @@ function summary(view: NotificationSummaryView) {
     recalledAt: none(view.recalledAt),
     reply: view.reply ? replyToMessage(view.reply) : undefined,
     respondedAt: none(view.respondedAt),
+    response: view.response ? response(view.response) : undefined,
   };
 }
 
@@ -211,6 +213,7 @@ export function registerNotificationApi(router: ConnectRouter) {
           kind: input.kind || undefined,
           status: input.status as NotificationStatus | undefined,
           replyState: input.replyState as NotificationReplyState | undefined,
+          order: input.order as NotificationListOrder | undefined,
           cursor: input.cursor || undefined,
           limit: input.limit || undefined,
         });

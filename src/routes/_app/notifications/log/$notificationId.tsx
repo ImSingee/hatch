@@ -14,21 +14,23 @@ import {
 import { usePlatformEvent } from '~components/system/platform-events';
 import { notificationDetailQueryOptions } from '~queries/notifications';
 
-export const Route = createFileRoute('/_app/notifications/$notificationId')({
-  loader: async ({ context, params }) => {
-    try {
-      return await context.queryClient.ensureQueryData(
-        notificationDetailQueryOptions(params.notificationId),
-      );
-    } catch (error) {
-      if (error instanceof Error && /not found/i.test(error.message)) {
-        throw notFound();
+export const Route = createFileRoute('/_app/notifications/log/$notificationId')(
+  {
+    loader: async ({ context, params }) => {
+      try {
+        return await context.queryClient.ensureQueryData(
+          notificationDetailQueryOptions(params.notificationId),
+        );
+      } catch (error) {
+        if (error instanceof Error && /not found/i.test(error.message)) {
+          throw notFound();
+        }
+        throw error;
       }
-      throw error;
-    }
+    },
+    component: NotificationDetailPage,
   },
-  component: NotificationDetailPage,
-});
+);
 
 function NotificationDetailPage() {
   const loaded = Route.useLoaderData();
@@ -43,7 +45,8 @@ function NotificationDetailPage() {
   useEffect(() => {
     shownId.current = notificationId;
   }, [notificationId]);
-  const leave = () => void navigate({ to: '/notifications', replace: true });
+  const leave = () =>
+    void navigate({ to: '/notifications/log', replace: true });
   const { confirmDelete, isPending } = useDeleteNotification({
     onDeleted: (id) => {
       if (id === shownId.current) leave();

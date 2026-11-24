@@ -433,9 +433,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'list'],
     usage:
-      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',
+      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--order created|activity] [--limit <1-100>] [--cursor <cursor>]',
     description:
-      'List notifications, newest first; --reply-state lists reply forms awaiting an answer or answered.',
+      'List notifications, newest first. --order activity sorts by the last push or edit (the timeline order, so an edited notification comes first) and shows that time; a --cursor continues only the order that printed it. --reply-state lists reply forms awaiting an answer or answered.',
   },
   {
     path: ['notification', 'get'],

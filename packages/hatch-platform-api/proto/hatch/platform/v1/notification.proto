@@ -110,6 +110,12 @@ message NotificationSummary {
   // -2 lowest (history only, never pushed to phones), -1 low (quiet on
   // phones), 0 normal, 1 high (time-sensitive on phones). Never changes.
   int32 priority = 20;
+  // ISO-8601; when the source last pushed or edited it, with an edit that
+  // changed the content or asked to alert again. Answers and recalls leave it
+  // unchanged. The order of ListNotifications with order "activity".
+  string activity_at = 21;
+  // The answer to the reply form, once given.
+  NotificationResponse response = 22;
 }
 
 // ---------------------------------------------------------------- replies
@@ -274,6 +280,15 @@ message ListNotificationsRequest {
     in: [
       "awaiting",
       "answered"
+    ]
+  }];
+  // created (default): newest pushed first. activity: most recently pushed
+  // or edited first, the timeline order. A cursor only continues the order
+  // that produced it.
+  optional string order = 8 [(buf.validate.field).string = {
+    in: [
+      "created",
+      "activity"
     ]
   }];
 }

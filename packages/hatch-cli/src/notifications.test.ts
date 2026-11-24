@@ -772,4 +772,15 @@ describe('notification reply commands', () => {
       '--limit must be an integer between 1 and 100.',
     );
   });
+
+  it('lists in timeline order with --order activity and rejects other orders', () => {
+    expect(
+      parse('list', '--order', 'activity', '--cursor', '1764000000000.X')
+        .request,
+    ).toMatchObject({ order: 'activity', cursor: '1764000000000.X' });
+    expect(parse('list').request).toMatchObject({ order: undefined });
+    expect(() => parse('list', '--order', 'updated')).toThrow(
+      '--order must be created or activity.',
+    );
+  });
 });

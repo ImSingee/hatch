@@ -40,8 +40,8 @@ The contract defines `hatch.platform.v1.AppService`, `WorkflowService`, `AuthSer
 `SdkService`, plus session-only `AgentService`. Both lifecycle services provide list, create, get, get-source,
 deploy and rollback RPCs. Auth provides `GetStatus` and session-only
 `CreateHandoff`; Sdk provides `GetSdk`. `NotificationService` manages the
-notification center for session and API-key callers and rejects Run
-credentials; its device RPCs are session-only (see
+notification center for session, API-key and Agent Run callers alike; its
+device RPCs are session-only (see
 [notifications](notifications.md)).
 There are no REST aliases or OpenAPI endpoint. Former `/api/v1/*`, including
 `openapi.json`, and `/api/cli/v1/*` return JSON 404 rather than the SPA shell.

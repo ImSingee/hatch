@@ -158,6 +158,10 @@ notification:
 ```
 
 An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
+
+An edit that changes the content or alerts again also sets `activityAt`, so
+the notification moves to the end of the timeline. Answers and recalls leave
+`activityAt` unchanged.
 By default it also alerts phones again, replacing the notification with the
 same id. Pass `silent: true` to only change content without another alert.
 An update with only `id` repeats the alert with the current content.
@@ -642,6 +646,19 @@ When the request fails or someone answered first, the phone shows a local
 notification saying so. The JavaScript tap handler ignores these actions and
 opens the notification for "Answer…". Once answered, the next device delivery
 replaces the shown notification passively, without its actions.
+
+## Web UI
+
+`/notifications` is the timeline: every notification as one stream ordered by
+`activityAt` (`ListNotifications` with `order: "activity"`), oldest at the
+top. It opens at the newest, follows new notifications while the reader stays
+at the end, and loads older pages on scroll. A person's message shows as a
+bubble, everything else as a card with its reply form until someone answers;
+low-priority notifications without a form share one collapsed row, and a
+recalled notification becomes one line. When a source edits a notification
+while the page is open, a marker stays where it was. `/notifications/log` is
+the delivery log (filters, deliveries, answer deliveries), and
+`/notifications/log/<id>` opens one notification there.
 
 ## Management API
 

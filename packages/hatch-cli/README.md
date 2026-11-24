@@ -775,6 +775,7 @@ hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.
   --reply '{"fields":[{"id":"decision","type":"buttons","label":"Approve?","options":[{"id":"approve","label":"Approve"},{"id":"reject","label":"Reject"}]}]}'
 hatch notification respond <notification-id> --answer decision=approve --json
 hatch notification list --reply-state awaiting
+hatch notification list --order activity
 ```
 
 A notification takes one answer and it is final: answering again, or answering

@@ -392,7 +392,7 @@ function DeliveryOutcome({
  * the system has for them. A scheme that would run in this document is shown
  * as text only.
  */
-function NotificationLink({ url }: { url: string }) {
+export function NotificationLink({ url }: { url: string }) {
   if (isDocumentUrl(url))
     return (
       <Text size="sm" truncate>

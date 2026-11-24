@@ -1037,3 +1037,59 @@ describe('response routes', () => {
     ).toMatchObject([{ status: 'succeeded' }]);
   });
 });
+
+describe('timeline order', () => {
+  const sender = () => ({ type: 'channel' as const, channelId });
+  const activityIds = async (limit?: number, cursor?: string) =>
+    service.listNotifications({ order: 'activity', limit, cursor });
+
+  it('moves a notification to the end when its source edits it, but not when someone answers or it is recalled', async () => {
+    const first = await sendForm();
+    const second = await sendForm();
+    const idsOf = async () =>
+      (await activityIds()).items.map((item) => item.id);
+    expect(await idsOf()).toEqual([second, first]);
+
+    await updateNotification(sender(), { id: first, title: 'Deploy v2?' });
+    expect(await idsOf()).toEqual([first, second]);
+    // The push order stays the creation order.
+    expect(
+      (await service.listNotifications()).items.map((item) => item.id),
+    ).toEqual([second, first]);
+
+    await respondToNotification(
+      second,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    await recallNotification(sender(), first);
+    await updateNotification(sender(), { id: second, silent: true });
+    expect(await idsOf()).toEqual([first, second]);
+
+    const answered = (await activityIds()).items.find(
+      (item) => item.id === second,
+    );
+    expect(answered?.response).toMatchObject({
+      answers: { decision: 'approve' },
+      via: 'web',
+    });
+  });
+
+  it('pages every notification once, also when several share one activity time', async () => {
+    const ids = [await sendForm(), await sendForm(), await sendForm()];
+    await db
+      .update(schema.notifications)
+      .set({ activityAt: new Date('2026-11-25T10:00:00Z') });
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await activityIds(1, cursor);
+      seen.push(...page.items.map((item) => item.id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    expect(seen).toEqual([...ids].reverse());
+    await expect(activityIds(1, ids[0])).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+});

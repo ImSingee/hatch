@@ -53,6 +53,17 @@ export async function loadResponseView(
   return row ? responseView(row) : null;
 }
 
+/** The answers of several notifications, keyed by notification id. */
+export async function loadResponseViews(
+  notificationIds: string[],
+): Promise<Map<string, NotificationResponseView>> {
+  if (notificationIds.length === 0) return new Map();
+  const rows = await db.query.notificationResponses.findMany({
+    where: { notificationId: { in: notificationIds } },
+  });
+  return new Map(rows.map((row) => [row.notificationId, responseView(row)]));
+}
+
 /** Someone answered first; carries their answer. */
 export class AlreadyRespondedError extends AppError {
   readonly response: NotificationResponseView;

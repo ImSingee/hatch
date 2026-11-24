@@ -182,7 +182,7 @@ Give an App page its own address with hash routing: the web host at
 `/app/<slug>#<route>` and pins pass `<route>` to the App. Link to Hatch pages
 with same-origin paths: `/app/<slug>#<route>` (another App, or this one at a
 route), `/agent/<session id>`, `/workflow/<slug>`, `/dashboard/<id>`,
-`/notifications/<id>`. In the Hatch phone app these links open the matching
+`/notifications/log/<id>`. In the Hatch phone app these links open the matching
 native page; `hatch://<same path>` names the same page from outside Hatch.
 Follow them as normal links in the same window: `target="_blank"` and
 `window.open` always leave for the system browser, and navigation a page

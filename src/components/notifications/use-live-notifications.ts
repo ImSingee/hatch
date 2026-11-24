@@ -7,16 +7,21 @@ import { NOTIFICATIONS_KEY } from '~queries/notifications';
 import { forgetNotification } from './use-delete-notification';
 
 /**
- * Keep notification history and detail views current: refetch on new,
+ * Keep the notification timeline, history and detail views current: refetch on new,
  * edited, recalled and deleted notifications and delivery updates, and after
  * the event stream reconnects.
  */
 export function useLiveNotifications() {
   const queryClient = useQueryClient();
   const refreshHistory = () =>
-    queryClient.invalidateQueries({
-      queryKey: [...NOTIFICATIONS_KEY, 'history'],
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: [...NOTIFICATIONS_KEY, 'history'],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: [...NOTIFICATIONS_KEY, 'timeline'],
+      }),
+    ]);
   const refreshDetail = (id: string) =>
     queryClient.invalidateQueries({
       queryKey: [...NOTIFICATIONS_KEY, 'detail', id],
@@ -39,9 +44,7 @@ export function useLiveNotifications() {
     void refreshDetail(event.notificationId);
   });
   usePlatformResync(() => {
-    void queryClient.invalidateQueries({
-      queryKey: [...NOTIFICATIONS_KEY, 'history'],
-    });
+    void refreshHistory();
     void queryClient.invalidateQueries({
       queryKey: [...NOTIFICATIONS_KEY, 'detail'],
     });

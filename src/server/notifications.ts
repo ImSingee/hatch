@@ -84,6 +84,7 @@ const listInputSchema = z.object({
     .enum(['unrouted', 'pending', 'delivered', 'partial', 'failed'])
     .optional(),
   replyState: z.enum(['awaiting', 'answered']).optional(),
+  order: z.enum(['created', 'activity']).optional(),
   cursor: z.string().max(64).optional(),
   limit: z.number().int().min(1).max(100).optional(),
 });
