@@ -1,12 +1,4 @@
-.layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-}
-
 .groups {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -59,16 +51,12 @@
   cursor: pointer;
   font-family: inherit;
   text-align: center;
+  text-decoration: none;
   transition: background-color var(--transition-fast);
 }
 
 .tile:hover {
   background: var(--surface-hover);
-}
-
-.tile[aria-pressed='true'] {
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-card);
 }
 
 .tileIcon {
@@ -116,101 +104,69 @@
   color: var(--mantine-color-white);
 }
 
-.detail {
-  flex: none;
-  position: sticky;
-  top: 0;
+.card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: 320px;
-  padding: 22px;
-  border-radius: var(--mantine-radius-xl);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-card);
+  gap: 10px;
 }
 
-.detail[data-inline] {
-  position: static;
-  width: auto;
-  padding: 4px 0 0;
-  box-shadow: none;
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
-.detailName {
-  margin: 0;
-  font-size: 20px;
+.cardTitle {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cardName {
+  font-size: 15px;
   font-weight: var(--font-weight-heading);
-  line-height: 28px;
+  line-height: 20px;
   overflow-wrap: anywhere;
 }
 
-.detailMeta {
+.cardMeta {
   color: var(--mantine-color-dimmed);
   font-size: 12px;
   font-weight: var(--font-weight-label);
   line-height: 18px;
 }
 
-.detailText {
-  margin: 0;
+.cardBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.cardFact {
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface-hover);
   color: var(--mantine-color-gray-7);
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
   line-height: 22px;
 }
 
-.fact {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--mantine-radius-md);
-  background: var(--surface-muted);
+.cardText {
+  margin: 0;
+  color: var(--mantine-color-gray-7);
   font-size: 13px;
-  font-weight: var(--font-weight-label);
-  line-height: 18px;
-}
-
-.factValue {
-  color: var(--mantine-color-gray-7);
-}
-
-.actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-/* Dock and desk: full width, since the labels do not fit side by side in
- * the detail column. */
-.pinActions {
-  display: grid;
-  gap: 8px;
-}
-
-.actionNote {
-  margin: -6px 0 0;
-  color: var(--mantine-color-gray-7);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-/* No room for the detail beside the grid: it opens as a sheet instead. */
-@media (max-width: 50em) {
-  .layout > .detail {
-    display: none;
-  }
+  line-height: 20px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tile:hover .tileIcon {
     transform: none;
   }
-}
-
-/* The detail as a sheet from the bottom of a narrow window. */
-.sheet {
-  border-start-start-radius: var(--radius-window);
-  border-start-end-radius: var(--radius-window);
 }

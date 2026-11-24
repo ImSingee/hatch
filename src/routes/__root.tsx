@@ -126,7 +126,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           <ModalsProvider>{children}</ModalsProvider>
 
           <Toaster position="top-center" richColors />
-          <NavigationProgress />
+          {/* A picture, not a control: it stays at the top edge even while
+              idle, where the pointer must reach what is underneath. */}
+          <NavigationProgress className="desk-route-progress" />
         </MantineProvider>
         <TanStackDevtools
           config={{
