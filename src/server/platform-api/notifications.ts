@@ -397,6 +397,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             name: sender.name,
             via: input.via === 'mobile' ? 'mobile' : 'cli',
           },
+          input.round > 0 ? { round: input.round } : undefined,
         );
         return { response: response(answered) };
       },

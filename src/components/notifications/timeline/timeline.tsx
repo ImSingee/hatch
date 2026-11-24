@@ -499,6 +499,7 @@ function Answer({
       <ReplySection
         notificationId={item.id}
         reply={reply}
+        round={item.replyRound}
         response={null}
         recalledAt={item.recalledAt}
       />

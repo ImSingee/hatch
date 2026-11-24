@@ -61,8 +61,13 @@ person who answered (`src/server/notifications/agent-answers.ts`):
 - Creating or retargeting an Agent route needs a model to run the answers:
   the fixed chat's model or a configured AI provider, else `409`.
 - An answer the Agent gave itself (a Run has no user) is never sent back.
-  Hand-off happens after the answer is stored; a missing Agent model is logged
-  and leaves the answer recorded. The message names the notification and the
+- Each chat an answer goes to is an answer delivery of its own
+  (`notification_response_deliveries` with `destination_type = agent`, the
+  chat in `agent_session_id` or null for the notification's own chat, and
+  the routes' `agent_instructions`). The dispatcher queues the message, so
+  one chat that fails (a model since disabled) retries with backoff and shows
+  in the delivery log without holding back the others; a removed chat or no
+  configured model fails it. The message names the notification and the
   round, so retries never queue it twice.
 
 Code: `src/server/notifications/` (`ingest.ts`, `dispatcher.ts`, `service.ts`,
@@ -309,9 +314,18 @@ question, because answers are delivered with it and receivers use it to tell
 what was answered; its other content may still be edited. Answers are stored
 per round (`notification_responses` keyed by notification and round), each
 `hatch.notification.responded` names its `response.round`, and receivers
-identify an answer by `(notification.id, response.round)`. A phone answering
-from the notification answers the current form: every new question re-pushes
-the notification, and answers that no longer fit are rejected (`400`).
+identify an answer by `(notification.id, response.round)`. An answer to an
+earlier round that is still being delivered goes out with that round's last
+version (its title, body, `data`, card and form, from
+`notification_revisions`), never with what a later question changed.
+
+An answer names the round it was given on: the web and the phone app send
+the round they show (`RespondToNotification.round`, `hatch notification
+respond --round`), and an answer from the push answers the version that phone
+last received. When an edit has asked a new question since, the answer is
+refused (`409`, code `notifications.replyRoundChanged`; `QUESTION_CHANGED`
+from the push), even when the new form keeps the old field and option ids.
+Answers that no longer fit the current form are rejected (`400`).
 
 Every edit that changes content or asks a new question keeps the replaced
 version in `notification_revisions`. `ListNotificationRevisions` (`hatch

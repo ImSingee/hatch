@@ -104,7 +104,8 @@ named `Hatch Agent`. Device registration is bound to a native login session,
 is mobile-only and has no CLI command. Answering from the notification itself
 (`POST /api/notifications/device-response`, signed with the phone's push key)
 is bound to the device as well; the CLI answers the same forms with
-`hatch notification respond`, and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
+`hatch notification respond` (`--round <n>` binds the answer to the question read, as the
+web and the phone app do), and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
 tokens) are printed only by the create/rotate commands that mint them.
 
 `notification list --order activity` lists in the web timeline's order (last

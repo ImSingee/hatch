@@ -32,6 +32,15 @@ const service = await import('./service');
 const { respondToNotification } = await import('./responses');
 const { updateNotification } = await import('./lifecycle');
 const { notificationUpdateSchema } = await import('./contract');
+const { claimDueDeliveries, runClaimedResponseDelivery } =
+  await import('./dispatcher');
+
+/** Send every answer due, as the dispatcher does. */
+async function deliverAnswers() {
+  for (const claimed of await claimDueDeliveries(20, 'response')) {
+    await runClaimedResponseDelivery(claimed, {} as never);
+  }
+}
 
 const FORM = {
   fields: [
@@ -119,7 +128,8 @@ describe('answers handed to the Agent', () => {
       agentSessionId: 'session-asked',
     });
     await answer(id);
-    await vi.waitFor(() => expect(enqueued).toHaveBeenCalledTimes(1));
+    await deliverAnswers();
+    expect(enqueued).toHaveBeenCalledTimes(1);
     const call = enqueued.mock.calls[0]![0];
     expect(call).toMatchObject({
       sessionId: 'session-asked',
@@ -140,8 +150,11 @@ describe('answers handed to the Agent', () => {
       agentSessionId: 'session-asked',
     });
     await answer(id, null);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await deliverAnswers();
     expect(enqueued).not.toHaveBeenCalled();
+    expect((await service.getNotification(id)).responseDeliveryList).toEqual(
+      [],
+    );
   });
 
   it('open one chat per notification for an Agent route and reuse it for the next question', async () => {
@@ -154,7 +167,8 @@ describe('answers handed to the Agent', () => {
     });
     const id = await notification({});
     await answer(id);
-    await vi.waitFor(() => expect(enqueued).toHaveBeenCalledTimes(1));
+    await deliverAnswers();
+    expect(enqueued).toHaveBeenCalledTimes(1);
     const [row] = await db
       .select()
       .from(schema.notifications)
@@ -191,7 +205,8 @@ describe('answers handed to the Agent', () => {
       }),
     );
     await answer(id);
-    await vi.waitFor(() => expect(enqueued).toHaveBeenCalledTimes(2));
+    await deliverAnswers();
+    expect(enqueued).toHaveBeenCalledTimes(2);
     expect(enqueued.mock.calls[1]![0]).toMatchObject({
       sessionId: row!.agentSessionId,
       clientMessageId: `notification-answer:${id}:2`,
@@ -218,8 +233,62 @@ describe('answers handed to the Agent', () => {
     });
     const id = await notification({});
     await answer(id);
-    await vi.waitFor(() => expect(enqueued).toHaveBeenCalledTimes(1));
+    await deliverAnswers();
+    expect(enqueued).toHaveBeenCalledTimes(1);
     expect(enqueued.mock.calls[0]![0].sessionId).toBe('session-fixed');
+  });
+});
+
+describe('several Agent chats for one answer', () => {
+  it('each succeed, retry or fail on their own and show in the delivery log', async () => {
+    await db.insert(schema.agentSessions).values([
+      { id: 'session-broken', title: 'Broken chat' },
+      { id: 'session-healthy', title: 'Healthy chat' },
+    ]);
+    for (const sessionId of ['session-broken', 'session-healthy']) {
+      await service.createResponseRoute({
+        sourceType: 'any',
+        target: { agent: { sessionId, instructions: null } },
+      });
+    }
+    // The broken chat's model was disabled after the route was set up.
+    enqueued.mockImplementation(async (input) => {
+      if (input.sessionId === 'session-broken') {
+        throw new Error('The model is disabled.');
+      }
+      return { pending: [], startedRunId: null } as never;
+    });
+    const id = await notification({});
+    await answer(id);
+    await deliverAnswers();
+
+    expect(
+      enqueued.mock.calls.map(([input]) => input.sessionId).sort(),
+    ).toEqual(['session-broken', 'session-healthy']);
+    const log = (await service.getNotification(id)).responseDeliveryList;
+    expect(
+      log
+        .map(({ destinationType, destinationName, status, lastError }) => ({
+          destinationType,
+          destinationName,
+          status,
+          lastError,
+        }))
+        .sort((a, b) => a.destinationName.localeCompare(b.destinationName)),
+    ).toEqual([
+      {
+        destinationType: 'agent',
+        destinationName: 'Broken chat',
+        status: 'pending',
+        lastError: 'The model is disabled.',
+      },
+      {
+        destinationType: 'agent',
+        destinationName: 'Healthy chat',
+        status: 'succeeded',
+        lastError: null,
+      },
+    ]);
   });
 });
 
@@ -251,10 +320,8 @@ describe('the message the Agent reads', () => {
       {
         round: 1,
         answers: { decision: 'fix' },
-        respondedBy: { userId: 'user-1', name: 'Ada' },
+        respondedByName: 'Ada',
         via: 'web',
-        destinationId: null,
-        respondedAt: new Date().toISOString(),
       },
       ['Fix the failing check.'],
     );

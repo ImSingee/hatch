@@ -1176,6 +1176,95 @@ describe('new questions on the same notification', () => {
     expect(history.responses.map((response) => response.round)).toEqual([1, 2]);
   });
 
+  it('delivers the answer to an earlier round with what it answered, after a new question changed the data', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      target: { destinationId: webhookId },
+    });
+    const response = await pushAsChannel({
+      kind: 'deploy',
+      title: 'Deploy A?',
+      data: { deployment: 'A' },
+      reply: APPROVE_FORM,
+    });
+    const { id } = (await response.json()) as { id: string };
+    await runAll();
+    // The receiver is down when the answer is given.
+    webhookStatus = 503;
+    await answer(id, { decision: 'approve' });
+    await runAll();
+    webhookStatus = 200;
+    await updateNotification(
+      { type: 'channel', channelId },
+      notificationUpdateSchema.parse({
+        id,
+        title: 'Deploy B?',
+        data: { deployment: 'B' },
+        reply: MERGE_FORM,
+      }),
+    );
+    received.length = 0;
+    await db
+      .update(schema.notificationResponseDeliveries)
+      .set({ nextAttemptAt: new Date(0) });
+    await runAll();
+
+    const [envelope] = received
+      .filter(
+        (entry) =>
+          entry.headers['x-hatch-event'] === 'hatch.notification.responded',
+      )
+      .map((entry) => JSON.parse(entry.body));
+    expect(envelope.notification).toMatchObject({
+      title: 'Deploy A?',
+      data: { deployment: 'A' },
+      reply: { fields: [{ id: 'decision' }] },
+      response: { round: 1, answers: { decision: 'approve' } },
+    });
+  });
+
+  it('refuses an answer to a question an edit has since replaced, on the web and from the push', async () => {
+    const id = await sendForm();
+    // Same field and option ids, a different question.
+    const renamed = structuredClone(APPROVE_FORM);
+    renamed.fields[0]!.label = 'Roll back the deploy?';
+    await updateNotification(
+      { type: 'channel', channelId },
+      notificationUpdateSchema.parse({ id, reply: renamed }),
+    );
+
+    await expect(
+      respondToNotification(
+        id,
+        { decision: 'approve' },
+        { userId: 'user-1', via: 'web' },
+        { round: 1 },
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'notifications.replyRoundChanged',
+    });
+    // The phone still shows the first question until the edit reaches it.
+    const stale = await handleDeviceResponse(
+      deviceRequest({ notificationId: id, answers: { decision: 'approve' } }),
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: 'QUESTION_CHANGED' },
+    });
+    expect((await service.getNotification(id)).response).toBeNull();
+
+    await runAll();
+    const current = await handleDeviceResponse(
+      deviceRequest({ notificationId: id, answers: { decision: 'reject' } }),
+    );
+    expect(current.status).toBe(200);
+    expect((await service.getNotification(id)).response).toMatchObject({
+      round: 2,
+      answers: { decision: 'reject' },
+    });
+  });
+
   it('asks nothing after the form is removed, and repeating the same form starts no round', async () => {
     const id = await sendForm();
     const sender = { type: 'channel' as const, channelId };

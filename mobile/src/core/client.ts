@@ -461,17 +461,19 @@ export class HatchApiClient {
   }
   /**
    * Answer a notification's reply form as the signed-in user. A notification
-   * takes one answer; a later one fails with a conflict (409).
+   * takes one answer per round; a later one, or one to a question an edit
+   * has since replaced, fails with a conflict (409).
    */
   respondToNotification(
     id: string,
+    round: number,
     answers: ReplyAnswers,
     signal?: AbortSignal,
   ) {
     return this.rpcRequest(
       (signal) =>
         this.notificationRpc.respondToNotification(
-          { id, answers: answersToMessages(answers), via: 'mobile' },
+          { id, round, answers: answersToMessages(answers), via: 'mobile' },
           { signal },
         ),
       signal,

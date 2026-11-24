@@ -44,6 +44,7 @@ const destinationLabels: Record<string, string> = {
   device: 'Device',
   webhook: 'Webhook',
   app: 'App',
+  agent: 'Agent chat',
 };
 
 export default function NotificationScreen() {
@@ -60,13 +61,15 @@ export default function NotificationScreen() {
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
   const queryClient = useQueryClient();
   const respond = useMutation({
-    mutationFn: (answers: ReplyAnswers) =>
-      api!.respondToNotification(id, answers),
+    // The round on screen, so a question an edit replaced meanwhile is
+    // refused rather than answered with this form.
+    mutationFn: (input: { round: number; answers: ReplyAnswers }) =>
+      api!.respondToNotification(id, input.round, input.answers),
     onError: (error) =>
       Alert.alert(
         'Answer not sent',
         error instanceof MobileError && error.status === 409
-          ? 'Someone already answered, or the sender recalled it.'
+          ? 'Someone already answered, the sender recalled it, or it now asks something else.'
           : errorText(error),
       ),
     onSettled: () =>
@@ -185,7 +188,9 @@ export default function NotificationScreen() {
           <ReplyFormCard
             reply={data.reply}
             busy={respond.isPending}
-            onSubmit={(answers) => respond.mutate(answers)}
+            onSubmit={(answers) =>
+              respond.mutate({ round: data.replyRound, answers })
+            }
           />
         ) : null}
         {data.url ? (

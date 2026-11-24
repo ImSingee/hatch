@@ -89,7 +89,8 @@ message NotificationDeliveryCounts {
 
 message NotificationSummary {
   string id = 1;
-  // app | channel | platform | user
+  //  // device | webhook | app, or agent for an answer queued in an Agent chat
+  // (which has no destination_id) | channel | platform | user
   string source_type = 2;
   optional string source_id = 3;
   string source_name = 4;
@@ -227,6 +228,11 @@ message RespondToNotificationRequest {
       "cli"
     ]
   }];
+  // The round of the reply form the answer was given on (the notification's
+  // reply_round when it was read). When set and an edit has since asked a
+  // new question, the answer fails with a conflict instead of answering the
+  // new one. 0 or unset answers the current round.
+  uint32 round = 4;
 }
 message RespondToNotificationResponse {
   NotificationResponse response = 1;
@@ -235,7 +241,8 @@ message RespondToNotificationResponse {
 message NotificationDelivery {
   string id = 1;
   optional string destination_id = 2;
-  // device | webhook | app
+  // device | webhook | app, or agent for an answer queued in an Agent chat
+  // (which has no destination_id)
   string destination_type = 3;
   string destination_name = 4;
   // pending | in_progress | succeeded | failed | canceled

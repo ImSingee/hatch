@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "da5db8f7-3c65-44da-80da-3ed0787e5284",
+  "id": "9cf9d79d-09a7-4c4c-8763-99d5edd68aa5",
   "prevIds": ["f4c7b13a-e729-4699-9f7f-c2abd570c148"],
   "footprints": [
     {
@@ -43,6 +43,36 @@
         "s|col|public.notification_response_deliveries.round",
         "n|col|public.notification_response_deliveries.round",
         "e|col|public.notification_response_deliveries.round"
+      ],
+      "reads": ["n|tbl|public.notification_response_deliveries", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_response_deliveries",
+        "agent_session_id"
+      ],
+      "writes": [
+        "s|col|public.notification_response_deliveries.agent_session_id",
+        "n|col|public.notification_response_deliveries.agent_session_id",
+        "e|col|public.notification_response_deliveries.agent_session_id"
+      ],
+      "reads": ["n|tbl|public.notification_response_deliveries", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_response_deliveries",
+        "agent_instructions"
+      ],
+      "writes": [
+        "s|col|public.notification_response_deliveries.agent_instructions",
+        "n|col|public.notification_response_deliveries.agent_instructions",
+        "e|col|public.notification_response_deliveries.agent_instructions"
       ],
       "reads": ["n|tbl|public.notification_response_deliveries", "n|sch|public"]
     },
@@ -451,6 +481,38 @@
         "notNull": true,
         "dimensions": 0,
         "default": "1",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_response_deliveries",
+        "name": "agent_session_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_response_deliveries",
+        "name": "agent_instructions",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
         "generated": null,
         "identity": null,
         "entityType": "columns"

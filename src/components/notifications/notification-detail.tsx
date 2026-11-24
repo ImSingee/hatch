@@ -31,7 +31,7 @@ import {
 } from '~queries/notifications';
 import { retryDeliveryFn, type DeliveryView } from '~server/notifications';
 import {
-  DESTINATION_TYPE_LABEL,
+  DELIVERY_TARGET_LABEL,
   DeliveryStatusBadge,
   DestinationTypeIcon,
   NotificationReplyBadge,
@@ -182,6 +182,7 @@ export function NotificationDetail({ id }: { id: string }) {
             <ReplySection
               notificationId={id}
               reply={data.reply}
+              round={data.replyRound}
               response={data.response}
               recalledAt={data.recalledAt}
             />
@@ -310,10 +311,10 @@ function DeliveryRow({
               {delivery.destinationName}
             </Text>
             <Text size="xs" c="dimmed">
-              {delivery.destinationId
-                ? t(DESTINATION_TYPE_LABEL[delivery.destinationType])
+              {delivery.destinationId || delivery.destinationType === 'agent'
+                ? t(DELIVERY_TARGET_LABEL[delivery.destinationType])
                 : t('notifications.detail.destinationRemoved', {
-                    type: t(DESTINATION_TYPE_LABEL[delivery.destinationType]),
+                    type: t(DELIVERY_TARGET_LABEL[delivery.destinationType]),
                   })}
             </Text>
           </Stack>

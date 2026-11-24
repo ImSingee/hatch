@@ -221,8 +221,10 @@ export type NotificationReplyState = 'awaiting' | 'answered';
 
 export type DeliveryView = {
   id: string;
+  /** Null for an Agent chat, and once the destination is removed. */
   destinationId: string | null;
-  destinationType: NotificationDestinationType;
+  /** `agent`: an answer queued in an Agent chat. */
+  destinationType: NotificationDestinationType | 'agent';
   destinationName: string;
   status: NotificationDeliveryStatus;
   attempts: number;
@@ -569,8 +571,11 @@ export async function listNotifications(
 function deliveryView(
   row: Omit<
     typeof schema.notificationDeliveries.$inferSelect,
-    'deliveredRevision'
-  > & { deliveredRevision?: number | null },
+    'deliveredRevision' | 'destinationType'
+  > & {
+    deliveredRevision?: number | null;
+    destinationType: DeliveryView['destinationType'];
+  },
 ): DeliveryView {
   return {
     id: row.id,

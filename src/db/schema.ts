@@ -925,6 +925,8 @@ export type NotificationKindDeclaration = {
 export type NotificationSourceType = 'app' | 'channel' | 'platform' | 'user';
 export type NotificationRouteSourceType = 'app' | 'channel' | 'any';
 export type NotificationDestinationType = 'device' | 'webhook' | 'app';
+/** Where an answer goes: a webhook or App destination, or an Agent chat. */
+export type NotificationResponseDeliveryType = 'webhook' | 'app' | 'agent';
 export type NotificationApnsEnvironment = 'sandbox' | 'production';
 /**
  * Why a destination is disabled: `user` in settings (only settings re-enable
@@ -1428,11 +1430,20 @@ export const notificationResponseDeliveries = snakeCase.table(
       .references(() => notifications.id, { onDelete: 'cascade' }),
     /** The round whose answer this delivers. */
     round: integer().notNull().default(1),
+    /** Null for an Agent chat, and once the destination is removed. */
     destinationId: ulid().references(() => notificationDestinations.id, {
       onDelete: 'set null',
     }),
-    destinationType: text().$type<NotificationDestinationType>().notNull(),
+    destinationType: text().$type<NotificationResponseDeliveryType>().notNull(),
     destinationName: text().notNull(),
+    /**
+     * The Agent chat an `agent` delivery queues the answer in; null for the
+     * notification's own chat (the one whose Run asked, or the one its first
+     * answer opens).
+     */
+    agentSessionId: text('agent_session_id'),
+    /** What the Agent routes that picked this chat ask the Agent to do. */
+    agentInstructions: jsonb('agent_instructions').$type<string[]>(),
     status: text()
       .$type<NotificationDeliveryStatus>()
       .notNull()

@@ -621,7 +621,7 @@ const specs: Record<string, Spec> = {
         const replySection = reply
           ? [
               '',
-              'Reply form:',
+              `Reply form (round ${field(summary, 'replyRound') || 1}):`,
               ...replyLines(reply),
               ...(answered
                 ? [
@@ -634,7 +634,7 @@ const specs: Record<string, Spec> = {
                 : field(summary, 'recalledAt')
                   ? ['Not answered; recalled.']
                   : [
-                      `Not answered yet. Answer with: hatch notification respond ${field(summary, 'id')} --answer <field-id>=<value>`,
+                      `Not answered yet. Answer with: hatch notification respond ${field(summary, 'id')} --round ${field(summary, 'replyRound') || 1} --answer <field-id>=<value>`,
                     ]),
             ]
           : [];
@@ -894,8 +894,18 @@ const specs: Record<string, Spec> = {
       answer: { type: 'string', multiple: true },
       answers: { type: 'string' },
       'answers-file': { type: 'string' },
+      round: { type: 'string' },
     },
     build: ([notificationId], values) => {
+      const roundFlag = str(values, 'round');
+      const round = roundFlag === undefined ? 0 : Number(roundFlag);
+      if (
+        roundFlag !== undefined &&
+        (!Number.isInteger(round) || round < 1 || round > 2 ** 31 - 1)
+      )
+        invalid(
+          '--round must be a positive integer (the reply round from get).',
+        );
       const shorthand = list(values, 'answer');
       const loader = jsonInput(values, 'answers');
       if (shorthand && loader)
@@ -908,7 +918,7 @@ const specs: Record<string, Spec> = {
       const pairs = shorthand ? parseAnswerFlags(shorthand) : undefined;
       return {
         method: 'respondToNotification',
-        request: { id: notificationId, via: 'cli' },
+        request: { id: notificationId, via: 'cli', round },
         prepare: async (signal) => ({
           answers: answersToMessages(
             pairs ?? checkAnswersObject(await loader!(signal), flag),

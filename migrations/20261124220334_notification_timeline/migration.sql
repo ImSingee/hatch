@@ -23,6 +23,8 @@ CREATE TABLE "notification_revisions" (
 );
 --> statement-breakpoint
 ALTER TABLE "notification_response_deliveries" ADD COLUMN "round" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "notification_response_deliveries" ADD COLUMN "agent_session_id" text;--> statement-breakpoint
+ALTER TABLE "notification_response_deliveries" ADD COLUMN "agent_instructions" jsonb;--> statement-breakpoint
 ALTER TABLE "notification_response_routes" ADD COLUMN "target_type" text DEFAULT 'destination' NOT NULL;--> statement-breakpoint
 ALTER TABLE "notification_response_routes" ADD COLUMN "agent_session_id" text;--> statement-breakpoint
 ALTER TABLE "notification_response_routes" ADD COLUMN "agent_instructions" text;--> statement-breakpoint

@@ -776,7 +776,9 @@ hatch notification mark-read --latest
 ```
 
 Each question takes one answer and it is final: answering again, or answering
-a recalled notification, is a conflict (exit 6), and an answer that does not
+a recalled notification, is a conflict (exit 6), and so is an answer with
+`--round <n>` after an edit asked a new question (round from `get`), so an
+answer meant for an earlier question never lands on a new one. An answer that does not
 fit the form is `BAD_REQUEST` (exit 2) naming the field. To ask a new
 question on the same notification, edit it with
 `update <id> --reply <json>` (or `--clear-reply`); the new round takes its own

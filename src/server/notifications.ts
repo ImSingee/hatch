@@ -121,6 +121,8 @@ export const retryDeliveryFn = createServerFn({ method: 'POST' })
 
 const answerSchema = z.object({
   id: idSchema,
+  // The round of the form on screen; a new question since then refuses it.
+  round: z.number().int().min(1),
   // Checked against the notification's form by the domain service.
   answers: z.record(
     z.string().max(64),
@@ -134,10 +136,12 @@ export const respondToNotificationFn = createServerFn({ method: 'POST' })
   .validator((input: z.input<typeof answerSchema>) => answerSchema.parse(input))
   .handler(async ({ data }) => {
     const { user } = await requireSession();
-    return respondToNotification(data.id, data.answers, {
-      userId: user.id,
-      via: 'web',
-    });
+    return respondToNotification(
+      data.id,
+      data.answers,
+      { userId: user.id, via: 'web' },
+      { round: data.round },
+    );
   });
 
 /** What a notification said before each edit, and every answer it took. */

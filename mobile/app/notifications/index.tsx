@@ -396,16 +396,52 @@ export default function NotificationsScreen() {
                       {notificationTime(row.items.at(-1)!.activityAt)}
                     </Text>
                   </Pressable>
+                  {/* Each opens the notification, with its body, link and
+                      delete; low priority ones may never reach the
+                      Notification Center. */}
                   {open
                     ? row.items.map((item) => (
-                        <View key={item.id} style={styles.quietLine}>
-                          <Text style={[type.caption, { color: c.ink }]}>
-                            {item.sourceName}
-                          </Text>
-                          <Text style={[type.small, { flex: 1 }]}>
-                            {item.title}
-                          </Text>
-                        </View>
+                        <Link
+                          key={item.id}
+                          href={`/notifications/${item.id}`}
+                          asChild
+                        >
+                          <Link.Trigger>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`${item.title}, from ${item.sourceName}`}
+                              accessibilityHint="Touch and hold for more actions"
+                              style={({ pressed }) => [
+                                styles.quietLine,
+                                pressed && { backgroundColor: c.hover },
+                              ]}
+                            >
+                              <Text style={[type.caption, { color: c.ink }]}>
+                                {item.sourceName}
+                              </Text>
+                              <Text
+                                style={[type.small, { flex: 1 }]}
+                                numberOfLines={1}
+                              >
+                                {item.title}
+                              </Text>
+                              <Glyph
+                                name="chevron"
+                                size={10}
+                                color={c.inkSoft}
+                              />
+                            </Pressable>
+                          </Link.Trigger>
+                          <Link.Menu>
+                            <Link.MenuAction
+                              icon="trash"
+                              destructive
+                              onPress={() => confirmDelete(item)}
+                            >
+                              Delete
+                            </Link.MenuAction>
+                          </Link.Menu>
+                        </Link>
                       ))
                     : null}
                 </View>
@@ -554,6 +590,7 @@ const styles = StyleSheet.create({
   },
   quietLine: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,

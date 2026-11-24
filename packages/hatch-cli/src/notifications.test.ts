@@ -687,10 +687,13 @@ describe('notification reply commands', () => {
         'who=bob',
         '--answer',
         'note=a=b',
+        '--round',
+        '3',
       ),
     );
     const answers = received.respondToNotification?.answers ?? {};
     expect(received.respondToNotification?.via).toBe('cli');
+    expect(received.respondToNotification?.round).toBe(3);
     expect(answers.when?.answer).toEqual({ case: 'value', value: 'am' });
     expect(answers.note?.answer).toEqual({ case: 'value', value: 'a=b' });
     expect(answers.who?.answer).toMatchObject({
@@ -708,6 +711,11 @@ describe('notification reply commands', () => {
     expect(() => parse('respond', 'n', '--answer', 'novalue')).toThrow(
       /must be <field-id>=<value>/,
     );
+    for (const round of ['0', '1.5', 'two']) {
+      expect(() =>
+        parse('respond', 'n', '--answer', 'a=b', '--round', round),
+      ).toThrow(/--round must be a positive integer/);
+    }
     const { transport, received } = replyTransport();
     await expect(
       executeNotificationCall(
