@@ -75,6 +75,9 @@ const SERVICE_NAME = /^[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*$/;
 const METHOD_NAME = /^[A-Za-z_]\w*$/;
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const ACCENT_STORAGE_KEY = 'hatch.accent';
+/** The faces the player page declares (fonts.css) and the theme names. */
+const PLAYER_FONT_FAMILIES = ['Nunito', 'JetBrains Mono'];
+const FONT_WAIT_MS = 3_000;
 
 function refuse(code: string, message: string): Answer {
   return { ok: false, code, message };
@@ -601,6 +604,16 @@ export async function startNativePlayer(): Promise<void> {
       host: { call: (name: string, args: unknown) => host.call(name, args) },
       onError: (message: string) => fail(message),
     });
+    // Text NSH draws before a face has loaded stays invisible until the next
+    // repaint, so the Desk faces (player fonts.css) load first, briefly.
+    await Promise.race([
+      Promise.all(
+        PLAYER_FONT_FAMILIES.map((family) =>
+          document.fonts.load(`16px "${family}"`).catch(() => []),
+        ),
+      ),
+      new Promise((resolve) => setTimeout(resolve, FONT_WAIT_MS)),
+    ]);
     document.getElementById('status')?.setAttribute('hidden', '');
     player.hostEvent('hatch.theme', { theme: theme() });
     for (const message of pending.splice(0)) apply(message);
