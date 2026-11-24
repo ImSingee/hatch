@@ -15,6 +15,7 @@ import {
 } from '~queries/app-tasks';
 import { cancelAppTaskRunFn, getAppTaskRunFn } from '~server/app-tasks';
 import { getAppBySlug } from '~server/apps';
+import { useI18n } from '~i18n';
 
 export const Route = createFileRoute('/_app/app/$appSlug/tasks/runs/$runId')({
   loader: async ({ params }) => {
@@ -33,6 +34,7 @@ export const Route = createFileRoute('/_app/app/$appSlug/tasks/runs/$runId')({
 function TaskRunInspectorPage() {
   const initial = Route.useLoaderData();
   const { runId } = Route.useParams();
+  const { t } = useI18n();
   const { app } = initial;
   const queryClient = useQueryClient();
   const { data } = useQuery({
@@ -46,8 +48,8 @@ function TaskRunInspectorPage() {
   const cancel = useMutation({
     mutationFn: () => cancelAppTaskRunFn({ data: { id: app.id, runId } }),
     onSuccess: (result) => {
-      if (result.canceled) toast.success('Run canceled');
-      else toast.info('The run had already finished');
+      if (result.canceled) toast.success(t('taskRun.toast.canceled'));
+      else toast.info(t('taskRun.toast.alreadyFinished'));
       void queryClient.invalidateQueries(appTaskRunQueryOptions(app.id, runId));
       void queryClient.invalidateQueries(appTasksQueryOptions(app.id));
     },
@@ -57,12 +59,12 @@ function TaskRunInspectorPage() {
     <DeskWindow
       fill
       maxWidth={1180}
-      title={`${app.name} · Run`}
+      title={t('taskRun.title', { app: app.name })}
       tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
       badge={<RunStatusBadge status={run.status} />}
       closeTo={{
         link: { to: '/app/$appSlug/tasks/runs', params },
-        label: `${app.name} task runs`,
+        label: t('taskRun.closeLabel', { app: app.name }),
       }}
     >
       <WindowBody>
@@ -79,7 +81,7 @@ function TaskRunInspectorPage() {
                 />
               )}
             >
-              ‹ All runs of {app.name}
+              {t('taskRun.backToRuns', { app: app.name })}
             </Anchor>
           }
         >
@@ -91,7 +93,7 @@ function TaskRunInspectorPage() {
               loading={cancel.isPending}
               onClick={() => cancel.mutate()}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
           ) : null}
         </Toolbar>
@@ -99,7 +101,7 @@ function TaskRunInspectorPage() {
           run={run}
           summaryRows={
             <>
-              <Row label="Task">
+              <Row label={t('taskRun.row.task')}>
                 <Anchor
                   size="sm"
                   renderRoot={(props) => (
@@ -114,13 +116,17 @@ function TaskRunInspectorPage() {
                 </Anchor>
               </Row>
               {run.queuePosition != null ? (
-                <Row label="Queue">
+                <Row label={t('taskRun.row.queue')}>
                   {run.queuePosition === 1
-                    ? 'Next to start'
-                    : `${run.queuePosition - 1} run(s) ahead`}
+                    ? t('taskRun.queue.next')
+                    : t('taskRun.queue.ahead', {
+                        count: run.queuePosition - 1,
+                      })}
                 </Row>
               ) : null}
-              {run.cronName ? <Row label="Schedule">{run.cronName}</Row> : null}
+              {run.cronName ? (
+                <Row label={t('taskRun.row.schedule')}>{run.cronName}</Row>
+              ) : null}
             </>
           }
         />
