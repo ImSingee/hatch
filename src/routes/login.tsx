@@ -10,6 +10,7 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '~auth/client';
+import { authErrorOf } from '~auth/auth-errors';
 import { browserSupportsPasskeys } from '~auth/passkey-browser';
 import { Brand } from '~components/desk/brand';
 import { DeskStandalone } from '~components/desk/desk-standalone';
@@ -20,6 +21,7 @@ import {
 } from '~components/page/standalone-window';
 import { hasActiveSession } from '~server/auth';
 import { getSignupConfig } from '~server/users';
+import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
 import { passkeyOriginQueryOptions } from '~queries/passkeys';
 import classes from './login.module.css';
 
@@ -58,6 +60,7 @@ export const Route = createFileRoute('/login')({
 type Mode = 'signin' | 'signup';
 
 function LoginPage() {
+  const { t, locale } = useI18n();
   const router = useRouter();
   const { redirect: redirectTo } = Route.useSearch();
   const { allowSignup, appOrigin } = Route.useLoaderData();
@@ -74,16 +77,33 @@ function LoginPage() {
     await router.navigate({ href: safeRedirect(redirectTo) });
   }, [redirectTo, router]);
 
+  // Validation stores catalog keys; the fields translate them at render.
   const form = useForm({
     initialValues: { name: '', email: '', password: '' },
     validate: {
-      email: (v) => (/^\S+@\S+\.\S+$/.test(v) ? null : 'Enter a valid email'),
+      email: (v) =>
+        /^\S+@\S+\.\S+$/.test(v)
+          ? null
+          : ('login.validation.email' satisfies PlainTranslationKey),
       password: (v) =>
-        v.length >= 8 ? null : 'Password must be at least 8 characters',
+        v.length >= 8
+          ? null
+          : ('login.validation.password' satisfies PlainTranslationKey),
       name: (v) =>
-        mode === 'signup' && v.trim().length === 0 ? 'Enter your name' : null,
+        mode === 'signup' && v.trim().length === 0
+          ? ('login.validation.name' satisfies PlainTranslationKey)
+          : null,
     },
   });
+  const fieldProps = (field: 'name' | 'email' | 'password') => {
+    const props = form.getInputProps(field);
+    const error = form.errors[field];
+    return {
+      ...props,
+      error:
+        typeof error === 'string' ? t(error as PlainTranslationKey) : error,
+    };
+  };
 
   const submit = form.onSubmit(async (values) => {
     setPasswordLoading(true);
@@ -101,13 +121,22 @@ function LoginPage() {
             });
 
       if (result.error) {
-        toast.error(result.error.message ?? 'Authentication failed');
+        toast.error(
+          translateError(
+            t,
+            locale,
+            authErrorOf(result.error),
+            'login.error.failed',
+          ),
+        );
         return;
       }
-      toast.success(mode === 'signin' ? 'Welcome back' : 'Account created');
+      toast.success(
+        mode === 'signin' ? t('login.welcomeBack') : t('login.accountCreated'),
+      );
       await navigateAfterAuthentication();
     } catch {
-      toast.error('Something went wrong. Please try again.');
+      toast.error(t('login.error.unexpected'));
     } finally {
       setPasswordLoading(false);
     }
@@ -116,20 +145,24 @@ function LoginPage() {
   return (
     <DeskStandalone>
       <StandaloneWindow
-        title={mode === 'signin' ? 'Sign in' : 'Create account'}
+        title={mode === 'signin' ? t('login.signIn') : t('login.createAccount')}
         footer={
           !allowSignup
-            ? 'Sign-up is closed. Ask the owner of this space for access.'
+            ? t('login.footer.signupClosed')
             : mode === 'signin'
-              ? 'New here? Switch to Create account above.'
-              : 'Already have an account? Switch to Sign in above.'
+              ? t('login.footer.newHere')
+              : t('login.footer.haveAccount')
         }
       >
         <WindowHero
           tile={<Brand size="lg" withWordmark={false} />}
-          title={mode === 'signin' ? 'Welcome back' : 'Create your account'}
+          title={
+            mode === 'signin'
+              ? t('login.welcomeBack')
+              : t('login.createYourAccount')
+          }
         >
-          Spin up your own apps just by talking to AI.
+          {t('login.tagline')}
         </WindowHero>
         {allowSignup && (
           <SegmentedControl
@@ -137,8 +170,8 @@ function LoginPage() {
             value={mode}
             onChange={(v) => setRawMode(v as Mode)}
             data={[
-              { label: 'Sign in', value: 'signin' },
-              { label: 'Create account', value: 'signup' },
+              { label: t('login.signIn'), value: 'signin' },
+              { label: t('login.createAccount'), value: 'signup' },
             ]}
           />
         )}
@@ -154,13 +187,13 @@ function LoginPage() {
             {mode === 'signup' ? (
               <TextInput
                 size="md"
-                label="Name"
-                {...form.getInputProps('name')}
+                label={t('login.name')}
+                {...fieldProps('name')}
               />
             ) : null}
             <TextInput
               size="md"
-              label="Email"
+              label={t('login.email')}
               autoComplete={
                 mode === 'signin'
                   ? browserSupportsPasskeys(appOrigin)
@@ -168,12 +201,12 @@ function LoginPage() {
                     : 'username'
                   : 'email'
               }
-              {...form.getInputProps('email')}
+              {...fieldProps('email')}
             />
             <PasswordInput
               size="md"
-              label="Password"
-              {...form.getInputProps('password')}
+              label={t('login.password')}
+              {...fieldProps('password')}
             />
             <Button
               type="submit"
@@ -185,7 +218,7 @@ function LoginPage() {
                 mode === 'signin' && passkeysAvailable ? 'default' : 'filled'
               }
             >
-              {mode === 'signin' ? 'Sign in' : 'Create account'}
+              {mode === 'signin' ? t('login.signIn') : t('login.createAccount')}
             </Button>
           </Stack>
         </form>

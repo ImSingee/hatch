@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { auth } from '~auth/server';
+import { CodedError } from '~lib/error-codes';
 
 /**
  * Report whether the request has a valid Better Auth session.
@@ -34,7 +35,8 @@ export const hasActiveSession = createServerFn({ method: 'GET' }).handler(
 export const requireSession = createServerOnlyFn(async () => {
   const request = getRequest();
   const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) throw new Error('Unauthorized');
+  // A plain error, not an `AppError`: callers keep their own HTTP status.
+  if (!session) throw new CodedError('Unauthorized', 'auth.unauthorized');
   return session;
 });
 

@@ -3,6 +3,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
+import { CodedError } from '~lib/error-codes';
 import { authClient } from './client';
 
 const SIGN_OUT_KEY = ['auth', 'sign-out'];
@@ -19,7 +20,10 @@ export function useSignOut() {
     mutationFn: async () => {
       const result = await authClient.signOut().catch(() => null);
       if (!result || result.error) {
-        throw new Error('Could not sign out. Please try again.');
+        throw new CodedError(
+          'Could not sign out. Please try again.',
+          'auth.signOutFailed',
+        );
       }
     },
     // A fresh document discards the query, mutation and Better Auth stores.
