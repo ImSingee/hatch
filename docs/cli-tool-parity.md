@@ -217,6 +217,14 @@ together, so Run credentials gain the same authority. `AuthService.CreateHandoff
 stays session-only because it exchanges the caller's native login session for
 a browser session.
 
+Account profile (nickname and avatar) is Web-only: Settings → Account edits
+the nickname through Better Auth's `/update-user` and the avatar through the
+`uploadMyAvatarFn` / `clearMyAvatarFn` Server Functions, and no `hatch`
+command or public RPC reads or changes either. When one is added, back it
+with `src/server/user-avatar-store.ts` (the avatar path lives in
+`user.image`; Better Auth endpoints refuse that field) and resolve a Run
+credential to the user who started the Run, as `PreferenceService` does.
+
 The desk menu bar's "Runner offline" warning reads the same Agent Runner
 status as `/settings/agent-runner`, which has no CLI command either. The
 `runner_id` that the session header shows is returned by
