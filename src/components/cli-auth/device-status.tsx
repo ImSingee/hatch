@@ -1,7 +1,6 @@
 import { Button, Group, Text, ThemeIcon } from '@mantine/core';
 import {
   IconBan,
-  IconCircleCheck,
   IconClockX,
   IconCloudX,
   IconDevices,
@@ -21,8 +20,8 @@ import classes from './device-approval.module.css';
 type Action = 'new-code' | 'sign-in' | 'recheck' | 'home';
 
 type StatusCopy = {
-  icon: Icon;
-  color: string;
+  icon?: Icon;
+  color?: string;
   title: string;
   body: string;
   actions: Action[];
@@ -82,8 +81,6 @@ const PROBLEMS: Record<Problem, StatusCopy> = {
 
 const OUTCOMES: Record<DeviceOutcome, StatusCopy> = {
   approved: {
-    icon: IconCircleCheck,
-    color: 'green',
     title: 'Device approved',
     body: 'Return to your device to finish. You can close this tab.',
     actions: [],
@@ -189,15 +186,17 @@ function StatusLayout({
 }) {
   return (
     <div className={classes.status}>
-      <ThemeIcon
-        size={52}
-        radius="xl"
-        variant="light"
-        color={copy.color}
-        aria-hidden
-      >
-        <copy.icon size={26} stroke={1.6} />
-      </ThemeIcon>
+      {copy.icon ? (
+        <ThemeIcon
+          size={52}
+          radius="xl"
+          variant="light"
+          color={copy.color}
+          aria-hidden
+        >
+          <copy.icon size={26} stroke={1.6} />
+        </ThemeIcon>
+      ) : null}
       <ViewHeader title={copy.title} focus>
         {copy.body}
       </ViewHeader>
