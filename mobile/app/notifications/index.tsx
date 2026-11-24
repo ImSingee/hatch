@@ -601,6 +601,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,

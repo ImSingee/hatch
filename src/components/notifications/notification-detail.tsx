@@ -172,22 +172,27 @@ export function NotificationDetail({ id }: { id: string }) {
         ) : null}
       </Box>
 
-      {data.reply ? (
+      {data.reply || data.responseDeliveryList.length > 0 ? (
         <>
           <Divider />
           <Box component="section">
             <Text fw={700} fz="lg" mb="xs">
               {t('notifications.detail.reply')}
             </Text>
-            <ReplySection
-              notificationId={id}
-              reply={data.reply}
-              round={data.replyRound}
-              response={data.response}
-              recalledAt={data.recalledAt}
-            />
-            {data.response ? (
-              <Box mt="lg">
+            {data.reply ? (
+              <ReplySection
+                notificationId={id}
+                reply={data.reply}
+                round={data.replyRound}
+                response={data.response}
+                recalledAt={data.recalledAt}
+              />
+            ) : null}
+            {/* Every round's answer deliveries, also after a later edit asked
+                a new question or removed the form, so a failed one can still
+                be retried. */}
+            {data.response || data.responseDeliveryList.length > 0 ? (
+              <Box mt={data.reply ? 'lg' : 0}>
                 <Text fw={700} size="sm" mb="xs">
                   {t('notifications.detail.answerDeliveries')}
                 </Text>

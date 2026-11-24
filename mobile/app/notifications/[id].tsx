@@ -186,6 +186,8 @@ export default function NotificationScreen() {
           <AnswerCard reply={data.reply} answer={data.response} />
         ) : data.reply && !data.recalledAt ? (
           <ReplyFormCard
+            // A new question starts a fresh draft.
+            key={`${id}:${data.replyRound}`}
             reply={data.reply}
             busy={respond.isPending}
             onSubmit={(answers) =>
