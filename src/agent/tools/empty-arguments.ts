@@ -1,15 +1,25 @@
-import { Type, type TSchema } from '@earendil-works/pi-ai';
+/** A JSON Schema object (as produced by `z.toJSONSchema`). */
+export type JsonSchema = Record<string, unknown>;
 
-type ObjectSchema = TSchema & {
+type ObjectSchema = JsonSchema & {
   description?: string;
   type?: string;
   const?: unknown;
   enum?: unknown[];
-  properties?: Record<string, TSchema>;
+  properties?: Record<string, JsonSchema>;
   required?: string[];
-  items?: TSchema;
-  anyOf?: TSchema[];
+  items?: JsonSchema;
+  anyOf?: JsonSchema[];
 };
+
+/** Empty spellings a model may send for an omitted optional field. */
+const EMPTY_PLACEHOLDERS: JsonSchema[] = [
+  { type: 'string', const: '' },
+  { type: 'null' },
+  { type: 'number', const: 0 },
+  { type: 'array', items: {}, maxItems: 0 },
+  { type: 'object', properties: {}, additionalProperties: false },
+];
 
 export type PreserveEmptyValue = (
   fieldPath: string,
@@ -52,7 +62,7 @@ function hasDeclaredTypeAndEnumValue(
 }
 
 /** Optional fields need a placeholder for models that always emit them. */
-export function withEmptyOptionalFields(schema: TSchema): TSchema {
+export function withEmptyOptionalFields(schema: JsonSchema): JsonSchema {
   const source = schema as ObjectSchema;
   const result: ObjectSchema = { ...source };
   if (source.anyOf) {
@@ -67,19 +77,12 @@ export function withEmptyOptionalFields(schema: TSchema): TSchema {
           key,
           source.required?.includes(key)
             ? adapted
-            : Type.Union(
-                [
-                  adapted,
-                  Type.Literal(''),
-                  Type.Null(),
-                  Type.Literal(0),
-                  Type.Array(Type.Any(), { maxItems: 0 }),
-                  Type.Object({}, { additionalProperties: false }),
-                ],
-                typeof (field as ObjectSchema).description === 'string'
+            : {
+                anyOf: [adapted, ...structuredClone(EMPTY_PLACEHOLDERS)],
+                ...(typeof (field as ObjectSchema).description === 'string'
                   ? { description: (field as ObjectSchema).description }
-                  : {},
-              ),
+                  : {}),
+              },
         ];
       }),
     );
@@ -90,7 +93,7 @@ export function withEmptyOptionalFields(schema: TSchema): TSchema {
 /** Only visit declared fields, never arbitrary JSON records or user data. */
 export function normalizeEmptyOptionalFields(
   input: Record<string, unknown>,
-  schema: TSchema,
+  schema: JsonSchema,
   preserve?: PreserveEmptyValue,
 ): Record<string, unknown> {
   function normalize(

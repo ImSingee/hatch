@@ -1,5 +1,5 @@
 /** The run_command shell tool with bounded, throttled live output. */
-import { Type } from '@earendil-works/pi-ai';
+import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ExecutionEnv } from '../execution-env';
 import type {
@@ -74,36 +74,37 @@ export function createCommandTool(
       'named values previously saved with request_env.',
     selectStreamDetails: (details) =>
       isCommandResultDetails(details) ? details : undefined,
-    parameters: Type.Object({
-      purpose: Type.String({
-        minLength: 1,
-        pattern: '\\S',
-        description:
+    parameters: z.object({
+      purpose: z
+        .string()
+        .min(1)
+        .regex(/\S/)
+        .describe(
           'Very brief purpose for running this command, shown as its UI ' +
-          'title. Keep it concise.',
-      }),
-      command: Type.String({ description: 'Shell command to run.' }),
-      timeout_seconds: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          maximum: MAX_COMMAND_TIMEOUT_SECONDS,
-          description:
-            `Maximum runtime in seconds. Defaults to ` +
+            'title. Keep it concise.',
+        ),
+      command: z.string().describe('Shell command to run.'),
+      timeout_seconds: z
+        .int()
+        .min(1)
+        .max(MAX_COMMAND_TIMEOUT_SECONDS)
+        .describe(
+          `Maximum runtime in seconds. Defaults to ` +
             `${DEFAULT_COMMAND_TIMEOUT_SECONDS}. Set this only after a ` +
             'command timed out at the default, or when you already know it ' +
             'is long-running and likely to exceed the default.',
-        }),
-      ),
-      env_keys: Type.Optional(
-        Type.Array(
-          Type.String({
-            pattern: ENV_KEY_PATTERN,
-            maxLength: 64,
-            description: 'A saved environment key to inject into this command.',
-          }),
-          { maxItems: 10 },
-        ),
-      ),
+        )
+        .optional(),
+      env_keys: z
+        .array(
+          z
+            .string()
+            .max(64)
+            .regex(new RegExp(ENV_KEY_PATTERN))
+            .describe('A saved environment key to inject into this command.'),
+        )
+        .max(10)
+        .optional(),
     }),
     execute: async (_id, params, signal, onUpdate) => {
       const timeoutSeconds = commandTimeoutSeconds(params.timeout_seconds);
