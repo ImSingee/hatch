@@ -56,6 +56,7 @@ import { Route as ApiAuthHandoffsCompleteRouteImport } from './routes/api/auth/h
 import { Route as ApiAuthHandoffsConsumeRouteImport } from './routes/api/auth/handoffs/consume'
 import { Route as ApiImagesCandidatesCandidateIdRouteImport } from './routes/api/images/candidates/$candidateId'
 import { Route as ApiNotificationsChannelChannelIdRouteImport } from './routes/api/notifications/channel/$channelId'
+import { Route as ApiUsersUserIdAvatarRouteImport } from './routes/api/users/$userId/avatar'
 import { Route as AppAppSlugEmbedSplatRouteImport } from './routes/app/$appSlug/embed/$'
 import { Route as AppAppAppSlugTasksIndexRouteImport } from './routes/_app/app/$appSlug/tasks/index'
 import { Route as AppAppAppSlugTasksTaskNameRouteImport } from './routes/_app/app/$appSlug/tasks/$taskName'
@@ -324,6 +325,11 @@ const ApiNotificationsChannelChannelIdRoute =
     path: '/api/notifications/channel/$channelId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiUsersUserIdAvatarRoute = ApiUsersUserIdAvatarRouteImport.update({
+  id: '/api/users/$userId/avatar',
+  path: '/api/users/$userId/avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppAppSlugEmbedSplatRoute = AppAppSlugEmbedSplatRouteImport.update({
   id: '/app/$appSlug/embed/$',
   path: '/app/$appSlug/embed/$',
@@ -509,6 +515,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/handoffs/consume': typeof ApiAuthHandoffsConsumeRoute
   '/api/images/candidates/$candidateId': typeof ApiImagesCandidatesCandidateIdRoute
   '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
+  '/api/users/$userId/avatar': typeof ApiUsersUserIdAvatarRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug/': typeof AppAppAppSlugIndexRoute
   '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
@@ -579,6 +586,7 @@ export interface FileRoutesByTo {
   '/api/auth/handoffs/consume': typeof ApiAuthHandoffsConsumeRoute
   '/api/images/candidates/$candidateId': typeof ApiImagesCandidatesCandidateIdRoute
   '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
+  '/api/users/$userId/avatar': typeof ApiUsersUserIdAvatarRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug': typeof AppAppAppSlugIndexRoute
   '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
@@ -654,6 +662,7 @@ export interface FileRoutesById {
   '/api/auth/handoffs/consume': typeof ApiAuthHandoffsConsumeRoute
   '/api/images/candidates/$candidateId': typeof ApiImagesCandidatesCandidateIdRoute
   '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
+  '/api/users/$userId/avatar': typeof ApiUsersUserIdAvatarRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/_app/app/$appSlug/': typeof AppAppAppSlugIndexRoute
   '/_app/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
@@ -729,6 +738,7 @@ export interface FileRouteTypes {
     | '/api/auth/handoffs/consume'
     | '/api/images/candidates/$candidateId'
     | '/api/notifications/channel/$channelId'
+    | '/api/users/$userId/avatar'
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug/'
     | '/app/$appSlug/tasks/$taskName'
@@ -799,6 +809,7 @@ export interface FileRouteTypes {
     | '/api/auth/handoffs/consume'
     | '/api/images/candidates/$candidateId'
     | '/api/notifications/channel/$channelId'
+    | '/api/users/$userId/avatar'
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug'
     | '/app/$appSlug/tasks/$taskName'
@@ -873,6 +884,7 @@ export interface FileRouteTypes {
     | '/api/auth/handoffs/consume'
     | '/api/images/candidates/$candidateId'
     | '/api/notifications/channel/$channelId'
+    | '/api/users/$userId/avatar'
     | '/app/$appSlug/embed/$'
     | '/_app/app/$appSlug/'
     | '/_app/app/$appSlug/tasks/$taskName'
@@ -925,6 +937,7 @@ export interface RootRouteChildren {
   ApiAuthHandoffsConsumeRoute: typeof ApiAuthHandoffsConsumeRoute
   ApiImagesCandidatesCandidateIdRoute: typeof ApiImagesCandidatesCandidateIdRoute
   ApiNotificationsChannelChannelIdRoute: typeof ApiNotificationsChannelChannelIdRouteWithChildren
+  ApiUsersUserIdAvatarRoute: typeof ApiUsersUserIdAvatarRoute
   AppAppSlugEmbedSplatRoute: typeof AppAppSlugEmbedSplatRoute
   ApiAgentSessionsSessionIdAutoRetryRoute: typeof ApiAgentSessionsSessionIdAutoRetryRoute
   ApiAgentSessionsSessionIdPendingRoute: typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
@@ -1268,6 +1281,13 @@ declare module '@tanstack/react-router' {
       path: '/api/notifications/channel/$channelId'
       fullPath: '/api/notifications/channel/$channelId'
       preLoaderRoute: typeof ApiNotificationsChannelChannelIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/users/$userId/avatar': {
+      id: '/api/users/$userId/avatar'
+      path: '/api/users/$userId/avatar'
+      fullPath: '/api/users/$userId/avatar'
+      preLoaderRoute: typeof ApiUsersUserIdAvatarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/$appSlug/embed/$': {
@@ -1646,6 +1666,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiImagesCandidatesCandidateIdRoute: ApiImagesCandidatesCandidateIdRoute,
   ApiNotificationsChannelChannelIdRoute:
     ApiNotificationsChannelChannelIdRouteWithChildren,
+  ApiUsersUserIdAvatarRoute: ApiUsersUserIdAvatarRoute,
   AppAppSlugEmbedSplatRoute: AppAppSlugEmbedSplatRoute,
   ApiAgentSessionsSessionIdAutoRetryRoute:
     ApiAgentSessionsSessionIdAutoRetryRoute,

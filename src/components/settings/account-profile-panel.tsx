@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { authClient, type Session } from '~auth/client';
 import { usersPanelQueryOptions } from '~queries/users';
+import { AccountAvatarField } from './account-avatar-field';
 
 const nicknameSchema = z.string().trim().min(1, 'Enter a nickname');
 
@@ -39,7 +40,16 @@ export function AccountProfilePanel() {
   }
 
   return (
-    <ProfileForm key={`${data.user.id}:${data.user.name}`} user={data.user} />
+    <Stack gap="md">
+      <Stack gap={2}>
+        <Text fw={700}>Profile</Text>
+        <Text size="sm" c="dimmed">
+          Choose the picture and name displayed for your account.
+        </Text>
+      </Stack>
+      <AccountAvatarField user={data.user} onChanged={refetch} />
+      <ProfileForm key={`${data.user.id}:${data.user.name}`} user={data.user} />
+    </Stack>
   );
 }
 
@@ -87,12 +97,6 @@ function ProfileForm({ user }: { user: Session['user'] }) {
       }}
     >
       <Stack gap="md">
-        <Stack gap={2}>
-          <Text fw={700}>Profile</Text>
-          <Text size="sm" c="dimmed">
-            Choose the name displayed for your account.
-          </Text>
-        </Stack>
         <TextInput
           label="Email"
           value={user.email}

@@ -30,6 +30,10 @@ const passkeyCeremonyPaths = new Set([
   '/passkey/verify-registration',
   '/passkey/verify-authentication',
 ]);
+// `user.image` holds only the path of an avatar the platform re-encoded and
+// stores (`src/server/user-avatar-store.ts`). Refuse client-chosen values,
+// which could point anywhere, on every endpoint that accepts the field.
+const userImageWritePaths = new Set(['/sign-up/email', '/update-user']);
 
 // Single-tenant platform: self-service sign-up is a runtime platform setting
 // (`auth.allowSignup` in platform_config), toggled from Settings → Users, not
@@ -64,6 +68,12 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      if (userImageWritePaths.has(ctx.path) && ctx.body?.image !== undefined) {
+        throw new APIError('BAD_REQUEST', {
+          code: 'USER_IMAGE_READ_ONLY',
+          message: 'Upload an avatar in Account settings instead.',
+        });
+      }
       if (!passkeyCeremonyPaths.has(ctx.path)) return;
 
       // Check the public origin, not an internal reverse-proxy transport URL.

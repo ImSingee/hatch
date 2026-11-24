@@ -1,4 +1,4 @@
-import { Avatar, Menu, UnstyledButton } from '@mantine/core';
+import { Menu, UnstyledButton } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
@@ -16,6 +16,7 @@ import { type ReactNode, useEffect, useEffectEvent, useState } from 'react';
 import { authClient } from '~auth/client';
 import { useSignOut } from '~auth/use-sign-out';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { UserAvatar } from '~components/auth/user-avatar';
 import {
   InsideDeskShellProvider,
   WindowFrameProvider,
@@ -206,12 +207,11 @@ function AccountFooter() {
     <Menu position="top-start" width={220} shadow="md">
       <Menu.Target>
         <UnstyledButton className={classes.account} aria-label="Account menu">
-          <Avatar
-            size={28}
-            radius="xl"
+          <UserAvatar
+            userId={data?.user.id}
+            image={data?.user.image}
             name={name}
-            color="primary"
-            variant="filled"
+            size={28}
           />
           <span className={classes.accountText}>
             <span className={classes.accountName}>{name}</span>
