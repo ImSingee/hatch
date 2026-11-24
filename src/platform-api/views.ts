@@ -57,6 +57,15 @@ const cron = z.object({
   path: str.optional(),
 });
 const url = z.object({ url: str });
+/** Index entry of one published external doc; the body is read separately. */
+export const appDocView = z.object({
+  id: str,
+  title: str,
+  description: str.optional(),
+  path: str,
+  bytes: z.number().int(),
+  sha256: str,
+});
 export const appManifestViewSchema = z.object({
   id: str,
   name: str,
@@ -159,6 +168,7 @@ export const appManifestViewSchema = z.object({
       protoFiles: z.array(z.object({ path: str, content: str })),
     })
     .optional(),
+  docs: z.array(appDocView).optional(),
 });
 const networkView = z
   .object({

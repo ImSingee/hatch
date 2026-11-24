@@ -181,6 +181,10 @@ or third-party authentication. Use a dedicated nonreserved header such as
 `X-App-Token` or a provider signature header, or a signature over the raw body.
 Removed values are not copied to another header.
 
+When other services call this webhook, describe its request contract in an
+external doc (see External docs in the `building-apps` Skill). Skip the doc when
+the webhook only serves the App itself, as in the media case below.
+
 ## Serving media from a webhook
 
 A webhook response is streamed back to the caller, so the App can serve files

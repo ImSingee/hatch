@@ -48,6 +48,7 @@ import {
   FileDescriptorSetSchema,
   type FileDescriptorSet,
 } from '@bufbuild/protobuf/wkt';
+import { captureAppDocs, writeAppDocs } from './docs-build';
 import { subprocessSandboxEnv } from '../sandbox-env';
 import { validateSchemaInput } from '../json-schema-input';
 import { validateCron } from './cron-expr';
@@ -769,6 +770,10 @@ export async function buildApp(
         tasks = preview.tasks;
       }
     }
+    const docs = await captureAppDocs(src, manifest.docs, manifestFile);
+    if (docs.length > 0) {
+      logs.push(`captured ${docs.length} external doc(s)`);
+    }
 
     // Only start replacing the requested output after every source validation
     // step has passed. Deploy builds use a fresh path, while direct callers do
@@ -930,6 +935,8 @@ export async function buildApp(
         `captured ${normalized.tasks.definitions.length} task input schema(s)`,
       );
     }
+    await writeAppDocs(out, docs);
+    if (docs.length > 0) normalized.docs = docs.map(({ doc }) => doc);
     await fs.writeFile(
       path.join(out, 'manifest.normalized.json'),
       JSON.stringify(normalized, null, 2),

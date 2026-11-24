@@ -63,6 +63,8 @@ import { rollbackWorkflowToVersion } from '~server/workflows/manage';
 import { createWorkflow } from '~server/workflows/scaffold';
 import { authenticatePublicApi } from './auth';
 import { listAppsForAgent, getAppDetailForAgent } from '~server/apps/inspect';
+import { listAppDocs, readAppDoc } from '~server/apps/docs';
+import type { PublishedAppDoc } from '~server/apps/manifest';
 import {
   listWorkflowsForAgent,
   getWorkflowDetailForAgent,
@@ -247,6 +249,14 @@ async function appIconPaths(id?: string): Promise<Map<string, string>> {
     ),
   );
 }
+const appDocMessage = (doc: PublishedAppDoc) => ({
+  id: doc.id,
+  title: doc.title,
+  description: doc.description,
+  path: doc.path,
+  bytes: doc.bytes,
+  sha256: doc.sha256,
+});
 const iconMessage = (icon: AppIconView) => ({
   icon: {
     key: icon.key ?? undefined,
@@ -855,6 +865,27 @@ export function registerPlatformApi(
     } catch (error) {
       throw publicError(error);
     }
+  });
+  router.rpc(AppService.method.listAppDocs, async (input) => {
+    const index = await listAppDocs((await find('apps', input.id)).id);
+    const start = input.cursor === undefined ? 0 : Number(input.cursor);
+    const end =
+      input.limit === undefined ? index.docs.length : start + input.limit;
+    return {
+      appId: index.appId,
+      version: index.version,
+      deploymentId: index.deploymentId,
+      docs: index.docs.slice(start, end).map(appDocMessage),
+      endpoints: index.endpoints,
+      nextCursor: end < index.docs.length ? String(end) : undefined,
+    };
+  });
+  router.rpc(AppService.method.getAppDoc, async (input) => {
+    const doc = await readAppDoc(
+      (await find('apps', input.id)).id,
+      input.docId,
+    );
+    return { ...doc, doc: appDocMessage(doc.doc) };
   });
   router.service(PreferenceService, {
     getAgentPreferences: async (_input, context) => ({
