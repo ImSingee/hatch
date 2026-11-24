@@ -2,7 +2,7 @@
  * Timeline read positions: one per user across devices plus one for the
  * platform Agent, moving only forward, and never counting what a reader sent.
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('~/db', async () => {
@@ -130,5 +130,29 @@ describe('timeline read positions', () => {
     await expect(
       markNotificationsRead(ada, { notificationId: 'missing' }),
     ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('read positions at the database clock', () => {
+  it('count a notification read once the position reaches it, also when its time had microseconds', async () => {
+    // PostgreSQL's now() has microseconds, which a JavaScript Date drops.
+    const micro = `${new Date(Date.now() - 1000).toISOString().slice(0, -1)}456Z`;
+    await db.insert(schema.notifications).values({
+      id: 'n-db-clock',
+      sourceType: 'channel',
+      sourceName: 'Source',
+      kind: 'k',
+      kindName: 'Kind',
+      title: 'From the database clock',
+      occurredAt: new Date(),
+      activityAt: sql`${micro}::timestamptz`,
+    });
+    expect(await getReadState(ada)).toMatchObject({ unreadCount: 1 });
+    expect(
+      await markNotificationsRead(ada, { notificationId: 'n-db-clock' }),
+    ).toMatchObject({ readThroughId: 'n-db-clock', unreadCount: 0 });
+    expect(await markNotificationsRead(bob, { latest: true })).toMatchObject({
+      unreadCount: 0,
+    });
   });
 });

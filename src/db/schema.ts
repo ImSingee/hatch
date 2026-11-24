@@ -33,6 +33,16 @@ function timestamp(name?: string) {
   return _timestamp(name, { withTimezone: true, mode: 'date' });
 }
 
+/**
+ * A timestamp kept to the millisecond, like a JavaScript `Date`. Use it for
+ * values code compares or writes back (positions and cursors): a microsecond
+ * `now()` read into a `Date` loses its last digits and no longer equals
+ * itself in SQL.
+ */
+function msTimestamp(name: string) {
+  return _timestamp(name, { withTimezone: true, mode: 'date', precision: 3 });
+}
+
 // Monotonic within a process, so ids also order rows created in the same
 // millisecond (Agent runs rely on id order to find a session's latest run).
 const genUlid0 = monotonicFactory();
@@ -1178,7 +1188,7 @@ export const notifications = snakeCase.table(
      * content or asked to alert again. Orders the timeline, so an update moves
      * the notification to the end; answers and recalls leave it in place.
      */
-    activityAt: timestamp('activity_at').notNull().defaultNow(),
+    activityAt: msTimestamp('activity_at').notNull().defaultNow(),
     /** Set once when the source recalls the notification. */
     recalledAt: timestamp('recalled_at'),
     /**
@@ -1254,7 +1264,7 @@ export const notificationReadCursors = snakeCase.table(
     /** `user:<id>` or `agent`. */
     reader: text().primaryKey(),
     userId: text().references(() => user.id, { onDelete: 'cascade' }),
-    activityAt: timestamp('activity_at').notNull(),
+    activityAt: msTimestamp('activity_at').notNull(),
     /** Breaks ties between notifications with one activity time; "" before any. */
     notificationId: text().notNull().default(''),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -1511,7 +1521,7 @@ export const notificationRevisions = snakeCase.table(
     reply: jsonb().$type<ReplyForm>(),
     replyRound: integer('reply_round').notNull(),
     /** When this version became current (its activity time). */
-    activityAt: timestamp('activity_at').notNull(),
+    activityAt: msTimestamp('activity_at').notNull(),
     /** When an edit replaced it. */
     replacedAt: timestamp('replaced_at').notNull(),
   },
