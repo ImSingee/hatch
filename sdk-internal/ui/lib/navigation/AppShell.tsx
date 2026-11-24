@@ -58,7 +58,11 @@ function Sidebar(props: AppShellProps & { selected: Selected }): JSX.Element {
                 disabled={item().disabled}
                 onPress={() => props.selected.set(item().id)}
                 accessibilityLabel={badgeLabel(item())}
-                class={`group h-9 flex-row items-center gap-2.5 rounded-(--radius-md) px-2.5 hover:bg-surface-hover selected:bg-primary-tint disabled:opacity-50 pointer-coarse:h-11 ${FOCUS_RING}`}
+                class={`group h-9 flex-row items-center gap-2.5 rounded-(--radius-md) px-2.5 disabled:opacity-50 pointer-coarse:h-11 ${FOCUS_RING}`}
+                classList={{
+                  'bg-primary-tint': props.selected.get() === item().id,
+                  'hover:bg-surface-hover': props.selected.get() !== item().id,
+                }}
               >
                 <Glyph
                   icon={item().icon as IconData}
@@ -107,7 +111,10 @@ function TopTabs(props: AppShellProps & { selected: Selected }): JSX.Element {
                 disabled={item().disabled}
                 onPress={() => props.selected.set(item().id)}
                 accessibilityLabel={badgeLabel(item())}
-                class={`group h-9 flex-row items-center gap-2 rounded-(--radius-md) px-3 hover:bg-surface-hover disabled:opacity-50 ${FOCUS_RING}`}
+                class={`group h-9 flex-row items-center gap-2 rounded-(--radius-md) px-3 disabled:opacity-50 ${FOCUS_RING}`}
+                classList={{
+                  'hover:bg-surface-hover': props.selected.get() !== item().id,
+                }}
               >
                 <Glyph
                   icon={item().icon as IconData}

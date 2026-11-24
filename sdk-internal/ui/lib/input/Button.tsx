@@ -4,6 +4,8 @@ import { Button as BaseButton } from 'nsh/base';
 import { FOCUS_RING } from '../core/styles';
 import type { ControlSize, IconData } from '../core/types';
 import { Spinner } from '../display/Spinner';
+import { TooltipBubble } from '../feedback/Tooltip';
+import { touch } from '../core/env';
 import { Glyph } from '../icons/Icon';
 import type { GlyphColor, IconSize } from '../icons/Icon';
 import { FormContext } from './form-context';
@@ -110,48 +112,50 @@ export function Button(props: ButtonProps): JSX.Element {
     props.onPress?.();
   };
   return (
-    <BaseButton
-      onPress={press}
-      disabled={
-        props.disabled === true ||
-        (props.type === 'submit' && form !== null && form.disabled())
-      }
-      accessibilityLabel={busy() ? `${props.label}, working` : props.label}
-      class={[
-        BASE,
-        KIND[kind()],
-        SIZE[size()],
-        props.fullWidth ? 'self-stretch' : 'self-start',
-      ].join(' ')}
-    >
-      <View
-        class={`flex-row items-center justify-center ${INNER_GAP[size()]}`}
-        classList={{ invisible: busy() }}
+    <View class={props.fullWidth ? 'flex-row self-stretch' : 'flex-row'}>
+      <BaseButton
+        onPress={press}
+        disabled={
+          props.disabled === true ||
+          (props.type === 'submit' && form !== null && form.disabled())
+        }
+        accessibilityLabel={busy() ? `${props.label}, working` : props.label}
+        class={[
+          BASE,
+          KIND[kind()],
+          SIZE[size()],
+          props.fullWidth ? 'flex-1' : '',
+        ].join(' ')}
       >
-        {props.icon ? (
-          <Glyph
-            icon={props.icon}
-            size={ICON[size()]}
-            color={GLYPH_COLOR[kind()]}
-          />
-        ) : null}
-        <Text class={`${LABEL[size()]} ${LABEL_COLOR[kind()]} truncate`}>
-          {props.label}
-        </Text>
-        {props.iconEnd ? (
-          <Glyph
-            icon={props.iconEnd}
-            size={ICON[size()]}
-            color={GLYPH_COLOR[kind()]}
-          />
-        ) : null}
-      </View>
-      {busy() ? (
-        <View class="absolute inset-0 items-center justify-center">
-          <Spinner size={ICON[size()]} color={GLYPH_COLOR[kind()]} />
+        <View
+          class={`flex-row items-center justify-center ${INNER_GAP[size()]}`}
+          classList={{ invisible: busy() }}
+        >
+          {props.icon ? (
+            <Glyph
+              icon={props.icon}
+              size={ICON[size()]}
+              color={GLYPH_COLOR[kind()]}
+            />
+          ) : null}
+          <Text class={`${LABEL[size()]} ${LABEL_COLOR[kind()]} truncate`}>
+            {props.label}
+          </Text>
+          {props.iconEnd ? (
+            <Glyph
+              icon={props.iconEnd}
+              size={ICON[size()]}
+              color={GLYPH_COLOR[kind()]}
+            />
+          ) : null}
         </View>
-      ) : null}
-    </BaseButton>
+        {busy() ? (
+          <View class="absolute inset-0 items-center justify-center">
+            <Spinner size={ICON[size()]} color={GLYPH_COLOR[kind()]} />
+          </View>
+        ) : null}
+      </BaseButton>
+    </View>
   );
 }
 
@@ -179,12 +183,11 @@ export function IconButton(props: IconButtonProps): JSX.Element {
       disabled={props.disabled}
       selected={props.selected}
       accessibilityLabel={props.label}
-      tooltip={props.label}
+      tooltip={touch ? undefined : <TooltipBubble label={props.label} />}
       class={[
         BASE,
-        KIND[kind()],
+        props.selected ? 'bg-primary-tint' : KIND[kind()],
         SQUARE[size()],
-        'selected:bg-primary-tint',
       ].join(' ')}
     >
       <Glyph

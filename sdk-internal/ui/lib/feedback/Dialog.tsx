@@ -57,8 +57,10 @@ function OverlayHeader(props: {
 
 function Footer(props: { children?: JSX.Element }): JSX.Element {
   return (
-    <View class="flex-row flex-wrap items-center justify-end gap-2 border-t border-hairline bg-muted px-6 py-3 pb-[env(safe-area-inset-bottom)]">
-      {props.children}
+    <View class="border-t border-hairline bg-muted pb-[env(safe-area-inset-bottom)]">
+      <View class="flex-row flex-wrap items-center justify-end gap-2 px-6 py-3">
+        {props.children}
+      </View>
     </View>
   );
 }

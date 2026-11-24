@@ -8,6 +8,7 @@ import {
   AppShell,
   IconButton,
   IconLayoutGrid,
+  IconTypography,
   IconLayoutSidebar,
   IconMessage,
   IconPencil,
@@ -20,6 +21,7 @@ import { Data } from './sections/data';
 import { Feedback } from './sections/feedback';
 import { Inputs } from './sections/inputs';
 import { Navigation } from './sections/navigation';
+import { Patterns } from './sections/patterns';
 
 function Gallery() {
   const start = host.params.section;
@@ -31,7 +33,7 @@ function Gallery() {
         {
           id: 'basics',
           label: 'Basics',
-          icon: IconLayoutGrid,
+          icon: IconTypography,
           content: Basics,
         },
         { id: 'inputs', label: 'Inputs', icon: IconPencil, content: Inputs },
@@ -47,6 +49,12 @@ function Gallery() {
           label: 'Navigation',
           icon: IconLayoutSidebar,
           content: Navigation,
+        },
+        {
+          id: 'patterns',
+          label: 'Patterns',
+          icon: IconLayoutGrid,
+          content: Patterns,
         },
       ]}
       actions={<IconButton icon={IconSettings} label="Gallery settings" />}

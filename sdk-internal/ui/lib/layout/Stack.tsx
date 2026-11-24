@@ -70,6 +70,9 @@ export type GridProps = {
   /** Columns in a wide pane. A medium pane shows at most two and a compact
    * pane one. Default 2. */
   columns?: 1 | 2 | 3 | 4;
+  /** Columns in a compact pane; default 1. Two suit small tiles such as
+   * `Stat`s. */
+  compactColumns?: 1 | 2;
   /** Default `lg` (16 points). */
   gap?: Space;
 };
@@ -86,7 +89,8 @@ export function Grid(props: GridProps): JSX.Element {
   const columns = (): 1 | 2 | 3 | 4 => {
     const wanted = props.columns ?? 2;
     const size = paneSize();
-    if (size === 'compact') return 1;
+    if (size === 'compact')
+      return Math.min(wanted, props.compactColumns ?? 1) as 1 | 2;
     if (size === 'medium') return wanted > 2 ? 2 : wanted;
     return wanted;
   };

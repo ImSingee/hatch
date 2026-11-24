@@ -235,11 +235,9 @@ export function NumberField(props: NumberFieldProps): JSX.Element {
         placeholder={props.placeholder}
         disabled={disabled()}
         accessibilityLabel={props.label}
-        controlsRight
         class={`${WELL} gap-0 overflow-hidden px-0 ${WELL_HEIGHT} ${wellState(error() !== undefined, disabled())}`}
         inputClass={`flex-1 self-stretch px-3 ${WELL_TEXT}`}
-        controlsClass="flex-row self-stretch border-l border-input"
-        decrementButtonClass={STEPPER}
+        decrementButtonClass={`${STEPPER} border-r border-input`}
         incrementButtonClass={`${STEPPER} border-l border-input`}
         decrementButton={
           <Glyph icon={IconMinus} size="sm" color="foreground" />

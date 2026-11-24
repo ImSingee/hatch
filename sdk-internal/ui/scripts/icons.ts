@@ -61,6 +61,8 @@ export const ICON_GROUPS: Record<string, readonly string[]> = {
     'layout-grid',
     'list',
     'table',
+    'dashboard',
+    'typography',
     'settings',
   ],
   Status: [

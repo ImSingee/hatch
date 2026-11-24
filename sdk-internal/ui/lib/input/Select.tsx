@@ -43,14 +43,14 @@ function items(options: readonly SelectOption[]) {
 
 function OptionRow(props: { title: string }): JSX.Element {
   return (
-    <>
+    <View class="flex-1 flex-row items-center gap-2">
       <Text class="flex-1 text-body font-strong text-popover-foreground">
         {props.title}
       </Text>
       <View class="opacity-0 group-selected:opacity-100">
         <Glyph icon={IconCheck} size="md" color="primary-strong" />
       </View>
-    </>
+    </View>
   );
 }
 

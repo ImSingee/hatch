@@ -3,6 +3,15 @@ import {
   Button,
   Card,
   Dialog,
+  IconArrowUp,
+  IconCopy,
+  IconInfoCircle,
+  IconPencil,
+  IconSortAscending,
+  IconTrash,
+  Icon,
+  Menu,
+  Tooltip,
   Page,
   Row,
   Sheet,
@@ -90,6 +99,51 @@ export function Feedback() {
           />
         </Row>
         <Text tone="muted">{answer()}</Text>
+      </Card>
+
+      <Card title="Menus and tooltips">
+        <Row wrap gap="md">
+          <Menu
+            label="More actions"
+            items={[
+              {
+                label: 'Rename',
+                icon: IconPencil,
+                onSelect: () => Toast.show({ title: 'Rename' }),
+              },
+              {
+                label: 'Duplicate',
+                icon: IconCopy,
+                onSelect: () => Toast.show({ title: 'Duplicate' }),
+              },
+              'separator',
+              {
+                label: 'Delete',
+                icon: IconTrash,
+                destructive: true,
+                onSelect: () => Toast.show({ title: 'Delete' }),
+              },
+            ]}
+          />
+          <Menu
+            label="Sort"
+            trigger="button"
+            icon={IconSortAscending}
+            items={[
+              { label: 'Name', checked: true, onSelect: () => {} },
+              { label: 'Date planted', onSelect: () => {} },
+              {
+                label: 'Harvest',
+                icon: IconArrowUp,
+                disabled: true,
+                onSelect: () => {},
+              },
+            ]}
+          />
+          <Tooltip label="Sown 12 April, 6 weeks ago">
+            <Icon icon={IconInfoCircle} label="About this bed" tone="muted" />
+          </Tooltip>
+        </Row>
       </Card>
 
       <Card title="Toasts">

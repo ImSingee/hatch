@@ -33,7 +33,7 @@ export function NavStack<R>(props: NavStackProps<R>): JSX.Element {
   return (
     <BaseNavStack state={props.stack} class="flex-1 self-stretch">
       {(route, index) => (
-        <NavPage headerVisible={false} class="flex-1">
+        <NavPage headerVisible={false} class="flex-1 bg-surface-window">
           <PageNavContext.Provider
             value={{
               canGoBack: () => index() > 0,

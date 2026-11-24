@@ -1,7 +1,12 @@
 import {
   Button,
   Card,
+  Checkbox,
   Combobox,
+  DatePicker,
+  RadioGroup,
+  Slider,
+  Switch,
   Form,
   IconButton,
   IconChevronDown,
@@ -124,6 +129,59 @@ export function Inputs() {
             multiple
             placeholder="Search tags"
           />
+        </Stack>
+      </Card>
+
+      <Card title="Toggles and ranges">
+        <Stack gap="lg">
+          <Checkbox label="Water in the morning" />
+          <Checkbox
+            label="Send a reminder"
+            description="A notification at 7:00 on watering days."
+            checked
+          />
+          <Checkbox label="All beds" indeterminate />
+          <Checkbox label="Locked option" disabled />
+          <Switch
+            label="Frost alerts"
+            description="Warn when the night drops below 2 °C."
+            checked
+          />
+          <Switch label="Weekly summary" />
+          <Switch label="Unavailable" disabled />
+          <RadioGroup
+            label="Units"
+            options={[
+              {
+                value: 'metric',
+                label: 'Metric',
+                description: 'Kilograms and litres',
+              },
+              {
+                value: 'imperial',
+                label: 'Imperial',
+                description: 'Pounds and gallons',
+              },
+              { value: 'mixed', label: 'Mixed', disabled: true },
+            ]}
+            value="metric"
+          />
+          <RadioGroup
+            label="Week starts on"
+            direction="row"
+            options={[
+              { value: 'mon', label: 'Monday' },
+              { value: 'sun', label: 'Sunday' },
+            ]}
+          />
+          <Slider
+            label="Shade"
+            value={40}
+            formatValue={(value) => `${value} %`}
+          />
+          <Slider label="Disabled" value={70} disabled />
+          <DatePicker label="Sown on" placeholder="Pick a date" clearable />
+          <DatePicker label="Next watering" withTime value="2026-04-12T07:30" />
         </Stack>
       </Card>
 
