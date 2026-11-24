@@ -84,5 +84,6 @@ describe('agent model kind migration', () => {
       expect(result.configLeft).toBe(0);
       expect(result.models.map((model) => model.id)).toEqual(['chat']);
     }
-  });
+    // Replays every migration on four fresh databases.
+  }, 60_000);
 });
