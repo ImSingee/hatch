@@ -19,25 +19,38 @@ import { z } from 'zod';
 /**
  * Patterns are App-authored and run against request-supplied strings, so a
  * backtracking-prone pattern must not stall the platform process. Matching
- * runs in a vm context, whose timeout interrupts a runaway match.
+ * runs in a vm context, whose timeout interrupts a runaway match, and all
+ * matches of one validation share a single time budget: an input with many
+ * values cannot multiply it.
  */
-const PATTERN_TIMEOUT_MS = 100;
+const PATTERN_BUDGET_MS = 200;
 const patternContext = vm.createContext({ pattern: /^/, value: '' });
 const patternTest = new vm.Script('pattern.test(value)');
 
-function matchPattern(pattern: RegExp, value: string): boolean | 'timeout' {
+/** Time left for pattern matching in one validation. */
+type PatternBudget = { remainingMs: number };
+
+function matchPattern(
+  pattern: RegExp,
+  value: string,
+  budget: PatternBudget,
+): boolean | 'timeout' {
+  if (budget.remainingMs <= 0) return 'timeout';
   patternContext.pattern = pattern;
   patternContext.value = value;
+  const started = performance.now();
   try {
     return patternTest.runInContext(patternContext, {
-      timeout: PATTERN_TIMEOUT_MS,
+      timeout: Math.max(1, Math.ceil(budget.remainingMs)),
     }) as boolean;
   } catch (error) {
     if ((error as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
+      budget.remainingMs = 0;
       return 'timeout';
     }
     throw error;
   } finally {
+    budget.remainingMs -= performance.now() - started;
     patternContext.value = '';
   }
 }
@@ -60,6 +73,8 @@ function typeOf(schema: JsonSchema): string | string[] | undefined {
 export type SchemaInputOptions = {
   /** Enforce `pattern` and reject undeclared object keys. */
   strict?: boolean;
+  /** Shared pattern time budget; one per validation (set internally). */
+  patternBudget?: PatternBudget;
 };
 
 /** Build a zod schema from a JSON Schema node. */
@@ -120,7 +135,11 @@ export function jsonSchemaToZod(
           });
         }
         if (!regex) return;
-        const matched = matchPattern(regex, value);
+        const matched = matchPattern(
+          regex,
+          value,
+          options.patternBudget ?? { remainingMs: PATTERN_BUDGET_MS },
+        );
         if (matched === 'timeout') {
           ctx.addIssue({
             code: 'custom',
@@ -265,7 +284,10 @@ export function validateSchemaInput(
     // No schema captured (e.g. a workflow with no declared input) — accept.
     return { success: true, data: rawInput ?? {} };
   }
-  const zodSchema = jsonSchemaToZod(jsonSchema, options);
+  const zodSchema = jsonSchemaToZod(jsonSchema, {
+    ...options,
+    patternBudget: { remainingMs: PATTERN_BUDGET_MS },
+  });
   const parsed = zodSchema.safeParse(rawInput ?? {});
   if (parsed.success) {
     return { success: true, data: parsed.data };

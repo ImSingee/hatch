@@ -172,4 +172,25 @@ describe('coerceSchemaQueryInput', () => {
     ).toBe(true);
     expect(validateSchemaInput(schema, { at: 'tomorrow' }).success).toBe(true);
   });
+
+  it('shares one pattern time budget across every value of an input', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: { type: 'string', pattern: '^(a+)+$' },
+        },
+      },
+    };
+    const started = Date.now();
+    const result = validateSchemaInput(
+      schema,
+      { items: Array.from({ length: 200 }, () => `${'a'.repeat(40)}b`) },
+      { strict: true },
+    );
+    // 200 runaway values would take 200 timeouts if each had its own.
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result.success).toBe(false);
+  });
 });
