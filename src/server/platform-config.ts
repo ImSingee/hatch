@@ -158,7 +158,7 @@ function readStored<K extends PlatformConfigKey>(
 }
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
-// Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
+// Existing namespaces elsewhere: 1 (App deploys), 2 (retired), 3
 // (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts),
 // 8 (apps/tasks/service.ts), 9 (model-catalog/refresh.ts).
 const PLATFORM_CONFIG_LOCK_NS = 7;

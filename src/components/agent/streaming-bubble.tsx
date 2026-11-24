@@ -2,6 +2,7 @@
 import { Box, Loader, Text } from '@mantine/core';
 import { Fragment, type ReactNode } from 'react';
 import type { AskAnswer } from '~agent/events';
+import { useI18n } from '~i18n';
 import {
   AgentErrorNotice,
   EndedEarlyNotice,
@@ -67,6 +68,7 @@ export function StreamingBubble({
    */
   retry?: RetryControls;
 }) {
+  const { t } = useI18n();
   const ask = state.pendingAsk;
   const envRequest = state.pendingEnvRequest;
 
@@ -167,7 +169,7 @@ export function StreamingBubble({
   const workingIndicator = working ? (
     <Box className={classes.workWaiting}>
       <Loader size={11} color="gray" />
-      <span>Thinking…</span>
+      <span>{t('agent.thinking.active')}</span>
     </Box>
   ) : null;
 
@@ -178,18 +180,19 @@ export function StreamingBubble({
     .at(-1);
   const currentStep =
     ask || envRequest
-      ? 'Waiting for you'
+      ? t('agent.work.waitingForYou')
       : runningTool
         ? toolDisplayLabel(
+            t,
             runningTool.name,
             runningTool.args,
             runningTool.label,
           )
         : anyCompactRunning
-          ? 'Compacting context'
+          ? t('agent.work.compacting')
           : state.textActive && !thinkingVisible
-            ? 'Writing'
-            : 'Thinking';
+            ? t('agent.work.writing')
+            : t('agent.thinking.done');
 
   // Each steered message is a message of its own: the work before it is
   // finished and framed apart, and the reply goes on after it.
@@ -230,7 +233,7 @@ export function StreamingBubble({
           // Without the image data, say the message had images. Kept apart
           // from the bubble, whose text may come from composer content.
           <Text size="xs" c="dimmed" ta="right">
-            {block.imageCount === 1 ? '1 image' : `${block.imageCount} images`}
+            {t('agent.message.imageCount', { count: block.imageCount })}
           </Text>
         ) : null}
       </Fragment>

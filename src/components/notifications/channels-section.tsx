@@ -24,6 +24,8 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useState, type FormEvent } from 'react';
+import { Trans } from 'react-i18next';
+import { useI18n } from '~i18n';
 import { notificationChannelsQueryOptions } from '~queries/notifications';
 import {
   createChannelFn,
@@ -35,6 +37,7 @@ import {
 import {
   EMPTY_KIND,
   KindsEditor,
+  KindsProblemText,
   kindsError,
   toKindInput,
   type KindDraft,
@@ -43,13 +46,17 @@ import { CopyableCode, SecretReveal } from './secret-reveal';
 import { SectionTitle } from './section-title';
 import { useNotificationMutation } from './use-notification-mutation';
 
-function curlExample(channel: ChannelView, token: string): string {
+function curlExample(
+  channel: ChannelView,
+  token: string,
+  title: string,
+): string {
   const kind = channel.kinds[0]?.kind ?? 'example';
   return [
     `curl -X POST '${channel.pushUrl}' \\`,
     `  -H 'x-hatch-secret: ${token}' \\`,
     `  -H 'content-type: application/json' \\`,
-    `  -d '${JSON.stringify({ kind, title: 'Hello from outside' })}'`,
+    `  -d '${JSON.stringify({ kind, title })}'`,
   ].join('\n');
 }
 
@@ -60,19 +67,25 @@ function PushInstructions({
   channel: ChannelView;
   token: string | null;
 }) {
+  const { t } = useI18n();
   return (
     <Stack gap="sm">
-      {token ? <SecretReveal label="Channel token" secret={token} /> : null}
-      <CopyableCode label="Push URL" value={channel.pushUrl} />
+      {token ? <SecretReveal kind="channelToken" secret={token} /> : null}
+      <CopyableCode kind="pushUrl" value={channel.pushUrl} />
       <CopyableCode
-        label="Example"
-        value={curlExample(channel, token ?? '<channel token>')}
+        kind="example"
+        value={curlExample(
+          channel,
+          token ?? t('notifications.channels.tokenPlaceholder'),
+          t('notifications.channels.exampleTitle'),
+        )}
       />
       <Text size="xs" c="dimmed">
-        Body fields: <code>kind</code> and <code>title</code> are required;{' '}
-        <code>body</code>, <code>url</code>, <code>data</code> (JSON object),{' '}
-        <code>dedupeKey</code> and <code>occurredAt</code> are optional. The
-        token can also be passed as <code>?secret=</code>.
+        <Trans
+          t={t}
+          i18nKey="notifications.channels.bodyFields"
+          components={{ code: <code /> }}
+        />
       </Text>
     </Stack>
   );
@@ -100,6 +113,7 @@ function ChannelModal({
     channel: ChannelView;
     token: string;
   } | null>(null);
+  const { t } = useI18n();
   const invalid = kindsError(kinds);
 
   const save = useNotificationMutation(
@@ -115,7 +129,9 @@ function ChannelModal({
       return createChannelFn({ data: input });
     },
     {
-      success: editing ? 'Channel updated' : 'Channel created',
+      success: editing
+        ? t('notifications.channels.updated')
+        : t('notifications.channels.created'),
       onSuccess: (result) => {
         if (result) setCreated(result);
         else onClose();
@@ -141,22 +157,26 @@ function ChannelModal({
       centered
       closeOnClickOutside={!created}
       title={
-        created ? 'Channel created' : editing ? 'Edit channel' : 'New channel'
+        created
+          ? t('notifications.channels.created')
+          : editing
+            ? t('notifications.channels.edit')
+            : t('notifications.channels.new')
       }
     >
       {created ? (
         <Stack gap="md">
           <PushInstructions channel={created.channel} token={created.token} />
           <Group justify="flex-end">
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{t('common.done')}</Button>
           </Group>
         </Stack>
       ) : (
         <form onSubmit={submit}>
           <Stack gap="md">
             <TextInput
-              label="Name"
-              placeholder="Home server"
+              label={t('common.name')}
+              placeholder={t('notifications.channels.namePlaceholder')}
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
               required
@@ -164,7 +184,7 @@ function ChannelModal({
               data-autofocus
             />
             <TextInput
-              label="Description"
+              label={t('notifications.description')}
               value={description}
               onChange={(event) => setDescription(event.currentTarget.value)}
               maxLength={500}
@@ -172,19 +192,21 @@ function ChannelModal({
             <KindsEditor value={kinds} onChange={setKinds} />
             {invalid && kinds.some((entry) => entry.kind || entry.name) ? (
               <Text size="xs" c="red.8">
-                {invalid}
+                <KindsProblemText problem={invalid} />
               </Text>
             ) : null}
             <Group justify="flex-end">
               <Button variant="default" onClick={onClose}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 type="submit"
                 loading={save.isPending}
                 disabled={Boolean(invalid)}
               >
-                {editing ? 'Save' : 'Create channel'}
+                {editing
+                  ? t('common.save')
+                  : t('notifications.channels.create')}
               </Button>
             </Group>
           </Stack>
@@ -201,6 +223,7 @@ function InstructionsModal({
   state: { channel: ChannelView; token: string | null } | null;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
       opened={state !== null}
@@ -208,7 +231,11 @@ function InstructionsModal({
       size="lg"
       centered
       closeOnClickOutside={!state?.token}
-      title={state?.token ? 'New channel token' : 'Push to this channel'}
+      title={
+        state?.token
+          ? t('notifications.channels.newToken')
+          : t('notifications.channels.pushTitle')
+      }
     >
       {state ? (
         <Stack gap="md">
@@ -218,12 +245,12 @@ function InstructionsModal({
               variant="light"
               icon={<IconAlertCircle size={18} stroke={1.6} />}
             >
-              The previous token stopped working. Update every sender.
+              {t('notifications.channels.tokenRotated')}
             </Alert>
           ) : null}
           <PushInstructions channel={state.channel} token={state.token} />
           <Group justify="flex-end">
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{t('common.done')}</Button>
           </Group>
         </Stack>
       ) : null}
@@ -232,6 +259,7 @@ function InstructionsModal({
 }
 
 export function ChannelsSection() {
+  const { t } = useI18n();
   const { data: channels } = useSuspenseQuery(notificationChannelsQueryOptions);
   const [modal, setModal] = useState<{ editing: ChannelView | null } | null>(
     null,
@@ -255,30 +283,29 @@ export function ChannelsSection() {
   );
   const remove = useNotificationMutation(
     (id: string) => deleteChannelFn({ data: id }),
-    { success: 'Channel deleted' },
+    { success: t('notifications.channels.deleted') },
   );
 
   const confirmRotate = (channel: ChannelView) =>
     modals.openConfirmModal({
-      title: `Rotate the token of ${channel.name}?`,
+      title: t('notifications.channels.rotateTitle', { name: channel.name }),
       centered: true,
-      children: (
-        <Text size="sm">The current token stops working immediately.</Text>
-      ),
-      labels: { confirm: 'Rotate token', cancel: 'Cancel' },
+      children: <Text size="sm">{t('notifications.channels.rotateBody')}</Text>,
+      labels: {
+        confirm: t('notifications.channels.rotate'),
+        cancel: t('common.cancel'),
+      },
       onConfirm: () => rotate.mutate(channel),
     });
   const confirmDelete = (channel: ChannelView) =>
     modals.openConfirmModal({
-      title: `Delete ${channel.name}?`,
+      title: t('notifications.channels.deleteTitle', { name: channel.name }),
       centered: true,
-      children: (
-        <Text size="sm">
-          Senders can no longer push to it and its routes are deleted. Past
-          notifications stay in the history.
-        </Text>
-      ),
-      labels: { confirm: 'Delete channel', cancel: 'Cancel' },
+      children: <Text size="sm">{t('notifications.channels.deleteBody')}</Text>,
+      labels: {
+        confirm: t('notifications.channels.delete'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(channel.id),
     });
@@ -286,32 +313,34 @@ export function ChannelsSection() {
   return (
     <Stack gap="md">
       <SectionTitle
-        title="Channels"
-        description="Let outside services push notifications into Hatch, like an App would."
+        title={t('notifications.channels.title')}
+        description={t('notifications.channels.description')}
         action={
           <Button
             variant="default"
             leftSection={<IconPlus size={16} stroke={1.8} />}
             onClick={() => setModal({ editing: null })}
           >
-            New channel
+            {t('notifications.channels.new')}
           </Button>
         }
       />
 
       {channels.length === 0 ? (
         <Text size="sm" c="dimmed" py="md">
-          No channels yet.
+          {t('notifications.channels.empty')}
         </Text>
       ) : (
         <Table.ScrollContainer minWidth={620} type="native">
           <Table verticalSpacing="sm" layout="fixed">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th w="32%">Channel</Table.Th>
-                <Table.Th>Kinds</Table.Th>
-                <Table.Th w={90}>Enabled</Table.Th>
-                <Table.Th w={48} aria-label="Actions" />
+                <Table.Th w="32%">
+                  {t('notifications.channels.column.channel')}
+                </Table.Th>
+                <Table.Th>{t('notifications.kinds.title')}</Table.Th>
+                <Table.Th w={90}>{t('common.enabled')}</Table.Th>
+                <Table.Th w={48} aria-label={t('common.actions')} />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -355,7 +384,9 @@ export function ChannelsSection() {
                           enabled: event.currentTarget.checked,
                         })
                       }
-                      aria-label={`Enable ${channel.name}`}
+                      aria-label={t('notifications.enableName', {
+                        name: channel.name,
+                      })}
                     />
                   </Table.Td>
                   <Table.Td>
@@ -364,7 +395,9 @@ export function ChannelsSection() {
                         <ActionIcon
                           variant="subtle"
                           color="gray"
-                          aria-label={`Actions for ${channel.name}`}
+                          aria-label={t('notifications.actionsFor', {
+                            name: channel.name,
+                          })}
                         >
                           <IconDotsVertical size={16} stroke={1.6} />
                         </ActionIcon>
@@ -376,26 +409,26 @@ export function ChannelsSection() {
                             setInstructions({ channel, token: null })
                           }
                         >
-                          How to push
+                          {t('notifications.channels.howToPush')}
                         </Menu.Item>
                         <Menu.Item
                           leftSection={<IconPencil size={14} stroke={1.6} />}
                           onClick={() => setModal({ editing: channel })}
                         >
-                          Edit
+                          {t('common.edit')}
                         </Menu.Item>
                         <Menu.Item
                           leftSection={<IconKey size={14} stroke={1.6} />}
                           onClick={() => confirmRotate(channel)}
                         >
-                          Rotate token
+                          {t('notifications.channels.rotate')}
                         </Menu.Item>
                         <Menu.Item
                           color="red"
                           leftSection={<IconTrash size={14} stroke={1.6} />}
                           onClick={() => confirmDelete(channel)}
                         >
-                          Delete
+                          {t('common.delete')}
                         </Menu.Item>
                       </Menu.Dropdown>
                     </Menu>

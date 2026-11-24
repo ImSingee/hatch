@@ -6,16 +6,24 @@
 import type { CommandCredentials } from './command-credentials';
 import { Buffer } from 'node:buffer';
 import {
-  AgentHarness,
-  InMemorySessionRepo,
+  runAgentLoop,
+  type AgentEvent,
+  type AgentLoopConfig,
   type AgentMessage,
+  type StreamFn,
 } from '@earendil-works/pi-agent-core';
-import type { Models } from '@earendil-works/pi-ai';
-import { hasBetaFeature, WORKFLOW_BETA_FEATURE } from '~/beta-features';
+import {
+  toToolDeclaration,
+  type Api,
+  type AssistantMessage,
+  type ImageContent,
+  type Model,
+  type Models,
+  type SystemMessage,
+} from '@earendil-works/pi-ai';
 import type { JsonValue } from '~/db/schema';
 import {
-  createSessionCompactor,
-  openTranscriptSession,
+  createTranscriptCompactor,
   withOverflowRecovery,
 } from './auto-compaction';
 import { formatAttachmentPrompt, type AgentAttachmentRef } from './attachments';
@@ -24,6 +32,7 @@ import {
   type AgentComposerContentPart,
 } from './composer-content';
 import type { AgentStreamEvent } from './events';
+import { convertToLlm } from './llm-messages';
 import type { SteerMessage } from './protocol';
 import { SKILLS_DIR } from './paths';
 import type { PlatformClient } from './platform-client';
@@ -31,6 +40,7 @@ import type { ResolvedModel } from './remote-models';
 import { agentShellEnv } from './shell-env';
 import { SessionExecutionEnv } from './sandboxed-file-io';
 import { prepareAgentSessionSandbox } from './shell-sandbox';
+import { Transcript } from './transcript';
 import { loadAgentSkills } from './skills';
 import { buildSystemPrompt } from './system-prompt';
 import { createTools, type AskBridge, type EnvBridge } from './tools';
@@ -247,10 +257,46 @@ export function annotateRunUserMessages(
   return result;
 }
 
+function userMessage(text: string, images: ImageContent[]): AgentMessage {
+  return {
+    role: 'user',
+    content: [{ type: 'text', text }, ...images],
+    timestamp: Date.now(),
+  };
+}
+
+/**
+ * The assistant message a run ends with when the loop itself failed, so the
+ * failure is recorded in the transcript like a provider error.
+ */
+function failureMessage(
+  model: Model<Api>,
+  error: unknown,
+  aborted: boolean,
+): AssistantMessage {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text: '' }],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    stopReason: aborted ? 'aborted' : 'error',
+    errorMessage: error instanceof Error ? error.message : String(error),
+    timestamp: Date.now(),
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+  };
+}
+
 export type RunAgentTurnOptions = {
   commandCredentials?: CommandCredentials;
   appUrl: string;
-  betaFeatures: readonly string[];
   tavilyApiKey?: string | null;
   priorMessages: AgentMessage[];
   sessionId: string;
@@ -278,10 +324,6 @@ export async function runAgentTurn(
 ): Promise<RunAgentTurnResult> {
   const { priorMessages, sessionId, userText, signal, emit, models, picked } =
     opts;
-  const workflowBetaEnabled = hasBetaFeature(
-    opts.betaFeatures,
-    WORKFLOW_BETA_FEATURE,
-  );
 
   prepareAgentSessionSandbox(sessionId);
 
@@ -295,16 +337,13 @@ export async function runAgentTurn(
     readOnlyRoots: [SKILLS_DIR],
   });
 
-  const repo = new InMemorySessionRepo();
-  const session = await repo.create({ id: sessionId });
   // `priorMessages` is the complete transcript, compaction markers included;
-  // the session derives the (possibly compacted) model context from it.
-  const transcript = await openTranscriptSession(session, priorMessages);
+  // the transcript derives the (possibly compacted) model context from it.
+  const transcript = Transcript.load(priorMessages);
 
-  const skills = await loadAgentSkills(env, { workflowBetaEnabled });
+  const skills = await loadAgentSkills(env);
   const tools = createTools(env, {
     commandCredentials: opts.commandCredentials,
-    workflowBetaEnabled,
     platform: opts.platform,
     ...(opts.tavilyApiKey ? { tavilyApiKey: opts.tavilyApiKey } : {}),
     ...(opts.ask ? { ask: opts.ask } : {}),
@@ -331,13 +370,21 @@ export async function runAgentTurn(
   }
 
   const thinkingLevel = picked.model.reasoning ? picked.thinkingLevel : 'off';
-  const systemPrompt = buildSystemPrompt(
-    opts.appUrl,
-    { workflowBetaEnabled },
-    skills,
-  );
-  const compactor = createSessionCompactor({
-    session,
+  const systemPrompt = buildSystemPrompt(opts.appUrl, skills);
+  // The prompt and the tool declarations travel as the leading system message
+  // of every request. It is rebuilt for each run and never stored.
+  const systemMessage: SystemMessage = {
+    role: 'system',
+    content: systemPrompt,
+    toolsAdded: tools.map(toToolDeclaration),
+    timestamp: Date.now(),
+  };
+  const modelContext = (): AgentMessage[] => [
+    systemMessage,
+    ...transcript.modelContext(),
+  ];
+  const compactor = createTranscriptCompactor({
+    transcript,
     models,
     model: picked.model,
     signal,
@@ -361,75 +408,25 @@ export async function runAgentTurn(
           : { tokensAfter: Math.round(tokensAfter) }),
       }),
   });
-  const compactedContext = async () => (await session.buildContext()).messages;
-
-  const harness = new AgentHarness({
-    session,
-    // A request the provider rejects for context length is compacted and
-    // re-sent in place, so the turn keeps the tool work it already did.
-    models: withOverflowRecovery(models, {
-      contextWindow: picked.model.contextWindow,
-      signal,
-      recover: async () =>
-        (await compactor.compactAfterOverflow())
-          ? compactedContext()
-          : undefined,
-    }),
-    model: picked.model,
-    tools,
-    resources: { skills },
-    systemPrompt,
-    thinkingLevel,
-    // Every steer message claimed at a boundary is injected together.
-    steeringMode: 'all',
+  // A request the provider rejects for context length is compacted and
+  // re-sent in place, so the turn keeps the tool work it already did.
+  const streamModels = withOverflowRecovery(models, {
+    contextWindow: picked.model.contextWindow,
+    signal,
+    recover: async () =>
+      (await compactor.compactAfterOverflow()) ? modelContext() : undefined,
   });
+  // Only these options reach the provider: the Hatch session id routes
+  // provider-side prompt caching, and nothing opts into deferred responses or
+  // pi's provider attribution (the loop's `identity`).
+  const streamFn: StreamFn = (model, context, options) =>
+    streamModels.streamSimple(model, context, {
+      reasoning: options?.reasoning,
+      signal: options?.signal,
+      sessionId,
+    });
 
-  // Every provider request passes through here with the session already
-  // holding the messages it is about to send (the new user message on the
-  // first request, tool results on later ones). Over the threshold, the
-  // session is compacted and the request goes out on the compacted context.
-  const removeContextHook = harness.on('context', async () =>
-    (await compactor.compactIfOverThreshold())
-      ? { messages: await compactedContext() }
-      : undefined,
-  );
   const toolStartDetailsById = new Map<string, JsonValue | undefined>();
-
-  // Persist the path identity selected at tool start even when execution
-  // fails. The same hook also marks a non-zero shell exit as an error while
-  // retaining its useful stdout/stderr/details.
-  const removeToolResultHook = harness.on('tool_result', (event) => {
-    const startDetails = toolStartDetailsById.has(event.toolCallId)
-      ? toolStartDetailsById.get(event.toolCallId)
-      : selectBoundedDetails(
-          event.input,
-          streamStartDetailsByName.get(event.toolName),
-        );
-    const details = mergeToolStartDetails(startDetails, event.details);
-    const commandFailed =
-      event.toolName === 'run_command' &&
-      !event.isError &&
-      isCommandResultDetails(event.details) &&
-      event.details.exitCode !== 0;
-
-    if (details || commandFailed) {
-      return {
-        ...(details ? { details } : {}),
-        ...(commandFailed ? { isError: true } : {}),
-      };
-    }
-    return undefined;
-  });
-
-  const onAbort = () => {
-    // Swallow abort rejections: a rejected abort() would otherwise become a
-    // process-level unhandledRejection that can crash the server.
-    void Promise.resolve(harness.abort()).catch(() => {});
-  };
-  signal.addEventListener('abort', onAbort);
-  if (signal.aborted) {
-    onAbort();
-  }
 
   // Did the current thinking block stream any real text delta? Some providers
   // (notably OpenAI reasoning summaries via the relay) stream empty
@@ -437,35 +434,51 @@ export async function runAgentTurn(
   // final `thinking_end`. We track this per block so we can backfill.
   let sawThinkingDelta = false;
 
-  // Steer messages handed to the harness, waiting for pi to inject them, and
-  // the ones already injected (in order) for the transcript.
+  // Steer messages claimed for pi to inject, and the ones already injected
+  // (in order) for the transcript.
   const awaitingInjection: SteerMessage[] = [];
   const injected: SteerMessage[] = [];
 
-  // `turn_end` listeners are awaited before pi polls its steering queue, so
-  // messages claimed here are injected at this exact boundary: after the
-  // assistant message and all of its tool calls, before the next LLM call.
-  const claimSteerMessages = async (stopReason: string | undefined) => {
-    // An errored or aborted turn ends the loop without polling steering.
-    if (!opts.steer?.pending() || signal.aborted) return;
-    if (stopReason === 'error' || stopReason === 'aborted') return;
-    const messages = await opts.steer.claim();
-    for (const message of messages) {
-      if (signal.aborted) return;
-      const images = message.images.map((image) => ({
-        type: 'image' as const,
-        data: image.data,
-        mimeType: image.mimeType,
-      }));
-      await harness.steer(
-        formatAttachmentPrompt(message.userText, message.attachments),
-        images.length > 0 ? { images } : undefined,
-      );
-      awaitingInjection.push(message);
+  // pi polls for steering once when the run starts and again after every
+  // completed turn (after `turn_end`), never after an errored or aborted
+  // reply. Claiming at those later polls injects the messages at this exact
+  // boundary: after the assistant message and all of its tool calls, before
+  // the next LLM call. The run's own prompt goes first, so the first poll
+  // claims nothing.
+  let steeringPolled = false;
+  const getSteeringMessages = async (): Promise<AgentMessage[]> => {
+    if (!steeringPolled) {
+      steeringPolled = true;
+      return [];
     }
+    if (!opts.steer?.pending() || signal.aborted) return [];
+    const messages: AgentMessage[] = [];
+    try {
+      for (const message of await opts.steer.claim()) {
+        if (signal.aborted) break;
+        const images = message.images.map((image) => ({
+          type: 'image' as const,
+          data: image.data,
+          mimeType: image.mimeType,
+        }));
+        messages.push(
+          userMessage(
+            formatAttachmentPrompt(message.userText, message.attachments),
+            images,
+          ),
+        );
+        awaitingInjection.push(message);
+      }
+    } catch (error) {
+      // A failed hand-over must not fail the run: whatever was claimed but
+      // not injected returns to the user's pending messages when the
+      // platform settles this run.
+      console.error('[agent] steer messages could not be injected:', error);
+    }
+    return messages;
   };
 
-  const unsubscribe = harness.subscribe(async (event) => {
+  const handleEvent = async (event: AgentEvent) => {
     switch (event.type) {
       case 'message_start': {
         if (!('message' in event)) break;
@@ -577,24 +590,52 @@ export async function runAgentTurn(
       }
       case 'turn_end': {
         emit({ type: 'turn_end' });
-        try {
-          await claimSteerMessages(
-            event.message.role === 'assistant'
-              ? event.message.stopReason
-              : undefined,
-          );
-        } catch (error) {
-          // A failed hand-over must not fail the run: whatever was claimed
-          // but not injected returns to the user's pending messages when the
-          // platform settles this run.
-          console.error('[agent] steer messages could not be injected:', error);
-        }
         break;
       }
       default:
         break;
     }
-  });
+  };
+  // Every message is recorded before listeners see its end, as pi's harness
+  // did, so a compaction triggered by the next request includes it. System
+  // messages are per-run request framing, not conversation history.
+  const sink = async (event: AgentEvent) => {
+    if (event.type === 'message_end' && event.message.role !== 'system') {
+      transcript.appendMessage(event.message);
+    }
+    await handleEvent(event);
+  };
+
+  // Persist the path identity selected at tool start even when execution
+  // fails. The same hook also marks a non-zero shell exit as an error while
+  // retaining its useful stdout/stderr/details.
+  const afterToolCall: AgentLoopConfig['afterToolCall'] = async ({
+    toolCall,
+    args,
+    result,
+    isError,
+  }) => {
+    const startDetails = toolStartDetailsById.has(toolCall.id)
+      ? toolStartDetailsById.get(toolCall.id)
+      : selectBoundedDetails(
+          args as Record<string, unknown>,
+          streamStartDetailsByName.get(toolCall.name),
+        );
+    const details = mergeToolStartDetails(startDetails, result.details);
+    const commandFailed =
+      toolCall.name === 'run_command' &&
+      !isError &&
+      isCommandResultDetails(result.details) &&
+      result.details.exitCode !== 0;
+
+    if (details || commandFailed) {
+      return {
+        ...(details ? { details } : {}),
+        ...(commandFailed ? { isError: true } : {}),
+      };
+    }
+    return undefined;
+  };
 
   const images = (opts.images ?? []).map((i) => ({
     type: 'image' as const,
@@ -604,7 +645,7 @@ export async function runAgentTurn(
 
   const buildTranscript = async (): Promise<JsonValue[]> => {
     const messages = addToolStartDetailsToTranscript(
-      await transcript.serialize(),
+      transcript.serialize(),
       toolStartDetailsById,
     );
     return annotateRunUserMessages(messages, {
@@ -614,16 +655,61 @@ export async function runAgentTurn(
     });
   };
 
-  try {
-    const assistant = await harness.prompt(
+  const runLoop = async (): Promise<AgentMessage[]> => {
+    const prompt = userMessage(
       formatAttachmentPrompt(userText, opts.attachments ?? []),
-      images.length > 0 ? { images } : undefined,
+      images,
     );
+    try {
+      return await runAgentLoop(
+        [prompt],
+        { messages: modelContext(), tools },
+        {
+          model: picked.model,
+          reasoning: thinkingLevel === 'off' ? undefined : thinkingLevel,
+          convertToLlm,
+          // Every provider request passes through here with the transcript
+          // already holding the messages it is about to send (the new user
+          // message on the first request, tool results on later ones). Over
+          // the threshold, the transcript is compacted first; the request
+          // always goes out on the transcript's model context.
+          transformContext: async () => {
+            await compactor.compactIfOverThreshold();
+            return modelContext();
+          },
+          afterToolCall,
+          getSteeringMessages,
+        },
+        sink,
+        signal,
+        streamFn,
+      );
+    } catch (error) {
+      // A loop failure (not a provider error, which the stream reports) ends
+      // the run with a failed assistant message, like a provider error.
+      const failure = failureMessage(picked.model, error, signal.aborted);
+      await sink({ type: 'message_start', message: failure });
+      await sink({ type: 'message_end', message: failure });
+      await sink({ type: 'turn_end', message: failure, toolResults: [] });
+      await sink({ type: 'agent_end', messages: [failure] });
+      return [failure];
+    }
+  };
+
+  try {
+    const assistant = (await runLoop())
+      .filter(
+        (message): message is AssistantMessage => message.role === 'assistant',
+      )
+      .at(-1);
+    if (!assistant) {
+      throw new Error('Agent run completed without an assistant message.');
+    }
     const messages = await buildTranscript();
 
-    // AgentHarness reports provider/stream failures as a resolved assistant
-    // message rather than rejecting prompt(). Propagate those terminal reasons
-    // to the runner while keeping the full transcript (including partial text).
+    // Provider/stream failures end the loop with an assistant message instead
+    // of a rejection. Propagate those terminal reasons to the runner while
+    // keeping the full transcript (including partial text).
     if (
       assistant.stopReason === 'error' ||
       assistant.stopReason === 'aborted'
@@ -644,10 +730,5 @@ export async function runAgentTurn(
       messages: await buildTranscript(),
       error: error instanceof Error ? error.message : String(error),
     };
-  } finally {
-    unsubscribe();
-    removeContextHook();
-    removeToolResultHook();
-    signal.removeEventListener('abort', onAbort);
   }
 }

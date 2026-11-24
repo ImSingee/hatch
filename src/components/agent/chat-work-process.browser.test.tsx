@@ -92,17 +92,17 @@ vi.mock('~queries/agent', async () => {
   };
 });
 
+vi.mock('~queries/agent-preferences', () => ({
+  agentPreferencesQueryOptions: (userId: string) => ({
+    queryKey: ['test-agent-preferences', userId],
+    queryFn: async () => ({ userId, messageMode: 'steer' }),
+  }),
+}));
+
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: {
     queryKey: ['test-apps'],
     queryFn: async () => fixtures.apps,
-  },
-}));
-
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [],
   },
 }));
 

@@ -19,7 +19,12 @@ import {
   extraPermissionsView,
 } from '~/extra-permissions';
 import { normalizedManifestFor } from './apps/access';
-import type { NormalizedManifest, WebhookAuth } from './apps/manifest';
+import {
+  APP_DOC_ID_RE,
+  type NormalizedManifest,
+  type WebhookAuth,
+} from './apps/manifest';
+import { readAppDoc } from './apps/docs';
 import {
   type AppCronRunView,
   ensureScheduler,
@@ -178,6 +183,16 @@ export const getNormalizedManifest = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .validator((id: string) => idSchema.parse(id))
   .handler(async ({ data: id }) => normalizedManifestFor(id));
+
+/** One external doc body of the current deployment, for the manage page. */
+export const getAppDocFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; docId: string }) =>
+    z
+      .object({ id: idSchema, docId: z.string().regex(APP_DOC_ID_RE) })
+      .parse(input),
+  )
+  .handler(async ({ data }) => readAppDoc(data.id, data.docId));
 
 export const listDeployments = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
@@ -441,7 +456,7 @@ async function requireKvApp(id: string): Promise<void> {
     columns: { status: true, capabilities: true },
   });
   if (!app || app.status === 'archived' || !app.capabilities?.kv) {
-    throw new Error('App not found');
+    throw new AppError('App not found', 404, { code: 'ops.appNotFound' });
   }
 }
 
@@ -511,10 +526,12 @@ async function requireDataTableApp(id: string): Promise<void> {
     !app.currentDeploymentId ||
     !app.capabilities?.dataTable
   ) {
-    throw new Error('App not found');
+    throw new AppError('App not found', 404, { code: 'ops.appNotFound' });
   }
   if (app.dataActivationId) {
-    throw new AppError('Data Table deployment is being finalized.', 503);
+    throw new AppError('Data Table deployment is being finalized.', 503, {
+      code: 'ops.dataTable.finalizing',
+    });
   }
 }
 

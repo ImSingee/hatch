@@ -5,23 +5,24 @@
  * and the re-encoded PNGs under the App's icon directory. Input bytes are
  * validated, decoded and re-encoded; they are never stored or served as-is.
  */
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { rm } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
-import sharp from 'sharp';
-import { ulid } from 'ulid';
 import { appIconDir } from '~agent/paths';
 import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
 import { readCandidate } from '~server/images/candidates';
+import {
+  encodeSquareImage,
+  MAX_SQUARE_IMAGE_BYTES,
+  readSquareImage,
+  removeSquareImageKey,
+  writeSquareImage,
+} from '~server/images/square-image';
 import { isValidAppId } from './manifest';
 
 export const APP_ICON_SIZES = [64, 128, 256] as const;
 export type AppIconSize = (typeof APP_ICON_SIZES)[number];
-export const MAX_APP_ICON_BYTES = 4 * 1024 * 1024;
-const MIN_SIDE = 64;
-const MAX_SIDE = 4096;
-const KEY_RE = /^[0-9a-z]{26}$/;
+export const MAX_APP_ICON_BYTES = MAX_SQUARE_IMAGE_BYTES;
 
 export type AppIconView = {
   /** Null when the App shows its monogram. */
@@ -43,54 +44,11 @@ export function appIconView(id: string, key: string | null): AppIconView {
   };
 }
 
-function isAcceptedFormat(bytes: Buffer): boolean {
-  const png = bytes
-    .subarray(0, 8)
-    .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const webp =
-    bytes.subarray(0, 4).toString('latin1') === 'RIFF' &&
-    bytes.subarray(8, 12).toString('latin1') === 'WEBP';
-  return png || jpeg || webp;
-}
-
 /** Validate an image and return one square PNG per stored size. */
-export async function encodeAppIcon(
+export function encodeAppIcon(
   bytes: Buffer,
 ): Promise<Map<AppIconSize, Buffer>> {
-  if (!bytes.byteLength) throw new AppError('Icon image is empty.', 400);
-  if (bytes.byteLength > MAX_APP_ICON_BYTES)
-    throw new AppError('Icon image exceeds 4 MB.', 413);
-  if (!isAcceptedFormat(bytes))
-    throw new AppError('Icon must be a PNG, JPEG or WebP image.', 415);
-  try {
-    const options = { limitInputPixels: MAX_SIDE * MAX_SIDE };
-    const meta = await sharp(bytes, options).metadata();
-    if (
-      !meta.width ||
-      !meta.height ||
-      Math.min(meta.width, meta.height) < MIN_SIDE ||
-      Math.max(meta.width, meta.height) > MAX_SIDE
-    )
-      throw new AppError(
-        `Icon sides must be ${MIN_SIDE} to ${MAX_SIDE} pixels.`,
-        400,
-      );
-    const encoded = new Map<AppIconSize, Buffer>();
-    for (const size of APP_ICON_SIZES)
-      encoded.set(
-        size,
-        await sharp(bytes, options)
-          .rotate()
-          .resize(size, size, { fit: 'cover', position: 'centre' })
-          .png()
-          .toBuffer(),
-      );
-    return encoded;
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError('Icon image could not be decoded.', 400);
-  }
+  return encodeSquareImage(bytes, 'Icon', APP_ICON_SIZES, 'app.icon');
 }
 
 async function requireApp(id: string) {
@@ -100,7 +58,7 @@ async function requireApp(id: string) {
         columns: { id: true, icon: true },
       })
     : undefined;
-  if (!app) throw new AppError('App not found.', 404);
+  if (!app) throw new AppError('App not found.', 404, { code: 'app.notFound' });
   return app;
 }
 
@@ -135,19 +93,8 @@ async function swapIconKey(
   });
 }
 
-/**
- * Remove the files of one icon key. Other keys and the directory itself are
- * kept: a concurrent writer may already have created the directory for its
- * own files. The directory goes away with the App.
- */
-async function removeIconKeyFiles(id: string, key: string | null) {
-  if (!key || !KEY_RE.test(key)) return;
-  const dir = appIconDir(id);
-  await Promise.all(
-    APP_ICON_SIZES.map((size) =>
-      rm(path.join(dir, `${key}-${size}.png`), { force: true }),
-    ),
-  );
+function removeIconKeyFiles(id: string, key: string | null) {
+  return removeSquareImageKey(appIconDir(id), key, APP_ICON_SIZES);
 }
 
 export async function setAppIcon(
@@ -156,19 +103,12 @@ export async function setAppIcon(
 ): Promise<AppIconView> {
   const app = await requireApp(id);
   const encoded = await encodeAppIcon(bytes);
-  const dir = appIconDir(app.id);
-  const key = ulid().toLowerCase();
-  await mkdir(dir, { recursive: true });
-  for (const [size, png] of encoded) {
-    const target = path.join(dir, `${key}-${size}.png`);
-    await writeFile(`${target}.tmp`, png);
-    await rename(`${target}.tmp`, target);
-  }
+  const key = await writeSquareImage(appIconDir(app.id), encoded);
   const previous = await swapIconKey(app.id, key);
   if (previous === undefined) {
     // The App was deleted meanwhile; leave nothing behind.
     await removeIconKeyFiles(app.id, key);
-    throw new AppError('App not found.', 404);
+    throw new AppError('App not found.', 404, { code: 'app.notFound' });
   }
   await removeIconKeyFiles(app.id, previous);
   return appIconView(app.id, key);
@@ -186,7 +126,8 @@ export async function setAppIconFromCandidate(
 export async function clearAppIcon(id: string): Promise<AppIconView> {
   const app = await requireApp(id);
   const previous = await swapIconKey(app.id, null);
-  if (previous === undefined) throw new AppError('App not found.', 404);
+  if (previous === undefined)
+    throw new AppError('App not found.', 404, { code: 'app.notFound' });
   await removeIconKeyFiles(app.id, previous);
   return appIconView(app.id, null);
 }
@@ -206,9 +147,5 @@ export async function readAppIcon(
         columns: { id: true, icon: true },
       })
     : undefined;
-  if (!app?.icon || !KEY_RE.test(app.icon)) return null;
-  const body = await readFile(
-    path.join(appIconDir(app.id), `${app.icon}-${size}.png`),
-  ).catch(() => null);
-  return body ? { key: app.icon, body } : null;
+  return app ? readSquareImage(appIconDir(app.id), app.icon, size) : null;
 }

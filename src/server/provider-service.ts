@@ -171,7 +171,10 @@ export async function listProviderViews(): Promise<ProviderView[]> {
 
 export async function getProviderView(id: string): Promise<ProviderView> {
   const provider = await db.query.agentProviders.findFirst({ where: { id } });
-  if (!provider) throw new AppError('Provider not found.', 404);
+  if (!provider)
+    throw new AppError('Provider not found.', 404, {
+      code: 'providers.providerNotFound',
+    });
   const models = await db.query.agentModels.findMany({
     where: { providerId: id },
     orderBy: { sortOrder: 'asc', createdAt: 'asc' },
@@ -202,11 +205,17 @@ export async function getModelView(id: string): Promise<ModelView> {
     where: { id },
     columns: { providerId: true },
   });
-  if (!model) throw new AppError('Model not found.', 404);
+  if (!model)
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
   const found = (await getProviderView(model.providerId)).models.find(
     (item) => item.id === id,
   );
-  if (!found) throw new AppError('Model not found.', 404);
+  if (!found)
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
   return found;
 }
 
@@ -221,11 +230,18 @@ export async function setProviderModelKind(
 
 function checkProviderName(value: string): string {
   const name = value.trim();
-  if (!name) throw new AppError('Provider name is required.', 400);
+  if (!name)
+    throw new AppError('Provider name is required.', 400, {
+      code: 'providers.providerNameRequired',
+    });
   if (Array.from(name).length > MAX_PROVIDER_NAME_LENGTH)
     throw new AppError(
       `Provider name must be at most ${MAX_PROVIDER_NAME_LENGTH} characters.`,
       400,
+      {
+        code: 'providers.providerNameTooLong',
+        params: { max: MAX_PROVIDER_NAME_LENGTH },
+      },
     );
   return name;
 }
@@ -236,30 +252,46 @@ function checkBaseUrl(value: string): string {
   try {
     url = new URL(text);
   } catch {
-    throw new AppError('Base URL must be an http(s) URL.', 400);
+    throw new AppError('Base URL must be an http(s) URL.', 400, {
+      code: 'providers.baseUrlInvalid',
+    });
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:')
-    throw new AppError('Base URL must be an http(s) URL.', 400);
+    throw new AppError('Base URL must be an http(s) URL.', 400, {
+      code: 'providers.baseUrlInvalid',
+    });
   if (text.length > MAX_BASE_URL_LENGTH)
     throw new AppError(
       `Base URL must be at most ${MAX_BASE_URL_LENGTH} characters.`,
       400,
+      {
+        code: 'providers.baseUrlTooLong',
+        params: { max: MAX_BASE_URL_LENGTH },
+      },
     );
   return text;
 }
 
 function checkApiKey(value: string): string {
   const key = value.trim();
-  if (!key) throw new AppError('API key is required.', 400);
+  if (!key)
+    throw new AppError('API key is required.', 400, {
+      code: 'providers.apiKeyRequired',
+    });
   if (key.length > MAX_API_KEY_LENGTH || /\s/.test(key))
-    throw new AppError('API key is not valid.', 400);
+    throw new AppError('API key is not valid.', 400, {
+      code: 'providers.apiKeyInvalid',
+    });
   return key;
 }
 
 function checkCatalogProvider(id: string) {
   const provider = catalogProvider(id);
   if (!provider)
-    throw new AppError(`Catalog provider "${id}" does not exist.`, 400);
+    throw new AppError(`Catalog provider "${id}" does not exist.`, 400, {
+      code: 'providers.catalogProviderMissing',
+      params: { id },
+    });
   return provider;
 }
 
@@ -286,7 +318,9 @@ export async function createProvider(
   const name = checkProviderName(input.name ?? preset?.name ?? '');
   const apiType = input.apiType ?? preset?.apiType;
   if (!apiType)
-    throw new AppError('API type is required for a custom provider.', 400);
+    throw new AppError('API type is required for a custom provider.', 400, {
+      code: 'providers.apiTypeRequired',
+    });
   const baseUrl = checkBaseUrl(input.baseUrl ?? preset?.baseUrl ?? '');
   const apiKey = checkApiKey(input.apiKey);
   const models: Array<{ modelId: string; kind?: AgentModelKind }> =
@@ -295,6 +329,10 @@ export async function createProvider(
     throw new AppError(
       `At most ${MAX_MODELS_PER_CREATE} models can be added at once.`,
       400,
+      {
+        code: 'providers.tooManyModels',
+        params: { max: MAX_MODELS_PER_CREATE },
+      },
     );
 
   const id = await db.transaction(async (tx) => {
@@ -348,7 +386,10 @@ export async function updateProvider(
   const current = await db.query.agentProviders.findFirst({
     where: { id: input.id },
   });
-  if (!current) throw new AppError('Provider not found.', 404);
+  if (!current)
+    throw new AppError('Provider not found.', 404, {
+      code: 'providers.providerNotFound',
+    });
   if (input.apiType !== undefined)
     await assertApiTypeKeepsModels(input.id, input.apiType);
   const patch: Partial<typeof schema.agentProviders.$inferInsert> = {};
@@ -401,7 +442,10 @@ export async function deleteProvider(id: string): Promise<void> {
     .delete(schema.agentProviders)
     .where(eq(schema.agentProviders.id, id))
     .returning({ id: schema.agentProviders.id });
-  if (!deleted.length) throw new AppError('Provider not found.', 404);
+  if (!deleted.length)
+    throw new AppError('Provider not found.', 404, {
+      code: 'providers.providerNotFound',
+    });
 }
 
 /** ================== talking to the provider ================== */
@@ -418,9 +462,14 @@ function redact(text: string, apiKey: string): string {
 
 async function loadProviderRow(id: string): Promise<ProviderRow> {
   const provider = await db.query.agentProviders.findFirst({ where: { id } });
-  if (!provider) throw new AppError('Provider not found.', 404);
+  if (!provider)
+    throw new AppError('Provider not found.', 404, {
+      code: 'providers.providerNotFound',
+    });
   if (!provider.apiKey)
-    throw new AppError('Add an API key to this provider first.', 409);
+    throw new AppError('Add an API key to this provider first.', 409, {
+      code: 'providers.apiKeyMissing',
+    });
   return provider;
 }
 
@@ -450,12 +499,14 @@ export async function testProvider(
     orderBy: { sortOrder: 'asc', createdAt: 'asc' },
   });
   if (!model)
-    throw new AppError(
-      modelId
-        ? `This provider has no chat model "${modelId}".`
-        : 'Add a chat model to this provider first.',
-      modelId ? 404 : 409,
-    );
+    throw modelId
+      ? new AppError(`This provider has no chat model "${modelId}".`, 404, {
+          code: 'providers.noSuchChatModel',
+          params: { modelId },
+        })
+      : new AppError('Add a chat model to this provider first.', 409, {
+          code: 'providers.noChatModel',
+        });
   const spec = resolveModelSpec(model, provider.apiType);
   const { models, picked } = buildRunModels({
     providerId: provider.id,
@@ -559,7 +610,9 @@ async function readLimited(response: Response): Promise<string> {
     size += value.byteLength;
     if (size > MAX_REMOTE_LIST_BYTES) {
       await reader.cancel().catch(() => undefined);
-      throw new AppError('The provider’s model list is too large.', 400);
+      throw new AppError('The provider’s model list is too large.', 400, {
+        code: 'providers.remoteListTooLarge',
+      });
     }
     chunks.push(value);
   }
@@ -582,23 +635,36 @@ export async function listRemoteModels(
       redirect: 'error',
     });
   } catch {
-    throw new AppError('The provider could not be reached.', 400);
+    throw new AppError('The provider could not be reached.', 400, {
+      code: 'providers.unreachable',
+    });
   }
   const text = await readLimited(response);
   if (!response.ok)
     throw new AppError(
       `The provider refused to list models (${response.status}): ${redact(text, provider.apiKey) || 'no details'}`,
       400,
+      {
+        code: 'providers.remoteListRefused',
+        params: {
+          status: response.status,
+          details: redact(text, provider.apiKey) || '-',
+        },
+      },
     );
   let body: unknown;
   try {
     body = JSON.parse(text);
   } catch {
-    throw new AppError('The provider’s model list is not JSON.', 400);
+    throw new AppError('The provider’s model list is not JSON.', 400, {
+      code: 'providers.remoteListNotJson',
+    });
   }
   const data = (body as { data?: unknown })?.data;
   if (!Array.isArray(data))
-    throw new AppError('The provider’s model list has no data.', 400);
+    throw new AppError('The provider’s model list has no data.', 400, {
+      code: 'providers.remoteListNoData',
+    });
   const seen = new Set<string>();
   const models: RemoteModel[] = [];
   for (const entry of data) {

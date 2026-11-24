@@ -29,6 +29,7 @@ import {
   composerDisplayText,
   composerModelText,
   hasComposerReference,
+  restoreComposerInput,
   type ComposerInputPart,
 } from '~agent/composer-content';
 import type { SendImage, SteerMessage } from '~agent/protocol';
@@ -130,7 +131,7 @@ export async function loadPendingRows(
 }
 
 function asParts(value: JsonValue[]): ComposerInputPart[] {
-  return value as unknown as ComposerInputPart[];
+  return restoreComposerInput(value);
 }
 
 export function pendingRowContent(row: PendingRow): {

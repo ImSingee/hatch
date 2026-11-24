@@ -48,6 +48,7 @@ import {
   FileDescriptorSetSchema,
   type FileDescriptorSet,
 } from '@bufbuild/protobuf/wkt';
+import { captureAppDocs, writeAppDocs } from './docs-build';
 import { subprocessSandboxEnv } from '../sandbox-env';
 import { validateSchemaInput } from '../json-schema-input';
 import { validateCron } from './cron-expr';
@@ -596,9 +597,7 @@ function resolveTaskInputs(
           `Task "${task.name}" cron job "${job.name}" has an invalid schedule: ${scheduleError}`,
         );
       }
-      const check = validateSchemaInput(task.inputSchema, job.input, {
-        strict: true,
-      });
+      const check = validateSchemaInput(task.inputSchema, job.input);
       if (!check.success) {
         throw new Error(
           `Task "${task.name}" cron job "${job.name}" input does not match the task input: ${check.message}`,
@@ -655,7 +654,6 @@ export async function buildApp(
     const legacy =
       manifestFile === 'manifest.json'
         ? await loadSourceManifest(src, {
-            kind: 'app',
             parse: parseSourceManifest,
           })
         : undefined;
@@ -664,7 +662,7 @@ export async function buildApp(
     // evaluated; it is independent of the runtime the manifest declares.
     const toolchain = createSourceToolchain(
       await detectSourceToolchain(sourceToolchainReader(src)),
-      platformToolchainContext('app', src, logs),
+      platformToolchainContext(src, logs),
     );
     await toolchain.validateDependencies();
 
@@ -768,6 +766,10 @@ export async function buildApp(
         resolveTaskInputs(preview, descriptors);
         tasks = preview.tasks;
       }
+    }
+    const docs = await captureAppDocs(src, manifest.docs, manifestFile);
+    if (docs.length > 0) {
+      logs.push(`captured ${docs.length} external doc(s)`);
     }
 
     // Only start replacing the requested output after every source validation
@@ -930,6 +932,8 @@ export async function buildApp(
         `captured ${normalized.tasks.definitions.length} task input schema(s)`,
       );
     }
+    await writeAppDocs(out, docs);
+    if (docs.length > 0) normalized.docs = docs.map(({ doc }) => doc);
     await fs.writeFile(
       path.join(out, 'manifest.normalized.json'),
       JSON.stringify(normalized, null, 2),

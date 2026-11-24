@@ -3,8 +3,7 @@
  * PinService both call this module, so the two surfaces cannot drift.
  *
  * App pins are rows of `sidebar_items` (an App can have several, each with
- * its own label and entry point); Workflows and dashboards carry a `pinned`
- * flag.
+ * its own label and entry point); dashboards carry a `pinned` flag.
  */
 import { eq, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
@@ -23,9 +22,9 @@ import {
 } from './workspace-read';
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
-// Existing namespaces elsewhere: appDeployLock=1 (apps/deploy.ts),
-// workflowDeployLock=2 (workflows/deploy.ts), APP_KV_LOCK_NS=3
-// (apps/kv.ts), DASHBOARDS_LOCK_NS=5 (dashboards.ts).
+// Existing namespaces elsewhere: appDeployLock=1 (apps/deploy.ts), 2 (retired
+// with Workflows; do not reuse), APP_KV_LOCK_NS=3 (apps/kv.ts),
+// DASHBOARDS_LOCK_NS=5 (dashboards.ts).
 const SIDEBAR_PIN_LOCK_NS = 4;
 
 /** Next sidebar sortOrder: max+1, so deletions never cause collisions. */
@@ -38,25 +37,17 @@ const pinsChanged = () => publishPlatformEvent({ type: 'pins.updated' });
 export type Pins = {
   /** In navigation order; includes pins of archived Apps. */
   appPins: SidebarItem[];
-  /** Most recently updated first, as the navigation shows them. */
-  workflows: { id: string; slug: string; name: string }[];
   /** In dashboard order. */
   dashboards: { id: string; name: string }[];
 };
 
 export async function listPins(): Promise<Pins> {
-  const [appPins, workflows, dashboards] = await Promise.all([
+  const [appPins, dashboards] = await Promise.all([
     readSidebarItems(),
-    db.query.workflows.findMany({
-      where: { pinned: true, status: { ne: 'archived' } },
-      orderBy: { updatedAt: 'desc' },
-      columns: { id: true, slug: true, name: true },
-    }),
     readDashboards(),
   ]);
   return {
     appPins,
-    workflows,
     dashboards: dashboards
       .filter((dashboard) => dashboard.pinned)
       .map(({ id, name }) => ({ id, name })),
@@ -65,7 +56,8 @@ export async function listPins(): Promise<Pins> {
 
 async function appPin(id: string): Promise<SidebarItem> {
   const pin = (await readSidebarItems()).find((item) => item.id === id);
-  if (!pin) throw new AppError('Pin not found.', 404);
+  if (!pin)
+    throw new AppError('Pin not found.', 404, { code: 'shell.pinNotFound' });
   return pin;
 }
 
@@ -78,6 +70,7 @@ function pinEntryHash(entryHash: string): string | null {
     throw new AppError(
       `The entry point is longer than ${MAX_ENTRY_HASH_LEN} characters.`,
       400,
+      { code: 'shell.entryPointTooLong', params: { max: MAX_ENTRY_HASH_LEN } },
     );
   return normalizeEntryHash(entryHash);
 }
@@ -85,7 +78,10 @@ function pinEntryHash(entryHash: string): string | null {
 /** Trimmed label, or a 400 when nothing is left. */
 function pinLabel(label: string): string {
   const trimmed = label.trim();
-  if (!trimmed) throw new AppError('Name cannot be empty.', 400);
+  if (!trimmed)
+    throw new AppError('Name cannot be empty.', 400, {
+      code: 'shell.pinNameEmpty',
+    });
   return trimmed;
 }
 
@@ -122,7 +118,8 @@ export async function pinApp(input: {
     const app =
       (await tx.query.apps.findFirst({ where: { id: input.app } })) ??
       (await tx.query.apps.findFirst({ where: { slug: input.app } }));
-    if (!app) throw new AppError('App not found.', 404);
+    if (!app)
+      throw new AppError('App not found.', 404, { code: 'shell.appNotFound' });
     if (input.ifAbsent) {
       const existing = await tx.query.sidebarItems.findFirst({
         where: { appId: app.id },
@@ -173,7 +170,8 @@ export async function updateAppPin(
     })
     .where(eq(schema.sidebarItems.id, id))
     .returning({ id: schema.sidebarItems.id });
-  if (!updated.length) throw new AppError('Pin not found.', 404);
+  if (!updated.length)
+    throw new AppError('Pin not found.', 404, { code: 'shell.pinNotFound' });
   pinsChanged();
   return appPin(id);
 }
@@ -190,7 +188,8 @@ export async function unpinApp(
       .delete(schema.sidebarItems)
       .where(eq(schema.sidebarItems.id, target.pinId))
       .returning({ id: schema.sidebarItems.id });
-    if (!removed.length) throw new AppError('Pin not found.', 404);
+    if (!removed.length)
+      throw new AppError('Pin not found.', 404, { code: 'shell.pinNotFound' });
     pinsChanged();
     return removed.map((row) => row.id);
   }
@@ -203,7 +202,8 @@ export async function unpinApp(
       where: { slug: target.app },
       columns: { id: true },
     }));
-  if (!app) throw new AppError('App not found.', 404);
+  if (!app)
+    throw new AppError('App not found.', 404, { code: 'shell.appNotFound' });
   const removed = await db
     .delete(schema.sidebarItems)
     .where(eq(schema.sidebarItems.appId, app.id))
@@ -231,29 +231,6 @@ export async function reorderDashboards(
   return ordered;
 }
 
-/** Pin or unpin a Workflow, addressed by id or slug. */
-export async function setWorkflowPinned(
-  workflow: string,
-  pinned: boolean,
-): Promise<{ id: string; pinned: boolean }> {
-  const row =
-    (await db.query.workflows.findFirst({
-      where: { id: workflow },
-      columns: { id: true },
-    })) ??
-    (await db.query.workflows.findFirst({
-      where: { slug: workflow },
-      columns: { id: true },
-    }));
-  if (!row) throw new AppError('Workflow not found.', 404);
-  await db
-    .update(schema.workflows)
-    .set({ pinned })
-    .where(eq(schema.workflows.id, row.id));
-  pinsChanged();
-  return { id: row.id, pinned };
-}
-
 export async function setDashboardPinned(
   id: string,
   pinned: boolean,
@@ -263,7 +240,10 @@ export async function setDashboardPinned(
     .set({ pinned })
     .where(eq(schema.dashboards.id, id))
     .returning({ id: schema.dashboards.id });
-  if (!updated.length) throw new AppError('Dashboard not found.', 404);
+  if (!updated.length)
+    throw new AppError('Dashboard not found.', 404, {
+      code: 'shell.dashboardNotFound',
+    });
   pinsChanged();
   return { id, pinned };
 }

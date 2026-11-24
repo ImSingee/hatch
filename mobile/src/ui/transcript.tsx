@@ -278,25 +278,30 @@ export function TranscriptMessage({
           resizeMode="cover"
         />
       );
-    if (block.type === 'app' || block.type === 'workflow')
+    if (block.type === 'app')
       return (
         <View
           key={index}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
         >
           <Glyph
-            name={block.type === 'app' ? 'apps' : 'workflows'}
+            name="apps"
             size={13}
             color={mine ? accent.onFill : accent.ink}
           />
           <Text
             style={[type.callout, { color: mine ? accent.onFill : accent.ink }]}
           >
-            {typeof block.name === 'string'
-              ? block.name
-              : 'Referenced resource'}
+            {typeof block.name === 'string' ? block.name : 'Referenced App'}
           </Text>
         </View>
+      );
+    // A stored mention of any other kind keeps its name, as on the web.
+    if (mine && typeof block.id === 'string' && typeof block.name === 'string')
+      return (
+        <Text key={index} style={[type.callout, { color: accent.onFill }]}>
+          @{block.name}
+        </Text>
       );
     // Without a reply row (a steered message's preview), a reply's own
     // process blocks still show on a rail.

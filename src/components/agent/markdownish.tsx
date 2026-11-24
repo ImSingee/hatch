@@ -21,6 +21,7 @@ function MarkdownLink(props: ComponentPropsWithoutRef<'a'>) {
 
 type PluginList = NonNullable<MarkdownOptions['rehypePlugins']>;
 const REMARK_PLUGINS: PluginList = [remarkGfm, remarkMath];
+const PLAIN_REMARK_PLUGINS: PluginList = [remarkGfm];
 const REHYPE_PLUGINS: PluginList = [
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
@@ -63,18 +64,24 @@ function normalizeMath(text: string): string {
 // instead of O(blocks).
 export const Markdownish = memo(function Markdownish({
   text,
+  math = true,
 }: {
   text: string;
+  /**
+   * Render LaTeX math. Chat output uses it; authored documents (such as App
+   * docs) disable it so `$` amounts and `\[...\]` regexes stay literal.
+   */
+  math?: boolean;
 }) {
   if (!text.trim()) return null;
   return (
     <Typography className={classes.markdown}>
       <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS}
+        remarkPlugins={math ? REMARK_PLUGINS : PLAIN_REMARK_PLUGINS}
+        rehypePlugins={math ? REHYPE_PLUGINS : undefined}
         components={MARKDOWN_COMPONENTS}
       >
-        {normalizeMath(text)}
+        {math ? normalizeMath(text) : text}
       </ReactMarkdown>
     </Typography>
   );

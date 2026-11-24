@@ -27,13 +27,10 @@ import {
   type AppTaskRun,
   type AppTaskRunStep,
   type AppTaskRunSummary,
+  type AppDoc,
   CreateAppRequestSchema,
   AppService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
-import {
-  CreateWorkflowRequestSchema,
-  WorkflowService,
-} from '../../hatch-platform-api/gen/hatch/platform/v1/workflow_pb';
 import { AuthService } from '../../hatch-platform-api/gen/hatch/platform/v1/auth_pb';
 import {
   ImageService,
@@ -161,6 +158,18 @@ const restored = (value: RestoredVersion) => ({
     ? {}
     : { dataSchemaMismatch: value.dataSchemaMismatch }),
 });
+const appDoc = (value: AppDoc | undefined) => {
+  const doc = required(value);
+  return {
+    id: doc.id,
+    title: doc.title,
+    description: doc.description ?? null,
+    path: doc.path,
+    bytes: doc.bytes,
+    sha256: doc.sha256,
+  };
+};
+export type AppDocView = ReturnType<typeof appDoc>;
 const icon = (app: string, value: AppIcon | undefined) => ({
   // The id or slug the caller passed; `path` carries the immutable id.
   app,
@@ -507,7 +516,6 @@ export type AppTaskRunView = ReturnType<typeof taskRunView>;
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
-  const workflows = createClient(WorkflowService, transport);
   function lifecycle(client: {
     list: (
       request: Record<string, never>,
@@ -855,11 +863,6 @@ export function cliClient(transport: Transport) {
         const result = await pins.listPins(page);
         return {
           appPins: result.appPins.map(appPin),
-          workflows: result.workflows.map((workflow) => ({
-            id: workflow.id,
-            slug: workflow.slug,
-            name: workflow.name,
-          })),
           dashboards: result.dashboards.map((dashboard) => ({
             id: dashboard.id,
             name: dashboard.name,
@@ -916,16 +919,6 @@ export function cliClient(transport: Transport) {
           await pins.reorderDashboards({ dashboardIds: input.dashboardIds })
         ).dashboardIds,
       }),
-      setWorkflowPinned: async (input: {
-        workflow: string;
-        pinned: boolean;
-      }) => {
-        const result = await pins.setWorkflowPinned({
-          workflow: input.workflow,
-          pinned: input.pinned,
-        });
-        return { workflowId: result.id, pinned: result.pinned };
-      },
       setDashboardPinned: async (input: {
         dashboardId: string;
         pinned: boolean;
@@ -1012,6 +1005,41 @@ export function cliClient(transport: Transport) {
       },
     },
     apps: {
+      docs: {
+        list: async (input: {
+          id: string;
+          limit?: number;
+          cursor?: string;
+        }) => {
+          const result = await apps.listAppDocs(input);
+          const endpoints = result.endpoints;
+          return {
+            appId: result.appId,
+            version: result.version,
+            deploymentId: result.deploymentId,
+            docs: result.docs.map((value) => appDoc(value)),
+            endpoints: {
+              webhook: endpoints?.webhook
+                ? { url: endpoints.webhook.url, auth: endpoints.webhook.auth }
+                : null,
+              rpc: endpoints?.rpc
+                ? { url: endpoints.rpc.url, service: endpoints.rpc.service }
+                : null,
+            },
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        get: async (input: { id: string; docId: string }) => {
+          const result = await apps.getAppDoc(input);
+          return {
+            appId: result.appId,
+            version: result.version,
+            deploymentId: result.deploymentId,
+            doc: appDoc(result.doc),
+            content: result.content,
+          };
+        },
+      },
       icon: {
         get: async (input: { id: string }) =>
           icon(input.id, (await apps.getAppIcon(input)).icon),
@@ -1156,17 +1184,6 @@ export function cliClient(transport: Transport) {
         return { appId: result.appId, association: result.association };
       },
     },
-    workflows: lifecycle({
-      list: workflows.listWorkflows,
-      create: (input) =>
-        workflows.createWorkflow(
-          parseCreate(CreateWorkflowRequestSchema, input),
-        ),
-      get: workflows.getWorkflow,
-      source: workflows.getWorkflowSource,
-      deploy: workflows.deployWorkflow,
-      rollback: workflows.rollbackWorkflow,
-    }),
     auth: {
       status: async (_input: Record<string, never>): Promise<AuthStatus> => {
         const result = await auth.getStatus({});
@@ -1219,8 +1236,8 @@ export function cliClient(transport: Transport) {
       },
     },
     sdk: {
-      get: async (input: { kind: 'app' | 'workflow' }) => {
-        const result = await sdk.getSdk(input);
+      get: async () => {
+        const result = await sdk.getSdk({ kind: 'app' });
         return {
           files: files(result.files),
           ...(result.tooling

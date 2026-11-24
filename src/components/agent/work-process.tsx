@@ -19,6 +19,8 @@ import {
   useId,
   useState,
 } from 'react';
+import { Trans } from 'react-i18next';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import type { StreamOutcome } from './use-agent-stream';
 import classes from './chat.module.css';
 
@@ -91,35 +93,64 @@ export type WorkSummary = {
  * The words that open the line: what happened, then how long it took. A
  * running reply counts up; an ended one says how it ended.
  */
-const PHASE_WORDS: Record<WorkPhase, { lead: string; span: string }> = {
-  running: { lead: 'Working', span: 'for' },
-  completed: { lead: 'Worked', span: 'for' },
-  failed: { lead: 'Failed', span: 'after' },
-  cancelled: { lead: 'Stopped', span: 'after' },
-  incomplete: { lead: 'Ended early', span: 'after' },
+type DurationKey =
+  | 'agent.work.runningFor'
+  | 'agent.work.completedFor'
+  | 'agent.work.failedAfter'
+  | 'agent.work.cancelledAfter'
+  | 'agent.work.incompleteAfter';
+
+const PHASE_WORDS: Record<
+  WorkPhase,
+  { lead: PlainTranslationKey; withDuration: DurationKey }
+> = {
+  running: {
+    lead: 'agent.work.running',
+    withDuration: 'agent.work.runningFor',
+  },
+  completed: {
+    lead: 'agent.work.completed',
+    withDuration: 'agent.work.completedFor',
+  },
+  failed: { lead: 'agent.work.failed', withDuration: 'agent.work.failedAfter' },
+  cancelled: {
+    lead: 'agent.work.cancelled',
+    withDuration: 'agent.work.cancelledAfter',
+  },
+  incomplete: {
+    lead: 'agent.work.incomplete',
+    withDuration: 'agent.work.incompleteAfter',
+  },
 };
 
-function WorkDuration({
+/** What happened, with how long it took when the timing is known. */
+function WorkLead({
+  phase,
   timing,
   running,
-  span,
 }: {
+  phase: WorkPhase;
   timing: WorkTiming;
   running: boolean;
-  span: string;
 }) {
+  const { t } = useI18n();
   const ticking = running && timing !== null && timing.endedAt === undefined;
   const now = useServerNow(ticking ? timing.startedAt : null);
-  if (!timing) return null;
-  const end = timing.endedAt ?? (ticking ? now : undefined);
-  if (end === undefined) return null;
+  const words = PHASE_WORDS[phase];
+  const end = timing ? (timing.endedAt ?? (ticking ? now : undefined)) : null;
+  if (!timing || end === undefined || end === null) {
+    return <span className={classes.workLead}>{t(words.lead)}</span>;
+  }
   return (
-    <>
-      {` ${span} `}
-      <span className={classes.workDuration}>
-        {formatElapsed(end - timing.startedAt)}
-      </span>
-    </>
+    <Trans
+      t={t}
+      i18nKey={words.withDuration}
+      values={{ duration: formatElapsed(end - timing.startedAt) }}
+      components={{
+        lead: <span className={classes.workLead} />,
+        duration: <span className={classes.workDuration} />,
+      }}
+    />
   );
 }
 
@@ -139,10 +170,6 @@ function WorkMark({ phase }: { phase: WorkPhase }) {
   }
 }
 
-function stepCountLabel(steps: number): string {
-  return steps === 1 ? '1 step' : `${steps} steps`;
-}
-
 /**
  * A reply's process as one quiet line in the Agent's column: no surface of
  * its own, so it reads as part of the turn rather than another message.
@@ -160,10 +187,10 @@ export function WorkProcess({
   summary: WorkSummary;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   const bodyId = useId();
   const reduceMotion = useReducedMotion();
   const running = frame.phase === 'running';
-  const words = PHASE_WORDS[frame.phase];
   // A finished reply with nothing before its answer and no known duration
   // (legacy history) has nothing to show here.
   if (!hasProcess && frame.timing === null && frame.phase === 'completed') {
@@ -173,7 +200,7 @@ export function WorkProcess({
   const detail = running
     ? summary.current
     : summary.steps > 0
-      ? stepCountLabel(summary.steps)
+      ? t('agent.work.steps', { count: summary.steps })
       : undefined;
   // Spaces between the parts keep the copied text and accessible name
   // readable ("Worked for 1m 12s · 6 steps").
@@ -183,12 +210,7 @@ export function WorkProcess({
         <WorkMark phase={frame.phase} />
       </span>
       <span className={classes.workText}>
-        <span className={classes.workLead}>{words.lead}</span>
-        <WorkDuration
-          timing={frame.timing}
-          running={running}
-          span={words.span}
-        />
+        <WorkLead phase={frame.phase} timing={frame.timing} running={running} />
         {detail ? (
           <>
             {' '}

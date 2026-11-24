@@ -18,11 +18,12 @@ designs icons in chat; people can also upload a file.
    provider. Migration `20261124092607_agent_model_kind` deletes the retired
    single `image.model` setting without converting it: an instance that used
    it adds its image model again.
-2. **Skill.** `skills/app-icon/SKILL.md` holds the versioned prompt set: how to
-   offer three candidates, one per style (Glossy: a colourful 3D object;
-   Glass: a milky frosted-glass object with one accent; Line: a bold white
-   line drawing), each with its own subject, plus the tile palette and one
-   fixed template per style. The Agent sends only a short subject phrase
+2. **Skill.** The `building-apps` Skill's
+   `skills/building-apps/references/app-icon.md` reference holds the versioned
+   prompt set: how to offer three candidates, one per style (Glossy: a
+   colourful 3D object; Glass: a milky frosted-glass object with one accent;
+   Line: a bold white line drawing), each with its own subject, plus the tile
+   palette and one fixed template per style. The Agent sends only a short subject phrase
    derived from the App's name and description and the tile colour's name,
    one prompt per candidate: repeating one prompt (`--count`) returns
    near-identical objects once the tile is normalised.
@@ -64,6 +65,8 @@ and 88 px), both on the Desk ground and on white.
 - Input is never stored or served as-is. Accepted: PNG, JPEG or WebP by
   signature, at most 4 MB, sides 64 to 4096 px. It is decoded, cropped to a
   centred square and re-encoded as PNG without metadata. SVG is rejected.
+  Validation, encoding and per-key files are shared with user avatars in
+  `src/server/images/square-image.ts`.
 - `GET /api/app/<id>/icon?v=<key>&size=64|128|256` accepts any platform
   credential (session, API key, Run). A URL naming the current key is
   `immutable`; any other must revalidate. The stored image is square; clients

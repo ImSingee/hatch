@@ -14,6 +14,8 @@ import type {
   EnvVariableField,
 } from '~agent/events';
 import { useEventCallback } from '~hooks/use-latest-committed';
+import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
+import { errorFromResponse } from '~lib/error-codes';
 import type { AgentThinkingLevel, JsonValue } from '~/db/schema';
 import { isIncompleteStopReason } from './chat-turns';
 import type { EnvEntry } from './env-form';
@@ -620,7 +622,10 @@ export async function startAgentRunRequest(
     body: JSON.stringify(params),
   });
   if (!res.ok) {
-    throw new Error((await res.text()) || `Request failed (${res.status})`);
+    throw errorFromResponse(
+      res,
+      (await res.text()) || `Request failed (${res.status})`,
+    );
   }
   return (await res.json()) as StartedRun | QueuedStart;
 }
@@ -634,7 +639,10 @@ export async function stopAgentAutoRetryRequest(
     { method: 'DELETE' },
   );
   if (!res.ok) {
-    throw new Error((await res.text()) || `Request failed (${res.status})`);
+    throw errorFromResponse(
+      res,
+      (await res.text()) || `Request failed (${res.status})`,
+    );
   }
 }
 
@@ -643,7 +651,10 @@ async function cancelAgentRunRequest(runId: string): Promise<void> {
     method: 'POST',
   });
   if (!res.ok) {
-    throw new Error((await res.text()) || `Request failed (${res.status})`);
+    throw errorFromResponse(
+      res,
+      (await res.text()) || `Request failed (${res.status})`,
+    );
   }
 }
 
@@ -697,7 +708,20 @@ export function useAgentStream({
   onConnected,
 }: AgentStreamCallbacks) {
   const [state, setState] = useState<StreamState>(IDLE);
-  const [envAnnouncement, setEnvAnnouncement] = useState('');
+  const { t, locale } = useI18n();
+  // Whether the screen-reader status says the environment was saved.
+  const [envSaved, setEnvSaved] = useState(false);
+  // Stable toasts for the callbacks below, in the language at call time.
+  const toastError = useEventCallback(
+    (error: unknown, fallback: PlainTranslationKey) => {
+      toast.error(translateError(t, locale, error, fallback));
+    },
+  );
+  const toastMessage = useEventCallback(
+    (key: PlainTranslationKey, options?: { id: string }) => {
+      toast.error(t(key), options);
+    },
+  );
   const abortRef = useRef<AbortController | null>(null);
   const runIdRef = useRef<string | null>(null);
   const lastSeqRef = useRef(0);
@@ -770,7 +794,7 @@ export function useAgentStream({
       const authoritativeSeed = seedHasPrompt && !sameSeedValue;
       if (!authoritativeSeed) return;
 
-      setEnvAnnouncement('');
+      setEnvSaved(false);
       const seededEnv = seed?.pendingEnvRequest ?? undefined;
       const seedWasConfirmed = Boolean(
         seededEnv &&
@@ -890,10 +914,10 @@ export function useAgentStream({
             if (submission?.id === confirmationId) {
               abortEnvSubmission();
             }
-            setEnvAnnouncement('Environment variables saved.');
+            setEnvSaved(true);
             toast.dismiss(envFailureToastId(source.runId, event.requestId));
           } else if (event.type === 'env_request') {
-            setEnvAnnouncement('');
+            setEnvSaved(false);
           }
           setState((current) =>
             current.runId === source.runId
@@ -956,7 +980,7 @@ export function useAgentStream({
       if (!sameRun) {
         abortEnvSubmission();
         confirmedEnvTombstoneRef.current = null;
-        setEnvAnnouncement('');
+        setEnvSaved(false);
         lastSeqRef.current = 0;
       }
       runIdRef.current = runId;
@@ -1098,7 +1122,7 @@ export function useAgentStream({
 
   const start = useCallback(
     async (params: StartParams): Promise<StartedRun | QueuedStart | null> => {
-      setEnvAnnouncement('');
+      setEnvSaved(false);
       const requestId = startRequestIdRef.current + 1;
       startRequestIdRef.current = requestId;
       pendingStartRef.current = { requestId, stopRequested: false };
@@ -1127,9 +1151,7 @@ export function useAgentStream({
           try {
             await cancelAgentRunRequest(runId);
           } catch (error) {
-            toast.error(
-              error instanceof Error ? error.message : 'Could not stop.',
-            );
+            toastError(error, 'agent.stream.stopFailed');
           } finally {
             handleSessionChanged();
           }
@@ -1148,13 +1170,13 @@ export function useAgentStream({
           pendingStartRef.current = null;
         }
         if (!stopRequested) {
-          toast.error(error instanceof Error ? error.message : 'Stream failed');
+          toastError(error, 'agent.stream.startFailed');
         }
         setState(IDLE);
         return null;
       }
     },
-    [handleSessionChanged],
+    [handleSessionChanged, toastError],
   );
 
   const send = useCallback((params: SendParams) => start(params), [start]);
@@ -1167,31 +1189,34 @@ export function useAgentStream({
     [start],
   );
 
-  const answer = useCallback(async (askId: string, answers: AskAnswer[]) => {
-    const runId = runIdRef.current;
-    if (!runId) return;
-    // Optimistically hide the form for snappy feedback, but remember it: if the
-    // POST fails the run is still blocked, so we must restore the form or the
-    // chat is stuck with no way to unblock it.
-    let previousAsk: PendingAsk | undefined;
-    setState((p) => {
-      if (p.pendingAsk?.askId !== askId) return p;
-      previousAsk = p.pendingAsk;
-      return { ...p, pendingAsk: undefined };
-    });
-    try {
-      await answerAgentRunRequest(runId, askId, answers);
-    } catch {
-      toast.error('Could not submit your answer. Try again.');
-      // Restore the same ask so the user can retry — but only if this run is
-      // still active and nothing newer (a fresh ask) has taken its place.
-      setState((p) =>
-        previousAsk && p.active && !p.pendingAsk && runIdRef.current === runId
-          ? { ...p, pendingAsk: previousAsk }
-          : p,
-      );
-    }
-  }, []);
+  const answer = useCallback(
+    async (askId: string, answers: AskAnswer[]) => {
+      const runId = runIdRef.current;
+      if (!runId) return;
+      // Optimistically hide the form for snappy feedback, but remember it: if the
+      // POST fails the run is still blocked, so we must restore the form or the
+      // chat is stuck with no way to unblock it.
+      let previousAsk: PendingAsk | undefined;
+      setState((p) => {
+        if (p.pendingAsk?.askId !== askId) return p;
+        previousAsk = p.pendingAsk;
+        return { ...p, pendingAsk: undefined };
+      });
+      try {
+        await answerAgentRunRequest(runId, askId, answers);
+      } catch {
+        toastMessage('agent.stream.answerFailed');
+        // Restore the same ask so the user can retry — but only if this run is
+        // still active and nothing newer (a fresh ask) has taken its place.
+        setState((p) =>
+          previousAsk && p.active && !p.pendingAsk && runIdRef.current === runId
+            ? { ...p, pendingAsk: previousAsk }
+            : p,
+        );
+      }
+    },
+    [toastMessage],
+  );
 
   const submitEnv = useCallback(
     async (requestId: string, entries: EnvEntry[]): Promise<boolean> => {
@@ -1242,7 +1267,7 @@ export function useAgentStream({
           runId,
           requestId,
         );
-        setEnvAnnouncement('Environment variables saved.');
+        setEnvSaved(true);
         toast.dismiss(envFailureToastId(runId, requestId));
         return true;
       } catch (error) {
@@ -1275,10 +1300,9 @@ export function useAgentStream({
         ) {
           return confirmed;
         }
-        toast.error(
-          'Could not confirm the environment variables were saved. Try again.',
-          { id: envFailureToastId(runId, requestId) },
-        );
+        toastMessage('agent.stream.envUnconfirmed', {
+          id: envFailureToastId(runId, requestId),
+        });
         return false;
       } finally {
         if (timeout) clearTimeout(timeout);
@@ -1287,7 +1311,7 @@ export function useAgentStream({
         }
       }
     },
-    [],
+    [toastMessage],
   );
 
   const stop = useCallback(
@@ -1310,13 +1334,13 @@ export function useAgentStream({
       try {
         await cancelAgentRunRequest(runId);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not stop.');
+        toastError(error, 'agent.stream.stopFailed');
         // The run may still be executing. Releasing the frozen turn lets the
         // caller reconnect while the session still reports the run active.
         release(runId);
       }
     },
-    [detach, release],
+    [detach, release, toastError],
   );
 
   return {
@@ -1330,6 +1354,6 @@ export function useAgentStream({
     stop,
     answer,
     submitEnv,
-    envAnnouncement,
+    envAnnouncement: envSaved ? t('agent.env.saved') : '',
   };
 }

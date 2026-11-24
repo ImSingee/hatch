@@ -36,6 +36,7 @@ import {
 } from '~components/desk/app-surface';
 import { appSurfaceSource } from '~components/desk/app-surface-source';
 import { DeskWindow } from '~components/desk/window';
+import { useErrorText, useI18n } from '~i18n';
 import { appViewQueryOptions } from '~queries/apps';
 import { getAppDeploymentRevision } from '~server/apps';
 import classes from './app-view.module.css';
@@ -60,6 +61,8 @@ function rawFragment(href: string) {
 }
 
 function AppView() {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const { appSlug } = Route.useParams();
   const appQueryOptions = appViewQueryOptions(appSlug);
   const { data: app } = useSuspenseQuery(appQueryOptions);
@@ -123,17 +126,23 @@ function AppView() {
     });
   };
 
-  // The browser tab shows whichever page the user is on inside the App, and
-  // gets the platform's title back when the App closes.
-  useEffect(() => {
-    const hostTitle = document.title;
-    return () => {
-      document.title = hostTitle;
-    };
-  }, [appSlug]);
-  const mirrorTitle = (title: string | null) => {
-    if (title && title !== document.title) document.title = title;
-  };
+  // The browser tab shows whichever page the user is on inside the App, or
+  // the App's name until that page reports a title. Kept per App, so a switch
+  // to another App does not show the previous one's page.
+  const [embeddedTitle, setEmbeddedTitle] = useState<{
+    appSlug: string;
+    title: string | null;
+  } | null>(null);
+  // The surface reports on every change to the App's head, often with the
+  // same title, so keep the current state when nothing changed.
+  const mirrorTitle = (title: string | null) =>
+    setEmbeddedTitle((current) =>
+      current?.appSlug === appSlug && current.title === title
+        ? current
+        : { appSlug, title },
+    );
+  const pageTitle =
+    (embeddedTitle?.appSlug === appSlug && embeddedTitle.title) || app.name;
 
   // Push each host navigation into the already-loaded App. The surface seeds
   // fresh loads itself (and app switches mount a new surface); this covers
@@ -168,17 +177,15 @@ function AppView() {
         await router.invalidate();
         return;
       }
-      toast.error(
-        error instanceof Error ? error.message : 'Could not reload the app.',
-      );
+      toast.error(errorText(error, 'appDetail.reloadFailed'));
     } finally {
       setReloading(false);
     }
   };
 
   const reloadLabel = updateAvailable
-    ? 'Update available — reload app'
-    : 'Reload app';
+    ? t('appDetail.updateReload')
+    : t('appDetail.reload');
   // Clicking the pill hands off to the plain reload icon, which carries the
   // loading state; the pill only returns if the reload fails.
   const showUpdatePill = updateAvailable && !reloading;
@@ -198,6 +205,7 @@ function AppView() {
     <DeskWindow
       fill
       title={app.name}
+      documentTitle={pageTitle}
       tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
       toolbar={
         <>
@@ -205,7 +213,7 @@ function AppView() {
             <>
               {showUpdatePill ? (
                 <Box component="output" className={classes.update}>
-                  <Tooltip label="Reload to apply the new version" withArrow>
+                  <Tooltip label={t('appDetail.reloadToApply')} withArrow>
                     <Button
                       size="compact-sm"
                       variant="light"
@@ -227,7 +235,7 @@ function AppView() {
                         />
                       }
                     >
-                      Update available
+                      {t('appDetail.updateAvailable')}
                     </Button>
                   </Tooltip>
                 </Box>
@@ -245,7 +253,7 @@ function AppView() {
                 </Tooltip>
               )}
               {canOpen ? (
-                <Tooltip label="Open in new tab" withArrow>
+                <Tooltip label={t('appDetail.openInNewTab')} withArrow>
                   <ActionIcon
                     variant="subtle"
                     color="gray"
@@ -253,7 +261,7 @@ function AppView() {
                     href={appSurfaceSource(app.slug)}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label="Open in new tab"
+                    aria-label={t('appDetail.openInNewTab')}
                   >
                     <IconExternalLink size={18} stroke={1.7} />
                   </ActionIcon>
@@ -261,11 +269,11 @@ function AppView() {
               ) : null}
             </>
           ) : null}
-          <Tooltip label="Manage" withArrow>
+          <Tooltip label={t('common.manage')} withArrow>
             <ActionIcon
               variant="subtle"
               color="gray"
-              aria-label="Manage"
+              aria-label={t('common.manage')}
               renderRoot={(props) => (
                 <Link
                   to="/app/$appSlug/manage"
@@ -316,20 +324,20 @@ function AppView() {
             <Text fw={700} mt="xs">
               {isCompatibilityBlocked
                 ? platformUpdateRequired
-                  ? 'Platform update required'
-                  : 'App update required'
+                  ? t('compatibility.platformUpdate.title')
+                  : t('compatibility.appUpdate.title')
                 : hasLiveDeployment
-                  ? 'Backend-only app'
-                  : 'Not deployed yet'}
+                  ? t('appDetail.backendOnly.title')
+                  : t('appDetail.notDeployed.title')}
             </Text>
             <Text size="sm" c="dimmed" ta="center">
               {isCompatibilityBlocked
                 ? platformUpdateRequired
-                  ? 'This App deployment is newer than the current platform. Update the platform before running it.'
-                  : 'This App cannot run on the current platform. Use Agent to update and redeploy it.'
+                  ? t('appDetail.platformUpdate.body')
+                  : t('appDetail.appUpdate.body')
                 : hasLiveDeployment
-                  ? 'This app has no frontend — it runs a backend (cron or webhook). Open Manage to inspect its capabilities.'
-                  : 'Deploy this app to use it here. You can build and deploy it from the Manage page.'}
+                  ? t('appDetail.backendOnly.body')
+                  : t('appDetail.notDeployed.body')}
             </Text>
             <Button
               variant="default"
@@ -354,8 +362,8 @@ function AppView() {
               }
             >
               {isCompatibilityBlocked && !platformUpdateRequired
-                ? 'Open Agent'
-                : 'Manage app'}
+                ? t('appDetail.openAgent')
+                : t('deployment.manageApp')}
             </Button>
           </Stack>
         </Box>

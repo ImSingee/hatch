@@ -10,7 +10,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { createModels, type AssistantMessage } from '@earendil-works/pi-ai';
+import {
+  createModels,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  type AssistantMessage,
+  type JsonObject,
+} from '@earendil-works/pi-ai';
 import {
   fauxAssistantMessage,
   fauxProvider,
@@ -102,7 +108,6 @@ async function runWithResponses(
 
   return runAgentTurn({
     appUrl: 'https://hatch.example.test',
-    betaFeatures: [],
     priorMessages,
     sessionId,
     userText: composerInput?.userText ?? 'hello',
@@ -160,7 +165,7 @@ describe('runAgentTurn terminal outcomes', () => {
       const original = structuredClone(args);
       const result = await runWithResponses(
         [
-          fauxAssistantMessage(fauxToolCall(name, args)),
+          fauxAssistantMessage(fauxToolCall(name, args as JsonObject)),
           fauxAssistantMessage('done'),
         ],
         `invalid-enum-${field}`,
@@ -383,17 +388,11 @@ describe('runAgentTurn terminal outcomes', () => {
         name: 'Original Name',
         slug: 'original-slug',
       },
-      { type: 'text', text: ' with ' },
-      {
-        type: 'workflow',
-        id: 'workflow-stable',
-        name: 'Original Workflow',
-      },
       { type: 'text', text: ' now.' },
     ];
     const userText =
       'Review @APP{name="Original Name" id="app-stable" slug="original-slug"}' +
-      ' with @WORKFLOW{name="Original Workflow" id="workflow-stable"} now.';
+      ' now.';
     const result = await runWithResponses(
       [
         (context) => {
@@ -903,7 +902,9 @@ describe('runAgentTurn auto compaction', () => {
   >[0];
 
   const isSummaryRequest = (context: ProviderContext) =>
-    context.systemPrompt?.includes('context summarization assistant') === true;
+    getCurrentSystemPrompt(context.messages).includes(
+      'context summarization assistant',
+    );
 
   const contextText = (context: ProviderContext) =>
     JSON.stringify(context.messages);
@@ -1097,10 +1098,10 @@ describe('runAgentTurn auto compaction', () => {
         revision: 1,
         truncated: false,
       });
-    // 100000 recorded tokens: under the 150000 trigger of this model when the
-    // turn starts. The usage the provider reports for the first request (the
-    // faux provider counts a first prompt twice, as input and cache write)
-    // puts the context over it before the request that follows the tool call.
+    // 100000 recorded tokens: under the 104000 trigger of this model when the
+    // turn starts. The first request's reported usage (the same history plus
+    // the system prompt and tool schemas) and the ~7500-token tool result put
+    // the context over it before the request that follows the tool call.
     const prior = history(4, 100000);
     const provider = script([
       () =>
@@ -1122,7 +1123,7 @@ describe('runAgentTurn auto compaction', () => {
       undefined,
       prior,
       undefined,
-      { contextWindow: 207500, maxTokens: 20000 },
+      { contextWindow: 150000, maxTokens: 20000 },
     );
 
     expect(result.error).toBeUndefined();
@@ -1334,7 +1335,6 @@ describe('runAgentTurn steer messages', () => {
     );
     const result = await runAgentTurn({
       appUrl: 'https://hatch.example.test',
-      betaFeatures: [],
       priorMessages: [],
       sessionId,
       userText: 'Build a tracker',
@@ -1457,5 +1457,146 @@ describe('runAgentTurn steer messages', () => {
       ),
     ).toEqual(['user', 'assistant', true, 'assistant']);
     expect(result.error).toBeUndefined();
+  });
+});
+
+describe('runAgentTurn with transcripts stored by pi 0.83', () => {
+  const roleOf = (message: unknown) => (message as { role?: string }).role;
+  const usage = (input: number) => ({
+    input,
+    output: 10,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: input + 10,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  });
+  const assistant = (
+    content: unknown[],
+    stopReason: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    role: 'assistant',
+    api: 'openai-completions',
+    provider: '01PROVFAKE000000000000000A',
+    model: 'fake-model',
+    responseId: 'c1',
+    content,
+    stopReason,
+    usage: usage(500),
+    timestamp: 1795539657286,
+    ...extra,
+  });
+  // The shapes pi 0.83 and the Hatch platform stored before the upgrade:
+  // signed thinking, tool calls with details, an aborted partial reply, a
+  // steered message with Hatch metadata, an image, and a compaction marker
+  // that keeps the history from index 4.
+  const stored = [
+    { role: 'user', content: 'OLD-REQUEST', timestamp: 1 },
+    assistant(
+      [
+        {
+          type: 'thinking',
+          thinking: 'OLD-THINKING',
+          thinkingSignature: 'reasoning_content',
+        },
+        {
+          type: 'toolCall',
+          id: 'call_1',
+          name: 'read_file',
+          arguments: { path: 'a.ts' },
+        },
+      ],
+      'toolUse',
+    ),
+    {
+      role: 'toolResult',
+      toolCallId: 'call_1',
+      toolName: 'read_file',
+      content: [{ type: 'text', text: 'OLD-FILE' }],
+      details: { path: '/work/a.ts' },
+      isError: false,
+      timestamp: 3,
+    },
+    assistant([{ type: 'text', text: 'OLD-ANSWER' }], 'stop'),
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'KEPT-REQUEST' },
+        {
+          type: 'image',
+          data: Buffer.from('png').toString('base64'),
+          mimeType: 'image/png',
+        },
+      ],
+      steered: true,
+      pendingMessageId: '01m8789abrkjvhj58wj3tmpxjs',
+      injectedAt: '2026-11-24T17:05:17.080Z',
+      timestamp: 5,
+    },
+    assistant([{ type: 'text', text: 'PARTIAL' }], 'aborted', {
+      errorMessage: 'Request was aborted',
+    }),
+    {
+      role: 'compactionSummary',
+      summary: 'SUMMARY-OF-OLD',
+      tokensBefore: 24599,
+      timestamp: 7,
+      firstKeptIndex: 4,
+      details: { readFiles: ['a.ts'], modifiedFiles: [] },
+    },
+    { role: 'user', content: 'AFTER-COMPACTION', timestamp: 8 },
+    assistant([{ type: 'text', text: 'AFTER-ANSWER' }], 'stop'),
+  ] as unknown as AgentMessage[];
+
+  it('sends the compacted context and keeps the stored transcript intact', async () => {
+    let sent:
+      | Parameters<Extract<FauxResponseStep, (...args: never[]) => unknown>>[0]
+      | undefined;
+    const result = await runWithResponses(
+      [
+        (context) => {
+          sent = context;
+          return fauxAssistantMessage('NEW-ANSWER');
+        },
+      ],
+      'stored-by-pi-083',
+      undefined,
+      undefined,
+      undefined,
+      structuredClone(stored),
+    );
+
+    expect(result.error).toBeUndefined();
+    const messages = sent!.messages;
+    // The prompt and tools lead the request as its system message.
+    expect(messages[0].role).toBe('system');
+    expect(getCurrentSystemPrompt(messages)).toContain('Hatch');
+    expect(getCurrentTools(messages).map((tool) => tool.name)).toContain(
+      'read_file',
+    );
+    // History before the marker's kept message is replaced by its summary.
+    const text = JSON.stringify(messages);
+    for (const dropped of ['OLD-REQUEST', 'OLD-FILE', 'OLD-ANSWER']) {
+      expect(text).not.toContain(dropped);
+    }
+    const order = [
+      'The conversation history before this point was compacted',
+      'SUMMARY-OF-OLD',
+      'KEPT-REQUEST',
+      'AFTER-COMPACTION',
+      'AFTER-ANSWER',
+      'hello',
+    ].map((marker) => text.indexOf(marker));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+
+    // The stored items come back unchanged, the marker still pointing at the
+    // same kept message, followed by this turn; no system message is stored.
+    expect(result.messages.slice(0, stored.length)).toEqual(stored);
+    expect(result.messages.map(roleOf).slice(stored.length)).toEqual([
+      'user',
+      'assistant',
+    ]);
+    expect(result.messages.map(roleOf)).not.toContain('system');
   });
 });

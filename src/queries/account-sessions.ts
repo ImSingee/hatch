@@ -1,3 +1,4 @@
+import { CodedError } from '~lib/error-codes';
 import { queryOptions } from '@tanstack/react-query';
 import {
   listAccountSessions,
@@ -22,6 +23,9 @@ export async function signOutSession(sessionId: string) {
   try {
     await revokeAccountSession({ data: { sessionId } });
   } catch {
-    throw new Error('Could not sign out that device. Please try again.');
+    throw new CodedError(
+      'Could not sign out that device. Please try again.',
+      'account.signOutFailed',
+    );
   }
 }

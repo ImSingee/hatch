@@ -1,10 +1,8 @@
 /**
  * Server-only: shared cron scheduling engine.
  *
- * Apps and workflows schedule cron jobs the same way — per-job setTimeout
- * chains with capped sleeps, generation-guarded reloads, and idempotent boot.
- * This module implements that engine once; the app and workflow schedulers
- * plug in their own job loading and firing.
+ * Per-job setTimeout chains with capped sleeps, generation-guarded reloads,
+ * and idempotent boot. Schedulers plug in their own job loading and firing.
  *
  * Single-instance design: timers live on globalThis, keyed per scheduler, so
  * duplicate module loads (dev hot reload) attach to the same state instead of

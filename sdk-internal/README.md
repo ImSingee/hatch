@@ -2,22 +2,20 @@
 
 This directory owns SDK source, public package definitions, and generated
 distribution output. These private, versionless packages are materialized by
-the platform; Apps and Workflows must not install them or commit `.hatch/`.
+the platform; Apps must not install them or commit `.hatch/`.
 
-| Package           | Authored source                      | Public entrypoints                                                                                               |
-| ----------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `@hatch/app`      | `app/src`                            | `.`, `./data`, `./data/react`, `./notifications`, `./storage`, `./storage/react`, `./storage/install`, `./tasks` |
-| `@hatch/workflow` | `workflow/src`                       | `.`, `./manifest`                                                                                                |
-| `@hatch/data`     | None; generated compatibility facade | `.`, `./react`                                                                                                   |
+| Package       | Authored source                      | Public entrypoints                                                                                               |
+| ------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `@hatch/app`  | `app/src`                            | `.`, `./data`, `./data/react`, `./notifications`, `./storage`, `./storage/react`, `./storage/install`, `./tasks` |
+| `@hatch/data` | None; generated compatibility facade | `.`, `./react`                                                                                                   |
 
 `@hatch/app/storage/install` is not for App source: the platform build runs
 it in a classic script at the start of each App page's `<head>` and as the
 banner of each widget bundle, scoping `localStorage` and `sessionStorage` to
 the App id before App code runs. `@hatch/app/storage` reads that scope.
 
-The App root exports `defineAppManifest` and `AppManifestInput`. The Workflow
-manifest entry exports `defineWorkflowManifest` and `WorkflowManifestInput`.
-Their input types derive from the canonical schemas in
+The App root exports `defineAppManifest` and `AppManifestInput`. Their input
+types derive from the canonical schemas in
 `packages/hatch-manifest/src`, also used by platform validation. Keep shared
 contracts there; SDK-only implementation belongs here.
 
@@ -34,9 +32,9 @@ with the repository's TypeScript compiler and asks that compiler for each
 package's declaration dependency graph. Only reachable declarations are copied
 under `dist/_types`; public declarations re-export them. Public JS entrypoints
 carry `@ts-self-types` for sources that build with the Deno toolchain; `tsc`
-resolves the same declarations as the sibling `.d.ts` of each entrypoint. App
-and Workflow never ship each other's unrelated schemas or implementations. Common declarations may appear in both
-payloads so each remains independently resolvable.
+resolves the same declarations as the sibling `.d.ts` of each entrypoint. Each
+payload ships only the schemas and implementations reachable from its own
+entrypoints, so each remains independently resolvable.
 
 All payloads are built and validated in staging before replacing `dist` trees.
 Generated output is ignored by Git. Docker and SDK materialization consume only

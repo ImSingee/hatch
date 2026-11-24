@@ -9,12 +9,12 @@ test('keeps code block lines aligned without applying inline code decoration', a
       <div style={{ width: 300 }}>
         <Markdownish
           text={[
-            'Use `hatch workflow list`:',
+            'Use `hatch app list`:',
             '',
             '```sh',
-            'hatch workflow list',
-            'hatch workflow get <id>',
-            `hatch workflow deploy --message "${'long command '.repeat(20)}"`,
+            'hatch app list',
+            'hatch app get <id>',
+            `hatch app deploy --message "${'long command '.repeat(20)}"`,
             '```',
           ].join('\n')}
         />
@@ -78,4 +78,18 @@ test('shows only images stored by the platform', async () => {
       ].join('\n\n'),
     ),
   ).toEqual([]);
+});
+
+test('keeps dollar amounts and escaped brackets literal when math is off', async () => {
+  const text = 'Refunds cost $5 and orders $10.\n\nMatch \\[a-z\\] ids.';
+  const screen = await render(
+    <MantineProvider>
+      <Markdownish text={text} math={false} />
+    </MantineProvider>,
+  );
+  expect(screen.container.querySelector('.katex')).toBeNull();
+  expect(screen.container.textContent).toContain(
+    'Refunds cost $5 and orders $10.',
+  );
+  expect(screen.container.textContent).toContain('Match [a-z] ids.');
 });

@@ -12,6 +12,7 @@ import {
 import { IconHelpCircle } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { AskAnswer, AskQuestion } from '~agent/events';
+import { useI18n } from '~i18n';
 import classes from './chat.module.css';
 import { Markdownish } from './markdownish';
 
@@ -34,6 +35,7 @@ export function AskForm({
   onSubmit: (answers: AskAnswer[]) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [state, setState] = useState<Record<string, QuestionState>>(() =>
     initialState(questions),
   );
@@ -70,7 +72,7 @@ export function AskForm({
       <Group gap={6} mb="xs">
         <IconHelpCircle size={16} className={classes.askIcon} />
         <Text size="xs" fw={700} c="primary" tt="uppercase">
-          Agent needs your input
+          {t('agent.ask.title')}
         </Text>
       </Group>
       <Stack gap="md">
@@ -93,7 +95,7 @@ export function AskForm({
                     {q.options.map((o) => (
                       <Checkbox key={o.id} value={o.id} label={o.label} />
                     ))}
-                    <Checkbox value={OTHER} label="Other…" />
+                    <Checkbox value={OTHER} label={t('agent.ask.other')} />
                   </Stack>
                 </Checkbox.Group>
               ) : (
@@ -105,14 +107,14 @@ export function AskForm({
                     {q.options.map((o) => (
                       <Radio key={o.id} value={o.id} label={o.label} />
                     ))}
-                    <Radio value={OTHER} label="Other…" />
+                    <Radio value={OTHER} label={t('agent.ask.other')} />
                   </Stack>
                 </Radio.Group>
               )}
               {showOther ? (
                 <Textarea
                   size="sm"
-                  placeholder="Type your answer (Shift+Enter for a new line)"
+                  placeholder={t('agent.ask.otherPlaceholder')}
                   autosize
                   minRows={1}
                   maxRows={6}
@@ -141,7 +143,7 @@ export function AskForm({
             disabled={!complete || disabled}
             onClick={submit}
           >
-            Send answer
+            {t('agent.ask.submit')}
           </Button>
         </Group>
       </Stack>

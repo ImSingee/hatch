@@ -10,13 +10,15 @@
 import { eq } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import { AppError } from './errors';
+import { removeUserAvatarFiles } from './user-avatar-store';
 
 /**
  * Delete an account. Rejects deleting the caller's own account — which also
  * guarantees at least one user always remains, since the caller must exist —
  * with an explicit last-user guard as a backstop should self-deletion or
  * non-user callers ever be introduced. Sessions and accounts are removed by
- * the FK `on delete cascade` on the Better Auth tables.
+ * the FK `on delete cascade` on the Better Auth tables; avatar files are
+ * removed once the row is gone.
  */
 export async function removePlatformUser(
   userId: string,
@@ -26,6 +28,7 @@ export async function removePlatformUser(
     throw new AppError(
       'You cannot delete the account you are signed in with.',
       400,
+      { code: 'users.selfDelete' },
     );
   }
   await db.transaction(async (tx) => {
@@ -39,11 +42,14 @@ export async function removePlatformUser(
       .from(schema.user)
       .for('update');
     if (!users.some((u) => u.id === userId)) {
-      throw new AppError('User not found.', 404);
+      throw new AppError('User not found.', 404, { code: 'users.notFound' });
     }
     if (users.length <= 1) {
-      throw new AppError('The last user cannot be deleted.', 400);
+      throw new AppError('The last user cannot be deleted.', 400, {
+        code: 'users.lastUser',
+      });
     }
     await tx.delete(schema.user).where(eq(schema.user.id, userId));
   });
+  await removeUserAvatarFiles(userId);
 }

@@ -1,6 +1,8 @@
 import { Alert, Anchor, Button, Text, TextInput } from '@mantine/core';
 import { IconAlertTriangle } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
+import { Trans } from 'react-i18next';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import {
   formatUserCode,
   normalizeUserCode,
@@ -12,10 +14,10 @@ import classes from './device-approval.module.css';
 
 const PROBLEM_TEXT: Record<
   Exclude<EntryProblem, 'invalid' | 'rate-limited'>,
-  string
+  PlainTranslationKey
 > = {
-  network: 'Couldn’t reach Hatch. Check your connection and try again.',
-  server: 'Hatch couldn’t open this request. Try again in a moment.',
+  network: 'cliAuth.entry.network',
+  server: 'cliAuth.entry.server',
 };
 
 type CodeEntryProps = {
@@ -43,6 +45,7 @@ export function CodeEntry({
   onSwitchAccount,
   focus,
 }: CodeEntryProps) {
+  const { t } = useI18n();
   const input = useRef<HTMLInputElement>(null);
   const [incomplete, setIncomplete] = useState(false);
 
@@ -51,15 +54,15 @@ export function CodeEntry({
   }, [focus]);
 
   const fieldError = incomplete
-    ? `Enter all ${USER_CODE_LENGTH} characters of the code.`
+    ? t('cliAuth.entry.incomplete', { length: USER_CODE_LENGTH })
     : problem === 'invalid'
-      ? 'No open request uses this code. Check it against your device.'
+      ? t('cliAuth.entry.invalid')
       : undefined;
 
   return (
     <>
-      <ViewHeader title="Connect a device">
-        Enter the code shown on your device.
+      <ViewHeader title={t('cliAuth.entry.title')}>
+        {t('cliAuth.entry.description')}
       </ViewHeader>
 
       <form
@@ -78,7 +81,7 @@ export function CodeEntry({
       >
         <TextInput
           ref={input}
-          label="Device code"
+          label={t('cliAuth.entry.codeLabel')}
           placeholder="XXXX-XXXX"
           value={formatUserCode(code)}
           onChange={(event) => {
@@ -102,23 +105,30 @@ export function CodeEntry({
             role="alert"
           >
             {problem === 'rate-limited'
-              ? `Too many attempts. ${retryWait(retryAfter)}`
-              : PROBLEM_TEXT[problem]}
+              ? t('cliAuth.entry.rateLimited', {
+                  wait: retryWait(t, retryAfter),
+                })
+              : t(PROBLEM_TEXT[problem])}
           </Alert>
         ) : null}
         <Button type="submit" size="md" fullWidth loading={pending}>
-          Continue
+          {t('common.continue')}
         </Button>
       </form>
 
       <Text size="sm" c="dimmed" ta="center" className={classes.footnote}>
         {account ? (
           <>
-            Signed in as{' '}
-            <Text span size="sm" fw={600} c="var(--mantine-color-text)">
-              {account}
-            </Text>
-            .{' '}
+            <Trans
+              t={t}
+              i18nKey="cliAuth.entry.signedInAs"
+              values={{ account }}
+              components={{
+                account: (
+                  <Text span size="sm" fw={600} c="var(--mantine-color-text)" />
+                ),
+              }}
+            />{' '}
           </>
         ) : null}
         <Anchor
@@ -127,7 +137,7 @@ export function CodeEntry({
           size="sm"
           onClick={onSwitchAccount}
         >
-          Use a different account
+          {t('cliAuth.useDifferentAccount')}
         </Anchor>
       </Text>
     </>

@@ -6,25 +6,26 @@ import {
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import type { DashboardBreakpoint } from '~/lib/dashboard-layout';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 
 const PREVIEW_OPTIONS: Array<{
   value: DashboardBreakpoint;
-  label: string;
+  label: PlainTranslationKey;
   icon: ReactNode;
 }> = [
   {
     value: 'desktop',
-    label: 'Desktop',
+    label: 'dashboard.preview.desktop',
     icon: <IconDeviceDesktop size={15} stroke={1.8} />,
   },
   {
     value: 'tablet',
-    label: 'Tablet',
+    label: 'dashboard.preview.tablet',
     icon: <IconDeviceTablet size={15} stroke={1.8} />,
   },
   {
     value: 'mobile',
-    label: 'Mobile',
+    label: 'dashboard.preview.mobile',
     icon: <IconDeviceMobile size={15} stroke={1.8} />,
   },
 ];
@@ -36,6 +37,7 @@ export function DashboardLayoutPreview({
   value: DashboardBreakpoint;
   onChange: (value: DashboardBreakpoint) => void;
 }) {
+  const { t } = useI18n();
   return (
     <SegmentedControl
       value={value}
@@ -46,11 +48,11 @@ export function DashboardLayoutPreview({
         label: (
           <Group component="span" gap={6} wrap="nowrap">
             {option.icon}
-            <span>{option.label}</span>
+            <span>{t(option.label)}</span>
           </Group>
         ),
       }))}
-      aria-label="Layout preview"
+      aria-label={t('dashboard.preview.label')}
     />
   );
 }

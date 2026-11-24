@@ -24,12 +24,7 @@ export function composerDocumentFromParts(
     } else {
       paragraphs.at(-1)!.content!.push({
         type: 'mention',
-        attrs: {
-          id: part.id,
-          label: part.name,
-          resourceType: part.type,
-          ...(part.type === 'app' ? { slug: part.slug } : {}),
-        },
+        attrs: { id: part.id, label: part.name, slug: part.slug },
       });
     }
   }
@@ -51,14 +46,7 @@ function serializeInlineNode(
     const id = node.attrs?.id;
     const name = node.attrs?.label;
     const slug = node.attrs?.slug;
-    const resourceType = node.attrs?.resourceType;
     if (typeof id !== 'string' || !id || typeof name !== 'string') return;
-    if (resourceType === 'workflow') {
-      parts.push({ type: 'workflow', id, name });
-      return;
-    }
-    // Mentions created before resourceType existed are Apps and already carry
-    // a slug, so keep them serializable during hot reloads.
     if (typeof slug === 'string' && slug) {
       parts.push({ type: 'app', id, name, slug });
     }

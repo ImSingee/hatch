@@ -10,6 +10,7 @@ import {
 import { Fragment, useMemo, useRef, useState } from 'react';
 import type { AgentThinkingLevel } from '~/db/schema';
 import { ProviderAvatar } from '~components/providers/provider-avatar';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import classes from './chat.module.css';
 
 export type ModelOption = {
@@ -28,14 +29,17 @@ export type ModelGroup = {
   items: ModelOption[];
 };
 
-export const THINKING_LEVEL_LABELS: Record<AgentThinkingLevel, string> = {
-  off: 'Off',
-  minimal: 'Minimal',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'Extra high',
-  max: 'Max',
+export const THINKING_LEVEL_LABELS: Record<
+  AgentThinkingLevel,
+  PlainTranslationKey
+> = {
+  off: 'agent.thinkingLevel.off',
+  minimal: 'agent.thinkingLevel.minimal',
+  low: 'agent.thinkingLevel.low',
+  medium: 'agent.thinkingLevel.medium',
+  high: 'agent.thinkingLevel.high',
+  xhigh: 'agent.thinkingLevel.xhigh',
+  max: 'agent.thinkingLevel.max',
 };
 
 function matches(option: ModelOption, terms: string[]): boolean {
@@ -62,6 +66,7 @@ export function ModelPicker({
   onChange: (value: string, thinkingLevel: AgentThinkingLevel) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [opened, setOpened] = useState(false);
   const [search, setSearch] = useState('');
   // A tap opens the level list instead of picking the model: touch screens
@@ -93,11 +98,14 @@ export function ModelPicker({
     thinkingLevel !== null;
   const pillLabel = selected
     ? showsLevel
-      ? `${selected.label} · ${THINKING_LEVEL_LABELS[thinkingLevel]}`
+      ? t('agent.model.withLevel', {
+          model: selected.label,
+          level: t(THINKING_LEVEL_LABELS[thinkingLevel]),
+        })
       : selected.label
     : empty
-      ? 'No models'
-      : 'Select model';
+      ? t('agent.model.none')
+      : t('agent.model.select');
 
   const pick = (option: ModelOption, level: AgentThinkingLevel) => {
     onChange(option.value, level);
@@ -145,14 +153,14 @@ export function ModelPicker({
       </Menu.Target>
       <Menu.Dropdown>
         <Menu.Search
-          placeholder="Search models"
+          placeholder={t('agent.model.search')}
           value={search}
           onChange={(event) => setSearch(event.currentTarget.value)}
         />
         <Box className={classes.modelMenuScroll}>
           {visible.length === 0 ? (
             <Text size="sm" c="dimmed" px="sm" py="xs">
-              No matching models
+              {t('agent.model.noMatch')}
             </Text>
           ) : null}
           {visible.map((group) => (
@@ -210,7 +218,7 @@ export function ModelPicker({
                       </Menu.Sub.Item>
                     </Menu.Sub.Target>
                     <Menu.Sub.Dropdown>
-                      <Menu.Label>Thinking</Menu.Label>
+                      <Menu.Label>{t('agent.model.thinking')}</Menu.Label>
                       {item.thinkingLevels.map((level) => (
                         <Menu.Item
                           key={level}
@@ -220,12 +228,12 @@ export function ModelPicker({
                               <IconCheck size={15} stroke={2} />
                             ) : level === item.defaultThinkingLevel ? (
                               <Text span size="xs" c="dimmed">
-                                Default
+                                {t('agent.model.defaultLevel')}
                               </Text>
                             ) : null
                           }
                         >
-                          {THINKING_LEVEL_LABELS[level]}
+                          {t(THINKING_LEVEL_LABELS[level])}
                         </Menu.Item>
                       ))}
                     </Menu.Sub.Dropdown>
@@ -240,7 +248,7 @@ export function ModelPicker({
           leftSection={<IconSettings size={15} stroke={1.6} />}
           renderRoot={(props) => <Link to="/settings/providers" {...props} />}
         >
-          Manage models
+          {t('agent.model.manage')}
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>

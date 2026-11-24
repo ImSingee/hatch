@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@mantine/hooks';
 import { Link, type LinkProps, useRouter } from '@tanstack/react-router';
 import {
   IconAppWindow,
@@ -15,6 +16,7 @@ import {
   useId,
   useRef,
 } from 'react';
+import { useI18n } from '~i18n';
 import { useWindowFrame, useWindowMaximize } from './desk-context';
 import { DESK_HOME } from './paths';
 import classes from './window.module.css';
@@ -26,10 +28,14 @@ export type WindowTarget = {
   label: string;
 };
 
-const DESK: WindowTarget = { link: { to: DESK_HOME }, label: 'the desk' };
-
 export type DeskWindowProps = {
   title: string;
+  /**
+   * The browser tab's title while this window is open. Defaults to `title`;
+   * set it when the title bar does not name the page, or when the page's name
+   * comes from what the window shows (an open chat, the App's own page).
+   */
+  documentTitle?: string;
   /** A 22 px tile shown before the title. Defaults to a neutral window tile. */
   tile?: ReactNode;
   /** Shown after the title, for a status chip. */
@@ -84,22 +90,29 @@ function isEditing(target: EventTarget | null) {
  */
 export function DeskWindow({
   title,
+  documentTitle,
   tile,
   badge,
   toolbar,
-  closeTo = DESK,
+  closeTo,
   fill = false,
   maxWidth = 1320,
   children,
 }: DeskWindowProps) {
+  const { t } = useI18n();
+  const target: WindowTarget = closeTo ?? {
+    link: { to: DESK_HOME },
+    label: t('window.desk'),
+  };
   const titleId = useId();
+  useDocumentTitle(documentTitle || title);
   const frame = useRef<HTMLElement>(null);
   const hosted = useWindowFrame() === 'host';
   const maximizable = useWindowMaximize();
   const maximize = hosted ? null : maximizable;
   const router = useRouter();
   const close = useEffectEvent(() => {
-    void router.navigate(closeTo.link as never);
+    void router.navigate(target.link as never);
   });
 
   useEffect(() => {
@@ -157,9 +170,9 @@ export function DeskWindow({
         }}
       >
         <Link
-          {...closeTo.link}
+          {...target.link}
           className={`${classes.button} ${classes.back}`}
-          aria-label={`Back to ${closeTo.label}`}
+          aria-label={t('window.backTo', { target: target.label })}
         >
           <IconChevronLeft size={18} stroke={2.4} aria-hidden />
         </Link>
@@ -181,8 +194,8 @@ export function DeskWindow({
             <button
               type="button"
               className={`${classes.button} ${classes.wide}`}
-              aria-label="Minimise window"
-              title="Minimise is not available yet"
+              aria-label={t('window.minimise')}
+              title={t('window.minimiseUnavailable')}
               disabled
             >
               <IconMinus size={14} stroke={2.4} aria-hidden />
@@ -192,7 +205,9 @@ export function DeskWindow({
                 type="button"
                 className={`${classes.button} ${classes.wide}`}
                 aria-label={
-                  maximize.maximized ? 'Restore window' : 'Maximize window'
+                  maximize.maximized
+                    ? t('window.restore')
+                    : t('window.maximize')
                 }
                 onClick={maximize.toggle}
               >
@@ -208,9 +223,9 @@ export function DeskWindow({
               </button>
             ) : null}
             <Link
-              {...closeTo.link}
+              {...target.link}
               className={`${classes.button} ${classes.wide}`}
-              aria-label={`Close window, back to ${closeTo.label}`}
+              aria-label={t('window.closeBackTo', { target: target.label })}
             >
               <IconX size={14} stroke={2.4} aria-hidden />
             </Link>

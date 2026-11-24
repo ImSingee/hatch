@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export const REPO_ROOT = process.cwd();
 /**
- * Runtime data root: agent-authored app/workflow sources, Git repos, build
+ * Runtime data root: agent-authored app sources, Git repos, build
  * artifacts, per-app storage and agent worktrees. Defaults to `<repo>/workspace`
  * (matching the Docker volume mount). Set HATCH_DATA_DIR to relocate it — e.g.
  * a sibling directory outside the repo in local dev so the checkout stays free
@@ -69,6 +69,8 @@ export const AGENT_ATTACHMENTS_DIR = path.resolve(
 );
 /** Re-encoded App icons, one dir per App id. */
 export const APP_ICONS_DIR = path.resolve(WORKSPACE_ROOT, 'app-icons');
+/** Re-encoded user avatars, one dir per user id. */
+export const USER_AVATARS_DIR = path.resolve(WORKSPACE_ROOT, 'user-avatars');
 /** Short-lived generated images awaiting a user choice; never in the DB. */
 export const IMAGE_CANDIDATES_DIR = path.resolve(
   WORKSPACE_ROOT,
@@ -198,73 +200,12 @@ export function appIconDir(id: string): string {
   return childPath(APP_ICONS_DIR, id, 'App id');
 }
 
+/** Directory holding every stored size of one user's avatar. */
+export function userAvatarDir(userId: string): string {
+  return childPath(USER_AVATARS_DIR, userId, 'User id');
+}
+
 /** Fixed persistent directory exposed to a storage-capable app backend. */
 export function appStorageDir(id: string): string {
   return path.resolve(STORAGE_DIR, id);
-}
-
-/** ================== workflows ================== */
-/**
- * Workflows mirror apps but live in their own namespaces so an app and a
- * workflow may share a slug without colliding on disk, including in Agent
- * default workdirs (`apps/<slug>` versus `workflows/<slug>`).
- */
-
-/** Git bare repositories for workflows: workspace/workflow-repos/<id>.git. */
-export const WORKFLOW_REPOS_DIR = path.resolve(
-  WORKSPACE_ROOT,
-  'workflow-repos',
-);
-/** Temporary build inputs copied from clean workflow source worktrees. */
-export const WORKFLOW_BUILD_WORK_DIR = path.resolve(
-  WORKSPACE_ROOT,
-  'workflow-build-work',
-);
-/** Deploy artifacts (bundled single-file program), one dir per deployment id. */
-export const WORKFLOW_ARTIFACTS_DIR = path.resolve(
-  WORKSPACE_ROOT,
-  'workflow-artifacts',
-);
-/**
- * Legacy live-bundle mirror (workspace/workflow-current/<id>). Runs always
- * execute the immutable per-deployment artifact, so nothing writes here
- * anymore; kept only so deleteWorkflow can sweep dirs from older deploys.
- */
-export const WORKFLOW_CURRENT_DIR = path.resolve(
-  WORKSPACE_ROOT,
-  'workflow-current',
-);
-/** Server-managed workflow source checkouts used for non-Agent deploys. */
-export const WORKFLOW_CHECKOUTS_DIR = path.resolve(
-  WORKSPACE_ROOT,
-  'workflow-checkouts',
-);
-
-export function workflowRepoDir(id: string): string {
-  return path.resolve(WORKFLOW_REPOS_DIR, `${id}.git`);
-}
-
-/** Agent worktree for a workflow, namespaced separately from apps. */
-export function agentWorkflowWorkDir(sessionId: string, slug: string): string {
-  return path.resolve(agentWorkDir(sessionId), 'workflows', slug);
-}
-
-export function workflowDeployCheckoutDir(id: string): string {
-  return path.resolve(WORKFLOW_CHECKOUTS_DIR, id, 'deploy');
-}
-
-export function workflowArtifactsDir(id: string): string {
-  return path.resolve(WORKFLOW_ARTIFACTS_DIR, id);
-}
-
-export function workflowDeploymentArtifactDir(
-  id: string,
-  deploymentId: string,
-): string {
-  return path.resolve(WORKFLOW_ARTIFACTS_DIR, id, deploymentId);
-}
-
-/** Legacy live-bundle dir for a workflow (cleanup-only; see above). */
-export function workflowCurrentDir(id: string): string {
-  return path.resolve(WORKFLOW_CURRENT_DIR, id);
 }

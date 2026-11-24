@@ -1,4 +1,5 @@
 import { Button, ThemeIcon } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import {
   Link,
   Outlet,
@@ -10,8 +11,10 @@ import { DeskWindow } from '~components/desk/window';
 import { NotificationHistory } from '~components/notifications/history-list';
 import classes from '~components/notifications/notifications-window.module.css';
 import { InsideWindowProvider } from '~components/page/window-context';
+import { useI18n } from '~i18n';
 import { useLiveNotifications } from '~components/notifications/use-live-notifications';
 import {
+  notificationDetailQueryOptions,
   notificationHistoryQueryOptions,
   notificationSourcesQueryOptions,
 } from '~queries/notifications';
@@ -33,12 +36,22 @@ export const Route = createFileRoute('/_app/notifications')({
  * on the right, like a chat. Each notification keeps its own URL.
  */
 function NotificationsLayout() {
+  const { t } = useI18n();
   useLiveNotifications();
   const { notificationId } = useParams({ strict: false });
+  // The tab names the open notification, from the cache its page reads.
+  const { data: openTitle } = useQuery({
+    ...notificationDetailQueryOptions(notificationId ?? ''),
+    enabled: Boolean(notificationId),
+    select: (notification) => notification.title,
+  });
   return (
     <DeskWindow
       fill
-      title="Notifications"
+      title={t('notifications.window.title')}
+      documentTitle={
+        (notificationId && openTitle) || t('notifications.window.title')
+      }
       tile={
         <ThemeIcon size={22} radius="xs" color="amber">
           <IconBell size={13} stroke={2.4} />
@@ -53,12 +66,15 @@ function NotificationsLayout() {
           size="compact-sm"
           leftSection={<IconSettings size={14} stroke={1.8} />}
         >
-          Delivery settings
+          {t('notifications.window.deliverySettings')}
         </Button>
       }
       closeTo={
         notificationId
-          ? { link: { to: '/notifications' }, label: 'Notifications' }
+          ? {
+              link: { to: '/notifications' },
+              label: t('notifications.window.title'),
+            }
           : undefined
       }
     >
@@ -66,7 +82,10 @@ function NotificationsLayout() {
         className={classes.split}
         data-open={notificationId ? '' : undefined}
       >
-        <aside className={classes.list} aria-label="All notifications">
+        <aside
+          className={classes.list}
+          aria-label={t('notifications.window.allNotifications')}
+        >
           <NotificationHistory selected={notificationId} />
         </aside>
         <section className={classes.detail}>

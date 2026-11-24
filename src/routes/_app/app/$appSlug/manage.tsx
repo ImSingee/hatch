@@ -23,6 +23,7 @@ import {
   IconApi,
   IconArchive,
   IconArchiveOff,
+  IconBook,
   IconBell,
   IconCheck,
   IconClock,
@@ -49,8 +50,10 @@ import {
 import copy from 'copy-to-clipboard';
 import dayjs from 'dayjs';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import { APP_SLUG_MAX_LENGTH } from '~/app-identity';
+import { useI18n } from '~i18n';
 import { DeskWindow } from '~components/desk/window';
 import {
   Column,
@@ -68,6 +71,7 @@ import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notic
 import { AppGlyph } from '~components/apps/app-glyph';
 import { AppIconSettings } from '~components/apps/app-icon-settings';
 import { DeploymentHistory } from '~components/apps/deployment-history';
+import { DocsPanel } from '~components/apps/docs-panel';
 import { OperationsPanel } from '~components/apps/operations-panel';
 import { StatusBadge } from '~components/system/status-badge';
 import {
@@ -96,6 +100,7 @@ export const Route = createFileRoute('/_app/app/$appSlug/manage')({
 });
 
 function AppDetailPage() {
+  const { t } = useI18n();
   const app = Route.useLoaderData();
   const router = useRouter();
   const navigate = useNavigate();
@@ -114,7 +119,9 @@ function AppDetailPage() {
     mutationFn: (archived: boolean) =>
       archiveAppFn({ data: { id: app.id, archived } }),
     onSuccess: (_result, archived) => {
-      toast.success(archived ? 'App archived' : 'App restored');
+      toast.success(
+        archived ? t('appManage.archived') : t('appManage.unarchived'),
+      );
       // Archiving stops the backend/cron; restoring re-enables them. The
       // Operations panel reads appOpsQueryOptions, so invalidate it too or it
       // keeps showing pre-toggle running/idle state until a later refetch.
@@ -126,7 +133,7 @@ function AppDetailPage() {
   const remove = useMutation({
     mutationFn: () => deleteAppFn({ data: app.id }),
     onSuccess: () => {
-      toast.success(`Deleted ${app.name}`);
+      toast.success(t('appManage.deleted', { name: app.name }));
       // The delete cascades to sidebar pins, so drop those caches too; otherwise
       // the deleted app lingers in the sidebar / pin menu and links to a 404
       // until the next focus refetch.
@@ -144,7 +151,7 @@ function AppDetailPage() {
     mutationFn: (pinned: boolean) =>
       setSidebarPin({ data: { appId: app.id, pinned } }),
     onSuccess: (_result, pinned) => {
-      toast.success(pinned ? 'Pinned to the dock' : 'Removed from the dock');
+      toast.success(pinned ? t('dock.pinned') : t('library.removedFromDock'));
       void queryClient.invalidateQueries({
         queryKey: sidebarItemsQueryOptions.queryKey,
       });
@@ -153,19 +160,21 @@ function AppDetailPage() {
 
   const confirmDelete = () =>
     modals.openConfirmModal({
-      title: `Delete ${app.name}?`,
-      children: (
-        <Text size="sm">
-          This permanently removes the app, its database, persistent storage
-          files, all deployments, and dashboard widgets. This cannot be undone.
-        </Text>
-      ),
-      labels: { confirm: 'Delete app', cancel: 'Cancel' },
+      title: t('appManage.deleteConfirm.title', { name: app.name }),
+      children: <Text size="sm">{t('appManage.deleteConfirm.body')}</Text>,
+      labels: {
+        confirm: t('appManage.deleteApp'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(),
     });
 
-  const sections = useManageSections(app.id, Boolean(capabilities?.backend));
+  const sections = useManageSections(
+    app.id,
+    Boolean(capabilities?.backend),
+    isArchived,
+  );
   const manifestHasTasks = Boolean(capabilities?.tasks);
   const hash = useRouterState({ select: (state) => state.location.hash });
   const current = sections.some((section) => section.key === hash)
@@ -193,7 +202,7 @@ function AppDetailPage() {
       disabled={app.status !== 'deployed' || !runtimeSupported}
       leftSection={<IconExternalLink size={16} stroke={1.8} />}
     >
-      Open app
+      {t('appManage.openApp')}
     </Button>
   ) : null;
 
@@ -205,13 +214,13 @@ function AppDetailPage() {
           color="gray"
           size={30}
           radius="sm"
-          aria-label="More actions"
+          aria-label={t('appManage.moreActions')}
         >
           <IconDots size={16} stroke={2} />
         </ActionIcon>
       </Menu.Target>
       <Menu.Dropdown>
-        <Menu.Label>Download</Menu.Label>
+        <Menu.Label>{t('appManage.download')}</Menu.Label>
         <Menu.Item
           leftSection={<IconFileZip size={16} />}
           component="a"
@@ -219,7 +228,7 @@ function AppDetailPage() {
           download
           disabled={!hasSource}
         >
-          Latest source (.zip)
+          {t('appManage.downloadSource')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconGitBranch size={16} />}
@@ -228,7 +237,7 @@ function AppDetailPage() {
           download
           disabled={!hasSource}
         >
-          Full repo (.tar.gz)
+          {t('appManage.downloadRepo')}
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
@@ -237,7 +246,7 @@ function AppDetailPage() {
           }
           onClick={() => pin.mutate(!isPinned)}
         >
-          {isPinned ? 'Remove from dock' : 'Pin to dock'}
+          {isPinned ? t('library.removeFromDock') : t('library.pinToDock')}
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
@@ -250,7 +259,7 @@ function AppDetailPage() {
           }
           onClick={() => archive.mutate(!isArchived)}
         >
-          {isArchived ? 'Restore from archive' : 'Archive'}
+          {isArchived ? t('appManage.unarchive') : t('appManage.archive')}
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
@@ -258,7 +267,7 @@ function AppDetailPage() {
           leftSection={<IconTrash size={16} />}
           onClick={confirmDelete}
         >
-          Delete app
+          {t('appManage.deleteApp')}
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>
@@ -267,17 +276,17 @@ function AppDetailPage() {
   return (
     <DeskWindow
       fill
-      title={`${app.name} · Manage`}
+      title={t('appManage.windowTitle', { name: app.name })}
       tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
       badge={<StatusBadge status={app.status} />}
       toolbar={moreMenu}
-      closeTo={{ link: { to: '/apps' }, label: 'All apps' }}
+      closeTo={{ link: { to: '/apps' }, label: t('nav.allApps') }}
     >
       <WindowSplit
         rail={
           <Rail
-            label="Manage sections"
-            searchLabel="Search sections"
+            label={t('appManage.sections')}
+            searchLabel={t('appManage.searchSections')}
             identity={
               <RailIdentity
                 tile={<AppGlyph name={app.name} seed={app.id} size="lg" />}
@@ -313,7 +322,7 @@ function AppDetailPage() {
                     )}
                     leftSection={<IconListCheck size={16} stroke={1.8} />}
                   >
-                    Run tasks
+                    {t('appManage.runTasks')}
                   </Button>
                 ) : null}
                 <Button
@@ -323,7 +332,7 @@ function AppDetailPage() {
                   to="/agent"
                   leftSection={<IconSparkles size={16} stroke={1.8} />}
                 >
-                  Edit with the Agent
+                  {t('appManage.editWithAgent')}
                 </Button>
               </>
             }
@@ -337,9 +346,9 @@ function AppDetailPage() {
           ) : null}
           <Columns>
             <Column grow basis={440}>
-              <Section id="overview" title="Overview">
+              <Section id="overview" title={t('appManage.section.overview')}>
                 <GroupCard>
-                  <Row label="Name">
+                  <Row label={t('common.name')}>
                     <strong>{app.name}</strong>
                   </Row>
                   <SlugField
@@ -347,22 +356,26 @@ function AppDetailPage() {
                     slug={app.slug}
                     runtimeSupported={runtimeSupported}
                   />
-                  <Row label="App ID" mono>
+                  <Row label={t('appManage.appId')} mono>
                     <CopyValue value={app.id} />
                   </Row>
-                  <Row label="Icon" stack>
+                  <Row label={t('appManage.icon')} stack>
                     <AppIconSettings appId={app.id} appName={app.name} />
                   </Row>
-                  <Row label="Updated">
+                  <Row label={t('appManage.updated')}>
                     {dayjs(app.updatedAt).format('YYYY-MM-DD HH:mm')}
                   </Row>
                   <GroupFooter>
                     <span>
-                      Continue editing this app from the{' '}
-                      <Anchor component={Link} to="/agent" size="sm">
-                        Agent
-                      </Anchor>
-                      .
+                      <Trans
+                        t={t}
+                        i18nKey="appManage.continueWithAgent"
+                        components={{
+                          agent: (
+                            <Anchor component={Link} to="/agent" size="sm" />
+                          ),
+                        }}
+                      />
                     </span>
                   </GroupFooter>
                 </GroupCard>
@@ -376,6 +389,9 @@ function AppDetailPage() {
               />
 
               {capabilities?.backend ? <ApiPanel appId={app.id} /> : null}
+
+              {/* An archived App publishes no docs, matching the CLI. */}
+              {isArchived ? null : <DocsPanel appId={app.id} slug={app.slug} />}
             </Column>
             <Column basis={360}>
               <DeploymentHistory appId={app.id} />
@@ -394,9 +410,14 @@ type ManageSection = {
   color: string;
 };
 
-/** The rail's sections: the overview, each operation the App has, its API
- * and its deployments, in page order. */
-function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
+/** The rail's sections: the overview, each operation the App has, its API,
+ * its published docs and its deployments, in page order. */
+function useManageSections(
+  appId: string,
+  hasApi: boolean,
+  isArchived: boolean,
+): ManageSection[] {
+  const { t } = useI18n();
   const { data: ops } = useQuery(appOpsQueryOptions(appId));
   const { data: manifest } = useQuery(normalizedManifestQueryOptions(appId));
   const icon = (Icon: typeof IconLayoutDashboard) => (
@@ -405,68 +426,80 @@ function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
   const sections: (ManageSection | false | undefined)[] = [
     {
       key: 'overview',
-      label: 'Overview',
+      label: t('appManage.section.overview'),
       icon: icon(IconLayoutDashboard),
       color: 'primary',
     },
     ops?.backend.capable && {
       key: 'backend',
-      label: 'Backend',
+      label: t('appManage.section.backend'),
       icon: icon(IconServerBolt),
       color: 'dark',
     },
     (ops?.database.enabled || Boolean(ops?.database.dbName)) && {
       key: 'database',
-      label: 'Database',
+      label: t('appManage.section.database'),
       icon: icon(IconDatabase),
       color: 'blue',
     },
     ops?.storage.enabled && {
       key: 'storage',
-      label: 'Storage',
+      label: t('appManage.section.storage'),
       icon: icon(IconFolder),
       color: 'gray',
     },
     (ops?.dataTable.enabled || Boolean(ops?.dataTable.dbName)) && {
       key: 'data-tables',
-      label: 'Data tables',
+      label: t('appManage.section.dataTables'),
       icon: icon(IconTable),
       color: 'teal',
     },
     ops?.cron.enabled && {
       key: 'schedules',
-      label: 'Schedules',
+      label: t('appManage.section.schedules'),
       icon: icon(IconClock),
       color: 'amber',
     },
     Boolean(manifest?.tasks) && {
       key: 'tasks',
-      label: 'Tasks',
+      label: t('appManage.section.tasks'),
       icon: icon(IconListCheck),
       color: 'primary',
     },
     ops?.webhook.enabled && {
       key: 'webhook',
-      label: 'Webhook',
+      label: t('appManage.section.webhook'),
       icon: icon(IconWebhook),
       color: 'violet',
     },
     ops?.kv.enabled && {
       key: 'kv',
-      label: 'Key-value store',
+      label: t('appManage.section.kv'),
       icon: icon(IconKey),
       color: 'indigo',
     },
     Boolean(manifest?.notifications) && {
       key: 'notifications',
-      label: 'Notifications',
+      label: t('appManage.section.notifications'),
       icon: icon(IconBell),
       color: 'pink',
     },
-    hasApi && { key: 'api', label: 'API', icon: icon(IconApi), color: 'blue' },
+    hasApi && {
+      key: 'api',
+      label: t('appManage.section.api'),
+      icon: icon(IconApi),
+      color: 'blue',
+    },
+    !isArchived &&
+      Boolean(manifest?.docs?.length) && {
+        key: 'docs',
+        label: t('appManage.section.docs'),
+        icon: icon(IconBook),
+        color: 'cyan',
+      },
     {
       key: 'deployments',
-      label: 'Deployments',
+      label: t('appManage.section.deployments'),
       icon: icon(IconHistory),
       color: 'dark',
     },
@@ -478,12 +511,13 @@ function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
 
 /** A value that copies itself when clicked. */
 function CopyValue({ value }: { value: string }) {
+  const { t } = useI18n();
   return (
-    <Tooltip label="Copy" withArrow position="top">
+    <Tooltip label={t('common.copy')} withArrow position="top">
       <UnstyledButton
         onClick={() => {
           copy(value);
-          toast.success('Copied');
+          toast.success(t('common.copied'));
         }}
         ff="monospace"
         fz="xs"
@@ -509,6 +543,7 @@ function SlugField({
   slug: string;
   runtimeSupported: boolean;
 }) {
+  const { t } = useI18n();
   const router = useRouter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -524,7 +559,7 @@ function SlugField({
     mutationFn: (next: string) =>
       setAppSlugFn({ data: { id: appId, slug: next } }),
     onSuccess: (result) => {
-      toast.success(`URL slug is now "${result.slug}"`);
+      toast.success(t('appManage.slugChanged', { slug: result.slug }));
       setEditing(false);
       void navigate({
         to: '/app/$appSlug/manage',
@@ -562,7 +597,7 @@ function SlugField({
   };
 
   return (
-    <Row label="URL slug">
+    <Row label={t('appManage.slug')}>
       {editing ? (
         <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
           <TextInput
@@ -582,18 +617,18 @@ function SlugField({
             styles={{ input: { fontFamily: 'monospace' } }}
             style={{ flex: 1, minWidth: 160 }}
           />
-          <Tooltip label="Save" withArrow position="top">
+          <Tooltip label={t('common.save')} withArrow position="top">
             <ActionIcon
               variant="light"
               color="green"
               onClick={submit}
               loading={save.isPending}
-              aria-label="Save slug"
+              aria-label={t('appManage.saveSlug')}
             >
               <IconCheck size={16} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="Cancel" withArrow position="top">
+          <Tooltip label={t('common.cancel')} withArrow position="top">
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -602,7 +637,7 @@ function SlugField({
                 setEditing(false);
               }}
               disabled={save.isPending}
-              aria-label="Cancel"
+              aria-label={t('common.cancel')}
             >
               <IconX size={16} />
             </ActionIcon>
@@ -614,21 +649,21 @@ function SlugField({
             {slug}
           </Text>
           {runtimeSupported ? (
-            <Tooltip label="Open app" withArrow position="top">
+            <Tooltip label={t('appManage.openApp')} withArrow position="top">
               <ActionIcon
                 variant="subtle"
                 color="gray"
                 component="a"
                 href={`/app/${slug}/embed/`}
                 target="_blank"
-                aria-label="Open app"
+                aria-label={t('appManage.openApp')}
               >
                 <IconExternalLink size={15} />
               </ActionIcon>
             </Tooltip>
           ) : (
             <Tooltip
-              label="Resolve this App deployment compatibility before opening it"
+              label={t('appManage.openBlocked')}
               withArrow
               position="top"
             >
@@ -636,13 +671,13 @@ function SlugField({
                 variant="subtle"
                 color="gray"
                 disabled
-                aria-label="Open app unavailable"
+                aria-label={t('appManage.openUnavailable')}
               >
                 <IconExternalLink size={15} />
               </ActionIcon>
             </Tooltip>
           )}
-          <Tooltip label="Edit slug" withArrow position="top">
+          <Tooltip label={t('appManage.editSlug')} withArrow position="top">
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -650,7 +685,7 @@ function SlugField({
                 setDraft(slug);
                 setEditing(true);
               }}
-              aria-label="Edit slug"
+              aria-label={t('appManage.editSlug')}
             >
               <IconPencil size={15} />
             </ActionIcon>

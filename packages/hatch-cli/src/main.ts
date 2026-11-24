@@ -8,6 +8,7 @@ import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
+import { parseDocsCommand, runDocs } from './docs';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { parsePreferencesCommand, runPreferences } from './preferences';
@@ -78,6 +79,8 @@ try {
   // Reject malformed task arguments locally, before any network request.
   if (!showHelp && name === 'app' && args[offset + 1] === 'task')
     parseTaskCommand(args, offset);
+  if (!showHelp && name === 'app' && args[offset + 1] === 'docs')
+    parseDocsCommand(args, offset);
   if (!showHelp && !['version', '--version'].includes(name))
     await refreshRunEnvironment(process.env, controller.signal);
   if (showHelp) {
@@ -119,6 +122,8 @@ try {
     await runBackend(args, offset, controller.signal);
   else if (name === 'app' && operation === 'task')
     await runTask(args, offset, controller.signal);
+  else if (name === 'app' && operation === 'docs')
+    await runDocs(args, offset, controller.signal);
   else if (
     name === 'image-model' ||
     name === 'image' ||
@@ -127,8 +132,7 @@ try {
     await runImage(args, offset, controller.signal);
   else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
     await runData(args, offset, controller.signal);
-  else if (['app', 'workflow'].includes(name))
-    await runLifecycle(args, offset, controller.signal);
+  else if (name === 'app') await runLifecycle(args, offset, controller.signal);
   else if (name === 'notification')
     await runNotification(args, offset, controller.signal);
   else if (name === 'theme') await runTheme(args, offset, controller.signal);

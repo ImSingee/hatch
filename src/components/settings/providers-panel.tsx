@@ -31,9 +31,11 @@ import {
   IconRobot,
   IconTrash,
 } from '@tabler/icons-react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
+import { useErrorText, useI18n } from '~i18n';
 import { ProviderAvatar } from '~components/providers/provider-avatar';
-import { formatExact, formatRelative } from '~/lib/format';
+import { formatExact, formatRelativeTime } from '~/lib/format';
 import {
   agentModelChoicesQueryOptions,
   catalogStatusQueryOptions,
@@ -79,6 +81,7 @@ function ModelRow({
   model: ProviderModel;
   onEdit: () => void;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const invalidate = useInvalidateProviders();
   const toggle = useMutation({
@@ -119,7 +122,7 @@ function ModelRow({
     mutationFn: () => deleteModel({ data: { id: model.id } }),
     onSuccess: async () => {
       await invalidate();
-      toast.success('Model removed');
+      toast.success(t('providers.toast.modelRemoved'));
     },
   });
 
@@ -148,9 +151,9 @@ function ModelRow({
           </span>
         ) : null}
         {model.chat?.overridden.length ? (
-          <Tooltip label="Some values differ from the catalog" withArrow>
+          <Tooltip label={t('providers.model.customTooltip')} withArrow>
             <Badge variant="light" size="sm">
-              Custom
+              {t('providers.model.custom')}
             </Badge>
           </Tooltip>
         ) : null}
@@ -160,7 +163,7 @@ function ModelRow({
           variant="subtle"
           color="gray"
           size="sm"
-          aria-label={`Edit ${model.name}`}
+          aria-label={t('providers.model.editNamed', { name: model.name })}
           onClick={onEdit}
         >
           <IconPencil size={15} stroke={1.6} />
@@ -169,18 +172,25 @@ function ModelRow({
           variant="subtle"
           color="red"
           size="sm"
-          aria-label={`Remove ${model.name}`}
+          aria-label={t('providers.model.removeNamed', { name: model.name })}
           onClick={() =>
             modals.openConfirmModal({
-              title: 'Remove model',
+              title: t('providers.model.remove'),
               centered: true,
               children: (
                 <Text size="sm">
-                  Remove <b>{model.name}</b>? Chats using it will switch to
-                  another model.
+                  <Trans
+                    t={t}
+                    i18nKey="providers.model.removeBody"
+                    values={{ name: model.name }}
+                    components={{ b: <b /> }}
+                  />
                 </Text>
               ),
-              labels: { confirm: 'Remove', cancel: 'Cancel' },
+              labels: {
+                confirm: t('common.remove'),
+                cancel: t('common.cancel'),
+              },
               confirmProps: { color: 'red' },
               onConfirm: () => remove.mutate(),
             })
@@ -193,13 +203,19 @@ function ModelRow({
         size="xs"
         checked={model.enabled}
         onChange={(event) => toggle.mutate(event.currentTarget.checked)}
-        aria-label={`${model.enabled ? 'Disable' : 'Enable'} ${model.name}`}
+        aria-label={t(
+          model.enabled
+            ? 'providers.model.disableNamed'
+            : 'providers.model.enableNamed',
+          { name: model.name },
+        )}
       />
     </div>
   );
 }
 
 function AddModel({ provider }: { provider: ProviderWithModels }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const invalidate = useInvalidateProviders();
   const add = useMutation({
@@ -236,7 +252,7 @@ function AddModel({ provider }: { provider: ProviderWithModels }) {
         leftSection={<IconPlus size={14} stroke={2} />}
         onClick={() => setOpen(true)}
       >
-        Add model
+        {t('providers.model.add')}
       </Button>
     );
   return (
@@ -267,13 +283,14 @@ function AddModel({ provider }: { provider: ProviderWithModels }) {
         color="gray"
         onClick={() => setOpen(false)}
       >
-        Done
+        {t('common.done')}
       </Button>
     </Group>
   );
 }
 
 function ProviderCard({ provider }: { provider: ProviderWithModels }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const invalidate = useInvalidateProviders();
   const [editOpen, editHandlers] = useDisclosure(false);
@@ -317,7 +334,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     mutationFn: () => deleteProvider({ data: { id: provider.id } }),
     onSuccess: async () => {
       await invalidate();
-      toast.success('Provider removed');
+      toast.success(t('providers.toast.providerRemoved'));
     },
   });
 
@@ -326,10 +343,18 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     onSuccess: (result) => {
       if (result.ok)
         toast.success(
-          `${provider.name} answered in ${(result.latencyMs / 1000).toFixed(1)} s`,
+          t('providers.test.ok', {
+            name: provider.name,
+            seconds: (result.latencyMs / 1000).toFixed(1),
+          }),
         );
       else
-        toast.error(`${provider.name} failed: ${result.error ?? 'no details'}`);
+        toast.error(
+          t('providers.test.failed', {
+            name: provider.name,
+            error: result.error ?? t('providers.test.noDetails'),
+          }),
+        );
     },
   });
 
@@ -348,12 +373,12 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
               </Text>
               {provider.enabled ? null : (
                 <Badge variant="default" size="sm">
-                  Off
+                  {t('providers.card.off')}
                 </Badge>
               )}
               {provider.hasApiKey ? null : (
                 <Badge variant="light" color="yellow" size="sm">
-                  No API key
+                  {t('providers.card.noApiKey')}
                 </Badge>
               )}
             </Group>
@@ -364,7 +389,9 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
         </Group>
         <Group gap="xs" wrap="nowrap">
           <Tooltip
-            label={provider.enabled ? 'Enabled' : 'Disabled'}
+            label={
+              provider.enabled ? t('common.enabled') : t('common.disabled')
+            }
             withArrow
             position="left"
           >
@@ -372,7 +399,12 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
               checked={provider.enabled}
               onChange={(e) => toggleEnabled.mutate(e.currentTarget.checked)}
               size="sm"
-              aria-label={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
+              aria-label={t(
+                provider.enabled
+                  ? 'providers.card.disableNamed'
+                  : 'providers.card.enableNamed',
+                { name: provider.name },
+              )}
             />
           </Tooltip>
           <Menu position="bottom-end" withArrow shadow="md">
@@ -380,7 +412,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
               <ActionIcon
                 variant="subtle"
                 color="gray"
-                aria-label="Provider menu"
+                aria-label={t('providers.card.menu')}
                 loading={test.isPending}
               >
                 <IconDotsVertical size={18} stroke={1.6} />
@@ -391,14 +423,14 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                 leftSection={<IconPencil size={15} stroke={1.6} />}
                 onClick={editHandlers.open}
               >
-                Edit provider
+                {t('providers.editProvider')}
               </Menu.Item>
               <Menu.Item
                 leftSection={<IconPlugConnected size={15} stroke={1.6} />}
                 disabled={!provider.hasApiKey || test.isPending}
                 onClick={() => test.mutate()}
               >
-                Test connection
+                {t('providers.card.test')}
               </Menu.Item>
               <Menu.Divider />
               <Menu.Item
@@ -406,21 +438,28 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                 leftSection={<IconTrash size={15} stroke={1.6} />}
                 onClick={() =>
                   modals.openConfirmModal({
-                    title: 'Remove provider',
+                    title: t('providers.removeProvider'),
                     centered: true,
                     children: (
                       <Text size="sm">
-                        Remove <b>{provider.name}</b> and its models? Chats
-                        using it will switch to another model.
+                        <Trans
+                          t={t}
+                          i18nKey="providers.removeProviderBody"
+                          values={{ name: provider.name }}
+                          components={{ b: <b /> }}
+                        />
                       </Text>
                     ),
-                    labels: { confirm: 'Remove', cancel: 'Cancel' },
+                    labels: {
+                      confirm: t('common.remove'),
+                      cancel: t('common.cancel'),
+                    },
                     confirmProps: { color: 'red' },
                     onConfirm: () => removeProvider.mutate(),
                   })
                 }
               >
-                Remove provider
+                {t('providers.removeProvider')}
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
@@ -441,7 +480,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
           </Stack>
         ) : (
           <Text size="sm" c="dimmed" className={classes.emptyModels}>
-            No models yet — add one to use this provider.
+            {t('providers.card.noModels')}
           </Text>
         )}
         <div className={classes.providerFoot}>
@@ -471,6 +510,8 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
 
 /** Where the model catalog comes from and when it last changed. */
 function CatalogStatus() {
+  const { t, locale } = useI18n();
+  const errorText = useErrorText();
   const qc = useQueryClient();
   const status = useQuery(catalogStatusQueryOptions);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -482,21 +523,24 @@ function CatalogStatus() {
     onSuccess: async (result) => {
       setStatus(result.status);
       if (result.outcome === 'updated') {
-        toast.success('Model catalog updated');
+        toast.success(t('providers.catalog.updated'));
         await qc.invalidateQueries({ queryKey: ['agent'] });
       } else if (result.outcome === 'unchanged')
-        toast.info('The model catalog is up to date');
+        toast.info(t('providers.catalog.upToDate'));
       else
-        toast.error(result.status.lastError ?? 'Could not update the catalog');
+        toast.error(
+          result.status.lastError ?? t('providers.catalog.updateFailed'),
+        );
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) =>
+      toast.error(errorText(error, 'providers.catalog.updateFailed')),
   });
   const save = useMutation({
     mutationFn: (input: { autoUpdate?: boolean; sourceUrl?: string | null }) =>
       updateModelCatalogSettings({ data: input }),
     onSuccess: (next) => {
       setStatus(next);
-      toast.success('Catalog settings saved');
+      toast.success(t('providers.catalog.saved'));
     },
   });
   if (!status.data) return null;
@@ -506,20 +550,29 @@ function CatalogStatus() {
   return (
     <div className={classes.catalogBar}>
       <div className={classes.catalogText}>
-        <Text size="sm" fw={700}>
-          Model catalog ·{' '}
-          <Tooltip label={formatExact(changed)} withArrow>
-            <span>updated {formatRelative(changed)}</span>
-          </Tooltip>
-        </Text>
+        <Tooltip label={formatExact(changed)} withArrow>
+          <Text size="sm" fw={700}>
+            {t('providers.catalog.title', {
+              time: formatRelativeTime(changed, locale),
+            })}
+          </Text>
+        </Tooltip>
         <Text size="xs" c={data.lastError ? 'red' : 'dimmed'}>
           {data.lastError
-            ? `Last check failed: ${data.lastError}`
-            : `${data.modelCount.toLocaleString('en-US')} models from aidy-models${
+            ? t('providers.catalog.lastError', { error: data.lastError })
+            : [
+                t('providers.catalog.models', { count: data.modelCount }),
                 data.lastCheckedAt
-                  ? ` · checked ${formatRelative(data.lastCheckedAt)}`
-                  : ''
-              } · ${data.autoUpdate ? 'updates automatically' : 'automatic updates off'}`}
+                  ? t('providers.catalog.checked', {
+                      time: formatRelativeTime(data.lastCheckedAt, locale),
+                    })
+                  : null,
+                data.autoUpdate
+                  ? t('providers.catalog.autoOn')
+                  : t('providers.catalog.autoOff'),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
         </Text>
       </div>
       <Group gap={4} wrap="nowrap">
@@ -531,7 +584,7 @@ function CatalogStatus() {
           loading={refresh.isPending}
           onClick={() => refresh.mutate()}
         >
-          Check now
+          {t('providers.catalog.checkNow')}
         </Button>
         <Popover
           position="bottom-end"
@@ -544,7 +597,7 @@ function CatalogStatus() {
             <ActionIcon
               variant="subtle"
               color="gray"
-              aria-label="Catalog settings"
+              aria-label={t('providers.catalog.settings')}
             >
               <IconAdjustments size={17} stroke={1.6} />
             </ActionIcon>
@@ -552,16 +605,16 @@ function CatalogStatus() {
           <Popover.Dropdown>
             <Stack gap="sm">
               <Switch
-                label="Update automatically"
-                description="Checks aidy-models every few hours. Turn off for offline or controlled installs."
+                label={t('providers.catalog.autoUpdate')}
+                description={t('providers.catalog.autoUpdateDescription')}
                 checked={data.autoUpdate}
                 onChange={(event) =>
                   save.mutate({ autoUpdate: event.currentTarget.checked })
                 }
               />
               <TextInput
-                label="Source URL"
-                description="An https mirror of aidy-models' models.json. Blank uses GitHub."
+                label={t('providers.catalog.sourceUrl')}
+                description={t('providers.catalog.sourceUrlDescription')}
                 placeholder={data.effectiveSourceUrl}
                 value={sourceUrl ?? ''}
                 onChange={(event) => setSourceUrl(event.currentTarget.value)}
@@ -576,7 +629,7 @@ function CatalogStatus() {
                     save.mutate({ sourceUrl: sourceUrl?.trim() || null })
                   }
                 >
-                  Save source
+                  {t('providers.catalog.saveSource')}
                 </Button>
               </Group>
             </Stack>
@@ -592,6 +645,7 @@ export function ProvidersPanel({
 }: {
   onAddProvider: () => void;
 }) {
+  const { t } = useI18n();
   const { data: providers } = useSuspenseQuery(providersQueryOptions);
 
   return (
@@ -603,11 +657,10 @@ export function ProvidersPanel({
             <IconRobot size={26} stroke={1.5} />
           </ThemeIcon>
           <Text fw={700} mt="xs">
-            No providers yet
+            {t('providers.empty.title')}
           </Text>
           <Text size="sm" c="dimmed" ta="center" maw={420}>
-            Pick a provider such as Anthropic, OpenAI or OpenRouter, or connect
-            any compatible endpoint, so the Agent can start building apps.
+            {t('providers.empty.body')}
           </Text>
           <Button
             type="button"
@@ -615,7 +668,7 @@ export function ProvidersPanel({
             leftSection={<IconPlus size={16} stroke={1.8} />}
             onClick={onAddProvider}
           >
-            Add provider
+            {t('providers.addProvider')}
           </Button>
         </Stack>
       ) : (

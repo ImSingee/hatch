@@ -108,12 +108,12 @@ function script(label: string, renew: boolean, finishWithoutCli = false) {
     (async () => {
       await capture('start');
       console.log(process.env.HATCH_CLI_TOKEN);
-      cli(['auth','status']); cli(['app','list']); cli(['workflow','list']);
+      cli(['auth','status']); cli(['app','list']); cli(['dashboard','list']);
       ${
         renew
-          ? `cli(['workflow','create','--file','-','--directory','./disposable-workflow'], JSON.stringify({slug:${JSON.stringify(`runner-cli-${randomUUID()}`)},name:'Runner CLI acceptance'}));
+          ? `cli(['dashboard','create','--name','Runner CLI acceptance']);
       await new Promise(r=>setTimeout(r,7000));
-      cli(['auth','status']); cli(['app','list']); cli(['workflow','list']);
+      cli(['auth','status']); cli(['app','list']); cli(['dashboard','list']);
       cli(['notification','group','list']);`
           : ''
       }
@@ -542,7 +542,7 @@ describe.runIf(Boolean(databaseUrl))(
       expect(transcript).toContain('credentialType');
       expect(transcript).toContain('Runner CLI acceptance');
       expect(
-        await database.db.query.workflows.findMany({
+        await database.db.query.dashboards.findMany({
           where: { name: 'Runner CLI acceptance' },
         }),
       ).toHaveLength(1);
@@ -561,7 +561,7 @@ describe.runIf(Boolean(databaseUrl))(
         ),
       ).toBe(true);
       observations.push(
-        'Installed CLI auth status, App/Workflow/notification reads, Workflow creation and a later command succeeded; ended tokens and command channels were rejected.',
+        'Installed CLI auth status, App/dashboard/notification reads, dashboard creation and a later command succeeded; ended tokens and command channels were rejected.',
       );
 
       const resumed = await start('reconnected');

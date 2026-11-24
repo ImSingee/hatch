@@ -20,7 +20,7 @@ cancels database execution before connection cleanup, with no automatic retry.
 
 Association derives only from verified Run context and is idempotent. Other
 credentials report `not-applicable`, with no invented session. App create,
-clone/update, deploy and rollback associate automatically; Workflow does not.
+clone/update, deploy and rollback associate automatically.
 App DB queries follow the current domain lifecycle: only already registered
 databases are queried, under the lifecycle lock. Querying never provisions or
 recreates a database.
@@ -32,13 +32,14 @@ polling and sign-out remain native HTTP endpoints under `/api/auth/*`.
 
 The authoritative contract is
 `packages/hatch-platform-api/proto/hatch/platform/v1/`.
-`app.proto`, `workflow.proto`, `auth.proto`, `agent.proto` and `sdk.proto` own their respective
-services and request/response messages. `lifecycle.proto` shares App/Workflow
-resource and release messages; `file.proto` shares file payloads; `error.proto`
+`app.proto`, `auth.proto`, `agent.proto` and `sdk.proto` own their respective
+services and request/response messages. `lifecycle.proto` holds App resource
+and release messages; `file.proto` shares file payloads; `error.proto`
 owns business error details. All files retain the `hatch.platform.v1` package.
-The contract defines `hatch.platform.v1.AppService`, `WorkflowService`, `AuthService` and
-`SdkService`, plus session-only `AgentService`. Both lifecycle services provide list, create, get, get-source,
-deploy and rollback RPCs. Auth provides `GetStatus` and session-only
+The contract defines `hatch.platform.v1.AppService`, `AuthService` and
+`SdkService`, plus session-only `AgentService`. The App lifecycle service
+provides list, create, get, get-source, deploy and rollback RPCs. Workflows and
+their `WorkflowService` were removed; App tasks replace them. Auth provides `GetStatus` and session-only
 `CreateHandoff`; Sdk provides `GetSdk`. `NotificationService` manages the
 notification center for session and API-key callers and rejects Run
 credentials; its device RPCs are session-only (see
@@ -112,7 +113,7 @@ artifact/data fences. Deployment requests include the resource's observed
 `createdAt` as `generation`, checked again under the deploy lock.
 
 Source is not transferred through these RPCs. Clients push and fetch over Git
-smart HTTP at `/api/git/{app|workflow}/<id-or-slug>.git`, authenticated by the
+smart HTTP at `/api/git/app/<id-or-slug>.git`, authenticated by the
 same credentials (HTTP Basic password, `Authorization: Bearer` or `X-API-Key`;
 never a Cookie). `master` accepts fast-forward pushes only and `deploy/*` tags
 belong to the platform. A Deploy request names the `commit` to release, which
@@ -274,6 +275,18 @@ so the rejection stays in the run history. A full queue (100 queued runs per
 App) answers `TOO_MANY_REQUESTS`. `ListAppTaskRuns` pages newest first with
 `limit` (1-200) and `next_cursor`. See [App tasks](../skills/building-apps/references/tasks.md)
 and `hatch app task` in the [CLI README](../packages/hatch-cli/README.md).
+
+### App docs
+
+`AppService` adds `ListAppDocs` and `GetAppDoc`, read-only views of the
+Markdown docs an App's current deployment publishes for the services that call
+it (declared in the manifest's `docs` list). `ListAppDocs` returns the doc
+index, the deployment version and id, and the platform-relative webhook and
+RPC endpoints, paged with an offset `cursor`/`limit` (every doc when unset).
+`GetAppDoc` returns one body. Both accept every credential type. An archived
+or never-deployed App answers `CONFLICT`; an unknown doc answers `NOT_FOUND`.
+Rollback serves the docs of the restored deployment. See `hatch app docs` in
+the [CLI README](../packages/hatch-cli/README.md).
 
 ## Errors and recovery
 

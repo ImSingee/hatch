@@ -84,13 +84,6 @@ vi.mock('~queries/apps', () => ({
   },
 }));
 
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [],
-  },
-}));
-
 vi.mock('./new-chat-api', () => ({
   createEmptyAgentSession: fixtures.createSession,
 }));

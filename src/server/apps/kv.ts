@@ -13,7 +13,7 @@
  */
 import { and, eq, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
-import { AppError } from '~server/errors';
+import { AppError, type AppErrorDetails } from '~server/errors';
 import { decryptKvSecret, encryptKvSecret } from './kv-secret';
 
 /** Max key length (chars). Keys travel in a URL path segment on the backend API. */
@@ -24,7 +24,7 @@ export const KV_VALUE_MAX_BYTES = 64 * 1024;
 export const KV_MAX_ENTRIES = 1000;
 /**
  * Advisory-lock namespace for per-app KV writes (distinct from the deploy locks:
- * 1 = app deploy, 2 = workflow deploy). Serializes a single app's KV writes so
+ * 1 = app deploy; 2 is retired). Serializes a single app's KV writes so
  * the entry-cap check + insert are atomic.
  */
 const APP_KV_LOCK_NS = 3;
@@ -40,8 +40,8 @@ export type KvRecord = {
 
 /** An error carrying the HTTP status the KV route should map it to. */
 export class KvError extends AppError {
-  constructor(message: string, status = 400) {
-    super(message, status);
+  constructor(message: string, status = 400, details: AppErrorDetails = {}) {
+    super(message, status, details);
     this.name = 'KvError';
   }
 }
@@ -49,24 +49,36 @@ export class KvError extends AppError {
 /** Validate + trim a key (shared by every operation). */
 export function normalizeKvKey(key: string): string {
   const trimmed = (key ?? '').trim();
-  if (!trimmed) throw new KvError('KV key is required.', 400);
+  if (!trimmed)
+    throw new KvError('KV key is required.', 400, {
+      code: 'ops.kv.keyRequired',
+    });
   if (trimmed.length > KV_KEY_MAX) {
-    throw new KvError(`KV key too long (max ${KV_KEY_MAX} chars).`, 400);
+    throw new KvError(`KV key too long (max ${KV_KEY_MAX} chars).`, 400, {
+      code: 'ops.kv.keyTooLong',
+      params: { max: KV_KEY_MAX },
+    });
   }
   // Control characters would corrupt the URL path / UI; reject them up front.
   for (let i = 0; i < trimmed.length; i++) {
     const code = trimmed.charCodeAt(i);
     if (code <= 0x1f || code === 0x7f) {
-      throw new KvError('KV key may not contain control characters.', 400);
+      throw new KvError('KV key may not contain control characters.', 400, {
+        code: 'ops.kv.keyControlChars',
+      });
     }
     if (code >= 0xd800 && code <= 0xdbff) {
       const next = trimmed.charCodeAt(i + 1);
       if (next < 0xdc00 || next > 0xdfff) {
-        throw new KvError('KV key must contain valid Unicode.', 400);
+        throw new KvError('KV key must contain valid Unicode.', 400, {
+          code: 'ops.kv.keyInvalidUnicode',
+        });
       }
       i++;
     } else if (code >= 0xdc00 && code <= 0xdfff) {
-      throw new KvError('KV key must contain valid Unicode.', 400);
+      throw new KvError('KV key must contain valid Unicode.', 400, {
+        code: 'ops.kv.keyInvalidUnicode',
+      });
     }
   }
   return trimmed;
@@ -80,6 +92,7 @@ function validateValue(value: unknown): asserts value is string {
     throw new KvError(
       `KV value too large (max ${KV_VALUE_MAX_BYTES} bytes).`,
       413,
+      { code: 'ops.kv.valueTooLarge', params: { max: KV_VALUE_MAX_BYTES } },
     );
   }
 }
@@ -273,6 +286,7 @@ export async function setKv(
         throw new KvError(
           `KV entry limit reached (max ${KV_MAX_ENTRIES} keys per app).`,
           409,
+          { code: 'ops.kv.entryLimit', params: { max: KV_MAX_ENTRIES } },
         );
       }
       const [row] = await tx
@@ -286,7 +300,9 @@ export async function setKv(
     // Drizzle includes bound parameters in database error messages. A secret
     // write binds the encrypted envelope, so never propagate or attach the
     // original error to a route, internal API, log, or server-function caller.
-    throw new KvError('Unable to store KV value.', 500);
+    throw new KvError('Unable to store KV value.', 500, {
+      code: 'ops.kv.storeFailed',
+    });
   }
 }
 

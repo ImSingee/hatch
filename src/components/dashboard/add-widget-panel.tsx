@@ -27,8 +27,8 @@ import {
 import type { AppListItem } from '~server/apps';
 import type { AvailableWidget, DashboardItem } from '~server/dashboards';
 import { dashboardWidgetKey } from '~/lib/dashboard-widget';
-import { REFRESH_PRESETS, formatInterval } from './refresh-presets';
-import { refreshText } from './desk-toolbar';
+import { useI18n } from '~i18n';
+import { formatIntervalLabel } from './refresh-presets';
 import classes from './add-widget-panel.module.css';
 
 /** The intervals the panel offers; the current one is added when it differs. */
@@ -66,6 +66,7 @@ export function AddWidgetPanel({
   cancelDisabled: boolean;
   saving: boolean;
 }) {
+  const { t, locale } = useI18n();
   const [search, setSearch] = useState('');
   const placedKeys = useMemo(
     () => new Set(placed.map(dashboardWidgetKey)),
@@ -96,14 +97,14 @@ export function AddWidgetPanel({
           <IconLayoutGridAdd size={14} stroke={2} />
         </span>
         <h2 id="add-widgets-title" className={classes.title}>
-          Add widgets
+          {t('dashboard.addPanel.title')}
         </h2>
         <ActionIcon
           variant="light"
           color="gray"
           size={30}
           radius="md"
-          aria-label="Close the panel and stop editing"
+          aria-label={t('dashboard.addPanel.close')}
           disabled={cancelDisabled}
           onClick={onCancel}
         >
@@ -113,10 +114,13 @@ export function AddWidgetPanel({
 
       <div className={classes.body}>
         <Section
-          title="Widgets you can add"
+          title={t('dashboard.addPanel.available')}
           aside={
             <span className={classes.count}>
-              {addedCount} of {available.length} added
+              {t('dashboard.addPanel.addedCount', {
+                added: addedCount,
+                total: available.length,
+              })}
             </span>
           }
         >
@@ -125,20 +129,20 @@ export function AddWidgetPanel({
               value={search}
               onChange={(event) => setSearch(event.currentTarget.value)}
               leftSection={<IconSearch size={15} stroke={1.8} />}
-              placeholder="Search widgets"
-              aria-label="Search widgets"
+              placeholder={t('dashboard.addPanel.search')}
+              aria-label={t('dashboard.addPanel.search')}
             />
           ) : null}
           {available.length === 0 ? (
             <EmptyState
               variant="dashed"
               icon={<IconPuzzle size={20} stroke={1.7} />}
-              title="No App offers a widget yet"
+              title={t('dashboard.addPanel.noneTitle')}
             >
-              Ask the Agent to add one to an App you use.
+              {t('dashboard.addPanel.noneBody')}
             </EmptyState>
           ) : filtered.length === 0 ? (
-            <EmptyLine>No matching widgets</EmptyLine>
+            <EmptyLine>{t('dashboard.addPanel.noMatches')}</EmptyLine>
           ) : (
             <GroupCard component="ul">
               {filtered.map((widget) => {
@@ -155,12 +159,12 @@ export function AddWidgetPanel({
                       />
                     }
                     title={widget.name}
-                    meta={`From ${widget.appName}`}
+                    meta={t('dashboard.addPanel.from', { app: widget.appName })}
                     trailing={
                       added ? (
                         <span className={classes.added}>
                           <IconCheck size={13} stroke={2.6} aria-hidden />
-                          Added
+                          {t('dashboard.addPanel.added')}
                         </span>
                       ) : (
                         <Button
@@ -169,10 +173,12 @@ export function AddWidgetPanel({
                           variant="default"
                           leftSection={<IconPlus size={13} stroke={2.4} />}
                           disabled={disabled}
-                          aria-label={`Add ${widget.name}`}
+                          aria-label={t('dashboard.addPanel.addWidget', {
+                            name: widget.name,
+                          })}
                           onClick={() => onAdd(widget)}
                         >
-                          Add
+                          {t('common.add')}
                         </Button>
                       )
                     }
@@ -185,7 +191,7 @@ export function AddWidgetPanel({
 
         {withoutWidgets.length > 0 ? (
           <Section
-            title="Other apps"
+            title={t('dashboard.addPanel.otherApps')}
             aside={
               <span className={classes.count}>{withoutWidgets.length}</span>
             }
@@ -193,7 +199,7 @@ export function AddWidgetPanel({
             <GroupCard padded dashed>
               <div className={classes.others}>
                 <Text size="sm" fw={700}>
-                  These apps have no widget yet
+                  {t('dashboard.addPanel.noWidgetApps')}
                 </Text>
                 <ul className={classes.otherList}>
                   {withoutWidgets.map((app) => (
@@ -208,38 +214,40 @@ export function AddWidgetPanel({
                   renderRoot={(props) => (
                     <Link
                       to="/agent"
-                      search={{ prompt: 'Add a dashboard widget to ' }}
+                      search={{ prompt: t('dashboard.agentPrompt.addWidget') }}
                       {...props}
                     />
                   )}
                 >
-                  Ask the Agent to make a widget ›
+                  {t('dashboard.addPanel.askAgent')}
                 </Anchor>
               </div>
             </GroupCard>
           </Section>
         ) : null}
 
-        <Section title="Auto refresh">
+        <Section title={t('dashboard.addPanel.autoRefresh')}>
           <GroupCard padded>
             <SegmentedControl
               fullWidth
               size="xs"
               value={String(autoRefreshSeconds)}
               onChange={(value) => onAutoRefreshChange(Number(value))}
-              aria-label="Auto refresh"
+              aria-label={t('dashboard.addPanel.autoRefresh')}
               data={intervals.map((seconds) => ({
                 value: String(seconds),
                 label:
                   seconds === 0
-                    ? 'Off'
-                    : (REFRESH_PRESETS.find((p) => p.seconds === seconds)
-                        ?.label ?? formatInterval(seconds)),
+                    ? t('dashboard.refresh.offOption')
+                    : formatIntervalLabel(seconds, locale),
               }))}
             />
             <Text size="xs" c="dimmed">
-              {refreshText(autoRefreshSeconds)}. Applies to every widget on this
-              dashboard and is saved right away.
+              {autoRefreshSeconds > 0
+                ? t('dashboard.addPanel.refreshHintOn', {
+                    interval: formatIntervalLabel(autoRefreshSeconds, locale),
+                  })
+                : t('dashboard.addPanel.refreshHintOff')}
             </Text>
           </GroupCard>
         </Section>
@@ -252,7 +260,7 @@ export function AddWidgetPanel({
             disabled={cancelDisabled}
             onClick={onCancel}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             type="button"
@@ -261,7 +269,7 @@ export function AddWidgetPanel({
             disabled={disabled}
             onClick={onDone}
           >
-            Done
+            {t('common.done')}
           </Button>
         </div>
       </div>

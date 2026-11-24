@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { Buffer } from 'node:buffer';
-import { validateToolCall } from '@earendil-works/pi-ai';
+import { validateToolCall, type JsonObject } from '@earendil-works/pi-ai';
 import {
   mkdtemp,
   mkdir,
@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { NodeExecutionEnv } from './node-execution-env';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EditFileDetails } from './edit-file-details';
 import type { PlatformClient } from './platform-client';
@@ -74,7 +74,6 @@ async function setup(
   }
   const env = new NodeExecutionEnv({ cwd: root });
   const tools = createTools(env, {
-    workflowBetaEnabled: false,
     platform: stubPlatform,
     ...(readOnlyRoot ? { readOnlyRoots: [readOnlyRoot] } : {}),
   });
@@ -267,7 +266,7 @@ describe('agent file tools', () => {
         type: 'toolCall',
         id: 'read',
         name: 'read_file',
-        arguments: arguments_,
+        arguments: arguments_ as JsonObject,
       });
 
     expect(validate({ path: 'app.ts' })).toEqual({ path: 'app.ts' });
@@ -692,7 +691,7 @@ describe('agent file tools', () => {
       getTool('edit_file').execute('edit', {
         path: skillPath,
         old_string: 'apps',
-        new_string: 'workflows',
+        new_string: 'tasks',
       }),
     ).rejects.toThrow(/outside the workspace/);
     await expect(
@@ -748,7 +747,7 @@ describe('run_command sandbox', () => {
         type: 'toolCall',
         id: 'command',
         name: 'run_command',
-        arguments: arguments_,
+        arguments: arguments_ as JsonObject,
       });
 
     expect(

@@ -1,5 +1,5 @@
 /** Human-in-the-loop tool for requesting environment values from the user. */
-import { Type } from '@earendil-works/pi-ai';
+import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { EnvVariableField } from '../events';
 import { ENV_KEY_PATTERN, requireEnvKey } from '../env-keys';
@@ -25,38 +25,35 @@ export function createRequestEnvTool(bridge: EnvBridge): AgentTool {
       'visibility choice. Secret values are stored without entering the model ' +
       'context, while non-secret values are returned after storage.',
     executionMode: 'sequential',
-    parameters: Type.Object(
-      {
-        reason: Type.String({
-          minLength: 1,
-          maxLength: 2000,
-          description: 'Why these environment values are needed.',
-        }),
-        variables: Type.Array(
-          Type.Object(
-            {
-              key: Type.String({
-                pattern: ENV_KEY_PATTERN,
-                maxLength: 64,
-                description: 'Environment variable key, such as API_TOKEN.',
-              }),
-              description: Type.String({
-                minLength: 1,
-                maxLength: 1000,
-                description: 'Where the user can obtain this value.',
-              }),
-              secret: Type.Boolean({
-                description:
-                  'Whether the value should be kept private from the model by default.',
-              }),
-            },
-            { additionalProperties: false },
-          ),
-          { minItems: 1, maxItems: 10 },
-        ),
-      },
-      { additionalProperties: false },
-    ),
+    parameters: z.strictObject({
+      reason: z
+        .string()
+        .min(1)
+        .max(2000)
+        .describe('Why these environment values are needed.'),
+      variables: z
+        .array(
+          z.strictObject({
+            key: z
+              .string()
+              .max(64)
+              .regex(new RegExp(ENV_KEY_PATTERN))
+              .describe('Environment variable key, such as API_TOKEN.'),
+            description: z
+              .string()
+              .min(1)
+              .max(1000)
+              .describe('Where the user can obtain this value.'),
+            secret: z
+              .boolean()
+              .describe(
+                'Whether the value should be kept private from the model by default.',
+              ),
+          }),
+        )
+        .min(1)
+        .max(10),
+    }),
     execute: async (_id, params, signal) => {
       const variables = params.variables.map((variable) => ({
         key: requireEnvKey(variable.key),

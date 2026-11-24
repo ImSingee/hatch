@@ -42,7 +42,7 @@ function greeting(hour: number) {
 
 /**
  * The home screen: the widgets of a dashboard in a sheet, paged by dashboard,
- * over the grid of pinned Apps and Workflows. With room for two columns the
+ * over the grid of pinned Apps. With room for two columns the
  * widgets take the leading one and the pins the trailing one, split on the
  * fold.
  */
@@ -80,7 +80,6 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const pins = (pinned.data?.apps ?? []).filter(
     (pin) => pin.appStatus !== 'archived',
   );
-  const pinnedWorkflows = pinned.data?.workflows ?? [];
   // Pins are shared by every client: a change re-reads them, and the
   // workspace that marks a pinned App on its App page.
   const changed = () =>
@@ -89,18 +88,15 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
       queryClient.invalidateQueries({ queryKey: [origin, 'workspace'] }),
     ]);
   const unpin = useMutation({
-    mutationFn: (target: { pinId: string } | { workflowId: string }) =>
-      'pinId' in target
-        ? api!.unpinApp(target.pinId, lifetime())
-        : api!.setWorkflowPinned(target.workflowId, false, lifetime()),
+    mutationFn: (pinId: string) => api!.unpinApp(pinId, lifetime()),
     onSettled: changed,
   });
   // Unpinning is undone by pinning again, so the menu item acts at once.
-  const unpinAction = (target: { pinId: string } | { workflowId: string }) => ({
+  const unpinAction = (pinId: string) => ({
     label: 'Unpin from Home',
     glyph: 'pinSlash' as const,
     destructive: true,
-    onPress: () => unpin.mutate(target),
+    onPress: () => unpin.mutate(pinId),
   });
   const pending = pinned.isPending;
   const failure = pinned.error ?? unpin.error;
@@ -217,12 +213,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                       width={tileWidth}
                       label="Add"
                       accessibilityLabel="Pin an App to the home screen"
-                      onPress={() =>
-                        router.push({
-                          pathname: '/pin',
-                          params: { kind: 'apps' },
-                        })
-                      }
+                      onPress={() => router.push('/pin')}
                     >
                       <AddTile size={tile.tile} />
                     </ShortcutTile>
@@ -242,7 +233,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                             params: { id: pin.appId, slug: pin.appSlug },
                           }),
                       },
-                      unpinAction({ pinId: pin.id }),
+                      unpinAction(pin.id),
                     ]}
                   >
                     {(onLongPress) => (
@@ -283,59 +274,6 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                 </View>
               );
             }}
-          />
-          <SectionLabel>Workflows</SectionLabel>
-          <TileGrid
-            items={withAdd(pinnedWorkflows)}
-            keyOf={(slot) => slot.key}
-            minTile={tile.minTile}
-            gap={tile.gap}
-            render={({ item }, tileWidth) => (
-              <View style={{ width: tileWidth, paddingBottom: 12 }}>
-                {item ? (
-                  <TileMenu actions={[unpinAction({ workflowId: item.id })]}>
-                    {(onLongPress) => (
-                      <ShortcutTile
-                        width={tileWidth}
-                        label={item.name}
-                        accessibilityLabel={`${item.name}, workflow`}
-                        accessibilityHint="Touch and hold to unpin"
-                        onLongPress={onLongPress}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/workflows/[id]',
-                            params: { id: item.id },
-                          })
-                        }
-                      >
-                        <AppTile
-                          name={item.name}
-                          seed={item.id}
-                          size={tile.tile}
-                          workflow
-                          lifted
-                        />
-                      </ShortcutTile>
-                    )}
-                  </TileMenu>
-                ) : (
-                  <ShortcutTile
-                    muted
-                    width={tileWidth}
-                    label="Add"
-                    accessibilityLabel="Pin a Workflow to the home screen"
-                    onPress={() =>
-                      router.push({
-                        pathname: '/pin',
-                        params: { kind: 'workflows' },
-                      })
-                    }
-                  >
-                    <AddTile size={tile.tile} workflow />
-                  </ShortcutTile>
-                )}
-              </View>
-            )}
           />
         </>
       ) : null}

@@ -13,11 +13,12 @@ import {
 } from '@mantine/core';
 import { IconPlayerPlay } from '@tabler/icons-react';
 import { useState } from 'react';
+import { useI18n } from '~i18n';
 
 /**
  * A run form inferred from a JSON Schema: one input per property of a flat
- * object schema, or a raw JSON editor for anything else. Shared by Workflow
- * runs and App task runs; the caller starts the run.
+ * object schema, or a raw JSON editor for anything else. The caller starts
+ * the run.
  */
 type JsonSchema = {
   type?: string | string[];
@@ -70,6 +71,11 @@ function effectiveSchema(schema: JsonSchema): JsonSchema {
       schema['x-hatch-enum-titles'] ?? member['x-hatch-enum-titles'],
   };
 }
+
+/** Why the form refused to submit; translated when rendered. */
+type FormError =
+  | { kind: 'fieldRequired' | 'fieldInvalidJson'; field: string }
+  | { kind: 'inputInvalidJson' };
 
 type Field = {
   key: string;
@@ -150,6 +156,7 @@ export function SchemaRunForm({
   /** Shown instead of fields when the schema declares no properties. */
   emptyText: string;
 }) {
+  const { t } = useI18n();
   const schema = (inputSchema ?? null) as JsonSchema | null;
   const fields = inferFields(schema);
   const [values, setValues] = useState<Record<string, unknown>>(() =>
@@ -157,7 +164,7 @@ export function SchemaRunForm({
   );
   // Raw JSON editor used when the schema isn't a simple flat object.
   const [rawJson, setRawJson] = useState('{}');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
   // Fields the user has edited; an explicitly cleared string is submitted
   // as '' while untouched optional fields stay omitted.
   const [edited, setEdited] = useState<ReadonlySet<string>>(new Set());
@@ -197,7 +204,7 @@ export function SchemaRunForm({
         // schema default (object/array) the server applies when the field is
         // omitted, so don't block those.
         if (typeof v === 'string' && !v.trim()) {
-          setError(`Field "${f.schema.title ?? f.key}" is required.`);
+          setError({ kind: 'fieldRequired', field: f.schema.title ?? f.key });
           return;
         }
       }
@@ -209,7 +216,7 @@ export function SchemaRunForm({
             try {
               obj[f.key] = JSON.parse(v);
             } catch {
-              setError(`Field "${f.key}" must be valid JSON.`);
+              setError({ kind: 'fieldInvalidJson', field: f.key });
               return;
             }
           }
@@ -235,7 +242,7 @@ export function SchemaRunForm({
       try {
         input = rawJson.trim() ? JSON.parse(rawJson) : {};
       } catch {
-        setError('Input must be valid JSON.');
+        setError({ kind: 'inputInvalidJson' });
         return;
       }
     }
@@ -361,8 +368,8 @@ export function SchemaRunForm({
         </Text>
       ) : (
         <JsonInput
-          label="Input (JSON)"
-          description="This input schema is custom — provide raw JSON."
+          label={t('runs.form.rawLabel')}
+          description={t('runs.form.rawDescription')}
           autosize
           minRows={4}
           formatOnBlur
@@ -374,7 +381,11 @@ export function SchemaRunForm({
 
       {error ? (
         <Alert color="red" variant="light" py="xs">
-          {error}
+          {error.kind === 'fieldRequired'
+            ? t('runs.form.fieldRequired', { field: error.field })
+            : error.kind === 'fieldInvalidJson'
+              ? t('runs.form.fieldInvalidJson', { field: error.field })
+              : t('runs.form.inputInvalidJson')}
         </Alert>
       ) : null}
 
@@ -386,7 +397,7 @@ export function SchemaRunForm({
           disabled={disabled}
           onClick={submit}
         >
-          Run now
+          {t('runs.form.runNow')}
         </Button>
       </Group>
     </Stack>

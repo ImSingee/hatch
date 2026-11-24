@@ -10,7 +10,8 @@ import {
 
 /**
  * Advisory-lock namespace for per-app database provisioning. Existing keyed
- * namespaces 1-5 cover app/workflow deploys, app KV, sidebar, and dashboards.
+ * namespaces 1-5 cover App deploys (2 is retired), app KV, sidebar, and
+ * dashboards.
  */
 const APP_DB_PROVISION_LOCK_NS = 6;
 

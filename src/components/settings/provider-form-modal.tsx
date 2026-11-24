@@ -26,6 +26,7 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { ProviderAvatar } from '~components/providers/provider-avatar';
 import {
   agentModelChoicesQueryOptions,
@@ -51,18 +52,11 @@ export const API_TYPE_OPTIONS = [
 
 type ApiType = ProviderWithModels['apiType'];
 
-function baseUrlHint(apiType: string): string {
-  switch (apiType) {
-    case 'anthropic-messages':
-      return 'e.g. https://api.anthropic.com — the SDK appends /v1/messages';
-    case 'openai-responses':
-      return 'e.g. https://api.openai.com/v1 — the SDK appends /responses';
-    case 'openai-completions':
-      return 'e.g. https://api.openai.com/v1 — the SDK appends /chat/completions';
-    default:
-      return '';
-  }
-}
+const BASE_URL_HINTS: Record<string, PlainTranslationKey> = {
+  'anthropic-messages': 'providers.form.baseUrlHint.anthropicMessages',
+  'openai-responses': 'providers.form.baseUrlHint.openaiResponses',
+  'openai-completions': 'providers.form.baseUrlHint.openaiCompletions',
+};
 
 function invalidateProviders(qc: ReturnType<typeof useQueryClient>) {
   return Promise.all([
@@ -77,6 +71,7 @@ function ProviderGallery({
 }: {
   onPick: (preset: CatalogProvider | null) => void;
 }) {
+  const { t } = useI18n();
   const presets = useQuery(catalogProvidersQueryOptions);
   const [search, setSearch] = useState('');
   const visible = useMemo(() => {
@@ -92,8 +87,8 @@ function ProviderGallery({
   return (
     <Stack gap="sm">
       <TextInput
-        placeholder="Search providers"
-        aria-label="Search providers"
+        placeholder={t('providers.gallery.search')}
+        aria-label={t('providers.gallery.search')}
         leftSection={<IconSearch size={15} stroke={1.7} />}
         value={search}
         onChange={(event) => setSearch(event.currentTarget.value)}
@@ -127,10 +122,10 @@ function ProviderGallery({
             <ProviderAvatar size={32} />
             <div className={classes.tileText}>
               <Text size="sm" fw={700}>
-                Custom
+                {t('providers.gallery.custom')}
               </Text>
               <Text size="xs" c="dimmed" truncate>
-                Any compatible endpoint
+                {t('providers.gallery.customDescription')}
               </Text>
             </div>
           </UnstyledButton>
@@ -148,6 +143,7 @@ function PickedModelList({
   models: PickedModel[];
   onRemove: (modelId: string) => void;
 }) {
+  const { t } = useI18n();
   if (!models.length) return null;
   return (
     <div className={classes.pickedList}>
@@ -177,7 +173,7 @@ function PickedModelList({
             variant="subtle"
             color="gray"
             size="sm"
-            aria-label={`Remove ${model.name}`}
+            aria-label={t('providers.model.removeNamed', { name: model.name })}
             onClick={() => onRemove(model.modelId)}
           >
             <IconX size={14} stroke={1.8} />
@@ -229,6 +225,7 @@ function NewProviderForm({
   onBack: () => void;
   onDone: () => void;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [advanced, advancedHandlers] = useDisclosure(false);
   const recommended = useRecommended(preset);
@@ -248,9 +245,9 @@ function NewProviderForm({
       catalogProviderId: preset?.id ?? null,
     },
     validate: {
-      name: (v) => (v.trim() ? null : 'Required'),
-      baseUrl: (v) => (v.trim() ? null : 'Required'),
-      apiKey: (v) => (v.trim() ? null : 'Required'),
+      name: (v) => (v.trim() ? null : t('providers.form.required')),
+      baseUrl: (v) => (v.trim() ? null : t('providers.form.required')),
+      apiKey: (v) => (v.trim() ? null : t('providers.form.required')),
     },
   });
 
@@ -271,7 +268,7 @@ function NewProviderForm({
       }),
     onSuccess: async () => {
       await invalidateProviders(qc);
-      toast.success('Provider added');
+      toast.success(t('providers.toast.providerAdded'));
       onDone();
     },
   });
@@ -286,22 +283,26 @@ function NewProviderForm({
     <Stack gap="sm">
       <Group grow align="flex-start">
         <TextInput
-          label="Name"
-          placeholder="My provider"
+          label={t('common.name')}
+          placeholder={t('providers.form.namePlaceholder')}
           data-autofocus={preset === null || undefined}
           {...form.getInputProps('name')}
         />
         <Select
-          label="API type"
+          label={t('providers.form.apiType')}
           data={API_TYPE_OPTIONS}
           allowDeselect={false}
           {...form.getInputProps('apiType')}
         />
       </Group>
       <TextInput
-        label="Base URL"
+        label={t('providers.form.baseUrl')}
         placeholder="https://api.example.com/v1"
-        description={baseUrlHint(form.values.apiType)}
+        description={
+          BASE_URL_HINTS[form.values.apiType]
+            ? t(BASE_URL_HINTS[form.values.apiType])
+            : undefined
+        }
         {...form.getInputProps('baseUrl')}
       />
     </Stack>
@@ -312,7 +313,7 @@ function NewProviderForm({
       <Stack gap="sm">
         {preset === null ? connection : null}
         <TextInput
-          label="API key"
+          label={t('providers.form.apiKey')}
           type="password"
           placeholder="sk-..."
           description={
@@ -325,12 +326,13 @@ function NewProviderForm({
                     rel="noopener noreferrer"
                     size="xs"
                   >
-                    Get an API key <IconExternalLink size={11} stroke={1.8} />
+                    {t('providers.form.getApiKey')}{' '}
+                    <IconExternalLink size={11} stroke={1.8} />
                   </Anchor>{' '}
                   ·{' '}
                 </>
               ) : null}
-              Stored on this server and never shown again.
+              {t('providers.form.apiKeyStored')}
             </>
           }
           data-autofocus={preset !== null || undefined}
@@ -338,9 +340,9 @@ function NewProviderForm({
         />
         {preset === null ? (
           <Select
-            label="Model details from"
-            description="A catalog provider this endpoint serves or proxies. Its models fill in context sizes and thinking levels."
-            placeholder="None"
+            label={t('providers.form.catalogLink')}
+            description={t('providers.form.catalogLinkDescription')}
+            placeholder={t('providers.form.catalogLinkNone')}
             clearable
             searchable
             selectFirstOptionOnChange
@@ -353,7 +355,7 @@ function NewProviderForm({
         ) : null}
         <Stack gap={4}>
           <Text size="sm" fw={600}>
-            Models
+            {t('providers.form.models')}
           </Text>
           <ModelSearchInput
             catalogProviderId={scope}
@@ -361,7 +363,7 @@ function NewProviderForm({
             onPick={(model) => setModels([...picked, model])}
           />
           <Text size="xs" c="dimmed">
-            Search the catalog, or type any model ID and press Enter.
+            {t('providers.form.modelsHint')}
           </Text>
           <PickedModelList
             models={picked}
@@ -383,21 +385,21 @@ function NewProviderForm({
               ) : (
                 <IconChevronRight size={14} stroke={2} />
               )}
-              <span>Advanced</span>
+              <span>{t('providers.form.advanced')}</span>
             </UnstyledButton>
             <Collapse expanded={advanced}>{connection}</Collapse>
           </>
         )}
         <Group justify="flex-end" mt="xs">
           <Button type="button" variant="default" onClick={onBack}>
-            Back
+            {t('providers.form.back')}
           </Button>
           <Button
             type="submit"
             loading={mutation.isPending}
             leftSection={<IconPlus size={15} stroke={1.8} />}
           >
-            Add provider
+            {t('providers.addProvider')}
           </Button>
         </Group>
       </Stack>
@@ -412,6 +414,7 @@ function EditProviderForm({
   provider: ProviderWithModels;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const presets = useQuery(catalogProvidersQueryOptions);
   const form = useForm<FormValues>({
@@ -423,10 +426,12 @@ function EditProviderForm({
       catalogProviderId: provider.catalogProviderId,
     },
     validate: {
-      name: (v) => (v.trim() ? null : 'Required'),
-      baseUrl: (v) => (v.trim() ? null : 'Required'),
+      name: (v) => (v.trim() ? null : t('providers.form.required')),
+      baseUrl: (v) => (v.trim() ? null : t('providers.form.required')),
       apiKey: (v) =>
-        provider.hasApiKey || v.trim() ? null : 'Add the API key',
+        provider.hasApiKey || v.trim()
+          ? null
+          : t('providers.form.apiKeyNeeded'),
     },
   });
   const mutation = useMutation({
@@ -443,7 +448,7 @@ function EditProviderForm({
       }),
     onSuccess: async () => {
       await invalidateProviders(qc);
-      toast.success('Provider updated');
+      toast.success(t('providers.toast.providerUpdated'));
       onClose();
     },
   });
@@ -452,35 +457,41 @@ function EditProviderForm({
     <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
       <Stack gap="sm">
         <TextInput
-          label="Name"
-          placeholder="My provider"
+          label={t('common.name')}
+          placeholder={t('providers.form.namePlaceholder')}
           data-autofocus
           {...form.getInputProps('name')}
         />
         <Select
-          label="API type"
+          label={t('providers.form.apiType')}
           data={API_TYPE_OPTIONS}
           allowDeselect={false}
           {...form.getInputProps('apiType')}
         />
         <TextInput
-          label="Base URL"
+          label={t('providers.form.baseUrl')}
           placeholder="https://api.example.com"
-          description={baseUrlHint(form.values.apiType)}
+          description={
+            BASE_URL_HINTS[form.values.apiType]
+              ? t(BASE_URL_HINTS[form.values.apiType])
+              : undefined
+          }
           {...form.getInputProps('baseUrl')}
         />
         <TextInput
-          label="API key"
+          label={t('providers.form.apiKey')}
           type="password"
           placeholder={
-            provider.hasApiKey ? 'Leave blank to keep current key' : 'sk-...'
+            provider.hasApiKey
+              ? t('providers.form.apiKeyKeepCurrent')
+              : 'sk-...'
           }
           {...form.getInputProps('apiKey')}
         />
         <Select
-          label="Model details from"
-          description="A catalog provider this endpoint serves or proxies. Its models fill in context sizes and thinking levels."
-          placeholder="None"
+          label={t('providers.form.catalogLink')}
+          description={t('providers.form.catalogLinkDescription')}
+          placeholder={t('providers.form.catalogLinkNone')}
           clearable
           searchable
           selectFirstOptionOnChange
@@ -492,10 +503,10 @@ function EditProviderForm({
         />
         <Group justify="flex-end" mt="xs">
           <Button type="button" variant="default" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="submit" loading={mutation.isPending}>
-            Save
+            {t('common.save')}
           </Button>
         </Group>
       </Stack>
@@ -513,16 +524,17 @@ export function ProviderFormModal({
   provider?: ProviderWithModels;
 }) {
   // undefined = choosing from the gallery; null = Custom.
+  const { t } = useI18n();
   const [preset, setPreset] = useState<CatalogProvider | null | undefined>(
     undefined,
   );
   const title = provider
-    ? 'Edit provider'
+    ? t('providers.editProvider')
     : preset === undefined
-      ? 'Add provider'
+      ? t('providers.addProvider')
       : preset === null
-        ? 'Add custom provider'
-        : `Add ${preset.name}`;
+        ? t('providers.addCustom')
+        : t('providers.addNamed', { name: preset.name });
 
   return (
     <Modal

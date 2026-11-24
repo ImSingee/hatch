@@ -1,9 +1,6 @@
 /** Server-only: authenticated HTTP delivery of stored platform images. */
-import {
-  APP_ICON_SIZES,
-  readAppIcon,
-  type AppIconSize,
-} from '~server/apps/icon';
+import type { UserAvatarSize } from '~lib/user-avatar';
+import { readAppIcon, type AppIconSize } from '~server/apps/icon';
 import { parseAppApiPath } from '~server/apps/runtime-api/path';
 import {
   authenticateCredential,
@@ -11,6 +8,7 @@ import {
 } from '~server/auth/credentials';
 import { RunTokenError } from '~server/agent-runner/run-auth';
 import { db } from '~/db';
+import { readUserAvatar } from '~server/user-avatar-store';
 import { readCandidate } from './candidates';
 
 const plain = (message: string, status: number) =>
@@ -41,6 +39,38 @@ function png(body: Buffer, cacheControl: string, etag: string): Response {
   });
 }
 
+const STORED_SIZES = [64, 128, 256] as const;
+type StoredSize = (typeof STORED_SIZES)[number];
+
+/**
+ * Deliver one size of a stored square image (App icon, user avatar) from
+ * `?size=64|128|256` (default 128), versioned by `?v=<key>`.
+ */
+async function storedSquareImage(
+  request: Request,
+  read: (size: StoredSize) => Promise<{ key: string; body: Buffer } | null>,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const requested = Number(url.searchParams.get('size') ?? 128);
+  const size = STORED_SIZES.find((value) => value === requested);
+  if (!size) return plain('Unsupported image size', 400);
+  const image = await read(size);
+  if (!image) return plain('Not found', 404);
+  const etag = `"${image.key}-${size}"`;
+  // A URL naming the current key never changes content, so it may be cached
+  // for good; any other URL must revalidate to pick up a replaced image.
+  const cacheControl =
+    url.searchParams.get('v') === image.key
+      ? 'private, max-age=31536000, immutable'
+      : 'private, no-cache';
+  if (request.headers.get('if-none-match') === etag)
+    return new Response(null, {
+      status: 304,
+      headers: { 'cache-control': cacheControl, etag },
+    });
+  return png(image.body, cacheControl, etag);
+}
+
 /** `GET /api/app/<id>/icon?size=64|128|256&v=<key>` */
 export async function handleAppIconRequest({
   request,
@@ -49,31 +79,36 @@ export async function handleAppIconRequest({
 }): Promise<Response> {
   const rejected = await denied(request);
   if (rejected) return rejected;
-  const url = new URL(request.url);
-  const parsed = parseAppApiPath(url.pathname);
+  const parsed = parseAppApiPath(new URL(request.url).pathname);
   if (!parsed || !/^\/icon\/?$/.test(parsed.rest))
     return plain('Not found', 404);
-  const requested = Number(url.searchParams.get('size') ?? 128);
-  const size = APP_ICON_SIZES.find((value) => value === requested);
-  if (!size) return plain('Unsupported icon size', 400);
-  const icon = await readAppIcon(
-    decodeURIComponent(parsed.id),
-    size satisfies AppIconSize,
+  return storedSquareImage(request, (size) =>
+    readAppIcon(decodeURIComponent(parsed.id), size satisfies AppIconSize),
   );
-  if (!icon) return plain('Not found', 404);
-  const etag = `"${icon.key}-${size}"`;
-  // A URL naming the current key never changes content, so it may be cached
-  // for good; any other URL must revalidate to pick up a replaced icon.
-  const cacheControl =
-    url.searchParams.get('v') === icon.key
-      ? 'private, max-age=31536000, immutable'
-      : 'private, no-cache';
-  if (request.headers.get('if-none-match') === etag)
-    return new Response(null, {
-      status: 304,
-      headers: { 'cache-control': cacheControl, etag },
-    });
-  return png(icon.body, cacheControl, etag);
+}
+
+/** `GET /api/users/<id>/avatar?size=64|128|256&v=<key>` */
+export async function handleUserAvatarRequest({
+  request,
+}: {
+  request: Request;
+}): Promise<Response> {
+  const rejected = await denied(request);
+  if (rejected) return rejected;
+  const encoded = /^\/api\/users\/([^/]+)\/avatar\/?$/.exec(
+    new URL(request.url).pathname,
+  )?.[1];
+  let userId: string | null = null;
+  try {
+    userId = encoded ? decodeURIComponent(encoded) : null;
+  } catch {
+    userId = null;
+  }
+  if (!userId) return plain('Not found', 404);
+  const id = userId;
+  return storedSquareImage(request, (size) =>
+    readUserAvatar(id, size satisfies UserAvatarSize),
+  );
 }
 
 /** `GET /api/images/candidates/<id>` */

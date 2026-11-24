@@ -4,11 +4,21 @@ import {
   IconDeviceTablet,
   IconDevices,
 } from '@tabler/icons-react';
-import dayjs from 'dayjs';
+import type { Locale, useI18n } from '~i18n';
 
-/** Absolute local time for session metadata. */
-export function formatSessionTime(iso: string): string {
-  return dayjs(iso).format('MMM D, YYYY [at] h:mm A');
+type Translate = ReturnType<typeof useI18n>['t'];
+
+/** Absolute local time for session metadata, as the reader's language writes it. */
+export function formatSessionTime(
+  iso: string,
+  locale: Locale,
+  t: Translate,
+): string {
+  const date = new Date(iso);
+  return t('account.sessions.dateTime', {
+    date: new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date),
+    time: new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(date),
+  });
 }
 
 export type DeviceKind = 'desktop' | 'mobile' | 'tablet' | 'unknown';
@@ -43,12 +53,16 @@ const SYSTEMS: [RegExp, string, DeviceKind][] = [
 ];
 
 /** Readable browser/OS summary of a stored User-Agent header. */
-export function describeUserAgent(userAgent: string | null): {
+export function describeUserAgent(
+  userAgent: string | null,
+  t: Translate,
+): {
   label: string;
   kind: DeviceKind;
 } {
   const ua = userAgent?.trim();
-  if (!ua) return { label: 'Unknown device', kind: 'unknown' };
+  if (!ua)
+    return { label: t('account.sessions.unknownDevice'), kind: 'unknown' };
 
   const browser = BROWSERS.find(([pattern]) => pattern.test(ua))?.[1];
   const system = SYSTEMS.find(([pattern]) => pattern.test(ua));
@@ -59,12 +73,18 @@ export function describeUserAgent(userAgent: string | null): {
       ? 'mobile'
       : (system?.[2] ?? 'unknown');
 
-  const label = [browser, os].filter(Boolean).join(' on ');
+  // Browser and system names are product names and stay untranslated.
+  const label =
+    browser && os
+      ? t('account.sessions.deviceLabel', { browser, os })
+      : (browser ?? os);
   if (label) return { label, kind };
   // Non-browser clients (CLIs, scripts) lead with their own product token.
   const product = ua.split(/\s/, 1)[0];
   return {
-    label: product.startsWith('Mozilla/') ? 'Unknown browser' : product,
+    label: product.startsWith('Mozilla/')
+      ? t('account.sessions.unknownBrowser')
+      : product,
     kind,
   };
 }

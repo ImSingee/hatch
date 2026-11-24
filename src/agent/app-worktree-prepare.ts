@@ -600,7 +600,6 @@ export async function prepareAppWorktree(
   try {
     toolchain = createSourceToolchain(await detectSourceToolchain(read), {
       root,
-      kind: 'app',
       run,
       read,
       readDependenciesThroughReader: isAgentAuthoredRoot(root),
@@ -616,7 +615,6 @@ export async function prepareAppWorktree(
   const legacy =
     manifestFile === 'manifest.json'
       ? await loadSourceManifest(root, {
-          kind: 'app',
           parse: parseSourceManifest,
           read,
         })

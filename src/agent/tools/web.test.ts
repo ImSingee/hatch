@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { validateToolCall } from '@earendil-works/pi-ai';
+import { validateToolCall, type JsonObject } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -65,12 +65,15 @@ function fetchCall(fetchMock: ReturnType<typeof vi.fn<typeof fetch>>) {
 describe('web tool schemas', () => {
   const tools = createWebTools({ fetchImpl: vi.fn<typeof fetch>() });
 
+  // Like the agent loop: the tool's argument boundary, then pi's validation.
   const validate = (name: string, arguments_: Record<string, unknown>) =>
     validateToolCall(tools, {
       type: 'toolCall',
       id: 'call-id',
       name,
-      arguments: arguments_,
+      arguments: findTool(tools, name).prepareArguments!(
+        arguments_,
+      ) as JsonObject,
     });
 
   it('accepts the curated search and fetch parameters', () => {
@@ -118,7 +121,7 @@ describe('web tool schemas', () => {
     { query: 'x', exclude_domains: [''] },
   ])('rejects invalid web_search arguments %#', (arguments_) => {
     expect(() => validate('web_search', arguments_)).toThrow(
-      /Validation failed for tool "web_search"/,
+      /Validation failed for tool "web_search"|Invalid tool argument/,
     );
   });
 
@@ -130,7 +133,7 @@ describe('web tool schemas', () => {
     { url: 'https://example.com', extract_depth: 'deep' },
   ])('rejects invalid web_fetch arguments %#', (arguments_) => {
     expect(() => validate('web_fetch', arguments_)).toThrow(
-      /Validation failed for tool "web_fetch"/,
+      /Validation failed for tool "web_fetch"|Invalid tool argument/,
     );
   });
 });

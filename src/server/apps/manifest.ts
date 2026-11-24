@@ -91,17 +91,29 @@ export type AppApi = {
 };
 
 /**
- * A resolved outbound workflow call this app declares. The invocation URL +
- * secret are NOT stored here (they are injected into the backend env at runtime,
- * never shipped to the browser) — only the alias the app code uses and the
- * target workflow id.
+ * An external doc published with a deployment. The Markdown body is stored in
+ * the deployment artifact at `appDocArtifactPath(id)`; the manifest keeps only
+ * this index so manifest reads never carry document bodies.
  */
-export type NormalizedAppWorkflow = {
-  /** Key the app uses in the injected `HATCH_WORKFLOWS` map. */
-  alias: string;
-  /** Target workflow id. */
-  workflow: string;
+export type PublishedAppDoc = {
+  id: string;
+  title: string;
+  description?: string;
+  /** Source-relative path, e.g. `docs/webhook.md`. */
+  path: string;
+  /** UTF-8 byte length of the body. */
+  bytes: number;
+  /** Lowercase hex SHA-256 of the body. */
+  sha256: string;
 };
+
+/** Artifact-relative directory holding published external docs. */
+export const APP_DOCS_ARTIFACT_DIR = 'published-docs';
+
+/** Artifact-relative path of one published doc body. */
+export function appDocArtifactPath(docId: string): string {
+  return `${APP_DOCS_ARTIFACT_DIR}/${docId}.md`;
+}
 
 /** JSON Schema of a task's input, generated from its RPC request message. */
 export type TaskInputSchema = JsonObject;
@@ -167,12 +179,6 @@ export type NormalizedManifest = {
   /** Scheduled jobs the platform triggers against the backend. */
   cron: CronJob[];
   /**
-   * Top-level workflows this app's backend may invoke. Present only when the
-   * app has a backend and declares workflow calls. The runtime injects the
-   * matching URL + secret per alias into the backend env (`HATCH_WORKFLOWS`).
-   */
-  workflows?: NormalizedAppWorkflow[];
-  /**
    * Inbound webhook URL + platform-side auth mode, when the webhook capability
    * is enabled. `platform` = secret-verified + HMAC-signed forward; `none` =
    * unauthenticated passthrough (app self-secures). See webhookConfigSchema.
@@ -200,6 +206,11 @@ export type NormalizedManifest = {
    * exactly which services + methods an app exposes.
    */
   api?: AppApi;
+  /**
+   * External docs published with this deployment, in manifest order. Set by
+   * the build; absent on deployments without docs and on historical ones.
+   */
+  docs?: PublishedAppDoc[];
 };
 
 /** Root path the platform serves an app's runtime APIs and assets under. */
@@ -382,8 +393,8 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
     };
   }
   // KV is reachable only from the app's own backend over the HMAC-signed route
-  // (a signing secret is minted only for backend apps), so like rpc / workflow
-  // calls it's meaningful only when a backend is actually staged. Without this
+  // (a signing secret is minted only for backend apps), so like rpc it's
+  // meaningful only when a backend is actually staged. Without this
   // gate a backendless app would advertise a KV URL that always 404s.
   if (src.capabilities.kv && src.capabilities.backend && src.backend) {
     out.kv = { url: kvUrl(src.id) };
@@ -438,16 +449,6 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
         inputType: '',
       })),
     };
-  }
-  // Workflow calls are outbound from the backend (the platform injects each
-  // target's secret into the backend env), so they only apply to apps that
-  // actually stage a backend — the capability alone, without a `backend.entry`,
-  // produces no process to receive the injected config.
-  if (src.capabilities.backend && src.backend && src.workflows.length > 0) {
-    out.workflows = src.workflows.map((w) => ({
-      alias: w.alias ?? w.workflow,
-      workflow: w.workflow,
-    }));
   }
   return out;
 }

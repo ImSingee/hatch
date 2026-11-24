@@ -923,9 +923,9 @@ describe('startAgentRun retry', () => {
           slug: 'team-notes',
         },
         { type: 'text', text: ' with ' },
-        { type: 'workflow', id: 'workflow-digest', name: 'Nightly Digest' },
+        { type: 'app', id: 'app-digest', name: 'Digest', slug: 'digest' },
         { type: 'text', text: ' and repeat ' },
-        { type: 'workflow', id: 'workflow-digest', name: 'Nightly Digest' },
+        { type: 'app', id: 'app-digest', name: 'Digest', slug: 'digest' },
         { type: 'text', text: '.' },
       ],
       providerId: PROVIDER_A_ID,
@@ -941,15 +941,15 @@ describe('startAgentRun retry', () => {
         slug: 'team-notes',
       },
       { type: 'text', text: ' with ' },
-      { type: 'workflow', id: 'workflow-digest', name: 'Nightly Digest' },
+      { type: 'app', id: 'app-digest', name: 'Digest', slug: 'digest' },
       { type: 'text', text: ' and repeat ' },
-      { type: 'workflow', id: 'workflow-digest', name: 'Nightly Digest' },
+      { type: 'app', id: 'app-digest', name: 'Digest', slug: 'digest' },
       { type: 'text', text: '.' },
     ] as const;
     const modelText =
       'Compare @APP{name="Team Notes" id="app-notes" slug="team-notes"}' +
-      ' with @WORKFLOW{name="Nightly Digest" id="workflow-digest"}' +
-      ' and repeat @WORKFLOW{name="Nightly Digest" id="workflow-digest"}.';
+      ' with @APP{name="Digest" id="app-digest" slug="digest"}' +
+      ' and repeat @APP{name="Digest" id="app-digest" slug="digest"}.';
     const session = await db.query.agentSessions.findFirst({
       where: { id: 'session-app-reference' },
     });

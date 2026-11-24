@@ -44,7 +44,7 @@ import {
 import { nextRun, parseCron } from '../cron-expr';
 import { type DedicatedRunHandle, runInDedicatedInstance } from '../runtime';
 
-/** Same bound as a Workflow run and a platform call into a backend. */
+/** Same bound as a platform call into a backend. */
 export const TASK_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Queued runs one App may hold before new ones are refused. */
 export const TASK_QUEUE_LIMIT = 100;
@@ -54,7 +54,7 @@ export const MAX_TASK_INPUT_BYTES = 1_000_000;
 const MAX_REJECTED_INPUT_BYTES = 64 * 1024;
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
-// Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
+// Existing namespaces elsewhere: 1 (App deploys), 2 (retired), 3
 // (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts),
 // 7 (platform-config.ts).
 const APP_TASK_QUEUE_LOCK_NS = 8;
@@ -79,6 +79,10 @@ export class TaskQueueFullError extends AppError {
     super(
       `Task "${taskName}" was not started: the App already has ${TASK_QUEUE_LIMIT} queued runs.`,
       429,
+      {
+        code: 'tasks.queueFull',
+        params: { task: taskName, limit: TASK_QUEUE_LIMIT },
+      },
     );
     this.name = 'TaskQueueFullError';
   }
@@ -115,10 +119,14 @@ async function activeTaskContext(appId: string): Promise<TaskContext> {
   });
   if (!app) throw new AppError(`App "${appId}" not found.`, 404);
   if (app.status === 'archived') {
-    throw new AppError('The App is archived; restore it to run tasks.', 409);
+    throw new AppError('The App is archived; restore it to run tasks.', 409, {
+      code: 'tasks.appArchived',
+    });
   }
   if (!app.currentDeploymentId) {
-    throw new AppError('The App has no active deployment.', 409);
+    throw new AppError('The App has no active deployment.', 409, {
+      code: 'tasks.notDeployed',
+    });
   }
   const deployment = await db.query.deployments.findFirst({
     where: { id: app.currentDeploymentId },
@@ -138,7 +146,9 @@ async function activeTaskContext(appId: string): Promise<TaskContext> {
   }
   const manifest = deployment.manifestNormalized as NormalizedManifest | null;
   if (!app.capabilities?.tasks || !manifest?.tasks || !manifest.rpc) {
-    throw new AppError('The App declares no tasks.', 409);
+    throw new AppError('The App declares no tasks.', 409, {
+      code: 'tasks.noTasks',
+    });
   }
   return {
     appId,
@@ -154,7 +164,10 @@ async function activeTaskContext(appId: string): Promise<TaskContext> {
 function findTask(context: TaskContext, taskName: string): NormalizedTask {
   const task = context.tasks.definitions.find((t) => t.name === taskName);
   if (!task) {
-    throw new AppError(`Task "${taskName}" is not declared by the App.`, 404);
+    throw new AppError(`Task "${taskName}" is not declared by the App.`, 404, {
+      code: 'tasks.taskNotDeclared',
+      params: { task: taskName },
+    });
   }
   return task;
 }
@@ -192,9 +205,7 @@ export async function startTaskRun(
     throw new AppError(`Task "${taskName}" does not accept webhook runs.`, 404);
   }
   const rawInput = options.input ?? {};
-  const validation = validateSchemaInput(task.inputSchema, rawInput, {
-    strict: true,
-  });
+  const validation = validateSchemaInput(task.inputSchema, rawInput);
   const base = {
     id: ulid().toLowerCase(),
     appId,
@@ -402,9 +413,7 @@ async function dispatchPass(appId: string): Promise<void> {
     // Input was validated against the deployment active when the run was
     // queued. The run executes on `context`'s deployment, whose definition
     // may have added required fields, defaults or constraints since.
-    const validation = validateSchemaInput(task.inputSchema, run.input ?? {}, {
-      strict: true,
-    });
+    const validation = validateSchemaInput(task.inputSchema, run.input ?? {});
     if (!validation.success) {
       await db
         .update(schema.appTaskRuns)

@@ -21,21 +21,15 @@ import {
   relative,
   isAbsolute,
 } from 'node:path';
-import { CliError, preparationFailure } from './error';
+import { CliError } from './error';
 import type { Profile } from './config';
 import { platformClient } from './client';
-import { pnpmInvocation } from './pnpm';
-import { prepareApp, prepareNodeWorkflow } from './preparation';
-import {
-  PNPM_LOCKFILE,
-  detectSourceToolchain,
-  sourceToolchainReader,
-} from '../../../src/source-toolchain';
+import { prepareApp } from './preparation';
 
-export type Kind = 'app' | 'workflow';
 export type Workspace = {
   version: 1;
-  kind: Kind;
+  /** Metadata with any other kind is rejected as a mismatched workspace. */
+  kind: 'app';
   url: string;
   id: string;
   generation: string;
@@ -43,7 +37,7 @@ export type Workspace = {
   pending?: { command: string; commit: string; startedAt: string };
   lastDeployment?: { version: number; deploymentId: string };
 };
-import { childEnvironment, command, git } from './process';
+import { childEnvironment, git } from './process';
 export { command, git, childEnvironment } from './process';
 
 export async function canonicalTarget(target: string) {
@@ -211,7 +205,6 @@ export async function assertAbsent(root: string) {
 }
 export async function workspace(
   root: string,
-  kind: Kind,
   credential: Profile,
 ): Promise<Workspace> {
   for (const path of [root, join(root, '.git')]) {
@@ -239,7 +232,7 @@ export async function workspace(
   }
   if (
     value.version !== 1 ||
-    value.kind !== kind ||
+    value.kind !== 'app' ||
     value.url !== credential.url ||
     typeof value.id !== 'string' ||
     !value.id ||
@@ -248,7 +241,7 @@ export async function workspace(
   )
     throw new CliError(
       'workspace_instance_mismatch',
-      'Workspace belongs to a different instance/resource kind or has invalid metadata.',
+      'Workspace belongs to a different instance, is not an App checkout or has invalid metadata.',
       6,
     );
   return value;
@@ -346,14 +339,11 @@ export async function writeFiles(
 }
 export async function installSdk(
   root: string,
-  kind: Kind,
   credential: Profile,
   timeout: number,
   signal: AbortSignal,
 ) {
-  const payload = await platformClient(credential, timeout, signal).sdk.get({
-    kind,
-  });
+  const payload = await platformClient(credential, timeout, signal).sdk.get();
   const stage = await mkdtemp(join(root, '.hatch-stage-'));
   const destination = join(root, '.hatch');
   const backup = join(root, `.hatch-backup-${randomUUID()}`);
@@ -414,60 +404,14 @@ export async function installSdk(
     } finally {
       await handle.close();
     }
-    if (kind === 'app') {
-      await prepareApp(root, signal, payload.tooling);
-      return;
-    }
-    // pnpm can succeed in a directory with no package.json. That is not a
-    // prepared Workflow: keep an empty checkout recoverable and name the stage.
-    const packageFile = await lstat(join(root, 'package.json')).catch(
-      () => null,
-    );
-    if (!packageFile?.isFile() || packageFile.isSymbolicLink())
-      throw new CliError(
-        'workflow_preparation_failed',
-        'Workflow preparation failed during dependency install: missing regular package.json. Add authored inputs and retry update.',
-        6,
-      );
-    // A committed pnpm lockfile selects the frozen install the platform
-    // repeats at deploy; Deno-toolchain Workflows keep the editor-only install.
-    if (await lstat(join(root, PNPM_LOCKFILE)).catch(() => null)) {
-      try {
-        await detectSourceToolchain(sourceToolchainReader(root));
-        await prepareNodeWorkflow(root, signal, payload.tooling);
-      } catch (error) {
-        throw preparationFailure(
-          'workflow_preparation_failed',
-          `Workflow preparation failed during dependency install: ${error instanceof Error ? error.message : 'Invalid source.'}`,
-          error,
-          signal,
-        );
-      }
-      return;
-    }
-    try {
-      const pnpm = await pnpmInvocation();
-      await command(
-        pnpm.executable,
-        [...pnpm.prefix, 'install', '--ignore-scripts', '--lockfile=false'],
-        root,
-        signal,
-      );
-    } catch (error) {
-      throw preparationFailure(
-        'workflow_preparation_failed',
-        `Workflow preparation failed during dependency install: ${error instanceof CliError ? error.message : 'Invalid source.'}`,
-        error,
-        signal,
-      );
-    }
+    await prepareApp(root, signal, payload.tooling);
   } finally {
     await rm(stage, { recursive: true, force: true });
   }
 }
-/** Git smart HTTP remote of a resource; IDs are stable, slugs are not. */
-export function remoteUrl(credential: Profile, kind: Kind, id: string) {
-  return `${credential.url}/api/git/${kind}/${id}.git`;
+/** Git smart HTTP remote of an App; IDs are stable, slugs are not. */
+export function remoteUrl(credential: Profile, id: string) {
+  return `${credential.url}/api/git/app/${id}.git`;
 }
 /**
  * Run git against the platform remote. The credential travels in the child
@@ -534,7 +478,6 @@ function remoteFailure(stderr: string) {
 export async function configureOrigin(
   root: string,
   credential: Profile & { profile?: string },
-  kind: Kind,
   id: string,
   signal: AbortSignal,
   /** Absolute path of an explicitly selected config file, if any. */
@@ -544,7 +487,7 @@ export async function configureOrigin(
     (await git(root, signal, ['remote', 'get-url', 'origin'], true)).code === 0
   )
     return;
-  const url = remoteUrl(credential, kind, id);
+  const url = remoteUrl(credential, id);
   const helper = `credential.${credential.url}.helper`;
   // Git runs the helper through a shell; plain git must resolve the same
   // credential source this checkout was created with.
@@ -576,12 +519,11 @@ export async function configureOrigin(
 export async function fetchRemote(
   root: string,
   credential: Profile,
-  kind: Kind,
   id: string,
   timeoutMs: number,
   signal: AbortSignal,
 ) {
-  const url = remoteUrl(credential, kind, id);
+  const url = remoteUrl(credential, id);
   const listed = await remoteGit(root, credential, timeoutMs, signal, [
     'ls-remote',
     url,
@@ -606,7 +548,6 @@ export async function fetchRemote(
 export async function pushHead(
   root: string,
   credential: Profile,
-  kind: Kind,
   id: string,
   timeoutMs: number,
   signal: AbortSignal,
@@ -614,7 +555,7 @@ export async function pushHead(
   const result = await remoteGit(root, credential, timeoutMs, signal, [
     'push',
     '--porcelain',
-    remoteUrl(credential, kind, id),
+    remoteUrl(credential, id),
     'HEAD:refs/heads/master',
   ]);
   const status = result.stdout

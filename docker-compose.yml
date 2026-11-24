@@ -59,8 +59,6 @@ services:
       # Generate one with e.g. `openssl rand -hex 32` and put it in `.env`.
       SECRET: ${SECRET:?set SECRET in .env (e.g. openssl rand -hex 32)}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-${SECRET}}
-      # Optional comma-separated beta features distributed to Agent Runners.
-      HATCH_BETA: ${HATCH_BETA:-}
       # Optional: seconds a serverless App backend may sit idle before it is
       # stopped (1-86400). Defaults to 300.
       HATCH_APP_IDLE_TIMEOUT_SECONDS: ${HATCH_APP_IDLE_TIMEOUT_SECONDS:-300}

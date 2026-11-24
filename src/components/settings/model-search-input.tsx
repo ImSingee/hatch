@@ -12,6 +12,7 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useErrorText, useI18n } from '~i18n';
 import type { CatalogModel } from '~server/model-catalog/types';
 import { fetchProviderModels, searchCatalog } from '~server/providers';
 import { formatTokenCount } from './token-count';
@@ -42,7 +43,7 @@ export function ModelSearchInput({
   exclude,
   onPick,
   focusOnMount = false,
-  placeholder = 'Search models or type a model ID',
+  placeholder,
 }: {
   /** Limit catalog results to this catalog provider; null searches all. */
   catalogProviderId: string | null;
@@ -55,6 +56,8 @@ export function ModelSearchInput({
   focusOnMount?: boolean;
   placeholder?: string;
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
@@ -83,11 +86,9 @@ export function ModelSearchInput({
     mutationFn: () => fetchProviderModels({ data: { id: providerId! } }),
     meta: { errorToast: false },
     onSuccess: (models) =>
-      toast.success(
-        `The provider lists ${models.length} model${models.length === 1 ? '' : 's'}.`,
-      ),
+      toast.success(t('providers.search.fetched', { count: models.length })),
     onError: (error) =>
-      toast.error(error.message || 'Could not fetch the provider’s models.'),
+      toast.error(errorText(error, 'providers.search.fetchFailed')),
   });
 
   const options = useMemo(() => {
@@ -154,8 +155,8 @@ export function ModelSearchInput({
         <TextInput
           ref={inputRef}
           value={query}
-          placeholder={placeholder}
-          aria-label="Search models"
+          placeholder={placeholder ?? t('providers.search.placeholder')}
+          aria-label={t('providers.search.label')}
           leftSection={<IconSearch size={15} stroke={1.7} />}
           rightSection={catalog.isFetching ? <Loader size={14} /> : null}
           onChange={(event) => {
@@ -188,8 +189,11 @@ export function ModelSearchInput({
           >
             <Text size="xs" c="dimmed">
               {catalog.data
-                ? `${Math.min(total, PAGE)} of ${total} catalog models`
-                : 'Searching…'}
+                ? t('providers.search.count', {
+                    shown: Math.min(total, PAGE),
+                    total,
+                  })
+                : t('providers.search.searching')}
             </Text>
             {providerId ? (
               <UnstyledButton
@@ -206,7 +210,7 @@ export function ModelSearchInput({
                   ) : (
                     <IconRefresh size={13} stroke={1.8} />
                   )}
-                  <span>Fetch from provider</span>
+                  <span>{t('providers.search.fetch')}</span>
                 </Group>
               </UnstyledButton>
             ) : null}
@@ -237,7 +241,7 @@ export function ModelSearchInput({
               <Group gap={6} wrap="nowrap">
                 <IconPlus size={14} stroke={2} />
                 <Text size="sm" fw={600} c="primary" truncate>
-                  Add “{typed}” as a custom model
+                  {t('providers.search.addCustom', { id: typed })}
                 </Text>
               </Group>
             </Combobox.Option>
@@ -245,8 +249,8 @@ export function ModelSearchInput({
           {!options.length && !offerCustom ? (
             <Combobox.Empty>
               {catalog.isFetching
-                ? 'Searching…'
-                : 'Type a model ID to add it as a custom model'}
+                ? t('providers.search.searching')
+                : t('providers.search.empty')}
             </Combobox.Empty>
           ) : null}
         </Combobox.Options>

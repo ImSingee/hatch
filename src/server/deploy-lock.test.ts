@@ -104,7 +104,7 @@ describe('createDeployLock().acquire', () => {
       'SELECT pg_advisory_xact_lock($1, hashtext($2))',
     );
     // Namespace and id are bound as params in that order — a swap here would
-    // let app and workflow deploys lock each other's namespace.
+    // let deploys of different kinds lock each other's namespace.
     expect(queries[0].params).toEqual([7, 'my-app']);
   });
 });

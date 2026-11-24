@@ -36,14 +36,6 @@ function tileRadius(size: number) {
           : radii.xl;
 }
 
-/** Workflows share the tile and differ by shape: one tight corner. */
-function tileShape(size: number, workflow: boolean) {
-  const radius = tileRadius(size);
-  return workflow
-    ? { borderRadius: radius, borderBottomLeftRadius: radius / 4 }
-    : { borderRadius: radius };
-}
-
 /** The stored size that covers `size` points on a 3x display. */
 function storedSize(size: number): 64 | 128 | 256 {
   return size <= 22 ? 64 : size <= 44 ? 128 : 256;
@@ -53,21 +45,18 @@ function storedSize(size: number): 64 | 128 | 256 {
  * An App's tile: its stored icon when it has one, otherwise the Desk
  * monogram, the first character of the name in white on a tile fill chosen by
  * a stable hash of `seed` (the App id). Same behaviour as the web `AppGlyph`.
- * Workflows have no icons: leave `iconPath` out and pass `workflow`.
  */
 export function AppTile({
   name,
   seed,
   iconPath,
   size = 44,
-  workflow = false,
   lifted = false,
 }: {
   name: string;
   seed?: string;
   iconPath?: string | null;
   size?: number;
-  workflow?: boolean;
   /** Home-screen tiles float on a shadow; tiles in a row stay flat. */
   lifted?: boolean;
 }) {
@@ -83,7 +72,7 @@ export function AppTile({
   // The path can be stale (icon removed elsewhere since the list loaded):
   // remember the address that failed and show the monogram until it changes.
   const [failed, setFailed] = useState<string | null>(null);
-  const shape = tileShape(size, workflow);
+  const shape = { borderRadius: tileRadius(size) };
   const frame = {
     width: size,
     height: size,
@@ -139,14 +128,12 @@ export function GlyphTile({
   tone = 'muted',
   fill,
   size = 34,
-  workflow = false,
 }: {
   glyph: GlyphName;
   tone?: 'muted' | 'accent' | 'ink' | 'fill';
   /** A tile fill; the glyph turns white. Overrides `tone`. */
   fill?: string;
   size?: number;
-  workflow?: boolean;
 }) {
   const accent = useAccent();
   const colors = fill
@@ -163,7 +150,7 @@ export function GlyphTile({
       style={{
         width: size,
         height: size,
-        ...tileShape(size, workflow),
+        borderRadius: tileRadius(size),
         backgroundColor: colors.bg,
         alignItems: 'center',
         justifyContent: 'center',
@@ -319,20 +306,14 @@ export function ShortcutTile({
 }
 
 /** The dashed "add" outline in the shape of the tiles beside it. */
-export function AddTile({
-  size = 44,
-  workflow = false,
-}: {
-  size?: number;
-  workflow?: boolean;
-}) {
+export function AddTile({ size = 44 }: { size?: number }) {
   return (
     <View
       accessible={false}
       style={{
         width: size,
         height: size,
-        ...tileShape(size, workflow),
+        borderRadius: tileRadius(size),
         borderWidth: 1.5,
         borderStyle: 'dashed',
         borderColor: c.outline,

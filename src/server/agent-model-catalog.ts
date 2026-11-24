@@ -130,6 +130,7 @@ export async function assertSelectableModel(
     throw new AppError(
       'That model is not available. Pick an enabled chat model.',
       400,
+      { code: 'agent.defaultModelUnavailable' },
     );
   if (
     choice.thinkingLevel &&
@@ -140,6 +141,10 @@ export async function assertSelectableModel(
     throw new AppError(
       `The model does not support thinking level "${choice.thinkingLevel}".`,
       400,
+      {
+        code: 'agent.thinkingLevelUnsupported',
+        params: { level: choice.thinkingLevel },
+      },
     );
 }
 

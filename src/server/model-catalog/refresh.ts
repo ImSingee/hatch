@@ -274,10 +274,14 @@ export async function updateCatalogSettings(input: {
     try {
       url = new URL(input.sourceUrl);
     } catch {
-      throw new AppError('The source URL must be an https URL.', 400);
+      throw new AppError('The source URL must be an https URL.', 400, {
+        code: 'models.catalogSourceHttps',
+      });
     }
     if (url.protocol !== 'https:' || input.sourceUrl.length > 500)
-      throw new AppError('The source URL must be an https URL.', 400);
+      throw new AppError('The source URL must be an https URL.', 400, {
+        code: 'models.catalogSourceHttps',
+      });
   }
   await updatePlatformConfig(
     'models.catalog',

@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { NodeExecutionEnv } from './node-execution-env';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SKILLS_DIR } from './paths';
 import type { PlatformClient } from './platform-client';
@@ -29,73 +29,39 @@ afterEach(async () => {
 });
 
 describe('Agent skills', () => {
-  it('hides Workflow skills when the beta feature is disabled', async () => {
+  it('loads the shipped App skills', async () => {
     const env = new NodeExecutionEnv({ cwd: process.cwd() });
-    const skills = await loadAgentSkills(env, {
-      workflowBetaEnabled: false,
-      skillsDir: SKILLS_DIR,
-    });
-    const names = skills.map((skill) => skill.name);
+    const skills = await loadAgentSkills(env, { skillsDir: SKILLS_DIR });
 
-    expect(names).toEqual(
+    expect(skills.map((skill) => skill.name)).toEqual(
       expect.arrayContaining([
         'building-apps',
         'importing-apps',
         'app-compatibility',
       ]),
     );
-    expect(names).not.toEqual(
-      expect.arrayContaining([
-        'building-workflows',
-        'importing-workflows',
-        'workflow-compatibility',
-      ]),
-    );
   });
 
-  it('loads Workflow skills when the beta feature is enabled', async () => {
-    const env = new NodeExecutionEnv({ cwd: process.cwd() });
-    const skills = await loadAgentSkills(env, {
-      workflowBetaEnabled: true,
-      skillsDir: SKILLS_DIR,
-    });
+  it('advertises readable shipped skills', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hatch-agent-work-'));
+    tempRoots.push(root);
+    const env = new NodeExecutionEnv({ cwd: root });
+    const skills = await loadAgentSkills(env, { skillsDir: SKILLS_DIR });
+    const prompt = buildSystemPrompt(appUrl, skills);
+    const readFileTool = createTools(env, {
+      platform: stubPlatform,
+      readOnlyRoots: [SKILLS_DIR],
+    }).find((tool) => tool.name === 'read_file');
+    if (!readFileTool) throw new Error('Missing read_file tool');
 
-    expect(skills.map((skill) => skill.name)).toEqual(
-      expect.arrayContaining([
-        'building-workflows',
-        'importing-workflows',
-        'workflow-compatibility',
-      ]),
-    );
-  });
-
-  it.each([false, true])(
-    'advertises readable shipped skills (workflow beta: %s)',
-    async (workflowBetaEnabled) => {
-      const root = await mkdtemp(path.join(tmpdir(), 'hatch-agent-work-'));
-      tempRoots.push(root);
-      const env = new NodeExecutionEnv({ cwd: root });
-      const skills = await loadAgentSkills(env, {
-        workflowBetaEnabled,
-        skillsDir: SKILLS_DIR,
+    for (const skill of skills) {
+      expect(prompt).toContain(skill.filePath);
+      const result = await readFileTool.execute('read', {
+        path: skill.filePath,
       });
-      const prompt = buildSystemPrompt(appUrl, { workflowBetaEnabled }, skills);
-      const readFileTool = createTools(env, {
-        workflowBetaEnabled,
-        platform: stubPlatform,
-        readOnlyRoots: [SKILLS_DIR],
-      }).find((tool) => tool.name === 'read_file');
-      if (!readFileTool) throw new Error('Missing read_file tool');
-
-      for (const skill of skills) {
-        expect(prompt).toContain(skill.filePath);
-        const result = await readFileTool.execute('read', {
-          path: skill.filePath,
-        });
-        expect(textOf(result)).toContain(skill.content);
-      }
-    },
-  );
+      expect(textOf(result)).toContain(skill.content);
+    }
+  });
 
   it('rejects an incomplete skill directory', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hatch-agent-skills-'));
@@ -115,46 +81,15 @@ describe('Agent skills', () => {
     );
     const env = new NodeExecutionEnv({ cwd: process.cwd() });
 
-    await expect(
-      loadAgentSkills(env, {
-        workflowBetaEnabled: false,
-        skillsDir: root,
-      }),
-    ).rejects.toThrow(/missing required skill: building-workflows/);
-  });
-
-  it('rejects shipped skills without the import safety procedures', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'hatch-agent-skills-'));
-    tempRoots.push(root);
-    for (const name of ['building-apps', 'building-workflows']) {
-      const skillDir = path.join(root, name);
-      await mkdir(skillDir, { recursive: true });
-      await writeFile(
-        path.join(skillDir, 'SKILL.md'),
-        [
-          '---',
-          `name: ${name}`,
-          `description: ${name}`,
-          '---',
-          '',
-          `# ${name}`,
-        ].join('\n'),
-      );
-    }
-    const env = new NodeExecutionEnv({ cwd: process.cwd() });
-
-    await expect(
-      loadAgentSkills(env, {
-        workflowBetaEnabled: false,
-        skillsDir: root,
-      }),
-    ).rejects.toThrow(/missing required skill: importing-apps/);
+    await expect(loadAgentSkills(env, { skillsDir: root })).rejects.toThrow(
+      /missing required skill: importing-apps/,
+    );
   });
 
   it('rejects skill loader diagnostics', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hatch-agent-skills-'));
     tempRoots.push(root);
-    for (const name of ['building-apps', 'building-workflows']) {
+    for (const name of ['building-apps', 'importing-apps']) {
       const skillDir = path.join(root, name);
       await mkdir(skillDir, { recursive: true });
       await writeFile(
@@ -164,7 +99,7 @@ describe('Agent skills', () => {
           `name: ${name}`,
           ...(name === 'building-apps'
             ? []
-            : ['description: Build Hatch workflows.']),
+            : ['description: Import Hatch apps.']),
           '---',
           '',
           `# ${name}`,
@@ -173,11 +108,8 @@ describe('Agent skills', () => {
     }
     const env = new NodeExecutionEnv({ cwd: process.cwd() });
 
-    await expect(
-      loadAgentSkills(env, {
-        workflowBetaEnabled: false,
-        skillsDir: root,
-      }),
-    ).rejects.toThrow(/invalid_metadata.*description is required/s);
+    await expect(loadAgentSkills(env, { skillsDir: root })).rejects.toThrow(
+      /invalid_metadata.*description is required/s,
+    );
   });
 });

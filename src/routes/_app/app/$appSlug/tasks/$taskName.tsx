@@ -6,6 +6,7 @@ import {
   notFound,
   useNavigate,
 } from '@tanstack/react-router';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   Callout,
@@ -20,6 +21,7 @@ import { TriggersCard } from '~components/runs/triggers-card';
 import { TaskAvailabilityNotice } from '~components/tasks/task-availability';
 import { TaskRunList } from '~components/tasks/task-run-list';
 import { TasksWindow } from '~components/tasks/tasks-window';
+import { useErrorText, useI18n } from '~i18n';
 import {
   appTaskRunsQueryOptions,
   appTasksQueryOptions,
@@ -38,13 +40,15 @@ export const Route = createFileRoute('/_app/app/$appSlug/tasks/$taskName')({
 
 /** One task: its input form, its latest runs and how it is triggered. */
 function TaskRunPage() {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const app = Route.useLoaderData();
   const { taskName } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const query = useQuery(appTasksQueryOptions(app.id));
   const view = query.data ?? null;
-  const task = view?.tasks.find((t) => t.name === taskName) ?? null;
+  const task = view?.tasks.find((item) => item.name === taskName) ?? null;
   const runnable =
     app.status === 'deployed' && (app.compatibility?.isSupported ?? false);
 
@@ -56,9 +60,9 @@ function TaskRunPage() {
     onSuccess: (result) => {
       // Rejected input is recorded as a failed run, so link to it.
       if (result.status === 'failed') {
-        toast.error('Input rejected — see the run for details.');
+        toast.error(t('tasks.detail.inputRejected'));
       } else {
-        toast.success('Run queued');
+        toast.success(t('tasks.detail.queued'));
       }
       void queryClient.invalidateQueries({
         queryKey: appTaskRunsQueryOptions(app.id).queryKey.slice(0, 2),
@@ -69,7 +73,9 @@ function TaskRunPage() {
         params: { appSlug: app.slug, runId: result.runId },
       });
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(errorText(error, 'tasks.detail.runFailed')),
+    // The toast above reports the failure.
+    meta: { errorToast: false },
   });
 
   return (
@@ -82,11 +88,7 @@ function TaskRunPage() {
           <Section
             title={task?.title ?? taskName}
             meta={task ? task.method : undefined}
-            note={
-              task
-                ? 'The form is built from the method’s request message. Every run is recorded under Runs.'
-                : undefined
-            }
+            note={task ? t('tasks.detail.formNote') : undefined}
           >
             <GroupCard padded>
               {task ? (
@@ -96,13 +98,13 @@ function TaskRunPage() {
                   disabled={!runnable}
                   pending={run.isPending}
                   onSubmit={(input) => run.mutate(input)}
-                  emptyText="This task takes no input."
+                  emptyText={t('tasks.detail.noInput')}
                 />
               ) : (
                 <EmptyLine>
                   {query.isLoading
-                    ? 'Loading task…'
-                    : `The active deployment declares no task "${taskName}".`}
+                    ? t('tasks.detail.loading')
+                    : t('tasks.detail.notDeclared', { task: taskName })}
                 </EmptyLine>
               )}
             </GroupCard>
@@ -117,13 +119,14 @@ function TaskRunPage() {
         <Column basis={320}>
           {task ? (
             <TriggersCard
-              manualNote="Run on demand from this page or the CLI; input is validated against the request message before a run is queued."
+              manualNote={t('tasks.detail.manualNote')}
               cronJobs={task.cron}
               cronEmptyNote={
-                <>
-                  No schedules declared. Add them under{' '}
-                  <Code>tasks.definitions[].cron</Code> in the manifest.
-                </>
+                <Trans
+                  t={t}
+                  i18nKey="tasks.detail.cronEmpty"
+                  components={{ code: <Code /> }}
+                />
               }
               webhook={
                 task.webhook.enabled && task.webhook.url
@@ -131,25 +134,25 @@ function TaskRunPage() {
                       enabled: true,
                       url: task.webhook.url,
                       secret: view?.webhookSecret ?? null,
-                      note: 'POST a JSON body (or GET with query params) here; the platform verifies the secret and queues a run with it as input.',
+                      note: t('tasks.detail.webhookNote'),
                     }
                   : {
                       enabled: false,
                       note: (
-                        <>
-                          Webhook runs are off. Set <Code>webhook: true</Code>{' '}
-                          on the task and redeploy.
-                        </>
+                        <Trans
+                          t={t}
+                          i18nKey="tasks.detail.webhookOff"
+                          components={{ code: <Code /> }}
+                        />
                       ),
                     }
               }
             />
           ) : null}
-          <Callout title="Want it to work differently?">
-            A task is a method of the App’s backend. Tell the Agent what to
-            change and it updates and redeploys the App.
+          <Callout title={t('tasks.detail.calloutTitle')}>
+            {t('tasks.detail.calloutBody')}
             <Anchor component={Link} to="/agent" size="sm">
-              Edit with the Agent ›
+              {t('tasks.detail.editWithAgent')}
             </Anchor>
           </Callout>
         </Column>

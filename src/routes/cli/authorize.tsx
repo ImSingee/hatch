@@ -33,11 +33,9 @@ export const Route = createFileRoute('/cli/authorize')({
         search: { redirect: returnPath(String(search.user_code ?? '')) },
       });
   },
-  head: () => ({
-    // The root document's `strict-origin` referrer policy keeps the code in
-    // this URL out of Referer headers, for direct loads and in-app navigation.
-    meta: [{ title: 'Approve a device · Hatch' }],
-  }),
+  // The root document's `strict-origin` referrer policy keeps the code in
+  // this URL out of Referer headers, for direct loads and in-app navigation.
+  // The page's StandaloneWindow names the browser tab.
   component: AuthorizePage,
 });
 

@@ -13,11 +13,18 @@ import { useRef } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { authClient, type Session } from '~auth/client';
+import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
+import { CodedError } from '~lib/error-codes';
 import { usersPanelQueryOptions } from '~queries/users';
+import { AccountAvatarField } from './account-avatar-field';
 
-const nicknameSchema = z.string().trim().min(1, 'Enter a nickname');
+const nicknameSchema = z
+  .string()
+  .trim()
+  .min(1, 'account.profile.nicknameRequired' satisfies PlainTranslationKey);
 
 export function AccountProfilePanel() {
+  const { t } = useI18n();
   const { data, isPending, error, refetch } = authClient.useSession();
 
   if (isPending) {
@@ -30,20 +37,31 @@ export function AccountProfilePanel() {
   }
   if (error || !data) {
     return (
-      <Alert color="red" title="Profile could not be loaded">
+      <Alert color="red" title={t('account.profile.loadFailed')}>
         <Button type="button" variant="subtle" onClick={() => void refetch()}>
-          Try again
+          {t('common.tryAgain')}
         </Button>
       </Alert>
     );
   }
 
   return (
-    <ProfileForm key={`${data.user.id}:${data.user.name}`} user={data.user} />
+    <Stack gap="md">
+      <Stack gap={2}>
+        <Text fw={700}>{t('account.profile.title')}</Text>
+        <Text size="sm" c="dimmed">
+          {t('account.profile.description')}
+        </Text>
+      </Stack>
+      <AccountAvatarField user={data.user} onChanged={refetch} />
+      <ProfileForm key={`${data.user.id}:${data.user.name}`} user={data.user} />
+    </Stack>
   );
 }
 
 function ProfileForm({ user }: { user: Session['user'] }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const qc = useQueryClient();
   const submitting = useRef(false);
   const form = useForm({
@@ -62,14 +80,15 @@ function ProfileForm({ user }: { user: Session['user'] }) {
     mutationFn: async (name: string) => {
       const result = await authClient.updateUser({ name });
       if (result.error)
-        throw new Error(
+        throw new CodedError(
           result.error.message ??
             'Could not save your nickname. Please try again.',
+          result.error.code ? `account.${result.error.code}` : undefined,
         );
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: usersPanelQueryOptions.queryKey });
-      toast.success('Nickname updated');
+      toast.success(t('account.profile.saved'));
     },
     onSettled: () => {
       submitting.current = false;
@@ -87,27 +106,31 @@ function ProfileForm({ user }: { user: Session['user'] }) {
       }}
     >
       <Stack gap="md">
-        <Stack gap={2}>
-          <Text fw={700}>Profile</Text>
-          <Text size="sm" c="dimmed">
-            Choose the name displayed for your account.
-          </Text>
-        </Stack>
         <TextInput
-          label="Email"
+          label={t('account.profile.email')}
           value={user.email}
           disabled
           autoComplete="email"
         />
         <TextInput
-          label="Nickname"
+          label={t('account.profile.nickname')}
           autoComplete="nickname"
           disabled={save.isPending}
           {...form.getInputProps('name')}
+          // Validation stores a catalog key; translate it on render.
+          error={
+            form.errors.name
+              ? t(form.errors.name as PlainTranslationKey)
+              : undefined
+          }
         />
         {save.error && (
-          <Alert color="red" title="Nickname could not be saved" role="alert">
-            {save.error.message}
+          <Alert
+            color="red"
+            title={t('account.profile.saveFailed')}
+            role="alert"
+          >
+            {errorText(save.error, 'account.profile.saveFailedBody')}
           </Alert>
         )}
         <Group justify="flex-start">
@@ -116,7 +139,7 @@ function ProfileForm({ user }: { user: Session['user'] }) {
             loading={save.isPending}
             disabled={form.values.name.trim() === user.name}
           >
-            Save nickname
+            {t('account.profile.save')}
           </Button>
         </Group>
       </Stack>

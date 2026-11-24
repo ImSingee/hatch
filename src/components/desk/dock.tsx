@@ -13,7 +13,6 @@ import {
   IconAppWindow,
   IconPencil,
   IconPinnedOff,
-  IconRepeat,
   IconSettings,
   IconSparkles,
 } from '@tabler/icons-react';
@@ -27,8 +26,8 @@ import {
 } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
+import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
-import { workflowsQueryOptions } from '~queries/workflows';
 import {
   addSidebarItem,
   removeSidebarItem,
@@ -36,7 +35,6 @@ import {
   setSidebarPin,
   updateSidebarItem,
 } from '~server/sidebar';
-import { setWorkflowPinFn } from '~server/workflows';
 import {
   AllAppsGlyph,
   DockAddButton,
@@ -80,18 +78,18 @@ function dockKeyOf(target: EventTarget | null) {
 }
 
 /**
- * The dock: pinned Apps, then All apps, and pinned Workflows when there are
- * any, with a marker under each one whose window is open. Adding happens in
+ * The dock: pinned Apps, then All apps, with a marker under each one whose
+ * window is open. Adding happens in
  * the dock's right-click menu; only an empty Apps group shows an add tile,
  * and a dock with no pins at all shows nothing else.
  */
 export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
-  const { data: workflows } = useQuery(workflowsQueryOptions);
   // Names under the tiles are an instance setting, off by default.
   const { data: theme } = useQuery(themeQueryOptions);
   const labels = theme?.dockLabels ?? false;
@@ -119,7 +117,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     mutationFn: (appId: string) =>
       setSidebarPin({ data: { appId, pinned: true } }),
     onSuccess: () => {
-      toast.success('Pinned to the dock');
+      toast.success(t('dock.pinned'));
     },
     onSettled: () => void invalidatePins(),
   });
@@ -144,7 +142,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const remove = useMutation({
     mutationFn: (id: string) => removeSidebarItem({ data: { id } }),
     onSuccess: () => {
-      toast.success('Unpinned');
+      toast.success(t('dock.unpinned'));
     },
     onSettled: () => void invalidatePins(),
   });
@@ -160,24 +158,9 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     // The server names the stale pin by id, which means nothing here.
     meta: { errorToast: false },
     onError: () => {
-      toast.error(
-        'The dock changed while you were moving that pin. It now shows the current order; try again.',
-      );
+      toast.error(t('dock.reorderConflict'));
     },
     onSettled: () => void invalidatePins(),
-  });
-
-  const setWorkflowPin = useMutation({
-    mutationFn: (input: { id: string; pinned: boolean }) =>
-      setWorkflowPinFn({ data: input }),
-    onSuccess: (_res, input) => {
-      toast.success(input.pinned ? 'Pinned to the dock' : 'Unpinned');
-    },
-    // Also after a failure: the Workflow may have been removed elsewhere.
-    onSettled: () =>
-      void queryClient.invalidateQueries({
-        queryKey: workflowsQueryOptions.queryKey,
-      }),
   });
 
   // Only deployed apps with a frontend can be opened from the dock.
@@ -187,14 +170,12 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const pinnedIds = new Set((pins ?? []).map((p) => p.appId));
   const unpinnedApps = openable.filter((s) => !pinnedIds.has(s.id));
   const pinnedApps = openable.filter((s) => pinnedIds.has(s.id));
-  const pinnedWorkflows = (workflows ?? []).filter((w) => w.pinned);
   // All apps closes the Apps group once anything is pinned; an empty dock
   // shows only its add tile.
-  const hasPins = Boolean(pins?.length) || pinnedWorkflows.length > 0;
-  const workflowCandidates = (workflows ?? []).filter((w) => !w.pinned);
+  const hasPins = Boolean(pins?.length);
 
   const goCreate = () => {
-    toast.info('Tell the Agent what to build: an App or a Workflow');
+    toast.info(t('dock.createHint'));
     void navigate({ to: '/agent' });
   };
 
@@ -211,13 +192,13 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
           })
         }
       >
-        Edit
+        {t('common.edit')}
       </Menu.Item>
       <Menu.Item
         leftSection={<IconPinnedOff size={15} stroke={1.7} />}
         onClick={() => remove.mutate(item.id)}
       >
-        Unpin
+        {t('dock.unpin')}
       </Menu.Item>
       <Menu.Item
         leftSection={<IconSettings size={15} stroke={1.7} />}
@@ -229,30 +210,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
           />
         )}
       >
-        Manage
-      </Menu.Item>
-    </>
-  );
-
-  const workflowMenu = (w: (typeof pinnedWorkflows)[number]) => (
-    <>
-      <Menu.Item
-        leftSection={<IconPinnedOff size={15} stroke={1.7} />}
-        onClick={() => setWorkflowPin.mutate({ id: w.id, pinned: false })}
-      >
-        Unpin
-      </Menu.Item>
-      <Menu.Item
-        leftSection={<IconSettings size={15} stroke={1.7} />}
-        renderRoot={(props) => (
-          <Link
-            to="/workflow/$workflowSlug/manage"
-            params={{ workflowSlug: w.slug }}
-            {...props}
-          />
-        )}
-      >
-        Manage
+        {t('common.manage')}
       </Menu.Item>
     </>
   );
@@ -261,7 +219,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     <>
       {unpinnedApps.length > 0 ? (
         <>
-          <Menu.Label>Pin a deployed app</Menu.Label>
+          <Menu.Label>{t('dock.pinDeployed')}</Menu.Label>
           {unpinnedApps.map((s) => (
             <Menu.Item
               key={s.id}
@@ -278,7 +236,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
       ) : null}
       {pinnedApps.length > 0 ? (
         <>
-          <Menu.Label>Add another shortcut</Menu.Label>
+          <Menu.Label>{t('dock.addShortcut')}</Menu.Label>
           {pinnedApps.map((s) => (
             <Menu.Item
               key={s.id}
@@ -294,16 +252,13 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         </>
       ) : null}
       {openable.length === 0 ? (
-        <Menu.Item disabled>No deployed apps yet</Menu.Item>
+        <Menu.Item disabled>{t('dock.noDeployedApps')}</Menu.Item>
       ) : null}
     </>
   );
 
   // The right-click menu: the clicked tile's own actions, then adding.
   const clickedPin = pins?.find((p) => `app:${p.id}` === menuKey);
-  const clickedWorkflow = pinnedWorkflows.find(
-    (w) => `workflow:${w.id}` === menuKey,
-  );
   const contextMenu = (
     <>
       {clickedPin ? (
@@ -313,51 +268,19 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
           <Menu.Divider />
         </>
       ) : null}
-      {clickedWorkflow ? (
-        <>
-          <Menu.Label>{clickedWorkflow.name}</Menu.Label>
-          {workflowMenu(clickedWorkflow)}
-          <Menu.Divider />
-        </>
-      ) : null}
       <Menu.Sub>
         <Menu.Sub.Target>
           <Menu.Sub.Item leftSection={<IconAppWindow size={15} stroke={1.7} />}>
-            Add an app
+            {t('dock.addAnApp')}
           </Menu.Sub.Item>
         </Menu.Sub.Target>
         <Menu.Sub.Dropdown miw={220}>{appPicker}</Menu.Sub.Dropdown>
       </Menu.Sub>
-      {workflowCandidates.length > 0 ? (
-        <Menu.Sub>
-          <Menu.Sub.Target>
-            <Menu.Sub.Item leftSection={<IconRepeat size={15} stroke={1.7} />}>
-              Add a workflow
-            </Menu.Sub.Item>
-          </Menu.Sub.Target>
-          <Menu.Sub.Dropdown miw={220}>
-            {workflowCandidates.map((w) => (
-              <Menu.Item
-                key={w.id}
-                leftSection={<IconRepeat size={16} stroke={1.6} />}
-                disabled={setWorkflowPin.isPending}
-                onClick={() =>
-                  setWorkflowPin.mutate({ id: w.id, pinned: true })
-                }
-              >
-                <Text size="sm" truncate>
-                  {w.name}
-                </Text>
-              </Menu.Item>
-            ))}
-          </Menu.Sub.Dropdown>
-        </Menu.Sub>
-      ) : null}
       <Menu.Item
         leftSection={<IconSparkles size={15} stroke={1.7} />}
         onClick={goCreate}
       >
-        New with Agent
+        {t('dock.newWithAgent')}
       </Menu.Item>
     </>
   );
@@ -380,7 +303,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         <Menu.ContextMenu>
           {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus, notes which tile a long press is on, and opens the menu from Shift+F10; the dock's tiles stay the interactive elements. */}
           <nav
-            aria-label="Dock"
+            aria-label={t('dock.label')}
             className={classes.dock}
             data-labels={labels ? 'shown' : 'hidden'}
             onMouseDown={(event) => {
@@ -392,7 +315,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
             onTouchStart={(event) => setMenuKey(dockKeyOf(event.target))}
             onKeyDown={openContextMenuFromKeyboard}
           >
-            <div className={`${classes.group} ${classes.grow}`}>
+            <div className={classes.group}>
               <div className={classes.groupBody}>
                 <div className={classes.row}>
                   {pins && pins.length > 0 ? (
@@ -425,14 +348,17 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                     />
                   ) : null}
                   {pins && pins.length === 0 ? (
-                    <DockAddButton label="Add app" hintHidden={menuOpen}>
+                    <DockAddButton
+                      label={t('dock.addApp')}
+                      hintHidden={menuOpen}
+                    >
                       {appPicker}
                     </DockAddButton>
                   ) : null}
                 </div>
                 {hasPins ? (
                   <DockItem
-                    label="All apps"
+                    label={t('nav.allApps')}
                     open={pathname === '/apps'}
                     glyph={<AllAppsGlyph />}
                     renderLink={(props) => <Link to="/apps" {...props} />}
@@ -441,44 +367,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                 ) : null}
               </div>
             </div>
-
-            {pinnedWorkflows.length > 0 ? (
-              <>
-                <span aria-hidden className={classes.divider} />
-                <div className={classes.group}>
-                  <div className={classes.row}>
-                    {pinnedWorkflows.map((w) => (
-                      <DockItem
-                        key={w.id}
-                        label={w.name}
-                        shape="workflow"
-                        open={openItems.some(
-                          (item) =>
-                            item.kind === 'workflow' && item.slug === w.slug,
-                        )}
-                        menuKey={`workflow:${w.id}`}
-                        glyph={
-                          <AppGlyph
-                            icon={false}
-                            name={w.name}
-                            seed={w.id}
-                            size="dock"
-                          />
-                        }
-                        renderLink={(props) => (
-                          <Link
-                            to="/workflow/$workflowSlug"
-                            params={{ workflowSlug: w.slug }}
-                            {...props}
-                          />
-                        )}
-                        hintHidden={menuOpen}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : null}
           </nav>
         </Menu.ContextMenu>
         <Menu.Dropdown>{contextMenu}</Menu.Dropdown>
@@ -514,9 +402,15 @@ function EditPinDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   // Keyed by pin so each opening starts from that pin's values.
   return (
-    <Modal opened={target !== null} onClose={onClose} title="Edit pin" centered>
+    <Modal
+      opened={target !== null}
+      onClose={onClose}
+      title={t('dock.editPin')}
+      centered
+    >
       {target ? (
         <EditPinForm
           key={target.id}
@@ -541,6 +435,7 @@ function EditPinForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [label, setLabel] = useState(target.label);
   const [hash, setHash] = useState(target.entryHash);
   // Whether the pin has been seen in the live pins since the dialog opened:
@@ -557,7 +452,7 @@ function EditPinForm({
     mutationFn: (input: { id: string; label: string; entryHash: string }) =>
       updateSidebarItem({ data: input }),
     onSuccess: () => {
-      toast.success('Pin updated');
+      toast.success(t('dock.pinUpdated'));
     },
     // Close on failure too: the pin being edited may be gone.
     onSettled: () => {
@@ -575,13 +470,10 @@ function EditPinForm({
   if (gone) {
     return (
       <Stack gap="sm">
-        <Text size="sm">
-          This pin was removed from the dock elsewhere, so there is nothing left
-          to edit.
-        </Text>
+        <Text size="sm">{t('dock.pinGone')}</Text>
         <Group justify="flex-end">
           <Button type="button" onClick={onClose}>
-            Close
+            {t('common.close')}
           </Button>
         </Group>
       </Stack>
@@ -592,7 +484,7 @@ function EditPinForm({
     <Stack gap="sm">
       <TextInput
         data-autofocus
-        label="Name"
+        label={t('dock.pinName')}
         value={label}
         onChange={(e) => setLabel(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -604,8 +496,8 @@ function EditPinForm({
       />
       <AppRouteAutocomplete
         routes={manifest?.app?.routes ?? []}
-        label="Entry point"
-        description="Open the app at a specific page. Leave blank for the app home."
+        label={t('dock.entryPoint')}
+        description={t('dock.entryPointDescription')}
         placeholder="/settings"
         value={hash}
         onChange={setHash}
@@ -617,7 +509,7 @@ function EditPinForm({
           disabled={!label.trim()}
           onClick={submit}
         >
-          Save
+          {t('common.save')}
         </Button>
       </Group>
     </Stack>

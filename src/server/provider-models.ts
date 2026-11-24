@@ -51,14 +51,23 @@ type Executor = Pick<typeof db, 'query' | 'insert' | 'select'>;
 
 function checkModelId(kind: AgentModelKind, value: string): string {
   const modelId = value.trim();
-  if (!modelId) throw new AppError('Model ID is required.', 400);
+  if (!modelId)
+    throw new AppError('Model ID is required.', 400, {
+      code: 'providers.modelIdRequired',
+    });
   if (Array.from(modelId).length > MAX_MODEL_ID_LENGTH)
     throw new AppError(
       `Model ID must be at most ${MAX_MODEL_ID_LENGTH} characters.`,
       400,
+      {
+        code: 'providers.modelIdTooLong',
+        params: { max: MAX_MODEL_ID_LENGTH },
+      },
     );
   if (kind === 'image' && !IMAGE_MODEL_ID_RE.test(modelId))
-    throw new AppError('Invalid image model id.', 400);
+    throw new AppError('Invalid image model id.', 400, {
+      code: 'providers.invalidImageModelId',
+    });
   return modelId;
 }
 
@@ -68,6 +77,7 @@ function checkName(value: string): string {
     throw new AppError(
       `Name must be at most ${MAX_MODEL_NAME_LENGTH} characters.`,
       400,
+      { code: 'providers.nameTooLong', params: { max: MAX_MODEL_NAME_LENGTH } },
     );
   return name;
 }
@@ -78,26 +88,46 @@ function checkDescription(value: string): string {
     throw new AppError(
       `Description must be at most ${MAX_MODEL_DESCRIPTION_LENGTH} characters.`,
       400,
+      {
+        code: 'providers.descriptionTooLong',
+        params: { max: MAX_MODEL_DESCRIPTION_LENGTH },
+      },
     );
   return description;
 }
 
 function checkPositive(
-  label: string,
+  field: 'contextWindow' | 'maxTokens',
   value: number | null | undefined,
 ): number | null | undefined {
   if (value === null || value === undefined) return value;
   if (!Number.isInteger(value) || value <= 0)
-    throw new AppError(`${label} must be a positive whole number.`, 400);
+    throw new AppError(
+      `${field === 'contextWindow' ? 'Context window' : 'Max output tokens'} must be a positive whole number.`,
+      400,
+      {
+        code:
+          field === 'contextWindow'
+            ? 'providers.contextWindowNotPositive'
+            : 'providers.maxTokensNotPositive',
+      },
+    );
   return value;
 }
 
 /** An explicit catalog reference must exist and describe this kind. */
 function checkCatalogRef(ref: string, kind: AgentModelKind): string {
   const entry = catalogModelByRef(ref);
-  if (!entry) throw new AppError(`Catalog model "${ref}" does not exist.`, 400);
+  if (!entry)
+    throw new AppError(`Catalog model "${ref}" does not exist.`, 400, {
+      code: 'providers.catalogModelMissing',
+      params: { ref },
+    });
   if (entry.kind !== kind)
-    throw new AppError(`Catalog model "${ref}" is not a ${kind} model.`, 400);
+    throw new AppError(`Catalog model "${ref}" is not a ${kind} model.`, 400, {
+      code: 'providers.catalogModelWrongKind',
+      params: { ref },
+    });
   return ref;
 }
 
@@ -112,6 +142,7 @@ function rejectChatFieldsForImage(kind: AgentModelKind, input: ModelFields) {
     throw new AppError(
       'Image models have no reasoning, context window or max tokens.',
       400,
+      { code: 'providers.imageModelChatFields' },
     );
 }
 
@@ -124,7 +155,10 @@ async function loadProvider(executor: Executor, providerId: string) {
     where: { id: providerId },
     columns: { id: true, apiType: true, catalogProviderId: true },
   });
-  if (!provider) throw new AppError('Provider not found.', 404);
+  if (!provider)
+    throw new AppError('Provider not found.', 404, {
+      code: 'providers.providerNotFound',
+    });
   return provider;
 }
 
@@ -134,7 +168,9 @@ export async function createProviderModel(
 ): Promise<ModelRow> {
   const provider = await loadProvider(executor, input.providerId);
   if (input.kind === 'image' && !canGenerateImages(provider.apiType))
-    throw new AppError('This provider cannot generate images.', 400);
+    throw new AppError('This provider cannot generate images.', 400, {
+      code: 'providers.cannotGenerateImages',
+    });
   const modelId = checkModelId(input.kind, input.modelId);
   rejectChatFieldsForImage(input.kind, input);
   const duplicate = await executor.query.agentModels.findFirst({
@@ -145,6 +181,7 @@ export async function createProviderModel(
     throw new AppError(
       `This provider already has the ${input.kind} model "${modelId}".`,
       409,
+      { code: 'providers.duplicateModel', params: { modelId } },
     );
   const catalogRef =
     input.catalogRef === undefined
@@ -173,11 +210,11 @@ export async function createProviderModel(
       reasoning: input.kind === 'chat' ? (input.reasoning ?? null) : null,
       contextWindow:
         input.kind === 'chat'
-          ? (checkPositive('Context window', input.contextWindow) ?? null)
+          ? (checkPositive('contextWindow', input.contextWindow) ?? null)
           : null,
       maxTokens:
         input.kind === 'chat'
-          ? (checkPositive('Max output tokens', input.maxTokens) ?? null)
+          ? (checkPositive('maxTokens', input.maxTokens) ?? null)
           : null,
       enabled: input.enabled ?? true,
       sortOrder: Number(next),
@@ -200,13 +237,17 @@ export async function updateProviderModel(
     where: { id: input.id },
   });
   if (!current || (onlyKind && current.kind !== onlyKind))
-    throw new AppError('Model not found.', 404);
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
   const provider = await loadProvider(db, current.providerId);
   const kind = input.kind ?? current.kind;
   rejectChatFieldsForImage(kind, input);
   if (kind === 'image' && kind !== current.kind) {
     if (!canGenerateImages(provider.apiType))
-      throw new AppError('This provider cannot generate images.', 400);
+      throw new AppError('This provider cannot generate images.', 400, {
+        code: 'providers.cannotGenerateImages',
+      });
   }
   const patch: Partial<typeof schema.agentModels.$inferInsert> = {};
   if (kind !== current.kind) {
@@ -246,9 +287,9 @@ export async function updateProviderModel(
     patch.description = checkDescription(input.description);
   if (input.reasoning !== undefined) patch.reasoning = input.reasoning;
   if (input.contextWindow !== undefined)
-    patch.contextWindow = checkPositive('Context window', input.contextWindow);
+    patch.contextWindow = checkPositive('contextWindow', input.contextWindow);
   if (input.maxTokens !== undefined)
-    patch.maxTokens = checkPositive('Max output tokens', input.maxTokens);
+    patch.maxTokens = checkPositive('maxTokens', input.maxTokens);
   if (input.enabled !== undefined) patch.enabled = input.enabled;
   if (kind === 'image') {
     // Image models have no chat metadata.
@@ -271,6 +312,7 @@ export async function updateProviderModel(
       throw new AppError(
         `This provider already has the ${kind} model "${modelId}".`,
         409,
+        { code: 'providers.duplicateModel', params: { modelId } },
       );
   }
   const [row] = await db
@@ -293,7 +335,10 @@ export async function deleteProviderModel(
         : eq(schema.agentModels.id, id),
     )
     .returning({ id: schema.agentModels.id });
-  if (!deleted.length) throw new AppError('Model not found.', 404);
+  if (!deleted.length)
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
 }
 
 /**
@@ -320,5 +365,6 @@ export async function assertApiTypeKeepsModels(
     throw new AppError(
       'This API type cannot generate images. Remove the provider’s image models first.',
       409,
+      { code: 'providers.apiTypeDropsImageModels' },
     );
 }

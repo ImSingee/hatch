@@ -15,14 +15,15 @@ import {
   type DashboardLayoutItem,
 } from '~/lib/dashboard-layout';
 import { dashboardWidgetKey } from '~/lib/dashboard-widget';
+import type { PlainTranslationKey } from '~i18n';
 
 export type DashboardDraftStatus =
   | { state: 'editing' }
   | { state: 'saving' }
   | { state: 'checking' }
-  | { state: 'error'; message: string }
-  | { state: 'conflict'; message: string }
-  | { state: 'unknown'; message: string };
+  | { state: 'error'; messageKey: PlainTranslationKey }
+  | { state: 'conflict'; messageKey: PlainTranslationKey }
+  | { state: 'unknown'; messageKey: PlainTranslationKey };
 
 type SaveMismatchStatus = Extract<
   DashboardDraftStatus,
@@ -31,8 +32,7 @@ type SaveMismatchStatus = Extract<
 
 const UNKNOWN_SAVE_STATUS: SaveMismatchStatus = {
   state: 'unknown',
-  message:
-    'Save status is still being confirmed. Check again before leaving this page.',
+  messageKey: 'dashboard.draft.unknown',
 };
 
 function cloneDashboardData(data: DashboardData): DashboardData {
@@ -278,8 +278,7 @@ export function useDashboardDraft({
       if (result.status === 'conflict') {
         return reconcileUnknownSave(submitted, {
           state: 'conflict',
-          message:
-            'Dashboard changed in another tab. Cancel this edit and reopen it before making more changes.',
+          messageKey: 'dashboard.draft.conflict',
         });
       }
       const saved = result.data;
@@ -310,7 +309,7 @@ export function useDashboardDraft({
     setStatus({ state: 'checking' });
     return reconcileUnknownSave(submitted, {
       state: 'error',
-      message: 'Dashboard changes were not saved. Your draft is still here.',
+      messageKey: 'dashboard.draft.notSaved',
     });
   }, [draft, reconcileUnknownSave, status.state]);
 

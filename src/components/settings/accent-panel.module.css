@@ -55,5 +55,4 @@
 .name {
   font-size: var(--mantine-font-size-sm);
   font-weight: var(--font-weight-label);
-  text-transform: capitalize;
 }

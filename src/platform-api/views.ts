@@ -41,14 +41,6 @@ export const appSummarySchema = resourceSchema
     capabilities: z.array(str),
   })
   .strict();
-export const workflowSummarySchema = resourceSchema
-  .extend({
-    liveVersion: z.number().nullable(),
-    compatibility: compatibilitySchema.nullable(),
-    webhook: z.boolean(),
-    cronCount: z.number(),
-  })
-  .strict();
 const footprint = z.object({ w: z.number(), h: z.number() });
 const cron = z.object({
   name: str,
@@ -57,6 +49,15 @@ const cron = z.object({
   path: str.optional(),
 });
 const url = z.object({ url: str });
+/** Index entry of one published external doc; the body is read separately. */
+export const appDocView = z.object({
+  id: str,
+  title: str,
+  description: str.optional(),
+  path: str,
+  bytes: z.number().int(),
+  sha256: str,
+});
 export const appManifestViewSchema = z.object({
   id: str,
   name: str,
@@ -101,7 +102,6 @@ export const appManifestViewSchema = z.object({
   ),
   rpc: z.object({ url: str, service: str }).optional(),
   cron: z.array(cron),
-  workflows: z.array(z.object({ alias: str, workflow: str })).optional(),
   webhook: z
     .object({ url: str, auth: z.enum(['platform', 'none']) })
     .optional(),
@@ -159,6 +159,7 @@ export const appManifestViewSchema = z.object({
       protoFiles: z.array(z.object({ path: str, content: str })),
     })
     .optional(),
+  docs: z.array(appDocView).optional(),
 });
 const networkView = z
   .object({
@@ -250,42 +251,6 @@ export const appDetailSchema = appSummarySchema
     ),
   })
   .strict();
-export const workflowDetailSchema = resourceSchema
-  .extend({
-    liveVersion: z.number().nullable(),
-    currentSourceCommit: nullable,
-    compatibility: compatibilitySchema.nullable(),
-    inputSchema: z.unknown(),
-    network: networkView.nullable(),
-    extraPermissions: extraPermissionsView.nullable(),
-    webhook: z.object({ enabled: z.boolean(), url: nullable }).strict(),
-    cron: z.array(
-      z
-        .object({ name: str, schedule: str, nextRun: timestamp.nullable() })
-        .strict(),
-    ),
-    recentRuns: z.array(
-      z
-        .object({ id: str, status: str, trigger: str, createdAt: timestamp })
-        .strict(),
-    ),
-    deployments: z.array(history.extend({ message: nullable }).strict()),
-  })
-  .strict();
-export const workflowManifestViewSchema = z.object({
-  id: str,
-  name: str,
-  description: str,
-  entry: str,
-  network: networkPolicySchema.optional(),
-  extraPermissions: extraPermissionsSchema.optional(),
-  triggers: z.object({
-    cron: z.array(
-      z.object({ name: str, schedule: str, input: z.unknown().optional() }),
-    ),
-    webhook: z.object({ enabled: z.boolean(), url: nullable }),
-  }),
-});
 export const releaseSchema = z
   .object({
     deploymentId: str,

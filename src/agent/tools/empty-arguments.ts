@@ -1,15 +1,28 @@
-import { Type, type TSchema } from '@earendil-works/pi-ai';
+/** A JSON Schema object (as produced by `z.toJSONSchema`). */
+export type JsonSchema = Record<string, unknown>;
 
-type ObjectSchema = TSchema & {
+type ObjectSchema = JsonSchema & {
   description?: string;
   type?: string;
   const?: unknown;
   enum?: unknown[];
-  properties?: Record<string, TSchema>;
+  properties?: Record<string, JsonSchema>;
   required?: string[];
-  items?: TSchema;
-  anyOf?: TSchema[];
+  items?: JsonSchema;
+  anyOf?: JsonSchema[];
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
 };
+
+/** Empty spellings a model may send for an omitted optional field. */
+const EMPTY_PLACEHOLDERS: JsonSchema[] = [
+  { type: 'string', const: '' },
+  { type: 'null' },
+  { type: 'number', const: 0 },
+  { type: 'array', items: {}, maxItems: 0 },
+  { type: 'object', properties: {}, additionalProperties: false },
+];
 
 export type PreserveEmptyValue = (
   fieldPath: string,
@@ -51,8 +64,57 @@ function hasDeclaredTypeAndEnumValue(
   return typeof type !== 'string' || typeof value === type;
 }
 
+function isNumericString(value: string): boolean {
+  return value.trim() !== '' && Number.isFinite(Number(value));
+}
+
+/**
+ * Why pi-ai must not see `value`, or undefined. pi-ai coerces arguments before
+ * it validates them, and some coercions turn an invalid value into a valid but
+ * different one: `null` into the string "null", "" or "true" into a number, a
+ * blank string into the numeric `0` empty placeholder of an optional field.
+ * Only the conversions a model plausibly means are left to pi-ai: numbers and
+ * booleans for strings, numeric strings for numbers, "true"/"false" for
+ * booleans.
+ */
+function coercionHazard(
+  value: unknown,
+  shape: ObjectSchema,
+  optional: boolean,
+): string | undefined {
+  const type = shape.type;
+  if (typeof type !== 'string') return undefined;
+  if (value === null) {
+    return !optional &&
+      (type === 'string' || type === 'number' || type === 'integer')
+      ? `expected ${type}, got null`
+      : undefined;
+  }
+  if (typeof value !== 'string') return undefined;
+  if ((type === 'number' || type === 'integer') && !isNumericString(value)) {
+    return `expected ${type}, got a non-numeric string`;
+  }
+  if (type === 'boolean' && value !== 'true' && value !== 'false') {
+    return 'expected boolean';
+  }
+  if (type !== 'string' || !optional) return undefined;
+  // An optional string that breaks its own constraints would otherwise be
+  // coerced into an empty placeholder and silently omitted.
+  const length = [...value].length;
+  if (shape.minLength !== undefined && length < shape.minLength) {
+    return `expected at least ${shape.minLength} characters`;
+  }
+  if (shape.maxLength !== undefined && length > shape.maxLength) {
+    return `expected at most ${shape.maxLength} characters`;
+  }
+  if (shape.pattern !== undefined && !new RegExp(shape.pattern).test(value)) {
+    return `expected to match ${shape.pattern}`;
+  }
+  return undefined;
+}
+
 /** Optional fields need a placeholder for models that always emit them. */
-export function withEmptyOptionalFields(schema: TSchema): TSchema {
+export function withEmptyOptionalFields(schema: JsonSchema): JsonSchema {
   const source = schema as ObjectSchema;
   const result: ObjectSchema = { ...source };
   if (source.anyOf) {
@@ -67,19 +129,12 @@ export function withEmptyOptionalFields(schema: TSchema): TSchema {
           key,
           source.required?.includes(key)
             ? adapted
-            : Type.Union(
-                [
-                  adapted,
-                  Type.Literal(''),
-                  Type.Null(),
-                  Type.Literal(0),
-                  Type.Array(Type.Any(), { maxItems: 0 }),
-                  Type.Object({}, { additionalProperties: false }),
-                ],
-                typeof (field as ObjectSchema).description === 'string'
+            : {
+                anyOf: [adapted, ...structuredClone(EMPTY_PLACEHOLDERS)],
+                ...(typeof (field as ObjectSchema).description === 'string'
                   ? { description: (field as ObjectSchema).description }
-                  : {},
-              ),
+                  : {}),
+              },
         ];
       }),
     );
@@ -90,7 +145,7 @@ export function withEmptyOptionalFields(schema: TSchema): TSchema {
 /** Only visit declared fields, never arbitrary JSON records or user data. */
 export function normalizeEmptyOptionalFields(
   input: Record<string, unknown>,
-  schema: TSchema,
+  schema: JsonSchema,
   preserve?: PreserveEmptyValue,
 ): Record<string, unknown> {
   function normalize(
@@ -99,9 +154,17 @@ export function normalizeEmptyOptionalFields(
     path: string,
   ): unknown {
     if (Array.isArray(value) && shape.items) {
-      return value.map((item, index) =>
-        normalize(item, shape.items as ObjectSchema, `${path}.${index}`),
-      );
+      const itemShape = shape.items as ObjectSchema;
+      return value.map((item, index) => {
+        const itemPath = `${path}.${index}`;
+        // Array items are data, never omitted placeholders: check them like
+        // required fields.
+        const hazard = coercionHazard(item, itemShape, false);
+        if (hazard) {
+          throw new Error(`Invalid tool argument ${itemPath}: ${hazard}.`);
+        }
+        return normalize(item, itemShape, itemPath);
+      });
     }
     if (!value || typeof value !== 'object' || !shape.properties) return value;
     const result: Record<string, unknown> = { ...value };
@@ -126,6 +189,14 @@ export function normalizeEmptyOptionalFields(
           throw new Error(
             `Invalid tool argument ${fieldPath}: expected ${String((field as ObjectSchema).type ?? 'declared type or enum value')}.`,
           );
+        }
+        const hazard = coercionHazard(
+          result[key],
+          field as ObjectSchema,
+          optional,
+        );
+        if (hazard) {
+          throw new Error(`Invalid tool argument ${fieldPath}: ${hazard}.`);
         }
         result[key] = normalize(result[key], field as ObjectSchema, fieldPath);
       }

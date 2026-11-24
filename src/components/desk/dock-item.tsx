@@ -7,14 +7,12 @@ import classes from './dock.module.css';
  * What the shell tells the dock about open windows. The dock marks every item
  * listed here and keeps no notion of "the current App" itself.
  */
-export type DockOpenItem =
-  | {
-      kind: 'app';
-      slug: string;
-      /** Route inside the App, as the URL fragment without `#`. */
-      route: string;
-    }
-  | { kind: 'workflow'; slug: string };
+export type DockOpenItem = {
+  kind: 'app';
+  slug: string;
+  /** Route inside the App, as the URL fragment without `#`. */
+  route: string;
+};
 
 /**
  * The full name above a tile while it is pointed at or has keyboard focus,
@@ -52,7 +50,6 @@ function TileName({
 export function DockItem({
   label,
   open,
-  shape = 'app',
   glyph,
   renderLink,
   menuKey,
@@ -61,7 +58,6 @@ export function DockItem({
   label: string;
   /** Whether this item's window is open. */
   open: boolean;
-  shape?: 'app' | 'workflow';
   glyph: ReactNode;
   /** Renders the link; receives the props the dock needs on it. */
   renderLink: (props: {
@@ -90,9 +86,7 @@ export function DockItem({
           'data-open': open ? 'true' : undefined,
           children: (
             <>
-              <span className={classes.tile} data-shape={shape}>
-                {glyph}
-              </span>
+              <span className={classes.tile}>{glyph}</span>
               <span className={classes.label} aria-hidden>
                 {label}
               </span>

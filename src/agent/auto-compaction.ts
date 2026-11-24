@@ -1,39 +1,23 @@
 /**
  * Automatic context compaction for Agent runs, all Runner-side.
  *
- * The session transcript stays the canonical, complete history. A compaction
- * adds a marker at the point where it happened: a `compactionSummary` item
- * holding the summary and the index of the first message that stays in the
- * model's context. Nothing is removed, so the chat history and the user-turn
- * bindings of earlier runs are unaffected; only the model-bound context is
- * derived from the newest marker (summary + kept tail + everything after).
- *
- * In the pi session the marker is a native compaction entry, so
- * `session.buildContext()` yields the compacted view and repeated compactions
- * update the previous summary instead of re-reading the whole history.
+ * The transcript stays the canonical, complete history. A compaction adds a
+ * marker where it happened (see `./transcript`); only the model-bound context
+ * is derived from the newest marker, so the chat history and the user-turn
+ * bindings of earlier runs are unaffected, and repeated compactions update
+ * the previous summary instead of re-reading the whole history.
  *
  * Three triggers share one mechanism:
  *
  * - before the turn, when the stored history is over the threshold;
- * - before any provider request in the turn (harness `context` hook), when
- *   tool output grew the context past the threshold;
+ * - before any provider request in the turn (the loop's `transformContext`),
+ *   when tool output grew the context past the threshold;
  * - after a provider rejected a request for context length: that one request
  *   is compacted and re-sent in place, so completed tool work is kept.
  */
-import {
-  compact,
-  convertToLlm,
-  DEFAULT_COMPACTION_SETTINGS,
-  estimateContextTokens,
-  estimateTokens,
-  getLastAssistantUsage,
-  prepareCompaction,
-  type AgentMessage,
-  type CompactionPreparation,
-  type CompactionSettings,
-  type Session,
-  type SessionTreeEntry,
-  type ThinkingLevel,
+import type {
+  AgentMessage,
+  ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
 import {
   createAssistantMessageEventStream,
@@ -44,7 +28,22 @@ import {
   type Model,
   type Models,
 } from '@earendil-works/pi-ai';
-import type { JsonValue } from '~/db/schema';
+import {
+  compact,
+  DEFAULT_COMPACTION_SETTINGS,
+  estimateContextTokens,
+  estimateTokens,
+  getLastAssistantUsage,
+  prepareCompaction,
+  type CompactionPreparation,
+  type CompactionSettings,
+} from './compaction';
+import { convertToLlm } from './llm-messages';
+import {
+  lastCompactionIndex,
+  type Transcript,
+  type TranscriptEntry,
+} from './transcript';
 
 /** Fraction of the model's input budget that triggers auto compaction. */
 export const AUTO_COMPACT_RATIO = 0.8;
@@ -77,125 +76,11 @@ export function compactionSettings(model: ModelBudget): CompactionSettings {
   // At least one token each: a zero tail budget could never be widened.
   const share = Math.max(1, Math.floor(compactionTriggerTokens(model) / 4));
   return {
-    enabled: true,
     reserveTokens: Math.min(DEFAULT_COMPACTION_SETTINGS.reserveTokens, share),
     keepRecentTokens: Math.min(
       DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
       share,
     ),
-  };
-}
-
-const COMPACTION_MARKER_ROLE = 'compactionSummary';
-
-type ParsedMarker = {
-  summary: string;
-  tokensBefore: number;
-  timestamp: number;
-  firstKeptIndex: number;
-  details?: JsonValue;
-};
-
-function hasMarkerRole(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    (value as { role?: unknown }).role === COMPACTION_MARKER_ROLE
-  );
-}
-
-function parseMarker(value: unknown): ParsedMarker | null {
-  const record = value as Record<string, unknown>;
-  const { summary, tokensBefore, timestamp, firstKeptIndex, details } = record;
-  if (
-    typeof summary !== 'string' ||
-    typeof tokensBefore !== 'number' ||
-    typeof timestamp !== 'number' ||
-    typeof firstKeptIndex !== 'number' ||
-    !Number.isSafeInteger(firstKeptIndex) ||
-    firstKeptIndex < 0
-  ) {
-    return null;
-  }
-  return {
-    summary,
-    tokensBefore,
-    timestamp,
-    firstKeptIndex,
-    ...(details === undefined ? {} : { details: details as JsonValue }),
-  };
-}
-
-export type TranscriptSession = {
-  /** The complete transcript: every message plus the compaction markers. */
-  serialize(): Promise<JsonValue[]>;
-};
-
-/**
- * Load a stored transcript into a fresh pi session. Messages become message
- * entries; each compaction marker becomes a compaction entry pointing at the
- * message it kept from. A marker that does not point at an earlier message is
- * dropped: without a valid cut it cannot describe any context.
- */
-export async function openTranscriptSession(
-  session: Session,
-  transcript: readonly unknown[],
-): Promise<TranscriptSession> {
-  const messageEntryIds: (string | undefined)[] = [];
-  const markerTimestamps = new Map<string, number>();
-  for (const [index, item] of transcript.entries()) {
-    if (!hasMarkerRole(item)) {
-      messageEntryIds[index] = await session.appendMessage(
-        item as AgentMessage,
-      );
-      continue;
-    }
-    const marker = parseMarker(item);
-    const firstKeptEntryId =
-      marker && marker.firstKeptIndex < index
-        ? messageEntryIds[marker.firstKeptIndex]
-        : undefined;
-    if (!marker || firstKeptEntryId === undefined) continue;
-    const entryId = await session.appendCompaction(
-      marker.summary,
-      firstKeptEntryId,
-      marker.tokensBefore,
-      marker.details,
-    );
-    markerTimestamps.set(entryId, marker.timestamp);
-  }
-
-  return {
-    async serialize() {
-      const items: JsonValue[] = [];
-      const messageIndexByEntryId = new Map<string, number>();
-      for (const entry of await session.getEntries()) {
-        if (entry.type === 'message') {
-          messageIndexByEntryId.set(entry.id, items.length);
-          items.push(entry.message as unknown as JsonValue);
-        } else if (entry.type === 'compaction') {
-          const firstKeptIndex =
-            entry.firstKeptEntryId === undefined
-              ? undefined
-              : messageIndexByEntryId.get(entry.firstKeptEntryId);
-          if (firstKeptIndex === undefined) continue;
-          items.push({
-            role: COMPACTION_MARKER_ROLE,
-            summary: entry.summary,
-            tokensBefore: entry.tokensBefore,
-            // A marker loaded from the transcript keeps its original time.
-            timestamp:
-              markerTimestamps.get(entry.id) ?? Date.parse(entry.timestamp),
-            firstKeptIndex,
-            ...(entry.details === undefined
-              ? {}
-              : { details: entry.details as JsonValue }),
-          });
-        }
-      }
-      return items;
-    },
   };
 }
 
@@ -211,18 +96,15 @@ export async function openTranscriptSession(
  * prompt, tool schemas), which provider usage includes and the heuristic
  * cannot see.
  */
-export async function estimateSessionContextTokens(
-  session: Session,
+export function estimateTranscriptContextTokens(
+  transcript: Transcript,
   overheadTokens = 0,
-): Promise<number> {
-  const branch = await session.getBranch();
-  const messages = (await session.buildContext()).messages;
-  let lastCompaction = branch.length - 1;
-  while (lastCompaction >= 0 && branch[lastCompaction].type !== 'compaction') {
-    lastCompaction -= 1;
-  }
+): number {
+  const branch = transcript.branch();
+  const messages = transcript.modelContext();
+  const lastCompaction = lastCompactionIndex(branch);
   if (getLastAssistantUsage(branch.slice(lastCompaction + 1))) {
-    return estimateContextTokens(messages).tokens;
+    return estimateContextTokens(messages);
   }
   return messages.reduce(
     (total, message) => total + estimateTokens(message),
@@ -243,7 +125,7 @@ export async function estimateSessionContextTokens(
  * then summarized as ordinary history, which updates the previous summary.
  */
 function prepareSummarizableCompaction(
-  branch: SessionTreeEntry[],
+  branch: readonly TranscriptEntry[],
   settings: CompactionSettings,
   maxKeepRecentTokens: number,
 ): CompactionPreparation | undefined {
@@ -252,12 +134,11 @@ function prepareSummarizableCompaction(
     ;
     keepRecentTokens *= 2
   ) {
-    const preparation = prepareCompaction(branch, {
+    const value = prepareCompaction(branch, {
       ...settings,
       keepRecentTokens,
     });
-    if (!preparation.ok || !preparation.value) return undefined;
-    const value = preparation.value;
+    if (!value) return undefined;
     if (value.messagesToSummarize.length > 0) return value;
     if (value.isSplitTurn) {
       return value.previousSummary === undefined
@@ -273,7 +154,7 @@ function prepareSummarizableCompaction(
   }
 }
 
-export type SessionCompactor = {
+export type TranscriptCompactor = {
   /** Compact when the estimated context is over the threshold. */
   compactIfOverThreshold(): Promise<boolean>;
   /** Compact regardless of the estimate: the provider rejected the context. */
@@ -281,14 +162,14 @@ export type SessionCompactor = {
 };
 
 /**
- * Compacts the session's current branch: summarizes the older history into a
- * compaction entry and keeps the recent tail. Both methods resolve to whether
+ * Compacts the transcript's current branch: summarizes the older history into
+ * a compaction marker and keeps the recent tail. Both methods resolve to whether
  * a compaction entry was added. `onEvent` gets `start` only once a summary is
  * actually being generated, and every `start` is followed by `done` or
  * `failed`.
  */
-export function createSessionCompactor(opts: {
-  session: Session;
+export function createTranscriptCompactor(opts: {
+  transcript: Transcript;
   models: Models;
   model: Model<Api>;
   signal?: AbortSignal;
@@ -301,19 +182,19 @@ export function createSessionCompactor(opts: {
     tokensBefore: number,
     tokensAfter?: number,
   ) => void;
-}): SessionCompactor {
-  const { session, models, model, signal, thinkingLevel, onEvent } = opts;
+}): TranscriptCompactor {
+  const { transcript, models, model, signal, thinkingLevel, onEvent } = opts;
   const trigger = compactionTriggerTokens(model);
   const settings = compactionSettings(model);
   const estimate = () =>
-    estimateSessionContextTokens(session, opts.overheadTokens);
+    estimateTranscriptContextTokens(transcript, opts.overheadTokens);
 
   const run = async (reason: AutoCompactReason): Promise<boolean> => {
     if (signal?.aborted) return false;
-    const tokensBefore = await estimate();
+    const tokensBefore = estimate();
     if (reason === 'threshold' && tokensBefore <= trigger) return false;
     const preparation = prepareSummarizableCompaction(
-      await session.getBranch(),
+      transcript.branch(),
       settings,
       trigger,
     );
@@ -321,31 +202,27 @@ export function createSessionCompactor(opts: {
 
     onEvent?.(reason, 'start', tokensBefore);
     try {
-      const result = await compact(
-        preparation,
+      const result = await compact(preparation, {
         models,
         model,
-        undefined,
         signal,
         thinkingLevel,
-      );
-      if (!result.ok) {
+      });
+      if (!result) {
         onEvent?.(reason, 'failed', tokensBefore);
         return false;
       }
-      await session.appendCompaction(
-        result.value.summary,
-        result.value.firstKeptEntryId,
+      transcript.appendCompaction({
+        summary: result.summary,
+        firstKept: result.firstKept,
         tokensBefore,
-        result.value.details,
-        false,
-        result.value.usage,
-      );
+        details: result.details,
+      });
     } catch {
       onEvent?.(reason, 'failed', tokensBefore);
       return false;
     }
-    onEvent?.(reason, 'done', tokensBefore, await estimate());
+    onEvent?.(reason, 'done', tokensBefore, estimate());
     return true;
   };
 
@@ -384,10 +261,9 @@ function hasReplyContent(event: AssistantMessageEvent): boolean {
  * undefined when nothing could be compacted; the original response is then
  * passed through unchanged.
  *
- * Every request also observes `signal`, the run's own cancellation. The
- * harness only aborts the controller of a turn that is already running, so a
- * stop that lands earlier (or while a compaction is in flight) would otherwise
- * not reach the provider call that follows.
+ * Every request also observes `signal`, the run's own cancellation, so a stop
+ * that lands while a compaction is in flight still reaches the provider call
+ * that follows.
  */
 export function withOverflowRecovery(
   models: Models,

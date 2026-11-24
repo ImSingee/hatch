@@ -18,7 +18,8 @@ import { RunStatusBadge } from '~components/runs/run-status';
 import { TaskAvailabilityNotice } from '~components/tasks/task-availability';
 import { TaskRunList } from '~components/tasks/task-run-list';
 import { TasksWindow } from '~components/tasks/tasks-window';
-import { formatRelative } from '~lib/format';
+import { useI18n } from '~i18n';
+import { formatRelativeTime } from '~lib/format';
 import { appTasksQueryOptions } from '~queries/app-tasks';
 import type { AppTaskView } from '~server/app-tasks';
 import { getAppBySlug } from '~server/apps';
@@ -33,6 +34,7 @@ export const Route = createFileRoute('/_app/app/$appSlug/tasks/')({
 });
 
 function TaskTriggers({ task }: { task: AppTaskView }) {
+  const { t } = useI18n();
   return (
     <Group gap={6}>
       <Badge
@@ -41,7 +43,7 @@ function TaskTriggers({ task }: { task: AppTaskView }) {
         radius="sm"
         leftSection={<IconHandClick size={11} />}
       >
-        Manual
+        {t('runTrigger.manual')}
       </Badge>
       {task.cron.length > 0 ? (
         <Badge
@@ -52,7 +54,7 @@ function TaskTriggers({ task }: { task: AppTaskView }) {
         >
           {task.cron.length === 1
             ? task.cron[0].schedule
-            : `${task.cron.length} schedules`}
+            : t('tasks.schedules', { count: task.cron.length })}
         </Badge>
       ) : null}
       {task.webhook.enabled ? (
@@ -62,7 +64,7 @@ function TaskTriggers({ task }: { task: AppTaskView }) {
           radius="sm"
           leftSection={<IconWebhook size={11} />}
         >
-          Webhook
+          {t('runTrigger.webhook')}
         </Badge>
       ) : null}
     </Group>
@@ -71,6 +73,7 @@ function TaskTriggers({ task }: { task: AppTaskView }) {
 
 /** The Run tab: every task with its triggers, latest run and a Run button. */
 function TasksPage() {
+  const { t, locale } = useI18n();
   const app = Route.useLoaderData();
   const query = useQuery(appTasksQueryOptions(app.id));
   const view = query.data ?? null;
@@ -84,18 +87,18 @@ function TasksPage() {
       <Columns>
         <Column grow basis={440}>
           <Section
-            title="Tasks"
+            title={t('tasks.section.tasks')}
             meta={view ? String(view.tasks.length) : undefined}
             note={
               view
-                ? `Up to ${view.concurrency} run${view.concurrency === 1 ? '' : 's'} at once, each in its own backend instance.`
+                ? t('tasks.concurrency', { count: view.concurrency })
                 : undefined
             }
           >
             <GroupCard padded>
               {!view ? (
                 <EmptyLine>
-                  {query.isLoading ? 'Loading tasks…' : 'No tasks to run.'}
+                  {query.isLoading ? t('tasks.loading') : t('tasks.empty')}
                 </EmptyLine>
               ) : (
                 <Stack gap="lg">
@@ -121,10 +124,18 @@ function TasksPage() {
                         <TaskTriggers task={task} />
                         <Text size="xs" c="dimmed">
                           {task.running > 0 || task.queued > 0
-                            ? `${task.running} running · ${task.queued} queued`
+                            ? t('tasks.activity', {
+                                running: task.running,
+                                queued: task.queued,
+                              })
                             : task.latestRun
-                              ? `Last run ${formatRelative(task.latestRun.createdAt)}`
-                              : 'Never run'}
+                              ? t('tasks.lastRun', {
+                                  when: formatRelativeTime(
+                                    task.latestRun.createdAt,
+                                    locale,
+                                  ),
+                                })
+                              : t('tasks.neverRun')}
                         </Text>
                       </Stack>
                       <Group gap={8} wrap="nowrap">
@@ -146,7 +157,7 @@ function TasksPage() {
                             />
                           )}
                         >
-                          Run
+                          {t('tasks.run')}
                         </Button>
                       </Group>
                     </Group>

@@ -12,7 +12,6 @@ import {
 import { isAbsolute, join, relative, delimiter, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sourceManifestSchema } from '../../hatch-manifest/src/app-schema.js';
-import { sourceWorkflowManifestSchema } from '../../hatch-manifest/src/workflow-schema.js';
 import { isAppManagedPathSegment } from '../../../src/app-managed-path';
 import { validateDenoDependencySource } from '../../../src/deno-dependencies';
 import {
@@ -39,7 +38,6 @@ import {
 } from '../../../src/source-toolchain';
 import { CliError, preparationFailure } from './error';
 import { command, childEnvironment } from './process';
-import type { Kind } from './workspace';
 import { pnpmInvocation } from './pnpm';
 
 function inside(root: string, target: string) {
@@ -190,29 +188,12 @@ async function nodeToolchain(
   };
 }
 
-/** Reproduce a Node-toolchain Workflow's locked dependencies. */
-export async function prepareNodeWorkflow(
-  root: string,
-  signal: AbortSignal,
-  tooling: Tooling | undefined,
-) {
-  await preflight(root);
-  await validateNodeDependencySource(root, 'workflow');
-  const env = await trustedEnv(root);
-  await withEmptyConfigHome(async (configHome) => {
-    await (
-      await nodeToolchain(root, signal, env, tooling, configHome)
-    ).install();
-  });
-}
-
 /**
  * Evaluate the workspace manifest. A source with `pnpm-lock.yaml` needs its
  * dependencies installed first; `tooling` supplies the platform's versions.
  */
 export async function readWorkspaceManifest(
   root: string,
-  kind: Kind,
   signal: AbortSignal,
   tooling?: ToolingSource,
   options: { installed?: boolean } = {},
@@ -225,14 +206,11 @@ export async function readWorkspaceManifest(
   const entry = ts ?? json;
   if (!entry?.isFile() || entry.isSymbolicLink())
     throw new Error('Manifest must be a regular file.');
-  const parse = (value: unknown) =>
-    kind === 'app'
-      ? sourceManifestSchema.parse(value)
-      : sourceWorkflowManifestSchema.parse(value);
+  const parse = (value: unknown) => sourceManifestSchema.parse(value);
   if (json) return parse(JSON.parse(await readFile(join(root, file), 'utf8')));
   const env = await trustedEnv(root);
   if ((await detectSourceToolchain(sourceToolchainReader(root))) === 'node') {
-    if (!options.installed) await validateNodeDependencySource(root, kind);
+    if (!options.installed) await validateNodeDependencySource(root);
     return withEmptyConfigHome(async (configHome) => {
       const node = await nodeToolchain(root, signal, env, tooling, configHome);
       if (!options.installed) await node.install();
@@ -242,9 +220,7 @@ export async function readWorkspaceManifest(
   const flags = [
     '--config=deno.json',
     '--no-remote',
-    kind === 'workflow'
-      ? '--node-modules-dir=none'
-      : '--node-modules-dir=manual',
+    '--node-modules-dir=manual',
     '--import-map=.hatch/import-map.json',
     '--lock=deno.lock',
     '--frozen',
@@ -331,8 +307,8 @@ export async function prepareApp(
     // The committed lockfile selects the toolchain before anything is evaluated.
     const node =
       (await detectSourceToolchain(sourceToolchainReader(root))) === 'node';
-    if (node) await validateNodeDependencySource(root, 'app');
-    else await validateDenoDependencySource(root, 'app');
+    if (node) await validateNodeDependencySource(root);
+    else await validateDenoDependencySource(root);
     const env = await trustedEnv(root);
     stage = 'dependency install';
     if (node)
@@ -358,7 +334,7 @@ export async function prepareApp(
         { env },
       );
     stage = 'manifest validation';
-    const manifest = await readWorkspaceManifest(root, 'app', signal, tooling, {
+    const manifest = await readWorkspaceManifest(root, signal, tooling, {
       installed: true,
     });
     stage = 'Connect codegen';

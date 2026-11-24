@@ -9,21 +9,18 @@ import {
   importBundle,
   saveWorkspace,
   safeTree,
-  type Kind,
   type Workspace,
 } from './workspace';
 import { readWorkspaceManifest } from './preparation';
 
 export async function adopt(
   root: string,
-  kind: Kind,
   id: string,
   credential: Profile,
   client: PlatformClient,
   signal: AbortSignal,
 ): Promise<Workspace> {
-  const api = kind === 'app' ? client.apps : client.workflows;
-  const detail = await api.get({ id });
+  const detail = await client.apps.get({ id });
   const gitDir = await lstat(join(root, '.git')).catch(() => null);
   if (!gitDir?.isDirectory() || gitDir.isSymbolicLink())
     throw new CliError(
@@ -41,13 +38,13 @@ export async function adopt(
     .stdout;
   if (
     !isAbsolute(origin) ||
-    basename(origin) !== `${kind}-${detail.id}.bundle` ||
+    basename(origin) !== `app-${detail.id}.bundle` ||
     basename(dirname(origin)) !== 'bundles' ||
     basename(dirname(dirname(dirname(origin)))) !== 'agents'
   )
     throw new CliError(
       'origin_mismatch',
-      'Origin is not the Agent bundle for this immutable resource ID/kind.',
+      'Origin is not the Agent bundle for this immutable App ID.',
       6,
     );
   const bundleEntry = await lstat(origin).catch(() => null);
@@ -60,7 +57,7 @@ export async function adopt(
       'Agent bundle origin traverses a symlink.',
       6,
     );
-  const source = await api.source({ id: detail.id });
+  const source = await client.apps.source({ id: detail.id });
   if (source.id !== detail.id)
     throw new CliError('resource_changed', 'Resource identity changed.', 6);
   const current = await importBundle(root, source, signal);
@@ -113,10 +110,9 @@ export async function adopt(
   try {
     manifest = await readWorkspaceManifest(
       root,
-      kind,
       signal,
       // Only a pnpm-toolchain source needs the platform's tool versions.
-      async () => (await client.sdk.get({ kind })).tooling,
+      async () => (await client.sdk.get()).tooling,
     );
   } catch (error) {
     // Validation can install dependencies and ask the platform for tool
@@ -137,7 +133,7 @@ export async function adopt(
       'Manifest ID differs from the immutable resource ID.',
       6,
     );
-  const observed = await api.get({ id: detail.id });
+  const observed = await client.apps.get({ id: detail.id });
   if (observed.id !== detail.id || observed.createdAt !== detail.createdAt)
     throw new CliError(
       'RESOURCE_GENERATION_CONFLICT',
@@ -146,7 +142,7 @@ export async function adopt(
     );
   const metadata: Workspace = {
     version: 1,
-    kind,
+    kind: 'app',
     url: credential.url,
     id: detail.id,
     generation: detail.createdAt,

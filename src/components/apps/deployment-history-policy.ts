@@ -5,17 +5,13 @@ export type RollbackResult = {
 
 export function rollbackNotification(result: RollbackResult): {
   tone: 'success' | 'warning';
-  message: string;
+  /** Catalog key; takes the restored `version`. */
+  key: 'deployments.restored' | 'deployments.restoredSchemaMismatch';
 } {
   if (result.dataSchemaMismatch) {
-    return {
-      tone: 'warning',
-      message:
-        `Restored v${result.version}. The managed Data Table schema was not ` +
-        'rolled back and may be incompatible with this code version.',
-    };
+    return { tone: 'warning', key: 'deployments.restoredSchemaMismatch' };
   }
-  return { tone: 'success', message: `Restored v${result.version}` };
+  return { tone: 'success', key: 'deployments.restored' };
 }
 
 export function requiresDataSchemaConfirmation(

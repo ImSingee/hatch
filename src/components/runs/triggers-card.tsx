@@ -17,7 +17,8 @@ import copy from 'copy-to-clipboard';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { GroupCard, Section } from '~components/page/page';
-import { formatRelative } from '~lib/format';
+import { useI18n } from '~i18n';
+import { formatRelativeTime } from '~lib/format';
 
 function TriggerHeader({ icon, title }: { icon: ReactNode; title: string }) {
   return (
@@ -37,9 +38,8 @@ export type TriggerCronJob = {
 };
 
 /**
- * How a run target is started: manually, on schedules and by webhook.
- * Shared by Workflows and App tasks; the caller supplies the wording for
- * its own source contract.
+ * How a run target is started: manually, on schedules and by webhook. The
+ * caller supplies the wording for its own source contract.
  */
 export function TriggersCard({
   manualNote,
@@ -54,18 +54,23 @@ export function TriggersCard({
     | { enabled: true; url: string; secret: string | null; note: ReactNode }
     | { enabled: false; note: ReactNode };
 }) {
+  const { t, locale } = useI18n();
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const on = 1 + (cronJobs.length > 0 ? 1 : 0) + (webhook.enabled ? 1 : 0);
   const withSecret = (url: string, secret: string | null) =>
     secret ? `${url}?secret=${secret}` : url;
   return (
-    <Section id="triggers" title="Triggers" meta={`${on} of 3 on`}>
+    <Section
+      id="triggers"
+      title={t('runs.triggers.title')}
+      meta={t('runs.triggers.meta', { on })}
+    >
       <GroupCard padded>
         <Stack gap="lg">
           <Stack gap={6}>
             <TriggerHeader
               icon={<IconHandClick size={16} stroke={1.8} />}
-              title="Manual"
+              title={t('runTrigger.manual')}
             />
             <Text size="xs" c="dimmed">
               {manualNote}
@@ -75,7 +80,7 @@ export function TriggersCard({
           <Stack gap={6}>
             <TriggerHeader
               icon={<IconClock size={16} stroke={1.8} />}
-              title="Scheduled jobs"
+              title={t('runs.triggers.scheduled')}
             />
             {cronJobs.length === 0 ? (
               <Text size="xs" c="dimmed">
@@ -108,8 +113,10 @@ export function TriggersCard({
                       <Table.Td>
                         <Text size="xs" c="dimmed" truncate>
                           {job.nextRun
-                            ? `next ${formatRelative(job.nextRun)}`
-                            : 'not scheduled'}
+                            ? t('runs.triggers.next', {
+                                when: formatRelativeTime(job.nextRun, locale),
+                              })
+                            : t('runs.triggers.notScheduled')}
                         </Text>
                       </Table.Td>
                     </Table.Tr>
@@ -122,7 +129,7 @@ export function TriggersCard({
           <Stack gap={6}>
             <TriggerHeader
               icon={<IconWebhook size={16} stroke={1.8} />}
-              title="Inbound webhook"
+              title={t('runs.triggers.webhook')}
             />
             {webhook.enabled ? (
               <>
@@ -138,19 +145,19 @@ export function TriggersCard({
                     {withSecret(webhook.url, webhook.secret)}
                   </Code>
                   <Tooltip
-                    label="Copy URL with secret"
+                    label={t('runs.triggers.copyWithSecret')}
                     withArrow
                     position="left"
                   >
                     <ActionIcon
                       variant="subtle"
                       color="gray"
-                      aria-label="Copy webhook URL"
+                      aria-label={t('runs.triggers.copyLabel')}
                       onClick={() => {
                         copy(
                           `${origin}${withSecret(webhook.url, webhook.secret)}`,
                         );
-                        toast.success('Webhook URL copied');
+                        toast.success(t('runs.triggers.copied'));
                       }}
                     >
                       <IconCopy size={15} />

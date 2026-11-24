@@ -1,9 +1,10 @@
 /** Shared helpers for the Agent tool modules. */
-import { Type, type Static, type TSchema } from '@earendil-works/pi-ai';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import { z } from 'zod';
 import {
   normalizeEmptyOptionalFields,
   withEmptyOptionalFields,
+  type JsonSchema,
   type PreserveEmptyValue,
 } from './empty-arguments';
 
@@ -20,8 +21,24 @@ export type AgentToolWithStreamDetails = AgentTool & {
   selectStreamDetails?: StreamDetailsSelector;
 };
 
-/** Define a tool while keeping `execute` params typed from its schema. */
-export function tool<S extends TSchema>(def: {
+/**
+ * The JSON Schema a zod parameter schema declares to the model. Input mode
+ * keeps objects open (no `additionalProperties: false`), as pi's validation
+ * has always accepted and passed through undeclared fields.
+ */
+export function toolJsonSchema(schema: z.ZodType): JsonSchema {
+  const { $schema: _dialect, ...json } = z.toJSONSchema(schema, {
+    io: 'input',
+  }) as JsonSchema;
+  return json;
+}
+
+/**
+ * Define a tool from a zod parameter schema while keeping `execute` params
+ * typed from it. The schema only declares the arguments: validation and
+ * coercion run on its JSON Schema, in pi and in the empty-value boundary.
+ */
+export function tool<S extends z.ZodObject>(def: {
   name: string;
   label: string;
   description: string;
@@ -33,29 +50,28 @@ export function tool<S extends TSchema>(def: {
   selectStreamDetails?: StreamDetailsSelector;
   execute: (
     id: string,
-    params: Static<S>,
+    params: z.output<S>,
     signal?: AbortSignal,
     /** Stream partial output while the tool is still running. */
     onUpdate?: (partial: unknown) => void,
   ) => Promise<AgentToolResult<unknown>>;
 }): AgentToolWithStreamDetails {
   const { preserveEmptyValue, ...definition } = def;
-  const parameters = Type.Unsafe<Static<S>>(
-    withEmptyOptionalFields(def.parameters),
-  );
-  const prepareArguments = (args: unknown): Static<S> => {
+  const jsonSchema = toolJsonSchema(def.parameters);
+  const parameters = withEmptyOptionalFields(jsonSchema);
+  const prepareArguments = (args: unknown): z.output<S> => {
     const input = args;
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       throw new Error('Tool arguments must be an object.');
     }
     const normalized = normalizeEmptyOptionalFields(
       input as Record<string, unknown>,
-      def.parameters,
+      jsonSchema,
       preserveEmptyValue,
     );
     return (
       def.prepareArguments ? def.prepareArguments(normalized) : normalized
-    ) as Static<S>;
+    ) as z.output<S>;
   };
   const execute: typeof def.execute = async (id, args, signal, onUpdate) =>
     def.execute(id, prepareArguments(args), signal, onUpdate);
@@ -91,8 +107,8 @@ export const MAX_FILE_CHARS = 60000;
 /**
  * Identifier shape that is safe to use as a single path segment, Git worktree
  * name, or database identifier: lowercase alphanumerics and hyphens. A leading
- * digit is allowed so generated ULID app ids pass alongside kebab-case slugs
- * and workflow ids. This is a path-safety guard, not a semantic check.
+ * digit is allowed so generated ULID app ids pass alongside kebab-case
+ * slugs. This is a path-safety guard, not a semantic check.
  */
 const ID_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 

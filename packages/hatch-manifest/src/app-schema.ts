@@ -282,61 +282,6 @@ export const tasksConfigSchema = z
 export type TasksConfig = z.infer<typeof tasksConfigSchema>;
 
 /**
- * A reference to a top-level Workflow this app's backend is allowed to invoke.
- * The app does NOT define the workflow — it is created independently in the
- * Workflow module; the platform injects the invocation URL + secret for each
- * declared workflow into the backend env at runtime so the app can trigger it
- * via the existing external workflow API.
- */
-export const appWorkflowRefSchema = z.object({
-  /**
-   * Target Workflow id (generated ULID or legacy kebab id). Kept as an inline
-   * literal so this manifest stays isomorphic.
-   */
-  workflow: z
-    .string()
-    .min(1)
-    .regex(
-      /^[a-z0-9][a-z0-9-]*$/,
-      'workflow must be a Workflow id (ULID or legacy kebab id)',
-    ),
-  /**
-   * Optional stable key the app code uses to look the workflow up in the
-   * injected `HATCH_WORKFLOWS` map. Defaults to the workflow id.
-   */
-  alias: z
-    .string()
-    .min(1)
-    .regex(
-      /^[a-zA-Z][a-zA-Z0-9_-]*$/,
-      'alias must start with a letter and contain only letters, digits, ' +
-        'hyphens, or underscores',
-    )
-    .optional(),
-});
-
-export type AppWorkflowRef = z.infer<typeof appWorkflowRefSchema>;
-
-/** Declared workflow calls with unique effective aliases (alias ?? workflow). */
-const appWorkflowsSchema = z
-  .array(appWorkflowRefSchema)
-  .default([])
-  .superRefine((refs, ctx) => {
-    const seen = new Set<string>();
-    for (const [i, ref] of refs.entries()) {
-      const alias = ref.alias ?? ref.workflow;
-      if (seen.has(alias)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: `duplicate workflow alias "${alias}"`,
-          path: [i, 'alias'],
-        });
-      }
-      seen.add(alias);
-    }
-  });
-
-/**
  * Inbound-webhook configuration. The webhook itself is always plain HTTP (any
  * verb/body — never Connect RPC); this only controls platform-side auth:
  *
@@ -469,6 +414,78 @@ export const notificationsConfigSchema = z
     }
   });
 
+/** External doc identifier, used in CLI arguments and artifact filenames. */
+export const APP_DOC_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** Most external docs one App may publish. */
+export const APP_DOCS_MAX_COUNT = 20;
+
+/**
+ * External docs live under the fixed `docs/` source tree and are Markdown.
+ * Each one is declared explicitly so internal notes in that tree are never
+ * published by accident.
+ */
+const docPath = sourceRelativePath.refine(
+  (p) =>
+    /^docs(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]*)+$/.test(p) && p.endsWith('.md'),
+  {
+    message:
+      'doc path must be a .md file under "docs/" using "/" separators (segments may not start with ".")',
+  },
+);
+
+/**
+ * A Markdown document the App publishes for its external callers, such as
+ * the request format of its webhook or the contract of its RPC service.
+ */
+export const appDocSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(
+        APP_DOC_ID_RE,
+        'doc id must be 1-64 lowercase letters, digits or "-", starting with a letter or digit',
+      ),
+    title: singleLineNonEmpty
+      .refine((title) => title.trim().length > 0, {
+        message: 'doc title must not be blank',
+      })
+      .refine((title) => title.length <= 120, {
+        message: 'doc title must be at most 120 characters',
+      }),
+    description: z.string().max(500).optional(),
+    path: docPath,
+  })
+  .strict();
+
+export type AppDoc = z.infer<typeof appDocSchema>;
+
+const appDocsSchema = z
+  .array(appDocSchema)
+  .max(APP_DOCS_MAX_COUNT)
+  .default([])
+  .superRefine((docs, ctx) => {
+    const ids = new Set<string>();
+    const paths = new Set<string>();
+    for (const [index, doc] of docs.entries()) {
+      if (ids.has(doc.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `duplicate doc id "${doc.id}"`,
+          path: [index, 'id'],
+        });
+      }
+      ids.add(doc.id);
+      if (paths.has(doc.path)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `duplicate doc path "${doc.path}"`,
+          path: [index, 'path'],
+        });
+      }
+      paths.add(doc.path);
+    }
+  });
+
 /** Backend listener ownership; an omitted value retains self-listening Deno. */
 export const backendRuntimeSchema = z.enum(['deno-run', 'deno-serve']);
 export type BackendRuntime = z.infer<typeof backendRuntimeSchema>;
@@ -526,15 +543,38 @@ export const sourceManifestSchema = z
     cron: z.array(cronJobSchema).default([]),
     /** Inbound webhook auth mode (see webhookConfigSchema); defaults to platform. */
     webhook: webhookConfigSchema.optional(),
-    /** Top-level workflows this app's backend may invoke (see appWorkflowRefSchema). */
-    workflows: appWorkflowsSchema,
+    /**
+     * Removed with Workflows. An empty list (the old default, still present in
+     * materialized source JSON) is accepted and ignored; a declared call gets
+     * the actionable error below instead of a generic unknown-key error.
+     */
+    workflows: z.unknown().optional(),
     /** Notification kinds and destination declaration (notifications capability). */
     notifications: notificationsConfigSchema.optional(),
     /** Runnable backend RPC methods (tasks capability). */
     tasks: tasksConfigSchema.optional(),
+    /**
+     * Markdown docs for external callers of this App's webhook or RPC API.
+     * Declare them only when the App is meant to be called by other services.
+     */
+    docs: appDocsSchema,
   })
   .strict()
   .superRefine((manifest, ctx) => {
+    if (
+      manifest.workflows !== undefined &&
+      !(Array.isArray(manifest.workflows) && manifest.workflows.length === 0)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'workflows is no longer supported: Workflows were removed from ' +
+          'the platform. Delete the workflows field and move runnable ' +
+          'backend work into App tasks (capabilities.tasks and ' +
+          'tasks.definitions).',
+        path: ['workflows'],
+      });
+    }
     if (
       manifest.capabilities.storage &&
       (!manifest.capabilities.backend || !manifest.backend)

@@ -20,8 +20,6 @@ const mocks = vi.hoisted(() => {
     sweepExpiredAgentRuns: asyncStep('agent-sweep'),
     ensureAgentRunSweeper: step('agent-sweeper'),
     ensureAgentAutoRetryScheduler: step('agent-auto-retry'),
-    interruptStaleWorkflowRuns: asyncStep('workflow-interrupt'),
-    ensureWorkflowScheduler: step('workflow-scheduler'),
     recoverTaskRuns: asyncStep('task-recovery'),
     ensureScheduler: step('app-scheduler'),
     warmLongRunningBackends: asyncStep('backend-warmup'),
@@ -74,12 +72,6 @@ vi.mock('~server/notifications/adapters', () => ({
 vi.mock('~server/tailscale-manager', () => ({
   getTailscaleManager: () => ({ initialize: async () => {} }),
 }));
-vi.mock('~server/workflows/execute', () => ({
-  interruptStaleWorkflowRuns: mocks.interruptStaleWorkflowRuns,
-}));
-vi.mock('~server/workflows/scheduler', () => ({
-  ensureWorkflowScheduler: mocks.ensureWorkflowScheduler,
-}));
 
 import migratePlugin from './migrate';
 
@@ -101,8 +93,6 @@ describe('platform startup migrations', () => {
       'agent-sweep',
       'agent-sweeper',
       'agent-auto-retry',
-      'workflow-interrupt',
-      'workflow-scheduler',
       'task-recovery',
       'app-scheduler',
       'backend-warmup',

@@ -10,9 +10,6 @@ const { abortSession, listSessionIds, removeSession, sockets } = vi.hoisted(
     sockets: [] as Array<EventEmitter & { sent: Record<string, unknown>[] }>,
   }),
 );
-const executorState = vi.hoisted(() => ({
-  getBetaFeatures: (() => []) as () => readonly string[],
-}));
 
 vi.mock('ws', () => ({
   WebSocket: class extends EventEmitter {
@@ -56,10 +53,6 @@ vi.mock('./workspace-cleanup', () => ({
 vi.mock('./platform-rest', () => ({ createPlatformRestClient: () => ({}) }));
 vi.mock('./executor', () => ({
   RunnerExecutor: class {
-    constructor(options: { getBetaFeatures: () => readonly string[] }) {
-      executorState.getBetaFeatures = options.getBetaFeatures;
-    }
-
     activeCount = 0;
     activeRunIds() {
       return [];
@@ -77,11 +70,10 @@ beforeEach(() => {
   listSessionIds.mockResolvedValue([]);
   removeSession.mockResolvedValue();
   abortSession.mockResolvedValue();
-  executorState.getBetaFeatures = () => [];
   vi.resetModules();
 });
 
-it('applies Platform beta features and cleanup before ready', async () => {
+it('applies Platform workspace cleanup before ready', async () => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   listSessionIds.mockResolvedValue(['session-present']);
 
@@ -103,7 +95,6 @@ it('applies Platform beta features and cleanup before ready', async () => {
     'message',
     JSON.stringify({
       type: 'hub.hello_ack',
-      betaFeatures: ['workflow', 'future-feature'],
       resumedRunIds: [],
       staleRunIds: [],
       staleWorkspaceSessionIds: ['session-deleted'],
@@ -113,10 +104,6 @@ it('applies Platform beta features and cleanup before ready', async () => {
   await vi.waitFor(() =>
     expect(socket.sent).toContainEqual({ type: 'runner.ready' }),
   );
-  expect(executorState.getBetaFeatures()).toEqual([
-    'workflow',
-    'future-feature',
-  ]);
   expect(abortSession).toHaveBeenCalledWith('session-deleted');
   expect(removeSession).toHaveBeenCalledWith('session-deleted');
   expect(abortSession.mock.invocationCallOrder[0]).toBeLessThan(

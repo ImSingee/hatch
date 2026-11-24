@@ -15,6 +15,7 @@ import { useForm } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import {
   agentModelChoicesQueryOptions,
   providersQueryOptions,
@@ -40,9 +41,9 @@ type Values = {
   reasoning: ReasoningChoice;
 };
 
-const KIND_LABELS: Record<ProviderModel['kind'], string> = {
-  chat: 'Chat',
-  image: 'Image',
+const KIND_LABELS: Record<ProviderModel['kind'], PlainTranslationKey> = {
+  chat: 'providers.model.kind.chat',
+  image: 'providers.model.kind.image',
 };
 
 function reasoningChoice(value: boolean | null): ReasoningChoice {
@@ -64,6 +65,7 @@ export function ModelFormModal({
   provider: ProviderWithModels;
   model: ProviderModel;
 }) {
+  const { t, locale } = useI18n();
   const qc = useQueryClient();
   // undefined = keep; null = detach; string = use this entry.
   const [catalogRef, setCatalogRef] = useState<string | null | undefined>(
@@ -82,9 +84,11 @@ export function ModelFormModal({
       reasoning: reasoningChoice(model.overrides.reasoning),
     },
     validate: {
-      modelId: (v) => (v.trim() ? null : 'Required'),
+      modelId: (v) => (v.trim() ? null : t('providers.form.required')),
       description: (v) =>
-        Array.from(v.trim()).length > 200 ? 'At most 200 characters' : null,
+        Array.from(v.trim()).length > 200
+          ? t('providers.model.descriptionTooLong')
+          : null,
     },
   });
   const image = form.values.kind === 'image';
@@ -122,7 +126,7 @@ export function ModelFormModal({
           queryKey: agentModelChoicesQueryOptions.queryKey,
         }),
       ]);
-      toast.success('Model updated');
+      toast.success(t('providers.toast.modelUpdated'));
       onClose();
     },
   });
@@ -132,22 +136,30 @@ export function ModelFormModal({
 
   const followLabel =
     catalogValues.reasoning === undefined
-      ? 'Follow catalog'
-      : `Follow catalog (${catalogValues.reasoning ? 'on' : 'off'})`;
+      ? t('providers.model.followCatalog')
+      : catalogValues.reasoning
+        ? t('providers.model.followCatalogOn')
+        : t('providers.model.followCatalogOff');
+  const number = (value: number) => value.toLocaleString(locale);
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Edit model" centered>
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={t('providers.model.edit')}
+      centered
+    >
       <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
         <Stack gap="sm">
           <Group grow align="flex-start">
             <Select
-              label="Category"
+              label={t('providers.model.category')}
               allowDeselect={false}
               data={[
-                { value: 'chat', label: KIND_LABELS.chat },
+                { value: 'chat', label: t(KIND_LABELS.chat) },
                 {
                   value: 'image',
-                  label: KIND_LABELS.image,
+                  label: t(KIND_LABELS.image),
                   disabled: !provider.canGenerateImages,
                 },
               ]}
@@ -155,29 +167,33 @@ export function ModelFormModal({
             />
             {image ? (
               <Autocomplete
-                label="Model ID"
+                label={t('providers.model.modelId')}
                 data={provider.imageModelSuggestions}
                 {...form.getInputProps('modelId')}
               />
             ) : (
-              <TextInput label="Model ID" {...form.getInputProps('modelId')} />
+              <TextInput
+                label={t('providers.model.modelId')}
+                {...form.getInputProps('modelId')}
+              />
             )}
           </Group>
           <div className={classes.match}>
             <div className={classes.matchText}>
               <Text size="sm" fw={700} truncate>
                 {linked && ref
-                  ? `Catalog: ${
-                      (catalogRef === undefined
-                        ? model.catalogLabel
-                        : pickedLabel) ?? ref
-                    }`
-                  : 'No catalog details'}
+                  ? t('providers.model.catalog', {
+                      name:
+                        (catalogRef === undefined
+                          ? model.catalogLabel
+                          : pickedLabel) ?? ref,
+                    })
+                  : t('providers.model.noCatalog')}
               </Text>
               <Text size="xs" c="dimmed">
                 {linked
-                  ? 'Values left blank follow the catalog.'
-                  : 'Hatch uses the values below, or its defaults.'}
+                  ? t('providers.model.followHint')
+                  : t('providers.model.noCatalogHint')}
               </Text>
             </div>
             <Group gap="xs" wrap="nowrap">
@@ -188,7 +204,9 @@ export function ModelFormModal({
                 fw={700}
                 onClick={() => setChangingRef((open) => !open)}
               >
-                {linked ? 'Change' : 'Link'}
+                {linked
+                  ? t('providers.model.changeCatalog')
+                  : t('providers.model.linkCatalog')}
               </Anchor>
               {linked ? (
                 <Anchor
@@ -198,7 +216,7 @@ export function ModelFormModal({
                   fw={700}
                   onClick={() => setCatalogRef(null)}
                 >
-                  Unlink
+                  {t('providers.model.unlinkCatalog')}
                 </Anchor>
               ) : null}
             </Group>
@@ -208,7 +226,7 @@ export function ModelFormModal({
               catalogProviderId={null}
               exclude={new Set()}
               focusOnMount
-              placeholder="Search the catalog"
+              placeholder={t('providers.search.catalogPlaceholder')}
               onPick={(picked) => {
                 if (!picked.catalogRef) return;
                 setCatalogRef(picked.catalogRef);
@@ -218,16 +236,16 @@ export function ModelFormModal({
             />
           ) : null}
           <TextInput
-            label="Display name"
-            description="Optional — defaults to the catalog name, then the model ID"
+            label={t('providers.model.displayName')}
+            description={t('providers.model.displayNameDescription')}
             placeholder={form.values.modelId.trim()}
             {...form.getInputProps('name')}
           />
           {image ? (
             <Textarea
-              label="Best for"
-              description="Optional — helps the Agent choose between image models"
-              placeholder="Fast, cheap drafts"
+              label={t('providers.model.bestFor')}
+              description={t('providers.model.bestForDescription')}
+              placeholder={t('providers.model.bestForPlaceholder')}
               autosize
               minRows={2}
               maxRows={4}
@@ -237,44 +255,54 @@ export function ModelFormModal({
             <>
               <Group grow align="flex-start">
                 <NumberInput
-                  label="Context window"
+                  label={t('providers.model.contextWindow')}
                   min={1000}
                   step={1000}
                   thousandSeparator=","
                   placeholder={
-                    catalogValues.contextWindow ? 'Follow catalog' : 'Default'
+                    catalogValues.contextWindow
+                      ? t('providers.model.followCatalog')
+                      : t('providers.model.useDefault')
                   }
                   description={
                     catalogValues.contextWindow
-                      ? `Catalog: ${catalogValues.contextWindow.toLocaleString('en-US')}`
-                      : 'Blank uses 128,000'
+                      ? t('providers.model.catalogValue', {
+                          value: number(catalogValues.contextWindow),
+                        })
+                      : t('providers.model.blankUses', {
+                          value: number(128000),
+                        })
                   }
                   {...form.getInputProps('contextWindow')}
                 />
                 <NumberInput
-                  label="Max output tokens"
+                  label={t('providers.model.maxTokens')}
                   min={256}
                   step={256}
                   thousandSeparator=","
                   placeholder={
-                    catalogValues.maxTokens ? 'Follow catalog' : 'Default'
+                    catalogValues.maxTokens
+                      ? t('providers.model.followCatalog')
+                      : t('providers.model.useDefault')
                   }
                   description={
                     catalogValues.maxTokens
-                      ? `Catalog: ${catalogValues.maxTokens.toLocaleString('en-US')}`
-                      : 'Blank uses 8,192'
+                      ? t('providers.model.catalogValue', {
+                          value: number(catalogValues.maxTokens),
+                        })
+                      : t('providers.model.blankUses', { value: number(8192) })
                   }
                   {...form.getInputProps('maxTokens')}
                 />
               </Group>
               <Select
-                label="Reasoning"
-                description="Reasoning models offer thinking levels in the model picker"
+                label={t('providers.model.reasoningField')}
+                description={t('providers.model.reasoningFieldDescription')}
                 allowDeselect={false}
                 data={[
                   { value: 'catalog', label: followLabel },
-                  { value: 'on', label: 'On' },
-                  { value: 'off', label: 'Off' },
+                  { value: 'on', label: t('providers.model.on') },
+                  { value: 'off', label: t('providers.model.off') },
                 ]}
                 {...form.getInputProps('reasoning')}
               />
@@ -290,15 +318,15 @@ export function ModelFormModal({
                 color="gray"
                 onClick={resetAll}
               >
-                Reset to catalog
+                {t('providers.model.resetAll')}
               </Button>
             )}
             <Group gap="xs">
               <Button type="button" variant="default" onClick={onClose}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" loading={mutation.isPending}>
-                Save
+                {t('common.save')}
               </Button>
             </Group>
           </Group>
