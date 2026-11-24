@@ -339,7 +339,13 @@ push and deploy 600s. Git source transfers in `clone` / `update` get 300s by
 default and exactly `--timeout` when it is given. `--timeout` accepts at most
 3600s; subprocess preparation is bounded. Git transfer errors: `non_fast_forward` (6), `git_remote_not_found`
 (5, deleted resource or a platform without Git transport), `git_remote_failed`
-(7) and `UNAUTHORIZED` (3).
+(7) and `UNAUTHORIZED` (3). `app invoke webhook --sse` streams server-sent
+events: `--timeout` bounds only the wait for response headers, `--idle-timeout`
+(default 120s) and `--max-duration` bound the stream, and `--json` prints NDJSON
+records. Its stream errors are `http_error`, `not_event_stream`,
+`stream_idle_timeout`, `stream_interrupted` and `stream_event_too_large` (all
+exit 7 except `http_error`, which maps 401/403/404 to 3/4/5); see
+`docs/app-webhooks.md`.
 
 | Exit | Meaning                                              |
 | ---- | ---------------------------------------------------- |

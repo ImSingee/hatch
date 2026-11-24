@@ -171,6 +171,8 @@ export default { async fetch(request: Request): Promise<Response> {
   const diagnostics = { method: request.method, path: url.pathname, query: url.search, bytes: Array.from(body), signedOK, signaturePresent: !!signature, timestampPresent: !!timestamp, authorization: request.headers.get('authorization'), apiKey: request.headers.get('x-api-key'), cookie: request.headers.get('cookie'), secret: request.headers.get('x-hatch-secret'), hatchOther: request.headers.get('x-hatch-forged'), routing: request.headers.get('x-forwarded-host'), count: ++count };
   if (mode === 'platform' && !signedOK) return Response.json(diagnostics, { status: 401 });
   if (mode === 'none' && !privateOK) return Response.json(diagnostics, { status: 401 });
+  if (url.pathname.endsWith('/sse')) { const encoder = new TextEncoder(); let n = Number(request.headers.get('last-event-id') ?? '0'); let timer = 0; return new Response(new ReadableStream({ start(controller) { controller.enqueue(encoder.encode(': open\\n\\n')); timer = setInterval(() => { n++; controller.enqueue(encoder.encode('id: ' + n + '\\ndata: ' + JSON.stringify({ n }) + '\\n\\n')); if (n >= 4) { clearInterval(timer); controller.close(); } }, 700); }, cancel() { clearInterval(timer); } }), { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } }); }
+  if (url.pathname.endsWith('/sse-hold')) { const encoder = new TextEncoder(); let timer = 0; return new Response(new ReadableStream({ start(controller) { timer = setInterval(() => controller.enqueue(encoder.encode(': ping\\n\\n')), 200); }, cancel() { clearInterval(timer); } }), { headers: { 'content-type': 'text/event-stream' } }); }
   if (url.pathname.endsWith('/binary')) return new Response(body, { status: 201, headers: { 'content-type': 'application/octet-stream' } });
   if (url.pathname.endsWith('/stream')) return new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array([0, 255])); setTimeout(() => { controller.enqueue(new Uint8Array([128, 10])); controller.close(); }, 500); } }), { headers: { 'content-type': 'application/octet-stream' } });
   if (url.pathname.endsWith('/text')) return new Response('plain webhook response', { status: 202, headers: { 'content-type': 'text/plain' } });
@@ -207,6 +209,8 @@ async function deploy(mode: 'platform' | 'none') {
     '-c',
     'commit.gpgSign=false',
     'commit',
+    // Redeploying unchanged source still needs a new commit.
+    '--allow-empty',
     '-m',
     `Deploy ${mode} fixture`,
   ]);
@@ -264,6 +268,8 @@ describe.runIf(Boolean(databaseUrl && cliEntry))(
         AGENT_INTERNAL_HOST: '127.0.0.1',
         AGENT_INTERNAL_PORT: String(await freePort()),
         AGENT_RUNNER_TOKEN: 'isolated-webhook-fleet-token',
+        // Keep redeploys from holding a retired backend's open streams long.
+        HATCH_APP_DRAIN_TIMEOUT_SECONDS: '2',
         HOST: '127.0.0.1',
         PORT: new URL(origin).port,
         NODE_ENV: 'production',
@@ -658,6 +664,116 @@ describe.runIf(Boolean(databaseUrl && cliEntry))(
         /ENOENT/,
       );
     });
+
+    it('streams App server-sent events through the installed CLI past --timeout, resumable by Last-Event-ID', async () => {
+      const records = (stdout: Buffer) =>
+        stdout
+          .toString()
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line) as Record<string, unknown>);
+      const subscribe = (args: string[], credential?: { apiKey: string }) =>
+        invoke(['--method', 'GET', '--sse', '--json', ...args], {
+          credential,
+        });
+      // Four events 700ms apart outlive the 2s header timeout.
+      for (const credential of [undefined, { apiKey: key }]) {
+        const result = await subscribe(
+          ['--path', 'sse', '--timeout', '2'],
+          credential,
+        );
+        expect({ code: result.code, stderr: result.stderr }).toMatchObject({
+          code: 0,
+        });
+        const lines = records(result.stdout);
+        expect(lines.map((line) => line.type)).toEqual([
+          'open',
+          'event',
+          'event',
+          'event',
+          'event',
+          'end',
+        ]);
+        expect(lines[1]).toEqual({
+          type: 'event',
+          event: 'message',
+          id: '1',
+          data: '{"n":1}',
+        });
+        expect(lines.at(-1)).toEqual({
+          type: 'end',
+          ok: true,
+          reason: 'closed',
+          lastEventId: '4',
+          events: 4,
+          retry: null,
+        });
+      }
+      const resumed = await subscribe([
+        '--path',
+        'sse',
+        '--header',
+        'Last-Event-ID: 2',
+      ]);
+      expect({ code: resumed.code, stderr: resumed.stderr }).toMatchObject({
+        code: 0,
+      });
+      expect(
+        records(resumed.stdout)
+          .filter((line) => line.type === 'event')
+          .map((line) => line.id),
+      ).toEqual(['3', '4']);
+      const held = await subscribe([
+        '--path',
+        'sse-hold',
+        '--max-duration',
+        '1',
+        '--idle-timeout',
+        '5',
+      ]);
+      expect({ code: held.code, stderr: held.stderr }).toMatchObject({
+        code: 0,
+      });
+      expect(records(held.stdout).at(-1)).toMatchObject({
+        type: 'end',
+        reason: 'max_duration',
+        events: 0,
+      });
+      // A redeploy retires the instance; once the drain timeout ends it, an
+      // open subscription fails as interrupted rather than ending cleanly.
+      const interrupted = subscribe([
+        '--path',
+        'sse-hold',
+        '--idle-timeout',
+        '60',
+      ]);
+      await delay(1000);
+      await deploy('platform');
+      const cut = await interrupted;
+      expect({ code: cut.code, stderr: cut.stderr }).toMatchObject({ code: 7 });
+      expect(records(cut.stdout).at(-1)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'stream_interrupted',
+          details: { lastEventId: null, events: 0 },
+        },
+      });
+      const buffered = await invoke([
+        '--method',
+        'GET',
+        '--path',
+        'sse',
+        '--timeout',
+        '10',
+        '--json',
+      ]);
+      expect(buffered.code).toBe(0);
+      expect(buffered.stderr).toMatch(/Use --sse --json/);
+      expect(JSON.parse(buffered.stdout.toString())).toMatchObject({
+        ok: true,
+        contentType: 'text/event-stream',
+      });
+    }, 60000);
 
     it.runIf(Boolean(process.env.HATCH_WEBHOOK_TEST_CONTAINER_IMAGE))(
       'invokes through the installed bundle in a nonroot read-only container',

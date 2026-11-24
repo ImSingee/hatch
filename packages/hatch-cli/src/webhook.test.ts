@@ -17,6 +17,13 @@ import { runWebhook, webhookHeaders, webhookSuffix } from './webhook';
 let server: Server;
 let directory: string;
 let url: string;
+/** Per-test handler for stream paths; the default handler serves the rest. */
+let stream:
+  | ((
+      request: import('node:http').IncomingMessage,
+      response: import('node:http').ServerResponse,
+    ) => void)
+  | undefined;
 let calls: {
   path: string;
   method?: string;
@@ -26,6 +33,7 @@ let calls: {
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'hatch-webhook-cli-'));
   calls = [];
+  stream = undefined;
   lookup.mockResolvedValue({ id: 'canonical-id' });
   server = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
@@ -36,7 +44,9 @@ beforeEach(async () => {
       headers: request.headers,
       body: Buffer.concat(chunks),
     });
-    if (request.url?.includes('/redirect')) {
+    if (stream && request.url?.includes('/stream')) {
+      stream(request, response);
+    } else if (request.url?.includes('/redirect')) {
       response.writeHead(307, { location: '/unexpected' });
       response.end();
     } else {
@@ -200,5 +210,187 @@ describe('webhook target and credential boundary', () => {
       ),
     ).rejects.toMatchObject({ code: 'incomplete_env' });
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('server-sent event subscriptions', () => {
+  const sse = (...extra: string[]) =>
+    runWebhook(
+      [
+        'app',
+        'invoke',
+        'webhook',
+        'id',
+        '--method',
+        'GET',
+        '--path',
+        'stream',
+        '--sse',
+        ...extra,
+      ],
+      0,
+      new AbortController().signal,
+    );
+  const records = (output: { mock: { calls: unknown[][] } }) =>
+    output.mock.calls.map((call) => JSON.parse(String(call[0])));
+  const open = (response: import('node:http').ServerResponse) =>
+    response.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+    });
+
+  it('rejects contradictory stream flags before any request', async () => {
+    for (const [args, code] of [
+      [['--idle-timeout', '5'], 'invalid_arguments'],
+      [['--max-duration', '5'], 'invalid_arguments'],
+      [['--sse', '--method', 'HEAD'], 'invalid_arguments'],
+      [['--sse', '--header', 'Accept: application/json'], 'invalid_arguments'],
+      [['--sse', '--idle-timeout', '0'], 'invalid_arguments'],
+      [['--sse', '--max-duration', '86401'], 'invalid_arguments'],
+    ] as const)
+      await expect(
+        runWebhook(
+          ['app', 'invoke', 'webhook', 'id', ...args],
+          0,
+          new AbortController().signal,
+        ),
+      ).rejects.toMatchObject({ code });
+    expect(lookup).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('streams NDJSON past --timeout while data flows, then ends on close', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.write('id: 1\ndata: {"pr":123}\n\n');
+      let beats = 0;
+      const timer = setInterval(() => {
+        if (++beats < 8) response.write(': ping\n\n');
+        else {
+          clearInterval(timer);
+          response.end('event: done\ndata: bye\n\n');
+        }
+      }, 100);
+    };
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await sse('--json', '--timeout', '0.3', '--idle-timeout', '1');
+    expect(calls[0].headers.accept).toBe('text/event-stream');
+    expect(records(output)).toEqual([
+      {
+        type: 'open',
+        status: 200,
+        contentType: 'text/event-stream; charset=utf-8',
+      },
+      { type: 'event', event: 'message', id: '1', data: '{"pr":123}' },
+      { type: 'event', event: 'done', id: '1', data: 'bye' },
+      {
+        type: 'end',
+        ok: true,
+        reason: 'closed',
+        lastEventId: '1',
+        events: 2,
+        retry: null,
+      },
+    ]);
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('fails an idle stream with its resume point and ends at --max-duration', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.write('id: 5\ndata: one\n\n');
+    };
+    vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await expect(sse('--json', '--idle-timeout', '0.2')).rejects.toMatchObject({
+      code: 'stream_idle_timeout',
+      exitCode: 7,
+      details: { lastEventId: '5', events: 1, retry: null },
+    });
+
+    stream = (_, response) => {
+      open(response);
+      const timer = setInterval(() => response.write(': ping\n\n'), 30);
+      response.on('close', () => clearInterval(timer));
+    };
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await sse('--json', '--max-duration', '0.2', '--idle-timeout', '1');
+    expect(records(output).at(-1)).toEqual({
+      type: 'end',
+      ok: true,
+      reason: 'max_duration',
+      lastEventId: null,
+      events: 0,
+      retry: null,
+    });
+  });
+
+  it('reports interrupted, non-2xx and non-stream responses distinctly', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.write('id: 3\ndata: a\n\n', () =>
+        setTimeout(() => response.destroy(), 20),
+      );
+    };
+    vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await expect(sse('--json')).rejects.toMatchObject({
+      code: 'stream_interrupted',
+      exitCode: 7,
+      message: expect.stringContaining("Last-Event-ID:3'"),
+      details: { lastEventId: '3', events: 1 },
+    });
+
+    stream = (_, response) => {
+      response.writeHead(403, { 'content-type': 'text/plain' });
+      response.end('no');
+    };
+    await expect(sse('--json')).rejects.toMatchObject({
+      code: 'http_error',
+      exitCode: 4,
+      httpStatus: 403,
+    });
+
+    stream = (_, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{}');
+    };
+    await expect(sse('--json')).rejects.toMatchObject({
+      code: 'not_event_stream',
+      exitCode: 7,
+    });
+  });
+
+  it('warns on stderr when plain --json meets an event stream', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.end('data: x\n\n');
+    };
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    const errors = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    await runWebhook(
+      [
+        'app',
+        'invoke',
+        'webhook',
+        'id',
+        '--method',
+        'GET',
+        '--path',
+        'stream',
+        '--json',
+      ],
+      0,
+      new AbortController().signal,
+    );
+    expect(String(errors.mock.calls[0][0])).toMatch(
+      /text\/event-stream; --json buffers it .* Use --sse --json/,
+    );
+    expect(records(output)).toEqual([
+      {
+        ok: true,
+        status: 200,
+        contentType: 'text/event-stream; charset=utf-8',
+        bodyEncoding: 'base64',
+        body: Buffer.from('data: x\n\n').toString('base64'),
+      },
+    ]);
   });
 });
