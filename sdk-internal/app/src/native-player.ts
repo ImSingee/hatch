@@ -133,7 +133,10 @@ export function createNativeHost(
       !SERVICE_NAME.test(service) ||
       typeof method !== 'string' ||
       !METHOD_NAME.test(method) ||
-      !isRecord(message)
+      // Any JSON value: a message's JSON form need not be an object
+      // (`google.protobuf.Value`, `Timestamp`, wrappers). The codecs and the
+      // backend check its shape.
+      message === undefined
     ) {
       return refuse(
         'invalid_argument',
@@ -161,11 +164,13 @@ export function createNativeHost(
       return refuse('unavailable', String(error));
     }
     const text = await response.text();
-    let body: unknown = null;
+    let body: unknown;
+    let parsed = true;
     try {
       body = text ? JSON.parse(text) : {};
     } catch {
       // A proxy error page; reported below.
+      parsed = false;
     }
     if (!response.ok) {
       const failure = isRecord(body) ? body : {};
@@ -178,7 +183,7 @@ export function createNativeHost(
           : `HTTP ${response.status}`,
       );
     }
-    if (!isRecord(body)) {
+    if (!parsed) {
       return refuse('internal', 'The backend answered with no JSON message.');
     }
     const header: Record<string, string> = {};

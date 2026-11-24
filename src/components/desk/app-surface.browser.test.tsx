@@ -2,6 +2,11 @@ import { MantineProvider } from '@mantine/core';
 import { createRef } from 'react';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
+import {
+  PlatformEventsContext,
+  type PlatformEventListener,
+} from '~components/system/platform-events-context';
+import type { PlatformEvent } from '~server/platform-events';
 import { applyAccent } from '~/ui/theme';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
 
@@ -83,16 +88,29 @@ test('runs a native App over the player channel instead of reading its frame', a
   const handle = createRef<AppSurfaceHandle>();
   const onRouteChange = vi.fn<(route: string) => void>();
   const onTitleChange = vi.fn<(title: string | null) => void>();
+  const listeners = new Set<PlatformEventListener>();
+  const events = {
+    subscribe: (listener: PlatformEventListener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    subscribeResync: () => () => {},
+  };
+  const emit = (event: PlatformEvent) => {
+    for (const listener of listeners) listener(event);
+  };
   const surface = (visible: boolean) => (
     <MantineProvider>
-      <AppSurface
-        ref={handle}
-        app={{ slug: 'native-notes', name: 'Notes' }}
-        route="/inbox"
-        visible={visible}
-        onRouteChange={onRouteChange}
-        onTitleChange={onTitleChange}
-      />
+      <PlatformEventsContext.Provider value={events}>
+        <AppSurface
+          ref={handle}
+          app={{ slug: 'native-notes', name: 'Notes' }}
+          route="/inbox"
+          visible={visible}
+          onRouteChange={onRouteChange}
+          onTitleChange={onTitleChange}
+        />
+      </PlatformEventsContext.Provider>
     </MantineProvider>
   );
   const screen = await render(surface(true));
@@ -134,4 +152,25 @@ test('runs a native App over the player channel instead of reading its frame', a
     ),
   );
   applyAccent('indigo');
+
+  // Another App's deployment is not an update for this one; a newer
+  // deployment of the App the player runs (`native-app`, `d1`) is.
+  emit({
+    type: 'app.deployment.activated',
+    appId: 'other-app',
+    deploymentRevision: 'x9',
+  });
+  emit({
+    type: 'app.deployment.activated',
+    appId: 'native-app',
+    deploymentRevision: 'd2',
+  });
+  await vi.waitFor(() =>
+    expect(player().received).toContainEqual({ type: 'update-available' }),
+  );
+  expect(
+    player().received.filter(
+      (message) => (message as { type: string }).type === 'update-available',
+    ),
+  ).toHaveLength(1);
 });

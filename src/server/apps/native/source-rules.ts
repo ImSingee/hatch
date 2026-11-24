@@ -321,17 +321,31 @@ function localMethodName(name: string): string {
   return camel.charAt(0).toLowerCase() + camel.slice(1);
 }
 
-/** Calls to streaming RPC methods in one file's source. */
+/**
+ * Calls to streaming RPC methods in one file's source. A call counts only
+ * when its receiver is a Connect client of the service that declares the
+ * method: `const client = createClient(CounterService, transport)` then
+ * `client.watchCount(...)`, or `createClient(CounterService, t).watchCount(...)`.
+ * A same-named method on anything else (`data.watch(...)`, a unary method of
+ * another service) is not a finding. A client passed around under another
+ * name is not followed; the bridge still refuses its streaming calls at run
+ * time.
+ */
 export function streamingCallFindings(
   file: string,
   source: string,
   services: readonly RpcServiceApi[],
 ): SourceFinding[] {
-  const streaming = services.flatMap((service) =>
-    service.methods
-      .filter((method) => method.clientStreaming || method.serverStreaming)
-      .map((method) => ({
-        local: localMethodName(method.name),
+  // Generated code exports each service descriptor under its proto name.
+  const streamingByService = new Map<
+    string,
+    Map<string, { label: string; kind: string }>
+  >();
+  for (const service of services) {
+    const methods = new Map<string, { label: string; kind: string }>();
+    for (const method of service.methods) {
+      if (!method.clientStreaming && !method.serverStreaming) continue;
+      methods.set(localMethodName(method.name), {
         label: `${service.name}/${method.name}`,
         kind:
           method.clientStreaming && method.serverStreaming
@@ -339,27 +353,70 @@ export function streamingCallFindings(
             : method.clientStreaming
               ? 'client-streaming'
               : 'server-streaming',
-      })),
-  );
-  if (streaming.length === 0) return [];
-  const findings: SourceFinding[] = [];
+      });
+    }
+    if (methods.size) {
+      streamingByService.set(service.name.split('.').at(-1)!, methods);
+    }
+  }
+  if (streamingByService.size === 0) return [];
   const list = tokens(source);
-  for (let index = 1; index < list.length - 1; index += 1) {
-    const token = list[index];
-    if (token.kind !== 'word') continue;
-    const previous = list[index - 1];
-    const next = list[index + 1];
-    if (previous.kind !== 'punct' || previous.value !== '.') continue;
-    if (next.kind !== 'punct' || next.value !== '(') continue;
-    const method = streaming.find((entry) => entry.local === token.value);
-    if (!method) continue;
+  const isPunct = (index: number, value: string) =>
+    list[index]?.kind === 'punct' && list[index].value === value;
+  /** The service of a `createClient(Service` starting at `index`. */
+  const createdClient = (index: number) =>
+    list[index]?.kind === 'word' &&
+    list[index].value === 'createClient' &&
+    isPunct(index + 1, '(') &&
+    list[index + 2]?.kind === 'word'
+      ? list[index + 2].value
+      : null;
+  /** Skip a balanced `( ... )` starting at `index`; returns the index after. */
+  const afterParens = (index: number) => {
+    let depth = 0;
+    for (let at = index; at < list.length; at += 1) {
+      if (isPunct(at, '(')) depth += 1;
+      else if (isPunct(at, ')') && --depth === 0) return at + 1;
+    }
+    return list.length;
+  };
+  // Client variables: `<name> = createClient(<Service>, ...)`.
+  const clients = new Map<string, string>();
+  for (let index = 0; index + 2 < list.length; index += 1) {
+    const service = createdClient(index + 2);
+    if (service && list[index].kind === 'word' && isPunct(index + 1, '=')) {
+      clients.set(list[index].value, service);
+    }
+  }
+  const findings: SourceFinding[] = [];
+  const report = (service: string, methodIndex: number) => {
+    const name = list[methodIndex];
+    if (name?.kind !== 'word' || !isPunct(methodIndex + 1, '(')) return;
+    const method = streamingByService.get(service)?.get(name.value);
+    if (!method) return;
     findings.push({
       file,
-      line: token.line,
+      line: name.line,
       message:
         `${method.label} is a ${method.kind} RPC; the native runtime ` +
         'supports unary RPC only.',
     });
+  };
+  for (let index = 0; index < list.length; index += 1) {
+    const token = list[index];
+    if (token.kind !== 'word') continue;
+    // `client.watchCount(`, unless `client` is a property (`x.client`).
+    const service = clients.get(token.value);
+    if (service && !isPunct(index - 1, '.') && isPunct(index + 1, '.')) {
+      report(service, index + 2);
+      continue;
+    }
+    // `createClient(Service, transport).watchCount(`
+    const inline = createdClient(index);
+    if (inline) {
+      const after = afterParens(index + 1);
+      if (isPunct(after, '.')) report(inline, after + 1);
+    }
   }
   return findings;
 }

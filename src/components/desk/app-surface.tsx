@@ -82,6 +82,8 @@ type NativeChannel = {
   port: MessagePort;
   /** The route the App last reported, to skip echoing it back. */
   route: string;
+  /** The App and deployment the player runs, from its `hello`. */
+  appId: string | null;
   deploymentId: string | null;
   send: (message: SurfaceMessage) => void;
 };
@@ -148,8 +150,11 @@ export function AppSurface({
   }, [visible]);
   useOptionalPlatformEvent('app.deployment.activated', (event) => {
     const channel = nativeRef.current;
+    // Every App's activations reach every surface; only this App's newer
+    // deployment is an update for it.
     if (
       channel?.deploymentId &&
+      event.appId === channel.appId &&
       event.deploymentRevision !== channel.deploymentId &&
       winRef.current
     ) {
@@ -254,6 +259,7 @@ export function AppSurface({
       const channel: NativeChannel = {
         port: port1,
         route: seedRoute(),
+        appId: null,
         deploymentId: null,
         send: (message) => port1.postMessage(message),
       };
@@ -263,6 +269,7 @@ export function AppSurface({
         if (!message || nativeRef.current !== channel) return;
         switch (message.type) {
           case 'hello':
+            channel.appId = message.appId;
             channel.deploymentId = message.deploymentId;
             break;
           case 'route':

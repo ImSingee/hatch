@@ -87,6 +87,19 @@ describe('native App host', () => {
     });
   });
 
+  it('carries a message whose JSON form is not an object both ways', async () => {
+    // `google.protobuf.Timestamp` in, `google.protobuf.Value` (null) out.
+    const { host, calls } = setup(() => Response.json(null));
+    await expect(
+      host.call('hatch.rpc', {
+        service: 'app.v1.NotesService',
+        method: 'ListNotes',
+        message: '2026-01-02T03:04:05Z',
+      }),
+    ).resolves.toMatchObject({ ok: true, message: null });
+    expect(calls[0].init?.body).toBe('"2026-01-02T03:04:05Z"');
+  });
+
   it('refuses RPCs outside the App and malformed arguments without a request', async () => {
     const { host, calls } = setup(() => Response.json({}));
     const refusals = [
@@ -95,7 +108,6 @@ describe('native App host', () => {
       { service: '../../other/rpc/x', method: 'ListNotes', message: {} },
       { service: 'app.v1.NotesService', method: 'WatchNotes', message: {} },
       { service: 'app.v1.NotesService', method: 'List/../x', message: {} },
-      { service: 'app.v1.NotesService', method: 'ListNotes', message: [] },
       { service: 'app.v1.NotesService', method: 'ListNotes' },
       'text',
     ];

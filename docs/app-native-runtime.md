@@ -68,8 +68,13 @@ backend, widgets and schema). In the disposable build copy it:
      Tailwind palette classes (`bg-red-500`, `text-white/80`) in any string,
      and colour literals given to colour style keys (`color`,
      `*Color`, `fill`, `stroke`, `fillStyle`, `strokeStyle`);
-   - no call of a streaming RPC method (`client.watchThings(...)` for a
-     method the proto declares streaming): the bridge carries unary calls.
+   - no call of a streaming RPC method on a Connect client of the service
+     that declares it (`client.watchThings(...)` after
+     `const client = createClient(ThingsService, transport)`, or
+     `createClient(ThingsService, t).watchThings(...)`): the bridge carries
+     unary calls. A same-named method on anything else is not a finding; a
+     client passed on under another name is not followed, and its streaming
+     calls fail at run time with `unimplemented`.
 4. `nsh build --release`; a warning about an unknown class fails the deploy.
 5. Start-up check: `nsh test app/main.tsx --web-host <canned host>`. NSH opens
    the App headless for about 1.2 s; a throw while rendering or starting fails
@@ -136,17 +141,17 @@ platform only through `host.call(name, args)`, answered by the shell with its
 own session. The grant is exactly these names (plus, later, the
 `hatch.native.*` names of granted capabilities):
 
-| Name                    | Arguments                                                                                        | Answer (`ok: true`)                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `hatch.rpc`             | `{ service, method, message }`: a unary method of the App's own proto; `message` is Connect JSON | `{ message, header }`                                             |
-| `hatch.data.query`      | `{ body }`: a Data API query                                                                     | `{ result }`                                                      |
-| `hatch.data.mutate`     | `{ body }`: `{ operations }`                                                                     | `{ result }`                                                      |
-| `hatch.data.events`     | `{ table, since }`                                                                               | `{ events: [{ revision?, reset }] }`, possibly empty after a wait |
-| `hatch.theme.get`       | `{}`                                                                                             | `{ theme }` (NSH `cssVars`)                                       |
-| `hatch.nav.setTitle`    | `{ title }` (string up to 256, or null)                                                          | `{}`                                                              |
-| `hatch.nav.setRoute`    | `{ route }`: raw fragment without `#`                                                            | `{}`                                                              |
-| `hatch.nav.open`        | `{ slug, route? }`                                                                               | `{}`                                                              |
-| `hatch.native.supports` | `{}`                                                                                             | `{ capabilities }` (`[]` on the web)                              |
+| Name                    | Arguments                                                                                                         | Answer (`ok: true`)                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `hatch.rpc`             | `{ service, method, message }`: a unary method of the App's own proto; `message` is Connect JSON (any JSON value) | `{ message, header }`                                             |
+| `hatch.data.query`      | `{ body }`: a Data API query                                                                                      | `{ result }`                                                      |
+| `hatch.data.mutate`     | `{ body }`: `{ operations }`                                                                                      | `{ result }`                                                      |
+| `hatch.data.events`     | `{ table, since }`                                                                                                | `{ events: [{ revision?, reset }] }`, possibly empty after a wait |
+| `hatch.theme.get`       | `{}`                                                                                                              | `{ theme }` (NSH `cssVars`)                                       |
+| `hatch.nav.setTitle`    | `{ title }` (string up to 256, or null)                                                                           | `{}`                                                              |
+| `hatch.nav.setRoute`    | `{ route }`: raw fragment without `#`                                                                             | `{}`                                                              |
+| `hatch.nav.open`        | `{ slug, route? }`                                                                                                | `{}`                                                              |
+| `hatch.native.supports` | `{}`                                                                                                              | `{ capabilities }` (`[]` on the web)                              |
 
 - Every handler answers with an envelope, `{ ok: true, ... }` or
   `{ ok: false, code, message }` with a Connect code name
@@ -184,7 +189,8 @@ then use only that port (`sdk-internal/app/src/native-surface.ts`):
 
 - surface to player: `init { route, accent, visible }` first, then
   `navigate { route }`, `theme { accent }`, `visibility { visible }`,
-  `update-available`;
+  `update-available` (when a deployment of the App named in `hello`, other
+  than its `deploymentId`, is activated);
 - player to surface: `hello { appId, deploymentId }`, `route { route }`,
   `title { title }`, `open { slug, route }`.
 

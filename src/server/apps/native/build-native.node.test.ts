@@ -231,18 +231,22 @@ describe.skipIf(!nshAvailable())(
         await fs.readFile(path.join(templateDir, 'proto/service.proto'), 'utf8')
       ).replace(
         /service CounterService \{/,
-        'service CounterService {\n  rpc WatchCount(GetCountRequest) returns (stream CountReply);',
+        'service CounterService {\n  rpc Watch(GetCountRequest) returns (stream CountReply);',
       );
       const main = (await fixtureFile('app/main.tsx')).replace(
         '  const go = (next: string) => {',
-        '  void client.watchCount({});\n  const go = (next: string) => {',
+        '  void client.watch({});\n  const go = (next: string) => {',
       );
       const message = await buildError({
         'proto/service.proto': proto,
         'app/main.tsx': main,
       });
       expect(message).toContain(
-        `app/main.tsx:${lineOf(main, 'client.watchCount')}: app.v1.CounterService/WatchCount is a server-streaming RPC`,
+        `app/main.tsx:${lineOf(main, 'client.watch(')}: app.v1.CounterService/Watch is a server-streaming RPC`,
+      );
+      // The Data Table's own `data.watch(...)` is not a call of that RPC.
+      expect(message).not.toContain(
+        `app/main.tsx:${lineOf(main, 'data.watch(')}:`,
       );
     });
 
