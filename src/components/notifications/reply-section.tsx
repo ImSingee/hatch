@@ -13,6 +13,7 @@ import {
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useState } from 'react';
+import { Trans } from 'react-i18next';
 import {
   ReplyAnswerError,
   answerOf,
@@ -22,19 +23,69 @@ import {
   type ReplyField,
   type ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
-import { formatExact, formatRelative } from '~lib/format';
+import { useI18n, type PlainTranslationKey } from '~i18n';
+import { formatExact, formatRelativeTime } from '~lib/format';
 import {
   respondToNotificationFn,
   type NotificationResponseView,
 } from '~server/notifications';
 import { useNotificationMutation } from './use-notification-mutation';
 
-const VIA_LABEL: Record<NotificationResponseView['via'], string> = {
-  push: 'from the phone notification',
-  mobile: 'in the phone app',
-  web: 'on the web',
-  cli: 'from the CLI',
-};
+/** "Answered by <name/> … · <time/>", one sentence per channel. */
+const ANSWERED_BY = {
+  push: 'notifications.reply.answeredBy.push',
+  mobile: 'notifications.reply.answeredBy.mobile',
+  web: 'notifications.reply.answeredBy.web',
+  cli: 'notifications.reply.answeredBy.cli',
+} as const satisfies Record<
+  NotificationResponseView['via'],
+  PlainTranslationKey
+>;
+
+/**
+ * Why an answer was rejected, worked out from the form and the submitted
+ * value, so the message can be translated and shown under its field.
+ */
+type AnswerProblem =
+  | { type: 'required' }
+  | { type: 'tooLong'; max: number }
+  | { type: 'selectExactly'; count: number }
+  | { type: 'selectRange'; min: number; max: number }
+  | { type: 'invalid' };
+
+function answerProblem(
+  reply: ReplyForm,
+  fieldId: string | null,
+  answers: ReplyAnswers,
+): AnswerProblem {
+  const field = reply.fields.find((entry) => entry.id === fieldId);
+  if (!field) return { type: 'invalid' };
+  const value = answerOf(answers, field.id);
+  if (field.type === 'text') {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return { type: 'required' };
+    if (Array.from(text).length > field.maxLength) {
+      return { type: 'tooLong', max: field.maxLength };
+    }
+    return { type: 'invalid' };
+  }
+  if (field.type === 'multiple') {
+    const ids = Array.isArray(value) ? value : value ? [value] : [];
+    if (ids.length === 0) return { type: 'required' };
+    if (ids.length < field.minSelected || ids.length > field.maxSelected) {
+      return field.minSelected === field.maxSelected
+        ? { type: 'selectExactly', count: field.minSelected }
+        : {
+            type: 'selectRange',
+            min: field.minSelected,
+            max: field.maxSelected,
+          };
+    }
+    return { type: 'invalid' };
+  }
+  if (value === undefined || value === '') return { type: 'required' };
+  return { type: 'invalid' };
+}
 
 /**
  * The notification's reply form: answer it here, or see who answered and
@@ -51,11 +102,12 @@ export function ReplySection({
   response: NotificationResponseView | null;
   recalledAt: string | null;
 }) {
+  const { t } = useI18n();
   if (response) return <AnswerSummary reply={reply} response={response} />;
   if (recalledAt) {
     return (
       <Text size="sm" c="dimmed">
-        Recalled before anyone answered, so it no longer takes an answer.
+        {t('notifications.reply.recalled')}
       </Text>
     );
   }
@@ -76,17 +128,25 @@ function AnswerSummary({
   reply: ReplyForm;
   response: NotificationResponseView;
 }) {
+  const { t, locale } = useI18n();
   const lines = describeAnswers(reply, response.answers);
   return (
     <Paper withBorder radius="md" p="md">
       <Text size="sm" mb="sm">
-        Answered by <b>{response.respondedBy.name}</b> {VIA_LABEL[response.via]}{' '}
-        ·{' '}
-        <Tooltip label={formatExact(response.respondedAt)} withArrow>
-          <Text span size="sm" c="dimmed">
-            {formatRelative(response.respondedAt)}
-          </Text>
-        </Tooltip>
+        <Trans
+          t={t}
+          i18nKey={ANSWERED_BY[response.via]}
+          components={{
+            name: <b>{response.respondedBy.name}</b>,
+            time: (
+              <Tooltip label={formatExact(response.respondedAt)} withArrow>
+                <Text span size="sm" c="dimmed">
+                  {formatRelativeTime(response.respondedAt, locale)}
+                </Text>
+              </Tooltip>
+            ),
+          }}
+        />
       </Text>
       <Stack gap={6}>
         {reply.fields.map((field) => {
@@ -101,7 +161,7 @@ function AnswerSummary({
                 c={line ? undefined : 'dimmed'}
                 style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
               >
-                {line?.value ?? 'No answer'}
+                {line?.value ?? t('notifications.reply.noAnswer')}
               </Text>
             </Group>
           );
@@ -118,16 +178,36 @@ function ReplyFormView({
   notificationId: string;
   reply: ReplyForm;
 }) {
+  const { t } = useI18n();
   const [answers, setAnswers] = useState<ReplyAnswers>({});
   const [error, setError] = useState<{
     field: string | null;
-    message: string;
+    problem: AnswerProblem;
   } | null>(null);
   const respond = useNotificationMutation(
     (input: ReplyAnswers) =>
       respondToNotificationFn({ data: { id: notificationId, answers: input } }),
-    { success: 'Answer sent' },
+    { success: t('notifications.reply.sent') },
   );
+  const problemText = (problem: AnswerProblem) => {
+    switch (problem.type) {
+      case 'required':
+        return t('notifications.reply.error.required');
+      case 'tooLong':
+        return t('notifications.reply.error.tooLong', { max: problem.max });
+      case 'selectExactly':
+        return t('notifications.reply.error.selectExactly', {
+          count: problem.count,
+        });
+      case 'selectRange':
+        return t('notifications.reply.error.selectRange', {
+          min: problem.min,
+          max: problem.max,
+        });
+      case 'invalid':
+        return t('notifications.reply.error.invalid');
+    }
+  };
   // One required buttons field answers with a single click, like on the phone.
   const [only] = reply.fields;
   const instant =
@@ -141,15 +221,9 @@ function ReplyFormView({
     } catch (caught) {
       if (!(caught instanceof ReplyAnswerError)) throw caught;
       // Shown under its field, so the reason alone reads best.
-      const reason = caught.field
-        ? caught.message.slice(`answers.${caught.field}: `.length)
-        : caught.message;
       setError({
         field: caught.field,
-        message:
-          reason === 'is required'
-            ? 'Answer this question.'
-            : `${reason[0]?.toUpperCase() ?? ''}${reason.slice(1)}.`,
+        problem: answerProblem(reply, caught.field, input),
       });
     }
   };
@@ -180,7 +254,9 @@ function ReplyFormView({
           key={field.id}
           field={field}
           value={answerOf(answers, field.id)}
-          error={error?.field === field.id ? error.message : undefined}
+          error={
+            error?.field === field.id ? problemText(error.problem) : undefined
+          }
           disabled={respond.isPending}
           onChange={(value) => set(field.id, value)}
           onPick={
@@ -190,15 +266,19 @@ function ReplyFormView({
                     title: field.label,
                     children: (
                       <Text size="sm">
-                        Answer “
-                        {field.type === 'buttons'
-                          ? field.options.find((o) => o.id === optionId)?.label
-                          : optionId}
-                        ”? A notification takes one answer, and it cannot be
-                        changed.
+                        {t('notifications.reply.confirmAnswer', {
+                          answer:
+                            field.type === 'buttons'
+                              ? (field.options.find((o) => o.id === optionId)
+                                  ?.label ?? '')
+                              : optionId,
+                        })}
                       </Text>
                     ),
-                    labels: { confirm: 'Send answer', cancel: 'Cancel' },
+                    labels: {
+                      confirm: t('notifications.reply.send'),
+                      cancel: t('common.cancel'),
+                    },
                     onConfirm: () => submit({ [field.id]: optionId }),
                   })
               : undefined
@@ -207,7 +287,7 @@ function ReplyFormView({
       ))}
       {error && error.field === null ? (
         <Text size="sm" c="red.8">
-          {error.message}
+          {problemText(error.problem)}
         </Text>
       ) : null}
       {instant ? null : (
@@ -216,7 +296,7 @@ function ReplyFormView({
             {reply.submitLabel}
           </Button>
           <Text size="xs" c="dimmed">
-            One answer is accepted, and it cannot be changed.
+            {t('notifications.reply.oneAnswer')}
           </Text>
         </Group>
       )}
@@ -240,6 +320,7 @@ function FieldInput({
   /** Set when choosing a button submits the form at once. */
   onPick?: (optionId: string) => void;
 }) {
+  const { t } = useI18n();
   const label = field.label;
   const description = field.description;
   const required = field.required;
@@ -266,8 +347,11 @@ function FieldInput({
   if (field.type === 'multiple') {
     const range =
       field.minSelected === field.maxSelected
-        ? `Choose ${field.minSelected}`
-        : `Choose ${field.minSelected}–${field.maxSelected}`;
+        ? t('notifications.reply.chooseExactly', { number: field.minSelected })
+        : t('notifications.reply.chooseRange', {
+            min: field.minSelected,
+            max: field.maxSelected,
+          });
     return (
       <Checkbox.Group
         label={label}
@@ -320,7 +404,7 @@ function FieldInput({
               disabled={disabled}
               onClick={() => onChange(undefined)}
             >
-              Clear answer
+              {t('notifications.reply.clear')}
             </Anchor>
           ) : null}
         </Stack>

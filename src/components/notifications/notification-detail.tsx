@@ -23,7 +23,8 @@ import {
   isDocumentUrl,
 } from '../../../packages/hatch-platform-api/deep-link';
 import { Field } from '~components/system/field';
-import { formatExact, formatRelative } from '~lib/format';
+import { useErrorText, useI18n, type PlainTranslationKey } from '~i18n';
+import { formatExact, formatRelativeTime } from '~lib/format';
 import {
   NOTIFICATIONS_KEY,
   notificationDetailQueryOptions,
@@ -36,18 +37,23 @@ import {
   NotificationReplyBadge,
   NotificationRevisionBadge,
   NotificationStatusBadge,
-  notificationPriorityLabel,
+  notificationPriorityLabelKey,
 } from './status';
 import { ReplySection } from './reply-section';
 
-const SOURCE_TYPE_LABEL = {
-  app: 'App',
-  channel: 'Channel',
-  user: 'User',
-} as const;
+const SOURCE_TYPE_LABEL: Record<
+  'app' | 'channel' | 'user',
+  PlainTranslationKey
+> = {
+  app: 'notifications.destinationType.app',
+  channel: 'notifications.channels.column.channel',
+  user: 'notifications.detail.sourceUser',
+};
 
 export function NotificationDetail({ id }: { id: string }) {
+  const { t } = useI18n();
   const { data } = useSuspenseQuery(notificationDetailQueryOptions(id));
+  const priorityKey = notificationPriorityLabelKey(data.priority);
 
   return (
     <Stack gap="xl">
@@ -64,52 +70,83 @@ export function NotificationDetail({ id }: { id: string }) {
             recalledAt={data.recalledAt}
           />
           <Text size="sm" c="dimmed">
-            {data.deliveries.succeeded} delivered · {data.deliveries.pending} in
-            progress · {data.deliveries.failed} failed
-            {data.deliveries.canceled > 0
-              ? ` · ${data.deliveries.canceled} not sent`
-              : ''}
+            {t(
+              data.deliveries.canceled > 0
+                ? 'notifications.detail.summaryWithCanceled'
+                : 'notifications.detail.summary',
+              {
+                succeeded: data.deliveries.succeeded,
+                pending: data.deliveries.pending,
+                failed: data.deliveries.failed,
+                canceled: data.deliveries.canceled,
+              },
+            )}
           </Text>
         </Group>
         <Stack gap={8}>
           <Field
-            label="Source"
+            label={t('notifications.detail.source')}
             value={
               data.sourceType === 'platform'
-                ? `${data.sourceName} (test)`
-                : `${SOURCE_TYPE_LABEL[data.sourceType]} · ${data.sourceName}`
+                ? t('notifications.detail.testSource', {
+                    name: data.sourceName,
+                  })
+                : `${t(SOURCE_TYPE_LABEL[data.sourceType])} · ${data.sourceName}`
             }
           />
-          <Field label="Kind" value={`${data.kindName} (${data.kind})`} />
           <Field
-            label="Priority"
-            value={notificationPriorityLabel(data.priority)}
+            label={t('notifications.kind')}
+            value={`${data.kindName} (${data.kind})`}
           />
-          <Field label="Occurred" value={formatExact(data.occurredAt)} />
-          <Field label="Received" value={formatExact(data.createdAt)} />
+          <Field
+            label={t('notifications.detail.priority')}
+            value={priorityKey ? t(priorityKey) : String(data.priority)}
+          />
+          <Field
+            label={t('notifications.detail.occurred')}
+            value={formatExact(data.occurredAt)}
+          />
+          <Field
+            label={t('notifications.detail.received')}
+            value={formatExact(data.createdAt)}
+          />
           {data.editedAt ? (
-            <Field label="Edited" value={formatExact(data.editedAt)} />
+            <Field
+              label={t('notifications.badge.edited')}
+              value={formatExact(data.editedAt)}
+            />
           ) : null}
           {data.recalledAt ? (
             <Field
-              label="Recalled"
-              value={`${formatExact(data.recalledAt)} · removed from phones; content kept here`}
+              label={t('notifications.badge.recalled')}
+              value={t('notifications.detail.recalledAt', {
+                time: formatExact(data.recalledAt),
+              })}
             />
           ) : null}
           {data.dedupeKey ? (
-            <Field label="Dedupe key" value={data.dedupeKey} mono />
+            <Field
+              label={t('notifications.detail.dedupeKey')}
+              value={data.dedupeKey}
+              mono
+            />
           ) : null}
-          <Field label="ID" value={data.id} mono copyValue={data.id} />
+          <Field
+            label={t('notifications.detail.id')}
+            value={data.id}
+            mono
+            copyValue={data.id}
+          />
           {data.url ? (
             <Group gap="md" wrap="nowrap" align="baseline">
               <Text size="sm" c="dimmed" style={{ width: 96, flex: 'none' }}>
-                Link
+                {t('notifications.detail.link')}
               </Text>
               <NotificationLink url={data.url} />
               {data.autoOpenUrl ? (
-                <Tooltip label="Tapping the phone notification opens this link instead of the notification.">
+                <Tooltip label={t('notifications.detail.opensOnTapHint')}>
                   <Badge variant="light" color="gray" style={{ flex: 'none' }}>
-                    Opens on tap
+                    {t('notifications.detail.opensOnTap')}
                   </Badge>
                 </Tooltip>
               ) : null}
@@ -124,7 +161,7 @@ export function NotificationDetail({ id }: { id: string }) {
         {data.data ? (
           <Stack gap={6} mt="lg">
             <Text size="sm" fw={700}>
-              Data
+              {t('notifications.detail.data')}
             </Text>
             <Code block style={{ fontSize: 'var(--mantine-font-size-xs)' }}>
               {JSON.stringify(data.data, null, 2)}
@@ -138,7 +175,7 @@ export function NotificationDetail({ id }: { id: string }) {
           <Divider />
           <Box component="section">
             <Text fw={700} fz="lg" mb="xs">
-              Reply
+              {t('notifications.detail.reply')}
             </Text>
             <ReplySection
               notificationId={id}
@@ -149,12 +186,11 @@ export function NotificationDetail({ id }: { id: string }) {
             {data.response ? (
               <Box mt="lg">
                 <Text fw={700} size="sm" mb="xs">
-                  Answer deliveries
+                  {t('notifications.detail.answerDeliveries')}
                 </Text>
                 {data.responseDeliveryList.length === 0 ? (
                   <Text size="sm" c="dimmed">
-                    No response route matched, so the answer is only recorded
-                    here. Add a response route in Settings → Notifications.
+                    {t('notifications.detail.noResponseRoute')}
                   </Text>
                 ) : (
                   <DeliveryTable
@@ -173,12 +209,11 @@ export function NotificationDetail({ id }: { id: string }) {
 
       <Box component="section">
         <Text fw={700} fz="lg" mb="xs">
-          Deliveries
+          {t('notifications.detail.deliveries')}
         </Text>
         {data.deliveryList.length === 0 ? (
           <Text size="sm" c="dimmed">
-            No route matched this notification, so it was recorded without being
-            delivered. Add a route in Settings → Notifications.
+            {t('notifications.detail.noRoute')}
           </Text>
         ) : (
           <DeliveryTable
@@ -201,16 +236,19 @@ function DeliveryTable({
   revision: number;
   deliveries: DeliveryView[];
 }) {
+  const { t } = useI18n();
   return (
     <Table.ScrollContainer minWidth={620} type="native">
       <Table verticalSpacing="sm" layout="fixed">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Destination</Table.Th>
-            <Table.Th w={130}>Status</Table.Th>
-            <Table.Th w={80}>Attempts</Table.Th>
-            <Table.Th>Outcome</Table.Th>
-            <Table.Th w={110} aria-label="Actions" />
+            <Table.Th>
+              {t('notifications.destinations.column.destination')}
+            </Table.Th>
+            <Table.Th w={130}>{t('common.status')}</Table.Th>
+            <Table.Th w={80}>{t('notifications.detail.attempts')}</Table.Th>
+            <Table.Th>{t('notifications.detail.outcome')}</Table.Th>
+            <Table.Th w={110} aria-label={t('common.actions')} />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -237,10 +275,16 @@ function DeliveryRow({
   revision: number;
   delivery: DeliveryView;
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const retry = useMutation({
     mutationFn: () => retryDeliveryFn({ data: delivery.id }),
-    onSuccess: () => toast.success('Delivery queued again'),
+    meta: { errorToast: false },
+    onError: (error) => {
+      toast.error(errorText(error, 'notifications.detail.retryFailed'));
+    },
+    onSuccess: () => toast.success(t('notifications.detail.retried')),
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries(
@@ -264,8 +308,11 @@ function DeliveryRow({
               {delivery.destinationName}
             </Text>
             <Text size="xs" c="dimmed">
-              {DESTINATION_TYPE_LABEL[delivery.destinationType]}
-              {delivery.destinationId ? '' : ' · removed'}
+              {delivery.destinationId
+                ? t(DESTINATION_TYPE_LABEL[delivery.destinationType])
+                : t('notifications.detail.destinationRemoved', {
+                    type: t(DESTINATION_TYPE_LABEL[delivery.destinationType]),
+                  })}
             </Text>
           </Stack>
         </Group>
@@ -290,7 +337,7 @@ function DeliveryRow({
             loading={retry.isPending}
             onClick={() => retry.mutate()}
           >
-            Retry
+            {t('common.retry')}
           </Button>
         ) : null}
       </Table.Td>
@@ -305,46 +352,70 @@ function DeliveryOutcome({
   delivery: DeliveryView;
   revision: number;
 }) {
-  const lines: { label: string; value: string; mono?: boolean }[] = [];
+  const { t, locale } = useI18n();
+  const lines: {
+    id: string;
+    label: string;
+    value: string;
+    mono?: boolean;
+    error?: boolean;
+  }[] = [];
   if (delivery.status === 'canceled') {
-    lines.push({ label: 'Recalled', value: 'before it was delivered' });
+    lines.push({
+      id: 'recalled',
+      label: t('notifications.badge.recalled'),
+      value: t('notifications.outcome.recalledBeforeDelivery'),
+    });
   } else if (revision > 1 && delivery.deliveredRevision !== null) {
     // Destinations that take edits and recalls are re-queued for every
     // change, so a finished delivery behind the latest revision never takes
     // them (a webhook with the option off, or an App that does not declare it).
     lines.push({
-      label: 'Changes',
+      id: 'changes',
+      label: t('notifications.outcome.changes'),
       value:
         delivery.deliveredRevision >= revision
-          ? 'latest edit or recall received'
+          ? t('notifications.outcome.changesReceived')
           : delivery.status === 'succeeded'
-            ? 'not sent here (destination takes no edits or recalls)'
+            ? t('notifications.outcome.changesNotSent')
             : delivery.status === 'failed'
-              ? 'latest edit or recall failed'
-              : 'sending the latest edit or recall',
+              ? t('notifications.outcome.changesFailed')
+              : t('notifications.outcome.changesSending'),
     });
   }
   if (delivery.result) {
     lines.push({
-      label: delivery.destinationType === 'app' ? 'App result' : 'Result',
+      id: 'result',
+      label:
+        delivery.destinationType === 'app'
+          ? t('notifications.outcome.appResult')
+          : t('notifications.outcome.result'),
       value: delivery.result,
     });
   }
   if (delivery.lastError) {
-    lines.push({ label: 'Error', value: delivery.lastError });
+    lines.push({
+      id: 'error',
+      label: t('notifications.outcome.error'),
+      value: delivery.lastError,
+      error: true,
+    });
   }
   if (delivery.httpStatus !== null) {
     lines.push({
-      label: 'HTTP',
+      id: 'http',
+      label: t('notifications.outcome.http'),
       value: String(delivery.httpStatus),
       mono: true,
     });
   }
   const when =
     delivery.nextAttemptAt && delivery.status === 'pending' && delivery.attempts
-      ? `Next attempt ${formatRelative(delivery.nextAttemptAt)}`
+      ? t('notifications.outcome.nextAttempt', {
+          when: formatRelativeTime(delivery.nextAttemptAt, locale),
+        })
       : delivery.completedAt
-        ? formatRelative(delivery.completedAt)
+        ? formatRelativeTime(delivery.completedAt, locale)
         : null;
 
   if (lines.length === 0 && !when) {
@@ -358,14 +429,14 @@ function DeliveryOutcome({
     <Stack gap={2}>
       {lines.map((line) => (
         <Text
-          key={line.label}
+          key={line.id}
           size="xs"
-          c={line.label === 'Error' ? 'red.8' : undefined}
+          c={line.error ? 'red.8' : undefined}
           ff={line.mono ? 'monospace' : undefined}
           style={{ wordBreak: 'break-word' }}
         >
           <Text span size="xs" c="dimmed">
-            {line.label}:{' '}
+            {t('notifications.outcome.lineLabel', { label: line.label })}{' '}
           </Text>
           {line.value}
         </Text>
