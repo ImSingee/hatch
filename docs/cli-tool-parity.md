@@ -238,10 +238,11 @@ webhook's secret). No Agent Tool is added.
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`
 (workspace navigation, Dashboard auto-refresh) still accept only a native user
 session and have no `hatch` CLI commands. Pending chat messages (the queue/steer
-tray: send while a run works, edit, cancel, Send now, resume) belong to the same
-gap: like sending a message, they are only `/api/agent/sessions/<id>/pending`
-HTTP routes for the Web and mobile chat, and `AgentService/GetSession` returns
-the tray read-only. Both routes take an optional `clientMessageId` that makes a
+tray: send while a run works in either mode, edit, switch between queue and
+steer, cancel, Send now, resume) belong to the same gap: like sending a
+message, they are only `/api/agent/sessions/<id>/pending` HTTP routes for
+the Web and mobile chat, and `AgentService/GetSession` returns the tray
+read-only. Both routes take an optional `clientMessageId` that makes a
 resend after a lost response return the first outcome
 (`src/server/agent-message-receipts.ts`); a CLI send command must expose it
 too, so an Agent can retry a send safely. Both are pending: add their CLI

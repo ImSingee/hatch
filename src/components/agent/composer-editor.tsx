@@ -39,6 +39,7 @@ import {
   plainTextComposerDocument,
   serializeComposerDocument,
 } from './composer-editor-content';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import classes from './chat.module.css';
 
 type ResourceType = 'app' | 'workflow';
@@ -190,11 +191,17 @@ function mentionItems(sources: MentionSources, query: string): MentionItem[] {
 function sourceStatus(
   sources: MentionSources,
   resourceType: ResourceType,
-): string | null {
-  const source = resourceType === 'app' ? sources.apps : sources.workflows;
-  const label = resourceType === 'app' ? 'Apps' : 'Workflows';
-  if (source.loading) return `Loading ${label}…`;
-  if (source.error) return `Could not load ${label}`;
+): PlainTranslationKey | null {
+  const app = resourceType === 'app';
+  const source = app ? sources.apps : sources.workflows;
+  if (source.loading) {
+    return app ? 'agent.mention.loadingApps' : 'agent.mention.loadingWorkflows';
+  }
+  if (source.error) {
+    return app
+      ? 'agent.mention.loadAppsFailed'
+      : 'agent.mention.loadWorkflowsFailed';
+  }
   return null;
 }
 
@@ -202,8 +209,10 @@ function mentionSourcesLoading(sources: MentionSources): boolean {
   return sources.apps.loading || sources.workflows.loading;
 }
 
-function resourceLabel(resourceType: ResourceType): string {
-  return resourceType === 'app' ? 'Apps' : 'Workflows';
+function resourceLabel(resourceType: ResourceType): PlainTranslationKey {
+  return resourceType === 'app'
+    ? 'agent.mention.apps'
+    : 'agent.mention.workflows';
 }
 
 /* eslint-disable jsx-a11y/prefer-tag-over-role -- ARIA listbox semantics are
@@ -224,6 +233,7 @@ const ResourceMentionMenu = forwardRef<
   },
   reference,
 ) {
+  const { t } = useI18n();
   const [scope, setScope] = useState<ResourceType | null>(null);
   const hasQuery = query.trim().length > 0;
   const activeScope = hasQuery ? null : scope;
@@ -337,11 +347,15 @@ const ResourceMentionMenu = forwardRef<
   let emptyMessage: string | null = null;
   if (visibleItems.length === 0 && statuses.length === 0) {
     if (activeScope) {
-      emptyMessage = `No ${resourceLabel(activeScope)} yet`;
+      emptyMessage = t(
+        activeScope === 'app'
+          ? 'agent.mention.noApps'
+          : 'agent.mention.noWorkflows',
+      );
     } else if (hasQuery) {
-      emptyMessage = 'No matching Apps or Workflows';
+      emptyMessage = t('agent.mention.noMatches');
     } else {
-      emptyMessage = 'No Apps or Workflows yet';
+      emptyMessage = t('agent.mention.noResources');
     }
   }
   const groupedSearch = hasQuery && !activeScope;
@@ -354,7 +368,7 @@ const ResourceMentionMenu = forwardRef<
       p={4}
       className={classes.mentionMenu}
       role="listbox"
-      aria-label="Apps and Workflows"
+      aria-label={t('agent.mention.label')}
     >
       {activeScope ? (
         <div className={classes.mentionMenuHeader}>
@@ -365,7 +379,7 @@ const ResourceMentionMenu = forwardRef<
             }}
             type="button"
             role="option"
-            aria-label="Back to Apps and Workflows"
+            aria-label={t('agent.mention.back')}
             aria-selected={activeIndex === 0}
             tabIndex={-1}
             className={classes.mentionMenuBack}
@@ -380,7 +394,7 @@ const ResourceMentionMenu = forwardRef<
           >
             <IconChevronLeft size={16} stroke={1.8} />
             <Text size="sm" fw={700}>
-              {resourceLabel(activeScope)}
+              {t(resourceLabel(activeScope))}
             </Text>
           </UnstyledButton>
         </div>
@@ -404,7 +418,7 @@ const ResourceMentionMenu = forwardRef<
                     fw={700}
                     className={classes.mentionMenuSection}
                   >
-                    {resourceLabel(item.resourceType)}
+                    {t(resourceLabel(item.resourceType))}
                   </Text>
                 ) : null}
                 <UnstyledButton
@@ -454,14 +468,14 @@ const ResourceMentionMenu = forwardRef<
                     <div className={classes.mentionMenuIdentity}>
                       <Text size="sm" fw={600} truncate>
                         {item.kind === 'category'
-                          ? resourceLabel(item.resourceType)
+                          ? t(resourceLabel(item.resourceType))
                           : item.resource.name}
                       </Text>
                       <Text size="xs" c="dimmed" truncate>
                         {item.kind === 'category'
                           ? item.resourceType === 'app'
-                            ? 'Browse every app'
-                            : 'Browse every workflow'
+                            ? t('agent.mention.browseApps')
+                            : t('agent.mention.browseWorkflows')
                           : item.resourceType === 'app'
                             ? `/${item.resource.slug}`
                             : (item.resource.description ?? item.resource.id)}
@@ -494,7 +508,7 @@ const ResourceMentionMenu = forwardRef<
         <div className={classes.mentionMenuStatuses} aria-live="polite">
           {statuses.map(({ resourceType, status }) => (
             <Text key={resourceType} size="sm" c="dimmed" px="sm" py={6}>
-              {status}
+              {t(status)}
             </Text>
           ))}
         </div>
@@ -538,7 +552,8 @@ export const ComposerEditor = forwardRef<
     seedContent?: ComposerInputPart[];
     onChange: (content: ComposerInputPart[]) => void;
     onMentionLookupPendingChange: (pending: boolean) => void;
-    onSubmit: () => void;
+    /** `switchMode`: sent with ⌘/Ctrl held, to flip the busy delivery mode. */
+    onSubmit: (options: { switchMode: boolean }) => void;
     onPasteFiles: (files: File[]) => void;
   }
 >(function ComposerEditor(
@@ -758,7 +773,7 @@ export const ComposerEditor = forwardRef<
         ) {
           if (menuOpenRef.current && menuHasItemsRef.current) return false;
           event.preventDefault();
-          emitSubmit();
+          emitSubmit({ switchMode: event.metaKey || event.ctrlKey });
           return true;
         }
         return false;

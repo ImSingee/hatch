@@ -10,6 +10,7 @@ import {
   Loader,
   Text,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import {
   IconFile,
@@ -21,10 +22,12 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import type { AgentMessageMode } from '~/db/schema';
 import {
   hasComposerText,
   type ComposerInputPart,
 } from '~agent/composer-content';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import type { AppListItem } from '~server/apps';
 import type { WorkflowListItem } from '~server/workflows';
 import { ComposerEditor, type ComposerEditorHandle } from './composer-editor';
@@ -44,11 +47,27 @@ type Mentions = {
   workflows?: WorkflowListItem[];
 };
 
-const MODE_LABEL = { queue: 'Queued', steer: 'Steer' } as const;
-const MODE_HINT = {
-  queue: 'Sent as its own message after the current reply finishes.',
-  steer: 'Sent into the current reply as soon as its running steps finish.',
-} as const;
+const MODE_LABEL: Record<AgentMessageMode, PlainTranslationKey> = {
+  queue: 'agent.pending.mode.queue',
+  steer: 'agent.pending.mode.steer',
+};
+const MODE_HINT: Record<AgentMessageMode, PlainTranslationKey> = {
+  queue: 'agent.pending.mode.queueHint',
+  steer: 'agent.pending.mode.steerHint',
+};
+/** The hint on a message that can still switch, naming the click. */
+const MODE_SWITCH_HINT: Record<AgentMessageMode, PlainTranslationKey> = {
+  queue: 'agent.pending.mode.queueSwitchHint',
+  steer: 'agent.pending.mode.steerSwitchHint',
+};
+const MODE_SWITCH_LABEL: Record<AgentMessageMode, PlainTranslationKey> = {
+  queue: 'agent.pending.mode.queueSwitchLabel',
+  steer: 'agent.pending.mode.steerSwitchLabel',
+};
+
+function otherMode(mode: AgentMessageMode): AgentMessageMode {
+  return mode === 'steer' ? 'queue' : 'steer';
+}
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -75,6 +94,7 @@ function PendingEdit({
   }) => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const editorRef = useRef<ComposerEditorHandle>(null);
   const [content, setContent] = useState(message.content);
   const [images, setImages] = useState(message.images);
@@ -111,7 +131,7 @@ function PendingEdit({
                 radius="xl"
                 variant="filled"
                 className={classes.thumbRemove}
-                aria-label="Remove image"
+                aria-label={t('agent.pending.removeImage')}
                 onClick={() =>
                   setImages((current) => current.filter((_, i) => i !== index))
                 }
@@ -126,7 +146,9 @@ function PendingEdit({
               </Text>
               <CloseButton
                 size="xs"
-                aria-label={`Remove ${attachment.name}`}
+                aria-label={t('agent.composer.removeFile', {
+                  name: attachment.name,
+                })}
                 onClick={() =>
                   setAttachments((current) =>
                     current.filter((item) => item.id !== attachment.id),
@@ -144,19 +166,17 @@ function PendingEdit({
           workflows={mentions.workflows}
           disabled={saving}
           focusOnMount
-          placeholder="Edit message…"
+          placeholder={t('agent.pending.editPlaceholder')}
           seedContent={message.content}
           onChange={setContent}
           onMentionLookupPendingChange={setLookupPending}
           onSubmit={save}
-          onPasteFiles={() =>
-            toast.info('Add new files with a new message instead.')
-          }
+          onPasteFiles={() => toast.info(t('agent.pending.editPasteFiles'))}
         />
       </Box>
       <Group gap="xs" justify="flex-end">
         <Button size="xs" variant="subtle" color="gray" onClick={onCancel}>
-          Discard changes
+          {t('agent.pending.discard')}
         </Button>
         <Button
           size="xs"
@@ -164,7 +184,7 @@ function PendingEdit({
           loading={saving}
           disabled={empty || lookupPending}
         >
-          Save
+          {t('common.save')}
         </Button>
       </Group>
     </Box>
@@ -182,6 +202,7 @@ function PendingRow({
   mentions: Mentions;
   onResult: (result: PendingMessagesResult) => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const update = useMutation({
     mutationFn: (changes: Parameters<typeof updatePendingMessage>[2]) =>
@@ -191,19 +212,26 @@ function PendingRow({
       onResult(result);
     },
     onError: (error) =>
-      toast.error(errorText(error, 'Could not save the message.')),
+      toast.error(errorText(error, t('agent.pending.saveFailed'))),
   });
   const cancel = useMutation({
     mutationFn: () => cancelPendingMessage(sessionId, message.id),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, 'Could not cancel the message.')),
+      toast.error(errorText(error, t('agent.pending.cancelFailed'))),
   });
   const sendNow = useMutation({
     mutationFn: () => sendPendingMessageNow(sessionId, message.id),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, 'Could not send the message now.')),
+      toast.error(errorText(error, t('agent.pending.sendNowFailed'))),
+  });
+  const switchMode = useMutation({
+    mutationFn: (mode: AgentMessageMode) =>
+      updatePendingMessage(sessionId, message.id, { mode }),
+    onSuccess: onResult,
+    onError: (error) =>
+      toast.error(errorText(error, t('agent.pending.switchFailed'))),
   });
   const editable = message.status === 'pending';
   // A run taking the message in ends any edit: it can no longer change.
@@ -213,8 +241,26 @@ function PendingRow({
     if (!editable) setEditing(false);
   }
   // A save still in flight would close an edit reopened meanwhile.
-  const working = cancel.isPending || sendNow.isPending || update.isPending;
+  const working =
+    cancel.isPending ||
+    sendNow.isPending ||
+    update.isPending ||
+    switchMode.isPending;
   const files = message.images.length + message.attachments.length;
+  // Show the switch at once; the result (or a failure) settles it.
+  const mode =
+    switchMode.isPending && switchMode.variables
+      ? switchMode.variables
+      : message.mode;
+  const badge = (
+    <Badge
+      size="xs"
+      variant="light"
+      color={mode === 'steer' ? 'primary' : 'gray'}
+    >
+      {t(MODE_LABEL[mode])}
+    </Badge>
+  );
 
   return (
     <Box
@@ -223,15 +269,24 @@ function PendingRow({
       data-status={message.status}
     >
       <Group gap="xs" wrap="nowrap" align="flex-start">
-        <Tooltip label={MODE_HINT[message.mode]} withArrow multiline w={220}>
-          <Badge
-            size="xs"
-            variant="light"
-            color={message.mode === 'steer' ? 'primary' : 'gray'}
-            className={classes.mode}
-          >
-            {MODE_LABEL[message.mode]}
-          </Badge>
+        <Tooltip
+          label={t(editable ? MODE_SWITCH_HINT[mode] : MODE_HINT[mode])}
+          withArrow
+          multiline
+          w={220}
+        >
+          {editable ? (
+            <UnstyledButton
+              className={classes.mode}
+              aria-label={t(MODE_SWITCH_LABEL[mode])}
+              disabled={working}
+              onClick={() => switchMode.mutate(otherMode(mode))}
+            >
+              {badge}
+            </UnstyledButton>
+          ) : (
+            <Box className={classes.mode}>{badge}</Box>
+          )}
         </Tooltip>
         {editing && editable ? (
           <Box className={classes.body}>
@@ -249,36 +304,37 @@ function PendingRow({
           <>
             <Box className={classes.body}>
               <Text size="sm" lineClamp={2} className={classes.text}>
-                {message.text || (files > 0 ? 'Attachments only' : '')}
+                {message.text ||
+                  (files > 0 ? t('agent.pending.attachmentsOnly') : '')}
               </Text>
               {files > 0 ? (
                 <Text size="xs" c="dimmed">
-                  {files === 1 ? '1 attachment' : `${files} attachments`}
+                  {t('agent.pending.attachments', { count: files })}
                 </Text>
               ) : null}
             </Box>
             {editable ? (
               <Group gap={2} wrap="nowrap" className={classes.actions}>
-                <Tooltip label="Edit" withArrow>
+                <Tooltip label={t('agent.pending.edit')} withArrow>
                   <ActionIcon
                     variant="subtle"
                     color="gray"
                     size={26}
                     radius="md"
-                    aria-label="Edit message"
+                    aria-label={t('agent.pending.editLabel')}
                     disabled={working}
                     onClick={() => setEditing(true)}
                   >
                     <IconPencil size={15} stroke={1.7} />
                   </ActionIcon>
                 </Tooltip>
-                <Tooltip label="Stop the current reply and send now" withArrow>
+                <Tooltip label={t('agent.pending.sendNowHint')} withArrow>
                   <ActionIcon
                     variant="subtle"
                     color="gray"
                     size={26}
                     radius="md"
-                    aria-label="Send now"
+                    aria-label={t('agent.pending.sendNow')}
                     loading={sendNow.isPending}
                     disabled={working}
                     onClick={() => sendNow.mutate()}
@@ -286,13 +342,13 @@ function PendingRow({
                     <IconSend size={15} stroke={1.7} />
                   </ActionIcon>
                 </Tooltip>
-                <Tooltip label="Cancel" withArrow>
+                <Tooltip label={t('agent.pending.cancel')} withArrow>
                   <ActionIcon
                     variant="subtle"
                     color="gray"
                     size={26}
                     radius="md"
-                    aria-label="Cancel message"
+                    aria-label={t('agent.pending.cancelLabel')}
                     loading={cancel.isPending}
                     disabled={working}
                     onClick={() => cancel.mutate()}
@@ -305,7 +361,7 @@ function PendingRow({
               <Group gap={6} wrap="nowrap" c="dimmed">
                 <Loader size={12} color="gray" />
                 <Text size="xs" c="dimmed">
-                  Sending…
+                  {t('agent.pending.sending')}
                 </Text>
               </Group>
             )}
@@ -333,18 +389,19 @@ export function PendingTray({
   workflows?: WorkflowListItem[];
   onResult: (result: PendingMessagesResult) => void;
 }) {
+  const { t } = useI18n();
   const resume = useMutation({
     mutationFn: () => resumePendingMessages(sessionId),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, 'Could not resume the messages.')),
+      toast.error(errorText(error, t('agent.pending.resumeFailed'))),
   });
   if (pending.messages.length === 0) return null;
   return (
     <Box
       component="section"
       className={classes.tray}
-      aria-label="Pending messages"
+      aria-label={t('agent.pending.label')}
     >
       {pending.paused ? (
         <Group
@@ -355,10 +412,7 @@ export function PendingTray({
         >
           <Group gap={6} wrap="nowrap">
             <IconPlayerPause size={14} stroke={1.7} />
-            <Text size="xs">
-              Paused after the last reply stopped. These messages wait until you
-              resume.
-            </Text>
+            <Text size="xs">{t('agent.pending.paused')}</Text>
           </Group>
           <Button
             size="compact-xs"
@@ -367,7 +421,7 @@ export function PendingTray({
             loading={resume.isPending}
             onClick={() => resume.mutate()}
           >
-            Resume
+            {t('agent.pending.resume')}
           </Button>
         </Group>
       ) : null}

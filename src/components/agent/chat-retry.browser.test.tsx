@@ -143,6 +143,13 @@ vi.mock('~queries/agent', () => ({
   }),
 }));
 
+vi.mock('~queries/agent-preferences', () => ({
+  agentPreferencesQueryOptions: (userId: string) => ({
+    queryKey: ['test-agent-preferences', userId],
+    queryFn: async () => ({ userId, messageMode: 'steer' }),
+  }),
+}));
+
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: {
     queryKey: ['test-apps'],

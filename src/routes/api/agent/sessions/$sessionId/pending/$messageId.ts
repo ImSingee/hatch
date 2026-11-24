@@ -19,19 +19,22 @@ import { errorResponse } from '~server/errors';
  * Each given field replaces that part of the message; an omitted field stays
  * unchanged. `attachmentIds` lists the attachments to keep (only removal is
  * possible), so it restates every one that stays; `[]` removes them all.
+ * `mode` switches the message between queue and steer delivery.
  */
 const updateBodySchema = z
   .object({
     content: composerInputSchema.optional(),
     images: agentMessageImagesSchema.optional(),
     attachmentIds: agentMessageAttachmentIdsSchema.optional(),
+    mode: z.enum(['queue', 'steer']).optional(),
   })
   .strict()
   .refine(
     (body) =>
       body.content !== undefined ||
       body.images !== undefined ||
-      body.attachmentIds !== undefined,
+      body.attachmentIds !== undefined ||
+      body.mode !== undefined,
     { message: 'Supply at least one field to change.' },
   );
 
@@ -70,10 +73,9 @@ export async function patchAgentPendingMessage({
     return new Response('Bad request', { status: 400 });
   }
 
+  const { mode, ...message } = parsed;
   try {
-    return Response.json(
-      await updatePendingMessage({ ...ids, message: parsed }),
-    );
+    return Response.json(await updatePendingMessage({ ...ids, message, mode }));
   } catch (error) {
     // Service errors carry their own status; anything else is ours.
     return errorResponse(error, 500);

@@ -71,7 +71,12 @@ test('restores mixed snapshots from plain text and HTML, submits identities, and
   await expect.element(screen.getByText('@Notes "{draft}"')).toBeVisible();
   await expect.element(screen.getByText('@Digest')).toBeVisible();
   await screen.getByRole('button', { name: 'Send' }).click();
-  expect(onSubmit).toHaveBeenLastCalledWith({ content, images: [], files: [] });
+  expect(onSubmit).toHaveBeenLastCalledWith({
+    content,
+    images: [],
+    files: [],
+    switchMode: false,
+  });
 
   await input.click();
   await selectEditorContents();
@@ -94,7 +99,12 @@ test('restores mixed snapshots from plain text and HTML, submits identities, and
   await expect.element(input).toHaveTextContent('');
   paste(input.element(), copied.clipboardData.getData('text/plain'));
   await screen.getByRole('button', { name: 'Send' }).click();
-  expect(onSubmit).toHaveBeenLastCalledWith({ content, images: [], files: [] });
+  expect(onSubmit).toHaveBeenLastCalledWith({
+    content,
+    images: [],
+    files: [],
+    switchMode: false,
+  });
 });
 
 test('replaces the selection with snapshots in one undoable paste and counts only remaining references', async () => {
@@ -184,7 +194,12 @@ test('copies exactly the selected message content and restores it in the editor'
     copied.clipboardData.getData('text/html'),
   );
   await screen.getByRole('button', { name: 'Send' }).click();
-  expect(onSubmit).toHaveBeenCalledWith({ content, images: [], files: [] });
+  expect(onSubmit).toHaveBeenCalledWith({
+    content,
+    images: [],
+    files: [],
+    switchMode: false,
+  });
 
   const range = document.createRange();
   range.setStart(mention.lastChild!, 0);
@@ -317,7 +332,12 @@ test('round-trips native browser clipboard through a plain textarea back into th
   await input.click();
   await userEvent.paste();
   await screen.getByRole('button', { name: 'Send' }).click();
-  expect(onSubmit).toHaveBeenCalledWith({ content, images: [], files: [] });
+  expect(onSubmit).toHaveBeenCalledWith({
+    content,
+    images: [],
+    files: [],
+    switchMode: false,
+  });
 });
 
 test('keeps file attachments ahead of mention text when both appear on the clipboard', async () => {
@@ -356,5 +376,6 @@ test('keeps file attachments ahead of mention text when both appear on the clipb
         file,
       }),
     ],
+    switchMode: false,
   });
 });
