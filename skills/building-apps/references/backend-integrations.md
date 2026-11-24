@@ -237,6 +237,21 @@ binary output). `--json` returns `ok`, `status`, `contentType`,
 `bodyEncoding: "base64"`, and the base64 `body`. Non-2xx exits nonzero. Calls are
 never retried and redirects are refused; a timeout may have an unknown outcome.
 
+For a handler that streams server-sent events, subscribe with `--sse --json`:
+
+```sh
+hatch app invoke webhook my-app --method GET --path prs/123/events --sse --json \
+  --max-duration 600
+```
+
+It prints one NDJSON line per event (`{"type":"event","event","id","data"}`,
+`data` as the raw string) between an `open` and an `end` record. `--timeout`
+then bounds only the wait for headers; `--idle-timeout` (default 120s) fails
+after that long without bytes, so have the handler send a `: ping` comment at
+least every 30 seconds. On `stream_idle_timeout` or `stream_interrupted`, resume
+with `--header 'Last-Event-ID: <details.lastEventId>'`; the CLI never
+reconnects by itself.
+
 Preserve exact raw bytes when verifying signatures; decoding and re-encoding a
 binary or non-canonical body changes the HMAC input. For example, in `none` mode
 verify a provider's `X-Provider-Signature` against `await request.arrayBuffer()`

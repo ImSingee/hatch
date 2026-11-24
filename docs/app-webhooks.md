@@ -60,10 +60,54 @@ save binary output. Errors and non-success HTTP status diagnostics go to stderr.
 --json emits one object with ok, status, contentType, bodyEncoding (always base64),
 and body (base64, including for text). HTTP failure preserves its body/status and
 exits nonzero (401: 3, 403: 4, 404: 5, other non-2xx: 7). Standard global
---profile/--config/--workdir/--timeout/help conventions apply. Timeout covers lookup
-and invocation. SIGINT exits 130. Requests are never retried and redirects are
+--profile/--config/--workdir/--timeout/help conventions apply. Without `--sse`,
+the timeout covers lookup and invocation. SIGINT exits 130. Requests are never retried and redirects are
 refused. A timeout/cancellation can occur after an App mutation: inspect state
 before retrying.
+
+### Server-sent events
+
+`--sse` subscribes to an App handler that answers `text/event-stream`:
+
+```sh
+hatch app invoke webhook my-app --method GET --path prs/123/events --sse --json
+hatch app invoke webhook my-app --method GET --path prs/123/events --sse --json \
+  --idle-timeout 300 --max-duration 3600 --header 'Last-Event-ID: 42'
+```
+
+The CLI sends `Accept: text/event-stream` (so `--header Accept` and `HEAD` are
+rejected). `--timeout` (default 30s) then bounds only the wait for response
+headers. `--idle-timeout` (default 120s, at most 86400) fails the call with
+`stream_idle_timeout` (exit 7) when no bytes arrive for that long; comments
+count, so the App should send a `: ping` comment at least every 30 seconds.
+`--max-duration` (at most 86400s, unset by default) ends the stream normally.
+It bounds the whole run: if stdout is still not read 5 seconds later, the CLI
+says so on stderr and exits 7 with the pending output discarded.
+
+`--sse --json` prints NDJSON, one record per line, as each event arrives:
+
+```jsonl
+{"type":"open","status":200,"contentType":"text/event-stream"}
+{"type":"event","event":"message","id":"42","data":"{\"pr\":123}"}
+{"type":"end","ok":true,"reason":"closed","lastEventId":"42","events":1,"retry":null}
+```
+
+Events follow the WHATWG parsing rules: comments are dropped, multi-line `data`
+is joined with `\n`, `event` defaults to `message` and `id` is the last event ID
+in effect. `data` is the raw string; parse it yourself (`jq '.data | fromjson'`).
+`reason` is `closed` when the App ends the stream and `max_duration` when
+`--max-duration` elapses; both exit 0. Otherwise the last line is the standard
+`{ok:false,error:{code,message,details}}`, where `details` holds `lastEventId`,
+`events` and `retry`. Codes: `http_error` (non-2xx; exit 3/4/5/7 as above),
+`not_event_stream`, `stream_idle_timeout`, `stream_interrupted` (connection lost
+mid-stream, for example after a redeploy once
+`HATCH_APP_DRAIN_TIMEOUT_SECONDS` elapses) and `stream_event_too_large` (one
+event over 1 MiB), all exit 7; SIGINT exits 130. The CLI never reconnects: pass
+`--header 'Last-Event-ID: <lastEventId>'` to resume. Without `--json`, `--sse`
+writes the raw bytes and reports how the stream ended on stderr.
+
+Without `--sse`, `--json` buffers the whole body; when the response is
+`text/event-stream` it warns on stderr as soon as headers arrive.
 
 ## Implementation and completion criteria
 

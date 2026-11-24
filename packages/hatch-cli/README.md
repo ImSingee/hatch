@@ -343,7 +343,13 @@ default and exactly `--timeout` when it is given. `--timeout` accepts at most
 unknown host, unreachable network) is `network_error` (7) naming its URL; no
 request was sent, so retrying is safe. A connection that fails or times out
 after the request was sent is `outcome_unknown` (7): inspect platform state
-before retrying a mutation.
+before retrying a mutation. `app invoke webhook --sse` streams server-sent
+events: `--timeout` bounds only the wait for response headers, `--idle-timeout`
+(default 120s) and `--max-duration` bound the stream, and `--json` prints NDJSON
+records. Its stream errors are `http_error`, `not_event_stream`,
+`stream_idle_timeout`, `stream_interrupted` and `stream_event_too_large` (all
+exit 7 except `http_error`, which maps 401/403/404 to 3/4/5); see
+`docs/app-webhooks.md`.
 
 | Exit | Meaning                                              |
 | ---- | ---------------------------------------------------- |
