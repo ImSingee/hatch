@@ -1,6 +1,6 @@
 ---
 name: building-apps
-description: Design, build, validate, and deploy Hatch Apps with React frontends, Connect/Deno backends, widgets, managed Data Tables, storage, and integrations. Use whenever creating, modifying, debugging, or deploying an App.
+description: Design, build, validate, and deploy Hatch Apps with React frontends, Connect/Deno backends, widgets, managed Data Tables, storage, integrations, and App icons. Use whenever creating, modifying, debugging, or deploying an App, or designing, changing, or removing its icon.
 ---
 
 # Build a Hatch App
@@ -61,8 +61,10 @@ Do not import generated files or execution modules from the manifest.
    deploy leaves that commit on `master` unreleased: fix the failure, validate
    again, commit on top, and redeploy.
 7. Call `get_app` to confirm the deployed state, then explain how to open it.
-8. After the first successful deployment of a new App, offer once to design
-   its icon and follow the `app-icon` Skill if the user agrees.
+8. After the first successful deployment of a new App, end that same reply by
+   offering once, in one sentence, to design its icon. Do not skip this step.
+   If the user agrees, follow [App icons](references/app-icon.md). Generate
+   images only after the user agrees.
 
 If deploy says `master` advanced, refresh the same checkout, run
 `git fetch origin master`, rebase onto `origin/master`, resolve conflicts, and
@@ -550,6 +552,10 @@ Read only the reference relevant to the requested capability:
   new scheduled or triggered jobs.
 - [Data and storage](references/data-storage.md): Postgres, Storage, KV, runtime
   assets, and Data Table query/mutation details.
+- [App icons](references/app-icon.md): design candidate icons with an image
+  model and let the user choose, upload a user-supplied file, or remove the
+  icon (`hatch app icon`). Read it whenever the user asks for an App icon or
+  logo, and after the user accepts the icon offer from Core workflow step 8.
 - [Notifications](references/backend-integrations.md#notifications): declare
   notification kinds, push with `notify()` from `@hatch/app/notifications`
   (edit or recall later with `updateNotification` / `recallNotification`, or
