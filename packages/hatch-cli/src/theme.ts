@@ -15,7 +15,7 @@ import {
 
 export type ThemeCommand =
   | { kind: 'get' }
-  | { kind: 'set'; accent: AccentName };
+  | { kind: 'set'; accent?: AccentName; dockLabels?: boolean };
 
 /** Map argv to one command; rejects anything unusable before any RPC. */
 export function parseThemeCommand(
@@ -29,15 +29,34 @@ export function parseThemeCommand(
     args,
     offset,
     2,
-    operation === 'set' ? { accent: { type: 'string' } } : {},
+    operation === 'set'
+      ? {
+          accent: { type: 'string' },
+          'dock-labels': { type: 'boolean' },
+          'no-dock-labels': { type: 'boolean' },
+        }
+      : {},
   );
   if (positionals.length)
     throw invalid('This command takes no positional arguments.');
   if (operation === 'get') return { command: { kind: 'get' }, flags };
   const accent = textFlag(flags, 'accent');
-  if (!isAccentName(accent))
+  if (accent !== undefined && !isAccentName(accent))
     throw invalid(`--accent must be one of: ${ACCENT_NAMES.join(', ')}.`);
-  return { command: { kind: 'set', accent }, flags };
+  const show = flags['dock-labels'] === true;
+  const hide = flags['no-dock-labels'] === true;
+  if (show && hide)
+    throw invalid('Supply at most one of --dock-labels and --no-dock-labels.');
+  if (accent === undefined && !show && !hide)
+    throw invalid('Supply --accent, --dock-labels or --no-dock-labels.');
+  return {
+    command: {
+      kind: 'set',
+      ...(accent === undefined ? {} : { accent }),
+      ...(show || hide ? { dockLabels: show } : {}),
+    },
+    flags,
+  };
 }
 
 export async function runTheme(
@@ -50,7 +69,10 @@ export async function runTheme(
   printResult(
     command.kind === 'get'
       ? await client.theme.get()
-      : await client.theme.set({ accent: command.accent }),
+      : await client.theme.set({
+          accent: command.accent,
+          dockLabels: command.dockLabels,
+        }),
     flags,
   );
 }

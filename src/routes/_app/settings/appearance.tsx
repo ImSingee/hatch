@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { GroupCard } from '~components/page/page';
 import { AccentPanel } from '~components/settings/accent-panel';
+import { DockLabelsPanel } from '~components/settings/dock-labels-panel';
 import { SectionHead } from '~components/settings/section-head';
 import { themeQueryOptions } from '~queries/theme';
 
@@ -15,6 +16,9 @@ export const Route = createFileRoute('/_app/settings/appearance')({
       />
       <GroupCard padded>
         <AccentPanel />
+      </GroupCard>
+      <GroupCard padded>
+        <DockLabelsPanel />
       </GroupCard>
     </>
   ),

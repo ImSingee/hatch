@@ -21,7 +21,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_theme: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ch1oYXRjaC9wbGF0Zm9ybS92MS90aGVtZS5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiJQoGQWNjZW50EgwKBG5hbWUYASABKAkSDQoFY29sb3IYAiABKAkiYAoKVGhlbWVTdGF0ZRIOCgZhY2NlbnQYASABKAkSFgoOZGVmYXVsdF9hY2NlbnQYAiABKAkSKgoHYWNjZW50cxgDIAMoCzIZLmhhdGNoLnBsYXRmb3JtLnYxLkFjY2VudCIRCg9HZXRUaGVtZVJlcXVlc3QiQAoQR2V0VGhlbWVSZXNwb25zZRIsCgV0aGVtZRgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLlRoZW1lU3RhdGUiPwoPU2V0VGhlbWVSZXF1ZXN0EiwKBmFjY2VudBgBIAEoCUIcukgZchcQARggMhFeW2Etel1bYS16MC05LV0qJCJAChBTZXRUaGVtZVJlc3BvbnNlEiwKBXRoZW1lGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuVGhlbWVTdGF0ZTK4AQoMVGhlbWVTZXJ2aWNlElMKCEdldFRoZW1lEiIuaGF0Y2gucGxhdGZvcm0udjEuR2V0VGhlbWVSZXF1ZXN0GiMuaGF0Y2gucGxhdGZvcm0udjEuR2V0VGhlbWVSZXNwb25zZRJTCghTZXRUaGVtZRIiLmhhdGNoLnBsYXRmb3JtLnYxLlNldFRoZW1lUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLlNldFRoZW1lUmVzcG9uc2ViBnByb3RvMw',
+    'Ch1oYXRjaC9wbGF0Zm9ybS92MS90aGVtZS5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiJQoGQWNjZW50EgwKBG5hbWUYASABKAkSDQoFY29sb3IYAiABKAkidQoKVGhlbWVTdGF0ZRIOCgZhY2NlbnQYASABKAkSFgoOZGVmYXVsdF9hY2NlbnQYAiABKAkSKgoHYWNjZW50cxgDIAMoCzIZLmhhdGNoLnBsYXRmb3JtLnYxLkFjY2VudBITCgtkb2NrX2xhYmVscxgEIAEoCCIRCg9HZXRUaGVtZVJlcXVlc3QiQAoQR2V0VGhlbWVSZXNwb25zZRIsCgV0aGVtZRgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLlRoZW1lU3RhdGUieQoPU2V0VGhlbWVSZXF1ZXN0EjEKBmFjY2VudBgBIAEoCUIcukgZchcQARggMhFeW2Etel1bYS16MC05LV0qJEgAiAEBEhgKC2RvY2tfbGFiZWxzGAIgASgISAGIAQFCCQoHX2FjY2VudEIOCgxfZG9ja19sYWJlbHMiQAoQU2V0VGhlbWVSZXNwb25zZRIsCgV0aGVtZRgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLlRoZW1lU3RhdGUyuAEKDFRoZW1lU2VydmljZRJTCghHZXRUaGVtZRIiLmhhdGNoLnBsYXRmb3JtLnYxLkdldFRoZW1lUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkdldFRoZW1lUmVzcG9uc2USUwoIU2V0VGhlbWUSIi5oYXRjaC5wbGF0Zm9ybS52MS5TZXRUaGVtZVJlcXVlc3QaIy5oYXRjaC5wbGF0Zm9ybS52MS5TZXRUaGVtZVJlc3BvbnNlYgZwcm90bzM',
     [file_buf_validate_validate],
   );
 
@@ -76,6 +76,14 @@ export type ThemeState = Message<'hatch.platform.v1.ThemeState'> & {
    * @generated from field: repeated hatch.platform.v1.Accent accents = 3;
    */
   accents: Accent[];
+
+  /**
+   * Whether the web dock shows each tile's name under it. Off by default;
+   * the full name always shows on hover.
+   *
+   * @generated from field: bool dock_labels = 4;
+   */
+  dockLabels: boolean;
 };
 
 /**
@@ -118,15 +126,24 @@ export const GetThemeResponseSchema: GenMessage<GetThemeResponse> =
   messageDesc(file_hatch_platform_v1_theme, 3);
 
 /**
+ * Changes the fields it sets and keeps the others; set at least one.
+ *
  * @generated from message hatch.platform.v1.SetThemeRequest
  */
 export type SetThemeRequest = Message<'hatch.platform.v1.SetThemeRequest'> & {
   /**
    * One of the names in ThemeState.accents; the platform checks membership.
    *
-   * @generated from field: string accent = 1;
+   * @generated from field: optional string accent = 1;
    */
-  accent: string;
+  accent?: string | undefined;
+
+  /**
+   * Whether the web dock shows each tile's name under it.
+   *
+   * @generated from field: optional bool dock_labels = 2;
+   */
+  dockLabels?: boolean | undefined;
 };
 
 /**

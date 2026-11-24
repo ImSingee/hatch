@@ -108,29 +108,30 @@
   background: var(--mantine-color-primary-6);
 }
 
+/* Names hidden (the default): the open marker sits just under the tile, the
+   tiles close up, and the space above and below each tile stays even. */
+.dock[data-labels='hidden'] {
+  padding-bottom: 5px;
+}
+
+.dock[data-labels='hidden'] .row {
+  min-height: 49px;
+}
+
+.dock[data-labels='hidden'] .item {
+  width: calc(var(--size-dock-tile) + 12px);
+}
+
+.dock[data-labels='hidden'] .label {
+  display: none;
+}
+
+.dock[data-labels='hidden'] .marker {
+  margin-top: 0;
+}
+
 .item[data-open] {
   color: var(--mantine-color-text);
-}
-
-.options {
-  position: absolute;
-  top: 0;
-  right: 2px;
-  opacity: 0;
-  box-shadow: var(--shadow-card);
-  transition: opacity var(--transition-fast);
-}
-
-.slot:hover .options,
-.options:focus-visible,
-.options[aria-expanded='true'] {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .options {
-    opacity: 1;
-  }
 }
 
 .add {

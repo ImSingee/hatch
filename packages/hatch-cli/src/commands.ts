@@ -243,13 +243,13 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'get'],
     usage: 'theme get',
     description:
-      'Show the instance theme: the chosen accent, the default accent and every accent that can be chosen with its #RRGGBB colour.',
+      'Show the instance theme: the chosen accent, the default accent, every accent that can be chosen with its #RRGGBB colour, and dockLabels (whether the web dock shows names under its tiles).',
   },
   {
     path: ['theme', 'set'],
-    usage: 'theme set --accent <name>',
+    usage: 'theme set [--accent <name>] [--dock-labels | --no-dock-labels]',
     description:
-      'Choose the accent colour of the whole instance, replacing the previous choice. Every signed-in web, mobile and desktop client recolours without a reload. Names come from theme get.',
+      'Change the theme of the whole instance; settings left out keep their value, and at least one is required. --accent replaces the accent colour (names come from theme get); every signed-in web, mobile and desktop client recolours without a reload. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default); the full name still shows on hover.',
   },
   {
     path: ['pin', 'list'],

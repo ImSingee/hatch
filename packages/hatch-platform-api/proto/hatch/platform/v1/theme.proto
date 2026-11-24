@@ -24,6 +24,9 @@ message ThemeState {
   string default_accent = 2;
   // Every accent that SetTheme accepts.
   repeated Accent accents = 3;
+  // Whether the web dock shows each tile's name under it. Off by default;
+  // the full name always shows on hover.
+  bool dock_labels = 4;
 }
 
 message GetThemeRequest {}
@@ -32,13 +35,16 @@ message GetThemeResponse {
   ThemeState theme = 1;
 }
 
+// Changes the fields it sets and keeps the others; set at least one.
 message SetThemeRequest {
   // One of the names in ThemeState.accents; the platform checks membership.
-  string accent = 1 [(buf.validate.field).string = {
+  optional string accent = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 32
     pattern: "^[a-z][a-z0-9-]*$"
   }];
+  // Whether the web dock shows each tile's name under it.
+  optional bool dock_labels = 2;
 }
 
 message SetThemeResponse {

@@ -22,6 +22,20 @@ describe('theme command arguments', () => {
       });
   });
 
+  it('sets dock names on their own or with the accent, leaving out what is not given', () => {
+    expect(command('theme', 'set', '--dock-labels')).toEqual({
+      kind: 'set',
+      dockLabels: true,
+    });
+    expect(command('theme', 'set', '--no-dock-labels')).toEqual({
+      kind: 'set',
+      dockLabels: false,
+    });
+    expect(
+      command('theme', 'set', '--accent', 'teal', '--no-dock-labels'),
+    ).toEqual({ kind: 'set', accent: 'teal', dockLabels: false });
+  });
+
   it('rejects unusable input before any request and names the flag', () => {
     for (const args of [
       ['theme'],
@@ -35,6 +49,9 @@ describe('theme command arguments', () => {
       ['theme', 'set', '--accent', 'orange'],
       // Inherited object keys are not accents.
       ['theme', 'set', '--accent', 'toString'],
+      ['theme', 'set', '--dock-labels', '--no-dock-labels'],
+      ['theme', 'set', '--dock-labels=yes'],
+      ['theme', 'get', '--dock-labels'],
     ])
       expect({ args, code: rejected(...args).code }).toEqual({
         args,
@@ -43,7 +60,11 @@ describe('theme command arguments', () => {
     // Every rejection names the flag to fix, including the ones Node's
     // argument parser raises before the command sees the flags.
     for (const [args, message] of [
-      [['theme', 'set'], '--accent must be one of'],
+      [['theme', 'set'], 'Supply --accent, --dock-labels or --no-dock-labels'],
+      [
+        ['theme', 'set', '--dock-labels', '--no-dock-labels'],
+        'at most one of --dock-labels and --no-dock-labels',
+      ],
       [['theme', 'set', '--accent', 'orange'], '--accent must be one of'],
       [['theme', 'set', '--accent'], '--accent needs a value'],
       [['theme', 'set', '--accent', '--json'], '--accent needs a value'],

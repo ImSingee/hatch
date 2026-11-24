@@ -309,10 +309,15 @@ wide the two buttons become one back button at the start of the title bar.
 
 - Tile 40 (`sizes.dockTile`), radius 12: the App icon, or a `tiles` fill
   with a white monogram.
-- Label under the tile: 11 / 700, neutral shade 8, one line, ellipsis, tile
-  column 64 wide, gap 5.
-- Hover: the tile rises 3 px over 150 ms. Running marker: a 4 px accent dot
-  under the label.
+- Names under the tiles are an instance setting (`ui.theme.dockLabels`,
+  Appearance › Show names in the dock), off by default. Shown: 11 / 700,
+  neutral shade 8, one line, ellipsis, tile column 64 wide, gap 5. Hidden:
+  the tile column is 52 wide.
+- Hover: the tile rises 3 px over 150 ms, and a tooltip above it gives the
+  full name whether or not names are shown. Running marker: a 4 px accent
+  dot under the name, or 5 under the tile when names are hidden.
+- A tile has no button of its own: its actions are in the dock's right-click
+  menu (a long press on touch).
 - Workflow tiles use radius `12 12 12 3` to differ from App tiles by shape.
 - The groups carry no labels; a hairline divider separates Apps from
   Workflows.
@@ -327,8 +332,10 @@ wide the two buttons become one back button at the start of the title bar.
   then Add an app ›, Add a workflow › and New with Agent. The Workflows
   group, with its divider, shows only while a Workflow is pinned.
 - The dock itself: `surfaces.dock` fill with blur, 1 px white border, radius
-  28 (`radius.dock`), `dock` shadow, padding 14 18 8, so the space above the tiles matches the space under the labels. The tab bar that
-  replaces it below 560 wide uses the same fill, border, radius and shadow.
+  28 (`radius.dock`), `dock` shadow, padding 14 18 8 with names and
+  14 18 5 without, so the space above the tiles matches the space under the
+  names or under the tiles. The tab bar that replaces it below 560 wide uses
+  the same fill, border, radius and shadow.
 - With a mouse (`hover: hover`) the dock floats over the stage and takes no
   room: it waits below the bottom edge. While it waits, a 64 × 5 pill in
   neutral shade 5, 6 above the bottom edge and centred, marks where it comes

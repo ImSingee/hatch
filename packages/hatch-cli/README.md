@@ -490,6 +490,7 @@ that were saved, so no image has to be generated again.
 ```sh
 hatch theme get --json
 hatch theme set --accent teal
+hatch theme set --dock-labels
 hatch pin list --json
 hatch pin list --limit 20 --cursor <next-cursor> --json
 hatch pin add --app my-app --label Inbox --entry /inbox
@@ -501,9 +502,12 @@ hatch pin add --workflow my-workflow
 hatch pin remove --dashboard <dashboard-id>
 ```
 
-`theme get` prints the chosen `accent`, the `defaultAccent` and every accent
-with its colour; `theme set` replaces the accent for the whole instance and
-signed-in clients recolour without a reload.
+`theme get` prints the chosen `accent`, the `defaultAccent`, every accent
+with its colour and `dockLabels`. `theme set` changes only the settings it is
+given, for the whole instance: `--accent` replaces the accent and signed-in
+clients recolour without a reload; `--dock-labels` / `--no-dock-labels` shows
+or hides the names under the web dock tiles (hidden by default). Give at least
+one; `--dock-labels` and `--no-dock-labels` together are rejected.
 
 `pin list` prints App pins in navigation order (`id` is the pin id, which
 `update`, `remove --pin` and `reorder --pin` take), pinned Workflows and pinned

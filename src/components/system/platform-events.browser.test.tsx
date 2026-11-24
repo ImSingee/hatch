@@ -377,6 +377,7 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
       accent: 'indigo',
       defaultAccent: 'indigo',
       accents: [],
+      dockLabels: false,
     });
 
   markFresh();

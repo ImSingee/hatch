@@ -155,6 +155,7 @@ const theme = (value: ThemeState | undefined) => {
       name: accent.name,
       color: accent.color,
     })),
+    dockLabels: state.dockLabels,
   };
 };
 const appPin = (value: PinnedApp | undefined) => {
@@ -502,7 +503,7 @@ export function cliClient(transport: Transport) {
     },
     theme: {
       get: async () => theme((await themes.getTheme({})).theme),
-      set: async (input: { accent: string }) =>
+      set: async (input: { accent?: string; dockLabels?: boolean }) =>
         theme((await themes.setTheme(input)).theme),
     },
     pins: {

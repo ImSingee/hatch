@@ -92,6 +92,13 @@ describe('theme and pin RPCs', () => {
         accent: 'teal',
         defaultAccent: 'indigo',
       });
+      // Dock names change on their own; the accent is kept.
+      const labels = await call('ThemeService/SetTheme', { dockLabels: true });
+      expect({ type, status: labels.status }).toEqual({ type, status: 200 });
+      expect(labels.data.theme).toMatchObject({
+        accent: 'teal',
+        dockLabels: true,
+      });
       const pinned = await call('PinService/PinApp', { app: 'notes' });
       expect({ type, status: pinned.status }).toEqual({ type, status: 200 });
       const listed = await call('PinService/ListPins');

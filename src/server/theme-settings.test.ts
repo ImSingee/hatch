@@ -7,7 +7,8 @@ vi.mock('~/db', async () => {
 });
 
 const { db, schema } = await import('~/db');
-const { getThemeState, setThemeAccent } = await import('./theme-settings');
+const { getThemeState, setThemeAccent, updateTheme } =
+  await import('./theme-settings');
 const { subscribePlatformEvents } = await import('./platform-events');
 
 beforeEach(async () => {
@@ -57,12 +58,48 @@ describe('instance theme', () => {
   it('falls back to the default accent when the stored one is no longer defined', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      await db
-        .insert(schema.platformConfig)
-        .values({ key: 'ui.theme', value: { accent: 'retired-accent' } });
-      expect((await getThemeState()).accent).toBe(tokens.defaultAccent);
+      await db.insert(schema.platformConfig).values({
+        key: 'ui.theme',
+        value: { accent: 'retired-accent', dockLabels: true },
+      });
+      const state = await getThemeState();
+      expect(state.accent).toBe(tokens.defaultAccent);
+      // The other setting survives the retired accent.
+      expect(state.dockLabels).toBe(true);
     } finally {
       warn.mockRestore();
+    }
+  });
+
+  it('hides dock names by default and changes them without touching the accent', async () => {
+    const other = Object.keys(tokens.accents).find(
+      (name) => name !== tokens.defaultAccent,
+    )!;
+    // A row written before dock names existed.
+    await db
+      .insert(schema.platformConfig)
+      .values({ key: 'ui.theme', value: { accent: other } });
+    expect(await getThemeState()).toMatchObject({
+      accent: other,
+      dockLabels: false,
+    });
+
+    const events: unknown[] = [];
+    const unsubscribe = subscribePlatformEvents((event) => events.push(event));
+    try {
+      expect(await updateTheme({ dockLabels: true })).toMatchObject({
+        accent: other,
+        dockLabels: true,
+      });
+      expect(await setThemeAccent(tokens.defaultAccent)).toMatchObject({
+        accent: tokens.defaultAccent,
+        dockLabels: true,
+      });
+      expect(events).toHaveLength(2);
+      await expect(updateTheme({})).rejects.toMatchObject({ status: 400 });
+      expect(events).toHaveLength(2);
+    } finally {
+      unsubscribe();
     }
   });
 });

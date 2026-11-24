@@ -13,6 +13,7 @@ import {
 import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { page, userEvent } from 'vitest/browser';
+import { appCssVariablesResolver, appTheme } from '~/ui/theme';
 
 type Pin = {
   id: string;
@@ -32,6 +33,7 @@ const fixtures = vi.hoisted(() => ({
     status?: string;
   }[],
   runnerState: 'connected' as string,
+  dockLabels: false,
   apps: [] as {
     id: string;
     slug: string;
@@ -63,6 +65,15 @@ vi.mock('~queries/sidebar', () => ({
   sidebarItemsQueryOptions: {
     queryKey: ['test-pins'],
     queryFn: async () => fixtures.pins,
+  },
+}));
+vi.mock('~queries/theme', () => ({
+  themeQueryOptions: {
+    queryKey: ['test-theme'],
+    queryFn: async () => ({
+      accent: 'indigo',
+      dockLabels: fixtures.dockLabels,
+    }),
   },
 }));
 vi.mock('~queries/workflows', () => ({
@@ -178,7 +189,12 @@ async function renderDesk(initialEntry: string) {
     },
   });
   const screen = await render(
-    <MantineProvider>
+    // The Desk theme and its variables, so sizes such as the dock tile are
+    // the ones users get.
+    <MantineProvider
+      theme={appTheme}
+      cssVariablesResolver={appCssVariablesResolver}
+    >
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router as never} />
       </QueryClientProvider>
@@ -211,6 +227,7 @@ beforeEach(() => {
   fixtures.workflows = [];
   fixtures.apps = [];
   fixtures.runnerState = 'connected';
+  fixtures.dockLabels = false;
 });
 
 test('every destination of the shell is reachable from the menu bar', async () => {
@@ -369,8 +386,8 @@ test('the dock lists pins and marks the one whose window is open', async () => {
   await expect.element(digest).toHaveAttribute('data-open', 'true');
   await expect.element(home).not.toHaveAttribute('data-open');
 
-  // Manage stays reachable from a pin's own menu.
-  await dock.getByRole('button', { name: 'Notes options' }).click();
+  // A pin's own actions are in the dock's right-click menu.
+  await notes.click({ button: 'right' });
   await expect
     .element(screen.getByRole('menuitem', { name: 'Manage' }))
     .toHaveAttribute('href', '/app/notes/manage');
@@ -432,7 +449,7 @@ test('a pin removed elsewhere turns its open edit dialog into a notice', async (
   const { screen, queryClient } = await renderDesk('/apps');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
   await revealDock();
-  await dock.getByRole('button', { name: 'Notes options' }).click();
+  await dock.getByRole('link', { name: 'Notes' }).click({ button: 'right' });
   await screen.getByRole('menuitem', { name: 'Edit' }).click();
   const dialog = screen.getByRole('dialog', { name: 'Edit pin' });
   await expect
@@ -578,9 +595,46 @@ test('an empty dock shows only its add tile; pins end the Apps group with All ap
     .element(dock.getByRole('button', { name: /Pin a workflow/ }))
     .not.toBeInTheDocument();
   const links = dock.getByRole('link').elements();
-  expect(links.map((link) => link.getAttribute('title'))).toEqual([
+  expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
     'Notes',
     'All apps',
     'Daily digest',
   ]);
+});
+
+test('names stay out of the dock unless the instance shows them, and pointing at a tile shows its full name', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-ledger',
+      appId: 'app-3',
+      appSlug: 'ledger',
+      label: 'Household ledger for the shared flat',
+      entryHash: null,
+    },
+  ];
+  const { screen, queryClient } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  const ledger = dock.getByRole('link', {
+    name: 'Household ledger for the shared flat',
+  });
+  await expect.element(ledger).toBeInTheDocument();
+  const printed = () =>
+    [...dock.element().querySelectorAll('[class*="_label_"]')].filter(
+      (label) => getComputedStyle(label).display !== 'none',
+    ).length;
+  expect(printed()).toBe(0);
+
+  await revealDock();
+  await ledger.hover();
+  await expect
+    .element(
+      screen.getByRole('tooltip', {
+        name: 'Household ledger for the shared flat',
+      }),
+    )
+    .toBeVisible();
+
+  fixtures.dockLabels = true;
+  await queryClient.invalidateQueries({ queryKey: ['test-theme'] });
+  await vi.waitFor(() => expect(printed()).toBeGreaterThan(0));
 });

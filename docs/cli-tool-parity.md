@@ -33,7 +33,7 @@ interface.
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
 | Image model      | image-model get / set / clear                                                                       | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed          |
 | Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap           |
-| Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent names come from the design tokens, clients recolour live                 |
+| Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
 | Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
@@ -111,9 +111,10 @@ domain service and `silent: true` option. No Agent Tool is added.
 
 ## Theme and pins: CLI only, no Agent Tool
 
-`hatch theme get | set --accent <name>` calls `ThemeService`, which reads and
-writes the `ui.theme` platform setting through `src/server/theme-settings.ts`,
-the same service as the Appearance settings page. The accent list is
+`hatch theme get | set [--accent <name>] [--dock-labels | --no-dock-labels]`
+calls `ThemeService`, which reads and writes the `ui.theme` platform setting
+through `src/server/theme-settings.ts`, the same service as the Appearance
+settings page (accent swatches and the "Show names in the dock" switch). The accent list is
 `packages/hatch-design-tokens/tokens.json`; the CLI validates `--accent`
 against the copy it was built with and the platform validates again. A change
 is published as the `theme.updated` platform event. Every pin change, from

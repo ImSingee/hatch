@@ -2,7 +2,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { authMiddleware } from './auth';
-import { getThemeState, setThemeAccent } from './theme-settings';
+import { getThemeState, setThemeAccent, updateTheme } from './theme-settings';
 
 /**
  * Public on purpose: the login page is drawn in the chosen accent, and the
@@ -16,3 +16,8 @@ export const setThemeAccentFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((accent: string) => z.string().min(1).max(32).parse(accent))
   .handler(({ data }) => setThemeAccent(data));
+
+export const setDockLabelsFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((shown: boolean) => z.boolean().parse(shown))
+  .handler(({ data }) => updateTheme({ dockLabels: data }));

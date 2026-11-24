@@ -26,8 +26,16 @@ const imageModelConfigSchema = z
   .nullable();
 export type ImageModelConfig = z.infer<typeof imageModelConfigSchema>;
 
-/** The accents come from the design tokens; nothing else lists them. */
-const uiThemeConfigSchema = z.object({ accent: z.enum(ACCENT_NAMES) });
+/**
+ * The accents come from the design tokens; nothing else lists them. Each
+ * field falls back on its own, so a retired accent does not also reset the
+ * dock labels, and rows written before `dockLabels` existed stay valid.
+ */
+const uiThemeConfigSchema = z.object({
+  accent: z.enum(ACCENT_NAMES).catch(DEFAULT_ACCENT),
+  /** Whether the web dock shows each tile's name under it. */
+  dockLabels: z.boolean().catch(false),
+});
 export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
 
 type ConfigEntry<T> = {
@@ -81,7 +89,7 @@ const REGISTRY = {
    */
   'ui.theme': {
     schema: uiThemeConfigSchema,
-    fallback: { accent: DEFAULT_ACCENT },
+    fallback: { accent: DEFAULT_ACCENT, dockLabels: false },
   } satisfies ConfigEntry<UiThemeConfig>,
 } as const;
 

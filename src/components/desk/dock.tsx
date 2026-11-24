@@ -26,6 +26,7 @@ import {
   normalizedManifestQueryOptions,
 } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
+import { themeQueryOptions } from '~queries/theme';
 import { workflowsQueryOptions } from '~queries/workflows';
 import {
   addSidebarItem,
@@ -90,7 +91,11 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
   const { data: workflows } = useQuery(workflowsQueryOptions);
+  // Names under the tiles are an instance setting, off by default.
+  const { data: theme } = useQuery(themeQueryOptions);
+  const labels = theme?.dockLabels ?? false;
   const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     id: string;
     appId: string;
@@ -365,13 +370,18 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         shadow="md"
         width={220}
         returnFocus={false}
-        onClose={() => setMenuKey(null)}
+        onOpen={() => setMenuOpen(true)}
+        onClose={() => {
+          setMenuOpen(false);
+          setMenuKey(null);
+        }}
       >
         <Menu.ContextMenu>
           {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus; the dock's tiles stay the interactive elements. */}
           <nav
             aria-label="Dock"
             className={classes.dock}
+            data-labels={labels ? 'shown' : 'hidden'}
             onMouseDown={(event) => {
               if (event.button === 2) event.preventDefault();
             }}
@@ -404,13 +414,15 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                               {...props}
                             />
                           )}
-                          menu={appMenu(item)}
+                          hintHidden={menuOpen}
                         />
                       )}
                     />
                   ) : null}
                   {pins && pins.length === 0 ? (
-                    <DockAddButton label="Add app">{appPicker}</DockAddButton>
+                    <DockAddButton label="Add app" hintHidden={menuOpen}>
+                      {appPicker}
+                    </DockAddButton>
                   ) : null}
                 </div>
                 {hasPins ? (
@@ -419,6 +431,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                     open={pathname === '/apps'}
                     glyph={<AllAppsGlyph />}
                     renderLink={(props) => <Link to="/apps" {...props} />}
+                    hintHidden={menuOpen}
                   />
                 ) : null}
               </div>
@@ -454,7 +467,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                             {...props}
                           />
                         )}
-                        menu={workflowMenu(w)}
+                        hintHidden={menuOpen}
                       />
                     ))}
                   </div>
