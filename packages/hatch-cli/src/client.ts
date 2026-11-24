@@ -44,6 +44,10 @@ import {
   type ThemeState,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import {
+  ServerService,
+  type ServerInfo,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/server_pb';
+import {
   ModelService,
   type ProviderModel,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/model_pb';
@@ -178,6 +182,10 @@ const theme = (value: ThemeState | undefined) => {
     })),
     dockLabels: state.dockLabels,
   };
+};
+const serverInfo = (value: ServerInfo | undefined) => {
+  const info = required(value);
+  return { commit: info.commit ?? null, commitTime: info.commitTime ?? null };
 };
 const appPin = (value: PinnedApp | undefined) => {
   const pin = required(value);
@@ -494,6 +502,7 @@ export function cliClient(transport: Transport) {
   const sdk = createClient(SdkService, transport);
   const images = createClient(ImageService, transport);
   const themes = createClient(ThemeService, transport);
+  const servers = createClient(ServerService, transport);
   const models = createClient(ModelService, transport);
   const pins = createClient(PinService, transport);
   const dashboards = createClient(DashboardService, transport);
@@ -611,6 +620,9 @@ export function cliClient(transport: Transport) {
       },
       setKind: async (input: { id: string; kind: string }) =>
         providerModel((await models.setModelKind(input)).model),
+    },
+    server: {
+      info: async () => serverInfo((await servers.getServerInfo({})).server),
     },
     theme: {
       get: async () => theme((await themes.getTheme({})).theme),

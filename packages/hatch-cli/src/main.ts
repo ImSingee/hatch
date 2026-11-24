@@ -13,6 +13,7 @@ import { parsePreferencesCommand, runPreferences } from './preferences';
 import { runNotification } from './notifications';
 import { runImage } from './image';
 import { runTheme } from './theme';
+import { runServer } from './server';
 import { runModel } from './model';
 import { runDashboard } from './dashboard';
 import { runPin } from './pin';
@@ -144,6 +145,7 @@ try {
   else if (name === 'notification')
     await runNotification(args, offset, controller.signal);
   else if (name === 'theme') await runTheme(args, offset, controller.signal);
+  else if (name === 'server') await runServer(args, offset, controller.signal);
   else if (name === 'model') await runModel(args, offset, controller.signal);
   else if (name === 'pin') await runPin(args, offset, controller.signal);
   else if (name === 'dashboard')
