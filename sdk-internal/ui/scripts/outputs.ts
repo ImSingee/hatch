@@ -37,10 +37,10 @@ function json(value: unknown): string {
 export function generatedFiles(): GeneratedFile[] {
   const icons = buildIcons();
   const files: GeneratedFile[] = [
-    { path: 'lib/theme.json', content: json(buildAppTheme()) },
-    { path: 'lib/tailwind.json', content: json(buildTailwindExtension()) },
-    { path: 'lib/icons/icons.gen.ts', content: renderIconModule(icons) },
-    { path: 'lib/core/tokens.gen.ts', content: renderTokenModule() },
+    { path: 'src/theme.json', content: json(buildAppTheme()) },
+    { path: 'src/tailwind.json', content: json(buildTailwindExtension()) },
+    { path: 'src/icons/icons.gen.ts', content: renderIconModule(icons) },
+    { path: 'src/core/tokens.gen.ts', content: renderTokenModule() },
     {
       path: 'gallery/web/themes.json',
       content: json(

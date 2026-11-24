@@ -45,14 +45,15 @@
       ...(idiom ? { idiom } : {}),
       host: {
         async call(name) {
-          if (name === 'hatch.theme.get') return themes[accent];
+          if (name === 'hatch.theme.get')
+            return { ok: true, theme: themes[accent] };
           throw new Error(`The gallery host does not handle ${name}`);
         },
       },
     });
     window.setAccent = (next) => {
       accent = next;
-      player.hostEvent('hatch.theme', themes[next]);
+      player.hostEvent('hatch.theme', { theme: themes[next] });
     };
     // Load the fonts before the App measures its first frame.
     await Promise.all(

@@ -1,6 +1,6 @@
 /**
  * The icon set of `@hatch/ui`: a closed list of Tabler outline icons, turned
- * into path data in a JS module (`lib/icons/icons.gen.ts`). A bundle keeps
+ * into path data in a JS module (`src/icons/icons.gen.ts`). A bundle keeps
  * only the icons it imports, because each is a plain constant; SVG imports
  * would ship every icon a reachable module names.
  */

@@ -16,16 +16,30 @@ function isThemeDocument(value: unknown): value is ThemeDocument {
 }
 
 /**
+ * The theme in what the host sent: `hatch.theme.get` answers
+ * `{ ok: true, theme }`, the `hatch.theme` event carries `{ theme }` (see
+ * `docs/app-native-runtime.md`); a bare theme is accepted too.
+ */
+function themeIn(value: unknown): ThemeDocument | null {
+  if (isThemeDocument(value)) return value;
+  if (typeof value !== 'object' || value === null) return null;
+  const message = value as { ok?: boolean; theme?: unknown };
+  if (message.ok === false) return null;
+  return isThemeDocument(message.theme) ? message.theme : null;
+}
+
+/**
  * Applies a theme the host sent, over the built-in Desk theme: NSH replaces
  * the whole theme, so a token the host left out keeps its built-in value
  * instead of leaving the classes that name it unresolved.
  */
 export function applyHostTheme(value: unknown): void {
-  if (!isThemeDocument(value)) return;
+  const sent = themeIn(value);
+  if (!sent) return;
   const theme: Theme = {
     cssVars: {
-      theme: { ...builtInTheme.cssVars.theme, ...value.cssVars?.theme },
-      light: { ...builtInTheme.cssVars.light, ...value.cssVars?.light },
+      theme: { ...builtInTheme.cssVars.theme, ...sent.cssVars?.theme },
+      light: { ...builtInTheme.cssVars.light, ...sent.cssVars?.light },
     },
   };
   try {

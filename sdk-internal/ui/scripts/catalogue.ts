@@ -19,7 +19,7 @@ import { API } from 'typescript/unstable/sync';
 import { ICON_GROUPS, type GeneratedIcon } from './icons.ts';
 
 const UI_ROOT = path.resolve(import.meta.dirname, '..');
-const LIB = path.join(UI_ROOT, 'lib');
+const LIB = path.join(UI_ROOT, 'src');
 const REFERENCE = path.resolve(
   UI_ROOT,
   '../../skills/building-apps/references/design-system.md',
@@ -360,7 +360,7 @@ function membersOf(type: TypeNode, module: Module): Prop[] {
   );
 }
 
-/** The value exports of `lib/index.ts`: name -> the module that declares it. */
+/** The value exports of `src/index.ts`: name -> the module that declares it. */
 function exportedValues(): Map<
   string,
   { module: Module; local: string } | 'nsh'

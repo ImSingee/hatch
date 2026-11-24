@@ -16,5 +16,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["*/src/**/*.ts", "../packages/hatch-manifest/src/**/*.ts"]
+  "include": ["*/src/**/*.ts", "../packages/hatch-manifest/src/**/*.ts"],
+  "exclude": ["ui/**"]
 }

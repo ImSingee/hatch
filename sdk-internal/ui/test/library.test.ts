@@ -17,7 +17,7 @@ import { UI_ROOT, generatedFiles } from '../scripts/outputs.ts';
 import { typeScale } from '../theme/tailwind.ts';
 import { ACCENT_NAMES, buildAppTheme, colorRamp } from '../theme/build.ts';
 
-const LIB = path.join(UI_ROOT, 'lib');
+const LIB = path.join(UI_ROOT, 'src');
 
 function libraryFiles(directory = LIB): string[] {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

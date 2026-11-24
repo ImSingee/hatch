@@ -1,7 +1,8 @@
 /**
  * Rules checked with NSH itself: the catalogue's types reject `class` and
- * `style`, forms keep drafts through the App's storage, and the gallery
- * builds for release with every class resolved. Skipped where `nsh` is not
+ * `style`, forms keep drafts through the App's storage, the library follows
+ * the shell's theme, and the gallery builds for release with every class
+ * resolved. Skipped where `nsh` is not
  * installed (it is not in CI yet); set `NSH_BIN` to use another binary.
  */
 import { spawnSync } from 'node:child_process';
@@ -52,6 +53,12 @@ describe.skipIf(!nsh)('with NSH', () => {
   it('keeps form drafts in the App storage', () => {
     expect(run(['test', 'app/draft.test.tsx'], fixture('draft'))).toMatch(
       /^ok\n[\s\S]*3 passed/,
+    );
+  }, 240_000);
+
+  it('follows the shell theme, over the built-in one', () => {
+    expect(run(['test', 'app/theme.test.tsx'], fixture('theme'))).toMatch(
+      /^ok\n[\s\S]*2 passed/,
     );
   }, 240_000);
 

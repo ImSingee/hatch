@@ -1,7 +1,9 @@
 /**
- * Lays an App root out as the platform lays out a native-runtime App:
- * `@hatch/ui` copied to `.hatch/ui/`, a generated `nsh.json` with the
- * library's theme, Tailwind extension and exact alias, and the
+ * Lays an App root out as the platform lays out a native-runtime App (see
+ * `s1-contract.md`): `@hatch/ui` materialised as an SDK package in
+ * `.hatch/sdk/@hatch/ui/` (its `package.json` and `src/` as `dist/`), a
+ * generated `nsh.json` with the exact host grant, the library's theme and
+ * Tailwind extension inline and one alias per entry, and the
  * `app/tsconfig.json` that `nsh check` needs next to the entry. None of these
  * are committed.
  *
@@ -13,32 +15,49 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const LIB = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../lib',
-);
+const UI = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SOURCE = path.join(UI, 'src');
+
+/** The host calls the platform grants a native App (plan section 9). */
+const HOST_GRANT = [
+  'hatch.rpc',
+  'hatch.data.query',
+  'hatch.data.mutate',
+  'hatch.data.events',
+  'hatch.theme.get',
+  'hatch.nav.setTitle',
+  'hatch.nav.setRoute',
+  'hatch.nav.open',
+  'hatch.native.supports',
+];
 
 export function prepareAppRoot(
   root: string,
   app: { id: string; name: string },
 ): void {
-  const target = path.join(root, '.hatch/ui');
+  const target = path.join(root, '.hatch/sdk/@hatch/ui');
   fs.rmSync(target, { recursive: true, force: true });
-  fs.cpSync(LIB, target, { recursive: true });
+  fs.mkdirSync(target, { recursive: true });
+  fs.copyFileSync(
+    path.join(UI, 'package.json'),
+    path.join(target, 'package.json'),
+  );
+  fs.cpSync(SOURCE, path.join(target, 'dist'), { recursive: true });
 
-  const tailwind = JSON.parse(
-    fs.readFileSync(path.join(LIB, 'tailwind.json'), 'utf8'),
-  ) as unknown;
+  const read = (file: string) =>
+    JSON.parse(fs.readFileSync(path.join(SOURCE, file), 'utf8')) as unknown;
   const nshJson = {
     name: app.name,
     id: app.id,
     version: '1.0.0',
     build: 1,
     appearance: 'light',
-    capabilities: { host: ['hatch.*'] },
-    theme: './.hatch/ui/theme.json',
-    tailwind,
-    resolve: { alias: { '@hatch/ui': './.hatch/ui/index.ts' } },
+    capabilities: { host: HOST_GRANT },
+    theme: read('theme.json'),
+    tailwind: read('tailwind.json'),
+    resolve: {
+      alias: { '@hatch/ui': './.hatch/sdk/@hatch/ui/dist/index.ts' },
+    },
   };
   fs.writeFileSync(
     path.join(root, 'nsh.json'),
@@ -53,14 +72,14 @@ export function prepareAppRoot(
       paths: {
         nsh: ['./.nsh/types/nsh/index.d.ts'],
         'nsh/*': ['./.nsh/types/nsh/*.d.ts'],
-        '@hatch/ui': ['../.hatch/ui/index.ts'],
+        '@hatch/ui': ['../.hatch/sdk/@hatch/ui/dist/index.ts'],
       },
     },
     include: [
       '**/*.ts',
       '**/*.tsx',
-      '../.hatch/ui/**/*.ts',
-      '../.hatch/ui/**/*.tsx',
+      '../.hatch/sdk/**/*.ts',
+      '../.hatch/sdk/**/*.tsx',
     ],
   };
   fs.mkdirSync(path.join(root, 'app'), { recursive: true });
