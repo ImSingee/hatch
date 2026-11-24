@@ -37,16 +37,20 @@ describe('successfullyDeployedAppIds', () => {
         arguments: { id: 'alpha' },
       },
     ];
-    const result = (isError = false): ToolResultMessage => ({
+    const result = (
+      toolCallId: string,
+      isError = false,
+    ): ToolResultMessage => ({
       role: 'toolResult',
+      toolCallId,
       toolName: 'deploy_app',
       content: [{ type: 'text', text: 'result' }],
       isError,
     });
     const toolResults = new Map([
-      ['deploy-a', result()],
-      ['deploy-b', result(true)],
-      ['deploy-a-again', result()],
+      ['deploy-a', result('deploy-a')],
+      ['deploy-b', result('deploy-b', true)],
+      ['deploy-a-again', result('deploy-a-again')],
     ]);
 
     expect(successfullyDeployedAppIds(blocks, toolResults)).toEqual(['alpha']);
@@ -113,7 +117,12 @@ describe('groupTurns', () => {
           { type: 'toolCall', id: 'call-1', name: 'list_apps', arguments: {} },
         ],
       },
-      { role: 'toolResult', toolName: 'list_apps', content: [] },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        toolName: 'list_apps',
+        content: [],
+      },
       { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
       { role: 'user', content: 'Third' },
     ];

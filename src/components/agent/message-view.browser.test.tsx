@@ -116,6 +116,7 @@ test.each(['Question cancelled.', 'The user canceled this question.'])(
       },
       {
         role: 'toolResult',
+        toolCallId: 'cancelled-ask',
         toolName: 'ask',
         content: [{ type: 'text', text: cancellationText }],
         isError: true,
@@ -189,6 +190,7 @@ test.each([false, true])(
                 'ask-1',
                 {
                   role: 'toolResult',
+                  toolCallId: 'ask-1',
                   toolName: 'ask',
                   content: [
                     { type: 'text', text: 'Q: Which release?\nA: Stable' },
@@ -295,6 +297,7 @@ test.each([
           'bad-ask',
           {
             role: 'toolResult',
+            toolCallId: 'bad-ask',
             toolName: 'ask',
             isError: true,
             content: [{ type: 'text', text: 'Invalid question input.' }],
@@ -356,9 +359,10 @@ function deployCall(id: string, appId: string): ToolCallBlock {
   };
 }
 
-function deployResult(isError = false): ToolResultMessage {
+function deployResult(toolCallId: string, isError = false): ToolResultMessage {
   return {
     role: 'toolResult',
+    toolCallId,
     toolName: 'deploy_app',
     content: [{ type: 'text', text: isError ? 'Build failed' : 'Deployed' }],
     isError,
@@ -393,9 +397,13 @@ function deployWorkflowCall(id: string, workflowId: string): ToolCallBlock {
   };
 }
 
-function deployWorkflowResult(isError = false): ToolResultMessage {
+function deployWorkflowResult(
+  toolCallId: string,
+  isError = false,
+): ToolResultMessage {
   return {
     role: 'toolResult',
+    toolCallId,
     toolName: 'deploy_workflow',
     content: [{ type: 'text', text: isError ? 'Build failed' : 'Deployed' }],
     isError,
@@ -559,6 +567,62 @@ async function expandStep(toggle: Locator): Promise<Locator> {
   if (!body) throw new TypeError('Expected the expanded step details');
   return page.elementLocator(body);
 }
+
+test('keeps each command output on its own call after a stopped command', async () => {
+  // A stopped run persists its command call without a result. Later calls of
+  // the same tool must still show their own output, not shift onto it.
+  const commandResult = (toolCallId: string, text: string) => ({
+    role: 'toolResult' as const,
+    toolCallId,
+    toolName: 'run_command',
+    content: [{ type: 'text' as const, text }],
+  });
+  const stopped: ChatMessage = {
+    role: 'assistant',
+    content: [runCommandCall('stopped', 'sleep 600', 'Wait for the build')],
+    stopReason: 'aborted',
+  };
+  const retried: ChatMessage = {
+    role: 'assistant',
+    content: [
+      runCommandCall('model', 'hatch image-model get --json', 'Check model'),
+      runCommandCall('generate', 'hatch image generate', 'Generate icons'),
+    ],
+    stopReason: 'toolUse',
+  };
+  const messages: ChatMessage[] = JSON.parse(
+    JSON.stringify([
+      { role: 'user', content: 'Build it' },
+      stopped,
+      { role: 'user', content: 'Try again' },
+      retried,
+      commandResult('model', 'stdout:\ngpt-image'),
+      commandResult('generate', 'stderr:\n503 Service Unavailable'),
+    ]),
+  );
+  const toolResults = pairToolResults(messages);
+
+  const screen = await renderMessage(messages[3], { toolResults });
+  for (const [name, output] of [
+    ['Check model', 'stdout:\ngpt-image'],
+    ['Generate icons', 'stderr:\n503 Service Unavailable'],
+  ]) {
+    const details = await expandStep(
+      screen.getByRole('button', { name: new RegExp(name) }),
+    );
+    expect(sectionText(details.getByRole('region', { name: 'Output' }))).toBe(
+      output,
+    );
+  }
+
+  const stoppedScreen = await renderMessage(messages[1], { toolResults });
+  const stoppedDetails = await expandStep(
+    stoppedScreen.getByRole('button', { name: /Wait for the build/ }),
+  );
+  expect(stoppedDetails.getByRole('region', { name: 'Output' }).query()).toBe(
+    null,
+  );
+});
 
 test('shows a persisted model error even when the reply has no content', async () => {
   const screen = await renderMessage({
@@ -924,6 +988,7 @@ test('keeps the tail of a persisted read path visible in a narrow header', async
           'read-long-path',
           {
             role: 'toolResult',
+            toolCallId: 'read-long-path',
             toolName: 'read_file',
             content: [{ type: 'text', text: 'file contents' }],
           },
@@ -980,6 +1045,7 @@ test('reveals a complete persisted command without overflowing a narrow message'
           'command-long',
           {
             role: 'toolResult',
+            toolCallId: 'command-long',
             toolName: 'run_command',
             content: [{ type: 'text', text: 'Command finished.' }],
           },
@@ -1190,6 +1256,7 @@ test('reveals a persisted read path without overflowing a narrow message', async
           'read-persisted',
           {
             role: 'toolResult',
+            toolCallId: 'read-persisted',
             toolName: 'read_file',
             content: [{ type: 'text', text: 'export const value = true;\n' }],
             details: {
@@ -1299,6 +1366,7 @@ test('expands a listed directory with stable path and contents labels', async ()
           'list-persisted',
           {
             role: 'toolResult',
+            toolCallId: 'list-persisted',
             toolName: 'list_files',
             content: [{ type: 'text', text: '- main.ts\nd components' }],
             details: {
@@ -1341,6 +1409,7 @@ test('normalizes a legacy root listing path to the workspace root', async () => 
           'list-legacy-root',
           {
             role: 'toolResult',
+            toolCallId: 'list-legacy-root',
             toolName: 'list_files',
             content: [{ type: 'text', text: '- package.json' }],
             details: { path: '', count: 1 },
@@ -1382,6 +1451,7 @@ test('does not show the workspace root for an invalid persisted list path', asyn
           'list-invalid-null',
           {
             role: 'toolResult',
+            toolCallId: 'list-invalid-null',
             toolName: 'list_files',
             content: [{ type: 'text', text: error }],
             isError: true,
@@ -1415,6 +1485,7 @@ test('labels an empty read result as empty file contents', async () => {
           'read-empty',
           {
             role: 'toolResult',
+            toolCallId: 'read-empty',
             toolName: 'read_file',
             content: [{ type: 'text', text: '' }],
             details: {
@@ -1451,6 +1522,7 @@ test('distinguishes an empty read page from an empty file', async () => {
           'read-empty-page',
           {
             role: 'toolResult',
+            toolCallId: 'read-empty-page',
             toolName: 'read_file',
             content: [{ type: 'text', text: '' }],
             details: {
@@ -1490,6 +1562,7 @@ test('reveals a successful persisted write without overflowing a narrow message'
           'write-persisted',
           {
             role: 'toolResult',
+            toolCallId: 'write-persisted',
             toolName: 'write_file',
             content: [{ type: 'text', text: summary }],
             details: {
@@ -1628,6 +1701,7 @@ test('keeps attempted write inputs and the output when a write fails', async () 
           'write-failed',
           {
             role: 'toolResult',
+            toolCallId: 'write-failed',
             toolName: 'write_file',
             content: [{ type: 'text', text: error }],
             details: {
@@ -1677,6 +1751,7 @@ test('renders a persisted edit result as a colored diff', async () => {
           'edit-app',
           {
             role: 'toolResult',
+            toolCallId: 'edit-app',
             toolName: 'edit_file',
             content: [
               {
@@ -1801,6 +1876,7 @@ test('keeps the attempted edit request and error for a failed paired edit', asyn
           'edit-failed',
           {
             role: 'toolResult',
+            toolCallId: 'edit-failed',
             toolName: 'edit_file',
             content: [{ type: 'text', text: 'old_string was not found.' }],
             details: editDetails,
@@ -1866,6 +1942,7 @@ test('shows the complete request beside a failed KV error', async () => {
           'kv-failed',
           {
             role: 'toolResult',
+            toolCallId: 'kv-failed',
             toolName: 'query_app_kv',
             content: [{ type: 'text', text: error }],
             isError: true,
@@ -1959,6 +2036,7 @@ test('shows structured Data Table and SQL requests within a narrow message', asy
           'data-table',
           {
             role: 'toolResult',
+            toolCallId: 'data-table',
             toolName: 'query_app_data_table',
             content: [{ type: 'text', text: 'Applied 3 operations.' }],
           },
@@ -1967,6 +2045,7 @@ test('shows structured Data Table and SQL requests within a narrow message', asy
           'sql',
           {
             role: 'toolResult',
+            toolCallId: 'sql',
             toolName: 'query_app_db',
             content: [{ type: 'text', text: 'column "tag_0" does not exist' }],
             isError: true,
@@ -2057,6 +2136,7 @@ test('keeps unknown, empty, and malformed requests inspectable', async () => {
           'future',
           {
             role: 'toolResult',
+            toolCallId: 'future',
             toolName: 'future_tool',
             content: [{ type: 'text', text: 'Future tool finished.' }],
           },
@@ -2065,6 +2145,7 @@ test('keeps unknown, empty, and malformed requests inspectable', async () => {
           'null-root',
           {
             role: 'toolResult',
+            toolCallId: 'null-root',
             toolName: 'get_app',
             content: [{ type: 'text', text: 'Arguments must be an object.' }],
             isError: true,
@@ -2109,6 +2190,7 @@ test('keeps an orphaned tool result inspectable without inventing arguments', as
       <MessageView
         message={{
           role: 'toolResult',
+          toolCallId: 'unpaired-deploy',
           toolName: 'deploy_app',
           content: [{ type: 'text', text: 'Unpaired deploy output' }],
         }}
@@ -2167,6 +2249,7 @@ test('masks sensitive KV write requests in saved history without changing the tr
           `kv-write-${index}`,
           {
             role: 'toolResult',
+            toolCallId: `kv-write-${index}`,
             toolName: 'query_app_kv',
             isError: index === 1,
             content: [
@@ -2212,7 +2295,7 @@ test('groups successful deploys, resolves aliases, and uses state-aware actions'
     deployCall('deleted', 'deleted-app'),
   ];
   const toolResults = new Map(
-    calls.map((call) => [call.id, deployResult(call.id === 'failed')]),
+    calls.map((call) => [call.id, deployResult(call.id, call.id === 'failed')]),
   );
   const screen = await renderMessage(
     { role: 'assistant', content: calls },
@@ -2262,12 +2345,12 @@ test('shows successful Workflow deploys separately with state-aware actions', as
     deployWorkflowCall('workflow-incomplete', 'workflow-incomplete'),
   ];
   const toolResults = new Map<string, ToolResultMessage>([
-    ['deploy-app', deployResult()],
-    ['workflow-by-id', deployWorkflowResult()],
-    ['workflow-again', deployWorkflowResult()],
-    ['workflow-archived', deployWorkflowResult()],
-    ['workflow-failed', deployWorkflowResult(true)],
-    ['workflow-deleted', deployWorkflowResult()],
+    ['deploy-app', deployResult('deploy-app')],
+    ['workflow-by-id', deployWorkflowResult('workflow-by-id')],
+    ['workflow-again', deployWorkflowResult('workflow-again')],
+    ['workflow-archived', deployWorkflowResult('workflow-archived')],
+    ['workflow-failed', deployWorkflowResult('workflow-failed', true)],
+    ['workflow-deleted', deployWorkflowResult('workflow-deleted')],
   ]);
   const screen = await renderMessage(
     { role: 'assistant', content: calls },
@@ -2339,7 +2422,7 @@ test('keeps historical Workflow deployment cards bound to IDs after slug reuse',
         workflowFixture('daily', 'renamed-daily', 'Original Daily'),
       ],
       toolResults: new Map(
-        calls.map((call) => [call.id, deployWorkflowResult()]),
+        calls.map((call) => [call.id, deployWorkflowResult(call.id)]),
       ),
     },
   );
@@ -2403,6 +2486,7 @@ test('shows the absolute path for files two or more levels above the root', asyn
     id,
     {
       role: 'toolResult',
+      toolCallId: id,
       toolName: 'read_file',
       content: [{ type: 'text', text: 'file contents' }],
       details: { relativePath, absolutePath },
