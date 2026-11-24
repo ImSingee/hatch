@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+// The platform server that answers these RPCs.
+service ServerService {
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
+}
+
+// Source revision the running server was built from. A field is left out
+// when the build recorded no revision (for example, built outside Git).
+message ServerInfo {
+  // Full Git commit SHA.
+  optional string commit = 1;
+  // Commit time as RFC 3339 with offset.
+  optional string commit_time = 2;
+}
+
+message GetServerInfoRequest {}
+
+message GetServerInfoResponse {
+  ServerInfo server = 1;
+}

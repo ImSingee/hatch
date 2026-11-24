@@ -27,6 +27,12 @@ const definitions: readonly CliCommandDefinition[] = [
     description: 'Show the CLI version.',
   },
   {
+    path: ['server', 'info'],
+    usage: 'server info',
+    description:
+      'Show the source revision the connected platform server was built from: the full commit SHA and its commit time, or null for each when the build recorded none. Unlike version, this asks the server, so it needs a credential.',
+  },
+  {
     path: ['auth', 'login'],
     usage: 'auth login [--url <url>] [--no-browser | --api-key-file <path>]',
     description: 'Save a browser-approved session credential.',

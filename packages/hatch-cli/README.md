@@ -625,6 +625,21 @@ positional argument). Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).
 
+## Server info
+
+```sh
+hatch server info --json
+```
+
+`server info` asks the connected platform which source revision its running
+server was built from and prints `commit` (the full SHA) and `commitTime`
+(RFC 3339), each `null` when the build recorded none. It is the same value as
+the Web Settings → About page. `hatch version` is different: it prints the
+revision the CLI itself was built from and works offline.
+
+Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
+an unknown flag or a positional argument).
+
 ## Notifications
 
 `hatch notification ...` manages the notification center with a user session,
