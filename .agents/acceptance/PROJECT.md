@@ -2,8 +2,8 @@
 
 ## 1. Project summary
 
-Hatch is a TanStack Start platform with a separate Agent Runner. App and Workflow
-source builders live under src/server; SDKs under packages. This change is
+Hatch is a TanStack Start platform with a separate Agent Runner. The App source
+builder lives under src/server; SDKs under packages. This change is
 verified through CLI, real builders, PostgreSQL records, and HTTP runtime calls.
 
 ## 2. Environment
@@ -36,15 +36,15 @@ for source-manifest behavior. UI layout changes require a separate visual check.
 ## 5. Project probes and quick navigation
 
 Probe /api/auth/get-session with the test cookie before authenticated requests.
-Inspect apps/deployments and workflows/workflow_deployments with the repo's DB
-client; invoke deployApp/deployWorkflow on committed test worktrees, then inspect
-JSON records and call the deployed App RPC / Workflow execution paths.
+Inspect apps/deployments and app_task_runs with the repo's DB client; invoke
+deployApp on committed test worktrees, then inspect JSON records and call the
+deployed App RPC and App task run paths.
 
 ## 6. Known constraints
 
 Use a dedicated database and workspace because deploy provisions resource data
 and writes Git history. SDK output must exist before materialization. App manifests
-are evaluated before RPC codegen. Workflow compatibilityVersion is mandatory.
+are evaluated before RPC codegen.
 A successful build alone does not prove deployment or runtime execution.
 
 ## 7. Tailscale settings verification

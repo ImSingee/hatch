@@ -6,12 +6,7 @@ import {
   isUnsupportedAppRootConfigName,
 } from './app-managed-path';
 
-type SourceKind = 'app' | 'workflow';
 type JsonObject = Record<string, unknown>;
-
-export type DenoDependencyValidation = {
-  lifecycleScripts: string[];
-};
 
 export type DenoDependencySourceFile =
   | 'package.json'
@@ -21,25 +16,11 @@ export type DenoDependencySourceReader = (
   file: DenoDependencySourceFile,
 ) => Promise<string | null>;
 
-const EXACT_NPM_PACKAGE =
-  /^npm:(@[^/\s]+\/[^@\s]+|[^@/\s][^@\s]*)@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
-
-function skillName(kind: SourceKind): string {
-  return kind === 'app' ? 'building-apps' : 'building-workflows';
-}
-
-function deployTool(kind: SourceKind): string {
-  return kind === 'app' ? 'deploy_app' : 'deploy_workflow';
-}
-
-function migrationHelp(kind: SourceKind): string {
-  return (
-    `Load the "${skillName(kind)}" Skill with read_file, migrate npm ` +
-    'dependencies to package.json, run `deno install --package-json ' +
-    '--node-modules-dir=auto --lock=deno.lock`, and commit package.json, ' +
-    `deno.json, and deno.lock before calling ${deployTool(kind)} again.`
-  );
-}
+const MIGRATION_HELP =
+  'Load the "building-apps" Skill with read_file, migrate npm ' +
+  'dependencies to package.json, run `deno install --package-json ' +
+  '--node-modules-dir=auto --lock=deno.lock`, and commit package.json, ' +
+  'deno.json, and deno.lock before calling deploy_app again.';
 
 async function readOptionalFile(file: string): Promise<string | null> {
   try {
@@ -262,9 +243,8 @@ function assertNoManagedHatchSdk(
  */
 export async function validateDenoDependencySource(
   sourceDir: string,
-  kind: SourceKind,
   sourceReader?: DenoDependencySourceReader,
-): Promise<DenoDependencyValidation> {
+): Promise<void> {
   // Deno's npm client reads a project-local .npmrc even when invoked with
   // --no-config. An App-controlled registry or auth setting would let a deploy
   // build send privileged network requests or credentials to an arbitrary
@@ -274,21 +254,17 @@ export async function validateDenoDependencySource(
     const npmConfigEntry = rootEntries.find(isAppRegistryConfigName);
     if (npmConfigEntry) {
       throw new Error(
-        `${kind} sources cannot include ${npmConfigEntry}. npm registry and ` +
+        `app sources cannot include ${npmConfigEntry}. npm registry and ` +
           'authentication configuration is managed by the platform.',
       );
     }
-    if (kind === 'app') {
-      const unsupportedConfig = rootEntries.find(
-        isUnsupportedAppRootConfigName,
+    const unsupportedConfig = rootEntries.find(isUnsupportedAppRootConfigName);
+    if (unsupportedConfig) {
+      throw new Error(
+        `App sources cannot include ${unsupportedConfig}. Hatch Apps use ` +
+          'the canonical root deno.json and do not load alternate TypeScript ' +
+          'configuration files.',
       );
-      if (unsupportedConfig) {
-        throw new Error(
-          `App sources cannot include ${unsupportedConfig}. Hatch Apps use ` +
-            'the canonical root deno.json and do not load alternate TypeScript ' +
-            'configuration files.',
-        );
-      }
     }
   }
 
@@ -307,24 +283,22 @@ export async function validateDenoDependencySource(
 
   if (!hasPackage && hasConfig) {
     throw new Error(
-      `Legacy deno.json-only ${kind} sources cannot be deployed. ${migrationHelp(
-        kind,
-      )}`,
+      `Legacy deno.json-only app sources cannot be deployed. ${MIGRATION_HELP}`,
     );
   }
   if (!hasPackage) {
     throw new Error(
-      `Missing package.json for ${kind} dependencies. ${migrationHelp(kind)}`,
+      `Missing package.json for app dependencies. ${MIGRATION_HELP}`,
     );
   }
   if (!hasConfig) {
     throw new Error(
-      `Missing deno.json for ${kind} dependency policy. ${migrationHelp(kind)}`,
+      `Missing deno.json for app dependency policy. ${MIGRATION_HELP}`,
     );
   }
   if (!hasLock) {
     throw new Error(
-      `Missing source-controlled deno.lock for ${kind}. ${migrationHelp(kind)}`,
+      `Missing source-controlled deno.lock for app. ${MIGRATION_HELP}`,
     );
   }
 
@@ -342,54 +316,6 @@ export async function validateDenoDependencySource(
   );
   assertNoManagedHatchSdk(packageJson, config, lock);
 
-  if (kind === 'app') {
-    assertStandaloneAppDependencySource(packageJson, config);
-    assertFixedAppConfiguration(packageJson, config);
-    return { lifecycleScripts: [] };
-  }
-
-  const allowScripts = config.allowScripts;
-  if (allowScripts !== undefined && !Array.isArray(allowScripts)) {
-    throw new Error(
-      'deno.json allowScripts must be an array of reviewed, exact npm package ' +
-        'versions such as "npm:pkg@1.2.3"; booleans and ranges are forbidden.',
-    );
-  }
-
-  const npmLock =
-    lock && typeof lock === 'object' && !Array.isArray(lock)
-      ? lock.npm
-      : undefined;
-  const lockedPackages =
-    npmLock && typeof npmLock === 'object' && !Array.isArray(npmLock)
-      ? new Set(Object.keys(npmLock))
-      : new Set<string>();
-
-  for (const value of allowScripts ?? []) {
-    if (typeof value !== 'string') {
-      throw new Error('Every deno.json allowScripts entry must be a string.');
-    }
-    const match = EXACT_NPM_PACKAGE.exec(value);
-    if (!match) {
-      throw new Error(
-        `Unsafe allowScripts entry "${value}". Use an exact reviewed version ` +
-          'such as "npm:pkg@1.2.3"; booleans, tags, wildcards, and ranges are ' +
-          'forbidden.',
-      );
-    }
-    const locked = `${match[1]}@${match[2]}`;
-    if (
-      ![...lockedPackages].some(
-        (candidate) =>
-          candidate === locked || candidate.startsWith(`${locked}_`),
-      )
-    ) {
-      throw new Error(
-        `allowScripts entry "${value}" is not present at that exact version ` +
-          'in deno.lock. Run deno install locally, review the resolved package, ' +
-          'and commit the updated lock.',
-      );
-    }
-  }
-  return { lifecycleScripts: (allowScripts ?? []) as string[] };
+  assertStandaloneAppDependencySource(packageJson, config);
+  assertFixedAppConfiguration(packageJson, config);
 }

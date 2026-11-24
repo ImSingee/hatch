@@ -1,6 +1,5 @@
 /**
- * Server-only: the stdout event protocol shared by Workflow runs and App task
- * runs.
+ * Server-only: the stdout event protocol of App task runs.
  *
  * A run process reports its steps as `[[hatch]]{json}` lines on stdout; every
  * other line is plain log output. This module turns a child's stdout/stderr

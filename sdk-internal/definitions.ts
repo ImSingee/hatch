@@ -1,7 +1,6 @@
 /** Public SDK exports are the shared build and resolution contract. */
 import appManifest from './app/package.json' with { type: 'json' };
 import dataManifest from './data/package.json' with { type: 'json' };
-import workflowManifest from './workflow/package.json' with { type: 'json' };
 
 type SdkManifest = {
   name: string;
@@ -41,16 +40,8 @@ export const LEGACY_DATA_SDK: SdkDefinition = {
   },
 };
 
-export const WORKFLOW_SDK: SdkDefinition = {
-  directory: 'workflow',
-  manifest: workflowManifest,
-  entries: {
-    '.': { source: 'workflow.ts' },
-    './manifest': { source: 'manifest.ts' },
-  },
-};
-
-export const SDK_DEFINITIONS = [APP_SDK, LEGACY_DATA_SDK, WORKFLOW_SDK];
+/** Every SDK a source receives: `@hatch/app` and its legacy alias. */
+export const SDK_DEFINITIONS = [APP_SDK, LEGACY_DATA_SDK];
 
 export function sdkImports(
   definitions: readonly SdkDefinition[],
@@ -63,12 +54,6 @@ export function sdkImports(
       ]),
     ),
   );
-}
-
-export type SdkKind = 'app' | 'workflow';
-
-export function sdkDefinitionsFor(kind: SdkKind): SdkDefinition[] {
-  return kind === 'app' ? [APP_SDK, LEGACY_DATA_SDK] : [WORKFLOW_SDK];
 }
 
 /** Deno namespace declarations shipped beside the generated tsconfig. */
@@ -106,11 +91,12 @@ export function sdkEntryTsconfig(files: readonly string[]): string {
  * - The runtime is Deno, so the `Deno` namespace is declared; web globals
  *   come from the DOM library, as they did under `deno.json`.
  */
-export function sdkToolchainFiles(kind: SdkKind): Record<string, string> {
+export function sdkToolchainFiles(): Record<string, string> {
   const paths = Object.fromEntries(
-    Object.entries(sdkImports(sdkDefinitionsFor(kind))).map(
-      ([specifier, target]) => [specifier, [target.replace(/\.js$/, '')]],
-    ),
+    Object.entries(sdkImports(SDK_DEFINITIONS)).map(([specifier, target]) => [
+      specifier,
+      [target.replace(/\.js$/, '')],
+    ]),
   );
   const tsconfig = {
     compilerOptions: {
@@ -138,8 +124,6 @@ export function sdkToolchainFiles(kind: SdkKind): Record<string, string> {
   return {
     [SDK_TSCONFIG]: `${JSON.stringify(tsconfig, null, 2)}\n`,
     [SDK_MANIFEST_TSCONFIG]: sdkEntryTsconfig(['../manifest.ts']),
-    ...(kind === 'app'
-      ? { [SDK_SCHEMA_TSCONFIG]: sdkEntryTsconfig(['../data/schema.ts']) }
-      : {}),
+    [SDK_SCHEMA_TSCONFIG]: sdkEntryTsconfig(['../data/schema.ts']),
   };
 }

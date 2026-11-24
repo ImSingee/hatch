@@ -8,19 +8,10 @@ import { SKILLS_DIR } from './paths';
 
 const REQUIRED_SKILL_NAMES = [
   'building-apps',
-  'building-workflows',
   'importing-apps',
-  'importing-workflows',
   'app-compatibility',
-  'workflow-compatibility',
   'app-icon',
 ] as const;
-
-const WORKFLOW_SKILL_NAMES = new Set([
-  'building-workflows',
-  'importing-workflows',
-  'workflow-compatibility',
-]);
 
 function formatDiagnostic(diagnostic: SkillDiagnostic): string {
   return `${diagnostic.code} at ${diagnostic.path}: ${diagnostic.message}`;
@@ -29,10 +20,7 @@ function formatDiagnostic(diagnostic: SkillDiagnostic): string {
 /** Load and validate the first-party skills required by the Hatch Agent. */
 export async function loadAgentSkills(
   env: ExecutionEnv,
-  options: {
-    workflowBetaEnabled: boolean;
-    skillsDir?: string;
-  },
+  options: { skillsDir?: string } = {},
 ): Promise<Skill[]> {
   const skillsDir = options.skillsDir ?? SKILLS_DIR;
   const { skills, diagnostics } = await loadSkills(env, skillsDir);
@@ -60,7 +48,5 @@ export async function loadAgentSkills(
     );
   }
 
-  return options.workflowBetaEnabled
-    ? skills
-    : skills.filter((skill) => !WORKFLOW_SKILL_NAMES.has(skill.name));
+  return skills;
 }

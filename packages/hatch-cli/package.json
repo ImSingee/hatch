@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Hatch authentication and App/Workflow lifecycle CLI.",
+  "description": "Hatch authentication and App lifecycle CLI.",
   "engines": {
     "node": ">=26.0.0"
   },

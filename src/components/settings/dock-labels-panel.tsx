@@ -22,8 +22,8 @@ export function DockLabelsPanel() {
       <Stack gap={2}>
         <Text fw={700}>Show names in the dock</Text>
         <Text size="sm" c="dimmed">
-          Print each App and Workflow name under its tile. Pointing at a tile
-          shows its full name either way.
+          Print each App name under its tile. Pointing at a tile shows its full
+          name either way.
         </Text>
       </Stack>
       <Switch

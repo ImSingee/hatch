@@ -43,8 +43,6 @@ function dispatchPlan(ownerRunnerId: string | null = null): RunDispatchPlan {
   return { ownerRunnerId, ...dispatch };
 }
 
-const DEFAULT_BETA_FEATURES = ['workflow'] as const;
-
 /** Minimal stand-in for the `ws` socket surface the hub touches. */
 class FakeSocket extends EventEmitter {
   OPEN = 1;
@@ -75,10 +73,9 @@ async function connectRunner(
   runnerId: string,
   activeRunIds: string[] = [],
   workspaceSessionIds: string[] = [],
-  betaFeatures: readonly string[] = DEFAULT_BETA_FEATURES,
 ) {
   const socket = new FakeSocket();
-  handleRunnerSocket(socket.asWebSocket(), { betaFeatures, handlers });
+  handleRunnerSocket(socket.asWebSocket(), { handlers });
   socket.emit(
     'message',
     JSON.stringify({
@@ -456,10 +453,7 @@ describe('workspace-affine dispatch', () => {
 describe('runner connection snapshot', () => {
   it('does not log rejected frame contents', async () => {
     const socket = new FakeSocket();
-    handleRunnerSocket(socket.asWebSocket(), {
-      betaFeatures: DEFAULT_BETA_FEATURES,
-      handlers,
-    });
+    handleRunnerSocket(socket.asWebSocket(), { handlers });
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
@@ -475,10 +469,7 @@ describe('runner connection snapshot', () => {
 
   it('rejects an older runner before it can use incompatible REST tools', async () => {
     const socket = new FakeSocket();
-    handleRunnerSocket(socket.asWebSocket(), {
-      betaFeatures: DEFAULT_BETA_FEATURES,
-      handlers,
-    });
+    handleRunnerSocket(socket.asWebSocket(), { handlers });
     socket.emit(
       'message',
       JSON.stringify({
@@ -580,24 +571,6 @@ describe('runner connection snapshot', () => {
     );
   });
 
-  it('sends the current Platform beta features on every connection', async () => {
-    const first = await connectRunner('runner-a');
-    const second = await connectRunner('runner-b', [], [], ['future-feature']);
-
-    expect(first.sent).toContainEqual(
-      expect.objectContaining({
-        type: 'hub.hello_ack',
-        betaFeatures: ['workflow'],
-      }),
-    );
-    expect(second.sent).toContainEqual(
-      expect.objectContaining({
-        type: 'hub.hello_ack',
-        betaFeatures: ['future-feature'],
-      }),
-    );
-  });
-
   it('returns the Platform reconciliation snapshot on reconnect', async () => {
     vi.mocked(handlers.reconcileRunnerWorkspaces).mockResolvedValueOnce({
       ownedSessionIds: ['active-session'],
@@ -616,7 +589,6 @@ describe('runner connection snapshot', () => {
     );
     expect(socket.sent).toContainEqual({
       type: 'hub.hello_ack',
-      betaFeatures: ['workflow'],
       resumedRunIds: [],
       staleRunIds: [],
       staleWorkspaceSessionIds: ['deleted-session'],
@@ -637,10 +609,7 @@ describe('runner connection snapshot', () => {
         }),
     );
     const socket = new FakeSocket();
-    handleRunnerSocket(socket.asWebSocket(), {
-      betaFeatures: DEFAULT_BETA_FEATURES,
-      handlers,
-    });
+    handleRunnerSocket(socket.asWebSocket(), { handlers });
     socket.emit(
       'message',
       JSON.stringify({
@@ -907,10 +876,7 @@ describe('steer messages', () => {
         }),
     );
     const socket = new FakeSocket();
-    handleRunnerSocket(socket.asWebSocket(), {
-      betaFeatures: DEFAULT_BETA_FEATURES,
-      handlers,
-    });
+    handleRunnerSocket(socket.asWebSocket(), { handlers });
     socket.emit(
       'message',
       JSON.stringify({

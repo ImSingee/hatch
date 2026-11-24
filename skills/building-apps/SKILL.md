@@ -179,8 +179,7 @@ Runtime selection is preserved in each deployment artifact and on rollback.
 Give an App page its own address with hash routing: the web host at
 `/app/<slug>#<route>` and pins pass `<route>` to the App. Link to Hatch pages
 with same-origin paths: `/app/<slug>#<route>` (another App, or this one at a
-route), `/agent/<session id>`, `/workflow/<slug>`, `/dashboard/<id>`,
-`/notifications/<id>`. In the Hatch phone app these links open the matching
+route), `/agent/<session id>`, `/dashboard/<id>`, `/notifications/<id>`. In the Hatch phone app these links open the matching
 native page; `hatch://<same path>` names the same page from outside Hatch.
 Follow them as normal links in the same window: `target="_blank"` and
 `window.open` always leave for the system browser, and navigation a page
@@ -288,7 +287,7 @@ arbitrary networking. Compatibility v1 and v2 still accept an omitted
 `network` and run it unrestricted; never omit it from new source.
 
 The platform automatically adds only the backend's exact loopback listener
-plus enabled Database, Data Tables, KV, Notifications, and Workflow endpoints. These platform
+plus enabled Database, Data Tables, KV, Notifications, and task endpoints. These platform
 channels do not need to appear in the manifest. In `"deno-run"` mode, bind to
 `127.0.0.1:${PORT}`, not `0.0.0.0`, `::`, or an unspecified host. In
 `"deno-serve"` mode, Hatch supplies the loopback host and port. Every other
@@ -297,11 +296,11 @@ destination must be declared.
 ### Extra Deno permissions
 
 1. Declare `extraPermissions` **only when strictly necessary**. If platform
-   capabilities (network, storage, database, KV, Data Tables, Workflow calls,
+   capabilities (network, storage, database, KV, Data Tables, App tasks,
    or a pure JS/Wasm implementation) can achieve the goal, you must not use it.
 2. **Obtain explicit user authorization before writing the declaration or
    deploying.** Explain the exact flags, why each is necessary, and the risks:
-   Apps, Workflows, and the platform share the same OS user; these permissions
+   Apps and the platform share the same OS user; these permissions
    are equivalent to host access and can expose platform credentials and other
    Apps' data. Without explicit consent, do not write the flags into a manifest
    or deploy them. Adding, broadening, or modifying an existing declaration
@@ -529,7 +528,7 @@ Read only the reference relevant to the requested capability:
   Connect clients, App-scoped browser storage, responsive widget sizing, and
   refresh behavior.
 - [Backend integrations](references/backend-integrations.md): Connect backend,
-  cron authentication, webhooks, long-running mode, and workflow calls.
+  cron authentication, webhooks, long-running mode, and enqueuing tasks.
   Webhooks always strip Authorization and x-api-key (all casing), including
   `auth: none`; they cannot carry App-private authentication. Use a dedicated
   nonreserved header such as X-App-Token or a raw-body provider signature.

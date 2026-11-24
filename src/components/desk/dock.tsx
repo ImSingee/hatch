@@ -13,7 +13,6 @@ import {
   IconAppWindow,
   IconPencil,
   IconPinnedOff,
-  IconRepeat,
   IconSettings,
   IconSparkles,
 } from '@tabler/icons-react';
@@ -28,7 +27,6 @@ import {
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
 import { themeQueryOptions } from '~queries/theme';
-import { workflowsQueryOptions } from '~queries/workflows';
 import {
   addSidebarItem,
   removeSidebarItem,
@@ -36,7 +34,6 @@ import {
   setSidebarPin,
   updateSidebarItem,
 } from '~server/sidebar';
-import { setWorkflowPinFn } from '~server/workflows';
 import {
   AllAppsGlyph,
   DockAddButton,
@@ -80,8 +77,8 @@ function dockKeyOf(target: EventTarget | null) {
 }
 
 /**
- * The dock: pinned Apps, then All apps, and pinned Workflows when there are
- * any, with a marker under each one whose window is open. Adding happens in
+ * The dock: pinned Apps, then All apps, with a marker under each one whose
+ * window is open. Adding happens in
  * the dock's right-click menu; only an empty Apps group shows an add tile,
  * and a dock with no pins at all shows nothing else.
  */
@@ -91,7 +88,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
-  const { data: workflows } = useQuery(workflowsQueryOptions);
   // Names under the tiles are an instance setting, off by default.
   const { data: theme } = useQuery(themeQueryOptions);
   const labels = theme?.dockLabels ?? false;
@@ -167,19 +163,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     onSettled: () => void invalidatePins(),
   });
 
-  const setWorkflowPin = useMutation({
-    mutationFn: (input: { id: string; pinned: boolean }) =>
-      setWorkflowPinFn({ data: input }),
-    onSuccess: (_res, input) => {
-      toast.success(input.pinned ? 'Pinned to the dock' : 'Unpinned');
-    },
-    // Also after a failure: the Workflow may have been removed elsewhere.
-    onSettled: () =>
-      void queryClient.invalidateQueries({
-        queryKey: workflowsQueryOptions.queryKey,
-      }),
-  });
-
   // Only deployed apps with a frontend can be opened from the dock.
   const openable = (apps ?? []).filter(
     (s) => s.status === 'deployed' && Boolean(s.capabilities?.frontend),
@@ -187,14 +170,12 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const pinnedIds = new Set((pins ?? []).map((p) => p.appId));
   const unpinnedApps = openable.filter((s) => !pinnedIds.has(s.id));
   const pinnedApps = openable.filter((s) => pinnedIds.has(s.id));
-  const pinnedWorkflows = (workflows ?? []).filter((w) => w.pinned);
   // All apps closes the Apps group once anything is pinned; an empty dock
   // shows only its add tile.
-  const hasPins = Boolean(pins?.length) || pinnedWorkflows.length > 0;
-  const workflowCandidates = (workflows ?? []).filter((w) => !w.pinned);
+  const hasPins = Boolean(pins?.length);
 
   const goCreate = () => {
-    toast.info('Tell the Agent what to build: an App or a Workflow');
+    toast.info('Tell the Agent what App to build');
     void navigate({ to: '/agent' });
   };
 
@@ -225,29 +206,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
           <Link
             to="/app/$appSlug/manage"
             params={{ appSlug: item.appSlug }}
-            {...props}
-          />
-        )}
-      >
-        Manage
-      </Menu.Item>
-    </>
-  );
-
-  const workflowMenu = (w: (typeof pinnedWorkflows)[number]) => (
-    <>
-      <Menu.Item
-        leftSection={<IconPinnedOff size={15} stroke={1.7} />}
-        onClick={() => setWorkflowPin.mutate({ id: w.id, pinned: false })}
-      >
-        Unpin
-      </Menu.Item>
-      <Menu.Item
-        leftSection={<IconSettings size={15} stroke={1.7} />}
-        renderRoot={(props) => (
-          <Link
-            to="/workflow/$workflowSlug/manage"
-            params={{ workflowSlug: w.slug }}
             {...props}
           />
         )}
@@ -301,22 +259,12 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
 
   // The right-click menu: the clicked tile's own actions, then adding.
   const clickedPin = pins?.find((p) => `app:${p.id}` === menuKey);
-  const clickedWorkflow = pinnedWorkflows.find(
-    (w) => `workflow:${w.id}` === menuKey,
-  );
   const contextMenu = (
     <>
       {clickedPin ? (
         <>
           <Menu.Label>{clickedPin.label}</Menu.Label>
           {appMenu(clickedPin)}
-          <Menu.Divider />
-        </>
-      ) : null}
-      {clickedWorkflow ? (
-        <>
-          <Menu.Label>{clickedWorkflow.name}</Menu.Label>
-          {workflowMenu(clickedWorkflow)}
           <Menu.Divider />
         </>
       ) : null}
@@ -328,31 +276,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         </Menu.Sub.Target>
         <Menu.Sub.Dropdown miw={220}>{appPicker}</Menu.Sub.Dropdown>
       </Menu.Sub>
-      {workflowCandidates.length > 0 ? (
-        <Menu.Sub>
-          <Menu.Sub.Target>
-            <Menu.Sub.Item leftSection={<IconRepeat size={15} stroke={1.7} />}>
-              Add a workflow
-            </Menu.Sub.Item>
-          </Menu.Sub.Target>
-          <Menu.Sub.Dropdown miw={220}>
-            {workflowCandidates.map((w) => (
-              <Menu.Item
-                key={w.id}
-                leftSection={<IconRepeat size={16} stroke={1.6} />}
-                disabled={setWorkflowPin.isPending}
-                onClick={() =>
-                  setWorkflowPin.mutate({ id: w.id, pinned: true })
-                }
-              >
-                <Text size="sm" truncate>
-                  {w.name}
-                </Text>
-              </Menu.Item>
-            ))}
-          </Menu.Sub.Dropdown>
-        </Menu.Sub>
-      ) : null}
       <Menu.Item
         leftSection={<IconSparkles size={15} stroke={1.7} />}
         onClick={goCreate}
@@ -392,7 +315,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
             onTouchStart={(event) => setMenuKey(dockKeyOf(event.target))}
             onKeyDown={openContextMenuFromKeyboard}
           >
-            <div className={`${classes.group} ${classes.grow}`}>
+            <div className={classes.group}>
               <div className={classes.groupBody}>
                 <div className={classes.row}>
                   {pins && pins.length > 0 ? (
@@ -441,44 +364,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                 ) : null}
               </div>
             </div>
-
-            {pinnedWorkflows.length > 0 ? (
-              <>
-                <span aria-hidden className={classes.divider} />
-                <div className={classes.group}>
-                  <div className={classes.row}>
-                    {pinnedWorkflows.map((w) => (
-                      <DockItem
-                        key={w.id}
-                        label={w.name}
-                        shape="workflow"
-                        open={openItems.some(
-                          (item) =>
-                            item.kind === 'workflow' && item.slug === w.slug,
-                        )}
-                        menuKey={`workflow:${w.id}`}
-                        glyph={
-                          <AppGlyph
-                            icon={false}
-                            name={w.name}
-                            seed={w.id}
-                            size="dock"
-                          />
-                        }
-                        renderLink={(props) => (
-                          <Link
-                            to="/workflow/$workflowSlug"
-                            params={{ workflowSlug: w.slug }}
-                            {...props}
-                          />
-                        )}
-                        hintHidden={menuOpen}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : null}
           </nav>
         </Menu.ContextMenu>
         <Menu.Dropdown>{contextMenu}</Menu.Dropdown>

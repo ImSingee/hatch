@@ -15,20 +15,10 @@
  *                                                → QueryAppDataTableResponse
  *   POST /internal/api/agent-sessions/:sessionId/apps/:appId
  *                                                → { appId }
- *   GET  /internal/api/workflows                → WorkflowSummaryForAgent[]
- *   GET  /internal/api/workflows/:workflowId    → WorkflowDetailForAgent (404)
- *   POST /internal/api/workflows                → CreateWorkflowResult
- *   GET  /internal/api/workflows/:workflowId/source
- *                                                → SourceBundleResponse
- *   POST /internal/api/workflows/:workflowId/deploy
- *                                                → WorkflowDeployResponse
- *   POST /internal/api/workflows/:workflowId/rollback
- *                                                → { version, compatibility }
  */
 import type http from 'node:http';
 import {
   createAppForSessionRequestSchema,
-  createWorkflowRequestSchema,
   deploySourceRequestSchema,
   queryAppDataTableRequestSchema,
   queryAppDbRequestSchema,
@@ -55,18 +45,6 @@ import { projectAppManifestUrls } from '~server/apps/manifest';
 import { rollbackAppToVersion } from '~server/apps/manage';
 import { queryAppDatabase } from '~server/apps/query-db';
 import { queryAppKv } from '~server/apps/query-kv';
-import {
-  listWorkflowsForAgent,
-  getWorkflowDetailForAgent,
-} from '~server/workflows/inspect';
-import { createWorkflow } from '~server/workflows/scaffold';
-import {
-  workflowMasterCommit,
-  exportWorkflowMasterBundle,
-  importWorkflowBundleToMaster,
-} from '~server/workflows/git';
-import { deployWorkflow } from '~server/workflows/deploy';
-import { rollbackWorkflowToVersion } from '~server/workflows/manage';
 import { queryAppDataTable } from '~server/apps/query-data-table';
 
 /**
@@ -154,26 +132,10 @@ async function requireAppGeneration(id: string): Promise<string> {
   return row.createdAt.toISOString();
 }
 
-async function requireWorkflow(
-  workflowId: string,
-): Promise<{ id: string; generation: string }> {
-  const row = await db.query.workflows.findFirst({
-    where: { id: workflowId },
-    columns: { id: true, createdAt: true },
-  });
-  if (!row) throw new AppError(`Workflow "${workflowId}" not found.`, 404);
-  return { id: row.id, generation: row.createdAt.toISOString() };
-}
-
-function requireGeneration(
-  kind: 'App' | 'Workflow',
-  id: string,
-  expected: string,
-  actual: string,
-): void {
+function requireGeneration(id: string, expected: string, actual: string): void {
   if (expected === actual) return;
   throw new AppError(
-    `${kind} "${id}" was deleted or recreated while preparing the deploy. ` +
+    `App "${id}" was deleted or recreated while preparing the deploy. ` +
       'Checkout the current source and try again.',
     409,
   );
@@ -217,10 +179,6 @@ export async function handleInternalApiRequest(
     }
     if (resource === 'apps') {
       await handleApps(req, res, method, rest);
-      return;
-    }
-    if (resource === 'workflows') {
-      await handleWorkflows(req, res, method, rest);
       return;
     }
     if (resource === 'agent-sessions') {
@@ -318,12 +276,7 @@ async function handleApps(
   if (action === 'deploy' && method === 'POST') {
     const id = appId;
     const body = deploySourceRequestSchema.parse(await readJsonBody(req));
-    requireGeneration(
-      'App',
-      id,
-      body.generation,
-      await requireAppGeneration(id),
-    );
+    requireGeneration(id, body.generation, await requireAppGeneration(id));
     // The bundle transport pushes and deploys in one request: fast-forward
     // master to the uploaded HEAD, then release that commit.
     const commit = await importAppBundleToMaster(
@@ -403,88 +356,6 @@ async function handleApps(
         body.action === 'raw_sql' ? abort.signal : undefined,
       ),
     );
-    return;
-  }
-
-  throw new AppError('Not found.', 404);
-}
-
-async function handleWorkflows(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  method: string,
-  rest: string[],
-): Promise<void> {
-  if (rest.length === 0) {
-    if (method === 'GET') {
-      json(res, 200, await listWorkflowsForAgent());
-      return;
-    }
-    if (method === 'POST') {
-      const body = createWorkflowRequestSchema.parse(await readJsonBody(req));
-      json(res, 200, await createWorkflow(body));
-      return;
-    }
-    throw new AppError('Method not allowed.', 405);
-  }
-
-  const workflowId = decodeURIComponent(rest[0]);
-  const action = rest[1];
-
-  if (!action) {
-    if (method !== 'GET') throw new AppError('Method not allowed.', 405);
-    const detail = await getWorkflowDetailForAgent(workflowId);
-    if (!detail) {
-      throw new AppError(`Workflow "${workflowId}" not found.`, 404);
-    }
-    json(res, 200, detail);
-    return;
-  }
-
-  if (action === 'source' && method === 'GET') {
-    await requireWorkflow(workflowId);
-    const commit = await workflowMasterCommit(workflowId);
-    const bundle = await exportWorkflowMasterBundle(workflowId);
-    const payload: SourceBundleResponse = {
-      id: workflowId,
-      masterCommit: commit,
-      bundleBase64: bundle ? bundle.toString('base64') : null,
-    };
-    json(res, 200, payload);
-    return;
-  }
-
-  if (action === 'deploy' && method === 'POST') {
-    const body = deploySourceRequestSchema.parse(await readJsonBody(req));
-    const workflow = await requireWorkflow(workflowId);
-    requireGeneration(
-      'Workflow',
-      workflowId,
-      body.generation,
-      workflow.generation,
-    );
-    const commit = await importWorkflowBundleToMaster(
-      workflowId,
-      Buffer.from(body.bundleBase64, 'base64'),
-    );
-    const result = await deployWorkflow(workflowId, {
-      commit,
-      message: body.message,
-      expectedGeneration: body.generation,
-    });
-    json(res, 200, {
-      deploymentId: result.deploymentId,
-      version: result.version,
-      compatibilityVersion: result.compatibilityVersion,
-      normalized: result.normalized,
-    });
-    return;
-  }
-
-  if (action === 'rollback' && method === 'POST') {
-    await requireWorkflow(workflowId);
-    const body = rollbackRequestSchema.parse(await readJsonBody(req));
-    json(res, 200, await rollbackWorkflowToVersion(workflowId, body.version));
     return;
   }
 

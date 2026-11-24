@@ -124,8 +124,7 @@ try {
     await runImage(args, offset, controller.signal);
   else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
     await runData(args, offset, controller.signal);
-  else if (['app', 'workflow'].includes(name))
-    await runLifecycle(args, offset, controller.signal);
+  else if (name === 'app') await runLifecycle(args, offset, controller.signal);
   else if (name === 'notification')
     await runNotification(args, offset, controller.signal);
   else if (name === 'theme') await runTheme(args, offset, controller.signal);

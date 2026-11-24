@@ -16,8 +16,8 @@ import { useState } from 'react';
 
 /**
  * A run form inferred from a JSON Schema: one input per property of a flat
- * object schema, or a raw JSON editor for anything else. Shared by Workflow
- * runs and App task runs; the caller starts the run.
+ * object schema, or a raw JSON editor for anything else. The caller starts
+ * the run.
  */
 type JsonSchema = {
   type?: string | string[];

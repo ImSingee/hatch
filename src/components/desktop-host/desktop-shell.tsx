@@ -9,7 +9,6 @@ import {
   IconLayoutGrid,
   IconLogout,
   IconMessage,
-  IconRepeat,
   IconSearch,
 } from '@tabler/icons-react';
 import { spotlight } from '@mantine/spotlight';
@@ -28,7 +27,6 @@ import { DESK_HOME } from '~components/desk/paths';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
 import { appsQueryOptions } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
-import { workflowsQueryOptions } from '~queries/workflows';
 import { DESKTOP_COMMAND_EVENT, parseDesktopCommand } from './host';
 import classes from './desktop-shell.module.css';
 
@@ -39,8 +37,7 @@ function isUnder(pathname: string, to: string) {
 /**
  * The signed-in layout inside the macOS app (`Mac-App` artboard): a sidebar
  * with search (the desk's own palette), the primary sections and the pinned
- * Apps and Workflows, and
- * the page beside it. It replaces the desk's menu bar and dock; the pages
+ * Apps, and the page beside it. It replaces the desk's menu bar and dock; the pages
  * themselves are the same as on the web. The window's traffic lights sit over
  * the sidebar's top strip, which also drags the window.
  */
@@ -95,8 +92,6 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
-  const { data: workflows } = useQuery(workflowsQueryOptions);
-  const pinnedWorkflows = (workflows ?? []).filter((w) => w.pinned);
 
   const sections = [
     {
@@ -119,13 +114,6 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
       count: apps?.length,
     },
     {
-      to: '/workflows',
-      label: 'Workflows',
-      icon: IconRepeat,
-      active: isUnder(pathname, '/workflows'),
-      count: workflows?.length,
-    },
-    {
       to: '/settings',
       label: 'Settings',
       icon: IconAdjustmentsHorizontal,
@@ -138,7 +126,7 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
     <>
       <UnstyledButton
         className={classes.search}
-        aria-label="Search apps, workflows and pages"
+        aria-label="Search apps and pages"
         aria-keyshortcuts="Meta+K"
         onClick={() => spotlight.open()}
       >
@@ -197,39 +185,6 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
               </Link>
             ))}
           </nav>
-
-          {pinnedWorkflows.length > 0 ? (
-            <>
-              <h2 className={classes.heading}>Workflows</h2>
-              <nav aria-label="Pinned workflows" className={classes.list}>
-                {pinnedWorkflows.map((workflow) => (
-                  <Link
-                    key={workflow.id}
-                    to="/workflow/$workflowSlug"
-                    params={{ workflowSlug: workflow.slug }}
-                    className={classes.item}
-                    data-active={
-                      openItems.some(
-                        (item) =>
-                          item.kind === 'workflow' &&
-                          item.slug === workflow.slug,
-                      ) || undefined
-                    }
-                  >
-                    <span className={classes.workflowTile}>
-                      <AppGlyph
-                        name={workflow.name}
-                        seed={workflow.id}
-                        size="sm"
-                        icon={false}
-                      />
-                    </span>
-                    <span className={classes.name}>{workflow.name}</span>
-                  </Link>
-                ))}
-              </nav>
-            </>
-          ) : null}
         </>
       </div>
 

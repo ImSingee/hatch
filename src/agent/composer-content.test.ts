@@ -7,6 +7,7 @@ import {
   hasComposerReference,
   hasComposerText,
   parseComposerText,
+  restoreComposerInput,
 } from './composer-content';
 
 describe('Agent Composer content', () => {
@@ -20,8 +21,8 @@ describe('Agent Composer content', () => {
         slug: 'notes',
       },
       { type: 'text' as const, text: ' and ' },
-      { type: 'workflow' as const, id: 'workflow-1', name: 'Digest }' },
-      { type: 'workflow' as const, id: 'workflow-1', name: 'Digest }' },
+      { type: 'app' as const, id: 'app-2', name: 'Digest }', slug: 'digest' },
+      { type: 'app' as const, id: 'app-2', name: 'Digest }', slug: 'digest' },
       { type: 'text' as const, text: '\n\nDone\n' },
     ];
     expect(parseComposerText(composerModelText(parts))).toEqual(parts);
@@ -33,19 +34,43 @@ describe('Agent Composer content', () => {
       '@UNKNOWN{name="Notes" id="app-1"}',
       '@APP{name="Notes" id="app-1"}',
       '@APP{name="Notes" id="" slug="notes"}',
-      '@WORKFLOW{name="Digest" id="workflow-1" slug="digest"}',
-      '@WORKFLOW{name="Bad\\q" id="workflow-1"}',
+      '@APP{name="Bad\\q" id="app-1" slug="notes"}',
       '@APP{name="Notes" id="app-1" slug="notes"',
-      `@WORKFLOW{name=${JSON.stringify('x'.repeat(501))} id="workflow-1"}`,
+      `@APP{name=${JSON.stringify('x'.repeat(501))} id="app-1" slug="notes"}`,
     ].join('\n');
     const valid = {
-      type: 'workflow' as const,
-      id: 'workflow-1',
-      name: 'Digest',
+      type: 'app' as const,
+      id: 'app-1',
+      name: 'Notes',
+      slug: 'notes',
     };
     expect(
       parseComposerText(invalid + '\n' + composerModelText([valid])),
     ).toEqual([{ type: 'text', text: invalid + '\n' }, valid]);
+  });
+
+  it('keeps a removed Workflow marker from old history as plain text', () => {
+    const text = 'Run @WORKFLOW{name="Digest" id="workflow-1"} nightly';
+    expect(parseComposerText(text)).toEqual([{ type: 'text', text }]);
+    expect(
+      composerInputSchema.safeParse([
+        { type: 'workflow', id: 'workflow-1', name: 'Digest' },
+      ]).success,
+    ).toBe(false);
+  });
+
+  it('restores a stored removed Workflow mention as its visible text', () => {
+    expect(
+      restoreComposerInput([
+        { type: 'text', text: 'Run ' },
+        { type: 'workflow', id: 'workflow-1', name: 'Digest' },
+        { type: 'text', text: ' with ' },
+        { type: 'app', id: 'app-1', name: 'Notes', slug: 'notes' },
+      ]),
+    ).toEqual([
+      { type: 'text', text: 'Run @Digest with ' },
+      { type: 'app', id: 'app-1', name: 'Notes', slug: 'notes' },
+    ]);
   });
 
   it('serializes resource references differently for the UI and model', () => {
@@ -57,21 +82,13 @@ describe('Agent Composer content', () => {
         name: 'Meal "Planner"',
         slug: 'meal-planner',
       },
-      { type: 'text' as const, text: '\nthen run ' },
-      {
-        type: 'workflow' as const,
-        id: 'workflow-1',
-        name: 'Nightly "Digest"',
-      },
+      { type: 'text' as const, text: '\nthen' },
     ];
 
-    expect(composerDisplayText(content)).toBe(
-      'Match @Meal "Planner"\nthen run @Nightly "Digest"',
-    );
+    expect(composerDisplayText(content)).toBe('Match @Meal "Planner"\nthen');
     expect(composerModelText(content)).toBe(
       'Match @APP{name="Meal \\"Planner\\"" id="app-1" slug="meal-planner"}' +
-        '\nthen run ' +
-        '@WORKFLOW{name="Nightly \\"Digest\\"" id="workflow-1"}',
+        '\nthen',
     );
   });
 
@@ -83,13 +100,13 @@ describe('Agent Composer content', () => {
         { type: 'text', text: ' two' },
         { type: 'app', id: 'app-1', name: 'App One', slug: 'app-one' },
         { type: 'text', text: ' three' },
-        { type: 'workflow', id: 'workflow-1', name: 'Workflow One' },
+        { type: 'app', id: 'app-2', name: 'App Two', slug: 'app-two' },
       ]),
     ).toEqual([
       { type: 'text', text: 'one two' },
       { type: 'app', id: 'app-1', name: 'App One', slug: 'app-one' },
       { type: 'text', text: ' three' },
-      { type: 'workflow', id: 'workflow-1', name: 'Workflow One' },
+      { type: 'app', id: 'app-2', name: 'App Two', slug: 'app-two' },
     ]);
   });
 
@@ -100,43 +117,29 @@ describe('Agent Composer content', () => {
       name: 'App One',
       slug: 'app-one',
     };
-    const workflow = {
-      type: 'workflow' as const,
-      id: 'workflow-1',
-      name: 'Workflow One',
-    };
-    expect(hasComposerReference([app, workflow])).toBe(true);
-    expect(hasComposerText([app, workflow])).toBe(false);
-    expect(hasComposerText([{ type: 'text', text: '  ' }, app, workflow])).toBe(
-      false,
+    expect(hasComposerReference([app])).toBe(true);
+    expect(hasComposerText([app])).toBe(false);
+    expect(hasComposerText([{ type: 'text', text: '  ' }, app])).toBe(false);
+    expect(hasComposerText([app, { type: 'text', text: 'Update this' }])).toBe(
+      true,
     );
-    expect(
-      hasComposerText([workflow, { type: 'text', text: 'Update this' }]),
-    ).toBe(true);
   });
 
-  it('bounds App and Workflow references together', () => {
-    const references = Array.from({ length: 32 }, (_, index) =>
-      index % 2 === 0
-        ? {
-            type: 'app' as const,
-            id: `app-${index}`,
-            name: `App ${index}`,
-            slug: `app-${index}`,
-          }
-        : {
-            type: 'workflow' as const,
-            id: `workflow-${index}`,
-            name: `Workflow ${index}`,
-          },
-    );
+  it('bounds App references', () => {
+    const references = Array.from({ length: 32 }, (_, index) => ({
+      type: 'app' as const,
+      id: `app-${index}`,
+      name: `App ${index}`,
+      slug: `app-${index}`,
+    }));
     expect(composerInputSchema.safeParse(references).success).toBe(true);
     expect(
       composerInputSchema.safeParse(
         references.concat({
-          type: 'workflow',
-          id: 'workflow-over-limit',
-          name: 'Workflow over limit',
+          type: 'app',
+          id: 'app-over-limit',
+          name: 'App over limit',
+          slug: 'app-over-limit',
         }),
       ).success,
     ).toBe(false);

@@ -70,7 +70,6 @@ export function startAgentInternalServer(): void {
     agentRunnerToken: token,
     agentInternalHost,
     agentInternalPort,
-    betaFeatures,
   } = getPlatformEnv();
 
   const authorized = (req: http.IncomingMessage): boolean =>
@@ -87,7 +86,7 @@ export function startAgentInternalServer(): void {
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      handleRunnerSocket(ws, { betaFeatures, handlers: runnerHubHandlers });
+      handleRunnerSocket(ws, { handlers: runnerHubHandlers });
     });
   });
 

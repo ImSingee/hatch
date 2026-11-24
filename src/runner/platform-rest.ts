@@ -5,11 +5,9 @@
 import type {
   AppDeployResponse,
   CreateAppResult,
-  CreateWorkflowResult,
   DownloadedAttachment,
   PlatformClient,
   QueryAppDbResponse,
-  WorkflowDeployResponse,
 } from '~agent/platform-client';
 import type {
   QueryAppDataTableResponse,
@@ -142,31 +140,5 @@ export function createPlatformRestClient(opts: {
         false,
         signal,
       ),
-
-    listWorkflows: () => call('GET', '/internal/api/workflows'),
-    getWorkflow: (workflowId) =>
-      call(
-        'GET',
-        `/internal/api/workflows/${enc(workflowId)}`,
-        undefined,
-        true,
-      ),
-    createWorkflow: (input) =>
-      call<CreateWorkflowResult>('POST', '/internal/api/workflows', input),
-    getWorkflowSource: (workflowId) =>
-      call<SourceBundleResponse>(
-        'GET',
-        `/internal/api/workflows/${enc(workflowId)}/source`,
-      ),
-    deployWorkflow: (workflowId, body) =>
-      call<WorkflowDeployResponse>(
-        'POST',
-        `/internal/api/workflows/${enc(workflowId)}/deploy`,
-        body,
-      ),
-    rollbackWorkflow: (workflowId, version) =>
-      call('POST', `/internal/api/workflows/${enc(workflowId)}/rollback`, {
-        version,
-      }),
   };
 }

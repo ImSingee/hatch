@@ -166,10 +166,7 @@ describe.runIf(Boolean(databaseUrl))(
       server = http.createServer(createInternalHttpHandler('test-fleet-token'));
       websocketServer = new WebSocketServer({ server });
       websocketServer.on('connection', (client) =>
-        handleRunnerSocket(client, {
-          betaFeatures: [],
-          handlers: runnerHubHandlers,
-        }),
+        handleRunnerSocket(client, { handlers: runnerHubHandlers }),
       );
       server.listen(0, '127.0.0.1');
       await once(server, 'listening');

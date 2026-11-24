@@ -36,7 +36,6 @@ export const DESKTOP_DESTINATIONS = [
   '/dashboard',
   '/agent',
   '/apps',
-  '/workflows',
   '/notifications',
   '/settings',
 ] as const;

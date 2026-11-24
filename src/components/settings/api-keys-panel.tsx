@@ -150,8 +150,8 @@ export function ApiKeysPanel() {
         <Stack gap={2} style={{ flex: '1 1 220px' }}>
           <Text fw={700}>API keys</Text>
           <Text size="sm" c="dimmed">
-            Let the Hatch CLI and your scripts build and manage Apps and
-            Workflows on your behalf.
+            Let the Hatch CLI and your scripts build and manage Apps on your
+            behalf.
           </Text>
         </Stack>
         <Button
@@ -379,8 +379,8 @@ function CreateApiKeyFlow({
     <form onSubmit={submit} noValidate>
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          The key can build, deploy, and manage every App and Workflow through
-          the CLI. It can’t manage users, credentials, or other API keys.
+          The key can build, deploy, and manage every App through the CLI. It
+          can’t manage users, credentials, or other API keys.
         </Text>
         <TextInput
           label="Name"

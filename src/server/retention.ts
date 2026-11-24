@@ -1,7 +1,7 @@
 /**
  * Server-only: periodic pruning of unbounded history tables.
  *
- * Cron logs, cron run history, workflow runs, and agent run events all grow
+ * Cron logs, cron run history, App task runs, and agent run events all grow
  * with every trigger and would otherwise accumulate forever on a single-tenant
  * install. Each table keeps a generous window (diagnosis stays possible) and
  * everything older is deleted in one daily sweep.
@@ -22,8 +22,6 @@ const RETENTION_DAYS = {
   logs: 30,
   /** Cron trigger history (`app_cron_runs`): the ops-panel run list. */
   cronRuns: 30,
-  /** Workflow executions (+ steps via cascade): user-facing run history. */
-  workflowRuns: 90,
   /** App task runs (+ steps via cascade): the Tasks run history. */
   taskRuns: 90,
   /**
@@ -55,11 +53,6 @@ export async function pruneHistory(): Promise<void> {
   );
   // Steps cascade with their run. Never remove a run that hasn't terminated:
   // the executor may still be attached to it.
-  await db.execute(
-    sql`delete from workflow_runs
-        where created_at < ${cutoff(RETENTION_DAYS.workflowRuns)}::timestamptz
-          and status not in ('queued', 'running')`,
-  );
   await db.execute(
     sql`delete from app_task_runs
         where created_at < ${cutoff(RETENTION_DAYS.taskRuns)}::timestamptz

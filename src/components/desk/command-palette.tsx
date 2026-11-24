@@ -15,12 +15,10 @@ import {
   IconSearch,
   IconSettings,
   IconSparkles,
-  IconStack2,
 } from '@tabler/icons-react';
 import { useMemo, type ReactNode } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { appsQueryOptions } from '~queries/apps';
-import { workflowsQueryOptions } from '~queries/workflows';
 import { DESK_HOME } from './paths';
 import classes from './menu-bar.module.css';
 
@@ -43,12 +41,6 @@ const PLACES: {
     link: { to: '/agent' },
   },
   { id: 'apps', label: 'All apps', icon: <IconApps />, link: { to: '/apps' } },
-  {
-    id: 'workflows',
-    label: 'Workflows',
-    icon: <IconStack2 />,
-    link: { to: '/workflows' },
-  },
   {
     id: 'executions',
     label: 'Executions',
@@ -82,7 +74,7 @@ const placeIcon = (icon: ReactNode) => (
 );
 
 /**
- * Search across the places of the desk, every App and every Workflow,
+ * Search across the places of the desk and every App,
  * opened from the menu bar or with ⌘K / Ctrl+K anywhere in the shell.
  */
 export function CommandPalette() {
@@ -90,7 +82,7 @@ export function CommandPalette() {
     <>
       <UnstyledButton
         className={`${classes.item} ${classes.search}`}
-        aria-label="Search apps, workflows and pages"
+        aria-label="Search apps and pages"
         aria-keyshortcuts="Meta+K Control+K"
         onClick={() => spotlight.open()}
       >
@@ -112,7 +104,6 @@ export function CommandPalette() {
 export function SearchPalette() {
   const navigate = useNavigate();
   const apps = useQuery(appsQueryOptions);
-  const workflows = useQuery(workflowsQueryOptions);
 
   const actions = useMemo<SpotlightActionGroupData[]>(
     () => [
@@ -146,27 +137,8 @@ export function SearchPalette() {
               ),
           })),
       },
-      {
-        group: 'Workflows',
-        actions: (workflows.data ?? [])
-          .filter((workflow) => workflow.status !== 'archived')
-          .map((workflow) => ({
-            id: `workflow-${workflow.id}`,
-            label: workflow.name,
-            description: workflow.description ?? undefined,
-            keywords: [workflow.slug],
-            leftSection: (
-              <AppGlyph name={workflow.name} seed={workflow.id} size="sm" />
-            ),
-            onClick: () =>
-              void navigate({
-                to: '/workflow/$workflowSlug',
-                params: { workflowSlug: workflow.slug },
-              }),
-          })),
-      },
     ],
-    [apps.data, workflows.data, navigate],
+    [apps.data, navigate],
   );
 
   return (
@@ -177,14 +149,14 @@ export function SearchPalette() {
       // from search boxes and the Agent composer too.
       tagsToIgnore={[]}
       triggerOnContentEditable
-      nothingFound="Nothing matches. Try an App, Workflow or page name."
+      nothingFound="Nothing matches. Try an App or page name."
       highlightQuery
       scrollable
       maxHeight={420}
       searchProps={{
         leftSection: <IconSearch size={18} stroke={1.8} />,
-        placeholder: 'Search apps, workflows and pages',
-        'aria-label': 'Search apps, workflows and pages',
+        placeholder: 'Search apps and pages',
+        'aria-label': 'Search apps and pages',
       }}
     />
   );

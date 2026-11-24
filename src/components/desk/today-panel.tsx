@@ -3,14 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { IconCalendarEvent, IconRoute } from '@tabler/icons-react';
 import dayjs from 'dayjs';
-import type { WorkflowRunStatus } from '~/db/schema';
-import { allWorkflowRunsQueryOptions } from '~queries/workflows';
+import type { RunStatus } from '~lib/runs';
+import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
 import classes from './today-panel.module.css';
 
 const ACTIVE_POLL_MS = 5_000;
 const IDLE_POLL_MS = 60_000;
 
-const STATUS_LABEL: Record<WorkflowRunStatus, string> = {
+const STATUS_LABEL: Record<RunStatus, string> = {
   queued: 'Queued',
   running: 'Running',
   succeeded: 'Done',
@@ -21,14 +21,14 @@ const STATUS_LABEL: Record<WorkflowRunStatus, string> = {
 /**
  * The ultrawide desk's today column: what ran today. The canvas puts an App
  * widget here; the platform has no widget of its own, so the column shows
- * today's Workflow runs, which every instance has data for.
+ * today's App task runs.
  */
 export function TodayPanel() {
   // No platform event announces run progress, so poll while the desk is
   // visible: quickly while a run is in flight, slowly otherwise so newly
   // scheduled runs still appear. Paused when the tab is hidden.
   const runs = useQuery({
-    ...allWorkflowRunsQueryOptions,
+    ...recentTaskRunsQueryOptions,
     refetchInterval: (query) =>
       query.state.data?.some(
         (run) => run.status === 'queued' || run.status === 'running',
@@ -90,11 +90,13 @@ export function TodayPanel() {
           {today.slice(0, 8).map((run) => (
             <li key={run.id}>
               <Link
-                to="/workflow/$workflowSlug/execution/$runId"
-                params={{ workflowSlug: run.workflowSlug, runId: run.id }}
+                to="/app/$appSlug/tasks/runs/$runId"
+                params={{ appSlug: run.appSlug, runId: run.id }}
                 className={classes.run}
               >
-                <span className={classes.runName}>{run.workflowName}</span>
+                <span className={classes.runName}>
+                  {run.appName} · {run.taskName}
+                </span>
                 <span className={classes.runMeta}>
                   {dayjs(run.createdAt).format('HH:mm')}
                 </span>
@@ -107,8 +109,8 @@ export function TodayPanel() {
         </ul>
       )}
       <div className={classes.footer}>
-        <Button component={Link} to="/workflows" variant="default" size="sm">
-          All workflows
+        <Button component={Link} to="/apps" variant="default" size="sm">
+          All apps
         </Button>
         <Link to="/executions" className={classes.more}>
           Executions ›

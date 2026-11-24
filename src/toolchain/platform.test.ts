@@ -34,7 +34,7 @@ const EVALUATION: ToolchainCommand = {
 
 async function context() {
   const { platformToolchainContext } = await import('./platform');
-  return platformToolchainContext('app', '/source', []);
+  return platformToolchainContext('/source', []);
 }
 
 afterEach(() => {

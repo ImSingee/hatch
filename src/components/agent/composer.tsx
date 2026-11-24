@@ -20,7 +20,6 @@ import {
   type ComposerInputPart,
 } from '~agent/composer-content';
 import type { AppListItem } from '~server/apps';
-import type { WorkflowListItem } from '~server/workflows';
 import { ComposerEditor, type ComposerEditorHandle } from './composer-editor';
 import classes from './chat.module.css';
 
@@ -141,9 +140,6 @@ export function Composer({
   apps,
   appsLoading = false,
   appsError = false,
-  workflows,
-  workflowsLoading = false,
-  workflowsError = false,
 }: {
   /**
    * Send the draft. Return `false` (or reject) to keep the draft intact — e.g.
@@ -172,10 +168,6 @@ export function Composer({
   apps?: AppListItem[];
   appsLoading?: boolean;
   appsError?: boolean;
-  /** Workflows available to the inline @ mention menu. */
-  workflows?: WorkflowListItem[];
-  workflowsLoading?: boolean;
-  workflowsError?: boolean;
 }) {
   const [content, setContent] = useState<ComposerInputPart[]>(() =>
     seedText ? [{ type: 'text', text: seedText }] : [],
@@ -374,9 +366,6 @@ export function Composer({
         apps={apps}
         appsLoading={appsLoading}
         appsError={appsError}
-        workflows={workflows}
-        workflowsLoading={workflowsLoading}
-        workflowsError={workflowsError}
         disabled={disabled}
         focusOnMount={focusOnMount}
         placeholder={placeholder}

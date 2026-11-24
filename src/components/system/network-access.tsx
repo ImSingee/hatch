@@ -38,7 +38,7 @@ export function NetworkAccessDetails({
       <Text size="xs" c="dimmed">
         Covers HTTP, HTTPS, TCP, UDP, DNS, and network listeners through Deno.
         {appPlatformChannels
-          ? ' The platform listener and enabled Database, Data Tables, KV, and Workflow channels remain available.'
+          ? ' The platform listener and enabled Database, Data Tables, and KV channels remain available.'
           : ''}
       </Text>
     </Stack>

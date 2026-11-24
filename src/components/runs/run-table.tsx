@@ -16,7 +16,7 @@ export type RunTableColumn<T> = {
 };
 
 /**
- * The run history table shared by Workflow and App task runs. The caller
+ * The App task run history table. The caller
  * owns data fetching and navigation: `renderLink` wraps the status badge in
  * a real link (open in new tab, keyboard) and `onOpen` handles a row click.
  */

@@ -34,8 +34,6 @@ type GlyphProps = {
    * `hero` (72) leads a detail view.
    */
   size?: 'sm' | 'widget' | 'md' | 'dock' | 'lg' | 'xl' | 'hero';
-  /** Workflows share the tile and differ by one squared-off corner. */
-  shape?: 'app' | 'workflow';
 };
 
 /** Stored icon size that covers a tile on a 2x display. */
@@ -46,15 +44,11 @@ function iconSizeFor(size: NonNullable<GlyphProps['size']>): 64 | 128 | 256 {
 
 /**
  * An App's tile: its stored icon when it has one, else the monogram. `seed`
- * is looked up as an App id; pass `icon={false}` for anything that is not an
- * App (Workflows share this tile but have no icons).
+ * is looked up as an App id.
  */
-export function AppGlyph({
-  icon = true,
-  ...props
-}: GlyphProps & { icon?: boolean }) {
+export function AppGlyph(props: GlyphProps) {
   const available = useHasAppIcons();
-  return icon && available && props.seed ? (
+  return available && props.seed ? (
     <AppIconGlyph {...props} />
   ) : (
     <Monogram {...props} />
@@ -74,7 +68,6 @@ function AppIconGlyph(props: GlyphProps) {
     <img
       className={classes.glyph}
       data-size={size}
-      data-shape={props.shape}
       src={src}
       onError={() => setFailed(src)}
       alt=""
@@ -84,13 +77,12 @@ function AppIconGlyph(props: GlyphProps) {
   );
 }
 
-function Monogram({ name, seed, size = 'md', shape }: GlyphProps) {
+function Monogram({ name, seed, size = 'md' }: GlyphProps) {
   const tile = TILE_COLORS[hash(seed ?? name) % TILE_COLORS.length];
   return (
     <span
       className={classes.glyph}
       data-size={size}
-      data-shape={shape}
       aria-hidden
       style={{ '--glyph-bg': tile } as CSSProperties}
     >

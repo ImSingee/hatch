@@ -1,5 +1,5 @@
 /**
- * The Agent Runner's view of the platform: every app/workflow operation a tool
+ * The Agent Runner's view of the platform: every App operation a tool
  * can perform goes through this interface instead of importing `~server/*`.
  * The runner implements it with authenticated REST calls to the platform's
  * internal API; tests can stub it.
@@ -9,13 +9,7 @@
  */
 import type { NormalizedManifest } from '~server/apps/manifest';
 import type { AppCompatibility } from '~/app-compatibility';
-import type { WorkflowCompatibility } from '~/workflow-compatibility';
 import type { AppDetail, AppSummary } from '~server/apps/inspect';
-import type { NormalizedWorkflowManifest } from '~server/workflows/manifest';
-import type {
-  WorkflowDetailForAgent,
-  WorkflowSummaryForAgent,
-} from '~server/workflows/inspect';
 import type {
   QueryAppDataTableRequest,
   QueryAppDataTableResponse,
@@ -33,26 +27,12 @@ export type CreateAppResult = {
   files: ScaffoldFile[];
 };
 
-export type CreateWorkflowResult = {
-  id: string;
-  slug: string;
-  name: string;
-  files: ScaffoldFile[];
-};
-
 export type AppDeployResponse = {
   deploymentId: string;
   version: number;
   compatibilityVersion: number;
   slug: string;
   normalized: NormalizedManifest;
-};
-
-export type WorkflowDeployResponse = {
-  deploymentId: string;
-  version: number;
-  compatibilityVersion: number;
-  normalized: NormalizedWorkflowManifest;
 };
 
 export type QueryAppDbResponse = {
@@ -129,23 +109,4 @@ export type PlatformClient = {
     input: QueryAppDataTableRequest,
     signal?: AbortSignal,
   ): Promise<QueryAppDataTableResponse>;
-
-  listWorkflows(): Promise<WorkflowSummaryForAgent[]>;
-  /** Looks up a Workflow by its immutable id; null when no Workflow matches. */
-  getWorkflow(workflowId: string): Promise<WorkflowDetailForAgent | null>;
-  createWorkflow(input: {
-    slug: string;
-    name: string;
-    description?: string;
-    pin?: boolean;
-  }): Promise<CreateWorkflowResult>;
-  getWorkflowSource(workflowId: string): Promise<SourceBundleResponse>;
-  deployWorkflow(
-    workflowId: string,
-    opts: { message: string; generation: string; bundleBase64: string },
-  ): Promise<WorkflowDeployResponse>;
-  rollbackWorkflow(
-    workflowId: string,
-    version: number,
-  ): Promise<{ version: number; compatibility: WorkflowCompatibility }>;
 };

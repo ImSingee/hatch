@@ -569,7 +569,7 @@ function notifyRunFinished(runId: string): void {
  */
 export function handleRunnerSocket(
   socket: WebSocket,
-  options: { betaFeatures: readonly string[]; handlers: RunnerHubHandlers },
+  options: { handlers: RunnerHubHandlers },
 ): void {
   let conn: RunnerConn | null = null;
 
@@ -678,7 +678,7 @@ export function handleRunnerSocket(
 async function registerRunner(
   socket: WebSocket,
   hello: Extract<RunnerMessage, { type: 'runner.hello' }>,
-  options: { betaFeatures: readonly string[]; handlers: RunnerHubHandlers },
+  options: { handlers: RunnerHubHandlers },
 ): Promise<RunnerConn | null> {
   const { handlers } = options;
   const state = hubState();
@@ -755,7 +755,6 @@ async function registerRunner(
   if (
     !send(conn, {
       type: 'hub.hello_ack',
-      betaFeatures: [...options.betaFeatures],
       resumedRunIds: runs.resumed,
       staleRunIds: runs.stale,
       staleWorkspaceSessionIds: workspace.staleSessionIds,

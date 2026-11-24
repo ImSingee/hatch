@@ -10,10 +10,7 @@ service SdkService {
 }
 
 message GetSdkRequest {
-  string kind = 1 [
-    (buf.validate.field).string.in = "app",
-    (buf.validate.field).string.in = "workflow"
-  ];
+  string kind = 1 [(buf.validate.field).string.in = "app"];
 }
 
 // Versions of the tools this platform builds sources with. A client that

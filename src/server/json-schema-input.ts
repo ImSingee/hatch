@@ -1,17 +1,12 @@
 /**
- * Server-only: validate run input against a JSON Schema captured at deploy
- * time, shared by Workflow runs and App task runs.
+ * Server-only: validate App task run input against the JSON Schema captured
+ * at deploy time.
  *
  * The gate is built by turning the stored JSON Schema back into a zod schema
- * ("zod from json schema") and parsing the input with it.
- *
- * - Workflows (default, lenient): the bundle re-validates with the *real* zod
- *   schema at run time, so this is a fast structural gate that errs toward
- *   acceptance. Constraints it can't faithfully represent (patterns) are
- *   skipped and unknown keys are stripped or kept.
- * - App tasks (`strict`): the platform is the only validator before the
- *   Connect request, whose JSON decoder rejects unknown fields. Patterns are
- *   enforced and unknown keys are rejected with the field named.
+ * ("zod from json schema") and parsing the input with it. The platform is the
+ * only validator before the Connect request, whose JSON decoder rejects
+ * unknown fields, so patterns are enforced and undeclared keys of a closed
+ * object are rejected with the field named.
  */
 import vm from 'node:vm';
 import { z } from 'zod';
@@ -71,8 +66,6 @@ function typeOf(schema: JsonSchema): string | string[] | undefined {
 }
 
 export type SchemaInputOptions = {
-  /** Enforce `pattern` and reject undeclared object keys. */
-  strict?: boolean;
   /** Shared pattern time budget; one per validation (set internally). */
   patternBudget?: PatternBudget;
 };
@@ -121,7 +114,6 @@ export function jsonSchemaToZod(
       let s = z.string();
       if (typeof schema.minLength === 'number') s = s.min(schema.minLength);
       if (typeof schema.maxLength === 'number') s = s.max(schema.maxLength);
-      if (!options.strict) return s;
       const pattern =
         typeof schema.pattern === 'string' ? schema.pattern : undefined;
       const regex = pattern === undefined ? null : new RegExp(pattern);
@@ -198,12 +190,7 @@ function objectToZod(
     shape[key] = field;
   }
   const obj = z.object(shape);
-  if (options.strict && schema.additionalProperties === false) {
-    return obj.strict();
-  }
-  // Mirror additionalProperties: false (the default for zod-produced schemas)
-  // by stripping unknown keys rather than rejecting, to stay lenient.
-  return schema.additionalProperties === false ? obj.strip() : obj.loose();
+  return schema.additionalProperties === false ? obj.strict() : obj.loose();
 }
 
 /** Collect the candidate JSON Schema types for a node, peering into unions. */
@@ -278,10 +265,9 @@ export type SchemaValidationResult =
 export function validateSchemaInput(
   jsonSchema: unknown,
   rawInput: unknown,
-  options: SchemaInputOptions = {},
 ): SchemaValidationResult {
   if (!asSchema(jsonSchema)) {
-    // No schema captured (e.g. a workflow with no declared input) — accept.
+    // No schema captured — accept.
     return { success: true, data: rawInput ?? {} };
   }
   // Strict inputs arrive from callers (webhooks, the RPC): refuse one with
@@ -294,7 +280,6 @@ export function validateSchemaInput(
     };
   }
   const zodSchema = jsonSchemaToZod(jsonSchema, {
-    ...options,
     patternBudget: { remainingMs: PATTERN_BUDGET_MS },
   });
   const parsed = zodSchema.safeParse(rawInput ?? {});

@@ -596,9 +596,7 @@ function resolveTaskInputs(
           `Task "${task.name}" cron job "${job.name}" has an invalid schedule: ${scheduleError}`,
         );
       }
-      const check = validateSchemaInput(task.inputSchema, job.input, {
-        strict: true,
-      });
+      const check = validateSchemaInput(task.inputSchema, job.input);
       if (!check.success) {
         throw new Error(
           `Task "${task.name}" cron job "${job.name}" input does not match the task input: ${check.message}`,
@@ -655,7 +653,6 @@ export async function buildApp(
     const legacy =
       manifestFile === 'manifest.json'
         ? await loadSourceManifest(src, {
-            kind: 'app',
             parse: parseSourceManifest,
           })
         : undefined;
@@ -664,7 +661,7 @@ export async function buildApp(
     // evaluated; it is independent of the runtime the manifest declares.
     const toolchain = createSourceToolchain(
       await detectSourceToolchain(sourceToolchainReader(src)),
-      platformToolchainContext('app', src, logs),
+      platformToolchainContext(src, logs),
     );
     await toolchain.validateDependencies();
 

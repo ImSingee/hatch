@@ -11,7 +11,6 @@ const symbols: Record<GlyphName, AndroidSymbol> = {
   apps: 'apps',
   agent: 'auto_awesome',
   person: 'person',
-  workflows: 'account_tree',
   more: 'more_horiz',
   open: 'north_east',
   refresh: 'refresh',

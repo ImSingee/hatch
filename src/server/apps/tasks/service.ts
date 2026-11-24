@@ -44,7 +44,7 @@ import {
 import { nextRun, parseCron } from '../cron-expr';
 import { type DedicatedRunHandle, runInDedicatedInstance } from '../runtime';
 
-/** Same bound as a Workflow run and a platform call into a backend. */
+/** Same bound as a platform call into a backend. */
 export const TASK_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Queued runs one App may hold before new ones are refused. */
 export const TASK_QUEUE_LIMIT = 100;
@@ -54,7 +54,7 @@ export const MAX_TASK_INPUT_BYTES = 1_000_000;
 const MAX_REJECTED_INPUT_BYTES = 64 * 1024;
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
-// Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
+// Existing namespaces elsewhere: 1 (App deploys), 2 (retired), 3
 // (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts),
 // 7 (platform-config.ts).
 const APP_TASK_QUEUE_LOCK_NS = 8;
@@ -192,9 +192,7 @@ export async function startTaskRun(
     throw new AppError(`Task "${taskName}" does not accept webhook runs.`, 404);
   }
   const rawInput = options.input ?? {};
-  const validation = validateSchemaInput(task.inputSchema, rawInput, {
-    strict: true,
-  });
+  const validation = validateSchemaInput(task.inputSchema, rawInput);
   const base = {
     id: ulid().toLowerCase(),
     appId,
@@ -402,9 +400,7 @@ async function dispatchPass(appId: string): Promise<void> {
     // Input was validated against the deployment active when the run was
     // queued. The run executes on `context`'s deployment, whose definition
     // may have added required fields, defaults or constraints since.
-    const validation = validateSchemaInput(task.inputSchema, run.input ?? {}, {
-      strict: true,
-    });
+    const validation = validateSchemaInput(task.inputSchema, run.input ?? {});
     if (!validation.success) {
       await db
         .update(schema.appTaskRuns)

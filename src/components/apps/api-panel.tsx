@@ -1,6 +1,5 @@
 import {
   ActionIcon,
-  Anchor,
   Badge,
   Center,
   Code,
@@ -14,14 +13,12 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { IconChevronRight, IconCopy } from '@tabler/icons-react';
 import copy from 'copy-to-clipboard';
 import { toast } from 'sonner';
 import type { ProtoFile, RpcServiceApi } from '~server/apps/manifest';
 import { normalizedManifestQueryOptions } from '~queries/apps';
 import { GroupCard, Section } from '~components/page/page';
-import { workflowsQueryOptions } from '~queries/workflows';
 
 /** Local-name of a fully-qualified proto type (drops the package prefix). */
 function shortType(fqName: string): string {
@@ -160,7 +157,6 @@ function ProtoSource({ file }: { file: ProtoFile }) {
  */
 export function ApiPanel({ appId }: { appId: string }) {
   const query = useQuery(normalizedManifestQueryOptions(appId));
-  const workflowsQuery = useQuery(workflowsQueryOptions);
 
   if (query.isLoading) {
     return (
@@ -176,10 +172,6 @@ export function ApiPanel({ appId }: { appId: string }) {
 
   const manifest = query.data;
   const api = manifest?.api;
-  const workflows = manifest?.workflows ?? [];
-  const workflowById = new Map(
-    (workflowsQuery.data ?? []).map((workflow) => [workflow.id, workflow]),
-  );
 
   return (
     <Section id="api" title="API">
@@ -215,54 +207,6 @@ export function ApiPanel({ appId }: { appId: string }) {
                 ) : null}
               </>
             )}
-            {workflows.length > 0 ? (
-              <Stack gap={6}>
-                <Text fw={700} size="sm">
-                  Workflow calls
-                </Text>
-                <Text size="xs" c="dimmed">
-                  Top-level workflows this app&apos;s backend can invoke. The
-                  platform injects each call&apos;s URL + secret at runtime.
-                </Text>
-                <Table withTableBorder verticalSpacing={6} highlightOnHover>
-                  <Table.Tbody>
-                    {workflows.map((w) => {
-                      const workflow = workflowById.get(w.workflow);
-                      return (
-                        <Table.Tr key={w.alias}>
-                          <Table.Td>
-                            <Text size="sm" fw={600} ff="monospace">
-                              {w.alias}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            {workflow ? (
-                              <Anchor
-                                size="xs"
-                                ff="monospace"
-                                renderRoot={(props) => (
-                                  <Link
-                                    to="/workflow/$workflowSlug"
-                                    params={{ workflowSlug: workflow.slug }}
-                                    {...props}
-                                  />
-                                )}
-                              >
-                                {w.workflow}
-                              </Anchor>
-                            ) : (
-                              <Text size="xs" ff="monospace">
-                                {w.workflow}
-                              </Text>
-                            )}
-                          </Table.Td>
-                        </Table.Tr>
-                      );
-                    })}
-                  </Table.Tbody>
-                </Table>
-              </Stack>
-            ) : null}
           </Stack>
         )}
       </GroupCard>

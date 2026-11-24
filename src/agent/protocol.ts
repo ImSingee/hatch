@@ -2,7 +2,7 @@
  * Wire protocol between the Platform (control plane) and the Agent Runner
  * (execution plane). The Runner is the only side that opens connections:
  * a WebSocket control channel for run dispatch/events plus REST calls for
- * app/workflow operations. Both sides validate every message against these
+ * App operations. Both sides validate every message against these
  * schemas.
  *
  * This module must stay dependency-free of `~server/*` and `~/db` (types
@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { createAppRequestSchema } from '~/platform-api/lifecycle-schemas';
 export {
   createAppRequestSchema,
-  createWorkflowRequestSchema,
   deploySourceRequestSchema,
   rollbackRequestSchema,
 } from '~/platform-api/lifecycle-schemas';
@@ -23,7 +22,7 @@ import { isReservedEnvKey } from './env-keys';
 
 export { DEFAULT_INTERNAL_PORT, RUNNER_WS_PATH } from './runner-constants';
 
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 
 /** How long a run lease stays valid without renewal (heartbeat/events renew). */
 export const RUN_LEASE_TTL_MS = 90_000;
@@ -317,8 +316,6 @@ export type RunnerMessage = z.infer<typeof runnerMessageSchema>;
 
 export const hubHelloAckSchema = z.object({
   type: z.literal('hub.hello_ack'),
-  /** Platform-owned beta features applied before this Runner becomes ready. */
-  betaFeatures: z.array(z.string().min(1)),
   /**
    * Runs this runner should keep reporting on: still-owned active runs (keep
    * executing + resend queues) and owned runs already terminal on the

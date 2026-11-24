@@ -12,7 +12,6 @@ import { IconDots, IconExternalLink, IconSettings } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
 import type { AppListItem } from '~server/apps';
-import type { WorkflowListItem } from '~server/workflows';
 import classes from './chat.module.css';
 
 type DeploymentResource = {
@@ -30,8 +29,6 @@ type DeploymentActionItem = {
   key: string;
   name: string;
   seed: string;
-  /** Whether `seed` is an App id that may have a stored icon. */
-  isApp: boolean;
   subtitle: string;
   action: ReactNode;
 };
@@ -81,12 +78,7 @@ function DeploymentActions({
             className={classes.deploymentActionRow}
             wrap="nowrap"
           >
-            <AppGlyph
-              icon={item.isApp}
-              name={item.name}
-              seed={item.seed}
-              size="lg"
-            />
+            <AppGlyph name={item.name} seed={item.seed} size="lg" />
             <Box className={classes.deploymentActionIdentity}>
               <Text size="sm" fw={700} truncate>
                 {item.name}
@@ -135,7 +127,6 @@ export function AppDeploymentActions({
           key: app?.id ?? reference,
           name,
           seed: app?.id ?? reference,
-          isApp: true,
           subtitle: app ? app.slug : 'No longer available',
           action: app ? (
             <Group
@@ -201,111 +192,6 @@ export function AppDeploymentActions({
                       )}
                     >
                       Manage app
-                    </Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-              ) : null}
-            </Group>
-          ) : (
-            unavailableAction()
-          ),
-        };
-      })}
-    />
-  );
-}
-
-export function WorkflowDeploymentActions({
-  ids,
-  workflows,
-}: {
-  ids: string[];
-  workflows: WorkflowListItem[] | undefined;
-}) {
-  if (!workflows) return null;
-  // Persisted deploy_workflow calls contain IDs, including legacy kebab IDs.
-  // Slugs are mutable and may belong to a different Workflow after reuse.
-  const deployedWorkflows = resolveDeployedResources(ids, (id) =>
-    workflows.find((workflow) => workflow.id === id),
-  );
-
-  return (
-    <DeploymentActions
-      singularLabel="Deployed workflow"
-      pluralLabel="Deployed workflows"
-      items={deployedWorkflows.map(({ reference, resource: workflow }) => {
-        const name = workflow?.name ?? reference;
-        const canOpen = workflow?.status === 'deployed';
-        return {
-          key: workflow?.id ?? reference,
-          name,
-          seed: workflow?.id ?? reference,
-          isApp: false,
-          subtitle: workflow ? workflow.slug : 'No longer available',
-          action: workflow ? (
-            <Group
-              gap={4}
-              wrap="nowrap"
-              className={classes.deploymentActionCtas}
-            >
-              {canOpen ? (
-                <Button
-                  size="compact-sm"
-                  variant="filled"
-                  color="primary"
-                  leftSection={<IconExternalLink size={14} stroke={1.8} />}
-                  renderRoot={(props) => (
-                    <Link
-                      to="/workflow/$workflowSlug"
-                      params={{ workflowSlug: workflow.slug }}
-                      {...props}
-                    />
-                  )}
-                >
-                  Open
-                </Button>
-              ) : (
-                <Button
-                  size="compact-sm"
-                  variant="default"
-                  leftSection={<IconSettings size={14} stroke={1.8} />}
-                  renderRoot={(props) => (
-                    <Link
-                      to="/workflow/$workflowSlug/manage"
-                      params={{ workflowSlug: workflow.slug }}
-                      {...props}
-                    />
-                  )}
-                >
-                  Manage
-                </Button>
-              )}
-              {canOpen ? (
-                <Menu position="bottom-end" withinPortal>
-                  <Menu.Target>
-                    <Tooltip label={`Manage ${name}`} withArrow>
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        aria-label={`More actions for ${name}`}
-                      >
-                        <IconDots size={16} stroke={1.8} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Item
-                      leftSection={<IconSettings size={15} stroke={1.7} />}
-                      renderRoot={(props) => (
-                        <Link
-                          to="/workflow/$workflowSlug/manage"
-                          params={{ workflowSlug: workflow.slug }}
-                          {...props}
-                        />
-                      )}
-                    >
-                      Manage workflow
                     </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>

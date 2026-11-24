@@ -25,7 +25,6 @@ import { createEmptyAgentSession } from '~components/agent/new-chat-api';
 import { startAgentRunRequest } from '~components/agent/use-agent-stream';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
-import { workflowsQueryOptions } from '~queries/workflows';
 import classes from './quick-agent-chat.module.css';
 
 /**
@@ -38,7 +37,6 @@ export function QuickAgentChat() {
   const navigate = useNavigate();
   const sessions = useQuery(sessionsQueryOptions);
   const apps = useQuery(appsQueryOptions);
-  const workflows = useQuery(workflowsQueryOptions);
   const { groups, first, available } = useModelOptions();
   const [model, setModel] = useLastSelectedModel();
   const [starting, setStarting] = useState(false);
@@ -174,11 +172,8 @@ export function QuickAgentChat() {
             apps={apps.data}
             appsLoading={apps.isLoading}
             appsError={apps.isError}
-            workflows={workflows.data}
-            workflowsLoading={workflows.isLoading}
-            workflowsError={workflows.isError}
             disabled={starting}
-            placeholder="Describe the app or workflow you want…"
+            placeholder="Describe the app you want…"
             modelControl={
               <ModelPicker
                 groups={groups}

@@ -12,7 +12,6 @@ beforeEach(async () => {
   await db.delete(schema.agentRuns);
   await db.delete(schema.agentSessions);
   await db.delete(schema.apps);
-  await db.delete(schema.workflows);
 });
 
 describe('runner workspace reconciliation', () => {

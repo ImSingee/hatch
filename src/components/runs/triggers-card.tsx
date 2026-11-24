@@ -37,9 +37,8 @@ export type TriggerCronJob = {
 };
 
 /**
- * How a run target is started: manually, on schedules and by webhook.
- * Shared by Workflows and App tasks; the caller supplies the wording for
- * its own source contract.
+ * How a run target is started: manually, on schedules and by webhook. The
+ * caller supplies the wording for its own source contract.
  */
 export function TriggersCard({
   manualNote,

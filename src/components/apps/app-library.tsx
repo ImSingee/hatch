@@ -25,33 +25,29 @@ import { openContextMenuFromKeyboard } from '~components/system/context-menu-key
 import { StatusBadge } from '~components/system/status-badge';
 import { formatRelative } from '~lib/format';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
-import { workflowsQueryOptions } from '~queries/workflows';
 import type { AppListItem } from '~server/apps';
 import { setSidebarPin } from '~server/sidebar';
-import { setWorkflowPinFn, type WorkflowListItem } from '~server/workflows';
 import { AppGlyph } from './app-glyph';
 import classes from './app-library.module.css';
 
 type Entry = {
-  kind: 'app' | 'workflow';
   id: string;
   slug: string;
   name: string;
   description: string | null;
-  status: AppListItem['status'] | WorkflowListItem['status'];
+  status: AppListItem['status'];
   updatedAt: string;
   pinned: boolean;
 };
 
-type Grouping = 'kind' | 'name' | 'recent';
+type Grouping = 'name' | 'recent';
 
 const GROUPINGS: { value: Grouping; label: string }[] = [
-  { value: 'kind', label: 'Kind' },
   { value: 'name', label: 'A–Z' },
   { value: 'recent', label: 'Recent' },
 ];
 
-const keyOf = (entry: Entry) => `${entry.kind}:${entry.id}`;
+const keyOf = (entry: Entry) => entry.id;
 
 const byName = (a: Entry, b: Entry) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
@@ -78,17 +74,6 @@ function groupEntries(
   entries: Entry[],
   grouping: Grouping,
 ): { title: string; items: Entry[] }[] {
-  if (grouping === 'kind') {
-    return [
-      { title: 'Apps', items: entries.filter((e) => e.kind === 'app') },
-      {
-        title: 'Workflows',
-        items: entries.filter((e) => e.kind === 'workflow'),
-      },
-    ]
-      .map((group) => ({ ...group, items: [...group.items].sort(byName) }))
-      .filter((group) => group.items.length > 0);
-  }
   const sorted = [...entries].sort(grouping === 'name' ? byName : byRecent);
   const groups: { title: string; items: Entry[] }[] = [];
   for (const entry of sorted) {
@@ -116,41 +101,27 @@ function entryKeyOf(target: EventTarget | null) {
 }
 
 /**
- * All apps: every App and Workflow as a tile. A click opens it. Pointing at a
+ * All apps: every App as a tile. A click opens it. Pointing at a
  * tile shows what it is; its actions (manage, dock, Agent) are in the
  * right-click menu, also opened by a long press or Shift+F10.
  */
 export function AppLibrary({ apps }: { apps: AppListItem[] }) {
-  const { data: workflows } = useQuery(workflowsQueryOptions);
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const [query, setQuery] = useState('');
-  const [grouping, setGrouping] = useState<Grouping>('kind');
+  const [grouping, setGrouping] = useState<Grouping>('name');
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const pinnedApps = new Set((pins ?? []).map((pin) => pin.appId));
-  const entries: Entry[] = [
-    ...apps.map((app): Entry => ({
-      kind: 'app',
-      id: app.id,
-      slug: app.slug,
-      name: app.name,
-      description: app.description,
-      status: app.status,
-      updatedAt: app.updatedAt,
-      pinned: pinnedApps.has(app.id),
-    })),
-    ...(workflows ?? []).map((workflow): Entry => ({
-      kind: 'workflow',
-      id: workflow.id,
-      slug: workflow.slug,
-      name: workflow.name,
-      description: workflow.description,
-      status: workflow.status,
-      updatedAt: workflow.updatedAt,
-      pinned: workflow.pinned,
-    })),
-  ];
+  const entries = apps.map((app): Entry => ({
+    id: app.id,
+    slug: app.slug,
+    name: app.name,
+    description: app.description,
+    status: app.status,
+    updatedAt: app.updatedAt,
+    pinned: pinnedApps.has(app.id),
+  }));
 
   const needle = query.trim().toLowerCase();
   const matching = needle
@@ -164,8 +135,6 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
   const menuEntry = entries.find((entry) => keyOf(entry) === menuKey) ?? null;
   const noteTarget = (target: EventTarget | null) =>
     setMenuKey(entryKeyOf(target));
-
-  const workflowCount = workflows?.length ?? 0;
 
   if (entries.length === 0) {
     return (
@@ -193,18 +162,8 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
 
   return (
     <WindowBody>
-      <Toolbar
-        lead={
-          workflowCount > 0
-            ? `${plural(apps.length, 'app')} · ${plural(workflowCount, 'workflow')}`
-            : plural(apps.length, 'app')
-        }
-      >
-        <ToolbarSearch
-          label="Search apps and workflows"
-          value={query}
-          onChange={setQuery}
-        />
+      <Toolbar lead={plural(apps.length, 'app')}>
+        <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
         <SegmentedControl
           aria-label="Group by"
           data={GROUPINGS}
@@ -231,7 +190,7 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
             </Button>
           }
         >
-          No app or workflow matches “{query.trim()}”.
+          No app matches “{query.trim()}”.
         </EmptyState>
       ) : (
         <Menu
@@ -292,22 +251,16 @@ function EntryLink({
   children?: ReactNode;
   'data-entry-key'?: string;
 }) {
-  return entry.kind === 'app' ? (
+  return (
     <Link
       to={manage ? '/app/$appSlug/manage' : '/app/$appSlug'}
       params={{ appSlug: entry.slug }}
       {...props}
     />
-  ) : (
-    <Link
-      to={manage ? '/workflow/$workflowSlug/manage' : '/workflow/$workflowSlug'}
-      params={{ workflowSlug: entry.slug }}
-      {...props}
-    />
   );
 }
 
-/** One App or Workflow: a link that opens it, with its details on hover. */
+/** One App: a link that opens it, with its details on hover. */
 function EntryTile({
   entry,
   cardHidden,
@@ -315,7 +268,6 @@ function EntryTile({
   entry: Entry;
   cardHidden: boolean;
 }) {
-  const isApp = entry.kind === 'app';
   return (
     <HoverCard
       openDelay={500}
@@ -331,13 +283,7 @@ function EntryTile({
           data-entry-key={keyOf(entry)}
         >
           <span className={classes.tileIcon}>
-            <AppGlyph
-              size="xl"
-              name={entry.name}
-              seed={entry.id}
-              icon={isApp}
-              shape={entry.kind}
-            />
+            <AppGlyph size="xl" name={entry.name} seed={entry.id} />
             {entry.pinned ? (
               <span className={classes.pinned}>
                 <IconPinFilled size={9} aria-label="Pinned" />
@@ -352,18 +298,11 @@ function EntryTile({
       </HoverCard.Target>
       <HoverCard.Dropdown className={classes.card}>
         <div className={classes.cardHead}>
-          <AppGlyph
-            size="lg"
-            name={entry.name}
-            seed={entry.id}
-            icon={isApp}
-            shape={entry.kind}
-          />
+          <AppGlyph size="lg" name={entry.name} seed={entry.id} />
           <div className={classes.cardTitle}>
             <span className={classes.cardName}>{entry.name}</span>
             <span className={classes.cardMeta}>
-              {isApp ? 'App' : 'Workflow'} · Updated{' '}
-              {formatRelative(entry.updatedAt)}
+              App · Updated {formatRelative(entry.updatedAt)}
             </span>
           </div>
         </div>
@@ -381,27 +320,19 @@ function EntryTile({
   );
 }
 
-/** What the right-click menu offers for one App or Workflow. */
+/** What the right-click menu offers for one App. */
 function EntryMenu({ entry }: { entry: Entry }) {
   const queryClient = useQueryClient();
   const pin = useMutation({
-    mutationFn: async (pinned: boolean) => {
-      if (entry.kind === 'app')
-        await setSidebarPin({ data: { appId: entry.id, pinned } });
-      else await setWorkflowPinFn({ data: { id: entry.id, pinned } });
-    },
+    mutationFn: (pinned: boolean) =>
+      setSidebarPin({ data: { appId: entry.id, pinned } }),
     onSuccess: (_result, pinned) => {
       toast.success(pinned ? 'Pinned to the dock' : 'Removed from the dock');
     },
     onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: sidebarItemsQueryOptions.queryKey,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: workflowsQueryOptions.queryKey,
-        }),
-      ]),
+      queryClient.invalidateQueries({
+        queryKey: sidebarItemsQueryOptions.queryKey,
+      }),
   });
 
   return (

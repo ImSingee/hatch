@@ -345,7 +345,7 @@ describe.runIf(Boolean(databaseUrl))(
 
     it('executes all twelve operations with full authority for Cookie, Bearer session, API key and Run JWT', async () => {
       for (const [credentialIndex, headers] of credentials.entries()) {
-        for (const collection of ['apps', 'workflows']) {
+        for (const collection of ['apps']) {
           const created = await api(collection, headers, {
             slug: `fixture-${randomUUID()}`,
             name: 'Public lifecycle',
@@ -400,25 +400,16 @@ describe.runIf(Boolean(databaseUrl))(
           // Small real deploy artifacts avoid dependency on an unrelated app UI.
           await writeFile(
             path.join(dir, 'manifest.ts'),
-            collection === 'apps'
-              ? `export default { id: '${id}', name: 'API deploy', compatibilityVersion: 2, capabilities: { frontend: true, database: true }, app: { entry: 'main.ts', html: 'index.html', routes: [] } };`
-              : `export default { id: '${id}', name: 'API deploy', compatibilityVersion: 1, entry: 'workflow.ts', network: [], triggers: { cron: [], webhook: false } };`,
+            `export default { id: '${id}', name: 'API deploy', compatibilityVersion: 2, capabilities: { frontend: true, database: true }, app: { entry: 'main.ts', html: 'index.html', routes: [] } };`,
           );
-          if (collection === 'apps') {
-            await writeFile(
-              path.join(dir, 'main.ts'),
-              "document.body.dataset.release = 'one';",
-            );
-            await writeFile(
-              path.join(dir, 'index.html'),
-              '<!doctype html><html><body>API release one</body></html>',
-            );
-          } else {
-            await writeFile(
-              path.join(dir, 'workflow.ts'),
-              "import { defineWorkflow } from '@hatch/workflow'; import { z } from 'zod'; export default defineWorkflow({ input: z.object({}), async run() { return { release: 'one' }; } });",
-            );
-          }
+          await writeFile(
+            path.join(dir, 'main.ts'),
+            "document.body.dataset.release = 'one';",
+          );
+          await writeFile(
+            path.join(dir, 'index.html'),
+            '<!doctype html><html><body>API release one</body></html>',
+          );
           let upload = await bundle(dir);
           const deployBody = {
             message: 'First public release',
@@ -442,7 +433,7 @@ describe.runIf(Boolean(databaseUrl))(
             'compatibilityVersion',
             'deploymentId',
             'normalized',
-            ...(collection === 'apps' ? ['slug'] : []),
+            'slug',
             'version',
           ]);
           const downloaded = await api(`${collection}/${id}/source`, headers);
@@ -459,15 +450,11 @@ describe.runIf(Boolean(databaseUrl))(
           expect(await readFile(path.join(clone, 'manifest.ts'), 'utf8')).toBe(
             await readFile(path.join(dir, 'manifest.ts'), 'utf8'),
           );
-          if (collection === 'apps') {
-            const served = await fetch(`${origin}/api/app/${id}/app/`, {
-              headers: { cookie },
-            });
-            // oxlint-disable-next-line vitest/no-conditional-expect -- Only Apps have an HTTP frontend artifact.
-            expect(served.status).toBe(200);
-            // oxlint-disable-next-line vitest/no-conditional-expect -- Only Apps have an HTTP frontend artifact.
-            expect(await served.text()).toContain('API release one');
-          }
+          const served = await fetch(`${origin}/api/app/${id}/app/`, {
+            headers: { cookie },
+          });
+          expect(served.status).toBe(200);
+          expect(await served.text()).toContain('API release one');
           await writeFile(path.join(dir, 'release.txt'), 'second release');
           upload = await bundle(dir);
           const second = await api(`${collection}/${id}/deploy`, headers, {
@@ -487,10 +474,9 @@ describe.runIf(Boolean(databaseUrl))(
             (await api(`${collection}/${id}/source`, headers)).data
               .masterCommit,
           ).toBe(downloaded.data.masterCommit);
-          const row =
-            collection === 'apps'
-              ? await database.db.query.apps.findFirst({ where: { id } })
-              : await database.db.query.workflows.findFirst({ where: { id } });
+          const row = await database.db.query.apps.findFirst({
+            where: { id },
+          });
           expect(row?.currentDeploymentId).toBe(first.data.deploymentId);
           resources.push({
             collection,
@@ -502,7 +488,7 @@ describe.runIf(Boolean(databaseUrl))(
           const artifact = path.join(
             root,
             'runtime',
-            collection === 'apps' ? 'artifacts' : 'workflow-artifacts',
+            'artifacts',
             id,
             second.data.deploymentId,
           );
@@ -520,7 +506,7 @@ describe.runIf(Boolean(databaseUrl))(
     }, 180000);
 
     it('preserves serialized versions, fast-forward denial and source recovery', async () => {
-      for (const collection of ['apps', 'workflows']) {
+      for (const collection of ['apps']) {
         const resource = resources.find(
           (row) => row.collection === collection,
         )!;
@@ -558,14 +544,9 @@ describe.runIf(Boolean(databaseUrl))(
           (await api(`${collection}/${id}/source`, credentials[0])).data
             .masterCommit,
         ).toBe(stable.data.masterCommit);
-        const deployments =
-          collection === 'apps'
-            ? await database.db.query.deployments.findMany({
-                where: { appId: id },
-              })
-            : await database.db.query.workflowDeployments.findMany({
-                where: { workflowId: id },
-              });
+        const deployments = await database.db.query.deployments.findMany({
+          where: { appId: id },
+        });
         expect(deployments).toHaveLength(4);
       }
     }, 180000);
@@ -620,7 +601,7 @@ describe.runIf(Boolean(databaseUrl))(
     });
 
     it('resolves exact IDs before colliding slugs and projects safe metadata on production', async () => {
-      for (const collection of ['apps', 'workflows']) {
+      for (const collection of ['apps']) {
         const id = `legacy-${randomUUID()}`;
         const values = [
           {
@@ -636,9 +617,7 @@ describe.runIf(Boolean(databaseUrl))(
             webhookSecret: 'fixture-webhook-secret',
           },
         ];
-        if (collection === 'apps')
-          await database.db.insert(database.schema.apps).values(values);
-        else await database.db.insert(database.schema.workflows).values(values);
+        await database.db.insert(database.schema.apps).values(values);
         const detail = await api(`${collection}/${id}`, credentials[1]);
         expect(detail.data.id).toBe(id);
         expect(detail.data.name).toBe('Exact ID owner');
@@ -955,7 +934,7 @@ describe.runIf(Boolean(databaseUrl))(
         });
         expect(verified.code).toBe(0);
         expect(verified.data.authority).toBe('platform');
-        for (const kind of ['app', 'workflow']) {
+        for (const kind of ['app']) {
           const directory = path.join(root, `cli-${randomUUID()}`);
           const clone = `${directory}-clone`;
           const file = `${directory}.json`;
@@ -1082,16 +1061,11 @@ describe.runIf(Boolean(databaseUrl))(
           expect(restored.code).toBe(0);
           expect(restored.data.compatibility.isSupported).toBe(true);
           expect(
-            (
-              await api(
-                `${kind === 'app' ? 'apps' : 'workflows'}/${id}/source`,
-                headers,
-              )
-            ).data.masterCommit,
+            (await api(`apps/${id}/source`, headers)).data.masterCommit,
           ).toBe(git(clone, 'rev-parse', 'HEAD'));
           // Rollback moved master back; the newer local commit stays local
           // and an ordinary push puts it on master again without releasing.
-          const collection = kind === 'app' ? 'apps' : 'workflows';
+          const collection = 'apps';
           const secondCommit = git(clone, 'rev-parse', 'HEAD');
           const thirdCommit = git(directory, 'rev-parse', 'HEAD');
           const ahead = await cliInvoke(
@@ -1195,19 +1169,15 @@ describe.runIf(Boolean(databaseUrl))(
       }
     }, 240000);
 
-    it('compares all fifteen real Tools with public CLI outputs and lifecycle side effects', async () => {
+    it('compares every real App Tool with public CLI outputs and lifecycle side effects', async () => {
       const { createPlatformRestClient } =
         await import('~/runner/platform-rest');
       const { createAppTools } = await import('~agent/tools/apps');
-      const { createWorkflowTools } = await import('~agent/tools/workflows');
       const platform = createPlatformRestClient({
         baseUrl: internal,
         token: fleet,
       });
-      const tools: AgentTool[] = [
-        ...createAppTools({ platform, sessionId }),
-        ...createWorkflowTools({ platform, sessionId }),
-      ];
+      const tools: AgentTool[] = [...createAppTools({ platform, sessionId })];
       const exercised = new Set<string>();
       const execute = async (name: string, args: unknown) => {
         const tool = tools.find((value) => value.name === name)!;
@@ -1224,7 +1194,7 @@ describe.runIf(Boolean(databaseUrl))(
         return result.details as Record<string, any>;
       };
       const records: Record<string, any>[] = [];
-      for (const kind of ['app', 'workflow']) {
+      for (const kind of ['app']) {
         const slug = `parity-${randomUUID()}`;
         const created = await execute(`create_${kind}`, {
           slug,
@@ -1238,15 +1208,13 @@ describe.runIf(Boolean(databaseUrl))(
           absolutePath: expect.any(String),
         });
         const dir = created.absolutePath as string;
-        if (kind === 'app') {
-          const file = path.join(dir, 'manifest.ts');
-          await writeFile(
-            file,
-            (await readFile(file, 'utf8'))
-              .replace('kv: false', 'kv: true')
-              .replace('database: false', 'database: true'),
-          );
-        }
+        const file = path.join(dir, 'manifest.ts');
+        await writeFile(
+          file,
+          (await readFile(file, 'utf8'))
+            .replace('kv: false', 'kv: true')
+            .replace('database: false', 'database: true'),
+        );
         await bundle(dir);
         const release = await execute(`deploy_${kind}`, {
           id: created.id,
@@ -1261,17 +1229,12 @@ describe.runIf(Boolean(databaseUrl))(
         );
         expect(publicView.code).toBe(0);
         expect(publicView.data).toMatchObject(view);
-        const inventory = await execute(
-          kind === 'app' ? 'list_apps' : 'list_workflows',
-          {},
-        );
+        const inventory = await execute('list_apps', {});
         const listed = await cliInvoke([kind, 'list'], credentials[3]);
         expect(
           listed.data.find((row: { id: string }) => row.id === created.id),
         ).toMatchObject(
-          inventory[kind === 'app' ? 'apps' : 'workflows'].find(
-            (row: { id: string }) => row.id === created.id,
-          ),
+          inventory.apps.find((row: { id: string }) => row.id === created.id),
         );
         const checkout = await execute(`checkout_${kind}`, {
           id: created.id,
@@ -1925,8 +1888,8 @@ describe.runIf(Boolean(databaseUrl))(
     }, 60000);
 
     it('retains recoverable empty canonical checkouts without silently creating another resource', async () => {
-      for (const kind of ['app', 'workflow']) {
-        const collection = kind === 'app' ? 'apps' : 'workflows';
+      for (const kind of ['app']) {
+        const collection = 'apps';
         const created = await api(collection, credentials[1], {
           slug: `empty-${randomUUID()}`,
           name: 'Empty canonical fixture',
@@ -2074,16 +2037,14 @@ describe.runIf(Boolean(databaseUrl))(
           ],
         }),
       );
-      const result = await client.workflows.create({
+      const result = await client.apps.create({
         slug: `typed-${randomUUID()}`,
         name: 'Typed client fixture',
         pin: false,
       });
-      expect((await client.workflows.get({ id: result.id })).id).toBe(
-        result.id,
-      );
+      expect((await client.apps.get({ id: result.id })).id).toBe(result.id);
       expect(
-        (await client.workflows.source({ id: result.id })).bundleBase64,
+        (await client.apps.source({ id: result.id })).bundleBase64,
       ).toBeNull();
       await expect(client.apps.get({ id: 'missing' })).rejects.toMatchObject({
         code: Code.NotFound,
@@ -2136,8 +2097,8 @@ describe.runIf(Boolean(databaseUrl))(
         body: JSON.stringify({ slug: 'invalid-type', name: 123 }),
       });
       expect(invalidType.status).toBe(400);
-      const workflow = await api(
-        'workflows',
+      const unpinned = await api(
+        'apps',
         { cookie },
         {
           slug: `presence-${randomUUID()}`,
@@ -2145,14 +2106,12 @@ describe.runIf(Boolean(databaseUrl))(
           pin: false,
         },
       );
-      expect(workflow.response.status).toBe(200);
+      expect(unpinned.response.status).toBe(200);
       expect(
-        (
-          await database.db.query.workflows.findFirst({
-            where: { id: workflow.data.id },
-          })
-        )?.pinned,
-      ).toBe(false);
+        await database.db.query.sidebarItems.findFirst({
+          where: { appId: unpinned.data.id },
+        }),
+      ).toBeUndefined();
       const sdk = await api('sdk/app', { cookie });
       expect(
         sdk.data.files.some(
@@ -2161,9 +2120,9 @@ describe.runIf(Boolean(databaseUrl))(
       ).toBe(true);
       expect(sdk.data.tooling.bufVersion).toMatch(/^\d+\.\d+\.\d+$/);
       // Clients build pnpm-lockfile sources with the platform's own tool
-      // versions and the generated configuration it delivers, for both kinds.
-      for (const kind of ['app', 'workflow']) {
-        const payload = await api(`sdk/${kind}`, { cookie });
+      // versions and the generated configuration it delivers.
+      {
+        const payload = await api('sdk/app', { cookie });
         expect(
           payload.data.files.map((file: { path: string }) => file.path),
         ).toEqual(
@@ -2436,11 +2395,10 @@ describe.runIf(Boolean(databaseUrl))(
       for (const endpoint of [
         'openapi.json',
         'apps',
-        'workflows',
         'auth/status',
         'sdk/app',
         'apps/absent/source',
-        'workflows/absent/deploy',
+        'apps/absent/deploy',
       ]) {
         for (const prefix of ['/api/v1', '/api/cli/v1']) {
           const response = await fetch(`${origin}${prefix}/${endpoint}`);
@@ -2511,7 +2469,7 @@ describe.runIf(Boolean(databaseUrl))(
         body: { keyId: revoked.id },
       });
       expect(
-        (await api('workflows', { cookie, 'x-api-key': revoked.key })).response
+        (await api('apps', { cookie, 'x-api-key': revoked.key })).response
           .status,
       ).toBe(401);
       const signup = await call(

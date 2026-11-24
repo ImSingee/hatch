@@ -14,8 +14,6 @@ import { ensureScheduler } from '~server/apps/scheduler';
 import { recoverTaskRuns } from '~server/apps/tasks/service';
 import { ensureRetentionSweep } from '~server/retention';
 import { startNotificationDelivery } from '~server/notifications/adapters';
-import { interruptStaleWorkflowRuns } from '~server/workflows/execute';
-import { ensureWorkflowScheduler } from '~server/workflows/scheduler';
 import { getTailscaleManager } from '~server/tailscale-manager';
 
 // Validate synchronously while Nitro loads its plugins. Throwing from the async
@@ -53,13 +51,9 @@ export default definePlugin(async () => {
   // Failed runs schedule their own replay; overdue ones fire on boot.
   ensureAgentAutoRetryScheduler();
 
-  // Recover orphaned workflow runs first (the in-memory run registry doesn't
-  // survive a restart), then (re)start cron timers so deployed schedules fire
-  // after a restart without waiting for someone to open the workflows page.
-  await interruptStaleWorkflowRuns();
-  ensureWorkflowScheduler();
   // App task runs: fail the ones a previous process was running and dispatch
-  // the queued ones again (run state is in memory, like workflow runs).
+  // the queued ones again (the in-memory run registry doesn't survive a
+  // restart).
   await recoverTaskRuns();
   // Same for app cron jobs and task schedules: without this they would only
   // start once someone happened to call listApps (its fire-and-forget side
@@ -68,8 +62,8 @@ export default definePlugin(async () => {
   // The keep-alive registry is in-memory, so long-running backends stay down
   // after a restart until their first request; boot them proactively.
   await warmLongRunningBackends();
-  // Trim unbounded history tables (logs, cron runs, workflow runs, agent run
-  // events) daily so a long-lived install doesn't grow without bound.
+  // Trim unbounded history tables (logs, cron runs, App task runs, agent
+  // run events) daily so a long-lived install doesn't grow without bound.
   ensureRetentionSweep();
   // Deliveries are durable rows; resume pending and lease-expired ones.
   startNotificationDelivery();

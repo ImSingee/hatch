@@ -33,9 +33,9 @@ export function ExtraPermissionsDetails({
             </Text>
           }
         >
-          These permissions grant host access as the platform OS user. App and
-          Workflow processes share that user and can access platform credentials
-          and other Apps’ data.
+          These permissions grant host access as the platform OS user. App
+          processes share that user and can access platform credentials and
+          other Apps’ data.
         </Alert>
       ) : null}
     </Stack>

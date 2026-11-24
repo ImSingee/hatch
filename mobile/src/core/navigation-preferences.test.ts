@@ -12,7 +12,7 @@ import {
 describe('device navigation preferences', () => {
   it('preserves ordered visible tabs and start page across serialization', () => {
     const p = {
-      order: ['agent', 'apps', 'dashboard', 'workflows'],
+      order: ['agent', 'apps', 'dashboard'],
       visible: ['agent', 'dashboard'],
       defaultTab: 'agent',
     };
@@ -38,7 +38,7 @@ describe('device navigation preferences', () => {
         defaultTab: 'unknown',
       }),
     ).toEqual({
-      order: ['agent', 'dashboard', 'apps', 'workflows'],
+      order: ['agent', 'dashboard', 'apps'],
       visible: ['agent'],
       defaultTab: 'agent',
     });

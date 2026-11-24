@@ -19,9 +19,9 @@ Keep plans concise and proportional to the task. Consider these sections in orde
 3. Implementation approach: intended behavior, main call paths, and component responsibilities.
 4. Database changes: schema, indexes, and constraints.
 5. Platform API, CLI commands, and Platform/Runner protocol changes.
-6. App/Workflow package contracts and compatibility.
+6. App package contracts and compatibility.
 7. Historical platform data migration.
-8. Existing App/Workflow migration: source, deployments, and application data.
+8. Existing App migration: source, deployments, and application data.
 9. Security and permissions.
 10. Tests and acceptance: checks and expected results tied to completion criteria.
 11. Implementation and release order, dependencies, and failure recovery.
@@ -56,7 +56,7 @@ Source lives in `src/`. Global routing is defined in `src/router.tsx`, with rout
 - `.agents/skills/` contains development and review guidance for agents working
   on this repository. It is for our own engineering work.
 - `skills/` contains skills preloaded by the platform Agent to perform tasks
-  inside the product, such as building Apps and Workflows.
+  inside the product, such as building Apps.
 
 Place implementation and review contracts in `.agents/skills/`; place platform
 feature usage guidance in `skills/`. Do not expose repository development
@@ -192,33 +192,6 @@ command against a local instance before declaring the work complete.
   values and relevant history, and keep final-deployment recording in sync. If
   required Platform/Runner REST fields change, also increment
   `PROTOCOL_VERSION`.
-
-## Workflow Compatibility Versions
-
-`src/workflow-compatibility.ts` owns the Workflow compatibility constants.
-
-- Workflow manifests must explicitly declare `compatibilityVersion`. Do not
-  introduce a source default, legacy resolver, nullable deployment field, or
-  runtime fallback. A migration may use a transient database default only to
-  backfill pre-existing rows, and must remove it in the same migration.
-- Prefer backward-compatible implementations. Keep currently supported behavior
-  working and record proposed removals under `Next (proposal)` in
-  `skills/workflow-compatibility/SKILL.md`.
-- Never increment `LATEST_WORKFLOW_COMPATIBILITY_VERSION` unless the user
-  explicitly requests a Workflow compatibility version bump. Increment it only
-  for a new deployed-Workflow contract that every successful final deployment
-  must record, not for backward-compatible features, refactors, or UI changes.
-- Increment `MIN_SUPPORTED_WORKFLOW_COMPATIBILITY_VERSION` only when the
-  platform intentionally stops executing an older contract. Update the manual,
-  cron, webhook, and App-call gates, UI/API rollback restrictions, Agent restore
-  path, scheduler filtering, and durable boundary tests in the same change.
-- Keep all history and upgrade guidance in the single
-  `skills/workflow-compatibility/SKILL.md` file. Append future versions there;
-  do not create per-version files.
-- Whenever either constant changes, synchronize the default Workflow template,
-  building/importing Skills, system prompt, compatibility history, runtime/UI
-  policy, and final-deployment recording. If required Platform/Runner REST
-  fields change, also increment `PROTOCOL_VERSION`.
 
 ## Oxlint
 

@@ -79,13 +79,6 @@ vi.mock('~queries/apps', () => ({
   appsQueryOptions: { queryKey: ['test-apps'], queryFn: async () => [] },
 }));
 
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [],
-  },
-}));
-
 const text = (value: string) => [{ type: 'text' as const, text: value }];
 
 function pendingMessage(

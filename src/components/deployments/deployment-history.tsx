@@ -32,10 +32,7 @@ import { formatRelative } from '~lib/format';
 import { GroupCard, Section } from '~components/page/page';
 import classes from './deployment-history.module.css';
 
-/**
- * Structural shape shared by app `DeploymentSummary` and workflow
- * `WorkflowDeploymentSummary` — the timeline renders either.
- */
+/** Structural shape of an App `DeploymentSummary` the timeline renders. */
 export type DeploymentLike = {
   id: string;
   version: number;
@@ -322,7 +319,7 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
 }
 
 /**
- * Shared deployment-history timeline for apps and workflows. Wrappers own the
+ * Deployment-history timeline for apps. Wrappers own the
  * data fetching and rollback mutation (query keys and invalidations differ);
  * this owns all presentation.
  */
@@ -339,7 +336,7 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
 }: {
   deployments: TDeployment[];
   isLoading: boolean;
-  /** "app" or "workflow" — used in the empty-state copy. */
+  /** Resource noun used in the empty-state copy. */
   emptyNoun: string;
   onRollback: (deploymentId: string) => void;
   /** Deployment id currently being restored, if any. */
