@@ -46,7 +46,63 @@
   flex: none;
   display: flex;
   justify-content: center;
+}
+
+.dockEdge {
+  display: none;
+}
+
+.dockPanel {
+  min-width: 0;
+  max-width: 100%;
   padding: 12px 16px 22px;
+}
+
+/* With a mouse the dock floats over the stage and waits below the bottom
+   edge. Pointing at the edge (or at the dock) brings it up; it stays while
+   keyboard focus or one of its menus is in it, and sinks again shortly after
+   the pointer leaves. */
+@media (hover: hover) {
+  .shell[data-view='window'] .stage {
+    padding-bottom: 20px;
+  }
+
+  .dock {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    display: block;
+    /* Room for the dock's shadow inside the clip, which hides the panel
+       while it waits below the edge without making the page scrollable. */
+    padding-top: 24px;
+    overflow: clip;
+    pointer-events: none;
+  }
+
+  .dockEdge {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    display: block;
+    height: 6px;
+    pointer-events: auto;
+  }
+
+  .dockPanel {
+    width: fit-content;
+    margin-inline: auto;
+    pointer-events: auto;
+    transform: translateY(100%);
+    transition: transform var(--transition-base) var(--ease-out-quart) 300ms;
+  }
+
+  .dock:hover .dockPanel,
+  .dock:has(:focus-visible) .dockPanel,
+  .dock:has([aria-expanded='true']) .dockPanel,
+  .dock:has([data-expanded]) .dockPanel {
+    transform: none;
+    transition-delay: 80ms;
+  }
 }
 
 .tabs {
@@ -62,13 +118,12 @@
     padding: 12px 12px 4px;
   }
 
-  .dock {
+  .dockPanel {
     padding: 8px 16px 16px;
   }
 }
 
-/* Below 560: pins move onto the desk, the dock becomes the tab bar, and a
-   window is the whole page. */
+/* Below 560: the dock becomes the tab bar, and a window is the whole page. */
 @media (max-width: 35em) {
   .dock {
     display: none;

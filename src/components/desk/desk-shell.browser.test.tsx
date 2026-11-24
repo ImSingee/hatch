@@ -188,6 +188,24 @@ async function renderDesk(initialEntry: string) {
   return { router, screen, path, queryClient };
 }
 
+/**
+ * With a mouse the dock waits below the bottom edge; point at the edge the
+ * way a person would to bring it up.
+ */
+async function revealDock() {
+  const edge = document.querySelector<HTMLElement>('[class*="dockEdge"]');
+  if (!edge) throw new Error('The dock has no bottom edge to point at');
+  await userEvent.hover(page.elementLocator(edge));
+}
+
+/** Whether the dock is on screen: its bottom is inside the viewport. */
+function dockShown() {
+  const nav = document.querySelector('nav[aria-label="Dock"]');
+  return Boolean(
+    nav && nav.getBoundingClientRect().bottom <= window.innerHeight,
+  );
+}
+
 beforeEach(() => {
   fixtures.pins = [];
   fixtures.workflows = [];
@@ -346,6 +364,7 @@ test('the dock lists pins and marks the one whose window is open', async () => {
   await expect.element(home).toHaveAttribute('data-open', 'true');
   await expect.element(settings).not.toHaveAttribute('data-open');
 
+  await revealDock();
   await digest.click();
   await expect.element(digest).toHaveAttribute('data-open', 'true');
   await expect.element(home).not.toHaveAttribute('data-open');
@@ -412,6 +431,7 @@ test('a pin removed elsewhere turns its open edit dialog into a notice', async (
   ];
   const { screen, queryClient } = await renderDesk('/apps');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
+  await revealDock();
   await dock.getByRole('button', { name: 'Notes options' }).click();
   await screen.getByRole('menuitem', { name: 'Edit' }).click();
   const dialog = screen.getByRole('dialog', { name: 'Edit pin' });
@@ -453,14 +473,105 @@ test('many pinned workflows scroll inside the dock instead of overflowing it', a
   await expect
     .element(dock.getByRole('link', { name: 'Digest 0' }))
     .toBeInTheDocument();
-  const add = dock.getByRole('button', { name: /Pin a workflow/ });
+  const last = dock.getByRole('link', { name: 'Digest 9' });
   await vi.waitFor(() => {
     const dockBox = dock.element().getBoundingClientRect();
-    const row = add.element().closest<HTMLElement>('[class*="row"]')!;
+    const row = last.element().closest<HTMLElement>('[class*="row"]')!;
     // The Workflows group stays inside the dock, and its row scrolls.
     expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(
       dockBox.right + 1,
     );
     expect(row.scrollWidth).toBeGreaterThan(row.clientWidth);
   });
+});
+
+test('the dock waits below the edge, rises at it, and stays while its menu is open', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-notes',
+      appId: 'app-2',
+      appSlug: 'notes',
+      label: 'Notes',
+      entryHash: null,
+    },
+  ];
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
+  ];
+  const { screen } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  await expect
+    .element(dock.getByRole('link', { name: 'Notes' }))
+    .toBeInTheDocument();
+
+  // It takes no room: the page runs to the bottom while the dock waits.
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  await vi.waitFor(() => expect(dockShown()).toBe(false));
+
+  await revealDock();
+  await vi.waitFor(() => expect(dockShown()).toBe(true));
+
+  // Adding lives in the right-click menu, which keeps the dock up while the
+  // pointer is in it.
+  await dock.getByRole('link', { name: 'Notes' }).click({ button: 'right' });
+  const addWorkflow = screen.getByRole('menuitem', { name: 'Add a workflow' });
+  await addWorkflow.hover();
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Daily digest' }))
+    .toBeVisible();
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  expect(dockShown()).toBe(true);
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Unpin' }))
+    .toBeVisible();
+
+  await userEvent.keyboard('{Escape}');
+  await userEvent.keyboard('{Escape}');
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  await vi.waitFor(() => expect(dockShown()).toBe(false));
+});
+
+test('the dock shows an add tile only when empty, ends with All apps, and hides an empty Workflows group', async () => {
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
+  ];
+  const { screen, queryClient } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+
+  await expect
+    .element(dock.getByRole('button', { name: 'Pin an app to the dock' }))
+    .toBeInTheDocument();
+  await expect
+    .element(dock.getByRole('link', { name: 'All apps' }))
+    .toHaveAttribute('href', '/apps');
+  await expect.element(dock.getByText('Workflows')).not.toBeInTheDocument();
+
+  fixtures.pins = [
+    {
+      id: 'pin-notes',
+      appId: 'app-2',
+      appSlug: 'notes',
+      label: 'Notes',
+      entryHash: null,
+    },
+  ];
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
+  ];
+  await queryClient.invalidateQueries();
+  await expect
+    .element(dock.getByRole('link', { name: 'Daily digest' }))
+    .toBeInTheDocument();
+  await expect
+    .element(dock.getByRole('button', { name: 'Pin an app to the dock' }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(dock.getByRole('button', { name: /Pin a workflow/ }))
+    .not.toBeInTheDocument();
+  const links = dock.getByRole('link').elements();
+  expect(links.map((link) => link.getAttribute('title'))).toEqual([
+    'Notes',
+    'All apps',
+    'Daily digest',
+  ]);
 });

@@ -1,5 +1,5 @@
 import { ActionIcon, Menu, UnstyledButton } from '@mantine/core';
-import { IconDots, IconPinnedOff, IconPlus } from '@tabler/icons-react';
+import { IconDots, IconPlus } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import classes from './dock.module.css';
 
@@ -17,8 +17,9 @@ export type DockOpenItem =
   | { kind: 'workflow'; slug: string };
 
 /**
- * One pinned item: the tile link with its label and open marker, and an
- * options menu beside it so the menu never triggers the link.
+ * One dock tile: the link with its label and open marker, and, when it has
+ * actions, an options menu beside it so the menu never triggers the link.
+ * `menuKey` lets the dock's right-click menu tell which tile was clicked.
  */
 export function DockItem({
   label,
@@ -26,8 +27,8 @@ export function DockItem({
   shape = 'app',
   glyph,
   renderLink,
-  onUnpin,
-  menuItems,
+  menuKey,
+  menu,
 }: {
   label: string;
   /** Whether this item's window is open. */
@@ -46,12 +47,12 @@ export function DockItem({
     'data-open': 'true' | undefined;
     children: ReactNode;
   }) => ReactNode;
-  onUnpin: () => void;
-  /** Menu items placed around the built-in Unpin: before and after it. */
-  menuItems?: { before?: ReactNode; after?: ReactNode };
+  menuKey?: string;
+  /** The tile's own actions: `Menu.Item`s. */
+  menu?: ReactNode;
 }) {
   return (
-    <div className={classes.slot}>
+    <div className={classes.slot} data-dock-key={menuKey}>
       {renderLink({
         className: classes.item,
         title: label,
@@ -67,56 +68,55 @@ export function DockItem({
           </>
         ),
       })}
-      <Menu position="top" shadow="md" width={170}>
-        <Menu.Target>
-          <ActionIcon
-            className={classes.options}
-            variant="default"
-            size={20}
-            radius="xl"
-            aria-label={`${label} options`}
-          >
-            <IconDots size={13} stroke={2} />
-          </ActionIcon>
-        </Menu.Target>
-        <Menu.Dropdown>
-          {menuItems?.before}
-          <Menu.Item
-            leftSection={<IconPinnedOff size={15} stroke={1.7} />}
-            onClick={onUnpin}
-          >
-            Unpin
-          </Menu.Item>
-          {menuItems?.after}
-        </Menu.Dropdown>
-      </Menu>
+      {menu ? (
+        <Menu position="top" shadow="md" width={170}>
+          <Menu.Target>
+            <ActionIcon
+              className={classes.options}
+              variant="default"
+              size={20}
+              radius="xl"
+              aria-label={`${label} options`}
+            >
+              <IconDots size={13} stroke={2} />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>{menu}</Menu.Dropdown>
+        </Menu>
+      ) : null}
     </div>
   );
 }
 
-/** The dashed tile at the end of a dock group; opens the pin picker. */
+/** The dashed tile of an empty Apps group; opens the App picker. */
 export function DockAddButton({
   label,
-  shape = 'app',
   children,
 }: {
   label: string;
-  shape?: 'app' | 'workflow';
   /** The picker: `Menu.Item`s and `Menu.Label`s. */
   children: ReactNode;
 }) {
   return (
     <Menu position="top" shadow="md" width={240}>
       <Menu.Target>
-        <UnstyledButton
-          className={classes.add}
-          data-shape={shape}
-          aria-label={label}
-        >
+        <UnstyledButton className={classes.add} aria-label={label}>
           <IconPlus size={16} stroke={2.4} aria-hidden />
         </UnstyledButton>
       </Menu.Target>
       <Menu.Dropdown>{children}</Menu.Dropdown>
     </Menu>
+  );
+}
+
+/** The glyph of the All apps tile: four dots in the dock tile's square. */
+export function AllAppsGlyph() {
+  return (
+    <span className={classes.allApps} aria-hidden>
+      <span />
+      <span />
+      <span />
+      <span />
+    </span>
   );
 }

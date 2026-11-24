@@ -25,7 +25,6 @@ function Harness() {
         editing={editing}
         editor={<h1>Edit desk layout</h1>}
         editorPanel={<aside>Add widgets</aside>}
-        tiles={<p>Desk tiles</p>}
       >
         <iframe title="Widget runtime" srcDoc="<p>Widget content</p>" />
       </DeskHome>

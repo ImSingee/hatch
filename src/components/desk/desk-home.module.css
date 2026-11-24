@@ -13,8 +13,7 @@
   display: grid;
   grid-template-areas:
     'heading toolbar'
-    'widgets widgets'
-    'tiles tiles';
+    'widgets widgets';
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 28px 16px;
@@ -75,11 +74,6 @@
   min-width: 0;
 }
 
-.tiles {
-  grid-area: tiles;
-  min-width: 0;
-}
-
 .today,
 .companion {
   display: none;
@@ -118,10 +112,9 @@
   .root[data-companion]:not([data-editing]) .layout {
     grid-template-areas:
       'heading toolbar companion'
-      'today widgets companion'
-      'today tiles companion';
+      'today widgets companion';
     grid-template-columns: 380px minmax(0, 1fr) 420px;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr;
     align-items: stretch;
     gap: 20px 28px;
     max-width: 1920px;
@@ -185,8 +178,7 @@
     grid-template-areas:
       'heading'
       'toolbar'
-      'widgets'
-      'tiles';
+      'widgets';
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }

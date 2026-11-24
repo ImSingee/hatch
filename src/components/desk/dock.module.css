@@ -25,6 +25,13 @@
   flex-shrink: 8;
 }
 
+/* The Apps pins scroll; All apps stays at the end, outside the scroller. */
+.groupBody {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
 .groupLabel {
   color: var(--mantine-color-dimmed);
   font-size: 10px;
@@ -82,8 +89,7 @@
 }
 
 /* Workflows differ from Apps by shape: one corner is nearly square. */
-.tile[data-shape='workflow'] > *,
-.add[data-shape='workflow'] {
+.tile[data-shape='workflow'] > * {
   border-bottom-left-radius: 3px;
 }
 
@@ -152,6 +158,41 @@
 .add:hover,
 .add[aria-expanded='true'] {
   background: var(--surface-hover);
+}
+
+/* All apps: four dots on a white tile, the same size as an App tile. */
+.allApps {
+  display: grid;
+  grid-template-columns: repeat(2, 10px);
+  place-content: center;
+  gap: 4px;
+  width: var(--size-dock-tile);
+  height: var(--size-dock-tile);
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.allApps > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.allApps > span:nth-child(1) {
+  background: var(--mantine-color-teal-6);
+}
+
+.allApps > span:nth-child(2) {
+  background: var(--mantine-color-orange-6);
+}
+
+.allApps > span:nth-child(3) {
+  background: var(--mantine-color-violet-6);
+}
+
+.allApps > span:nth-child(4) {
+  background: var(--mantine-color-blue-6);
 }
 
 @media (max-width: 48em) {

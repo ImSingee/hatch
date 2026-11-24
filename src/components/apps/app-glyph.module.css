@@ -26,13 +26,6 @@
   box-shadow: var(--shadow-card);
 }
 
-.glyph[data-size='desk'] {
-  width: var(--size-desk-tile);
-  height: var(--size-desk-tile);
-  --glyph-radius: var(--radius-tile);
-  font-size: 22px;
-}
-
 .glyph[data-size='lg'] {
   width: 44px;
   height: 44px;

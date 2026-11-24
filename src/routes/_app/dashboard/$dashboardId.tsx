@@ -33,7 +33,6 @@ import { useDashboardDraft } from '~components/dashboard/use-dashboard-draft';
 import { useLiveDashboard } from '~components/dashboard/use-live-dashboard';
 import { WidgetPager } from '~components/dashboard/widget-pager';
 import { DeskHome } from '~components/desk/desk-home';
-import { DeskTiles } from '~components/desk/desk-tiles';
 import { QuickAgentChat } from '~components/desk/quick-agent-chat';
 import { TodayPanel } from '~components/desk/today-panel';
 import { appsQueryOptions } from '~queries/apps';
@@ -281,7 +280,6 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
           saving={editor.status.state === 'saving'}
         />
       }
-      tiles={<DeskTiles />}
       today={<TodayPanel />}
       companion={<QuickAgentChat />}
     >
