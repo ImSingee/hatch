@@ -718,10 +718,23 @@ function QuietGroup({ items }: { items: TimelineItem[] }): ReactNode {
         {open ? (
           <ul className={classes.quietList}>
             {items.map((item) => (
-              <li key={item.id} className={classes.quietLine}>
-                <span className={classes.source}>{item.sourceName}</span>
-                <span className={classes.quietTitle}>{item.title}</span>
-                <Time iso={item.activityAt} />
+              <li key={item.id}>
+                {/* Opens it in the log: body, link, card and delivery. */}
+                <Link
+                  to="/notifications/log/$notificationId"
+                  params={{ notificationId: item.id }}
+                  className={classes.quietLine}
+                >
+                  <span className={classes.source}>{item.sourceName}</span>
+                  <span className={classes.quietTitle}>{item.title}</span>
+                  <Time iso={item.activityAt} />
+                  <IconChevronRight
+                    size={14}
+                    stroke={2.2}
+                    className={classes.chevron}
+                    aria-hidden
+                  />
+                </Link>
               </li>
             ))}
           </ul>

@@ -262,13 +262,24 @@
 
 .quietLine {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
+  min-height: 40px;
   padding: 8px 14px;
   font-size: 13px;
+  color: inherit;
+  text-decoration: none;
 }
 
-.quietLine + .quietLine {
+.quietLine:hover {
+  background: var(--surface-hover);
+}
+
+.quietLine:focus-visible {
+  outline-offset: -2px;
+}
+
+.quietList li + li {
   border-top: 1px solid var(--border-hairline);
 }
 

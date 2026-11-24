@@ -176,8 +176,13 @@ export function NotificationDetail({ id }: { id: string }) {
         <>
           <Divider />
           <Box component="section">
+            {/* Without a form, only earlier rounds' deliveries are left. */}
             <Text fw={700} fz="lg" mb="xs">
-              {t('notifications.detail.reply')}
+              {t(
+                data.reply
+                  ? 'notifications.detail.reply'
+                  : 'notifications.detail.answerDeliveries',
+              )}
             </Text>
             {data.reply ? (
               <ReplySection
@@ -193,9 +198,11 @@ export function NotificationDetail({ id }: { id: string }) {
                 be retried. */}
             {data.response || data.responseDeliveryList.length > 0 ? (
               <Box mt={data.reply ? 'lg' : 0}>
-                <Text fw={700} size="sm" mb="xs">
-                  {t('notifications.detail.answerDeliveries')}
-                </Text>
+                {data.reply ? (
+                  <Text fw={700} size="sm" mb="xs">
+                    {t('notifications.detail.answerDeliveries')}
+                  </Text>
+                ) : null}
                 {data.responseDeliveryList.length === 0 ? (
                   <Text size="sm" c="dimmed">
                     {t('notifications.detail.noResponseRoute')}

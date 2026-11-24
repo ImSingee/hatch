@@ -420,25 +420,34 @@ export default function NotificationsScreen() {
                               accessibilityRole="button"
                               accessibilityLabel={`${item.title}, from ${item.sourceName}`}
                               accessibilityHint="Touch and hold for more actions"
-                              style={({ pressed }) => [
-                                styles.quietLine,
-                                pressed && { backgroundColor: c.hover },
-                              ]}
                             >
-                              <Text style={[type.caption, { color: c.ink }]}>
-                                {item.sourceName}
-                              </Text>
-                              <Text
-                                style={[type.small, { flex: 1 }]}
-                                numberOfLines={1}
-                              >
-                                {item.title}
-                              </Text>
-                              <Glyph
-                                name="chevron"
-                                size={10}
-                                color={c.inkSoft}
-                              />
+                              {/* Styled inside: the link trigger replaces the
+                                  Pressable's own style. */}
+                              {({ pressed }) => (
+                                <View
+                                  style={[
+                                    styles.quietLine,
+                                    pressed && { backgroundColor: c.hover },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[type.caption, { color: c.ink }]}
+                                  >
+                                    {item.sourceName}
+                                  </Text>
+                                  <Text
+                                    style={[type.small, { flex: 1 }]}
+                                    numberOfLines={1}
+                                  >
+                                    {item.title}
+                                  </Text>
+                                  <Glyph
+                                    name="chevron"
+                                    size={10}
+                                    color={c.inkSoft}
+                                  />
+                                </View>
+                              )}
                             </Pressable>
                           </Link.Trigger>
                           <Link.Menu>
