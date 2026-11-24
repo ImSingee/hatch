@@ -71,6 +71,8 @@ export type ChatMessage =
     }
   | {
       role: 'toolResult';
+      /** The id of the `toolCall` block this result answers. */
+      toolCallId: string;
       toolName: string;
       content: ContentPart[];
       /** Structured result data persisted by pi tools. */
@@ -93,29 +95,17 @@ export type ToolResultMessage = Extract<ChatMessage, { role: 'toolResult' }>;
 
 /**
  * Map each tool-call id to its result message so a call and its output can be
- * rendered as a single collapsible step. Results arrive sequentially after
- * their calls, so we match the oldest pending call of the same tool name.
+ * rendered as a single collapsible step. A result names the call it answers,
+ * so a call that never got one (its run was stopped mid-command) stays
+ * without output instead of taking a later call's result. When a call has
+ * several results, the newest one wins, as it does for the Runner.
  */
 export function pairToolResults(
   messages: ChatMessage[],
 ): Map<string, ToolResultMessage> {
   const map = new Map<string, ToolResultMessage>();
-  const pending: { id: string; name: string }[] = [];
   for (const message of messages) {
-    if (message.role === 'assistant') {
-      for (const block of message.content) {
-        if (block.type === 'toolCall') {
-          pending.push({ id: block.id, name: block.name });
-        }
-      }
-    } else if (message.role === 'toolResult') {
-      let index = pending.findIndex((p) => p.name === message.toolName);
-      if (index < 0 && pending.length > 0) index = 0;
-      if (index >= 0) {
-        const [hit] = pending.splice(index, 1);
-        map.set(hit.id, message);
-      }
-    }
+    if (message.role === 'toolResult') map.set(message.toolCallId, message);
   }
   return map;
 }

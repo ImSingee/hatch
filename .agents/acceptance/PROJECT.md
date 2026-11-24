@@ -15,6 +15,8 @@ or stop another task's database. Set DATABASE_URL and APP_DATABASE_URL to that
 container and HATCH_DATA_DIR to the acceptance round's private runtime directory.
 Build with pnpm build, then start dist/platform/server/index.mjs with Node;
 set HOST=127.0.0.1 and PORT to a free port.
+The production server refuses to start without AGENT_RUNNER_TOKEN; set it to
+any test value for isolated runs.
 APP_URL and AGENT_INTERNAL_PORT must use isolated free ports. Stop only the
 processes and container created by the round. Production builds use pnpm build.
 

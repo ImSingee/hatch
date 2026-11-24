@@ -350,6 +350,7 @@ test('keeps a running reply open through every phase and folds its process once 
       },
       {
         role: 'toolResult',
+        toolCallId: 'tool-1',
         toolName: 'list_apps',
         content: [{ type: 'text', text: '[]' }],
       },
@@ -458,6 +459,7 @@ test('shows history with run-bound defaults and keeps essential actions outside'
     },
     {
       role: 'toolResult',
+      toolCallId: 'deploy-1',
       toolName: 'deploy_app',
       content: [{ type: 'text', text: 'Deployed.' }],
     },
@@ -489,7 +491,12 @@ test('shows history with run-bound defaults and keeps essential actions outside'
         { type: 'toolCall', id: 'list-1', name: 'list_apps', arguments: {} },
       ],
     },
-    { role: 'toolResult', toolName: 'list_apps', content: [] },
+    {
+      role: 'toolResult',
+      toolCallId: 'list-1',
+      toolName: 'list_apps',
+      content: [],
+    },
     // An interrupted run persisted no reply; its run still explains why.
     { role: 'user', content: 'Run the nightly report' },
     // A failed reply stays open with its reason and Retry.
@@ -1237,7 +1244,12 @@ test('retries a failed turn without resurrecting its superseded failure', async 
       ],
       stopReason: 'toolUse',
     },
-    { role: 'toolResult', toolName: 'list_apps', content: [] },
+    {
+      role: 'toolResult',
+      toolCallId: 'list-1',
+      toolName: 'list_apps',
+      content: [],
+    },
     {
       role: 'assistant',
       content: [{ type: 'text', text: 'The tracker is live.' }],
@@ -1394,6 +1406,7 @@ test('keeps a reopened work process in place instead of following to the bottom'
       },
       ...calls.map((call) => ({
         role: 'toolResult' as const,
+        toolCallId: call.id,
         toolName: call.name,
         content: [{ type: 'text', text: 'Healthy.' }],
       })),
