@@ -64,7 +64,7 @@ instructions as preloaded platform Agent skills.
 
 ## Build & Development Commands
 
-Use pnpm for everything. `pnpm dev` starts the Vite dev server on port 3000 with hot reload. `pnpm build` emits the optimized bundle into `.output/`, while `pnpm preview` runs the Nitro server from `.output/` to sanity-check the production SPA shell and server endpoints. `pnpm check:types` runs `tsc --noEmit`. `pnpm lint` runs Oxlint, and `pnpm format` runs Oxfmt then auto-fixes lint errors with Oxlint.
+Use pnpm for everything. `pnpm dev` starts the Vite dev server on port 3000 with hot reload. `pnpm build` emits the optimized bundle into `.output/`, while `pnpm preview` runs the Nitro server from `.output/` to sanity-check the production SPA shell and server endpoints. `pnpm check:types` runs the translation check (`pnpm i18n:check`) and `tsc --noEmit`; `pnpm i18n:types` regenerates the translation key types. `pnpm lint` runs Oxlint, and `pnpm format` runs Oxfmt then auto-fixes lint errors with Oxlint.
 
 Dependency upgrade policy:
 
@@ -245,6 +245,70 @@ Oxfmt config lives in `.oxfmtrc.json`:
 - `printWidth: 80` - wrap long lines at 80 columns
 
 Run `pnpm format` to format and fix lint errors in one step (runs Oxfmt, Oxlint --fix, then verifies both).
+
+## Internationalization
+
+The platform Web UI uses i18next and react-i18next with bundled English (`en`)
+and Simplified Chinese (`zh-CN`) catalogs in `src/i18n/`. English is the source
+catalog. All new or changed user-visible copy in the Web UI (`src/routes`,
+`src/components`, `src/ui`, and client-side `src/auth` screens) must go through
+the catalogs: text, headings, button and menu labels, placeholders, tooltips,
+`aria-label`s and other accessible names, validation and form errors, empty
+states, toasts, confirmation dialogs and window titles. Do not hard-code
+display strings in components, and do not write inline locale conditionals or
+TypeScript dictionaries.
+
+Most existing screens still have English literals. When you change a
+component's copy or behaviour, move that component's display strings into the
+catalogs in the same change; new components and pages start translated.
+
+Out of scope for now: `hatch` CLI output, Agent prompts and Skills, server
+logs, App/Workflow templates, and the native mobile and desktop shells. Server
+Functions should return data or stable error codes rather than new English
+sentences meant for display, so the UI can translate them.
+
+### Adding or changing copy
+
+1. Add the key to `src/i18n/en.json` and translate it in `src/i18n/zh-CN.json`
+   in the same change. Keys are flat, dot-separated and grouped by area
+   (`settings.users.label`, `appearance.accent.title`, `common.signOut`). Reuse
+   a `common.*` key only when the meaning is identical.
+2. Translate whole sentences with `{{name}}` placeholders instead of
+   concatenating fragments. Pass a numeric `count` for plurals and give every
+   catalog the same `_one` / `_other` keys.
+3. Run `pnpm i18n:types` after any change to `en.json`, including wording-only
+   edits, and commit the regenerated `src/i18n/resources.generated.d.ts`. Never
+   edit that file by hand.
+4. Remove a key from every catalog when its last use goes away.
+5. A Chinese value may equal the English one only for names that stay the same
+   (product names such as Tailscale). List such keys under `zh-CN` in
+   `src/i18n/same-as-source.json`; never copy English text into `zh-CN.json`
+   to silence the check.
+
+### Using translations
+
+- Call `const { t, locale } = useI18n()` from `~i18n` at the top of the
+  component and translate during rendering. Data that names copy (navigation
+  items, options, table columns) stores a `PlainTranslationKey` and calls
+  `t(key)` when it renders; do not translate at module load or keep translated
+  strings in state, so switching language updates the screen in place.
+- Keep IDs, routes, search params, enum values and user content
+  language-independent. Translate their labels, not the values.
+- Format numbers and dates for the reader with `Intl` and the `locale` from
+  `useI18n()`; dayjs follows the active language automatically.
+- The language is a per-browser preference (Settings → Appearance → Language,
+  stored in local storage). Use `changeLocale()`; never reload the page or key
+  providers, routers or forms by locale.
+- Browser tests run in English (`vitest.browser.setup.ts`) and assert English
+  copy. Update text assertions and accessible-name selectors when copy changes.
+
+### Checks
+
+CI fails when a translation is missing or wrong. `pnpm i18n:check` (also the
+first step of `pnpm check:types`) rejects keys missing from or extra in a
+catalog, empty values, Chinese values still equal to the English text, mismatched
+`{{placeholders}}`, and a stale `resources.generated.d.ts`. `tsc` also rejects
+unknown keys and missing interpolation values in `t()` calls.
 
 ## Coding Style & Naming Conventions
 

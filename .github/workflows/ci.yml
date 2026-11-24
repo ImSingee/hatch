@@ -57,6 +57,10 @@ jobs:
       - name: Check Platform API contract
         run: pnpm platform-api:check
 
+      # Fails when a key is added without translations; see AGENTS.md.
+      - name: Check translations
+        run: pnpm i18n:check
+
       - name: Run type check
         run: pnpm check:types
 

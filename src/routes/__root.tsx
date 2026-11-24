@@ -17,6 +17,8 @@ import { ModalsProvider } from '@mantine/modals';
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import appCss from '~styles.css?url';
+// Starts the UI language (and <html lang>) before any route renders.
+import '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {

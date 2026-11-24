@@ -9,10 +9,12 @@ import {
 } from '@tabler/icons-react';
 import { authClient } from '~auth/client';
 import { useSignOut } from '~auth/use-sign-out';
+import { useI18n } from '~i18n';
 import classes from './menu-bar.module.css';
 
 /** The account tile at the end of the menu bar and the pages behind it. */
 export function AccountMenu() {
+  const { t } = useI18n();
   const { signOut, leaving } = useSignOut();
   const { data } = authClient.useSession();
   const email = data?.user.email ?? 'account';
@@ -21,7 +23,10 @@ export function AccountMenu() {
   return (
     <Menu position="bottom-end" width={220} shadow="md">
       <Menu.Target>
-        <UnstyledButton className={classes.account} aria-label="Account menu">
+        <UnstyledButton
+          className={classes.account}
+          aria-label={t('nav.accountMenu')}
+        >
           <Avatar
             size={26}
             radius="sm"
@@ -42,25 +47,25 @@ export function AccountMenu() {
           leftSection={<IconBell size={16} stroke={1.6} />}
           renderRoot={(props) => <Link to="/notifications" {...props} />}
         >
-          Notifications
+          {t('nav.notifications')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconLayoutDashboard size={16} stroke={1.6} />}
           renderRoot={(props) => <Link to="/dashboards" {...props} />}
         >
-          Dashboards
+          {t('nav.dashboards')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconRepeat size={16} stroke={1.6} />}
           renderRoot={(props) => <Link to="/workflows" {...props} />}
         >
-          Workflows
+          {t('nav.workflows')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconSettings size={16} stroke={1.6} />}
           renderRoot={(props) => <Link to="/settings" {...props} />}
         >
-          Settings
+          {t('nav.settings')}
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
@@ -68,7 +73,7 @@ export function AccountMenu() {
           onClick={signOut}
           disabled={leaving}
         >
-          Sign out
+          {t('common.signOut')}
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>
