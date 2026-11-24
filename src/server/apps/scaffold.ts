@@ -109,8 +109,8 @@ export type CreateAppContext = {
 /**
  * Register a new app: validate the slug, mint the immutable id, create the
  * canonical bare repo and the database row, and render the scaffold template.
- * The rendered files are RETURNED, not written — the Agent Runner (or a
- * script) writes them into its own checkout and commits from there.
+ * The rendered files are RETURNED, not written — the caller (the `hatch`
+ * CLI) writes them into its own checkout and commits from there.
  */
 export async function createApp(
   input: CreateAppInput,

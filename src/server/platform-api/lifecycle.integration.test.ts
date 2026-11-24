@@ -4,6 +4,7 @@ import postgres from 'postgres';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import {
+  cp,
   mkdtemp,
   mkdir,
   readFile,
@@ -1293,6 +1294,101 @@ describe.runIf(Boolean(databaseUrl))(
       expect(
         (await cliInvoke(['app', 'docs', 'get', id, 'refunds'], run)).code,
       ).toBe(5);
+    }, 240000);
+
+    it('adopts a checkout left by the removed checkout_app Tool and deploys from it', async () => {
+      const [, apiKey, run] = credentials;
+      const directory = path.join(root, `adopt-src-${randomUUID()}`);
+      const file = `${directory}.json`;
+      await writeFile(
+        file,
+        JSON.stringify({
+          slug: `adopt-${randomUUID()}`,
+          name: 'Adopt',
+          pin: false,
+        }),
+      );
+      const created = await cliInvoke(
+        ['app', 'create', '--file', file, '--directory', directory],
+        apiKey,
+      );
+      assert.equal(created.code, 0, JSON.stringify(created));
+      const id = created.data.id as string;
+      const first = await cliInvoke(
+        ['app', 'deploy', '--directory', directory, '--message', 'First'],
+        apiKey,
+      );
+      assert.equal(first.code, 0, JSON.stringify(first));
+
+      // The layout the removed Tool left in older chats: a Runner work tree
+      // whose origin is the session's local bundle of platform master.
+      const session = path.join(root, 'agents', `session-${randomUUID()}`);
+      const bundleFile = path.join(session, 'bundles', `app-${id}.bundle`);
+      const checkout = path.join(session, 'work', 'apps', 'adopt');
+      await mkdir(path.dirname(bundleFile), { recursive: true });
+      await mkdir(path.dirname(checkout), { recursive: true });
+      const source = await api(`apps/${id}/source`, apiKey);
+      await writeFile(
+        bundleFile,
+        Buffer.from(source.data.bundleBase64, 'base64'),
+      );
+      execFileSync(
+        'git',
+        ['clone', '--branch', 'master', bundleFile, checkout],
+        { stdio: 'pipe' },
+      );
+      // The Runner materialized the generated SDK beside the source and
+      // Git-excluded the generated paths, so the bundle did not carry them.
+      await cp(path.join(directory, '.hatch'), path.join(checkout, '.hatch'), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(checkout, '.git', 'info', 'exclude'),
+        [
+          '/.hatch/',
+          '/.hatch-install-*/',
+          '/.hatch-backup-*/',
+          '/node_modules/',
+          '/pnpm-workspace.yaml',
+          '/gen/',
+        ].join('\n') + '\n',
+      );
+      await writeFile(path.join(checkout, 'agent-work.txt'), 'committed work');
+      git(checkout, 'add', '.');
+      git(
+        checkout,
+        '-c',
+        'user.name=Agent',
+        '-c',
+        'user.email=agent@example.test',
+        'commit',
+        '-m',
+        'Agent work',
+      );
+      await writeFile(path.join(checkout, 'dirty.txt'), 'uncommitted work');
+
+      const adopted = await cliInvoke(
+        ['app', 'adopt', id, '--directory', checkout],
+        run,
+      );
+      assert.equal(adopted.code, 0, JSON.stringify(adopted));
+      expect(adopted.data.dirty).toBe(true);
+      expect(git(checkout, 'remote', 'get-url', 'origin')).toBe(bundleFile);
+      await expect(
+        readFile(path.join(checkout, 'dirty.txt'), 'utf8'),
+      ).resolves.toBe('uncommitted work');
+
+      await rm(path.join(checkout, 'dirty.txt'));
+      const deployed = await cliInvoke(
+        ['app', 'deploy', '--directory', checkout, '--message', 'From adopt'],
+        run,
+      );
+      assert.equal(deployed.code, 0, JSON.stringify(deployed));
+      expect(deployed.data.version).toBe(2);
+      expect(deployed.data.sourceCommit).toBe(
+        git(checkout, 'rev-parse', 'HEAD'),
+      );
+      expect(git(checkout, 'remote', 'get-url', 'origin')).toBe(bundleFile);
     }, 240000);
 
     it('exercises KV masking, large and empty writes, pagination and Run association without spoofing', async () => {
