@@ -147,7 +147,7 @@ use `text-wrap: pretty`.
 | `sm`     | 9   | Menu items, tooltips, medium tile               |
 | `md`     | 12  | Controls: buttons, fields, nav rows, large tile |
 | `lg`     | 16  | Menus, popovers, suggestion chips               |
-| `tile`   | 18  | Desk home tile (60) and launcher tile (56)      |
+| `tile`   | 18  | Mobile desk tile (60) and launcher tile (56)    |
 | `xl`     | 20  | Cards, the composer                             |
 | `window` | 24  | Windows, modals, the sign-in card               |
 | `widget` | 26  | Desk widget panels, the sign-in hero tile       |
@@ -192,7 +192,7 @@ Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 
 `--surface-panel`, `--surface-dock`, `--surface-widget`, `--radius-widget`, `--ground-shape-accent`,
 `--ground-shape-warm`, `--ground-shape-fresh`, `--radius-dock`,
-`--size-dock-tile`, `--size-desk-tile`, `--size-widget-icon`, `--radius-tile`,
+`--size-dock-tile`, `--size-widget-icon`, `--radius-tile`,
 `--surface-window`, `--surface-bubble`, `--border-composer`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
 `--surface-hover`, `--surface-pressed`, `--surface-scrim`, `--border-hairline`,
 `--border-input`, `--focus-ring`, `--radius-window`, `--shadow-card`,
@@ -268,7 +268,7 @@ Text input, textarea, select and number input share one well.
 
 A rounded square. Sizes: 22 (radius 6), 26 widget header (radius 9,
 `sizes.widgetIcon`), 38 (radius 9), 40 dock (radius 12, `sizes.dockTile`), 44
-(radius 12), 56 launcher (radius 18), 60 desk home (radius 18,
+(radius 12), 56 launcher (radius 18), 60 mobile desk (radius 18,
 `sizes.deskTile`), 72 hero (radius 20).
 
 - With an icon: the App's stored icon image, cropped to cover the square. No
@@ -309,15 +309,42 @@ wide the two buttons become one back button at the start of the title bar.
 
 - Tile 40 (`sizes.dockTile`), radius 12: the App icon, or a `tiles` fill
   with a white monogram.
-- Label under the tile: 11 / 700, neutral shade 8, one line, ellipsis, tile
-  column 64 wide, gap 5.
-- Hover: the tile rises 3 px over 150 ms. Running marker: a 4 px accent dot
-  under the label.
-- "Add" tile: same size, 1.5 px dashed neutral shade-5 border, no fill.
+- Names under the tiles are an instance setting (`ui.theme.dockLabels`,
+  Appearance › Show names in the dock), off by default. Shown: 11 / 700,
+  neutral shade 8, one line, ellipsis, tile column 64 wide, gap 5. Hidden:
+  the tile column is 52 wide.
+- Hover: the tile rises 3 px over 150 ms, and a tooltip above it gives the
+  full name whether or not names are shown. Running marker: a 4 px accent
+  dot under the name, or 5 under the tile when names are hidden.
+- A tile has no button of its own: its actions are in the dock's right-click
+  menu (a long press on touch).
 - Workflow tiles use radius `12 12 12 3` to differ from App tiles by shape.
+- The groups carry no labels; a hairline divider separates Apps from
+  Workflows.
+- Once anything is pinned, the Apps group ends with an All apps tile that is
+  not a pin: four 10 dots (teal, orange, violet, blue, shade 6) on a white
+  tile with the `card` shadow. It is never dragged and stays visible when the
+  pins scroll.
+- "Add app" tile: same size, 1.5 px dashed neutral shade-5 border, no fill,
+  labelled like any tile. Only an empty Apps group shows it, so a dock with
+  no pins shows this tile alone. Otherwise adding lives in the dock's
+  right-click menu: the clicked pin's own actions (Edit, Unpin, Manage),
+  then Add an app ›, Add a workflow › and New with Agent. The Workflows
+  group, with its divider, shows only while a Workflow is pinned.
 - The dock itself: `surfaces.dock` fill with blur, 1 px white border, radius
-  28 (`radius.dock`), `dock` shadow, padding 10 18 12. The tab bar that
-  replaces it below 560 wide uses the same fill, border, radius and shadow.
+  28 (`radius.dock`), `dock` shadow, padding 14 18 8 with names and
+  14 18 5 without, so the space above the tiles matches the space under the
+  names or under the tiles. The tab bar that replaces it below 560 wide uses
+  the same fill, border, radius and shadow.
+- With a mouse (`hover: hover`) the dock floats over the stage and takes no
+  room: it waits below the bottom edge. While it waits, a 64 × 5 pill in
+  neutral shade 5, 6 above the bottom edge and centred, marks where it comes
+  from; it fades out (`fast`) while the dock is up. Pointing at the bottom
+  6 px of the page, at the pill (a 120 × 16 hit area) or at the dock raises
+  it after 80 ms with a `base` slide; it sinks
+  300 ms after the pointer leaves. Keyboard focus inside it and an open menu
+  of its own hold it up. A right-click does not move focus, like a native
+  context menu. On touch it keeps its own row under the stage.
 
 ### Widget panel
 
@@ -338,8 +365,8 @@ empty desk).
   buttons when the widget declares several sizes, else its size as text. A
   30 round ink Remove button sits on the top-right corner, red on hover.
 
-On the desk, App tiles use the dock tile (40); below 560 widgets become a
-pager with page dots and "All widgets".
+Below 560 widgets become a pager with page dots and "All widgets". The web
+desk shows no App tiles: Apps live in the dock and in All apps.
 
 ### Empty state
 

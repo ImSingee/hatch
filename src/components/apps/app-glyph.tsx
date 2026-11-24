@@ -29,11 +29,11 @@ type GlyphProps = {
   /** Stable identifier for the tint; defaults to the name. */
   seed?: string;
   /**
-   * `widget` (26) heads a widget panel, `dock` (40) is the dock tile and
-   * `desk` (60) the desk home tile; those three sizes come from the design
-   * tokens. `xl` (56) is the launcher tile and `hero` (72) leads a detail view.
+   * `widget` (26) heads a widget panel and `dock` (40) is the dock tile; those
+   * two sizes come from the design tokens. `xl` (56) is the launcher tile and
+   * `hero` (72) leads a detail view.
    */
-  size?: 'sm' | 'widget' | 'md' | 'dock' | 'lg' | 'xl' | 'desk' | 'hero';
+  size?: 'sm' | 'widget' | 'md' | 'dock' | 'lg' | 'xl' | 'hero';
   /** Workflows share the tile and differ by one squared-off corner. */
   shape?: 'app' | 'workflow';
 };
@@ -41,7 +41,7 @@ type GlyphProps = {
 /** Stored icon size that covers a tile on a 2x display. */
 function iconSizeFor(size: NonNullable<GlyphProps['size']>): 64 | 128 | 256 {
   if (size === 'sm' || size === 'widget') return 64;
-  return size === 'xl' || size === 'desk' || size === 'hero' ? 256 : 128;
+  return size === 'xl' || size === 'hero' ? 256 : 128;
 }
 
 /**

@@ -21,8 +21,11 @@ type DeskShellProps = {
 };
 
 /**
- * The desk every signed-in page lives on: menu bar on top, the stage in the
- * middle (the desk home, or one window), the dock at the bottom.
+ * The desk every signed-in page lives on: menu bar on top, then the stage
+ * (the desk home, or one window) down to the bottom edge. With a mouse the
+ * dock floats over the stage and stays below the edge until the pointer
+ * reaches the bottom or keyboard focus enters it; on touch it keeps its own
+ * row under the stage.
  */
 export function DeskShell({
   view,
@@ -46,7 +49,11 @@ export function DeskShell({
         <InsideDeskShellProvider value>{children}</InsideDeskShellProvider>
       </main>
       <footer className={classes.dock}>
-        <Dock openItems={openItems} />
+        <div aria-hidden className={classes.dockEdge} />
+        <div aria-hidden className={classes.dockHandle} />
+        <div className={classes.dockPanel}>
+          <Dock openItems={openItems} />
+        </div>
       </footer>
       <footer className={classes.tabs}>
         <TabBar />

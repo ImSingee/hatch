@@ -1,5 +1,5 @@
-import { ActionIcon, Menu, UnstyledButton } from '@mantine/core';
-import { IconDots, IconPinnedOff, IconPlus } from '@tabler/icons-react';
+import { Menu, Tooltip, UnstyledButton } from '@mantine/core';
+import { IconPlus } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import classes from './dock.module.css';
 
@@ -17,8 +17,37 @@ export type DockOpenItem =
   | { kind: 'workflow'; slug: string };
 
 /**
- * One pinned item: the tile link with its label and open marker, and an
- * options menu beside it so the menu never triggers the link.
+ * The full name above a tile while it is pointed at or has keyboard focus,
+ * whether or not the dock prints names. Hidden while the dock's right-click
+ * menu is open.
+ */
+function TileName({
+  label,
+  hidden,
+  children,
+}: {
+  label: string;
+  hidden: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip
+      label={label}
+      position="top"
+      offset={8}
+      disabled={hidden}
+      // Keyboard focus shows the name too; with names hidden, it is the only
+      // way to tell two shortcuts of one App apart.
+      events={{ hover: true, focus: true, touch: false }}
+    >
+      {children}
+    </Tooltip>
+  );
+}
+
+/**
+ * One dock tile: the link with its name and open marker. Its actions live in
+ * the dock's right-click menu; `menuKey` tells that menu which tile it is.
  */
 export function DockItem({
   label,
@@ -26,8 +55,8 @@ export function DockItem({
   shape = 'app',
   glyph,
   renderLink,
-  onUnpin,
-  menuItems,
+  menuKey,
+  hintHidden,
 }: {
   label: string;
   /** Whether this item's window is open. */
@@ -37,7 +66,7 @@ export function DockItem({
   /** Renders the link; receives the props the dock needs on it. */
   renderLink: (props: {
     className: string;
-    title: string;
+    'aria-label': string;
     draggable: false;
     /**
      * The open marker. Not `aria-current`: the router sets that on every link
@@ -46,77 +75,78 @@ export function DockItem({
     'data-open': 'true' | undefined;
     children: ReactNode;
   }) => ReactNode;
-  onUnpin: () => void;
-  /** Menu items placed around the built-in Unpin: before and after it. */
-  menuItems?: { before?: ReactNode; after?: ReactNode };
+  menuKey?: string;
+  /** Hide the name hint, e.g. while the right-click menu is open. */
+  hintHidden: boolean;
 }) {
   return (
-    <div className={classes.slot}>
-      {renderLink({
-        className: classes.item,
-        title: label,
-        draggable: false,
-        'data-open': open ? 'true' : undefined,
-        children: (
-          <>
-            <span className={classes.tile} data-shape={shape}>
-              {glyph}
-            </span>
-            <span className={classes.label}>{label}</span>
-            <span className={classes.marker} aria-hidden />
-          </>
-        ),
-      })}
-      <Menu position="top" shadow="md" width={170}>
-        <Menu.Target>
-          <ActionIcon
-            className={classes.options}
-            variant="default"
-            size={20}
-            radius="xl"
-            aria-label={`${label} options`}
-          >
-            <IconDots size={13} stroke={2} />
-          </ActionIcon>
-        </Menu.Target>
-        <Menu.Dropdown>
-          {menuItems?.before}
-          <Menu.Item
-            leftSection={<IconPinnedOff size={15} stroke={1.7} />}
-            onClick={onUnpin}
-          >
-            Unpin
-          </Menu.Item>
-          {menuItems?.after}
-        </Menu.Dropdown>
-      </Menu>
+    <div className={classes.slot} data-dock-key={menuKey}>
+      <TileName label={label} hidden={hintHidden}>
+        {renderLink({
+          className: classes.item,
+          // The printed name may be hidden or cut short; this is the name.
+          'aria-label': label,
+          draggable: false,
+          'data-open': open ? 'true' : undefined,
+          children: (
+            <>
+              <span className={classes.tile} data-shape={shape}>
+                {glyph}
+              </span>
+              <span className={classes.label} aria-hidden>
+                {label}
+              </span>
+              <span className={classes.marker} aria-hidden />
+            </>
+          ),
+        })}
+      </TileName>
     </div>
   );
 }
 
-/** The dashed tile at the end of a dock group; opens the pin picker. */
+/**
+ * The dashed tile of an empty Apps group, named like any other tile; opens
+ * the App picker.
+ */
 export function DockAddButton({
   label,
-  shape = 'app',
+  hintHidden,
   children,
 }: {
   label: string;
-  shape?: 'app' | 'workflow';
+  hintHidden: boolean;
   /** The picker: `Menu.Item`s and `Menu.Label`s. */
   children: ReactNode;
 }) {
   return (
     <Menu position="top" shadow="md" width={240}>
-      <Menu.Target>
-        <UnstyledButton
-          className={classes.add}
-          data-shape={shape}
-          aria-label={label}
-        >
-          <IconPlus size={16} stroke={2.4} aria-hidden />
-        </UnstyledButton>
-      </Menu.Target>
+      <TileName label={label} hidden={hintHidden}>
+        <Menu.Target>
+          <UnstyledButton className={classes.item} aria-label={label}>
+            <span className={classes.add}>
+              <IconPlus size={16} stroke={2.4} aria-hidden />
+            </span>
+            <span className={classes.label} aria-hidden>
+              {label}
+            </span>
+            <span className={classes.marker} aria-hidden />
+          </UnstyledButton>
+        </Menu.Target>
+      </TileName>
       <Menu.Dropdown>{children}</Menu.Dropdown>
     </Menu>
+  );
+}
+
+/** The glyph of the All apps tile: four dots in the dock tile's square. */
+export function AllAppsGlyph() {
+  return (
+    <span className={classes.allApps} aria-hidden>
+      <span />
+      <span />
+      <span />
+      <span />
+    </span>
   );
 }

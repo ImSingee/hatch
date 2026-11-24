@@ -13,6 +13,7 @@ import {
 import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { page, userEvent } from 'vitest/browser';
+import { appCssVariablesResolver, appTheme } from '~/ui/theme';
 
 type Pin = {
   id: string;
@@ -32,6 +33,7 @@ const fixtures = vi.hoisted(() => ({
     status?: string;
   }[],
   runnerState: 'connected' as string,
+  dockLabels: false,
   apps: [] as {
     id: string;
     slug: string;
@@ -63,6 +65,15 @@ vi.mock('~queries/sidebar', () => ({
   sidebarItemsQueryOptions: {
     queryKey: ['test-pins'],
     queryFn: async () => fixtures.pins,
+  },
+}));
+vi.mock('~queries/theme', () => ({
+  themeQueryOptions: {
+    queryKey: ['test-theme'],
+    queryFn: async () => ({
+      accent: 'indigo',
+      dockLabels: fixtures.dockLabels,
+    }),
   },
 }));
 vi.mock('~queries/workflows', () => ({
@@ -178,7 +189,12 @@ async function renderDesk(initialEntry: string) {
     },
   });
   const screen = await render(
-    <MantineProvider>
+    // The Desk theme and its variables, so sizes such as the dock tile are
+    // the ones users get.
+    <MantineProvider
+      theme={appTheme}
+      cssVariablesResolver={appCssVariablesResolver}
+    >
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router as never} />
       </QueryClientProvider>
@@ -188,11 +204,30 @@ async function renderDesk(initialEntry: string) {
   return { router, screen, path, queryClient };
 }
 
+/**
+ * With a mouse the dock waits below the bottom edge, marked by a short bar;
+ * point at the bar the way a person would to bring it up.
+ */
+async function revealDock() {
+  const handle = document.querySelector<HTMLElement>('[class*="dockHandle"]');
+  if (!handle) throw new Error('The waiting dock shows no handle');
+  await userEvent.hover(page.elementLocator(handle));
+}
+
+/** Whether the dock is on screen: its bottom is inside the viewport. */
+function dockShown() {
+  const nav = document.querySelector('nav[aria-label="Dock"]');
+  return Boolean(
+    nav && nav.getBoundingClientRect().bottom <= window.innerHeight,
+  );
+}
+
 beforeEach(() => {
   fixtures.pins = [];
   fixtures.workflows = [];
   fixtures.apps = [];
   fixtures.runnerState = 'connected';
+  fixtures.dockLabels = false;
 });
 
 test('every destination of the shell is reachable from the menu bar', async () => {
@@ -346,12 +381,13 @@ test('the dock lists pins and marks the one whose window is open', async () => {
   await expect.element(home).toHaveAttribute('data-open', 'true');
   await expect.element(settings).not.toHaveAttribute('data-open');
 
+  await revealDock();
   await digest.click();
   await expect.element(digest).toHaveAttribute('data-open', 'true');
   await expect.element(home).not.toHaveAttribute('data-open');
 
-  // Manage stays reachable from a pin's own menu.
-  await dock.getByRole('button', { name: 'Notes options' }).click();
+  // A pin's own actions are in the dock's right-click menu.
+  await notes.click({ button: 'right' });
   await expect
     .element(screen.getByRole('menuitem', { name: 'Manage' }))
     .toHaveAttribute('href', '/app/notes/manage');
@@ -412,7 +448,8 @@ test('a pin removed elsewhere turns its open edit dialog into a notice', async (
   ];
   const { screen, queryClient } = await renderDesk('/apps');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
-  await dock.getByRole('button', { name: 'Notes options' }).click();
+  await revealDock();
+  await dock.getByRole('link', { name: 'Notes' }).click({ button: 'right' });
   await screen.getByRole('menuitem', { name: 'Edit' }).click();
   const dialog = screen.getByRole('dialog', { name: 'Edit pin' });
   await expect
@@ -453,14 +490,215 @@ test('many pinned workflows scroll inside the dock instead of overflowing it', a
   await expect
     .element(dock.getByRole('link', { name: 'Digest 0' }))
     .toBeInTheDocument();
-  const add = dock.getByRole('button', { name: /Pin a workflow/ });
+  const last = dock.getByRole('link', { name: 'Digest 9' });
   await vi.waitFor(() => {
     const dockBox = dock.element().getBoundingClientRect();
-    const row = add.element().closest<HTMLElement>('[class*="row"]')!;
+    const row = last.element().closest<HTMLElement>('[class*="row"]')!;
     // The Workflows group stays inside the dock, and its row scrolls.
     expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(
       dockBox.right + 1,
     );
     expect(row.scrollWidth).toBeGreaterThan(row.clientWidth);
   });
+});
+
+test('the dock waits below the edge, rises at it, and stays while its menu is open', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-notes',
+      appId: 'app-2',
+      appSlug: 'notes',
+      label: 'Notes',
+      entryHash: null,
+    },
+  ];
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
+  ];
+  const { screen } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  await expect
+    .element(dock.getByRole('link', { name: 'Notes' }))
+    .toBeInTheDocument();
+
+  // It takes no room: the page runs to the bottom while the dock waits.
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  await vi.waitFor(() => expect(dockShown()).toBe(false));
+
+  await revealDock();
+  await vi.waitFor(() => expect(dockShown()).toBe(true));
+
+  // Adding lives in the right-click menu, which keeps the dock up while the
+  // pointer is in it.
+  await dock.getByRole('link', { name: 'Notes' }).click({ button: 'right' });
+  const addWorkflow = screen.getByRole('menuitem', { name: 'Add a workflow' });
+  await addWorkflow.hover();
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Daily digest' }))
+    .toBeVisible();
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  expect(dockShown()).toBe(true);
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Unpin' }))
+    .toBeVisible();
+
+  await userEvent.keyboard('{Escape}');
+  await userEvent.keyboard('{Escape}');
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  await vi.waitFor(() => expect(dockShown()).toBe(false));
+});
+
+test('an empty dock shows only its add tile; pins end the Apps group with All apps', async () => {
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
+  ];
+  const { screen, queryClient } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+
+  await expect
+    .element(dock.getByRole('button', { name: 'Add app' }))
+    .toBeInTheDocument();
+  expect(dock.getByRole('link').elements()).toEqual([]);
+
+  // A pinned Workflow alone brings All apps back beside the add tile.
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
+  ];
+  await queryClient.invalidateQueries();
+  await expect
+    .element(dock.getByRole('link', { name: 'All apps' }))
+    .toHaveAttribute('href', '/apps');
+  await expect
+    .element(dock.getByRole('button', { name: 'Add app' }))
+    .toBeInTheDocument();
+
+  fixtures.pins = [
+    {
+      id: 'pin-notes',
+      appId: 'app-2',
+      appSlug: 'notes',
+      label: 'Notes',
+      entryHash: null,
+    },
+  ];
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
+  ];
+  await queryClient.invalidateQueries();
+  await expect
+    .element(dock.getByRole('link', { name: 'Daily digest' }))
+    .toBeInTheDocument();
+  await expect
+    .element(dock.getByRole('button', { name: 'Add app' }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(dock.getByRole('button', { name: /Pin a workflow/ }))
+    .not.toBeInTheDocument();
+  const links = dock.getByRole('link').elements();
+  expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
+    'Notes',
+    'All apps',
+    'Daily digest',
+  ]);
+});
+
+test('names stay out of the dock unless the instance shows them, and pointing at a tile shows its full name', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-ledger',
+      appId: 'app-3',
+      appSlug: 'ledger',
+      label: 'Household ledger for the shared flat',
+      entryHash: null,
+    },
+  ];
+  const { screen, queryClient } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  const ledger = dock.getByRole('link', {
+    name: 'Household ledger for the shared flat',
+  });
+  await expect.element(ledger).toBeInTheDocument();
+  const printed = () =>
+    [...dock.element().querySelectorAll('[class*="_label_"]')].filter(
+      (label) => getComputedStyle(label).display !== 'none',
+    ).length;
+  expect(printed()).toBe(0);
+
+  await revealDock();
+  await ledger.hover();
+  await expect
+    .element(
+      screen.getByRole('tooltip', {
+        name: 'Household ledger for the shared flat',
+      }),
+    )
+    .toBeVisible();
+
+  fixtures.dockLabels = true;
+  await queryClient.invalidateQueries({ queryKey: ['test-theme'] });
+  await vi.waitFor(() => expect(printed()).toBeGreaterThan(0));
+});
+
+test('keyboard focus shows a tile its full name, and a long press opens that tile own actions', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-ledger',
+      appId: 'app-3',
+      appSlug: 'ledger',
+      label: 'Household ledger',
+      entryHash: null,
+    },
+  ];
+  const { screen } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  const ledger = dock.getByRole('link', { name: 'Household ledger' });
+  await expect.element(ledger).toBeInTheDocument();
+
+  // Tab into the dock from the page.
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  let focused = false;
+  for (let step = 0; step < 40 && !focused; step++) {
+    await userEvent.keyboard('{Tab}');
+    focused = document.activeElement === ledger.element();
+  }
+  expect(focused).toBe(true);
+  await expect
+    .element(screen.getByRole('tooltip', { name: 'Household ledger' }))
+    .toBeVisible();
+  (document.activeElement as HTMLElement).blur();
+
+  // A long press: touches without a contextmenu event, as iOS Safari sends.
+  const target = ledger.element();
+  const box = target.getBoundingClientRect();
+  const touch = new Touch({
+    identifier: 1,
+    target,
+    clientX: box.x + box.width / 2,
+    clientY: box.y + box.height / 2,
+  });
+  const press = (type: 'touchstart' | 'touchend') =>
+    target.dispatchEvent(
+      new TouchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        touches: type === 'touchstart' ? [touch] : [],
+        targetTouches: type === 'touchstart' ? [touch] : [],
+        changedTouches: [touch],
+      }),
+    );
+  // Hold past the long-press delay: the menu opens on that tile, with its
+  // own actions. (This runner has a mouse, so the dock sits in its clipped
+  // floating layer and the popover keeps itself hidden; on a touch device
+  // the dock has its own row. What the fix changes is the menu's content.)
+  press('touchstart');
+  await vi.waitFor(() => {
+    const menu = document.querySelector('[role="menu"]');
+    expect(menu?.textContent).toContain('Household ledger');
+    expect(
+      [...menu!.querySelectorAll('[role="menuitem"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(['Edit', 'Unpin', 'Manage', 'Add an app', 'New with Agent']);
+  });
+  press('touchend');
 });

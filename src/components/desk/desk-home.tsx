@@ -19,8 +19,6 @@ type DeskHomeProps = {
   /** While editing, the panel beside the widgets (add widgets, refresh). */
   editorPanel?: ReactNode;
   editing?: boolean;
-  /** The App tiles under the widgets. */
-  tiles?: ReactNode;
   /** The ultrawide desk's left column, under the heading. */
   today?: ReactNode;
   /** The ultrawide desk's right column. */
@@ -33,7 +31,7 @@ type DeskHomeProps = {
  * The desk with no window open, straight on the ground. One DOM tree serves
  * every width; CSS places the parts:
  *
- * - default: heading and toolbar in a row, then widgets, then App tiles;
+ * - default: heading and toolbar in a row, then the widgets;
  * - ultrawide: a today column, the widgets and a companion column;
  * - editing: the editor heading and widgets, with the editor panel beside
  *   them or, when narrow, below.
@@ -50,7 +48,6 @@ export function DeskHome({
   editor,
   editorPanel,
   editing = false,
-  tiles,
   today,
   companion,
   children,
@@ -99,9 +96,6 @@ export function DeskHome({
         <section aria-label="Widgets" className={classes.widgets}>
           {children}
         </section>
-        {!editing && tiles ? (
-          <div className={classes.tiles}>{tiles}</div>
-        ) : null}
         {!editing && companion ? (
           <div className={classes.companion}>{companion}</div>
         ) : null}

@@ -3,7 +3,7 @@
   align-items: stretch;
   gap: 18px;
   max-width: 100%;
-  padding: 10px 18px 12px;
+  padding: 14px 18px 8px;
   border: 1px solid var(--mantine-color-white);
   border-radius: var(--radius-dock);
   background: var(--surface-dock);
@@ -25,13 +25,11 @@
   flex-shrink: 8;
 }
 
-.groupLabel {
-  color: var(--mantine-color-dimmed);
-  font-size: 10px;
-  font-weight: var(--font-weight-heading);
-  letter-spacing: 0.12em;
-  line-height: 12px;
-  text-transform: uppercase;
+/* The Apps pins scroll; All apps stays at the end, outside the scroller. */
+.groupBody {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
 }
 
 .row {
@@ -82,8 +80,7 @@
 }
 
 /* Workflows differ from Apps by shape: one corner is nearly square. */
-.tile[data-shape='workflow'] > *,
-.add[data-shape='workflow'] {
+.tile[data-shape='workflow'] > * {
   border-bottom-left-radius: 3px;
 }
 
@@ -111,54 +108,88 @@
   background: var(--mantine-color-primary-6);
 }
 
+/* Names hidden (the default): the open marker sits just under the tile, the
+   tiles close up, and the space above and below each tile stays even. */
+.dock[data-labels='hidden'] {
+  padding-bottom: 5px;
+}
+
+.dock[data-labels='hidden'] .row {
+  min-height: 49px;
+}
+
+.dock[data-labels='hidden'] .item {
+  width: calc(var(--size-dock-tile) + 12px);
+}
+
+.dock[data-labels='hidden'] .label {
+  display: none;
+}
+
+.dock[data-labels='hidden'] .marker {
+  margin-top: 0;
+}
+
 .item[data-open] {
   color: var(--mantine-color-text);
 }
 
-.options {
-  position: absolute;
-  top: 0;
-  right: 2px;
-  opacity: 0;
-  box-shadow: var(--shadow-card);
-  transition: opacity var(--transition-fast);
-}
-
-.slot:hover .options,
-.options:focus-visible,
-.options[aria-expanded='true'] {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .options {
-    opacity: 1;
-  }
-}
-
 .add {
-  flex: none;
   display: grid;
   place-items: center;
   width: var(--size-dock-tile);
   height: var(--size-dock-tile);
-  margin: 0 12px;
   border: 1.5px dashed var(--mantine-color-gray-5);
   border-radius: var(--mantine-radius-md);
   color: var(--mantine-color-gray-7);
   transition: background-color var(--transition-fast);
 }
 
-.add:hover,
-.add[aria-expanded='true'] {
+.item:hover .add,
+.item[aria-expanded='true'] .add {
   background: var(--surface-hover);
+}
+
+/* All apps: four dots on a white tile, the same size as an App tile. */
+.allApps {
+  display: grid;
+  grid-template-columns: repeat(2, 10px);
+  place-content: center;
+  gap: 4px;
+  width: var(--size-dock-tile);
+  height: var(--size-dock-tile);
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.allApps > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.allApps > span:nth-child(1) {
+  background: var(--mantine-color-teal-6);
+}
+
+.allApps > span:nth-child(2) {
+  background: var(--mantine-color-orange-6);
+}
+
+.allApps > span:nth-child(3) {
+  background: var(--mantine-color-violet-6);
+}
+
+.allApps > span:nth-child(4) {
+  background: var(--mantine-color-blue-6);
 }
 
 @media (max-width: 48em) {
   .dock {
     gap: 14px;
     width: 100%;
-    padding: 10px 14px 12px;
+    padding: 14px 14px 8px;
   }
 
   .grow {
@@ -167,10 +198,6 @@
 
   .item {
     width: 58px;
-  }
-
-  .add {
-    margin: 0 9px;
   }
 }
 

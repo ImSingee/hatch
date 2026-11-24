@@ -101,7 +101,7 @@ import {
 } from '~server/images/model';
 
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
-import { getThemeState, setThemeAccent } from '~server/theme-settings';
+import { getThemeState, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
   listPins,
@@ -788,7 +788,12 @@ export function registerPlatformApi(
   });
   router.service(ThemeService, {
     getTheme: async () => ({ theme: await getThemeState() }),
-    setTheme: async (input) => ({ theme: await setThemeAccent(input.accent) }),
+    setTheme: async (input) => ({
+      theme: await updateTheme({
+        accent: input.accent,
+        dockLabels: input.dockLabels,
+      }),
+    }),
   });
   router.service(PinService, {
     listPins: async (input) => {

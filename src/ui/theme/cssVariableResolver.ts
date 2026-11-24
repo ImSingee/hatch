@@ -46,7 +46,6 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--radius-widget': `${tokens.radius.widget}px`,
     '--radius-tile': `${tokens.radius.tile}px`,
     '--size-dock-tile': `${tokens.sizes.dockTile}px`,
-    '--size-desk-tile': `${tokens.sizes.deskTile}px`,
     '--size-widget-icon': `${tokens.sizes.widgetIcon}px`,
     '--shadow-card': tokens.shadows.card,
     '--shadow-dock': tokens.shadows.dock,
