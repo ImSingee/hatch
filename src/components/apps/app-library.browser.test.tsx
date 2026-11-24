@@ -52,21 +52,6 @@ vi.mock('~server/sidebar', () => ({
   },
 }));
 vi.mock('~server/workflows', () => ({ setWorkflowPinFn: async () => {} }));
-vi.mock('~queries/dashboards', () => ({
-  dashboardsQueryOptions: {
-    queryKey: ['test-dashboards'],
-    queryFn: async () => [{ id: 'home', name: 'My Dashboard' }],
-  },
-  availableWidgetsQueryOptions: {
-    queryKey: ['test-available'],
-    queryFn: async () => [],
-  },
-  dashboardQueryOptions: (id: string) => ({
-    queryKey: ['dashboard', 'widgets', id],
-    queryFn: async () => ({ widgets: [] }),
-  }),
-}));
-vi.mock('~server/dashboards', () => ({ addDashboardWidget: async () => ({}) }));
 vi.mock('~components/apps/use-app-icon', () => ({
   appIconUrl: () => '',
   useAppIconKey: () => null,
@@ -148,6 +133,9 @@ test('a click opens an App or Workflow straight away, with no detail panel', asy
 test('pointing shows the details; the actions are in the right-click menu and on Shift+F10', async () => {
   const { screen, path } = await renderLibrary();
   const budget = screen.getByRole('link', { name: /Budget Buddy/ });
+  // Start from elsewhere, so pointing at the tile is a fresh hover even if
+  // an earlier test left the pointer where the tile now is.
+  await userEvent.hover(screen.getByRole('link', { name: 'New app' }));
   await budget.hover();
   await expect
     .element(screen.getByText('Splits the rent between flatmates.'))
@@ -163,7 +151,7 @@ test('pointing shows the details; the actions are in the right-click menu and on
     await expect.element(screen.getByRole('menuitem', { name })).toBeVisible();
   await expect
     .element(screen.getByRole('menuitem', { name: /Pin to desk/ }))
-    .toBeDisabled();
+    .not.toBeInTheDocument();
   await screen.getByRole('menuitem', { name: 'Pin to dock' }).click();
   await vi.waitFor(() =>
     expect(fixtures.pinCalls).toEqual([{ appId: 'app-1', pinned: true }]),

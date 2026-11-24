@@ -30,7 +30,6 @@ import type { AppListItem } from '~server/apps';
 import { setSidebarPin } from '~server/sidebar';
 import { setWorkflowPinFn, type WorkflowListItem } from '~server/workflows';
 import { AppGlyph } from './app-glyph';
-import { PinToDeskItems } from './pin-to-desk';
 import classes from './app-library.module.css';
 
 type Entry = {
@@ -118,7 +117,7 @@ function entryKeyOf(target: EventTarget | null) {
 
 /**
  * All apps: every App and Workflow as a tile. A click opens it. Pointing at a
- * tile shows what it is; its actions (manage, dock, desk, Agent) are in the
+ * tile shows what it is; its actions (manage, dock, Agent) are in the
  * right-click menu, also opened by a long press or Shift+F10.
  */
 export function AppLibrary({ apps }: { apps: AppListItem[] }) {
@@ -377,9 +376,6 @@ function EntryTile({
         <p className={classes.cardText}>
           {entry.description || 'No description yet.'}
         </p>
-        <span className={classes.cardHint}>
-          Click to open · right-click for more
-        </span>
       </HoverCard.Dropdown>
     </HoverCard>
   );
@@ -441,7 +437,6 @@ function EntryMenu({ entry }: { entry: Entry }) {
       >
         {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
       </Menu.Item>
-      {entry.kind === 'app' ? <PinToDeskItems appId={entry.id} /> : null}
       <Menu.Divider />
       <Menu.Item
         leftSection={<IconSparkles size={15} stroke={1.7} />}
