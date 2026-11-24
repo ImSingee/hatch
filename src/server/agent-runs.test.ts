@@ -31,6 +31,7 @@ const hub = await import('~server/agent-runner/hub');
 const {
   assignRunToRunner,
   answerAgentRun,
+  assertAgentModelAvailable,
   cancelAgentRun,
   completeRunFromRunner,
   finalizeRunWorkspaceAffinity,
@@ -1740,5 +1741,27 @@ describe('unconfirmed dispatch', () => {
     expect(failed.autoRetryAt).not.toBeNull();
     await fireDueAgentAutoRetries(FAR_FUTURE());
     expect(await runIds()).toHaveLength(2);
+  });
+});
+
+describe('model kind', () => {
+  it('runs the Agent only with chat models', async () => {
+    await seedModel(PROVIDER_A_ID, MODEL_A_ID, 'A');
+    await db.insert(schema.agentModels).values({
+      providerId: PROVIDER_A_ID,
+      modelId: 'image-model',
+      name: 'Image',
+      kind: 'image',
+    });
+
+    await expect(
+      assertAgentModelAvailable(PROVIDER_A_ID, MODEL_A_ID),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertAgentModelAvailable(PROVIDER_A_ID, 'image-model'),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: 'The selected Agent model is unavailable.',
+    });
   });
 });
