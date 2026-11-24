@@ -312,7 +312,8 @@ Its buttons, in order:
   Maximized, the window fills the screen edge to edge, with no radius or
   shadow. With a mouse, the menu bar waits above the top edge and slides down
   (`slow`, 80 ms delay) when the pointer reaches the top 6 px or keyboard
-  focus enters it; there is no handle. The choice is the shell's and is
+  focus enters it; there is no handle. It floats over the top of the window
+  rather than pushing it down. The choice is the shell's and is
   remembered per browser, so the next window opens the same way.
 - **Close** leads to the window's parent or the desk.
 

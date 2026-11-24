@@ -734,6 +734,10 @@ test('a maximized window fills the screen, the menu bar waits at the top edge, a
   const edge = document.querySelector<HTMLElement>('[class*="menuEdge"]')!;
   await userEvent.hover(page.elementLocator(edge));
   await vi.waitFor(() => expect(menuBarShown()).toBe(true));
+  // It floats over the top of the window; the window stays where it is.
+  expect(window_().element().getBoundingClientRect().top).toBeLessThanOrEqual(
+    1,
+  );
 
   // The next window opens maximized, and restoring brings the bar back.
   await router.navigate({ to: '/apps' as never });
@@ -741,6 +745,9 @@ test('a maximized window fills the screen, the menu bar waits at the top edge, a
     .element(screen.getByRole('region', { name: 'Apps' }))
     .toHaveAttribute('data-maximized', 'true');
   expect(localStorage.getItem('hatch.desk.windowMaximized')).toBe('true');
+  // Move into the window so the bar goes up and uncovers its buttons.
+  await userEvent.hover(screen.getByRole('textbox', { name: 'Note' }));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(false));
   await screen.getByRole('button', { name: 'Restore window' }).click();
   await expect
     .element(screen.getByRole('region', { name: 'Apps' }))

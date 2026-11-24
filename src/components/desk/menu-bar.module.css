@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  height: var(--desk-menu-bar-height);
+  height: 40px;
   padding: 0 14px;
   background: var(--surface-panel);
   border-bottom: 1px solid var(--border-hairline);

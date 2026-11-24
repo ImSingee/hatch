@@ -1,8 +1,4 @@
 .shell {
-  /* The menu bar's height, which a maximized window makes room for when the
-     bar slides down over it. */
-  --desk-menu-bar-height: 40px;
-
   display: flex;
   flex-direction: column;
 }
@@ -180,31 +176,18 @@
     height: 6px;
   }
 
-  /* The window slides down with the bar, so the bar never covers the
-     window's own buttons; a transform, so nothing inside re-lays out. */
-  .shell[data-maximized] .stage {
-    transition: transform var(--transition-slow) 300ms;
-  }
-
+  /* The bar floats over the top of the window rather than pushing it
+     down, the way a full-screen app's menu bar does. */
   .shell[data-maximized]:has(
       .menuEdge:hover,
       .menuBar:hover,
       .menuBar :focus-visible,
       .menuBar [aria-expanded='true']
     )
-    :is(.menuBar > *, .stage) {
+    .menuBar
+    > * {
     transform: none;
     transition-delay: 80ms;
-  }
-
-  .shell[data-maximized]:has(
-      .menuEdge:hover,
-      .menuBar:hover,
-      .menuBar :focus-visible,
-      .menuBar [aria-expanded='true']
-    )
-    .stage {
-    transform: translateY(var(--desk-menu-bar-height));
   }
 
   .dock:hover .dockHandle,
