@@ -476,6 +476,18 @@ const definitions: readonly CliCommandDefinition[] = [
       'Answer a notification reply form as the signed-in user; one answer per notification, final once sent. Repeat --answer for each option of a multiple field. Sends the answer to matching response routes.',
   },
   {
+    path: ['notification', 'unread'],
+    usage: 'notification unread',
+    description:
+      "Show how many notifications are unread for the caller (the signed-in user, or the platform Agent in a Run), the oldest unread one and where reading stopped. The position is shared by all of a user's devices.",
+  },
+  {
+    path: ['notification', 'mark-read'],
+    usage: 'notification mark-read (--through <notification-id> | --latest)',
+    description:
+      "Mark notifications read up to and including one notification in timeline order, or all of them with --latest. The position only moves forward: an older one changes nothing. Changes the caller's position on every device.",
+  },
+  {
     path: ['notification', 'delete'],
     usage: 'notification delete <notification-id> --yes',
     description:

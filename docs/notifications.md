@@ -656,7 +656,21 @@ at the end, and loads older pages on scroll. A person's message shows as a
 bubble, everything else as a card with its reply form until someone answers;
 low-priority notifications without a form share one collapsed row, and a
 recalled notification becomes one line. When a source edits a notification
-while the page is open, a marker stays where it was. `/notifications/log` is
+while the page is open, a marker stays where it was.
+
+Each user has one read position in timeline order, shared by all their
+devices (`notification_read_cursors`; the platform Agent has one of its own,
+since Runs have no user). Everything after it is unread, except recalled
+notifications and the reader's own sends; a notification its source moves past
+the position by editing it is unread again. The position only moves forward.
+The timeline marks read once the newest notification has been on screen in a
+visible tab, keeps the divider and the "N unread · jump" prompt from when it
+opened, and the menu bar bell shows a dot while anything is unread. Users who
+existed when the position shipped start with everything read; a new user starts
+from when they joined. `GetNotificationReadState` and `MarkNotificationsRead`
+expose it (`hatch notification unread`, `hatch notification mark-read`).
+
+`/notifications/log` is
 the delivery log (filters, deliveries, answer deliveries), and
 `/notifications/log/<id>` opens one notification there.
 

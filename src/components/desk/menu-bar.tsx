@@ -2,6 +2,8 @@ import { Menu, Text, UnstyledButton } from '@mantine/core';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { IconBell, IconMenu2 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
+import { useNotificationReadState } from '~components/notifications/use-notification-read-state';
+import { useI18n } from '~/i18n';
 import { AccountMenu } from './account-menu';
 import { Brand } from './brand';
 import { CommandPalette } from './command-palette';
@@ -86,21 +88,33 @@ export function MenuBar() {
       <div className={classes.side}>
         <RunnerStatus />
         <CommandPalette />
-        <Link
-          to="/notifications"
-          className={`${classes.item} ${classes.icon}`}
-          aria-label="Notifications"
-          aria-current={
-            isUnder(pathname, '/notifications') ? 'page' : undefined
-          }
-        >
-          <IconBell size={18} stroke={1.8} aria-hidden />
-        </Link>
+        <NotificationsLink current={isUnder(pathname, '/notifications')} />
         <Text component="span" className={classes.date}>
           {dayjs().format('ddd, MMM D')}
         </Text>
         <AccountMenu />
       </div>
     </header>
+  );
+}
+
+/** The bell, with a dot while anything is unread. */
+function NotificationsLink({ current }: { current: boolean }) {
+  const { t } = useI18n();
+  const unread = useNotificationReadState().data?.unreadCount ?? 0;
+  return (
+    <Link
+      to="/notifications"
+      className={`${classes.item} ${classes.icon} ${classes.bell}`}
+      aria-label={
+        unread > 0
+          ? t('nav.notificationsUnread', { count: unread })
+          : t('nav.notifications')
+      }
+      aria-current={current ? 'page' : undefined}
+    >
+      <IconBell size={18} stroke={1.8} aria-hidden />
+      {unread > 0 ? <span className={classes.unreadDot} aria-hidden /> : null}
+    </Link>
   );
 }

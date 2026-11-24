@@ -96,5 +96,11 @@
   "notifications.reply.chooseExactly_one": "选择 {{count}} 项",
   "notifications.reply.chooseExactly_other": "选择 {{count}} 项",
   "notifications.reply.chooseRange": "选择 {{min}}–{{max}} 项",
-  "notifications.reply.clear": "清除选择"
+  "notifications.reply.clear": "清除选择",
+  "nav.notificationsUnread_one": "通知，{{count}} 条未读",
+  "nav.notificationsUnread_other": "通知，{{count}} 条未读",
+  "notifications.timeline.unreadJump_one": "{{count}} 条未读 · 跳到上次看到的位置",
+  "notifications.timeline.unreadJump_other": "{{count}} 条未读 · 跳到上次看到的位置",
+  "notifications.timeline.unreadDivider_one": "以下是 {{count}} 条未读",
+  "notifications.timeline.unreadDivider_other": "以下是 {{count}} 条未读"
 }

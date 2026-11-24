@@ -22,7 +22,9 @@ export type TimelineRow =
   | { kind: 'item'; key: string; item: TimelineItem }
   | { kind: 'quiet'; key: string; items: TimelineItem[] }
   | { kind: 'recalled'; key: string; item: TimelineItem }
-  | { kind: 'moved'; key: string; sourceNames: string[] };
+  | { kind: 'moved'; key: string; sourceNames: string[] }
+  /** Before the first notification that was unread when the page opened. */
+  | { kind: 'unread'; key: 'unread' };
 
 /** Low priority notifications that ask nothing share one collapsed row. */
 function isQuiet(item: TimelineItem) {
@@ -44,6 +46,7 @@ function dayOf(iso: string) {
 export function buildTimelineRows(
   items: TimelineItem[],
   moved: MovedMarker[],
+  firstUnreadId: string | null = null,
 ): TimelineRow[] {
   const markersAfter = new Map<string | null, MovedMarker[]>();
   for (const marker of moved) {
@@ -78,6 +81,7 @@ export function buildTimelineRows(
       rows.push({ kind: 'day', key: `day:${itemDay}`, date: item.activityAt });
     }
     flushMarkers();
+    if (item.id === firstUnreadId) rows.push({ kind: 'unread', key: 'unread' });
     const previous = rows.at(-1);
     if (isQuiet(item)) {
       if (previous?.kind === 'quiet') previous.items.push(item);

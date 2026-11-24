@@ -481,6 +481,22 @@ const page = (lines: string, response: Row) => {
   return next ? `${lines}\nMore: --cursor ${next}` : lines;
 };
 
+/** The caller's read position: what is unread and where reading stopped. */
+function readStateText(response: Row): string {
+  const state = response.state as Row | undefined;
+  const count = Number(state?.unreadCount ?? 0);
+  const through = field(state, 'readThroughId');
+  const first = field(state, 'firstUnreadId');
+  return [
+    count === 0
+      ? 'No unread notifications.'
+      : `${count} unread; the oldest is ${first}.`,
+    through
+      ? `Read through ${through} (${field(state, 'readThroughAt')}).`
+      : `Read through ${field(state, 'readThroughAt')}.`,
+  ].join('\n');
+}
+
 const specs: Record<string, Spec> = {
   list: {
     positionals: [],
@@ -830,6 +846,41 @@ const specs: Record<string, Spec> = {
           const answered = response.response as Row | undefined;
           return `Answered notification ${notificationId} as ${field(answered, 'respondedByName')}. Response routes deliver the answer; see hatch notification get ${notificationId}.`;
         },
+      };
+    },
+  },
+  unread: {
+    positionals: [],
+    build: () => ({
+      method: 'getNotificationReadState',
+      request: {},
+      text: readStateText,
+    }),
+  },
+  'mark-read': {
+    positionals: [],
+    options: {
+      through: { type: 'string' },
+      latest: { type: 'boolean' },
+    },
+    build: (_positionals, values) => {
+      const through = str(values, 'through');
+      const latest = values.latest === true;
+      if (through !== undefined && latest)
+        invalid(
+          'Use either --through <notification-id> or --latest, not both.',
+        );
+      if (through === undefined && !latest)
+        invalid('Supply --through <notification-id> or --latest.');
+      return {
+        method: 'markNotificationsRead',
+        request: {
+          through:
+            through !== undefined
+              ? { case: 'notificationId', value: through }
+              : { case: 'latest', value: true },
+        },
+        text: readStateText,
       };
     },
   },

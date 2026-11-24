@@ -29,6 +29,12 @@ service NotificationService {
   // destinations already received stay there and nothing is sent; recall
   // first to remove it from phones.
   rpc DeleteNotification(DeleteNotificationRequest) returns (DeleteNotificationResponse);
+  // How far the caller has read the timeline, shared by all their devices:
+  // the calling user, or the platform Agent for a Run (Runs have no user).
+  rpc GetNotificationReadState(GetNotificationReadStateRequest) returns (GetNotificationReadStateResponse);
+  // Move the caller's read position forward to one notification, or to the
+  // newest. A position behind the current one changes nothing.
+  rpc MarkNotificationsRead(MarkNotificationsReadRequest) returns (MarkNotificationsReadResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
   rpc GetApnsStatus(GetApnsStatusRequest) returns (GetApnsStatusResponse);
 
@@ -463,6 +469,39 @@ message DeleteNotificationRequest {
   }];
 }
 message DeleteNotificationResponse {}
+
+message NotificationReadState {
+  // The last notification read; absent before the reader read any.
+  optional string read_through_id = 1;
+  // ISO-8601 activity time of the read position.
+  string read_through_at = 2;
+  // Notifications after the position in timeline order, leaving out
+  // recalled ones and the caller's own sends.
+  uint32 unread_count = 3;
+  // The oldest unread notification in timeline order.
+  optional string first_unread_id = 4;
+}
+
+message GetNotificationReadStateRequest {}
+message GetNotificationReadStateResponse {
+  NotificationReadState state = 1;
+}
+
+message MarkNotificationsReadRequest {
+  oneof through {
+    option (buf.validate.oneof).required = true;
+    // Everything up to and including this notification is read.
+    string notification_id = 1 [(buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    }];
+    // Everything so far is read.
+    bool latest = 2 [(buf.validate.field).bool.const = true];
+  }
+}
+message MarkNotificationsReadResponse {
+  NotificationReadState state = 1;
+}
 
 message NotificationKind {
   string kind = 1 [(buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$"];

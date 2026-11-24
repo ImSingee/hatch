@@ -132,6 +132,26 @@ describe('timeline rows', () => {
     ]);
   });
 
+  it('puts the unread divider under the day divider of the first unread notification', () => {
+    const rows = buildTimelineRows(
+      [
+        item('a', '2026-11-24T18:00:00'),
+        item('b', '2026-11-25T09:00:00'),
+        item('c', '2026-11-25T09:10:00'),
+      ],
+      [],
+      'b',
+    );
+    expect(rows.map((row) => row.kind)).toEqual([
+      'day',
+      'item',
+      'day',
+      'unread',
+      'item',
+      'item',
+    ]);
+  });
+
   it('drops a marker once the notification it followed is gone', () => {
     const before = [
       item('a', '2026-11-25T09:00:00'),

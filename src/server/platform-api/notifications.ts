@@ -64,6 +64,12 @@ import {
   type NotificationResponseView,
 } from '~server/notifications/responses';
 import { MAX_NOTIFICATION_BODY_BYTES } from '~server/notifications/contract';
+import {
+  getReadState,
+  markNotificationsRead,
+  type NotificationReadState,
+  type NotificationReader,
+} from '~server/notifications/read-state';
 import { publicApiError } from './errors';
 import { publicApiContext } from './context';
 
@@ -183,6 +189,22 @@ function senderOf(context: HandlerContext): DirectSender {
     return { type: 'user', userId: user.id, name: user.name || user.email };
   }
   return AGENT_SENDER;
+}
+
+/** Whose read position a call uses: the caller, or the platform Agent for a Run. */
+function readerOf(context: HandlerContext): NotificationReader {
+  const sender = senderOf(context);
+  return sender.type === 'user'
+    ? { type: 'user', userId: sender.userId }
+    : { type: 'agent' };
+}
+
+function readState(state: NotificationReadState) {
+  return {
+    ...state,
+    readThroughId: none(state.readThroughId),
+    firstUnreadId: none(state.firstUnreadId),
+  };
 }
 
 /** A device destination belongs to the native login session that registered it. */
@@ -310,6 +332,20 @@ export function registerNotificationApi(router: ConnectRouter) {
       deleteNotification: async (input) => {
         await deleteNotification(input.id);
         return {};
+      },
+      getNotificationReadState: async (_input, context) => ({
+        state: readState(await getReadState(readerOf(context))),
+      }),
+      markNotificationsRead: async (input, context) => {
+        const through =
+          input.through.case === 'notificationId'
+            ? { notificationId: input.through.value }
+            : { latest: true as const };
+        return {
+          state: readState(
+            await markNotificationsRead(readerOf(context), through),
+          ),
+        };
       },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();

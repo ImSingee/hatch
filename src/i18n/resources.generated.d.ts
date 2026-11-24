@@ -99,4 +99,10 @@ export type TranslationResource = {
   'notifications.reply.chooseExactly_other': 'Choose {{count}}';
   'notifications.reply.chooseRange': 'Choose {{min}}–{{max}}';
   'notifications.reply.clear': 'Clear answer';
+  'nav.notificationsUnread_one': 'Notifications, {{count}} unread';
+  'nav.notificationsUnread_other': 'Notifications, {{count}} unread';
+  'notifications.timeline.unreadJump_one': '{{count}} unread · Jump to where you left off';
+  'notifications.timeline.unreadJump_other': '{{count}} unread · Jump to where you left off';
+  'notifications.timeline.unreadDivider_one': '{{count}} unread below';
+  'notifications.timeline.unreadDivider_other': '{{count}} unread below';
 };

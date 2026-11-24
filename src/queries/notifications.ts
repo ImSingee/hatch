@@ -3,6 +3,7 @@ import type { NotificationSourceType } from '~/db/schema';
 import {
   getApnsStatusFn,
   getNotificationFn,
+  getNotificationReadStateFn,
   listChannelsFn,
   listDestinationsFn,
   listGroupsFn,
@@ -89,4 +90,10 @@ export const notificationTimelineQueryOptions = infiniteQueryOptions({
     }),
   initialPageParam: null as string | null,
   getNextPageParam: (page) => page.nextCursor,
+});
+
+/** How far the signed-in user has read the timeline, on every device. */
+export const notificationReadStateQueryOptions = queryOptions({
+  queryKey: [...NOTIFICATIONS_KEY, 'read-state'],
+  queryFn: () => getNotificationReadStateFn(),
 });

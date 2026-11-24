@@ -1227,6 +1227,31 @@ export const notifications = snakeCase.table(
 );
 
 /**
+ * How far each reader has read the timeline: everything at or before
+ * (`activityAt`, `notificationId`) in timeline order is read. One row per
+ * user, shared by all their devices, and one for the platform Agent (Runs have
+ * no user of their own). The position only moves forward.
+ */
+export const notificationReadCursors = snakeCase.table(
+  'notification_read_cursors',
+  {
+    /** `user:<id>` or `agent`. */
+    reader: text().primaryKey(),
+    userId: text().references(() => user.id, { onDelete: 'cascade' }),
+    activityAt: timestamp('activity_at').notNull(),
+    /** Breaks ties between notifications with one activity time; "" before any. */
+    notificationId: text().notNull().default(''),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  () => [
+    check(
+      'notification_read_cursors_reader_check',
+      sql`("notification_read_cursors"."reader" = 'agent' and "notification_read_cursors"."user_id" is null) or "notification_read_cursors"."reader" = 'user:' || "notification_read_cursors"."user_id"`,
+    ),
+  ],
+);
+
+/**
  * Where notifications can be delivered. A device is one signed-in mobile
  * session; a webhook is an outbound URL; an app is an App whose manifest
  * accepts routed notifications.

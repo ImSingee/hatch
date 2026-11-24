@@ -39,6 +39,10 @@ import {
   updateResponseRoute,
   updateRoute,
 } from './notifications/service';
+import {
+  getReadState,
+  markNotificationsRead,
+} from './notifications/read-state';
 import { respondToNotification } from './notifications/responses';
 import { idSchema } from './validation';
 import type { JsonObject } from '~/db/schema';
@@ -64,6 +68,7 @@ export type {
   RouteView,
 } from './notifications/service';
 export type { NotificationResponseView } from './notifications/responses';
+export type { NotificationReadState } from './notifications/read-state';
 
 const shortText = z.string().max(200);
 const kindsSchema = z
@@ -132,6 +137,30 @@ export const respondToNotificationFn = createServerFn({ method: 'POST' })
       userId: user.id,
       via: 'web',
     });
+  });
+
+/** How far the signed-in user has read the timeline. */
+export const getNotificationReadStateFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const { user } = await requireSession();
+    return getReadState({ type: 'user', userId: user.id });
+  });
+
+const markReadSchema = z.union([
+  z.object({ notificationId: idSchema }),
+  z.object({ latest: z.literal(true) }),
+]);
+
+/** Move the signed-in user's read position forward. */
+export const markNotificationsReadFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: z.input<typeof markReadSchema>) =>
+    markReadSchema.parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { user } = await requireSession();
+    return markNotificationsRead({ type: 'user', userId: user.id }, data);
   });
 
 export const deleteNotificationFn = createServerFn({ method: 'POST' })

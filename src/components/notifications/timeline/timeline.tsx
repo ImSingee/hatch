@@ -1,9 +1,14 @@
 import { Button, Center, Loader, Tooltip } from '@mantine/core';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   IconArrowBackUp,
   IconArrowDown,
+  IconArrowUp,
   IconBell,
   IconBellOff,
   IconCheck,
@@ -11,6 +16,7 @@ import {
 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -23,10 +29,16 @@ import { UserAvatar } from '~components/auth/user-avatar';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { EmptyState } from '~components/page/page';
 import { useI18n, type Locale } from '~/i18n';
+import { useEventCallback } from '~hooks/use-latest-committed';
 import { formatExact } from '~lib/format';
-import { notificationTimelineQueryOptions } from '~queries/notifications';
+import {
+  notificationReadStateQueryOptions,
+  notificationTimelineQueryOptions,
+} from '~queries/notifications';
+import { markNotificationsReadFn } from '~server/notifications';
 import { NotificationLink } from '../notification-detail';
 import { ReplySection } from '../reply-section';
+import { useNotificationReadState } from '../use-notification-read-state';
 import {
   buildTimelineRows,
   nextMovedMarkers,
@@ -39,6 +51,10 @@ import classes from './timeline.module.css';
 const AT_END = 80;
 /** How close to the top, in px, loads the next older page. */
 const NEAR_TOP = 240;
+/** How long the newest must stay in view before it counts as read, in ms. */
+const READ_AFTER = 600;
+/** Most older pages a jump loads to reach the first unread notification. */
+const JUMP_PAGES = 20;
 
 /**
  * Remember where notifications were before their source moved them, while
@@ -63,22 +79,44 @@ function useMovedMarkers(items: TimelineItem[]): MovedMarker[] {
 /**
  * Every notification as one stream, oldest at the top. It opens at the
  * newest, follows new notifications while the reader is at the end, and
- * loads older pages when they scroll up.
+ * loads older pages when they scroll up. What was unread when it opened is
+ * marked by a divider with a jump back to it; reaching the end marks
+ * everything read on every device.
  */
 export function NotificationTimeline() {
   const { t, locale } = useI18n();
   const { data: session } = authClient.useSession();
+  const queryClient = useQueryClient();
   const query = useInfiniteQuery(notificationTimelineQueryOptions);
+  const readState = useNotificationReadState();
   const pages = query.data?.pages;
   const items = useMemo(
     () => (pages ?? []).flatMap((page) => page.items).reverse(),
     [pages],
   );
   const moved = useMovedMarkers(items);
-  const rows = useMemo(() => buildTimelineRows(items, moved), [items, moved]);
+
+  // What was unread when the page opened stays marked while it is open.
+  const [opened, setOpened] = useState<{
+    firstUnreadId: string | null;
+    count: number;
+  } | null>(null);
+  if (opened === null && readState.data) {
+    setOpened({
+      firstUnreadId: readState.data.firstUnreadId,
+      count: readState.data.unreadCount,
+    });
+  }
+  const [jumped, setJumped] = useState(false);
+  const firstUnreadId = opened?.firstUnreadId ?? null;
+  const rows = useMemo(
+    () => buildTimelineRows(items, moved, firstUnreadId),
+    [items, moved, firstUnreadId],
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const unreadRef = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
   // Set while an older page loads, to keep the rows in view where they were.
   const restore = useRef<{ pages: number; height: number; top: number }>(null);
@@ -109,12 +147,76 @@ export function NotificationTimeline() {
     return () => observer.disconnect();
   }, [query.isLoading]);
 
+  // The jump goes away once the divider has been in view.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const divider = unreadRef.current;
+    if (!scroller || !divider || jumped) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) setJumped(true);
+      },
+      { root: scroller },
+    );
+    observer.observe(divider);
+    return () => observer.disconnect();
+  }, [rows, jumped]);
+
+  const markRead = useMutation({
+    mutationFn: (notificationId: string) =>
+      markNotificationsReadFn({ data: { notificationId } }),
+    onSuccess: (state) =>
+      queryClient.setQueryData(
+        notificationReadStateQueryOptions.queryKey,
+        state,
+      ),
+  });
+  const newestId = items.at(-1)?.id;
+  // Reading means the newest has been on screen for a moment in a visible tab.
+  const readNewest = useEventCallback(() => {
+    if (
+      !newestId ||
+      !atEnd.current ||
+      document.visibilityState !== 'visible' ||
+      markRead.isPending ||
+      !readState.data ||
+      readState.data.unreadCount === 0
+    ) {
+      return;
+    }
+    markRead.mutate(newestId);
+  });
+  const unreadNow = readState.data?.unreadCount ?? 0;
+  useEffect(() => {
+    if (!newestId || unreadNow === 0) return;
+    const timer = setTimeout(readNewest, READ_AFTER);
+    return () => clearTimeout(timer);
+  }, [newestId, unreadNow, readNewest]);
+  useEffect(() => {
+    document.addEventListener('visibilitychange', readNewest);
+    return () => document.removeEventListener('visibilitychange', readNewest);
+  }, [readNewest]);
+
+  const jumpToUnread = async () => {
+    atEnd.current = false;
+    setJumped(true);
+    // The first unread notification may be on an older page.
+    for (let page = 0; !unreadRef.current && page < JUMP_PAGES; page += 1) {
+      const result = await query.fetchNextPage();
+      if (!result.hasNextPage) break;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    unreadRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
   const onScroll = () => {
     const scroller = scrollRef.current;
     if (!scroller) return;
+    const wasAtEnd = atEnd.current;
     atEnd.current =
       scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <
       AT_END;
+    if (atEnd.current && !wasAtEnd) readNewest();
     if (
       scroller.scrollTop < NEAR_TOP &&
       query.hasNextPage &&
@@ -166,6 +268,18 @@ export function NotificationTimeline() {
       onScroll={onScroll}
       aria-label={t('notifications.timeline.label')}
     >
+      {opened && opened.count > 0 && !jumped ? (
+        <div className={classes.jump}>
+          <button
+            type="button"
+            className={classes.jumpButton}
+            onClick={() => void jumpToUnread()}
+          >
+            <IconArrowUp size={14} stroke={2.4} aria-hidden />
+            {t('notifications.timeline.unreadJump', { count: opened.count })}
+          </button>
+        </div>
+      ) : null}
       <div ref={contentRef} className={classes.column}>
         <p className={classes.edge}>
           {query.hasNextPage
@@ -178,6 +292,14 @@ export function NotificationTimeline() {
               return (
                 <div key={row.key} className={classes.day}>
                   {dayLabel(row.date, locale, t)}
+                </div>
+              );
+            case 'unread':
+              return (
+                <div key={row.key} ref={unreadRef} className={classes.unread}>
+                  {t('notifications.timeline.unreadDivider', {
+                    count: opened?.count ?? 0,
+                  })}
                 </div>
               );
             case 'moved':

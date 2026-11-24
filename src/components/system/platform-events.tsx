@@ -46,6 +46,11 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       if (!notificationId) return null;
       return { type, notificationId } satisfies PlatformEvent;
     }
+    if (type === 'notification.read') {
+      const reader = stringField(value, 'reader');
+      if (!reader) return null;
+      return { type, reader } satisfies PlatformEvent;
+    }
     if (type === 'notification.delivery.updated') {
       const notificationId = stringField(value, 'notificationId');
       const deliveryId = stringField(value, 'deliveryId');

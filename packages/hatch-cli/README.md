@@ -776,6 +776,8 @@ hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.
 hatch notification respond <notification-id> --answer decision=approve --json
 hatch notification list --reply-state awaiting
 hatch notification list --order activity
+hatch notification unread
+hatch notification mark-read --latest
 ```
 
 A notification takes one answer and it is final: answering again, or answering

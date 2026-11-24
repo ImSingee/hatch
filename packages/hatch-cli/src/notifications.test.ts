@@ -784,3 +784,21 @@ describe('notification reply commands', () => {
     );
   });
 });
+
+describe('read position commands', () => {
+  it('marks through one notification or all of them, and needs exactly one', () => {
+    expect(parse('mark-read', '--through', 'n-1').request).toMatchObject({
+      through: { case: 'notificationId', value: 'n-1' },
+    });
+    expect(parse('mark-read', '--latest').request).toMatchObject({
+      through: { case: 'latest', value: true },
+    });
+    expect(() => parse('mark-read')).toThrow(
+      'Supply --through <notification-id> or --latest.',
+    );
+    expect(() => parse('mark-read', '--through', 'n-1', '--latest')).toThrow(
+      'Use either --through <notification-id> or --latest, not both.',
+    );
+    expect(parse('unread').method).toBe('getNotificationReadState');
+  });
+});
