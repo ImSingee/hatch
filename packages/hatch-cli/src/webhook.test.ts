@@ -362,6 +362,55 @@ describe('server-sent event subscriptions', () => {
     });
   });
 
+  it('honors a resume ID reset that carries no event', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.write('id: 5\ndata: one\n\nid:\n\n');
+    };
+    vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await expect(sse('--json', '--idle-timeout', '0.2')).rejects.toMatchObject({
+      code: 'stream_idle_timeout',
+      message: expect.stringContaining('resubscribe from the start'),
+      details: { lastEventId: null, events: 1 },
+    });
+  });
+
+  it('ends or cancels normally while stdout never drains', async () => {
+    stream = (_, response) => {
+      open(response);
+      const timer = setInterval(() => response.write(': ping\n\n'), 30);
+      response.on('close', () => clearInterval(timer));
+    };
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(false);
+    await sse('--json', '--max-duration', '0.2');
+    expect(records(output).at(-1)).toMatchObject({
+      type: 'end',
+      ok: true,
+      reason: 'max_duration',
+    });
+
+    const cancel = new AbortController();
+    setTimeout(() => cancel.abort(), 200);
+    await expect(
+      runWebhook(
+        [
+          'app',
+          'invoke',
+          'webhook',
+          'id',
+          '--method',
+          'GET',
+          '--path',
+          'stream',
+          '--sse',
+          '--json',
+        ],
+        0,
+        cancel.signal,
+      ),
+    ).rejects.toMatchObject({ code: 'cancelled', exitCode: 130 });
+  });
+
   it('reports interrupted, non-2xx and non-stream responses distinctly', async () => {
     stream = (_, response) => {
       open(response);

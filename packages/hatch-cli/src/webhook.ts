@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { credentialHeaders, platformClient } from './client';
 import { configPath, resolveCredential } from './config';
 import { argumentsError, CliError } from './error';
-import { type SseEvent, SseParser } from './sse';
+import { type SseEvent, type SseIdChange, SseParser } from './sse';
 
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -368,9 +368,9 @@ async function streamEvents(
   // Resume data follows what reached stdout, not what the parser has seen:
   // an event parsed but not yet written must not be skipped on resume.
   const delivered = { lastEventId: null as string | null, events: 0 };
-  const deliver = (event: SseEvent) => {
-    delivered.lastEventId = event.id;
-    delivered.events++;
+  const deliver = (item: SseEvent | SseIdChange) => {
+    delivered.lastEventId = item.id;
+    if (item.type === 'event') delivered.events++;
   };
   const resume = () =>
     delivered.lastEventId === null
@@ -394,26 +394,28 @@ async function streamEvents(
           call.abort(new Error('max-duration'));
         }, options.maxMs);
   const output = AbortSignal.any([signal, call.signal]);
-  const emit = (record: unknown, during = output) =>
-    write(`${JSON.stringify(record)}\n`, during);
+  const emit = (record: unknown) =>
+    write(`${JSON.stringify(record)}\n`, output);
   try {
-    if (options.json)
-      await emit({ type: 'open', status: response.status, contentType });
-    armIdle();
     try {
+      // Inside the stop handling: a backpressured open record still ends by
+      // --max-duration or cancellation, not as an internal error.
+      if (options.json)
+        await emit({ type: 'open', status: response.status, contentType });
+      armIdle();
       if (response.body)
         for await (const chunk of response.body) {
           // The idle timer covers only waiting for the App. Suspend it while
           // stdout applies backpressure, then restart it for the next chunk.
           clearTimeout(idleTimer);
           if (options.json)
-            for (const event of parser.push(chunk)) {
-              await emit(event);
-              deliver(event);
+            for (const item of parser.push(chunk)) {
+              if (item.type === 'event') await emit(item);
+              deliver(item);
             }
           else {
             await write(chunk, output);
-            for (const event of parser.push(chunk)) deliver(event);
+            for (const item of parser.push(chunk)) deliver(item);
           }
           armIdle();
         }
@@ -455,8 +457,11 @@ async function streamEvents(
     }
     const reason = stop === 'max' ? 'max_duration' : 'closed';
     if (options.json)
-      // The stream signal may already be aborted by --max-duration.
-      await emit({ type: 'end', ok: true, reason, ...details() }, signal);
+      // Queue the final record without waiting for drain: the stream signal
+      // may already be aborted, and a stuck reader must not hold the exit.
+      process.stdout.write(
+        `${JSON.stringify({ type: 'end', ok: true, reason, ...details() })}\n`,
+      );
     else
       process.stderr.write(
         `Stream ${reason === 'closed' ? 'closed by the App' : 'reached --max-duration'} after ${delivered.events} events; last event ID: ${delivered.lastEventId ?? 'none'}.\n`,

@@ -11,6 +11,12 @@ export type SseEvent = {
   retry?: number;
 };
 
+/**
+ * A data-less block that changed the last event ID (for example `id:` alone
+ * to reset it). It dispatches no event, but it moves the resume point.
+ */
+export type SseIdChange = { type: 'id'; id: string | null };
+
 /** Largest event (pending line plus buffered data), in UTF-16 code units. */
 export const MAX_SSE_EVENT_LENGTH = 1024 * 1024;
 
@@ -40,11 +46,12 @@ export class SseParser {
   }
 
   /**
-   * Feed raw bytes and yield the events they complete, one at a time. A
+   * Feed raw bytes and yield the events they complete, plus every last event
+   * ID change from a data-less block, one at a time, in stream order. A
    * failure (an oversized event) throws only once the events before it in the
    * same chunk have been taken, so the caller can deliver them first.
    */
-  push(chunk: Uint8Array): Generator<SseEvent, void, undefined> {
+  push(chunk: Uint8Array): Generator<SseEvent | SseIdChange, void, undefined> {
     // TextDecoder drops a leading BOM and holds split multi-byte sequences.
     return this.#feed(this.#decoder.decode(chunk, { stream: true }));
   }
@@ -57,7 +64,7 @@ export class SseParser {
     for (const _ of this.#feed(this.#decoder.decode()));
   }
 
-  *#feed(text: string): Generator<SseEvent, void, undefined> {
+  *#feed(text: string): Generator<SseEvent | SseIdChange, void, undefined> {
     let start = 0;
     // A CR ended the previous chunk; an LF opening this one completes CRLF.
     if (this.#skipLineFeed && text) {
@@ -96,7 +103,7 @@ export class SseParser {
       );
   }
 
-  #processLine(line: string): SseEvent | undefined {
+  #processLine(line: string): SseEvent | SseIdChange | undefined {
     if (line === '') return this.#dispatch();
     if (line.startsWith(':')) return;
     const colon = line.indexOf(':');
@@ -115,9 +122,10 @@ export class SseParser {
     }
   }
 
-  #dispatch(): SseEvent | undefined {
+  #dispatch(): SseEvent | SseIdChange | undefined {
     // The resume ID advances only when a block completes, so an interrupted
     // block's id never points past an event that was not delivered.
+    const idChanged = this.#lastEventId !== this.#pendingEventId;
     this.#lastEventId = this.#pendingEventId;
     const retry = this.#blockRetry;
     const hasData = this.#hasData;
@@ -132,7 +140,8 @@ export class SseParser {
     this.#hasData = false;
     this.#event = '';
     this.#blockRetry = undefined;
-    if (!hasData) return;
+    if (!hasData)
+      return idChanged ? { type: 'id', id: this.lastEventId } : undefined;
     return result;
   }
 }

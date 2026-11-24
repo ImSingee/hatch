@@ -5,11 +5,12 @@ const bytes = (text: string) => new TextEncoder().encode(text);
 
 function parse(chunks: (string | Uint8Array)[], max?: number) {
   const parser = new SseParser(max);
-  const events = chunks.flatMap((chunk) => [
+  const items = chunks.flatMap((chunk) => [
     ...parser.push(typeof chunk === 'string' ? bytes(chunk) : chunk),
   ]);
+  const events = items.filter((item) => item.type === 'event');
   parser.end();
-  return { events, parser };
+  return { events, items, parser };
 }
 
 describe('server-sent event parsing contract', () => {
@@ -75,6 +76,14 @@ describe('server-sent event parsing contract', () => {
     expect(() => events.next()).toThrow(
       expect.objectContaining({ code: 'stream_event_too_large' }),
     );
+  });
+
+  it('reports a resume ID reset from a data-less block', () => {
+    const { items } = parse(['id: 5\ndata: one\n\nid:\n\n: ping\n\n']);
+    expect(items).toEqual([
+      { type: 'event', event: 'message', id: '5', data: 'one' },
+      { type: 'id', id: null },
+    ]);
   });
 
   it('advances the resume ID only when an event block completes', () => {
