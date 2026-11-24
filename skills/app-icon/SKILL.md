@@ -49,8 +49,9 @@ those commands directly. The steps below are for designing a new icon.
    ```
 
    Never use `--count` above 1 for icon candidates. Each result has an `id`
-   and a `path`. Candidates expire after one day. If one command fails, show
-   the candidates that succeeded rather than retrying at once.
+   and a `path`. Candidates expire after one day. When a command fails,
+   handle it as listed under Failures, then show whatever candidates
+   succeeded; with none, tell the user why and stop.
 
 4. Call `ask` with one question whose text shows the candidates as Markdown
    images, using each `path` exactly as returned and a letter label:
@@ -130,8 +131,9 @@ asks for colour or a light background makes generation fail.
 
 - `CONFLICT` "No image model is configured": step 1 applies.
 - `BAD_REQUEST` naming the image provider: relay the provider's reason; do
-  not retry the same prompt.
-- `TOO_MANY_REQUESTS`: the hourly image limit is reached; tell the user and
-  stop.
-- `BAD_REQUEST` "not a white glyph on black": the model ignored the style;
-  generate once more with the template unchanged.
+  not retry that prompt.
+- `TOO_MANY_REQUESTS`: the hourly image limit is reached; generate nothing
+  more, tell the user, and still offer the candidates that succeeded.
+- `BAD_REQUEST` "not a white glyph on black": the model ignored the style.
+  Generate that subject once more with the template unchanged; if it fails
+  again, drop it. This is the only failure worth retrying.
