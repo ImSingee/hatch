@@ -255,6 +255,9 @@ one of several image models (the first usable one when unset) and whose
 response names the `image_model_id` used. `GetImageModel`, `SetImageModel`,
 `ClearImageModel` and their messages, which managed a single instance-wide
 selection, have been removed without aliases; the CLI ships with the platform. All accept every credential type. `SetAppIcon` takes either
+`ModelService/ListModels` lists every provider model with its kind (paged like
+`ListDashboards`) and `SetModelKind` moves one between `chat` and `image`, the
+same change the Web model form's Category field makes.
 image bytes (its own 4 MiB message ceiling) or a candidate id. `Resource`
 gains the optional `icon_path` for Apps with an icon. Image bytes are fetched
 over plain authenticated HTTP, not RPC. See [App icons](app-icons.md).

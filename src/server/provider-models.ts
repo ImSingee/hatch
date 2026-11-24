@@ -135,6 +135,56 @@ export async function updateProviderModel(
   return row;
 }
 
+export type ProviderModelView = {
+  id: string;
+  providerId: string;
+  providerName: string;
+  modelId: string;
+  name: string;
+  kind: AgentModelKind;
+  description: string;
+  enabled: boolean;
+};
+
+/** Every provider model, in provider order then model order. */
+export async function listProviderModels(
+  kind?: AgentModelKind,
+): Promise<ProviderModelView[]> {
+  const providers = await db.query.agentProviders.findMany({
+    columns: { id: true, name: true },
+    orderBy: { sortOrder: 'asc', createdAt: 'asc' },
+  });
+  const models = await db.query.agentModels.findMany({
+    where: kind ? { kind } : {},
+    orderBy: { sortOrder: 'asc', createdAt: 'asc' },
+  });
+  return providers.flatMap((provider) =>
+    models
+      .filter((model) => model.providerId === provider.id)
+      .map((model) => ({
+        id: model.id,
+        providerId: provider.id,
+        providerName: provider.name,
+        modelId: model.modelId,
+        name: model.name,
+        kind: model.kind,
+        description: model.description,
+        enabled: model.enabled,
+      })),
+  );
+}
+
+/** Move a model between chat and image, as the Web model form can. */
+export async function setProviderModelKind(
+  id: string,
+  kind: AgentModelKind,
+): Promise<ProviderModelView> {
+  await updateProviderModel({ id, kind });
+  const model = (await listProviderModels()).find((item) => item.id === id);
+  if (!model) throw new AppError('Model not found.', 404);
+  return model;
+}
+
 export async function deleteProviderModel(
   id: string,
   kind?: AgentModelKind,

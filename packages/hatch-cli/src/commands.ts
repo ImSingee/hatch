@@ -216,6 +216,18 @@ const definitions: readonly CliCommandDefinition[] = [
       'Delete the App icon so the App shows its monogram again. Succeeds when there is none.',
   },
   {
+    path: ['model', 'list'],
+    usage: 'model list [--kind chat|image] [--limit <n>] [--cursor <cursor>]',
+    description:
+      'List the models under every provider in provider order: id, provider, provider model id, name, kind (chat runs the Agent, image generates images), description and enabled. --kind keeps one kind. --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys.',
+  },
+  {
+    path: ['model', 'set-kind'],
+    usage: 'model set-kind <model-id> --kind chat|image',
+    description:
+      'Move a model between chat and image, like the Category field of the Web model form. A model made image leaves the Agent model picker and becomes available to image generate; only providers whose API can generate images accept image. Prints the model.',
+  },
+  {
     path: ['image-model', 'list'],
     usage: 'image-model list [--limit <n>] [--cursor <cursor>]',
     description:

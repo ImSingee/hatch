@@ -32,6 +32,7 @@ interface.
 | ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
 | Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed  |
+| Model category   | model list / set-kind                                                                               | ModelService/ListModels, SetModelKind; every provider model with its kind, moved like the Web Category field     |
 | Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap           |
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
@@ -42,8 +43,9 @@ Not covered by the CLI: providers and their chat models (create, edit, API
 keys) remain Web-only. Image models are the provider models of kind `image`;
 the CLI covers every field the Web form sets for them (model id, name,
 description) but only on providers that already exist, and cannot create
-one. Switching a model between chat and image in the Web form stays Web-only
-with the chat models it touches. See [App icons](app-icons.md).
+one. `model list` shows every provider model (chat and image) and
+`model set-kind` moves one between the two kinds, as the Web Category field
+does; the other chat model settings stay Web-only. See [App icons](app-icons.md).
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`

@@ -12,6 +12,7 @@ import { parsePreferencesCommand, runPreferences } from './preferences';
 import { runNotification } from './notifications';
 import { runImage } from './image';
 import { runTheme } from './theme';
+import { runModel } from './model';
 import { runDashboard } from './dashboard';
 import { runPin } from './pin';
 import { publicError } from './client';
@@ -136,6 +137,7 @@ try {
   else if (name === 'notification')
     await runNotification(args, offset, controller.signal);
   else if (name === 'theme') await runTheme(args, offset, controller.signal);
+  else if (name === 'model') await runModel(args, offset, controller.signal);
   else if (name === 'pin') await runPin(args, offset, controller.signal);
   else if (name === 'dashboard')
     await runDashboard(args, offset, controller.signal);

@@ -101,6 +101,11 @@ import {
 } from '~server/images/model';
 
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import { ModelService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/model_pb';
+import {
+  listProviderModels,
+  setProviderModelKind,
+} from '~server/provider-models';
 import { getThemeState, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
@@ -813,6 +818,21 @@ export function registerPlatformApi(
         candidates: result.images,
       };
     },
+  });
+  router.service(ModelService, {
+    listModels: async (input) => {
+      const page = listPage(
+        await listProviderModels(input.kind as 'chat' | 'image' | undefined),
+        input,
+      );
+      return { models: page.items, nextCursor: page.nextCursor };
+    },
+    setModelKind: async (input) => ({
+      model: await setProviderModelKind(
+        input.id,
+        input.kind as 'chat' | 'image',
+      ),
+    }),
   });
   router.service(ThemeService, {
     getTheme: async () => ({ theme: await getThemeState() }),

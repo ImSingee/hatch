@@ -448,6 +448,8 @@ promise compatibility with older CLI binaries.
 ## App icons and image generation
 
 ```sh
+hatch model list --kind chat --json
+hatch model set-kind <model-id> --kind image
 hatch image-model list --json
 hatch image-model add --provider <provider-id> --model-id gpt-image-1-mini \
   --name 'GPT Image Mini' --description 'Fast, cheap drafts'
@@ -462,7 +464,11 @@ hatch image-model remove <image-model-id> --yes
 ```
 
 An instance can have several image models, each a provider model of the
-image category with an optional description of what it suits.
+image category with an optional description of what it suits. `model list`
+shows every provider model with its `kind` (`--kind` filters, `--limit` and
+`--cursor` page), and `model set-kind` moves a model between `chat` and
+`image` like the Web form's Category field; `image` is refused on a provider
+whose API cannot generate images.
 `image-model list` prints every model with its `id`, whether it is `usable`,
 the `defaultModelId` and the providers that can hold image models with
 suggested model ids; `--limit` (1 to 100) prints one page of models and a

@@ -14,8 +14,13 @@ const {
   resolveImageModel,
   updateImageModel,
 } = await import('./model');
-const { assertApiTypeKeepsModels, createProviderModel, updateProviderModel } =
-  await import('~server/provider-models');
+const {
+  assertApiTypeKeepsModels,
+  createProviderModel,
+  listProviderModels,
+  setProviderModelKind,
+  updateProviderModel,
+} = await import('~server/provider-models');
 const { getAgentModelCatalog } = await import('~server/agent-model-catalog');
 
 const FIRST = '01JZZZZZZZZZZZZZZZZZZZZZZA';
@@ -165,8 +170,16 @@ describe('image models', () => {
     expect((await resolveImageModel()).id).toBe(chat.id);
     expect((await getAgentModelCatalog()).providers).toEqual([]);
 
-    await updateProviderModel({ id: chat.id, kind: 'chat' });
+    // The public call moves it back, as the Web form's Category does.
+    expect(await setProviderModelKind(chat.id, 'chat')).toMatchObject({
+      id: chat.id,
+      kind: 'chat',
+    });
     await expect(resolveImageModel()).rejects.toMatchObject({ status: 409 });
+    expect((await listProviderModels('image')).map((m) => m.id)).toEqual([]);
+    expect((await listProviderModels('chat')).map((m) => m.id)).toEqual([
+      chat.id,
+    ]);
 
     const claude = await createProviderModel({
       providerId: CLAUDE,
@@ -174,7 +187,7 @@ describe('image models', () => {
       modelId: 'claude-model',
     });
     await expect(
-      updateProviderModel({ id: claude.id, kind: 'image' }),
+      setProviderModelKind(claude.id, 'image'),
     ).rejects.toMatchObject({ status: 400 });
   });
 

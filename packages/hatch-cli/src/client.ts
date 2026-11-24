@@ -40,6 +40,10 @@ import {
   type ThemeState,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import {
+  ModelService,
+  type ProviderModel,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/model_pb';
+import {
   PinService,
   type PinnedApp,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/pin_pb';
@@ -146,6 +150,19 @@ const icon = (app: string, value: AppIcon | undefined) => ({
   path: required(value).path ?? null,
   sizes: required(value).sizes,
 });
+const providerModel = (value: ProviderModel | undefined) => {
+  const model = required(value);
+  return {
+    id: model.id,
+    providerId: model.providerId,
+    providerName: model.providerName,
+    modelId: model.modelId,
+    name: model.name,
+    kind: model.kind,
+    description: model.description,
+    enabled: model.enabled,
+  };
+};
 const theme = (value: ThemeState | undefined) => {
   const state = required(value);
   return {
@@ -392,6 +409,7 @@ export function cliClient(transport: Transport) {
   const sdk = createClient(SdkService, transport);
   const images = createClient(ImageService, transport);
   const themes = createClient(ThemeService, transport);
+  const models = createClient(ModelService, transport);
   const pins = createClient(PinService, transport);
   const dashboards = createClient(DashboardService, transport);
   const preferences = createClient(PreferenceService, transport);
@@ -493,6 +511,21 @@ export function cliClient(transport: Transport) {
           ).detail,
         ),
       }),
+    },
+    models: {
+      list: async (input: {
+        kind?: string;
+        limit: number;
+        cursor?: string;
+      }) => {
+        const result = await models.listModels(input);
+        return {
+          models: result.models.map(providerModel),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
+      setKind: async (input: { id: string; kind: string }) =>
+        providerModel((await models.setModelKind(input)).model),
     },
     theme: {
       get: async () => theme((await themes.getTheme({})).theme),
