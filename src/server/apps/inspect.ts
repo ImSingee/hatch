@@ -42,7 +42,7 @@ function enabledCapabilities(
   return CAPABILITY_KEYS.filter((key) => caps[key]);
 }
 
-export type AppSummary = {
+type AppSummary = {
   id: string;
   slug: string;
   name: string;

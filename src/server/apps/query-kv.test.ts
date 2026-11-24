@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueryAppKvRequest } from '~agent/protocol';
+import type { QueryAppKvRequest } from '~/platform-api/data-schemas';
 
 vi.mock('~/db', async () => {
   const { createTestDb } = await import('~/db/test-db');
@@ -11,7 +11,7 @@ vi.stubEnv('APP_URL', 'https://public.example.test');
 vi.stubEnv('SECRET', 'platform-secret');
 
 const { db, schema } = await import('~/db');
-const { queryAppKvRequestSchema } = await import('~agent/protocol');
+const { queryAppKvRequestSchema } = await import('~/platform-api/data-schemas');
 const { listKvPage } = await import('./kv');
 const { queryAppKv: executeQueryAppKv } = await import('./query-kv');
 

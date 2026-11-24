@@ -1,329 +1,139 @@
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { validateToolArguments } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import type { PlatformClient } from '../platform-client';
-import { createAppTools } from './apps';
+import { z } from 'zod';
+import { text, tool } from './shared';
+
+/**
+ * The shared `tool()` boundary every Agent tool goes through. A model may
+ * spell an omitted optional field as null, "", [], {} or 0; each must behave
+ * exactly like omission, while required data, explicit false and nonempty
+ * wrong types keep strict validation.
+ */
+const EMPTY_SPELLINGS = [null, '', [], {}, 0] as const;
+
+function boundaryTool() {
+  const received = vi.fn<(params: unknown) => void>();
+  const definition = tool({
+    name: 'boundary_probe',
+    label: 'Boundary probe',
+    description: 'Exercises the shared argument boundary.',
+    parameters: z.object({
+      id: z.string().min(1),
+      mode: z.enum(['list', 'query']),
+      data: z.record(z.string(), z.unknown()),
+      table: z.string().min(1).optional(),
+      cursor: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      order: z
+        .object({
+          field: z.string().min(1),
+          direction: z.enum(['asc', 'desc']).optional(),
+        })
+        .optional(),
+      tags: z.array(z.string()).optional(),
+      flag: z.boolean().optional(),
+    }),
+    execute: async (_id, params) => {
+      received(params);
+      return text('ok');
+    },
+  });
+  return { definition, received };
+}
+
+/** The provider path: prepare, validate against the declared schema, run. */
+async function call(definition: AgentTool, args: Record<string, unknown>) {
+  const prepared = definition.prepareArguments!(args) as Record<
+    string,
+    unknown
+  >;
+  const validated = validateToolArguments(definition, {
+    type: 'toolCall',
+    id: 'call',
+    name: definition.name,
+    arguments: prepared,
+  });
+  return definition.execute('call', validated);
+}
+
+const baseline = { id: 'sample', mode: 'query', data: { a: 1 } };
 
 describe('optional tool empty values', () => {
-  it.each([null, '', [], {}, 0])(
-    'makes populated %j controls equivalent to omission before platform calls',
+  it.each(EMPTY_SPELLINGS)(
+    'makes populated %j optional fields equivalent to omission',
     async (empty) => {
-      const queryAppKv = vi
-        .fn<PlatformClient['queryAppKv']>()
-        .mockResolvedValue({ action: 'list', items: [], nextCursor: null });
-      const queryAppDataTable = vi
-        .fn<PlatformClient['queryAppDataTable']>()
-        .mockImplementation(async (_id, input) =>
-          input.action === 'mutate'
-            ? { action: 'mutate', results: [], revision: 1 }
-            : {
-                action: 'query',
-                items: [],
-                cursor: null,
-                revision: 1,
-                truncated: false,
-              },
-        );
-      const tools = createAppTools({
-        platform: {
-          queryAppKv,
-          queryAppDataTable,
-        } as unknown as PlatformClient,
-      });
-      const kv = tools.find((t) => t.name === 'query_app_kv')!;
-      const data = tools.find((t) => t.name === 'query_app_data_table')!;
-      const inputs = [
-        {
-          tool: kv,
-          baseline: { id: 'sample-app', action: 'list' },
-          filled: {
-            id: 'sample-app',
-            action: 'list',
-            key: empty,
-            value: empty,
-            secret: empty,
-            cursor: empty,
-            limit: empty,
-            reveal_secrets: empty,
-          },
-          calls: queryAppKv,
-        },
-        {
-          tool: data,
-          baseline: { id: 'sample-app', action: 'query', table: 'todos' },
-          filled: {
-            id: 'sample-app',
-            action: 'query',
-            table: 'todos',
-            where: empty,
-            order_by: empty,
-            cursor: empty,
-            limit: empty,
-            operations: empty,
-            sql: empty,
-            timeout_ms: empty,
-          },
-          calls: queryAppDataTable,
-        },
-        {
-          tool: data,
-          baseline: {
-            id: 'sample-app',
-            action: 'query',
-            table: 'todos',
-            order_by: { field: 'title' },
-          },
-          filled: {
-            id: 'sample-app',
-            action: 'query',
-            table: 'todos',
-            order_by: { field: 'title', direction: empty },
-          },
-          calls: queryAppDataTable,
-        },
-        {
-          tool: data,
-          baseline: {
-            id: 'sample-app',
-            action: 'mutate',
-            operations: [{ type: 'insert', table: 'todos', value: {} }],
-          },
-          filled: {
-            id: 'sample-app',
-            action: 'mutate',
-            operations: [
-              {
-                type: 'insert',
-                table: 'todos',
-                value: {},
-                id: empty,
-                field: empty,
-                amount: empty,
-                unset: empty,
-              },
-            ],
-            table: empty,
-            where: empty,
-            order_by: empty,
-            cursor: empty,
-            limit: empty,
-            sql: empty,
-            timeout_ms: empty,
-          },
-          calls: queryAppDataTable,
-        },
-      ];
-      for (const { tool, baseline, filled, calls } of inputs) {
-        await tool.execute('omitted', baseline);
-        const omittedCall = structuredClone(calls.mock.lastCall);
-        const original = structuredClone(filled);
-        expect(() =>
-          validateToolArguments(tool, {
-            type: 'toolCall',
-            id: 'schema',
-            name: tool.name,
-            arguments: filled,
-          }),
-        ).not.toThrow();
-        const prepared = tool.prepareArguments!(filled) as Record<
-          string,
-          unknown
-        >;
-        await tool.execute(
-          'filled',
-          validateToolArguments(tool, {
-            type: 'toolCall',
-            id: 'filled',
-            name: tool.name,
-            arguments: prepared,
-          }),
-        );
-        expect(calls.mock.lastCall).toEqual(omittedCall);
-        expect(filled).toEqual(original);
-      }
+      const { definition, received } = boundaryTool();
+      await call(definition, baseline);
+      const omitted = received.mock.lastCall?.[0];
+      const filled = {
+        ...baseline,
+        table: empty,
+        cursor: empty,
+        limit: empty,
+        order: empty,
+        tags: empty,
+        flag: empty,
+      };
+      const original = structuredClone(filled);
+
+      await call(definition, filled);
+
+      expect(received.mock.lastCall?.[0]).toEqual(omitted);
+      expect(filled).toEqual(original);
     },
   );
 
-  it('preserves valid enum values and nonempty string zero outside enums through provider validation', async () => {
-    const queryAppDataTable = vi
-      .fn<PlatformClient['queryAppDataTable']>()
-      .mockResolvedValue({
-        action: 'query',
-        items: [],
-        cursor: null,
-        revision: 1,
-        truncated: false,
-      });
-    const data = createAppTools({
-      platform: { queryAppDataTable } as unknown as PlatformClient,
-    }).find((tool) => tool.name === 'query_app_data_table')!;
-    const args = {
-      id: 'sample-app',
-      action: 'query',
-      table: 'todos',
+  it('preserves valid enum values and nonempty string zero', async () => {
+    const { definition, received } = boundaryTool();
+    await call(definition, {
+      ...baseline,
       cursor: '0',
-      order_by: { field: 'title', direction: 'desc' },
-    };
-    await data.execute(
-      'valid',
-      validateToolArguments(data, {
-        type: 'toolCall',
-        id: 'valid',
-        name: data.name,
-        arguments: data.prepareArguments!(args) as Record<string, unknown>,
-      }),
-    );
-    expect(queryAppDataTable.mock.lastCall?.[1]).toEqual({
-      action: 'query',
-      table: 'todos',
-      where: [],
-      limit: 50,
+      order: { field: 'title', direction: 'desc' },
+    });
+
+    expect(received.mock.lastCall?.[0]).toMatchObject({
       cursor: '0',
-      orderBy: { field: 'title', direction: 'desc' },
+      order: { field: 'title', direction: 'desc' },
     });
   });
 
   it('keeps required empty data and explicit false, and rejects nonempty wrong types', async () => {
-    const queryAppKv = vi.fn<PlatformClient['queryAppKv']>().mockResolvedValue({
-      action: 'set',
-      record: {
-        key: 'empty',
-        value: '',
-        secret: false,
-        createdAt: '',
-        updatedAt: '',
-      },
-    });
-    const queryAppDataTable = vi
-      .fn<PlatformClient['queryAppDataTable']>()
-      .mockResolvedValue({ action: 'mutate', results: [], revision: 1 });
-    const tools = createAppTools({
-      platform: { queryAppKv, queryAppDataTable } as unknown as PlatformClient,
-    });
-    const kv = tools.find((t) => t.name === 'query_app_kv')!;
-    const data = tools.find((t) => t.name === 'query_app_data_table')!;
-    await kv.execute('empty-write', {
-      id: 'sample-app',
-      action: 'set',
-      key: 'empty',
-      value: '',
-      secret: false,
-    });
-    expect(queryAppKv).toHaveBeenLastCalledWith(
-      'sample-app',
-      { action: 'set', key: 'empty', value: '', secret: false },
-      undefined,
-    );
-    const value = {
-      text: '',
-      nullable: null,
-      list: [],
-      object: {},
-      zero: 0,
+    const { definition, received } = boundaryTool();
+    await call(definition, { ...baseline, data: {}, flag: false });
+    expect(received.mock.lastCall?.[0]).toMatchObject({
+      data: {},
       flag: false,
-    };
-    await data.execute('data', {
-      id: 'sample-app',
-      action: 'mutate',
-      operations: [
-        { type: 'insert', table: 'todos', value },
-        {
-          type: 'increment',
-          table: 'stats',
-          id: 'row-1',
-          field: 'count',
-          amount: 0,
-        },
-      ],
     });
-    expect(queryAppDataTable.mock.lastCall?.[1]).toEqual({
-      action: 'mutate',
-      operations: [
-        { type: 'insert', table: 'todos', value },
-        {
-          type: 'increment',
-          table: 'stats',
-          id: 'row-1',
-          field: 'count',
-          amount: 0,
-        },
+
+    received.mockClear();
+    for (const [args, error] of [
+      [{ ...baseline, limit: '0' }, /argument limit: expected integer/],
+      [{ ...baseline, limit: false }, /argument limit: expected integer/],
+      [{ ...baseline, mode: 'other' }, /Validation failed/],
+      [
+        { ...baseline, order: { field: 'title', direction: 'sideways' } },
+        /argument order\.direction/,
       ],
-    });
-    queryAppKv.mockClear();
-    queryAppDataTable.mockClear();
-    for (const args of [
-      { id: 'sample-app', action: 'query', table: 'todos', where: false },
-      { id: 'sample-app', action: 'query', table: 'todos', limit: false },
-      { id: 'sample-app', action: 'inspect', unknown: null },
-      { id: 'sample-app', action: 'inspect', cursor: 'wrong-action' },
-      {
-        id: 'sample-app',
-        action: 'mutate',
-        operations: [
-          {
-            type: 'increment',
-            table: 'stats',
-            id: 'row-1',
-            field: 'count',
-            amount: null,
-          },
-        ],
-      },
-    ]) {
-      await expect(data.execute('invalid', args)).rejects.toThrow(
-        /where|limit|amount|declared|unrecognized|cursor/i,
-      );
+      [{ ...baseline, tags: 'a' }, /argument tags: expected array/],
+    ] as const) {
+      await expect(call(definition, args)).rejects.toThrow(error);
     }
-    for (const value of [null, [], {}, 0]) {
-      await expect(
-        kv.execute('invalid-data', {
-          id: 'sample-app',
-          action: 'set',
-          key: 'empty',
-          value,
-        }),
-      ).rejects.toThrow(/value/i);
-    }
-    expect(queryAppKv).not.toHaveBeenCalled();
-    expect(queryAppDataTable).not.toHaveBeenCalled();
+    expect(received).not.toHaveBeenCalled();
   });
 
-  it.each([null, '', [], {}, 0])(
-    'gives the same required-field errors for omission and %j',
+  it.each(EMPTY_SPELLINGS)(
+    'rejects %j in a required field just like omission',
     async (empty) => {
-      const queryAppKv = vi.fn<PlatformClient['queryAppKv']>();
-      const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
-      const tools = createAppTools({
-        platform: {
-          queryAppKv,
-          queryAppDataTable,
-        } as unknown as PlatformClient,
-      });
-      for (const [name, args, field] of [
-        ['query_app_kv', { id: 'sample-app', action: 'get' }, 'key'],
-        ['query_app_kv', { id: 'sample-app', action: 'delete' }, 'key'],
-        [
-          'query_app_data_table',
-          { id: 'sample-app', action: 'query' },
-          'table',
-        ],
-        [
-          'query_app_data_table',
-          { id: 'sample-app', action: 'mutate' },
-          'operations',
-        ],
-      ] as const) {
-        const tool = tools.find((t) => t.name === name)!;
-        const omittedError = await tool
-          .execute('omitted', args)
-          .catch((error: Error) => error.message);
-        const emptyError = await tool
-          .execute('empty', { ...args, [field]: empty })
-          .catch((error: Error) => error.message);
-        expect(omittedError).toEqual(expect.any(String));
-        expect(emptyError).toEqual(omittedError);
-      }
-      expect(queryAppKv).not.toHaveBeenCalled();
-      expect(queryAppDataTable).not.toHaveBeenCalled();
+      const { definition, received } = boundaryTool();
+      const { mode: _omitted, ...withoutMode } = baseline;
+      await expect(call(definition, withoutMode)).rejects.toThrow(
+        /Validation failed/,
+      );
+      await expect(
+        call(definition, { ...baseline, mode: empty }),
+      ).rejects.toThrow(/Validation failed/);
+      expect(received).not.toHaveBeenCalled();
     },
   );
 });

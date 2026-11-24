@@ -61,6 +61,16 @@ const stubPlatform = new Proxy({} as PlatformClient, {
   },
 });
 
+const ARTICLE_URL = 'https://example.com/article';
+
+/** A Tavily extract response for the `web_fetch` tool. */
+function extractResponse(url: string, rawContent: string): Response {
+  return Response.json({
+    results: [{ url, raw_content: rawContent }],
+    failed_results: [],
+  });
+}
+
 async function runWithResponse(
   response: ReturnType<typeof fauxAssistantMessage>,
   sessionId: string,
@@ -118,16 +128,6 @@ async function runWithResponses(
 
 describe('runAgentTurn terminal outcomes', () => {
   it.each([
-    {
-      name: 'query_app_data_table',
-      args: {
-        id: 'sample-app',
-        action: 'query',
-        table: 'todos',
-        order_by: { field: 'title', direction: '0' },
-      },
-      field: 'order_by.direction',
-    },
     ...['search_depth', 'topic', 'time_range'].map((field) => ({
       name: 'web_search',
       args: { query: 'battery research', [field]: '0' },
@@ -141,15 +141,6 @@ describe('runAgentTurn terminal outcomes', () => {
   ])(
     'rejects nonempty enum $field before coercion or external calls',
     async ({ name, args, field }) => {
-      const queryAppDataTable = vi
-        .fn<PlatformClient['queryAppDataTable']>()
-        .mockResolvedValue({
-          action: 'query',
-          items: [],
-          cursor: null,
-          revision: 1,
-          truncated: false,
-        });
       const fetchMock = vi.fn<typeof fetch>(async () =>
         Response.json({ query: 'battery research', results: [] }),
       );
@@ -163,9 +154,7 @@ describe('runAgentTurn terminal outcomes', () => {
         ],
         `invalid-enum-${field}`,
         (event) => events.push(event),
-        { queryAppDataTable } as unknown as PlatformClient,
       );
-      expect(queryAppDataTable).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
       expect(events.find((event) => event.type === 'tool_end')).toMatchObject({
         isError: true,
@@ -194,183 +183,49 @@ describe('runAgentTurn terminal outcomes', () => {
   );
 
   it.each([null, '', [], {}, 0])(
-    'executes query and insert empty controls %j identically to omitted controls',
+    'executes empty optional fields %j like omission while events and history keep the raw call',
     async (empty) => {
-      const queryArgs = {
-        id: 'sample-app',
-        action: 'query',
-        table: 'todos',
-        where: empty,
-      };
-      const insertArgs = {
-        id: 'sample-app',
-        action: 'mutate',
-        operations: [
-          {
-            type: 'insert',
-            table: 'todos',
-            id: empty,
-            value: { title: 'test' },
-          },
-        ],
-      };
-      const queryAppDataTable = vi
-        .fn<PlatformClient['queryAppDataTable']>()
-        .mockResolvedValueOnce({
-          action: 'query',
-          items: [],
-          cursor: null,
-          revision: 1,
-          truncated: false,
-        })
-        .mockResolvedValueOnce({ action: 'mutate', results: [], revision: 2 });
+      const fetchMock = vi.fn<typeof fetch>(async () =>
+        extractResponse('https://example.com/article', 'article body'),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const omitted = { url: 'https://example.com/article' };
+      const filled = { ...omitted, query: empty, extract_depth: empty };
       const events: AgentStreamEvent[] = [];
       const result = await runWithResponses(
         [
-          fauxAssistantMessage(fauxToolCall('query_app_data_table', queryArgs)),
-          fauxAssistantMessage(
-            fauxToolCall('query_app_data_table', insertArgs),
-          ),
+          fauxAssistantMessage(fauxToolCall('web_fetch', omitted)),
+          fauxAssistantMessage(fauxToolCall('web_fetch', filled)),
           fauxAssistantMessage('done'),
         ],
-        `empty-data-control-${JSON.stringify(empty)}`,
+        `empty-web-fetch-${JSON.stringify(empty)}`,
         (event) => events.push(event),
-        { queryAppDataTable } as unknown as PlatformClient,
       );
-      expect(queryAppDataTable.mock.calls.map(([, input]) => input)).toEqual([
-        { action: 'query', table: 'todos', where: [], limit: 50 },
-        {
-          action: 'mutate',
-          operations: [
-            { type: 'insert', table: 'todos', value: { title: 'test' } },
-          ],
-        },
-      ]);
+
+      const bodies = fetchMock.mock.calls.map(([, init]) =>
+        JSON.parse(String(init?.body)),
+      );
+      expect(bodies).toHaveLength(2);
+      expect(bodies[1]).toEqual(bodies[0]);
       expect(events.filter((event) => event.type === 'tool_end')).toEqual([
         expect.objectContaining({ isError: false }),
         expect.objectContaining({ isError: false }),
       ]);
-      for (const args of [queryArgs, insertArgs]) {
-        expect(events.filter((event) => event.type === 'tool_start')).toEqual(
-          expect.arrayContaining([expect.objectContaining({ args })]),
-        );
-        expect(result.messages).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              role: 'assistant',
-              content: expect.arrayContaining([
-                expect.objectContaining({ type: 'toolCall', arguments: args }),
-              ]),
-            }),
-          ]),
-        );
-      }
-    },
-  );
-  it.each([null, '', [], {}, 0])(
-    'treats empty KV cursor %j as omission and preserves raw history',
-    async (cursor) => {
-      const args = { id: 'sample-app', action: 'list', cursor };
-      const queryAppKv = vi
-        .fn<PlatformClient['queryAppKv']>()
-        .mockResolvedValue({ action: 'list', items: [], nextCursor: null });
-      const events: AgentStreamEvent[] = [];
-      const result = await runWithResponses(
-        [
-          fauxAssistantMessage(fauxToolCall('query_app_kv', args)),
-          fauxAssistantMessage('done'),
-        ],
-        `empty-kv-cursor-${JSON.stringify(cursor)}`,
-        (event) => events.push(event),
-        { queryAppKv } as unknown as PlatformClient,
-      );
-      expect(queryAppKv).toHaveBeenCalledExactlyOnceWith(
-        'sample-app',
-        { action: 'list', limit: 100, revealSecrets: false },
-        expect.any(AbortSignal),
-      );
-      expect(events.find((event) => event.type === 'tool_start')).toMatchObject(
-        { args },
-      );
-      expect(events.find((event) => event.type === 'tool_end')).toMatchObject({
-        isError: false,
-      });
+      expect(
+        events.filter((event) => event.type === 'tool_start').at(-1),
+      ).toMatchObject({ args: filled });
       expect(result.messages).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             role: 'assistant',
             content: expect.arrayContaining([
-              expect.objectContaining({ type: 'toolCall', arguments: args }),
+              expect.objectContaining({ type: 'toolCall', arguments: filled }),
             ]),
           }),
         ]),
       );
     },
   );
-
-  it('executes an empty KV cursor as the first page while preserving the original call in events and history', async () => {
-    const args = {
-      id: 'sample-app',
-      action: 'list',
-      cursor: '',
-      key: '',
-      value: '',
-      secret: '',
-      limit: '',
-      reveal_secrets: '',
-    };
-    const events: AgentStreamEvent[] = [];
-    const queryAppKv = vi.fn<PlatformClient['queryAppKv']>().mockResolvedValue({
-      action: 'list',
-      items: [],
-      nextCursor: null,
-    });
-    const result = await runWithResponses(
-      [
-        fauxAssistantMessage(
-          fauxToolCall('query_app_kv', args, { id: 'empty-kv-cursor' }),
-        ),
-        fauxAssistantMessage('done'),
-      ],
-      'empty-kv-cursor',
-      (event) => events.push(event),
-      { queryAppKv } as unknown as PlatformClient,
-    );
-
-    expect(queryAppKv).toHaveBeenCalledExactlyOnceWith(
-      'sample-app',
-      { action: 'list', limit: 100, revealSecrets: false },
-      expect.any(AbortSignal),
-    );
-    expect(events.find((event) => event.type === 'tool_start')).toMatchObject({
-      name: 'query_app_kv',
-      args,
-    });
-    expect(events.find((event) => event.type === 'tool_end')).toMatchObject({
-      name: 'query_app_kv',
-      isError: false,
-      output: 'App "sample-app" has no KV entries.',
-    });
-    expect(result.messages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: 'assistant',
-          content: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'toolCall',
-              name: 'query_app_kv',
-              arguments: args,
-            }),
-          ]),
-        }),
-        expect.objectContaining({
-          role: 'toolResult',
-          toolName: 'query_app_kv',
-          isError: false,
-        }),
-      ]),
-    );
-  });
 
   it('keeps resource snapshot metadata while exposing inline text to the model', async () => {
     const composerContent: AgentComposerContentPart[] = [
@@ -511,50 +366,27 @@ describe('runAgentTurn terminal outcomes', () => {
   });
 
   it('does not stream details from tools that did not opt in', async () => {
-    const sessionId = 'non-streamed-app-details';
-    const apps = Array.from({ length: 2_000 }, (_, index) => ({
-      id: `app-${index}`,
-      slug: `app-${index}`,
-      name: `App ${index}`,
-      description: `details-only-${'x'.repeat(128)}`,
-      status: 'draft' as const,
-      currentVersion: null,
-      compatibility: null,
-      capabilities: [],
-      updatedAt: '2026-07-19T00:00:00.000Z',
-    })) satisfies Awaited<ReturnType<PlatformClient['listApps']>>;
-    const platform = {
-      listApps: async () => apps,
-    } as unknown as PlatformClient;
+    const sessionId = 'non-streamed-tool-details';
+    const appIds = Array.from({ length: 20 }, (_, index) => `app-${index}`);
     const events: AgentStreamEvent[] = [];
 
     const result = await runWithResponses(
       [
-        fauxAssistantMessage(fauxToolCall('list_apps', {})),
+        fauxAssistantMessage(
+          fauxToolCall('report_deployed_apps', { app_ids: appIds }),
+        ),
         fauxAssistantMessage('done'),
       ],
       sessionId,
       (event) => events.push(event),
-      platform,
     );
 
     const toolEnd = events.find(
       (event): event is Extract<AgentStreamEvent, { type: 'tool_end' }> =>
-        event.type === 'tool_end' && event.name === 'list_apps',
+        event.type === 'tool_end' && event.name === 'report_deployed_apps',
     );
-    expect(toolEnd).toBeDefined();
+    expect(toolEnd).toMatchObject({ isError: false });
     expect(toolEnd).not.toHaveProperty('details');
-    expect(
-      Buffer.byteLength(
-        JSON.stringify({
-          type: 'run.event',
-          runId: sessionId,
-          runnerSeq: 1,
-          event: toolEnd,
-        }),
-        'utf8',
-      ),
-    ).toBeLessThan(8 * 1024);
 
     const toolResult = result.messages.find(
       (message) =>
@@ -562,9 +394,9 @@ describe('runAgentTurn terminal outcomes', () => {
         typeof message === 'object' &&
         !Array.isArray(message) &&
         message.role === 'toolResult' &&
-        message.toolName === 'list_apps',
-    ) as { details?: { apps?: unknown[] } } | undefined;
-    expect(toolResult?.details?.apps).toHaveLength(apps.length);
+        message.toolName === 'report_deployed_apps',
+    ) as { details?: { appIds?: unknown[] } } | undefined;
+    expect(toolResult?.details?.appIds).toEqual(appIds);
   });
 
   it('registers web search, clips its event, and bounds each result field', async () => {
@@ -1080,15 +912,10 @@ describe('runAgentTurn auto compaction', () => {
   });
 
   it('compacts inside the turn once the context grows past the threshold', async () => {
-    const queryAppDataTable = vi
-      .fn<PlatformClient['queryAppDataTable']>()
-      .mockResolvedValue({
-        action: 'query',
-        items: [{ value: 'x'.repeat(30000) }],
-        cursor: null,
-        revision: 1,
-        truncated: false,
-      });
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      extractResponse(ARTICLE_URL, 'x'.repeat(30000)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     // 100000 recorded tokens: under the 150000 trigger of this model when the
     // turn starts. The usage the provider reports for the first request (the
     // faux provider counts a first prompt twice, as input and cache write)
@@ -1096,13 +923,7 @@ describe('runAgentTurn auto compaction', () => {
     const prior = history(4, 100000);
     const provider = script([
       () =>
-        fauxAssistantMessage(
-          fauxToolCall('query_app_data_table', {
-            id: 'sample-app',
-            action: 'query',
-            table: 'todos',
-          }),
-        ),
+        fauxAssistantMessage(fauxToolCall('web_fetch', { url: ARTICLE_URL })),
       () => fauxAssistantMessage('final answer'),
     ]);
     const events: AgentStreamEvent[] = [];
@@ -1110,7 +931,7 @@ describe('runAgentTurn auto compaction', () => {
       provider.steps,
       'compact-mid-turn',
       (event) => events.push(event),
-      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
       undefined,
       prior,
       undefined,
@@ -1118,7 +939,7 @@ describe('runAgentTurn auto compaction', () => {
     );
 
     expect(result.error).toBeUndefined();
-    expect(queryAppDataTable).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     // The first request went out whole; the one after the tool result did not.
     expect(contextText(provider.agentRequests[0])).toContain('user-0 ');
     const afterTool = contextText(provider.agentRequests[1]);
@@ -1134,27 +955,16 @@ describe('runAgentTurn auto compaction', () => {
   });
 
   it('recovers from a provider context-length rejection without repeating tool work', async () => {
-    const queryAppDataTable = vi
-      .fn<PlatformClient['queryAppDataTable']>()
-      .mockResolvedValue({
-        action: 'query',
-        items: [{ value: 'small result' }],
-        cursor: null,
-        revision: 1,
-        truncated: false,
-      });
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      extractResponse(ARTICLE_URL, 'small result'),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     // 100000 recorded tokens: the estimate never crosses the trigger, but the
     // provider rejects the request that follows the tool call anyway.
     const prior = history(4, 100000);
     const provider = script([
       () =>
-        fauxAssistantMessage(
-          fauxToolCall('query_app_data_table', {
-            id: 'sample-app',
-            action: 'query',
-            table: 'todos',
-          }),
-        ),
+        fauxAssistantMessage(fauxToolCall('web_fetch', { url: ARTICLE_URL })),
       () =>
         fauxAssistantMessage('', {
           stopReason: 'error',
@@ -1167,7 +977,7 @@ describe('runAgentTurn auto compaction', () => {
       provider.steps,
       'compact-overflow',
       (event) => events.push(event),
-      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
       undefined,
       prior,
       undefined,
@@ -1176,7 +986,7 @@ describe('runAgentTurn auto compaction', () => {
 
     expect(result.error).toBeUndefined();
     // The tool ran once and its result is still part of the turn.
-    expect(queryAppDataTable).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(events.filter((event) => event.type === 'tool_start')).toHaveLength(
       1,
     );
@@ -1194,23 +1004,18 @@ describe('runAgentTurn auto compaction', () => {
   });
 
   const toolCallReply = () =>
-    fauxAssistantMessage(
-      fauxToolCall('query_app_data_table', {
-        id: 'sample-app',
-        action: 'query',
-        table: 'todos',
-      }),
-    );
+    fauxAssistantMessage(fauxToolCall('web_fetch', { url: ARTICLE_URL }));
 
   it('starts no model or tool work for a run stopped before its turn began', async () => {
-    const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
     const controller = new AbortController();
     controller.abort();
     const result = await runWithResponses(
       script([toolCallReply, () => fauxAssistantMessage('never')]).steps,
       'compact-stopped-early',
       undefined,
-      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
       undefined,
       history(2, 400),
       undefined,
@@ -1219,13 +1024,14 @@ describe('runAgentTurn auto compaction', () => {
     );
 
     expect(result.error).toMatch(/abort/i);
-    expect(queryAppDataTable).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     // The stopped turn's user message is still part of the transcript.
     expect(nextUserTurn(result.messages)).toBe(2);
   });
 
   it('starts no model or tool work for a run stopped during a compaction', async () => {
-    const queryAppDataTable = vi.fn<PlatformClient['queryAppDataTable']>();
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
     const controller = new AbortController();
     const step: FauxResponseStep = (context) => {
       if (isSummaryRequest(context)) {
@@ -1240,7 +1046,7 @@ describe('runAgentTurn auto compaction', () => {
       Array.from({ length: 6 }, () => step),
       'compact-stopped-compacting',
       (event) => events.push(event),
-      { queryAppDataTable } as unknown as PlatformClient,
+      undefined,
       undefined,
       prior,
       undefined,
@@ -1249,7 +1055,7 @@ describe('runAgentTurn auto compaction', () => {
     );
 
     expect(result.error).toMatch(/abort/i);
-    expect(queryAppDataTable).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(markersOf(result.messages)).toEqual([]);
     expect(result.messages.slice(0, prior.length)).toEqual(prior);
     expect(compactPhases(events)).toEqual([

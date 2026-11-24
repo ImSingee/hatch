@@ -1,40 +1,20 @@
 /**
- * Full platform <-> runner source transfer round-trip over git bundles:
+ * Platform source transfer over git bundles, as the public App RPCs use it:
  *
- *   platform exportMasterBundle -> runner checkoutFromBundle -> agent
- *   commits -> runner bundleWorktreeForDeploy -> platform importBundleToMaster
- *   (fast-forward master) -> publishDeploymentSource (deploy tag).
+ *   platform exportMasterBundle -> client clones and commits -> client
+ *   bundles HEAD -> platform importBundleToMaster (fast-forward master) ->
+ *   publishDeploymentSource (deploy tag).
  *
- * Everything runs against throwaway temp dirs; HATCH_DATA_DIR is pointed at a
- * temp root before the modules under test are imported (their path constants
- * bind at import time).
+ * Everything runs against throwaway temp dirs.
  */
 import { spawn } from 'node:child_process';
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { createGitSource } from '~server/source-git';
 
 const root = await mkdtemp(path.join(tmpdir(), 'hatch-bundle-rt-'));
-// Per-session Linux UIDs need to traverse the fixture root to reach their
-// private runner-data worktrees. Keep it non-listable and non-writable.
-await chmod(root, 0o711);
-process.env.HATCH_DATA_DIR = path.join(root, 'runner-data');
-
-// Import after HATCH_DATA_DIR is set (module-level path constants).
-const { bundleWorktreeForDeploy, checkoutFromBundle, initNewWorktree } =
-  await import('~agent/local-sources');
-const { agentHomeDir } = await import('~agent/paths');
-const { sandboxSpawn, prepareAgentSessionSandbox } =
-  await import('~agent/shell-sandbox');
-const { createGitSource } = await import('~server/source-git');
 
 const platform = createGitSource({
   noun: 'app',
@@ -42,20 +22,10 @@ const platform = createGitSource({
   deployCheckoutDir: (id) => path.join(root, 'checkouts', id),
 });
 
-function run(cmd: string, args: string[], cwd: string): Promise<string> {
-  return runSpawn(cmd, args, cwd);
-}
-
-function runSpawn(
-  cmd: string,
-  args: string[],
-  cwd: string,
-  env?: NodeJS.ProcessEnv,
-): Promise<string> {
+function git(args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, {
+    const child = spawn('git', args, {
       cwd,
-      env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';
@@ -65,55 +35,42 @@ function runSpawn(
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve(out.trim());
-      else reject(new Error(`${cmd} ${args.join(' ')} failed: ${err || out}`));
+      else reject(new Error(`git ${args.join(' ')} failed: ${err || out}`));
     });
   });
 }
 
-const git = (args: string[], cwd: string) => run('git', args, cwd);
-
-function agentGit(
-  sessionId: string,
-  args: string[],
-  cwd: string,
-): Promise<string> {
-  const wrapped = sandboxSpawn(['git', ...args], sessionId);
-  return runSpawn(wrapped.command, wrapped.args, cwd, {
-    PATH: process.env.PATH,
-    HOME: agentHomeDir(sessionId),
-    LANG: process.env.LANG,
-    GIT_TERMINAL_PROMPT: '0',
-  });
+async function commitAll(worktree: string, message: string): Promise<string> {
+  await git(['add', '-A'], worktree);
+  await git(['commit', '-m', message], worktree);
+  return git(['rev-parse', 'HEAD'], worktree);
 }
 
-type TestSource = {
-  id: string;
-  masterCommit: string | null;
-  bundleBase64: string | null;
-};
-
-async function commitAll(
-  worktree: string,
-  message: string,
-  sessionId?: string,
-): Promise<string> {
-  const runGit = sessionId
-    ? (args: string[]) => agentGit(sessionId, args, worktree)
-    : (args: string[]) => git(args, worktree);
-  await runGit(['add', '-A']);
-  await runGit(['commit', '-m', message]);
-  return runGit(['rev-parse', 'HEAD']);
+async function configureIdentity(worktree: string): Promise<void> {
+  await git(['config', 'user.email', 't@t'], worktree);
+  await git(['config', 'user.name', 't'], worktree);
 }
 
-/** Push a plain worktree's HEAD to platform master and tag it as released. */
+/** Bundle a worktree's HEAD the way a client uploads it. */
+async function bundleHead(worktree: string): Promise<Buffer> {
+  const file = path.join(
+    root,
+    `${path.basename(worktree)}-${Date.now()}.bundle`,
+  );
+  await git(['bundle', 'create', file, 'HEAD'], worktree);
+  return readFile(file);
+}
+
+/** Push a worktree's HEAD to platform master and tag it as released. */
 async function pushAndRelease(
   id: string,
   worktree: string,
   version: number,
 ): Promise<string> {
-  const file = path.join(root, `push-${id}-${version}.bundle`);
-  await git(['bundle', 'create', file, 'HEAD'], worktree);
-  const commit = await platform.importBundleToMaster(id, await readFile(file));
+  const commit = await platform.importBundleToMaster(
+    id,
+    await bundleHead(worktree),
+  );
   await platform.publishDeploymentSource(id, commit, version);
   return commit;
 }
@@ -125,181 +82,64 @@ async function seedPlatformSource(
   const seed = path.join(root, `seed-${id}`);
   await mkdir(seed, { recursive: true });
   await git(['init', '--initial-branch', 'master'], seed);
-  await git(['config', 'user.email', 't@t'], seed);
-  await git(['config', 'user.name', 't'], seed);
+  await configureIdentity(seed);
   await writeFile(path.join(seed, 'README.md'), contents);
   const commit = await commitAll(seed, `seed ${id}`);
   await pushAndRelease(id, seed, 1);
   return commit;
 }
 
-async function exportSource(id: string): Promise<TestSource> {
-  const [bundle, masterCommit] = await Promise.all([
-    platform.exportMasterBundle(id),
-    platform.masterCommit(id),
-  ]);
-  return {
-    id,
-    masterCommit,
-    bundleBase64: bundle?.toString('base64') ?? null,
-  };
-}
-
-async function publishAgentChange(options: {
-  source: TestSource;
-  sessionId: string;
-  version: number;
-  contents: string;
-}): Promise<string> {
-  const { source, sessionId, version, contents } = options;
-  const checkout = await checkoutFromBundle(sessionId, source);
-  await writeFile(path.join(checkout.absolutePath, 'README.md'), contents);
-  const commit = await commitAll(
-    checkout.absolutePath,
-    `publish v${version}`,
-    sessionId,
-  );
-  const deploy = await bundleWorktreeForDeploy(
-    sessionId,
-    source.id,
-    checkout.absolutePath,
-  );
-  const pushed = await platform.importBundleToMaster(
-    source.id,
-    Buffer.from(deploy.bundleBase64, 'base64'),
-  );
-  await platform.publishDeploymentSource(source.id, pushed, version);
-  return commit;
-}
-
-async function currentBranch(
-  worktree: string,
-  sessionId: string,
-): Promise<string | null> {
-  return agentGit(
-    sessionId,
-    ['symbolic-ref', '--quiet', '--short', 'HEAD'],
-    worktree,
-  ).catch(() => null);
-}
-
-async function expectSynchronizedCheckout(
-  checkout: Awaited<ReturnType<typeof checkoutFromBundle>>,
-  expectedCommit: string,
-  sessionId: string,
-): Promise<void> {
-  expect(checkout).toMatchObject({
-    dirty: false,
-    headCommit: expectedCommit,
-    remoteCommit: expectedCommit,
-    replacedExisting: false,
-    synchronizedExisting: true,
-  });
-  await expect(currentBranch(checkout.absolutePath, sessionId)).resolves.toBe(
-    'master',
-  );
-  await expect(
-    agentGit(
-      sessionId,
-      ['rev-parse', 'refs/heads/master'],
-      checkout.absolutePath,
-    ),
-  ).resolves.toBe(expectedCommit);
-  await expect(
-    agentGit(
-      sessionId,
-      ['rev-parse', 'refs/remotes/origin/master'],
-      checkout.absolutePath,
-    ),
-  ).resolves.toBe(expectedCommit);
-  await expect(
-    agentGit(sessionId, ['status', '--short'], checkout.absolutePath),
-  ).resolves.toBe('');
+/** Export platform master and clone it into a fresh client checkout. */
+async function cloneMaster(id: string, name: string): Promise<string> {
+  const bundle = await platform.exportMasterBundle(id);
+  expect(bundle).not.toBeNull();
+  const file = path.join(root, `export-${id}-${name}.bundle`);
+  await writeFile(file, bundle!);
+  const checkout = path.join(root, 'clients', `${id}-${name}`);
+  await mkdir(path.dirname(checkout), { recursive: true });
+  await git(['clone', '--branch', 'master', file, checkout], root);
+  await configureIdentity(checkout);
+  return checkout;
 }
 
 afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-describe('git bundle round-trip (platform <-> runner)', () => {
+describe('git bundle source transfer (platform)', () => {
   const APP_ID = 'rt-app';
-  const SESSION = 'rt-session';
-
-  it('checks out canonical master regardless of the agent Git default branch', async () => {
-    const id = 'nondefault-branch-app';
-    const sessionId = 'nondefault-branch-session';
-    const commit = await seedPlatformSource(id);
-    prepareAgentSessionSandbox(sessionId);
-    await writeFile(
-      path.join(agentHomeDir(sessionId), '.gitconfig'),
-      '[init]\n\tdefaultBranch = unrelated\n',
-    );
-    const checkout = await checkoutFromBundle(
-      sessionId,
-      await exportSource(id),
-    );
-    expect(checkout).toMatchObject({
-      dirty: false,
-      headCommit: commit,
-      remoteCommit: commit,
-    });
-    await expect(currentBranch(checkout.absolutePath, sessionId)).resolves.toBe(
-      'master',
-    );
-    await expect(
-      readFile(path.join(checkout.absolutePath, 'README.md'), 'utf8'),
-    ).resolves.toBe('v1\n');
-  });
 
   it('transfers source both ways and fast-forwards canonical master', async () => {
     // -- Seed the canonical repo with an initial commit (platform side). ----
     const seed = path.join(root, 'seed');
     await mkdir(seed, { recursive: true });
     await git(['init', '--initial-branch', 'master'], seed);
-    await git(['config', 'user.email', 't@t'], seed);
-    await git(['config', 'user.name', 't'], seed);
+    await configureIdentity(seed);
     await writeFile(path.join(seed, 'README.md'), 'v1\n');
     const seedCommit = await commitAll(seed, 'seed v1');
     await pushAndRelease(APP_ID, seed, 1);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(seedCommit);
 
-    // -- Platform -> runner: export master, sync a local checkout. ----------
-    const exported = await platform.exportMasterBundle(APP_ID);
-    expect(exported).not.toBeNull();
-    const checkout = await checkoutFromBundle(SESSION, {
-      id: APP_ID,
-      masterCommit: seedCommit,
-      bundleBase64: exported!.toString('base64'),
-    });
-    expect(checkout.headCommit).toBe(seedCommit);
-    expect(checkout.dirty).toBe(false);
-    expect(checkout.synchronizedExisting).toBe(false);
+    // -- Platform -> client: export master as a bundle and clone it. -------
+    const checkout = await cloneMaster(APP_ID, 'client');
+    await expect(git(['rev-parse', 'HEAD'], checkout)).resolves.toBe(
+      seedCommit,
+    );
+    await expect(git(['rev-parse', 'deploy/v1'], checkout)).resolves.toBe(
+      seedCommit,
+    );
     await expect(
-      agentGit(SESSION, ['rev-parse', 'deploy/v1'], checkout.absolutePath),
-    ).resolves.toBe(seedCommit);
-    await expect(
-      readFile(path.join(checkout.absolutePath, 'README.md'), 'utf8'),
+      readFile(path.join(checkout, 'README.md'), 'utf8'),
     ).resolves.toBe('v1\n');
 
-    // -- Agent work: edit + commit in the runner worktree. ------------------
-    await writeFile(path.join(checkout.absolutePath, 'README.md'), 'v2\n');
-    const localCommit = await commitAll(
-      checkout.absolutePath,
-      'agent edit',
-      SESSION,
-    );
+    // -- Client work: edit + commit. ----------------------------------------
+    await writeFile(path.join(checkout, 'README.md'), 'v2\n');
+    const localCommit = await commitAll(checkout, 'client edit');
 
-    // -- Runner -> platform: bundle the worktree, stage it, publish. --------
-    const deploy = await bundleWorktreeForDeploy(
-      SESSION,
-      APP_ID,
-      checkout.absolutePath,
-    );
-    expect(deploy.headCommit).toBe(localCommit);
-
+    // -- Client -> platform: bundle HEAD, stage it, publish. ----------------
     const pushed = await platform.importBundleToMaster(
       APP_ID,
-      Buffer.from(deploy.bundleBase64, 'base64'),
+      await bundleHead(checkout),
     );
     expect(pushed).toBe(localCommit);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
@@ -343,374 +183,46 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
   }, 15_000);
 
-  describe('existing checkout synchronization', () => {
-    for (const kind of ['app'] as const) {
-      it(`synchronizes a clean ${kind} master already equal to remote`, async () => {
-        const id = `sync-equal-${kind}`;
-        const expectedCommit = await seedPlatformSource(id);
-        const source = await exportSource(id);
-        const sessionId = `${id}-session`;
-        const fresh = await checkoutFromBundle(sessionId, source);
-        expect(fresh.synchronizedExisting).toBe(false);
-
-        const synchronized = await checkoutFromBundle(sessionId, source);
-
-        await expectSynchronizedCheckout(
-          synchronized,
-          expectedCommit,
-          sessionId,
-        );
-        await expect(
-          readFile(path.join(synchronized.absolutePath, 'README.md'), 'utf8'),
-        ).resolves.toBe('v1\n');
-      }, 15_000);
-    }
-
-    for (const kind of ['app'] as const) {
-      it(`advances a clean existing ${kind} master that is behind remote`, async () => {
-        const id = `sync-behind-${kind}`;
-        await seedPlatformSource(id);
-        const initialSource = await exportSource(id);
-        const sessionId = `${id}-session`;
-        await checkoutFromBundle(sessionId, initialSource);
-        const expectedCommit = await publishAgentChange({
-          source: initialSource,
-          sessionId: `${id}-publisher`,
-          version: 2,
-          contents: 'v2\n',
-        });
-        const advancedSource = await exportSource(id);
-
-        const synchronized = await checkoutFromBundle(
-          sessionId,
-          advancedSource,
-        );
-
-        await expectSynchronizedCheckout(
-          synchronized,
-          expectedCommit,
-          sessionId,
-        );
-        await expect(
-          readFile(path.join(synchronized.absolutePath, 'README.md'), 'utf8'),
-        ).resolves.toBe('v2\n');
-      }, 15_000);
-    }
-
-    for (const kind of ['app'] as const) {
-      it(`materializes the first remote commit in an unborn clean ${kind} master`, async () => {
-        const id = `sync-unborn-${kind}`;
-        const sessionId = `${id}-session`;
-        const emptySource: TestSource = {
-          id,
-          masterCommit: null,
-          bundleBase64: null,
-        };
-        const empty = await checkoutFromBundle(sessionId, emptySource);
-        expect(empty.headCommit).toBeNull();
-        expect(empty.synchronizedExisting).toBe(false);
-        const expectedCommit = await seedPlatformSource(id);
-        const source = await exportSource(id);
-
-        const synchronized = await checkoutFromBundle(sessionId, source);
-
-        await expectSynchronizedCheckout(
-          synchronized,
-          expectedCommit,
-          sessionId,
-        );
-        await expect(
-          readFile(path.join(synchronized.absolutePath, 'README.md'), 'utf8'),
-        ).resolves.toBe('v1\n');
-      });
-    }
-
-    for (const kind of ['app'] as const) {
-      for (const relation of ['ahead', 'diverged'] as const) {
-        it(`preserves a clean ${kind} master that is ${relation} from remote`, async () => {
-          const id = `sync-${relation}-${kind}`;
-          await seedPlatformSource(id);
-          const initialSource = await exportSource(id);
-          const sessionId = `${id}-session`;
-          const local = await checkoutFromBundle(sessionId, initialSource);
-          await writeFile(
-            path.join(local.absolutePath, 'local.txt'),
-            'local-only\n',
-          );
-          const localCommit = await commitAll(
-            local.absolutePath,
-            'local-only commit',
-            sessionId,
-          );
-          let remoteSource = initialSource;
-          if (relation === 'diverged') {
-            await publishAgentChange({
-              source: initialSource,
-              sessionId: `${id}-publisher`,
-              version: 2,
-              contents: 'remote-only\n',
-            });
-            remoteSource = await exportSource(id);
-          }
-          if (!remoteSource.masterCommit) {
-            throw new Error('Expected committed remote source.');
-          }
-
-          await expect(
-            checkoutFromBundle(sessionId, remoteSource),
-          ).rejects.toThrow(
-            /local master.*commits.*platform master.*origin\/master.*refreshed/is,
-          );
-          await expect(
-            currentBranch(local.absolutePath, sessionId),
-          ).resolves.toBe('master');
-          await expect(
-            agentGit(sessionId, ['rev-parse', 'HEAD'], local.absolutePath),
-          ).resolves.toBe(localCommit);
-          await expect(
-            agentGit(
-              sessionId,
-              ['rev-parse', 'refs/heads/master'],
-              local.absolutePath,
-            ),
-          ).resolves.toBe(localCommit);
-          await expect(
-            agentGit(
-              sessionId,
-              ['rev-parse', 'refs/remotes/origin/master'],
-              local.absolutePath,
-            ),
-          ).resolves.toBe(remoteSource.masterCommit);
-          await expect(
-            readFile(path.join(local.absolutePath, 'local.txt'), 'utf8'),
-          ).resolves.toBe('local-only\n');
-          await expect(
-            agentGit(sessionId, ['status', '--short'], local.absolutePath),
-          ).resolves.toBe('');
-        });
-      }
-    }
-
-    for (const kind of ['app'] as const) {
-      for (const state of ['dirty', 'feature', 'detached'] as const) {
-        it(`preserves an existing ${kind} checkout on ${state} state`, async () => {
-          const id = `sync-${state}-${kind}`;
-          await seedPlatformSource(id);
-          const source = await exportSource(id);
-          const sessionId = `${id}-session`;
-          const local = await checkoutFromBundle(sessionId, source);
-          const head = await agentGit(
-            sessionId,
-            ['rev-parse', 'HEAD'],
-            local.absolutePath,
-          );
-          if (state === 'dirty') {
-            await writeFile(
-              path.join(local.absolutePath, 'README.md'),
-              'dirty\n',
-            );
-          } else if (state === 'feature') {
-            await agentGit(
-              sessionId,
-              ['switch', '-c', 'feature'],
-              local.absolutePath,
-            );
-          } else {
-            await agentGit(
-              sessionId,
-              ['switch', '--detach'],
-              local.absolutePath,
-            );
-          }
-
-          await expect(checkoutFromBundle(sessionId, source)).rejects.toThrow(
-            /already exists.*origin bundle was refreshed/is,
-          );
-          await expect(
-            agentGit(sessionId, ['rev-parse', 'HEAD'], local.absolutePath),
-          ).resolves.toBe(head);
-          await expect(
-            currentBranch(local.absolutePath, sessionId),
-          ).resolves.toBe(
-            state === 'detached'
-              ? null
-              : state === 'feature'
-                ? 'feature'
-                : 'master',
-          );
-          await expect(
-            readFile(path.join(local.absolutePath, 'README.md'), 'utf8'),
-          ).resolves.toBe(state === 'dirty' ? 'dirty\n' : 'v1\n');
-          await expect(
-            agentGit(sessionId, ['status', '--short'], local.absolutePath),
-          ).resolves.toBe(state === 'dirty' ? 'M README.md' : '');
-        });
-      }
-    }
-  });
-
   it('rejects a stale bundle that is not a fast-forward of master', async () => {
-    // A second session syncs, commits on top of v2… ------------------------
-    const exported = await platform.exportMasterBundle(APP_ID);
-    const master = await platform.masterCommit(APP_ID);
-    const stale = await checkoutFromBundle('rt-stale', {
-      id: APP_ID,
-      masterCommit: master,
-      bundleBase64: exported!.toString('base64'),
-    });
-    await writeFile(path.join(stale.absolutePath, 'README.md'), 'stale\n');
-    await commitAll(stale.absolutePath, 'stale edit', 'rt-stale');
-    const staleBundle = await bundleWorktreeForDeploy(
-      'rt-stale',
-      APP_ID,
-      stale.absolutePath,
-    );
+    // A second client clones, commits on top of v2… -------------------------
+    const stale = await cloneMaster(APP_ID, 'stale');
+    await writeFile(path.join(stale, 'README.md'), 'stale\n');
+    await commitAll(stale, 'stale edit');
+    const staleBundle = await bundleHead(stale);
 
     // …but master advances first (another deploy wins the race). ------------
-    const winner = await checkoutFromBundle('rt-winner', {
-      id: APP_ID,
-      masterCommit: master,
-      bundleBase64: exported!.toString('base64'),
-    });
-    await writeFile(path.join(winner.absolutePath, 'README.md'), 'winner\n');
-    await commitAll(winner.absolutePath, 'winner edit', 'rt-winner');
-    const winnerBundle = await bundleWorktreeForDeploy(
-      'rt-winner',
-      APP_ID,
-      winner.absolutePath,
-    );
+    const winner = await cloneMaster(APP_ID, 'winner');
+    await writeFile(path.join(winner, 'README.md'), 'winner\n');
+    await commitAll(winner, 'winner edit');
     const winnerCommit = await platform.importBundleToMaster(
       APP_ID,
-      Buffer.from(winnerBundle.bundleBase64, 'base64'),
+      await bundleHead(winner),
     );
 
     // The stale bundle is self-contained history, but it is not a
     // fast-forward of master, so the push is refused and master stays put.
     await expect(
-      platform.importBundleToMaster(
-        APP_ID,
-        Buffer.from(staleBundle.bundleBase64, 'base64'),
-      ),
+      platform.importBundleToMaster(APP_ID, staleBundle),
     ).rejects.toThrow(/master advanced/);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(winnerCommit);
-  });
+  }, 15_000);
 
   it('deploys an explicit old checkout after the same id is recreated', async () => {
     const id = 'rt-recreated-deploy';
     await seedPlatformSource(id, 'old source\n');
-    const source = await exportSource(id);
-    const sessionId = `${id}-session`;
-    const oldCheckout = await checkoutFromBundle(sessionId, source);
-    await writeFile(
-      path.join(oldCheckout.absolutePath, 'README.md'),
-      'restored source\n',
-    );
-    const restoredCommit = await commitAll(
-      oldCheckout.absolutePath,
-      'restore old checkout',
-      sessionId,
-    );
+    const oldCheckout = await cloneMaster(id, 'old-checkout');
+    await writeFile(path.join(oldCheckout, 'README.md'), 'restored source\n');
+    const restoredCommit = await commitAll(oldCheckout, 'restore old checkout');
 
-    // Entity deletion removes only Platform-owned source. The conversation
-    // checkout remains, and a same-id recreation starts with an empty repo.
+    // Entity deletion removes only Platform-owned source. A client checkout
+    // remains, and a same-id recreation starts with an empty repo.
     await rm(path.join(root, 'repos', `${id}.git`), {
       recursive: true,
       force: true,
     });
-    const upload = await bundleWorktreeForDeploy(
-      sessionId,
-      id,
-      oldCheckout.absolutePath,
-    );
     await expect(
-      platform.importBundleToMaster(
-        id,
-        Buffer.from(upload.bundleBase64, 'base64'),
-      ),
+      platform.importBundleToMaster(id, await bundleHead(oldCheckout)),
     ).resolves.toBe(restoredCommit);
     await expect(platform.masterCommit(id)).resolves.toBe(restoredCommit);
-  });
-
-  for (const kind of ['app'] as const) {
-    it(`requires force to discard local ${kind} work against an empty remote`, async () => {
-      const sessionId = `rt-empty-remote-${kind}`;
-      const id = `empty-remote-${kind}`;
-      const fresh = await initNewWorktree(sessionId, id, () =>
-        Promise.resolve(),
-      );
-      await writeFile(path.join(fresh.absolutePath, 'a.txt'), 'work\n');
-      const localCommit = await commitAll(
-        fresh.absolutePath,
-        'local work',
-        sessionId,
-      );
-      const emptySource: TestSource = {
-        id,
-        masterCommit: null,
-        bundleBase64: null,
-      };
-
-      await expect(checkoutFromBundle(sessionId, emptySource)).rejects.toThrow(
-        /already exists.*platform master is currently empty/,
-      );
-      await expect(
-        agentGit(sessionId, ['rev-parse', 'HEAD'], fresh.absolutePath),
-      ).resolves.toBe(localCommit);
-
-      const replacement = await checkoutFromBundle(sessionId, emptySource, {
-        force: true,
-      });
-      expect(replacement.replacedExisting).toBe(true);
-      expect(replacement.synchronizedExisting).toBe(false);
-      expect(replacement.headCommit).toBeNull();
-      await expect(
-        readFile(path.join(replacement.absolutePath, 'a.txt'), 'utf8'),
-      ).rejects.toThrow(/ENOENT/);
-    });
-  }
-
-  it('rejects a dirty worktree and an empty worktree at bundle time', async () => {
-    await writeFile(
-      path.join(
-        root,
-        'runner-data',
-        'agents',
-        SESSION,
-        'work',
-        'apps',
-        APP_ID,
-        'x',
-      ),
-      'dirty\n',
-    );
-    const sourcePath = path.join(
-      root,
-      'runner-data',
-      'agents',
-      SESSION,
-      'work',
-      'apps',
-      APP_ID,
-    );
-    await expect(
-      bundleWorktreeForDeploy(SESSION, APP_ID, sourcePath),
-    ).rejects.toThrow(/dirty/);
-    await rm(path.join(sourcePath, 'x'));
-
-    await expect(
-      bundleWorktreeForDeploy(
-        SESSION,
-        'never-checked-out',
-        path.join(
-          root,
-          'runner-data',
-          'agents',
-          SESSION,
-          'work',
-          'apps',
-          'never-checked-out',
-        ),
-      ),
-    ).rejects.toThrow(/not checked out/);
-  });
+  }, 15_000);
 });

@@ -3,7 +3,6 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { ulid } from 'ulid';
 import { TEMPLATES_DIR } from '~agent/paths';
-import type { ScaffoldFile } from '~agent/protocol';
 import { isAppManagedPathSegment } from '~/app-managed-path';
 import {
   APP_NAME_MAX_LENGTH,
@@ -15,6 +14,9 @@ import { AppError } from '~server/errors';
 import { appSlugExists } from './access';
 import { ensureAppRepo } from './git';
 import { isValidAppSlug } from './manifest';
+
+/** A rendered template file: a safe relative path and base64 contents. */
+type ScaffoldFile = { path: string; contentBase64: string };
 
 /** Substitute original tokens once; never reinterpret user-provided text. */
 function applyReplacements(
@@ -91,7 +93,7 @@ export type CreateAppInput = {
   pin?: boolean;
 };
 
-export type CreateAppResult = {
+type CreateAppResult = {
   id: string;
   slug: string;
   name: string;

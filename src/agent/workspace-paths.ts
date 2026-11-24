@@ -4,7 +4,7 @@ import path from 'node:path';
 import { agentWorkDir } from './paths';
 import { writeAgentWorkspaceFile } from './sandboxed-file-io';
 
-export type AgentWorkspacePath = {
+type AgentWorkspacePath = {
   absolutePath: string;
   path: string;
   sessionId: string;
@@ -12,10 +12,7 @@ export type AgentWorkspacePath = {
   rootAbsolutePath: string;
 };
 
-export function isWorkspacePathInside(
-  parent: string,
-  candidate: string,
-): boolean {
+function isWorkspacePathInside(parent: string, candidate: string): boolean {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
   return (
     relative === '' ||

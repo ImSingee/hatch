@@ -90,8 +90,12 @@ Do not import generated files or execution modules from the manifest.
    only pushes without releasing; deploy already pushes, so you rarely need
    it.)
 
-7. Run `hatch app get <id> --json` to confirm the deployed state, then explain
-   how to open it.
+7. Run `hatch app get <id> --json` to confirm the deployed state. Then call
+   `report_deployed_apps` with `app_ids` listing every App this turn deployed
+   successfully, whether you created it or changed it. Call it once, after the
+   last deploy of the turn, and never for a failed or unconfirmed deploy: the
+   chat shows these Apps with buttons to open them. Then explain how to open
+   them.
 8. After the first successful deployment of a new App, end that same reply by
    offering once, in one sentence, to design its icon. Do not skip this step.
    If the user agrees, follow [App icons](references/app-icon.md). Generate

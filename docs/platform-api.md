@@ -97,7 +97,7 @@ required strings, slug syntax/length, App name Unicode code-point length,
 positive rollback versions, full deployment commit ids and allowed SDK kinds.
 Protobuf decoding handles wire types. Unknown fields follow Protobuf evolution
 rules. These rules do not reproduce the former Zod parsing or error messages.
-Runner and Agent tool contracts retain their independent Zod validation.
+Agent tool arguments keep their own Zod validation.
 
 Lists return a `resources` array. Resource metadata contains only public identity,
 status and ISO timestamps. Optional fields have explicit presence; omitted and
@@ -118,7 +118,7 @@ same credentials (HTTP Basic password, `Authorization: Bearer` or `X-API-Key`;
 never a Cookie). `master` accepts fast-forward pushes only and `deploy/*` tags
 belong to the platform. A Deploy request names the `commit` to release, which
 must be on `master`, and defaults to its tip. The `bundle` field and the
-`Get*Source` bundle remain for Agent Tools and older CLIs: an uploaded bundle is
+`Get*Source` bundle remain for older CLIs: an uploaded bundle is
 fast-forwarded onto `master` and then released. Rollback moves `master` back to
 the restored release.
 

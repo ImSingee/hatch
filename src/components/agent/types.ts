@@ -158,6 +158,7 @@ export const TOOL_LABELS: Record<string, string> = {
   query_app_db: 'Query app DB',
   query_app_data_table: 'Query app Data Table',
   query_app_kv: 'Query app KV',
+  report_deployed_apps: 'Show deployed apps',
   web_search: 'Web search',
   web_fetch: 'Fetch web page',
   ask: 'Ask the user',
@@ -231,6 +232,12 @@ export function toolDetail(
     const value = args[key];
     return typeof value === 'string' ? { value, ellipsis } : undefined;
   };
+  if (name === 'report_deployed_apps') {
+    const ids = reportedAppIds(args);
+    return ids.length > 0
+      ? { value: ids.join(', '), ellipsis: 'end' }
+      : undefined;
+  }
   const raw =
     name === 'run_command'
       ? pick('command')
@@ -418,12 +425,22 @@ export function toolInputDetails(
   return undefined;
 }
 
+function reportedAppIds(args: Record<string, unknown> | undefined): string[] {
+  const value = args?.app_ids;
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((id) =>
+    typeof id === 'string' && id.trim() ? [id.trim()] : [],
+  );
+}
+
 /**
  * App ids that an assistant turn successfully deployed, in call order.
  *
- * A tool call alone only means the Agent attempted a deploy. Requiring its
- * paired, non-error result keeps failed or incomplete calls from producing a
- * misleading app action in the finished transcript.
+ * The Agent deploys through the `hatch` CLI and then names the deployed Apps
+ * with `report_deployed_apps`. Transcripts from before the CLI carry the
+ * removed `deploy_app` tool instead, so its calls still count. A tool call
+ * alone only means an attempt: requiring its paired, non-error result keeps
+ * failed or incomplete calls from producing a misleading app action.
  */
 export function successfullyDeployedAppIds(
   blocks: AssistantBlock[],
@@ -431,11 +448,17 @@ export function successfullyDeployedAppIds(
 ): string[] {
   const ids = new Set<string>();
   for (const block of blocks) {
-    if (block.type === 'toolCall' && block.name === 'deploy_app') {
-      const result = toolResults?.get(block.id);
-      if (!result || result.isError) continue;
-      const id = toolArgumentsRecord(block.arguments)?.id;
-      if (typeof id === 'string') ids.add(id);
+    if (block.type !== 'toolCall') continue;
+    if (block.name !== 'report_deployed_apps' && block.name !== 'deploy_app') {
+      continue;
+    }
+    const result = toolResults?.get(block.id);
+    if (!result || result.isError) continue;
+    const args = toolArgumentsRecord(block.arguments);
+    if (block.name === 'report_deployed_apps') {
+      for (const id of reportedAppIds(args)) ids.add(id);
+    } else if (typeof args?.id === 'string') {
+      ids.add(args.id);
     }
   }
   return [...ids];

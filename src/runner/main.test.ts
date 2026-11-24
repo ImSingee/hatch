@@ -41,11 +41,6 @@ vi.mock('~env', () => ({
 vi.mock('~agent/shell-sandbox', () => ({
   initializeAgentSandbox: vi.fn<() => void>(),
 }));
-vi.mock('~agent/local-sources', () => ({
-  withSourceWorkspaceLock: vi.fn<
-    (sessionId: string, task: () => Promise<unknown>) => Promise<unknown>
-  >(async (_sessionId, task) => task()),
-}));
 vi.mock('./workspace-cleanup', () => ({
   listLocalWorkspaceSessionIds: listSessionIds,
   removeSessionWorkspace: removeSession,

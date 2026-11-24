@@ -105,10 +105,6 @@ export function isSafePathSegment(value: string): boolean {
   );
 }
 
-export function isSafeEntityId(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*$/.test(value);
-}
-
 function childPath(root: string, segment: string, label: string): string {
   if (!isSafePathSegment(segment)) {
     throw new Error(`Invalid ${label}.`);
@@ -139,10 +135,6 @@ export function agentWorkDir(sessionId: string): string {
 
 export function agentHomeDir(sessionId: string): string {
   return childPath(AGENT_HOME_DIR, sessionId, 'Agent session id');
-}
-
-export function agentAppWorkDir(sessionId: string, id: string): string {
-  return path.resolve(agentWorkDir(sessionId), 'apps', id);
 }
 
 export function agentAttachmentWorkDir(

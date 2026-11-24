@@ -29,11 +29,7 @@ import {
 } from './paths';
 
 /** Platform-provided CLI shims used by App codegen and Agent instructions. */
-export const PLATFORM_NODE_BIN_DIR = path.join(
-  REPO_ROOT,
-  'node_modules',
-  '.bin',
-);
+const PLATFORM_NODE_BIN_DIR = path.join(REPO_ROOT, 'node_modules', '.bin');
 
 /**
  * Variables a dev shell legitimately needs (git / pnpm / deno / node / tools).
