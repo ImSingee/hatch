@@ -22,10 +22,12 @@ import { ThemeIcon } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { authClient } from '~auth/client';
 import { useSignOut } from '~auth/use-sign-out';
+import { UserAvatar } from '~components/auth/user-avatar';
 import { DeskWindow } from '~components/desk/window';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { WindowBody } from '~components/page/page';
 import { Rail, RailIdentity, WindowSplit } from '~components/page/split';
+import { userAvatarSrc } from '~lib/user-avatar';
 
 export const Route = createFileRoute('/_app/settings')({
   component: SettingsLayout,
@@ -155,6 +157,17 @@ function SettingsLayout() {
             searchLabel={t('settings.search')}
             identity={
               <RailIdentity
+                tile={
+                  data && userAvatarSrc(data.user.id, data.user.image, 48) ? (
+                    <UserAvatar
+                      userId={data.user.id}
+                      image={data.user.image}
+                      name={name}
+                      size={48}
+                      radius="md"
+                    />
+                  ) : undefined
+                }
                 monogram={Array.from(name.trim())[0]?.toUpperCase() ?? '?'}
                 name={name}
                 meta={data?.user.email}

@@ -1,6 +1,5 @@
 import {
   ActionIcon,
-  Avatar,
   Badge,
   Divider,
   Group,
@@ -19,6 +18,7 @@ import {
 import { IconTrash } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
+import { UserAvatar } from '~components/auth/user-avatar';
 import { usersPanelQueryOptions } from '~queries/users';
 import {
   deleteUser,
@@ -136,11 +136,11 @@ function UserRow({
     <Table.Tr>
       <Table.Td>
         <Group gap="sm" wrap="nowrap">
-          <Avatar
-            size={36}
-            radius="xl"
+          <UserAvatar
+            userId={user.id}
+            image={user.image}
             name={user.name || user.email}
-            src={user.image}
+            size={36}
           />
           <Stack gap={0} miw={0}>
             <Group gap={6} wrap="nowrap">

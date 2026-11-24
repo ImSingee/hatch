@@ -152,6 +152,21 @@ describe('App task runs', () => {
     expect(launches).toHaveLength(0);
   });
 
+  it('keeps only the size of a large rejected input', async () => {
+    const result = await startTaskRun(APP, 'digest', {
+      trigger: 'webhook',
+      input: { repo: 'a/b', extra: 'x'.repeat(100_000) },
+    });
+    expect(result.status).toBe('failed');
+    const run = await getTaskRun(APP, result.runId);
+    expect(run?.input).toEqual({
+      truncated: true,
+      bytes: Buffer.byteLength(
+        JSON.stringify({ repo: 'a/b', extra: 'x'.repeat(100_000) }),
+      ),
+    });
+  });
+
   it('sends defaults and a signed request, and persists steps before the result', async () => {
     const { runId } = await startTaskRun(APP, 'digest', {
       trigger: 'manual',

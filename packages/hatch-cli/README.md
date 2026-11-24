@@ -331,6 +331,11 @@ inspection. No durable operation service or fake async operation IDs are added.
 ## Output, errors and unsupported commands
 
 `hatch help`, `help app deploy`, `--help`, `version` and `--version` work offline.
+Help lists one level at a time: `hatch help` shows the top-level commands and
+groups, `hatch help app` (or `hatch app --help`, or just `hatch app`) the commands and subgroups of
+`app`, and `hatch help app kv set` that one command. `--json` returns the same
+level as `commands` (with usage and description) and `groups` (path, usage and
+description); follow a group's `path` to list its commands.
 `--json` writes a single JSON result or `{ok:false,error:{code,message}}` to
 stdout; progress/device instructions use stderr. Branch on code, not prose.
 Secrets are redacted; raw exception/auth response diagnostics are not printed.
@@ -689,7 +694,7 @@ an unknown flag or a positional argument).
 
 `hatch notification ...` manages the notification center with a user session,
 API key or Agent Run credential. In a Run, `--group` and `--destination` sends
-come from `Hatch Agent`. `hatch help` lists every command. `send` takes exactly one recipient. `--channel`
+come from `Hatch Agent`. `hatch help notification` lists its commands and groups. `send` takes exactly one recipient. `--channel`
 acts as that Channel (its id, not its token): its kinds, dedupe scope and
 routes apply, and `--kind` is required. `--group` and `--destination` deliver
 straight there from you, never routed, with `--kind` optional (default

@@ -1,4 +1,4 @@
-import { Avatar, Menu, Text, UnstyledButton } from '@mantine/core';
+import { Menu, Text, UnstyledButton } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
 import {
   IconBell,
@@ -8,6 +8,7 @@ import {
   IconSettings,
 } from '@tabler/icons-react';
 import { authClient } from '~auth/client';
+import { UserAvatar } from '~components/auth/user-avatar';
 import { useSignOut } from '~auth/use-sign-out';
 import { useI18n } from '~i18n';
 import classes from './menu-bar.module.css';
@@ -27,12 +28,12 @@ export function AccountMenu() {
           className={classes.account}
           aria-label={t('nav.accountMenu')}
         >
-          <Avatar
+          <UserAvatar
+            userId={data?.user.id}
+            image={data?.user.image}
+            name={name}
             size={26}
             radius="sm"
-            name={name}
-            color="primary"
-            variant="filled"
           />
         </UnstyledButton>
       </Menu.Target>

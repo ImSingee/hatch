@@ -6,10 +6,29 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router';
+import { useState } from 'react';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { WindowFrameProvider, type WindowFrame } from './desk-context';
 import { DeskWindow } from './window';
+
+async function renderPage(component: () => React.ReactNode) {
+  const rootRoute = createRootRoute();
+  const page = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([page]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
+  return render(
+    <MantineProvider>
+      <RouterProvider router={router} />
+    </MantineProvider>,
+  );
+}
 
 async function renderWindow(frame?: WindowFrame) {
   const rootRoute = createRootRoute();
@@ -77,4 +96,21 @@ test('a window in a native host leaves its frame to the host', async () => {
   await expect
     .element(screen.getByRole('button', { name: 'Save' }))
     .toBeEnabled();
+});
+
+test('the open window names the browser tab, and its page name overrides and follows the window title', async () => {
+  function Chat() {
+    const [chatTitle, setChatTitle] = useState<string>();
+    return (
+      <DeskWindow title="Agent" documentTitle={chatTitle}>
+        <button type="button" onClick={() => setChatTitle('Habit tracker')}>
+          Name chat
+        </button>
+      </DeskWindow>
+    );
+  }
+  const screen = await renderPage(Chat);
+  await expect.poll(() => document.title).toBe('Agent');
+  await screen.getByRole('button', { name: 'Name chat' }).click();
+  await expect.poll(() => document.title).toBe('Habit tracker');
 });

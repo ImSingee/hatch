@@ -69,6 +69,8 @@ export const AGENT_ATTACHMENTS_DIR = path.resolve(
 );
 /** Re-encoded App icons, one dir per App id. */
 export const APP_ICONS_DIR = path.resolve(WORKSPACE_ROOT, 'app-icons');
+/** Re-encoded user avatars, one dir per user id. */
+export const USER_AVATARS_DIR = path.resolve(WORKSPACE_ROOT, 'user-avatars');
 /** Short-lived generated images awaiting a user choice; never in the DB. */
 export const IMAGE_CANDIDATES_DIR = path.resolve(
   WORKSPACE_ROOT,
@@ -196,6 +198,11 @@ export function deploymentArtifactDir(
 /** Directory holding every stored size of one App's icon. */
 export function appIconDir(id: string): string {
   return childPath(APP_ICONS_DIR, id, 'App id');
+}
+
+/** Directory holding every stored size of one user's avatar. */
+export function userAvatarDir(userId: string): string {
+  return childPath(USER_AVATARS_DIR, userId, 'User id');
 }
 
 /** Fixed persistent directory exposed to a storage-capable app backend. */
