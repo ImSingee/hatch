@@ -94,7 +94,9 @@ export function Field(
 export const WELL =
   'flex-row items-center gap-2 self-stretch rounded-(--radius-md) border bg-card px-3 transition-colors focus-within:border-ring focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring';
 
-export const WELL_HEIGHT = 'h-9 pointer-coarse:h-11';
+/** 36 points; on touch 46, so the input inside its 1-point border keeps a
+ * 44-point target. */
+export const WELL_HEIGHT = 'h-9 pointer-coarse:h-11.5';
 
 export function wellState(invalid: boolean, disabled: boolean): string {
   if (disabled) return 'border-input bg-muted';
