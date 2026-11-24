@@ -4,11 +4,13 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
+import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { setDockLabelsFn } from '~server/theme';
 
 /** Whether the web dock shows names under its tiles, for everyone. */
 export function DockLabelsPanel() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: theme } = useSuspenseQuery(themeQueryOptions);
   const save = useMutation({
@@ -20,10 +22,9 @@ export function DockLabelsPanel() {
   return (
     <Group justify="space-between" gap="md" wrap="nowrap">
       <Stack gap={2}>
-        <Text fw={700}>Show names in the dock</Text>
+        <Text fw={700}>{t('appearance.dockLabels.title')}</Text>
         <Text size="sm" c="dimmed">
-          Print each App and Workflow name under its tile. Pointing at a tile
-          shows its full name either way.
+          {t('appearance.dockLabels.description')}
         </Text>
       </Stack>
       <Switch
@@ -33,7 +34,7 @@ export function DockLabelsPanel() {
         checked={save.isPending ? save.variables : theme.dockLabels}
         disabled={save.isPending}
         onChange={(event) => save.mutate(event.currentTarget.checked)}
-        aria-label="Show names in the dock"
+        aria-label={t('appearance.dockLabels.title')}
       />
     </Group>
   );
