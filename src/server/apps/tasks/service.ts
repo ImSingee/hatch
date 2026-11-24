@@ -50,6 +50,8 @@ export const TASK_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 export const TASK_QUEUE_LIMIT = 100;
 /** Largest task input, as JSON text, any trigger accepts. */
 export const MAX_TASK_INPUT_BYTES = 1_000_000;
+/** Largest rejected input stored on its failed run. */
+const MAX_REJECTED_INPUT_BYTES = 64 * 1024;
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
 // Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
@@ -202,10 +204,16 @@ export async function startTaskRun(
     actor: options.actor ?? null,
   };
   if (!validation.success) {
+    // Rejected input is kept for diagnosis, but a large one only as its size:
+    // failed runs are not bounded by the queue limit.
+    const bytes = Buffer.byteLength(JSON.stringify(rawInput));
     await db.insert(schema.appTaskRuns).values({
       ...base,
       status: 'failed',
-      input: rawInput as JsonValue,
+      input:
+        bytes > MAX_REJECTED_INPUT_BYTES
+          ? { truncated: true, bytes }
+          : (rawInput as JsonValue),
       error: `Input validation failed: ${validation.message}`,
       finishedAt: new Date(),
     });
