@@ -24,7 +24,7 @@ import {
   workflowOpsQueryOptions,
 } from '~queries/workflows';
 import type { WorkflowListItem } from '~server/workflows';
-import { RunStatusBadge } from './run-status';
+import { RunStatusBadge } from '~components/runs/run-status';
 import classes from './workflow-list.module.css';
 
 const DESCRIPTION =

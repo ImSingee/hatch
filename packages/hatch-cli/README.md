@@ -407,6 +407,41 @@ SIGINT/HTTP timeout abort SQL connections; possibly mutating requests are never
 retried automatically. A cancellation around commit still requires inspecting
 platform data before retrying.
 
+## App tasks
+
+```sh
+hatch app task list <id-or-slug> --json
+hatch app task run <id-or-slug> <task> --input '{"repo":"a/b"}' --wait --json
+hatch app task run <id-or-slug> <task> --file ./input.json --json
+hatch app task runs <id-or-slug> --task <task> --status failed --limit 50 --cursor '<nextCursor>' --json
+hatch app task get-run <id-or-slug> <run-id> --json
+hatch app task cancel <id-or-slug> <run-id> --json
+hatch app task rotate-webhook-secret <id-or-slug> --json
+```
+
+A task is a backend RPC method the App's manifest marks as runnable; every run
+executes in its own backend instance. `list` prints the App's `concurrency`,
+`queued` and `running` totals, `available` (false when the App cannot run
+tasks), and each task with `inputSchema`, `cron` (with `nextRun`),
+`webhookPath`, its own `concurrency` and `latestRun`. Absent facts are `null`.
+
+`run` takes a JSON object (`--input` or `--file`, up to 1 MB; default `{}`)
+and prints `runId` and `status`: `queued`, or `failed` when the platform
+rejected the input (inspect the run for the reason). With `--wait` it polls
+until the run ends, writing status changes to stderr, and prints the full run.
+A run that did not succeed exits 6 with `task_run_failed` or
+`task_run_canceled`; with `--json` the error envelope is the only output and
+carries the full run in `error.details.run`.
+`--timeout` defaults to 600 seconds with `--wait` (60 otherwise); when it
+expires the command exits 7 with `timeout` and the run keeps going. A full
+queue answers `TOO_MANY_REQUESTS` (exit 2). `get-run` prints steps, log,
+input, output and the queue position of a queued run. `cancel` is idempotent
+and prints `canceled: false` with the final status for a finished run.
+`rotate-webhook-secret` replaces the App's shared webhook secret, which the
+App webhook and every task webhook accept, and prints `{ appId, secret }`
+once; callers using the previous secret are rejected from then on. It answers
+`CONFLICT` when the App has neither the App webhook nor a task webhook.
+
 ## App backend runtime
 
 ```sh

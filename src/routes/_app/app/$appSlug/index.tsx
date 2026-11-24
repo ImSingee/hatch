@@ -10,6 +10,7 @@ import {
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import {
   Link,
+  Navigate,
   createFileRoute,
   isNotFound,
   useRouter,
@@ -181,6 +182,17 @@ function AppView() {
   // Clicking the pill hands off to the plain reload icon, which carries the
   // loading state; the pill only returns if the reload fails.
   const showUpdatePill = updateAvailable && !reloading;
+
+  // An App without a frontend whose live deployment declares tasks is used
+  // through its Tasks pages, so open them instead of a placeholder.
+  if (
+    !hasFrontend &&
+    hasLiveDeployment &&
+    !isCompatibilityBlocked &&
+    app.capabilities?.tasks
+  ) {
+    return <Navigate to="/app/$appSlug/tasks" params={{ appSlug }} replace />;
+  }
 
   return (
     <DeskWindow

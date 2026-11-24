@@ -21,7 +21,11 @@ import {
   NODE_TOOLCHAIN_IGNORED_ROOT_FILE,
   isAppManagedPathSegment,
 } from '../app-managed-path';
-import { PLATFORM_APP_BUF_GEN_YAML } from './app-codegen';
+import {
+  APP_TASK_OPTIONS_PROTO,
+  APP_TASK_OPTIONS_PROTO_FILE,
+  PLATFORM_APP_BUF_GEN_YAML,
+} from './app-codegen';
 import type { WorktreeMaterializer } from './worktree-materializer';
 import {
   AGENTS_DIR,
@@ -115,6 +119,7 @@ const APP_HATCH_SDK_GENERATION: HatchSdkGeneration = {
   packages: [sdkPackage(APP_SDK), sdkPackage(LEGACY_DATA_SDK)],
   extraFiles: {
     'buf.gen.yaml': PLATFORM_APP_BUF_GEN_YAML,
+    [APP_TASK_OPTIONS_PROTO_FILE]: APP_TASK_OPTIONS_PROTO,
     ...sdkToolchainFiles('app'),
   },
   copiedFiles: TOOLCHAIN_COPIED_FILES,
@@ -545,8 +550,10 @@ async function stageSdkGeneration(
     );
   }
   for (const [file, contents] of Object.entries(generation.extraFiles ?? {})) {
+    const destination = path.join(target, ...file.split('/'));
+    await mkdir(path.dirname(destination), { recursive: true });
     tasks.push(
-      writeFile(path.join(target, file), contents, {
+      writeFile(destination, contents, {
         encoding: 'utf8',
         flag: 'wx',
       }),

@@ -22,6 +22,13 @@ const fixtures = vi.hoisted(() => ({
     >(),
 }));
 
+vi.mock('~queries/app-tasks', () => ({
+  appTasksQueryOptions: (id: string) => ({
+    queryKey: ['test-app-tasks', id],
+    queryFn: async () => null,
+  }),
+}));
+
 vi.mock('~queries/apps', () => ({
   appBackendsQueryOptions: {
     queryKey: ['test-app-backends'],

@@ -43,7 +43,19 @@ import {
   parseDataSchemaDescriptor,
   type DataSchemaDescriptor,
 } from './data-table/schema';
+import { fromBinary } from '@bufbuild/protobuf';
+import {
+  FileDescriptorSetSchema,
+  type FileDescriptorSet,
+} from '@bufbuild/protobuf/wkt';
 import { subprocessSandboxEnv } from '../sandbox-env';
+import { validateSchemaInput } from '../json-schema-input';
+import { validateCron } from './cron-expr';
+import {
+  TaskInputSchemaError,
+  taskDescriptorRegistry,
+  taskInputSchema,
+} from './tasks/input-schema';
 import { assertDenoPermissionFlags } from '../deno-permissions';
 import { run as runSubprocess } from '../subprocess';
 
@@ -349,26 +361,6 @@ async function checkAppSource(
   });
 }
 
-/**
- * Minimal shape of a protoc/buf JSON `FileDescriptorSet`. proto3 JSON omits
- * fields at their default value, so streaming flags are optional (absent =
- * false) and type references carry a leading dot we strip when displaying.
- */
-type DescriptorMethod = {
-  name?: string;
-  inputType?: string;
-  outputType?: string;
-  clientStreaming?: boolean;
-  serverStreaming?: boolean;
-};
-type DescriptorService = { name?: string; method?: DescriptorMethod[] };
-type DescriptorFile = {
-  name?: string;
-  package?: string;
-  service?: DescriptorService[];
-};
-type FileDescriptorSet = { file?: DescriptorFile[] };
-
 function stripLeadingDot(t: string): string {
   return t.startsWith('.') ? t.slice(1) : t;
 }
@@ -376,18 +368,18 @@ function stripLeadingDot(t: string): string {
 /** Map a compiled descriptor set to the platform's service/method API view. */
 function parseServices(set: FileDescriptorSet): RpcServiceApi[] {
   const services: RpcServiceApi[] = [];
-  for (const file of set.file ?? []) {
+  for (const file of set.file) {
     const pkg = file.package ? `${file.package}.` : '';
-    for (const svc of file.service ?? []) {
+    for (const svc of file.service) {
       if (!svc.name) continue;
       services.push({
         name: `${pkg}${svc.name}`,
-        methods: (svc.method ?? []).map((m) => ({
-          name: m.name ?? '',
-          inputType: stripLeadingDot(m.inputType ?? ''),
-          outputType: stripLeadingDot(m.outputType ?? ''),
-          clientStreaming: m.clientStreaming ?? false,
-          serverStreaming: m.serverStreaming ?? false,
+        methods: svc.method.map((m) => ({
+          name: m.name,
+          inputType: stripLeadingDot(m.inputType),
+          outputType: stripLeadingDot(m.outputType),
+          clientStreaming: m.clientStreaming,
+          serverStreaming: m.serverStreaming,
         })),
       });
     }
@@ -425,12 +417,16 @@ async function collectProtoFiles(src: string): Promise<ProtoFile[]> {
  * collect the raw proto sources for upload. Runs alongside `buf generate` and is
  * keyed off the same `proto/` module.
  */
-async function extractAppApi(src: string): Promise<AppApi> {
+async function extractAppApi(
+  src: string,
+): Promise<{ api: AppApi; descriptors: FileDescriptorSet }> {
   // Write to a temp file (not stdout) so buf warnings on stderr never corrupt
-  // the JSON we parse. The file lives outside the staged output dir.
+  // the descriptor we parse. The file lives outside the staged output dir.
+  // The binary form keeps custom options (task input hints) and source
+  // comments, which the JSON form cannot carry for unknown extensions.
   const descriptorPath = path.join(
     BUILD_WORK_DIR,
-    `descriptor-${randomUUID()}.json`,
+    `descriptor-${randomUUID()}.binpb`,
   );
   await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
   try {
@@ -441,12 +437,16 @@ async function extractAppApi(src: string): Promise<AppApi> {
     if (built.code !== 0) {
       throw new Error(`buf build (API descriptor) failed:\n${built.output}`);
     }
-    const set = JSON.parse(
-      await fs.readFile(descriptorPath, 'utf8'),
-    ) as FileDescriptorSet;
+    const set = fromBinary(
+      FileDescriptorSetSchema,
+      await fs.readFile(descriptorPath),
+    );
     return {
-      services: parseServices(set),
-      protoFiles: await collectProtoFiles(src),
+      api: {
+        services: parseServices(set),
+        protoFiles: await collectProtoFiles(src),
+      },
+      descriptors: set,
     };
   } finally {
     await fs.rm(descriptorPath, { force: true });
@@ -549,6 +549,65 @@ async function describeDataSchema(
   }
 }
 
+/**
+ * Check every task against the compiled proto and fill its input schema:
+ * the method must be a unary method of the declared service, its request
+ * message must map to a form, and each cron input must satisfy it.
+ */
+function resolveTaskInputs(
+  normalized: NormalizedManifest,
+  descriptors: FileDescriptorSet | undefined,
+): void {
+  const tasks = normalized.tasks;
+  if (!tasks) return;
+  const serviceName = normalized.rpc?.service;
+  const service = normalized.api?.services.find((s) => s.name === serviceName);
+  if (!service || !descriptors) {
+    throw new Error('Tasks require a compiled RPC service (rpc.service).');
+  }
+  const registry = taskDescriptorRegistry(descriptors);
+  for (const task of tasks.definitions) {
+    const method = service.methods.find((m) => m.name === task.method);
+    if (!method) {
+      throw new Error(
+        `Task "${task.name}" names RPC method "${task.method}", which is not defined on ${service.name}.`,
+      );
+    }
+    if (method.clientStreaming || method.serverStreaming) {
+      throw new Error(
+        `Task "${task.name}" names RPC method "${task.method}", which is a streaming method. A task run sends one unary request.`,
+      );
+    }
+    try {
+      task.inputSchema = taskInputSchema(registry, method.inputType);
+    } catch (error) {
+      if (error instanceof TaskInputSchemaError) {
+        throw new Error(
+          `Task "${task.name}" cannot use ${method.inputType} as its input: ${error.message}`,
+        );
+      }
+      throw error;
+    }
+    task.inputType = method.inputType;
+    for (const job of task.cron) {
+      const scheduleError = validateCron(job.schedule);
+      if (scheduleError) {
+        throw new Error(
+          `Task "${task.name}" cron job "${job.name}" has an invalid schedule: ${scheduleError}`,
+        );
+      }
+      const check = validateSchemaInput(task.inputSchema, job.input, {
+        strict: true,
+      });
+      if (!check.success) {
+        throw new Error(
+          `Task "${task.name}" cron job "${job.name}" input does not match the task input: ${check.message}`,
+        );
+      }
+    }
+  }
+}
+
 export async function buildApp(
   id: string,
   options: BuildAppOptions = {},
@@ -640,6 +699,7 @@ export async function buildApp(
     // app's declared API (services + methods) and uploads the raw proto.
     const protoPath = manifest.rpc ? path.join(src, manifest.rpc.proto) : null;
     let api: AppApi | undefined;
+    let descriptors: FileDescriptorSet | undefined;
     if (manifest.rpc && protoPath) {
       const rpc = manifest.rpc;
       const protoEntry = await fs.lstat(protoPath).catch((error: unknown) => {
@@ -674,7 +734,7 @@ export async function buildApp(
       if (gen.code !== 0) {
         throw new Error(`Connect codegen failed:\n${gen.output}`);
       }
-      api = await extractAppApi(src);
+      ({ api, descriptors } = await extractAppApi(src));
       if (!api.services.some((service) => service.name === rpc.service)) {
         throw new Error(
           `RPC service declared by ${manifestFile} was not found in the compiled proto: ${rpc.service}`,
@@ -696,6 +756,18 @@ export async function buildApp(
     let dataSchema: DataSchemaDescriptor | undefined;
     if (manifest.capabilities.dataTable) {
       dataSchema = await describeDataSchema(src, toolchain);
+    }
+
+    // Task inputs come from the compiled proto: resolve (and validate) them
+    // with the other source checks, before the output is replaced.
+    let tasks: NormalizedManifest['tasks'];
+    {
+      const preview = normalizeManifest(manifest);
+      if (preview.tasks) {
+        if (api) preview.api = api;
+        resolveTaskInputs(preview, descriptors);
+        tasks = preview.tasks;
+      }
     }
 
     // Only start replacing the requested output after every source validation
@@ -852,6 +924,12 @@ export async function buildApp(
       };
     }
     if (api) normalized.api = api;
+    if (tasks) {
+      normalized.tasks = tasks;
+      logs.push(
+        `captured ${normalized.tasks.definitions.length} task input schema(s)`,
+      );
+    }
     await fs.writeFile(
       path.join(out, 'manifest.normalized.json'),
       JSON.stringify(normalized, null, 2),

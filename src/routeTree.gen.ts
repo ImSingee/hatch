@@ -62,6 +62,8 @@ import { Route as ApiNotificationsChannelChannelIdRouteImport } from './routes/a
 import { Route as ApiWorkflowWorkflowIdDownloadRouteImport } from './routes/api/workflow/$workflowId/download'
 import { Route as ApiWorkflowWorkflowIdRunRouteImport } from './routes/api/workflow/$workflowId/run'
 import { Route as AppAppSlugEmbedSplatRouteImport } from './routes/app/$appSlug/embed/$'
+import { Route as AppAppAppSlugTasksIndexRouteImport } from './routes/_app/app/$appSlug/tasks/index'
+import { Route as AppAppAppSlugTasksTaskNameRouteImport } from './routes/_app/app/$appSlug/tasks/$taskName'
 import { Route as AppWorkflowWorkflowSlugExecutionRunIdRouteImport } from './routes/_app/workflow/$workflowSlug/execution/$runId'
 import { Route as AppWorkflowWorkflowSlugExecutionsIndexRouteImport } from './routes/_app/workflow/$workflowSlug/executions/index'
 import { Route as ApiAgentRunsRunIdAnswerRouteImport } from './routes/api/agent/runs/$runId/answer'
@@ -76,11 +78,15 @@ import { Route as ApiAppAppIdHookSplatRouteImport } from './routes/api/app/$appI
 import { Route as ApiAppAppIdKvSplatRouteImport } from './routes/api/app/$appId/kv/$'
 import { Route as ApiAppAppIdNotificationsActionRouteImport } from './routes/api/app/$appId/notifications/$action'
 import { Route as ApiAppAppIdRpcSplatRouteImport } from './routes/api/app/$appId/rpc/$'
+import { Route as ApiAppAppIdTasksEnqueueRouteImport } from './routes/api/app/$appId/tasks/enqueue'
 import { Route as ApiAppAppIdWidgetWidgetIdRouteImport } from './routes/api/app/$appId/widget/$widgetId'
 import { Route as ApiNotificationsChannelChannelIdActionRouteImport } from './routes/api/notifications/channel/$channelId/$action'
+import { Route as AppAppAppSlugTasksRunsIndexRouteImport } from './routes/_app/app/$appSlug/tasks/runs/index'
+import { Route as AppAppAppSlugTasksRunsRunIdRouteImport } from './routes/_app/app/$appSlug/tasks/runs/$runId'
 import { Route as ApiAgentSessionsSessionIdAttachmentsAttachmentIdRouteImport } from './routes/api/agent/sessions/$sessionId/attachments/$attachmentId'
 import { Route as ApiAgentSessionsSessionIdPendingMessageIdRouteImport } from './routes/api/agent/sessions/$sessionId/pending/$messageId'
 import { Route as ApiAgentSessionsSessionIdPendingResumeRouteImport } from './routes/api/agent/sessions/$sessionId/pending/resume'
+import { Route as ApiAppAppIdTasksTaskNameRunRouteImport } from './routes/api/app/$appId/tasks/$taskName/run'
 import { Route as ApiAgentSessionsSessionIdPendingMessageIdSendNowRouteImport } from './routes/api/agent/sessions/$sessionId/pending/$messageId/send-now'
 
 const IndexRoute = IndexRouteImport.update({
@@ -359,6 +365,17 @@ const AppAppSlugEmbedSplatRoute = AppAppSlugEmbedSplatRouteImport.update({
   path: '/app/$appSlug/embed/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAppAppSlugTasksIndexRoute = AppAppAppSlugTasksIndexRouteImport.update({
+  id: '/app/$appSlug/tasks/',
+  path: '/app/$appSlug/tasks/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAppAppSlugTasksTaskNameRoute =
+  AppAppAppSlugTasksTaskNameRouteImport.update({
+    id: '/app/$appSlug/tasks/$taskName',
+    path: '/app/$appSlug/tasks/$taskName',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppWorkflowWorkflowSlugExecutionRunIdRoute =
   AppWorkflowWorkflowSlugExecutionRunIdRouteImport.update({
     id: '/workflow/$workflowSlug/execution/$runId',
@@ -434,6 +451,11 @@ const ApiAppAppIdRpcSplatRoute = ApiAppAppIdRpcSplatRouteImport.update({
   path: '/api/app/$appId/rpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAppAppIdTasksEnqueueRoute = ApiAppAppIdTasksEnqueueRouteImport.update({
+  id: '/api/app/$appId/tasks/enqueue',
+  path: '/api/app/$appId/tasks/enqueue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAppAppIdWidgetWidgetIdRoute =
   ApiAppAppIdWidgetWidgetIdRouteImport.update({
     id: '/api/app/$appId/widget/$widgetId',
@@ -445,6 +467,18 @@ const ApiNotificationsChannelChannelIdActionRoute =
     id: '/$action',
     path: '/$action',
     getParentRoute: () => ApiNotificationsChannelChannelIdRoute,
+  } as any)
+const AppAppAppSlugTasksRunsIndexRoute =
+  AppAppAppSlugTasksRunsIndexRouteImport.update({
+    id: '/app/$appSlug/tasks/runs/',
+    path: '/app/$appSlug/tasks/runs/',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppAppAppSlugTasksRunsRunIdRoute =
+  AppAppAppSlugTasksRunsRunIdRouteImport.update({
+    id: '/app/$appSlug/tasks/runs/$runId',
+    path: '/app/$appSlug/tasks/runs/$runId',
+    getParentRoute: () => AppRoute,
   } as any)
 const ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute =
   ApiAgentSessionsSessionIdAttachmentsAttachmentIdRouteImport.update({
@@ -463,6 +497,12 @@ const ApiAgentSessionsSessionIdPendingResumeRoute =
     id: '/resume',
     path: '/resume',
     getParentRoute: () => ApiAgentSessionsSessionIdPendingRoute,
+  } as any)
+const ApiAppAppIdTasksTaskNameRunRoute =
+  ApiAppAppIdTasksTaskNameRunRouteImport.update({
+    id: '/api/app/$appId/tasks/$taskName/run',
+    path: '/api/app/$appId/tasks/$taskName/run',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute =
   ApiAgentSessionsSessionIdPendingMessageIdSendNowRouteImport.update({
@@ -524,6 +564,7 @@ export interface FileRoutesByFullPath {
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug/': typeof AppAppAppSlugIndexRoute
   '/workflow/$workflowSlug/': typeof AppWorkflowWorkflowSlugIndexRoute
+  '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
   '/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   '/api/agent/runs/$runId/answer': typeof ApiAgentRunsRunIdAnswerRoute
   '/api/agent/runs/$runId/cancel': typeof ApiAgentRunsRunIdCancelRoute
@@ -537,12 +578,17 @@ export interface FileRoutesByFullPath {
   '/api/app/$appId/kv/$': typeof ApiAppAppIdKvSplatRoute
   '/api/app/$appId/notifications/$action': typeof ApiAppAppIdNotificationsActionRoute
   '/api/app/$appId/rpc/$': typeof ApiAppAppIdRpcSplatRoute
+  '/api/app/$appId/tasks/enqueue': typeof ApiAppAppIdTasksEnqueueRoute
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
+  '/app/$appSlug/tasks/': typeof AppAppAppSlugTasksIndexRoute
   '/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
+  '/app/$appSlug/tasks/runs/$runId': typeof AppAppAppSlugTasksRunsRunIdRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
   '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
   '/api/agent/sessions/$sessionId/pending/resume': typeof ApiAgentSessionsSessionIdPendingResumeRoute
+  '/api/app/$appId/tasks/$taskName/run': typeof ApiAppAppIdTasksTaskNameRunRoute
+  '/app/$appSlug/tasks/runs/': typeof AppAppAppSlugTasksRunsIndexRoute
   '/api/agent/sessions/$sessionId/pending/$messageId/send-now': typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
 }
 export interface FileRoutesByTo {
@@ -595,6 +641,7 @@ export interface FileRoutesByTo {
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug': typeof AppAppAppSlugIndexRoute
   '/workflow/$workflowSlug': typeof AppWorkflowWorkflowSlugIndexRoute
+  '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
   '/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   '/api/agent/runs/$runId/answer': typeof ApiAgentRunsRunIdAnswerRoute
   '/api/agent/runs/$runId/cancel': typeof ApiAgentRunsRunIdCancelRoute
@@ -608,12 +655,17 @@ export interface FileRoutesByTo {
   '/api/app/$appId/kv/$': typeof ApiAppAppIdKvSplatRoute
   '/api/app/$appId/notifications/$action': typeof ApiAppAppIdNotificationsActionRoute
   '/api/app/$appId/rpc/$': typeof ApiAppAppIdRpcSplatRoute
+  '/api/app/$appId/tasks/enqueue': typeof ApiAppAppIdTasksEnqueueRoute
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
+  '/app/$appSlug/tasks': typeof AppAppAppSlugTasksIndexRoute
   '/workflow/$workflowSlug/executions': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
+  '/app/$appSlug/tasks/runs/$runId': typeof AppAppAppSlugTasksRunsRunIdRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
   '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
   '/api/agent/sessions/$sessionId/pending/resume': typeof ApiAgentSessionsSessionIdPendingResumeRoute
+  '/api/app/$appId/tasks/$taskName/run': typeof ApiAppAppIdTasksTaskNameRunRoute
+  '/app/$appSlug/tasks/runs': typeof AppAppAppSlugTasksRunsIndexRoute
   '/api/agent/sessions/$sessionId/pending/$messageId/send-now': typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
 }
 export interface FileRoutesById {
@@ -671,6 +723,7 @@ export interface FileRoutesById {
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/_app/app/$appSlug/': typeof AppAppAppSlugIndexRoute
   '/_app/workflow/$workflowSlug/': typeof AppWorkflowWorkflowSlugIndexRoute
+  '/_app/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
   '/_app/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   '/api/agent/runs/$runId/answer': typeof ApiAgentRunsRunIdAnswerRoute
   '/api/agent/runs/$runId/cancel': typeof ApiAgentRunsRunIdCancelRoute
@@ -684,12 +737,17 @@ export interface FileRoutesById {
   '/api/app/$appId/kv/$': typeof ApiAppAppIdKvSplatRoute
   '/api/app/$appId/notifications/$action': typeof ApiAppAppIdNotificationsActionRoute
   '/api/app/$appId/rpc/$': typeof ApiAppAppIdRpcSplatRoute
+  '/api/app/$appId/tasks/enqueue': typeof ApiAppAppIdTasksEnqueueRoute
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
+  '/_app/app/$appSlug/tasks/': typeof AppAppAppSlugTasksIndexRoute
   '/_app/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
+  '/_app/app/$appSlug/tasks/runs/$runId': typeof AppAppAppSlugTasksRunsRunIdRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
   '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
   '/api/agent/sessions/$sessionId/pending/resume': typeof ApiAgentSessionsSessionIdPendingResumeRoute
+  '/api/app/$appId/tasks/$taskName/run': typeof ApiAppAppIdTasksTaskNameRunRoute
+  '/_app/app/$appSlug/tasks/runs/': typeof AppAppAppSlugTasksRunsIndexRoute
   '/api/agent/sessions/$sessionId/pending/$messageId/send-now': typeof ApiAgentSessionsSessionIdPendingMessageIdSendNowRoute
 }
 export interface FileRouteTypes {
@@ -747,6 +805,7 @@ export interface FileRouteTypes {
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug/'
     | '/workflow/$workflowSlug/'
+    | '/app/$appSlug/tasks/$taskName'
     | '/workflow/$workflowSlug/execution/$runId'
     | '/api/agent/runs/$runId/answer'
     | '/api/agent/runs/$runId/cancel'
@@ -760,12 +819,17 @@ export interface FileRouteTypes {
     | '/api/app/$appId/kv/$'
     | '/api/app/$appId/notifications/$action'
     | '/api/app/$appId/rpc/$'
+    | '/api/app/$appId/tasks/enqueue'
     | '/api/app/$appId/widget/$widgetId'
     | '/api/notifications/channel/$channelId/$action'
+    | '/app/$appSlug/tasks/'
     | '/workflow/$workflowSlug/executions/'
+    | '/app/$appSlug/tasks/runs/$runId'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
     | '/api/agent/sessions/$sessionId/pending/$messageId'
     | '/api/agent/sessions/$sessionId/pending/resume'
+    | '/api/app/$appId/tasks/$taskName/run'
+    | '/app/$appSlug/tasks/runs/'
     | '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -818,6 +882,7 @@ export interface FileRouteTypes {
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug'
     | '/workflow/$workflowSlug'
+    | '/app/$appSlug/tasks/$taskName'
     | '/workflow/$workflowSlug/execution/$runId'
     | '/api/agent/runs/$runId/answer'
     | '/api/agent/runs/$runId/cancel'
@@ -831,12 +896,17 @@ export interface FileRouteTypes {
     | '/api/app/$appId/kv/$'
     | '/api/app/$appId/notifications/$action'
     | '/api/app/$appId/rpc/$'
+    | '/api/app/$appId/tasks/enqueue'
     | '/api/app/$appId/widget/$widgetId'
     | '/api/notifications/channel/$channelId/$action'
+    | '/app/$appSlug/tasks'
     | '/workflow/$workflowSlug/executions'
+    | '/app/$appSlug/tasks/runs/$runId'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
     | '/api/agent/sessions/$sessionId/pending/$messageId'
     | '/api/agent/sessions/$sessionId/pending/resume'
+    | '/api/app/$appId/tasks/$taskName/run'
+    | '/app/$appSlug/tasks/runs'
     | '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
   id:
     | '__root__'
@@ -893,6 +963,7 @@ export interface FileRouteTypes {
     | '/app/$appSlug/embed/$'
     | '/_app/app/$appSlug/'
     | '/_app/workflow/$workflowSlug/'
+    | '/_app/app/$appSlug/tasks/$taskName'
     | '/_app/workflow/$workflowSlug/execution/$runId'
     | '/api/agent/runs/$runId/answer'
     | '/api/agent/runs/$runId/cancel'
@@ -906,12 +977,17 @@ export interface FileRouteTypes {
     | '/api/app/$appId/kv/$'
     | '/api/app/$appId/notifications/$action'
     | '/api/app/$appId/rpc/$'
+    | '/api/app/$appId/tasks/enqueue'
     | '/api/app/$appId/widget/$widgetId'
     | '/api/notifications/channel/$channelId/$action'
+    | '/_app/app/$appSlug/tasks/'
     | '/_app/workflow/$workflowSlug/executions/'
+    | '/_app/app/$appSlug/tasks/runs/$runId'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
     | '/api/agent/sessions/$sessionId/pending/$messageId'
     | '/api/agent/sessions/$sessionId/pending/resume'
+    | '/api/app/$appId/tasks/$taskName/run'
+    | '/_app/app/$appSlug/tasks/runs/'
     | '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
   fileRoutesById: FileRoutesById
 }
@@ -949,8 +1025,10 @@ export interface RootRouteChildren {
   ApiAppAppIdHookSplatRoute: typeof ApiAppAppIdHookSplatRoute
   ApiAppAppIdKvSplatRoute: typeof ApiAppAppIdKvSplatRoute
   ApiAppAppIdRpcSplatRoute: typeof ApiAppAppIdRpcSplatRoute
+  ApiAppAppIdTasksEnqueueRoute: typeof ApiAppAppIdTasksEnqueueRoute
   ApiAppAppIdWidgetWidgetIdRoute: typeof ApiAppAppIdWidgetWidgetIdRoute
   ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute: typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
+  ApiAppAppIdTasksTaskNameRunRoute: typeof ApiAppAppIdTasksTaskNameRunRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1326,6 +1404,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAppSlugEmbedSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/app/$appSlug/tasks/': {
+      id: '/_app/app/$appSlug/tasks/'
+      path: '/app/$appSlug/tasks'
+      fullPath: '/app/$appSlug/tasks/'
+      preLoaderRoute: typeof AppAppAppSlugTasksIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/app/$appSlug/tasks/$taskName': {
+      id: '/_app/app/$appSlug/tasks/$taskName'
+      path: '/app/$appSlug/tasks/$taskName'
+      fullPath: '/app/$appSlug/tasks/$taskName'
+      preLoaderRoute: typeof AppAppAppSlugTasksTaskNameRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/workflow/$workflowSlug/execution/$runId': {
       id: '/_app/workflow/$workflowSlug/execution/$runId'
       path: '/workflow/$workflowSlug/execution/$runId'
@@ -1424,6 +1516,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAppAppIdRpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/app/$appId/tasks/enqueue': {
+      id: '/api/app/$appId/tasks/enqueue'
+      path: '/api/app/$appId/tasks/enqueue'
+      fullPath: '/api/app/$appId/tasks/enqueue'
+      preLoaderRoute: typeof ApiAppAppIdTasksEnqueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/app/$appId/widget/$widgetId': {
       id: '/api/app/$appId/widget/$widgetId'
       path: '/api/app/$appId/widget/$widgetId'
@@ -1437,6 +1536,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/notifications/channel/$channelId/$action'
       preLoaderRoute: typeof ApiNotificationsChannelChannelIdActionRouteImport
       parentRoute: typeof ApiNotificationsChannelChannelIdRoute
+    }
+    '/_app/app/$appSlug/tasks/runs/': {
+      id: '/_app/app/$appSlug/tasks/runs/'
+      path: '/app/$appSlug/tasks/runs'
+      fullPath: '/app/$appSlug/tasks/runs/'
+      preLoaderRoute: typeof AppAppAppSlugTasksRunsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/app/$appSlug/tasks/runs/$runId': {
+      id: '/_app/app/$appSlug/tasks/runs/$runId'
+      path: '/app/$appSlug/tasks/runs/$runId'
+      fullPath: '/app/$appSlug/tasks/runs/$runId'
+      preLoaderRoute: typeof AppAppAppSlugTasksRunsRunIdRouteImport
+      parentRoute: typeof AppRoute
     }
     '/api/agent/sessions/$sessionId/attachments/$attachmentId': {
       id: '/api/agent/sessions/$sessionId/attachments/$attachmentId'
@@ -1458,6 +1571,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/agent/sessions/$sessionId/pending/resume'
       preLoaderRoute: typeof ApiAgentSessionsSessionIdPendingResumeRouteImport
       parentRoute: typeof ApiAgentSessionsSessionIdPendingRoute
+    }
+    '/api/app/$appId/tasks/$taskName/run': {
+      id: '/api/app/$appId/tasks/$taskName/run'
+      path: '/api/app/$appId/tasks/$taskName/run'
+      fullPath: '/api/app/$appId/tasks/$taskName/run'
+      preLoaderRoute: typeof ApiAppAppIdTasksTaskNameRunRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/agent/sessions/$sessionId/pending/$messageId/send-now': {
       id: '/api/agent/sessions/$sessionId/pending/$messageId/send-now'
@@ -1540,8 +1660,12 @@ interface AppRouteChildren {
   AppWorkflowWorkflowSlugManageRoute: typeof AppWorkflowWorkflowSlugManageRoute
   AppAppAppSlugIndexRoute: typeof AppAppAppSlugIndexRoute
   AppWorkflowWorkflowSlugIndexRoute: typeof AppWorkflowWorkflowSlugIndexRoute
+  AppAppAppSlugTasksTaskNameRoute: typeof AppAppAppSlugTasksTaskNameRoute
   AppWorkflowWorkflowSlugExecutionRunIdRoute: typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
+  AppAppAppSlugTasksIndexRoute: typeof AppAppAppSlugTasksIndexRoute
   AppWorkflowWorkflowSlugExecutionsIndexRoute: typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
+  AppAppAppSlugTasksRunsRunIdRoute: typeof AppAppAppSlugTasksRunsRunIdRoute
+  AppAppAppSlugTasksRunsIndexRoute: typeof AppAppAppSlugTasksRunsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1558,10 +1682,14 @@ const AppRouteChildren: AppRouteChildren = {
   AppWorkflowWorkflowSlugManageRoute: AppWorkflowWorkflowSlugManageRoute,
   AppAppAppSlugIndexRoute: AppAppAppSlugIndexRoute,
   AppWorkflowWorkflowSlugIndexRoute: AppWorkflowWorkflowSlugIndexRoute,
+  AppAppAppSlugTasksTaskNameRoute: AppAppAppSlugTasksTaskNameRoute,
   AppWorkflowWorkflowSlugExecutionRunIdRoute:
     AppWorkflowWorkflowSlugExecutionRunIdRoute,
+  AppAppAppSlugTasksIndexRoute: AppAppAppSlugTasksIndexRoute,
   AppWorkflowWorkflowSlugExecutionsIndexRoute:
     AppWorkflowWorkflowSlugExecutionsIndexRoute,
+  AppAppAppSlugTasksRunsRunIdRoute: AppAppAppSlugTasksRunsRunIdRoute,
+  AppAppAppSlugTasksRunsIndexRoute: AppAppAppSlugTasksRunsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -1683,9 +1811,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAppAppIdHookSplatRoute: ApiAppAppIdHookSplatRoute,
   ApiAppAppIdKvSplatRoute: ApiAppAppIdKvSplatRoute,
   ApiAppAppIdRpcSplatRoute: ApiAppAppIdRpcSplatRoute,
+  ApiAppAppIdTasksEnqueueRoute: ApiAppAppIdTasksEnqueueRoute,
   ApiAppAppIdWidgetWidgetIdRoute: ApiAppAppIdWidgetWidgetIdRoute,
   ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute:
     ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute,
+  ApiAppAppIdTasksTaskNameRunRoute: ApiAppAppIdTasksTaskNameRunRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

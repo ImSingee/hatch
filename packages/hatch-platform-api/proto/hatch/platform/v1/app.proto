@@ -29,6 +29,18 @@ service AppService {
   rpc GetAppIcon(GetAppIconRequest) returns (GetAppIconResponse);
   rpc SetAppIcon(SetAppIconRequest) returns (SetAppIconResponse);
   rpc ClearAppIcon(ClearAppIconRequest) returns (ClearAppIconResponse);
+  // Tasks of the active deployment with their triggers and current load.
+  rpc ListAppTasks(ListAppTasksRequest) returns (ListAppTasksResponse);
+  // Validate input and queue a manual run. Invalid input is recorded as a
+  // failed run and returned with status "failed".
+  rpc RunAppTask(RunAppTaskRequest) returns (RunAppTaskResponse);
+  rpc ListAppTaskRuns(ListAppTaskRunsRequest) returns (ListAppTaskRunsResponse);
+  rpc GetAppTaskRun(GetAppTaskRunRequest) returns (GetAppTaskRunResponse);
+  // Cancel a queued or running run; a running one has its instance killed.
+  rpc CancelAppTaskRun(CancelAppTaskRunRequest) returns (CancelAppTaskRunResponse);
+  // Replace the App's shared webhook secret (used by the App webhook and task
+  // webhooks) and return it; this is the only response that carries it.
+  rpc RotateAppWebhookSecret(RotateAppWebhookSecretRequest) returns (RotateAppWebhookSecretResponse);
 }
 
 message ListAppsRequest {}
@@ -296,4 +308,202 @@ message ClearAppIconRequest {
 
 message ClearAppIconResponse {
   AppIcon icon = 1;
+}
+
+// A schedule that starts a task with a fixed input.
+message AppTaskCron {
+  string name = 1;
+  string schedule = 2;
+  google.protobuf.Value input = 3;
+  // Absent when the schedule never fires again.
+  optional string next_run = 4;
+}
+
+message AppTaskRunRef {
+  string id = 1;
+  // queued | running | succeeded | failed | canceled
+  string status = 2;
+  string created_at = 3;
+}
+
+// A runnable backend RPC method of the active deployment.
+message AppTask {
+  string name = 1;
+  // Unary method on the App's RPC service.
+  string method = 2;
+  optional string title = 3;
+  optional string description = 4;
+  // Own cap on simultaneous runs; absent means only the App cap applies.
+  optional uint32 concurrency = 5;
+  // Fully-qualified request message type.
+  string input_type = 6;
+  // JSON Schema of the input, generated from the request message.
+  google.protobuf.Struct input_schema = 7;
+  repeated AppTaskCron cron = 8;
+  bool webhook = 9;
+  // Platform path of the webhook trigger, when enabled. It accepts native
+  // credentials or the App's webhook secret (shown in the Web UI; minted by
+  // RotateAppWebhookSecret).
+  optional string webhook_path = 10;
+  uint32 queued = 11;
+  uint32 running = 12;
+  optional AppTaskRunRef latest_run = 13;
+}
+
+message ListAppTasksRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message ListAppTasksResponse {
+  string app_id = 1;
+  // False when the App cannot run tasks now (not deployed, archived, no
+  // tasks declared); every other field is then empty.
+  bool available = 2;
+  // Runs allowed at once across the App's tasks.
+  uint32 concurrency = 3;
+  uint32 queued = 4;
+  uint32 running = 5;
+  repeated AppTask tasks = 6;
+}
+
+message RunAppTaskRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string task = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // JSON object matching the task input; omitted means {}.
+  optional google.protobuf.Struct input = 3;
+}
+message RunAppTaskResponse {
+  string run_id = 1;
+  // queued, or failed when the input was rejected.
+  string status = 2;
+}
+
+message AppTaskRunSummary {
+  string id = 1;
+  string task = 2;
+  // manual | cron | webhook | app
+  string trigger = 3;
+  optional string cron_name = 4;
+  // queued | running | succeeded | failed | canceled
+  string status = 5;
+  optional uint32 version = 6;
+  optional string error = 7;
+  string created_at = 8;
+  optional string started_at = 9;
+  optional string finished_at = 10;
+  optional uint64 duration_ms = 11;
+  uint32 step_count = 12;
+}
+
+message ListAppTaskRunsRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  optional string task = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  optional string status = 3 [(buf.validate.field).string = {
+    in: [
+      "queued",
+      "running",
+      "succeeded",
+      "failed",
+      "canceled"
+    ]
+  }];
+  // Page size; defaults to 50.
+  optional uint32 limit = 4 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 200
+  }];
+  // next_cursor of the previous page.
+  optional string cursor = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message ListAppTaskRunsResponse {
+  // Newest first.
+  repeated AppTaskRunSummary runs = 1;
+  // Absent on the last page.
+  optional string next_cursor = 2;
+}
+
+message AppTaskRunStep {
+  uint32 seq = 1;
+  string name = 2;
+  // running | succeeded | failed
+  string status = 3;
+  uint32 attempt = 4;
+  optional google.protobuf.Value output = 5;
+  optional string error = 6;
+  optional string started_at = 7;
+  optional string finished_at = 8;
+  optional uint64 duration_ms = 9;
+}
+
+message AppTaskRun {
+  AppTaskRunSummary summary = 1;
+  // User id, "agent" for an Agent Run; absent for schedules and webhooks
+  // authenticated by the shared secret.
+  optional string actor = 2;
+  optional string deployment_id = 3;
+  optional google.protobuf.Value input = 4;
+  optional google.protobuf.Value output = 5;
+  optional string log = 6;
+  // Position among the App's queued runs (1 = next), while queued.
+  optional uint32 queue_position = 7;
+  repeated AppTaskRunStep steps = 8;
+}
+
+message GetAppTaskRunRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string run_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message GetAppTaskRunResponse {
+  AppTaskRun run = 1;
+}
+
+message CancelAppTaskRunRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string run_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message CancelAppTaskRunResponse {
+  // False when the run had already finished.
+  bool canceled = 1;
+  string status = 2;
+}
+
+message RotateAppWebhookSecretRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message RotateAppWebhookSecretResponse {
+  string secret = 1;
+  // Canonical App ID (the request may name the App by slug).
+  string app_id = 2;
 }

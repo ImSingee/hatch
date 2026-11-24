@@ -222,7 +222,8 @@ in `manifest.ts`:
     "storage": false,
     "kv": false,
     "dataTable": false,
-    "notifications": false
+    "notifications": false,
+    "tasks": false
   },
   "backendMode": "serverless",
   "rpc": {
@@ -540,6 +541,11 @@ Read only the reference relevant to the requested capability:
   uses Connect unary JSON. See the reference for credential precedence,
   raw-byte handling, errors and transport limits.
 
+- [Tasks](references/tasks.md): background work with run history — mark a
+  unary backend RPC method as a task for a generated input form, manual, cron,
+  webhook and backend-enqueued runs, a dedicated instance per run, `step()`
+  records, concurrency caps, and `hatch app task` commands. Prefer tasks for
+  new scheduled or triggered jobs.
 - [Data and storage](references/data-storage.md): Postgres, Storage, KV, runtime
   assets, and Data Table query/mutation details.
 - [Notifications](references/backend-integrations.md#notifications): declare

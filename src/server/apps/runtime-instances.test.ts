@@ -66,6 +66,7 @@ const {
   getBackendRuntimeView,
   killApp,
   proxyAppRequest,
+  runInDedicatedInstance,
   setKeepAlive,
   startAppBackend,
   stopApp,
@@ -78,6 +79,16 @@ Deno.addSignalListener('SIGTERM', () => {
 export default {
   fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/flood') {
+      // A response that never ends.
+      return new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(65536));
+          },
+        }),
+      );
+    }
     if (url.pathname !== '/stream') return new Response(String(Deno.pid));
     const holdMs = Number(url.searchParams.get('ms'));
     const gate = url.searchParams.get('gate');
@@ -422,7 +433,7 @@ it('keeps a boot of the deployment a deploy activated while the deploy finalizes
     port,
     drainingInstances: 0,
   });
-});
+}, 60_000);
 
 it('does not take down the active instance for a caller holding a superseded deployment', async () => {
   activateNextDeployment();
@@ -478,3 +489,75 @@ it('kills every instance at once, draining and in-flight ones included', async (
   await draining.reader.cancel().catch(() => {});
   await routable.reader.cancel().catch(() => {});
 });
+
+/** Start a task run against the fixture and report its instance's pid. */
+function startRun(
+  requestPath: string,
+  options: { deploymentId?: string; maxResponseBytes?: number } = {},
+) {
+  let pid: number | null = null;
+  const result = runInDedicatedInstance(appId, {
+    request: { path: requestPath, headers: {}, body: '' },
+    deploymentId: options.deploymentId ?? DEPLOYMENT_ID,
+    maxResponseBytes: options.maxResponseBytes ?? 1024 * 1024,
+    env: { HATCH_RUN_ID: 'run-1', HATCH_TASK: 'digest' },
+    onStdout: () => {},
+    onStderr: () => {},
+    onSpawn: (handle) => {
+      pid = handle.pid;
+      if (pid) spawnedPids.add(pid);
+    },
+  });
+  return { result, pid: () => pid };
+}
+
+it('serves a task run in its own instance that routing never uses and that exits with the run', async () => {
+  const served = await callPid();
+  const run = startRun('/');
+  await waitUntil(() => run.pid() !== null, 20_000);
+  // While the run instance is alive, routing still reaches the served one.
+  expect(await callPid()).toBe(served);
+  const { response, deploymentId } = await run.result;
+  const runPid = Number(response?.body);
+  expect(runPid).not.toBe(served);
+  expect(deploymentId).toBe(DEPLOYMENT_ID);
+  // The result resolves once the instance has exited and closed its output.
+  expect(isAlive(run.pid() as number)).toBe(false);
+  // The backend's view never reports the run instance.
+  expect(getBackendRuntimeView(appId).pid).not.toBe(runPid);
+}, 60_000);
+
+it('lets a stop or deploy drain a task run to completion and a force stop end it', async () => {
+  const drained = startRun('/stream?gate=run-drain');
+  await waitUntil(() => drained.pid() !== null, 20_000);
+  // Wait until the request is in flight before retiring the instance.
+  await delay(1500);
+  stopApp(appId);
+  expect(isAlive(drained.pid() as number)).toBe(true);
+  releaseGate(DEPLOYMENT_ID, 'run-drain');
+  const finished = await drained.result;
+  expect(finished.response?.status).toBe(200);
+  expect(finished.error).toBeNull();
+
+  const killed = startRun('/stream?gate=run-kill');
+  await waitUntil(() => killed.pid() !== null, 20_000);
+  await delay(1500);
+  killApp(appId);
+  const ended = await killed.result;
+  expect(ended.response).toBeNull();
+  expect(ended.error).toMatch(/stopped during the run/);
+}, 60_000);
+
+it('reads at most the response limit and never serves a run from a deployment it was not prepared for', async () => {
+  const flood = startRun('/flood', { maxResponseBytes: 4096 });
+  const bounded = await flood.result;
+  expect(bounded.response).toMatchObject({ status: 200, truncated: true });
+  expect(bounded.response?.body).toHaveLength(4096);
+  expect(isAlive(flood.pid() as number)).toBe(false);
+
+  activateNextDeployment();
+  const stale = startRun('/', { deploymentId: DEPLOYMENT_ID });
+  const superseded = await stale.result;
+  expect(superseded).toMatchObject({ response: null, superseded: true });
+  expect(stale.pid()).toBeNull();
+}, 60_000);

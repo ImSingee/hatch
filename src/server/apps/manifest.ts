@@ -10,6 +10,7 @@ import {
   type BackendRuntime,
   type NotificationsConfig,
 } from '../../../packages/hatch-manifest/src/app-schema.js';
+import type { JsonObject } from '~/db/schema';
 export * from '../../../packages/hatch-manifest/src/app-schema.js';
 
 /** A grid footprint in dashboard column/row units. */
@@ -102,6 +103,37 @@ export type NormalizedAppWorkflow = {
   workflow: string;
 };
 
+/** JSON Schema of a task's input, generated from its RPC request message. */
+export type TaskInputSchema = JsonObject;
+
+/** A schedule that starts a task with a fixed, validated input. */
+export type NormalizedTaskCronJob = {
+  name: string;
+  schedule: string;
+  input: JsonObject;
+};
+
+/** A deployed task: its method, triggers and generated input schema. */
+export type NormalizedTask = {
+  name: string;
+  method: string;
+  title?: string;
+  description?: string;
+  /** Own cap on simultaneous runs; absent means only the App cap applies. */
+  concurrency?: number;
+  cron: NormalizedTaskCronJob[];
+  webhook: boolean;
+  /** Filled by the build from the compiled proto descriptor. */
+  inputSchema: TaskInputSchema;
+  /** Fully-qualified request message type, for diagnostics. */
+  inputType: string;
+};
+
+export type NormalizedTasks = {
+  concurrency: number;
+  definitions: NormalizedTask[];
+};
+
 export type NormalizedManifest = {
   id: string;
   name: string;
@@ -146,6 +178,8 @@ export type NormalizedManifest = {
    * unauthenticated passthrough (app self-secures). See webhookConfigSchema.
    */
   webhook?: { url: string; auth: WebhookAuth };
+  /** Runnable backend RPC methods, when the tasks capability is enabled. */
+  tasks?: NormalizedTasks;
   /** KV REST base URL, when the kv capability is enabled. */
   kv?: { url: string };
   /** Managed Data Table REST/SSE base URL. */
@@ -258,6 +292,16 @@ export function webhookUrl(id: string): string {
   return `${appBasePath(id)}/hook`;
 }
 
+/** Public URL that starts a run of one task (webhook trigger). */
+export function taskRunUrl(id: string, taskName: string): string {
+  return `${appBasePath(id)}/tasks/${taskName}/run`;
+}
+
+/** Signed endpoint an App backend calls to enqueue one of its own tasks. */
+export function taskEnqueueUrl(id: string): string {
+  return `${appBasePath(id)}/tasks/enqueue`;
+}
+
 /** Parse + validate raw manifest JSON authored by the Agent. */
 export function parseSourceManifest(raw: unknown): SourceManifest {
   return sourceManifestSchema.parse(raw);
@@ -361,6 +405,38 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
       ...(src.notifications.destination
         ? { destination: src.notifications.destination }
         : {}),
+    };
+  }
+  // Tasks run the backend's own RPC methods, so they need a staged backend
+  // and an RPC service. The build fills each input schema from the proto.
+  if (
+    src.capabilities.tasks &&
+    src.capabilities.backend &&
+    src.backend &&
+    src.rpc &&
+    src.tasks
+  ) {
+    out.tasks = {
+      concurrency: src.tasks.concurrency,
+      definitions: src.tasks.definitions.map((task) => ({
+        name: task.name,
+        method: task.method,
+        ...(task.title === undefined ? {} : { title: task.title }),
+        ...(task.description === undefined
+          ? {}
+          : { description: task.description }),
+        ...(task.concurrency === undefined
+          ? {}
+          : { concurrency: task.concurrency }),
+        cron: task.cron.map((job) => ({
+          name: job.name,
+          schedule: job.schedule,
+          input: job.input as JsonObject,
+        })),
+        webhook: task.webhook,
+        inputSchema: {},
+        inputType: '',
+      })),
     };
   }
   // Workflow calls are outbound from the backend (the platform injects each

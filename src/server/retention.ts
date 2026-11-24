@@ -24,6 +24,8 @@ const RETENTION_DAYS = {
   cronRuns: 30,
   /** Workflow executions (+ steps via cascade): user-facing run history. */
   workflowRuns: 90,
+  /** App task runs (+ steps via cascade): the Tasks run history. */
+  taskRuns: 90,
   /**
    * Agent run replay events. Only needed while a client may still reconnect
    * to a stream; the durable transcript lives on the session row. Events of
@@ -56,6 +58,11 @@ export async function pruneHistory(): Promise<void> {
   await db.execute(
     sql`delete from workflow_runs
         where created_at < ${cutoff(RETENTION_DAYS.workflowRuns)}::timestamptz
+          and status not in ('queued', 'running')`,
+  );
+  await db.execute(
+    sql`delete from app_task_runs
+        where created_at < ${cutoff(RETENTION_DAYS.taskRuns)}::timestamptz
           and status not in ('queued', 'running')`,
   );
   // Replay events are useless once no client can reconnect to the run; keep

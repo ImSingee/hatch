@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { db } from '~/db';
 import { secretsMatch } from '~server/secrets';
-import { coerceWorkflowQueryInput } from '~server/workflows/validate';
+import { coerceSchemaQueryInput } from '~server/json-schema-input';
 import { startWorkflowRun } from '~server/workflows/execute';
 import { AppError } from '~server/errors';
 import { WorkflowDeploymentCompatibilityError } from '~server/workflows/compatibility';
@@ -56,7 +56,7 @@ export async function handle({
   delete query.secret;
   // Query params are always strings; coerce them toward the workflow's input
   // schema so numeric/boolean fields don't fail validation on GET/DELETE hooks.
-  let input: unknown = coerceWorkflowQueryInput(workflow.inputSchema, query);
+  let input: unknown = coerceSchemaQueryInput(workflow.inputSchema, query);
   if (request.method === 'POST' || request.method === 'PUT') {
     const declared = Number(request.headers.get('content-length'));
     if (Number.isFinite(declared) && declared > MAX_WEBHOOK_BODY) {

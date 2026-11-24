@@ -11,6 +11,7 @@ import { hardenPlatformDatabase } from '~server/apps/provision';
 import { reconcilePendingAppActivations } from '~server/apps/deploy';
 import { warmLongRunningBackends } from '~server/apps/runtime';
 import { ensureScheduler } from '~server/apps/scheduler';
+import { recoverTaskRuns } from '~server/apps/tasks/service';
 import { ensureRetentionSweep } from '~server/retention';
 import { startNotificationDelivery } from '~server/notifications/adapters';
 import { interruptStaleWorkflowRuns } from '~server/workflows/execute';
@@ -57,8 +58,12 @@ export default definePlugin(async () => {
   // after a restart without waiting for someone to open the workflows page.
   await interruptStaleWorkflowRuns();
   ensureWorkflowScheduler();
-  // Same for app cron jobs: without this they would only start once someone
-  // happened to call listApps (its fire-and-forget side effect).
+  // App task runs: fail the ones a previous process was running and dispatch
+  // the queued ones again (run state is in memory, like workflow runs).
+  await recoverTaskRuns();
+  // Same for app cron jobs and task schedules: without this they would only
+  // start once someone happened to call listApps (its fire-and-forget side
+  // effect).
   ensureScheduler();
   // The keep-alive registry is in-memory, so long-running backends stay down
   // after a restart until their first request; boot them proactively.
