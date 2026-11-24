@@ -140,7 +140,7 @@ beforeEach(() => {
   fixtures.markRead = [];
 });
 
-async function renderTimeline() {
+async function renderTimeline(height = 600) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -150,7 +150,7 @@ async function renderTimeline() {
       cssVariablesResolver={appCssVariablesResolver}
     >
       <QueryClientProvider client={queryClient}>
-        <div style={{ height: 600, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ height, display: 'flex', flexDirection: 'column' }}>
           <NotificationTimeline />
         </div>
       </QueryClientProvider>
@@ -206,4 +206,12 @@ test('the jump loads older pages until it reaches the first unread notification'
   await expect.element(screen.getByText('115 unread below')).toBeInViewport();
   expect(fixtures.pagesRequested).toBe(3);
   await expect.element(jump).not.toBeInTheDocument();
+});
+
+test('keeps loading older pages while the reader is already at the top', async () => {
+  // A window tall enough that a page never fills it: the reader is at the
+  // top without scrolling, and can scroll no further to ask for more.
+  const { article } = await renderTimeline(40_000);
+  await vi.waitFor(() => expect(article(0)).not.toBeNull());
+  expect(fixtures.pagesRequested).toBe(3);
 });

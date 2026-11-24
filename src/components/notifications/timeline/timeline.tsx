@@ -235,6 +235,40 @@ export function NotificationTimeline() {
     }
   };
 
+  // Near the top, load the page before. Also checked after every load: a
+  // reader already at the top cannot scroll further to ask again, and a load
+  // that added no page (a refetch got there first) must not block the next.
+  const loadOlder = useEventCallback(() => {
+    const scroller = scrollRef.current;
+    if (
+      !scroller ||
+      pendingJump.current ||
+      scroller.scrollTop >= NEAR_TOP ||
+      !query.hasNextPage ||
+      query.isFetching ||
+      restore.current
+    ) {
+      return;
+    }
+    const pending = {
+      pages: pages?.length ?? 0,
+      height: scroller.scrollHeight,
+      top: scroller.scrollTop,
+    };
+    restore.current = pending;
+    void query.fetchNextPage().finally(() => {
+      if (restore.current === pending) {
+        const loaded =
+          queryClient.getQueryData(notificationTimelineQueryOptions.queryKey)
+            ?.pages.length ?? 0;
+        if (loaded <= pending.pages) restore.current = null;
+      }
+    });
+  });
+  useEffect(() => {
+    loadOlder();
+  }, [pages, query.isFetching, loadOlder]);
+
   const onScroll = () => {
     const scroller = scrollRef.current;
     if (!scroller) return;
@@ -243,19 +277,7 @@ export function NotificationTimeline() {
       scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <
       AT_END;
     if (atEnd.current && !wasAtEnd) readNewest();
-    if (
-      scroller.scrollTop < NEAR_TOP &&
-      query.hasNextPage &&
-      !query.isFetchingNextPage &&
-      !restore.current
-    ) {
-      restore.current = {
-        pages: pages?.length ?? 0,
-        height: scroller.scrollHeight,
-        top: scroller.scrollTop,
-      };
-      void query.fetchNextPage();
-    }
+    loadOlder();
   };
 
   if (query.isLoading) {
