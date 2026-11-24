@@ -68,7 +68,7 @@ import {
 import { type File } from '../../hatch-platform-api/gen/hatch/platform/v1/file_pb';
 import type { AuthStatus } from '../../hatch-platform-api/auth';
 import type { Profile } from './config';
-import { CliError } from './error';
+import { CliError, fetchFailure } from './error';
 
 export function credentialHeaders(credential: Profile): Record<string, string> {
   return credential.apiKey
@@ -924,7 +924,13 @@ export function platformTransport(
           contextValues,
         );
       } catch (error) {
-        const safe = publicError(error);
+        // Connect reports a rejected fetch as Unknown with the TypeError.
+        const safe =
+          error instanceof ConnectError &&
+          error.code === Code.Unknown &&
+          error.cause instanceof TypeError
+            ? fetchFailure(credential.url, error.cause)
+            : publicError(error);
         let message = safe.message;
         for (const value of [credential.token, credential.apiKey])
           if (value) message = message.replaceAll(value, '[redacted]');

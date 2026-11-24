@@ -6,7 +6,7 @@ import { Code, ConnectError } from '@connectrpc/connect';
 import { errorFromJson } from '@connectrpc/connect/protocol-connect';
 import { configPath, resolveCredential } from './config';
 import { credentialHeaders, platformClient, publicError } from './client';
-import { CliError } from './error';
+import { CliError, fetchFailure } from './error';
 import { readTextInput } from './input';
 
 export class BackendInvocationError extends CliError {
@@ -217,6 +217,8 @@ export async function runBackendInvocation(
         'Cancelled. The App method may have run.',
         130,
       );
+    const failure = fetchFailure(credential.url, error);
+    if (failure.code === 'network_error') throw failure;
     throw new CliError(
       'outcome_unknown',
       'Backend request failed or timed out. The App method may have run; inspect its state before retrying.',

@@ -339,7 +339,11 @@ push and deploy 600s. Git source transfers in `clone` / `update` get 300s by
 default and exactly `--timeout` when it is given. `--timeout` accepts at most
 3600s; subprocess preparation is bounded. Git transfer errors: `non_fast_forward` (6), `git_remote_not_found`
 (5, deleted resource or a platform without Git transport), `git_remote_failed`
-(7) and `UNAUTHORIZED` (3).
+(7) and `UNAUTHORIZED` (3). A platform the CLI cannot connect to (refused,
+unknown host, unreachable network) is `network_error` (7) naming its URL; no
+request was sent, so retrying is safe. A connection that fails or times out
+after the request was sent is `outcome_unknown` (7): inspect platform state
+before retrying a mutation.
 
 | Exit | Meaning                                              |
 | ---- | ---------------------------------------------------- |
