@@ -10,6 +10,8 @@
     "runTrigger.webhook",
     "settings.agentRunner.label",
     "settings.tailscale.label",
+    "appManage.appId",
+    "appManage.slug",
     "agentRunner.runners.id",
     "agentRunner.runs.runner",
     "homepage.page.agent",

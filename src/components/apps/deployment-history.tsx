@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { IconDownload, IconFileZip, IconRobot } from '@tabler/icons-react';
 import { toast } from 'sonner';
+import { useI18n } from '~i18n';
 import {
   BuildLogContent,
   DeploymentHistoryView,
@@ -47,6 +48,7 @@ function AppBuildLog({
 }
 
 export function DeploymentHistory({ appId }: { appId: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const qc = useQueryClient();
   const query = useQuery(deploymentsQueryOptions(appId));
@@ -56,7 +58,9 @@ export function DeploymentHistory({ appId }: { appId: string }) {
       rollbackAppFn({ data: { id: appId, deploymentId } }),
     onSuccess: (result) => {
       const notification = rollbackNotification(result);
-      toast[notification.tone](notification.message);
+      toast[notification.tone](
+        t(notification.key, { version: result.version }),
+      );
       void qc.invalidateQueries(deploymentsQueryOptions(appId));
       // Rolling back can change backend/cron/webhook capabilities, so
       // refresh the Operations panel on this page too; the deployments + loader
@@ -77,15 +81,12 @@ export function DeploymentHistory({ appId }: { appId: string }) {
       return;
     }
     modals.openConfirmModal({
-      title: 'Restore code with a different Data Table schema?',
-      children: (
-        <Text size="sm">
-          This restores the app code, but managed Data Table migrations are
-          forward-only. The current Data Table schema and data will remain
-          unchanged, so this older code may be incompatible.
-        </Text>
-      ),
-      labels: { confirm: 'Restore code', cancel: 'Cancel' },
+      title: t('deployments.schemaConfirm.title'),
+      children: <Text size="sm">{t('deployments.schemaConfirm.body')}</Text>,
+      labels: {
+        confirm: t('deployments.schemaConfirm.confirm'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'orange' },
       onConfirm: () => rollback.mutate(deploymentId),
     });
@@ -95,13 +96,14 @@ export function DeploymentHistory({ appId }: { appId: string }) {
     <DeploymentHistoryView
       deployments={query.data ?? []}
       isLoading={query.isLoading}
-      emptyNoun="app"
       onRollback={requestRollback}
       rollingId={rollback.isPending ? (rollback.variables ?? null) : null}
       renderVersionMeta={(deployment) =>
         deployment.compatibility.isLatest ? null : (
           <Badge size="xs" variant="light" color="orange">
-            Compatibility v{deployment.compatibility.version}
+            {t('deployments.compatibilityBadge', {
+              version: deployment.compatibility.version,
+            })}
           </Badge>
         )
       }
@@ -114,8 +116,8 @@ export function DeploymentHistory({ appId }: { appId: string }) {
           <Tooltip
             label={
               requiresNewerPlatform
-                ? 'Only Agent can restore a deployment newer than this platform; its runtime stays disabled until the platform is updated'
-                : 'Only Agent can restore a deployment below the minimum supported compatibility version'
+                ? t('deployments.agentRestore.newerPlatform')
+                : t('deployments.agentRestore.belowMinimum')
             }
             withArrow
           >
@@ -136,14 +138,18 @@ export function DeploymentHistory({ appId }: { appId: string }) {
                 />
               )}
             >
-              Use Agent
+              {t('deployments.useAgent')}
             </Button>
           </Tooltip>
         );
       }}
       renderArtifact={(deployment) =>
         deployment.hasArtifact ? (
-          <Tooltip label="Download artifact (.tar.gz)" withArrow position="top">
+          <Tooltip
+            label={t('deployments.downloadArtifact')}
+            withArrow
+            position="top"
+          >
             <UnstyledButton
               component="a"
               href={`/api/app/${appId}/download?mode=artifact&deployment=${deployment.id}`}
@@ -151,14 +157,14 @@ export function DeploymentHistory({ appId }: { appId: string }) {
               className={metaItemClass}
             >
               <IconFileZip size={13} stroke={1.6} />
-              <Text size="xs">Artifact</Text>
+              <Text size="xs">{t('deployments.artifact')}</Text>
               <IconDownload size={12} stroke={1.6} />
             </UnstyledButton>
           </Tooltip>
         ) : (
           <Box component="span" className={metaItemClass}>
             <IconFileZip size={13} stroke={1.6} />
-            <Text size="xs">Artifact pruned</Text>
+            <Text size="xs">{t('deployments.artifactPruned')}</Text>
           </Box>
         )
       }
