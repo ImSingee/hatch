@@ -303,10 +303,12 @@ export async function runTask(
     return;
   }
   if (command.action === 'rotate-webhook-secret') {
-    const { secret } = await task.rotateWebhookSecret({ id: command.id });
+    const { appId, secret } = await task.rotateWebhookSecret({
+      id: command.id,
+    });
     write(
-      { appId: command.id, secret },
-      `${command.id}  webhook secret: ${secret}\nThe previous secret no longer works; this is the only time the new one is printed.`,
+      { appId, secret },
+      `${appId}  webhook secret: ${secret}\nThe previous secret no longer works; this is the only time the new one is printed.`,
     );
     return;
   }

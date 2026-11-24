@@ -849,7 +849,7 @@ export function registerPlatformApi(
   router.rpc(AppService.method.rotateAppWebhookSecret, async (input) => {
     try {
       const { id } = await find('apps', input.id);
-      return { secret: await rotateAppWebhookSecret(id) };
+      return { secret: await rotateAppWebhookSecret(id), appId: id };
     } catch (error) {
       throw publicError(error);
     }

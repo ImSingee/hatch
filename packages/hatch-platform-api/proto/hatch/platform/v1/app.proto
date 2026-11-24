@@ -504,4 +504,6 @@ message RotateAppWebhookSecretRequest {
 }
 message RotateAppWebhookSecretResponse {
   string secret = 1;
+  // Canonical App ID (the request may name the App by slug).
+  string app_id = 2;
 }
