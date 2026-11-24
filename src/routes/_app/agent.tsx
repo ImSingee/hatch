@@ -20,6 +20,7 @@ import { Suspense } from 'react';
 import { SessionsPanel } from '~components/agent/sessions-panel';
 import { DeskWindow } from '~components/desk/window';
 import { InsideWindowProvider } from '~components/page/window-context';
+import { useI18n } from '~i18n';
 import {
   providersQueryOptions,
   sessionQueryOptions,
@@ -38,6 +39,7 @@ export const Route = createFileRoute('/_app/agent')({
 });
 
 function AgentLayout() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { threadId } = useParams({ strict: false });
   const [drawerOpened, drawer] = useDisclosure(false);
@@ -62,8 +64,8 @@ function AgentLayout() {
     <DeskWindow
       fill
       maxWidth={1360}
-      title="Agent"
-      documentTitle={(threadId && chatTitle) || 'Agent'}
+      title={t('nav.agent')}
+      documentTitle={(threadId && chatTitle) || t('nav.agent')}
       tile={
         <ThemeIcon size={22} radius="xs" color="primary">
           <IconSparkles size={13} stroke={2.4} />
@@ -87,7 +89,7 @@ function AgentLayout() {
             onClose={drawer.close}
             position="left"
             size={300}
-            title="Chats"
+            title={t('agent.layout.chats')}
             padding="md"
             classNames={{ body: classes.drawerBody }}
           >
@@ -99,13 +101,15 @@ function AgentLayout() {
               <ActionIcon
                 variant="default"
                 radius="md"
-                aria-label="Open chats"
+                aria-label={t('agent.layout.openChats')}
                 onClick={drawer.open}
               >
                 <IconMessages size={18} stroke={1.6} />
               </ActionIcon>
               <Text fw={700} size="sm" truncate>
-                {threadId ? 'Chat' : 'New chat'}
+                {threadId
+                  ? t('agent.chat.fallbackTitle')
+                  : t('agent.sessions.new')}
               </Text>
             </Box>
 

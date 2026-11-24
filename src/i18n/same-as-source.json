@@ -10,6 +10,8 @@
     "runTrigger.webhook",
     "settings.agentRunner.label",
     "settings.tailscale.label",
+    "agent.tool.input.url",
+    "agent.header.apps_one",
     "appManage.appId",
     "appManage.slug",
     "notifications.destinationType.app",

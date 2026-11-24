@@ -10,6 +10,7 @@ import {
 import { IconKey } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 import type { EnvVariableField } from '~agent/events';
+import { useI18n } from '~i18n';
 import classes from './chat.module.css';
 
 export type EnvEntry = { key: string; value: string; secret: boolean };
@@ -26,9 +27,8 @@ function initialPrivacy(
   );
 }
 
-function countLabel(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? '' : 's'}`;
-}
+/** What the screen-reader status line last reported about a submission. */
+type Announcement = 'saving' | 'saved' | 'notSaved' | null;
 
 export function EnvForm({
   reason,
@@ -41,6 +41,7 @@ export function EnvForm({
   onSubmit: (entries: EnvEntry[]) => Promise<boolean>;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [values, setValues] = useState<Record<string, string>>(() =>
     initialValues(variables),
   );
@@ -48,31 +49,45 @@ export function EnvForm({
     initialPrivacy(variables),
   );
   const [submitting, setSubmitting] = useState(false);
-  const [announcement, setAnnouncement] = useState('');
+  const [announcement, setAnnouncement] = useState<Announcement>(null);
   const [visible, setVisible] = useState<Record<string, boolean>>({});
   const submittingRef = useRef(false);
   const sharedCount = variables.filter(
     (variable) => !(privacy[variable.key] ?? variable.secret),
   ).length;
   const privateCount = variables.length - sharedCount;
-  const variableCountLabel = countLabel(variables.length, 'variable');
-  const sharedCountLabel = countLabel(sharedCount, 'value');
+  const counts = {
+    variables: t('agent.env.variableCount', { count: variables.length }),
+    values: t('agent.env.valueCount', { count: sharedCount }),
+  };
   const summary =
     sharedCount === 0
-      ? `${variableCountLabel} will be saved privately. 0 values will be shared with the AI.`
-      : `${variableCountLabel} will be saved. ${sharedCountLabel} will be ` +
-        'shared with the AI in plaintext and retained in the chat history.';
-  const submitLabel = `Save ${variableCountLabel}, share ${sharedCount} with AI`;
+      ? t('agent.env.summaryPrivate', counts)
+      : t('agent.env.summaryShared', counts);
+  const submitLabel = t('agent.env.submit', {
+    variables: counts.variables,
+    shared: sharedCount,
+  });
+  const announcementText =
+    announcement === 'saving'
+      ? sharedCount === 0
+        ? t('agent.env.savingPrivate', counts)
+        : t('agent.env.savingShared', counts)
+      : announcement === 'saved'
+        ? t('agent.env.saved')
+        : announcement === 'notSaved'
+          ? t('agent.env.notSaved')
+          : t('agent.env.needs', {
+              variables: counts.variables,
+              private: privateCount,
+              shared: sharedCount,
+            });
 
   const submit = async () => {
     if (disabled || submittingRef.current) return;
     submittingRef.current = true;
     setSubmitting(true);
-    setAnnouncement(
-      sharedCount === 0
-        ? `Saving ${variableCountLabel} privately.`
-        : `Saving ${variableCountLabel} and sharing ${sharedCountLabel} with the AI.`,
-    );
+    setAnnouncement('saving');
     const entries = variables.map((variable) => ({
       key: variable.key,
       value: values[variable.key] ?? '',
@@ -81,11 +96,9 @@ export function EnvForm({
     try {
       if (await onSubmit(entries)) {
         setValues(initialValues(variables));
-        setAnnouncement('Environment variables saved.');
+        setAnnouncement('saved');
       } else {
-        setAnnouncement(
-          'Environment variables were not saved. Your values are still here.',
-        );
+        setAnnouncement('notSaved');
       }
     } finally {
       submittingRef.current = false;
@@ -112,18 +125,14 @@ export function EnvForm({
             <Group gap={6}>
               <IconKey size={16} className={classes.envIcon} />
               <Text size="xs" fw={700} className={classes.envHeading}>
-                Agent needs environment variables
+                {t('agent.env.title')}
               </Text>
             </Group>
             <Text size="sm" fw={700}>
               {reason}
             </Text>
             <Text size="xs" c="dimmed" className={classes.envNote}>
-              Every value is saved in this chat&apos;s workspace. Keep private
-              prevents this form from sending the value to the AI, while Agent
-              commands can still use it. Turn it off only for non-sensitive
-              configuration: the plaintext value is sent to the AI and retained
-              in the chat history.
+              {t('agent.env.note')}
             </Text>
           </Stack>
 
@@ -156,7 +165,9 @@ export function EnvForm({
                     }));
                   }}
                   visibilityToggleButtonProps={{
-                    'aria-label': `${isVisible ? 'Hide' : 'Show'} value for ${variable.key}`,
+                    'aria-label': isVisible
+                      ? t('agent.env.hideValue', { key: variable.key })
+                      : t('agent.env.showValue', { key: variable.key }),
                     tabIndex: 0,
                   }}
                   styles={{
@@ -176,12 +187,14 @@ export function EnvForm({
                   }}
                   disabled={disabled || submitting}
                   color="primary.7"
-                  label="Keep private"
-                  aria-label={`Keep ${variable.key} private`}
+                  label={t('agent.env.keepPrivate')}
+                  aria-label={t('agent.env.keepKeyPrivate', {
+                    key: variable.key,
+                  })}
                   description={
                     isPrivate
-                      ? 'Saved for Agent commands without being sent to the AI by this form.'
-                      : 'This plaintext value will be sent to the AI and retained in the chat history.'
+                      ? t('agent.env.privateDescription')
+                      : t('agent.env.sharedDescription')
                   }
                 />
               </Stack>
@@ -214,8 +227,7 @@ export function EnvForm({
             aria-live="polite"
             aria-atomic="true"
           >
-            {announcement ||
-              `Agent needs ${variableCountLabel}. ${privateCount} private, ${sharedCount} shared.`}
+            {announcementText}
           </Text>
         </Stack>
       </form>

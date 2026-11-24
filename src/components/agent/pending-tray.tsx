@@ -27,7 +27,7 @@ import {
   hasComposerText,
   type ComposerInputPart,
 } from '~agent/composer-content';
-import { useI18n, type PlainTranslationKey } from '~i18n';
+import { useErrorText, useI18n, type PlainTranslationKey } from '~i18n';
 import type { AppListItem } from '~server/apps';
 import { ComposerEditor, type ComposerEditorHandle } from './composer-editor';
 import {
@@ -65,10 +65,6 @@ const MODE_SWITCH_LABEL: Record<AgentMessageMode, PlainTranslationKey> = {
 
 function otherMode(mode: AgentMessageMode): AgentMessageMode {
   return mode === 'steer' ? 'queue' : 'steer';
-}
-
-function errorText(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function imageSrc(image: { data: string; mimeType: string }): string {
@@ -200,6 +196,7 @@ function PendingRow({
   onResult: (result: PendingMessagesResult) => void;
 }) {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const [editing, setEditing] = useState(false);
   const update = useMutation({
     mutationFn: (changes: Parameters<typeof updatePendingMessage>[2]) =>
@@ -209,26 +206,26 @@ function PendingRow({
       onResult(result);
     },
     onError: (error) =>
-      toast.error(errorText(error, t('agent.pending.saveFailed'))),
+      toast.error(errorText(error, 'agent.pending.saveFailed')),
   });
   const cancel = useMutation({
     mutationFn: () => cancelPendingMessage(sessionId, message.id),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, t('agent.pending.cancelFailed'))),
+      toast.error(errorText(error, 'agent.pending.cancelFailed')),
   });
   const sendNow = useMutation({
     mutationFn: () => sendPendingMessageNow(sessionId, message.id),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, t('agent.pending.sendNowFailed'))),
+      toast.error(errorText(error, 'agent.pending.sendNowFailed')),
   });
   const switchMode = useMutation({
     mutationFn: (mode: AgentMessageMode) =>
       updatePendingMessage(sessionId, message.id, { mode }),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, t('agent.pending.switchFailed'))),
+      toast.error(errorText(error, 'agent.pending.switchFailed')),
   });
   const editable = message.status === 'pending';
   // A run taking the message in ends any edit: it can no longer change.
@@ -385,11 +382,12 @@ export function PendingTray({
   onResult: (result: PendingMessagesResult) => void;
 }) {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const resume = useMutation({
     mutationFn: () => resumePendingMessages(sessionId),
     onSuccess: onResult,
     onError: (error) =>
-      toast.error(errorText(error, t('agent.pending.resumeFailed'))),
+      toast.error(errorText(error, 'agent.pending.resumeFailed')),
   });
   if (pending.messages.length === 0) return null;
   return (

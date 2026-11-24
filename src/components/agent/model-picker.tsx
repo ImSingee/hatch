@@ -1,6 +1,7 @@
 import { Box, Menu, Text, UnstyledButton } from '@mantine/core';
 import { IconCheck, IconChevronDown, IconSparkles } from '@tabler/icons-react';
 import { Fragment, useMemo } from 'react';
+import { useI18n } from '~i18n';
 import classes from './chat.module.css';
 
 export type ModelGroup = {
@@ -24,6 +25,7 @@ export function ModelPicker({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const selectedLabel = useMemo(() => {
     for (const g of groups) {
       for (const it of g.items) if (it.value === value) return it.label;
@@ -55,7 +57,8 @@ export function ModelPicker({
             className={classes.modelPillIcon}
           />
           <Text component="span" className={classes.modelPillLabel}>
-            {selectedLabel ?? (empty ? 'No models' : 'Select model')}
+            {selectedLabel ??
+              (empty ? t('agent.model.none') : t('agent.model.select'))}
           </Text>
           <IconChevronDown
             size={14}

@@ -13,7 +13,7 @@ import {
   getPendingMessages,
 } from '~server/agent-pending-messages';
 import { authenticateSessionRequest } from '~server/session-http-auth';
-import { errorResponse } from '~server/errors';
+import { AppError, errorResponse } from '~server/errors';
 
 const enqueueBodySchema = refineAgentMessage(
   z.object({
@@ -70,7 +70,11 @@ export async function postAgentPendingMessage({
   try {
     const raw = await readCappedJson(request, MAX_BODY_BYTES);
     if (raw === TOO_LARGE) {
-      return new Response('Payload too large', { status: 413 });
+      return errorResponse(
+        new AppError('Payload too large', 413, {
+          code: 'agent.payloadTooLarge',
+        }),
+      );
     }
     parsed = enqueueBodySchema.parse(raw);
   } catch {

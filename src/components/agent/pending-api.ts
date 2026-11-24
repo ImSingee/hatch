@@ -1,6 +1,7 @@
 /** Browser requests for messages sent while an Agent run works. */
 import type { AgentMessageMode } from '~/db/schema';
 import type { ComposerInputPart } from '~agent/composer-content';
+import { errorFromResponse } from '~lib/error-codes';
 import type {
   AgentPendingMessage,
   SessionPendingMessages,
@@ -29,7 +30,10 @@ async function request(
         }),
   });
   if (!res.ok) {
-    throw new Error((await res.text()) || `Request failed (${res.status})`);
+    throw errorFromResponse(
+      res,
+      (await res.text()) || `Request failed (${res.status})`,
+    );
   }
   return (await res.json()) as PendingMessagesResult;
 }
