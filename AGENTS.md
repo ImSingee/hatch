@@ -294,8 +294,11 @@ sentences meant for display, so the UI can translate them.
   strings in state, so switching language updates the screen in place.
 - Keep IDs, routes, search params, enum values and user content
   language-independent. Translate their labels, not the values.
-- Format numbers and dates for the reader with `Intl` and the `locale` from
-  `useI18n()`; dayjs follows the active language automatically.
+- Format displayed numbers and dates with `Intl` (`Intl.DateTimeFormat`,
+  `Intl.NumberFormat`, `Intl.RelativeTimeFormat`) and the `locale` from
+  `useI18n()`, so they re-render on a language switch. dayjs stays on its
+  English default: keep it for date arithmetic and fixed technical formats
+  such as `YYYY-MM-DD HH:mm:ss`, not for translated display text.
 - The language is a per-browser preference (Settings → Appearance → Language,
   stored in local storage). Use `changeLocale()`; never reload the page or key
   providers, routers or forms by locale.

@@ -1,5 +1,3 @@
-import dayjs from 'dayjs';
-import 'dayjs/locale/zh-cn';
 import { createInstance } from 'i18next';
 import { initReactI18next, useTranslation } from 'react-i18next';
 import {
@@ -14,12 +12,6 @@ import { resources } from './resources';
 
 export { LANGUAGE_NAMES, LOCALES, isLocale, type Locale } from './locale';
 export type { PlainTranslationKey, TranslationKey } from './resources';
-
-/** dayjs locale names for relative times such as `formatRelative()`. */
-const DAYJS_LOCALES = {
-  en: 'en',
-  'zh-CN': 'zh-cn',
-} as const satisfies Record<Locale, string>;
 
 /**
  * The platform Web UI's single i18next instance. Resources are bundled, so it
@@ -44,15 +36,15 @@ function currentLocale(): Locale {
     : SOURCE_LOCALE;
 }
 
-function applyDocumentLocale(locale: Locale) {
-  dayjs.locale(DAYJS_LOCALES[locale]);
+/** Keep `<html lang>` on the active language (the shell is prerendered as en). */
+function applyDocumentLanguage() {
   if (typeof document !== 'undefined') {
-    document.documentElement.lang = locale;
+    document.documentElement.lang = currentLocale();
   }
 }
 
-applyDocumentLocale(currentLocale());
-i18n.on('languageChanged', () => applyDocumentLocale(currentLocale()));
+applyDocumentLanguage();
+i18n.on('languageChanged', applyDocumentLanguage);
 
 /** Switch this browser's language in place and remember the choice. */
 export async function changeLocale(locale: Locale) {
