@@ -9,11 +9,14 @@ import {
   listFlag,
   onePositional,
   openClient,
+  PAGE_OPTIONS,
+  pageFlags,
   parseCommandArgs,
   printResult,
   switchFlag,
   textFlag,
   type Flags,
+  type Page,
 } from './command-session';
 import { CliError } from './error';
 import { readTextInput } from './input';
@@ -38,7 +41,7 @@ type ProviderFields = {
 };
 
 export type ProviderCommand =
-  | { kind: 'list' }
+  | { kind: 'list'; page: Page }
   | { kind: 'get'; id: string }
   | { kind: 'catalog'; search?: string }
   | ({
@@ -60,7 +63,7 @@ export type ProviderCommand =
     } & ProviderFields)
   | { kind: 'remove'; id: string }
   | { kind: 'test'; id: string; modelId?: string }
-  | { kind: 'fetch-models'; id: string };
+  | { kind: 'fetch-models'; id: string; page: Page };
 
 const FIELD_OPTIONS = {
   name: { type: 'string' },
@@ -125,12 +128,33 @@ export function parseProviderCommand(
 ): { command: ProviderCommand; flags: Flags } {
   const operation = args[offset + 1];
   if (operation === 'list') {
-    const { flags, positionals } = parseCommandArgs(args, offset, 2, {});
+    const { flags, positionals } = parseCommandArgs(
+      args,
+      offset,
+      2,
+      PAGE_OPTIONS,
+    );
     if (positionals.length)
       throw invalid('This command takes no positional arguments.');
-    return { command: { kind: 'list' }, flags };
+    return { command: { kind: 'list', page: pageFlags(flags) }, flags };
   }
-  if (operation === 'get' || operation === 'fetch-models') {
+  if (operation === 'fetch-models') {
+    const { flags, positionals } = parseCommandArgs(
+      args,
+      offset,
+      2,
+      PAGE_OPTIONS,
+    );
+    return {
+      command: {
+        kind: operation,
+        id: onePositional(positionals, 'provider id'),
+        page: pageFlags(flags),
+      },
+      flags,
+    };
+  }
+  if (operation === 'get') {
     const { flags, positionals } = parseCommandArgs(args, offset, 2, {});
     return {
       command: {
@@ -334,7 +358,7 @@ export async function runProvider(
   let result: unknown;
   switch (command.kind) {
     case 'list':
-      result = await client.providers.list();
+      result = await client.providers.list(command.page);
       break;
     case 'get':
       result = await client.providers.get({ id: command.id });
@@ -416,7 +440,10 @@ export async function runProvider(
       break;
     }
     case 'fetch-models':
-      result = await client.providers.remoteModels({ id: command.id });
+      result = await client.providers.remoteModels({
+        id: command.id,
+        ...command.page,
+      });
       break;
   }
   printResult(result, flags);

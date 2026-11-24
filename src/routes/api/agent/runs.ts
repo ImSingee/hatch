@@ -11,7 +11,7 @@ import {
   TOO_LARGE,
 } from '~server/agent-message-body';
 import { authenticateSessionRequest } from '~server/session-http-auth';
-import { assertAgentModelAvailable, startAgentRun } from '~server/agent-runs';
+import { startAgentRun } from '~server/agent-runs';
 import { thinkingLevelSchema } from '~agent/protocol';
 import { AppError, errorResponse } from '~server/errors';
 
@@ -73,14 +73,13 @@ export async function postAgentRun({
   }
 
   try {
-    // A level the user picked must suit the model; never swap it silently.
-    if (parsed.thinkingLevel)
-      await assertAgentModelAvailable(
-        parsed.providerId,
-        parsed.modelId,
-        parsed.thinkingLevel,
-      );
-    const result = await startAgentRun({ ...parsed, userId: session.user.id });
+    // A level the user picked must suit the model; startAgentRun checks it
+    // after replaying a resend, which returns its original outcome instead.
+    const result = await startAgentRun({
+      ...parsed,
+      userId: session.user.id,
+      strictThinkingLevel: true,
+    });
     return Response.json(result);
   } catch (error) {
     // A resend of a message already waiting in the tray was accepted then.

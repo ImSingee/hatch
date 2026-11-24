@@ -140,6 +140,8 @@ export type AgentRunInput =
       retry: true;
       /** Revision of the session snapshot whose failure the user retried. */
       expectedSessionUpdatedAt: string;
+      /** The client chose `thinkingLevel`: reject one the model lacks. */
+      strictThinkingLevel?: boolean;
       providerId: string;
       modelId: string;
       /**
@@ -182,6 +184,8 @@ export type AgentRunInput =
        * one returns that run (see `~server/agent-message-receipts`).
        */
       clientMessageId?: string;
+      /** The client chose `thinkingLevel`: reject one the model lacks. */
+      strictThinkingLevel?: boolean;
       pendingMessageIds?: never;
     }
   | {
@@ -1051,6 +1055,18 @@ export async function startAgentRun(
     }
   }
 
+  // A level the user just chose is never silently replaced. Checked only
+  // for a new run: a resend replayed above keeps its original outcome.
+  if (
+    'strictThinkingLevel' in input &&
+    input.strictThinkingLevel &&
+    input.thinkingLevel
+  )
+    await assertAgentModelAvailable(
+      input.providerId,
+      input.modelId,
+      input.thinkingLevel,
+    );
   // Unset reuses the chat's level while the chat stays on the same model.
   const model = await resolveRunModelConfig(
     input.providerId,

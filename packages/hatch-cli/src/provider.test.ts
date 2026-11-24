@@ -12,6 +12,34 @@ const failure = (...args: string[]) => {
 };
 
 describe('provider command arguments', () => {
+  it('pages provider and remote model lists', () => {
+    expect(command('provider', 'list')).toEqual({
+      kind: 'list',
+      page: { limit: 0, cursor: undefined },
+    });
+    expect(
+      command(
+        'provider',
+        'fetch-models',
+        'p1',
+        '--limit',
+        '20',
+        '--cursor',
+        '40',
+      ),
+    ).toEqual({
+      kind: 'fetch-models',
+      id: 'p1',
+      page: { limit: 20, cursor: '40' },
+    });
+    expect(failure('provider', 'list', '--limit', '0').code).toBe(
+      'invalid_arguments',
+    );
+    expect(
+      failure('provider', 'fetch-models', 'p1', '--cursor', 'x').code,
+    ).toBe('invalid_arguments');
+  });
+
   it('maps add from a catalog preset or from explicit fields', () => {
     expect(
       command('provider', 'add', '--catalog', 'openai', '--api-key-file', '-'),

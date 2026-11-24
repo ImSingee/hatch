@@ -766,11 +766,13 @@ export function cliClient(transport: Transport) {
       },
     },
     providers: {
-      list: async () => ({
-        providers: (await providers.listProviders({})).providers.map(
-          providerSummary,
-        ),
-      }),
+      list: async (input: { limit: number; cursor?: string }) => {
+        const page = await providers.listProviders(input);
+        return {
+          providers: page.providers.map(providerSummary),
+          nextCursor: page.nextCursor ?? null,
+        };
+      },
       get: async (input: { id: string }) =>
         providerView((await providers.getProvider(input)).provider),
       create: async (input: {
@@ -806,17 +808,24 @@ export function cliClient(transport: Transport) {
           error: result.error ?? null,
         };
       },
-      remoteModels: async (input: { id: string }) => ({
-        providerId: input.id,
-        models: (await providers.listRemoteModels(input)).models.map(
-          (model) => ({
+      remoteModels: async (input: {
+        id: string;
+        limit: number;
+        cursor?: string;
+      }) => {
+        const page = await providers.listRemoteModels(input);
+        return {
+          providerId: input.id,
+          models: page.models.map((model) => ({
             modelId: model.modelId,
             name: model.name ?? null,
             catalogRef: model.catalogRef ?? null,
             added: model.added,
-          }),
-        ),
-      }),
+          })),
+          nextCursor: page.nextCursor ?? null,
+          truncated: page.truncated,
+        };
+      },
     },
     catalog: {
       providers: async () =>

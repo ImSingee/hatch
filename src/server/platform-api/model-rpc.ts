@@ -148,9 +148,13 @@ function catalogRefInput(
 
 export function registerModelServices(router: ConnectRouter): void {
   router.service(ProviderService, {
-    listProviders: async () => ({
-      providers: (await listProviderViews()).map(providerMessage),
-    }),
+    listProviders: async (input) => {
+      const page = listPage(await listProviderViews(), input);
+      return {
+        providers: page.items.map(providerMessage),
+        nextCursor: page.nextCursor,
+      };
+    },
     getProvider: async (input) => ({
       provider: providerMessage(await getProviderView(input.id)),
     }),
@@ -222,8 +226,11 @@ export function registerModelServices(router: ConnectRouter): void {
       const provider = await getProviderView(input.id);
       const remote = await listRemoteModels(input.id, context.signal);
       const added = new Set(provider.models.map((model) => model.modelId));
+      const page = listPage(remote.models, input);
       return {
-        models: remote.map((model) => ({
+        truncated: remote.truncated,
+        nextCursor: page.nextCursor,
+        models: page.items.map((model) => ({
           modelId: model.modelId,
           name: model.name,
           catalogRef:

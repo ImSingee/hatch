@@ -196,8 +196,9 @@ export const fetchProviderModels = createServerFn({ method: 'POST' })
   .validator((data: { id: string }) =>
     z.object({ id: z.string().min(1) }).parse(data),
   )
-  .handler(async ({ data }): Promise<RemoteModel[]> =>
-    listRemoteModels(data.id),
+  .handler(
+    async ({ data }): Promise<RemoteModel[]> =>
+      (await listRemoteModels(data.id)).models,
   );
 
 export const testProvider = createServerFn({ method: 'POST' })

@@ -428,10 +428,15 @@ function EditProviderForm({
     validate: {
       name: (v) => (v.trim() ? null : t('providers.form.required')),
       baseUrl: (v) => (v.trim() ? null : t('providers.form.required')),
-      apiKey: (v) =>
-        provider.hasApiKey || v.trim()
+      apiKey: (v, values) =>
+        v.trim()
           ? null
-          : t('providers.form.apiKeyNeeded'),
+          : !provider.hasApiKey
+            ? t('providers.form.apiKeyNeeded')
+            : values.baseUrl.trim().replace(/\/+$/, '') !== provider.baseUrl ||
+                values.apiType !== provider.apiType
+              ? t('providers.form.apiKeyForEndpoint')
+              : null,
     },
   });
   const mutation = useMutation({

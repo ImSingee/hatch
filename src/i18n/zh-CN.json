@@ -1961,5 +1961,7 @@
   "error.providers.remoteListNoData": "Provider 的模型列表没有数据。",
   "error.models.catalogSourceHttps": "数据源 URL 必须是 https 地址。",
   "error.agent.defaultModelUnavailable": "该模型不可用，请选择一个已启用的对话模型。",
-  "error.agent.thinkingLevelUnsupported": "该模型不支持思考强度“{{level}}”。"
+  "error.agent.thinkingLevelUnsupported": "该模型不支持思考强度“{{level}}”。",
+  "error.providers.apiKeyRequiredForEndpoint": "修改 Base URL 或 API 类型时，需要重新填写 API key。",
+  "providers.form.apiKeyForEndpoint": "修改 Base URL 或 API 类型时需要重新填写 key"
 }

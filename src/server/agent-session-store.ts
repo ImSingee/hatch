@@ -15,6 +15,7 @@ import {
   listSessionPendingMessages,
   type SessionPendingMessages,
 } from './agent-pending-store';
+import { thinkingLevelSchema } from '~agent/protocol';
 
 export type SessionSummary = {
   id: string;
@@ -173,13 +174,21 @@ export async function insertAgentSession(data: {
   title?: string;
   providerId?: string | null;
   modelId?: string | null;
+  /**
+   * Level the first run uses unless the client names one; a level the model
+   * no longer offers falls back to its default then.
+   */
+  thinkingLevel?: string | null;
 }) {
+  const level = thinkingLevelSchema.safeParse(data.thinkingLevel);
   const [row] = await db
     .insert(schema.agentSessions)
     .values({
       title: data.title?.trim() || 'New chat',
       providerId: data.providerId ?? null,
       modelId: data.modelId ?? null,
+      thinkingLevel:
+        data.providerId && data.modelId && level.success ? level.data : null,
     })
     .returning();
   return { id: row.id };

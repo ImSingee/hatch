@@ -276,9 +276,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['provider', 'list'],
-    usage: 'provider list',
+    usage: 'provider list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List AI providers in display order: id, name, apiType, baseUrl, enabled, catalogProviderId (the catalog preset it is linked to, or null), hasApiKey, canGenerateImages and modelCount. Never prints API keys. provider get and model list --provider show the models.',
+      'List AI providers in display order: id, name, apiType, baseUrl, enabled, catalogProviderId (the catalog preset it is linked to, or null), hasApiKey, canGenerateImages and modelCount. Without --limit, lists every provider; --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys. provider get and model list --provider show the models.',
   },
   {
     path: ['provider', 'get'],
@@ -304,7 +304,7 @@ const definitions: readonly CliCommandDefinition[] = [
     usage:
       'provider update <provider-id> [--name <text>] [--api-type <type>] [--base-url <url>] [--api-key-file <path|->] [--enable | --disable] [--catalog <catalog-provider-id> | --clear-catalog]',
     description:
-      'Change a provider; omitted fields stay unchanged and at least one is required. --api-key-file replaces the API key (read from the file or stdin, never printed). --disable hides all its models from the Agent and image generation. --catalog links it to a catalog preset, which model add and provider fetch-models use to match catalog metadata by model id (existing models keep their catalogRef); --clear-catalog unlinks it. Prints the provider.',
+      'Change a provider; omitted fields stay unchanged and at least one is required. --api-key-file replaces the API key (read from the file or stdin, never printed); a change of --base-url or --api-type also needs --api-key-file, so a stored key never goes to a new endpoint. --disable hides all its models from the Agent and image generation. --catalog links it to a catalog preset, which model add and provider fetch-models use to match catalog metadata by model id (models without a catalog entry, or with one from the old link, are matched again); --clear-catalog unlinks it. Prints the provider.',
   },
   {
     path: ['provider', 'remove'],
@@ -320,9 +320,10 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['provider', 'fetch-models'],
-    usage: 'provider fetch-models <provider-id>',
+    usage:
+      'provider fetch-models <provider-id> [--limit <n>] [--cursor <cursor>]',
     description:
-      "List the models the provider itself offers (its /models endpoint) with modelId, name, catalogRef when the provider's catalog preset knows the model, and added when the provider already has it. Adds nothing; use model add.",
+      "List the models the provider itself offers (its /models endpoint), sorted by id, with modelId, name, catalogRef when the provider's catalog preset knows the model, and added when the provider already has it. Without --limit, lists every one; --limit (1-100) prints one page and a nextCursor to pass as --cursor. The platform reads at most 2,000 ids; truncated is true when the provider listed more. Adds nothing; use model add.",
   },
   {
     path: ['model', 'list'],

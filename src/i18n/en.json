@@ -1961,5 +1961,7 @@
   "error.providers.remoteListNoData": "The provider’s model list has no data.",
   "error.models.catalogSourceHttps": "The source URL must be an https URL.",
   "error.agent.defaultModelUnavailable": "That model is not available. Pick an enabled chat model.",
-  "error.agent.thinkingLevelUnsupported": "The model does not support thinking level “{{level}}”."
+  "error.agent.thinkingLevelUnsupported": "The model does not support thinking level “{{level}}”.",
+  "error.providers.apiKeyRequiredForEndpoint": "Enter the API key again when changing the base URL or API type.",
+  "providers.form.apiKeyForEndpoint": "Enter the key again to change the base URL or API type"
 }

@@ -169,6 +169,60 @@ describe('max output from the catalog', () => {
   });
 });
 
+describe('a stored key stays with its endpoint', () => {
+  it('requires the key again when the base URL or API type changes', async () => {
+    const provider = await createProvider({
+      catalogProviderId: 'anthropic',
+      apiKey: 'sk-original',
+      models: [],
+    });
+    await expect(
+      updateProvider({ id: provider.id, baseUrl: 'https://evil.example.test' }),
+    ).rejects.toThrow(/API key again/);
+    await expect(
+      updateProvider({ id: provider.id, apiType: 'openai-completions' }),
+    ).rejects.toThrow(/API key again/);
+    // Same endpoint (trailing slash only) or other fields: no key needed.
+    await updateProvider({
+      id: provider.id,
+      baseUrl: `${provider.baseUrl}/`,
+      name: 'Renamed',
+    });
+    await updateProvider({
+      id: provider.id,
+      baseUrl: 'https://proxy.example.test',
+      apiKey: 'sk-new',
+    });
+    const row = await db.query.agentProviders.findFirst({
+      where: { id: provider.id },
+    });
+    expect(row).toMatchObject({
+      name: 'Renamed',
+      baseUrl: 'https://proxy.example.test',
+      apiKey: 'sk-new',
+    });
+  });
+});
+
+describe('new chats from a saved default', () => {
+  it('start with the saved thinking level', async () => {
+    const { insertAgentSession } = await import('./agent-session-store');
+    const { id } = await insertAgentSession({
+      providerId: 'p',
+      modelId: 'm',
+      thinkingLevel: 'xhigh',
+    });
+    const ignored = await insertAgentSession({ thinkingLevel: 'bogus' });
+    const rows = await db.query.agentSessions.findMany({
+      where: { id: { in: [id, ignored.id] } },
+      columns: { id: true, thinkingLevel: true },
+    });
+    expect(
+      Object.fromEntries(rows.map((r) => [r.id, r.thinkingLevel])),
+    ).toEqual({ [id]: 'xhigh', [ignored.id]: null });
+  });
+});
+
 describe('linking a provider to the catalog', () => {
   it('gives its unlinked models catalog metadata', async () => {
     const provider = await createProvider({

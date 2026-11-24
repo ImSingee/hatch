@@ -373,7 +373,10 @@ export type UpdateProviderInput = {
   name?: string;
   apiType?: ProviderApiType;
   baseUrl?: string;
-  /** Replaces the key; unset keeps it. */
+  /**
+   * Replaces the key; unset keeps it. Required when the base URL or API type
+   * changes, so a stored key never follows the provider to a new endpoint.
+   */
   apiKey?: string;
   enabled?: boolean;
   /** Links to a catalog provider; null unlinks it. */
@@ -398,6 +401,18 @@ export async function updateProvider(
   if (input.baseUrl !== undefined) patch.baseUrl = checkBaseUrl(input.baseUrl);
   if (input.apiKey !== undefined) patch.apiKey = checkApiKey(input.apiKey);
   if (input.enabled !== undefined) patch.enabled = input.enabled;
+  // The stored key only ever goes to the endpoint it was entered for:
+  // pointing the provider somewhere else needs the key again, so a changed
+  // endpoint (say, by a prompt-injected Agent) can never receive it.
+  const endpointChanged =
+    (patch.baseUrl !== undefined && patch.baseUrl !== current.baseUrl) ||
+    (patch.apiType !== undefined && patch.apiType !== current.apiType);
+  if (endpointChanged && patch.apiKey === undefined && current.apiKey)
+    throw new AppError(
+      'Enter the API key again when changing the base URL or API type.',
+      400,
+      { code: 'providers.apiKeyRequiredForEndpoint' },
+    );
   if (input.catalogProviderId !== undefined)
     patch.catalogProviderId =
       input.catalogProviderId === null
@@ -623,7 +638,7 @@ async function readLimited(response: Response): Promise<string> {
 export async function listRemoteModels(
   id: string,
   signal?: AbortSignal,
-): Promise<RemoteModel[]> {
+): Promise<{ models: RemoteModel[]; truncated: boolean }> {
   const provider = await loadProviderRow(id);
   const request = modelListRequest(provider);
   const timeout = AbortSignal.timeout(PROVIDER_REQUEST_TIMEOUT_MS);
@@ -684,5 +699,10 @@ export async function listRemoteModels(
     });
     if (models.length >= MAX_REMOTE_MODELS) break;
   }
-  return models.sort((a, b) => a.modelId.localeCompare(b.modelId));
+  return {
+    models: models.sort((a, b) => a.modelId.localeCompare(b.modelId)),
+    // The platform reads at most MAX_REMOTE_MODELS ids.
+    truncated:
+      models.length >= MAX_REMOTE_MODELS && data.length > models.length,
+  };
 }

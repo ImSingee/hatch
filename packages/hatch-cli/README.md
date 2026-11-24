@@ -531,7 +531,9 @@ characters with no whitespace inside; there is deliberately no flag that takes t
 key itself, because shell history and process lists would record it. Keys are
 never printed: providers report `hasApiKey`. `provider list` prints each
 provider with `modelCount`; `provider get` adds its models. `provider update`
-changes only the given fields; `--catalog` links a preset (used by
+changes only the given fields; changing `--base-url` or `--api-type` also
+needs `--api-key-file`, so a stored key never goes to a new endpoint
+(`BAD_REQUEST` otherwise); `--catalog` links a preset (used by
 `model add` and `fetch-models` to match catalog metadata by model id) and
 `--clear-catalog` unlinks it. `provider remove --yes` deletes the provider,
 its key and all its models and cannot be undone. `provider test` sends one
