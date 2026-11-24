@@ -1,11 +1,13 @@
 import { ThemeIcon } from '@mantine/core';
+import { useDocumentTitle } from '@mantine/hooks';
 import { IconAppWindow } from '@tabler/icons-react';
 import { type CSSProperties, type ReactNode, type Ref, useId } from 'react';
 import classes from './standalone-window.module.css';
 
 /**
  * A window on the bare desk (sign-in, device approval, not found): a title
- * bar, a padded body and an optional muted footer.
+ * bar, a padded body and an optional muted footer. Its title also names the
+ * browser tab.
  */
 export function StandaloneWindow({
   title,
@@ -23,6 +25,7 @@ export function StandaloneWindow({
   children: ReactNode;
 }) {
   const titleId = useId();
+  useDocumentTitle(title);
   return (
     <section
       aria-labelledby={titleId}

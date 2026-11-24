@@ -8,6 +8,7 @@ import {
   ThemeIcon,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { useQuery } from '@tanstack/react-query';
 import {
   Outlet,
   createFileRoute,
@@ -19,7 +20,11 @@ import { Suspense } from 'react';
 import { SessionsPanel } from '~components/agent/sessions-panel';
 import { DeskWindow } from '~components/desk/window';
 import { InsideWindowProvider } from '~components/page/window-context';
-import { providersQueryOptions, sessionsQueryOptions } from '~queries/agent';
+import {
+  providersQueryOptions,
+  sessionQueryOptions,
+  sessionsQueryOptions,
+} from '~queries/agent';
 import classes from '~components/agent/chat.module.css';
 
 export const Route = createFileRoute('/_app/agent')({
@@ -36,6 +41,13 @@ function AgentLayout() {
   const navigate = useNavigate();
   const { threadId } = useParams({ strict: false });
   const [drawerOpened, drawer] = useDisclosure(false);
+  // The tab names the open chat, following its automatic title and renames
+  // through the same cache the chat reads; a new chat is just "Agent".
+  const { data: chatTitle } = useQuery({
+    ...sessionQueryOptions(threadId ?? ''),
+    enabled: Boolean(threadId),
+    select: (session) => session?.title,
+  });
 
   const select = (id: string | null) => {
     drawer.close();
@@ -51,6 +63,7 @@ function AgentLayout() {
       fill
       maxWidth={1360}
       title="Agent"
+      documentTitle={(threadId && chatTitle) || 'Agent'}
       tile={
         <ThemeIcon size={22} radius="xs" color="primary">
           <IconSparkles size={13} stroke={2.4} />

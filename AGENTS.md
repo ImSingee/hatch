@@ -262,6 +262,27 @@ Use PascalCase for components (`DashboardCard.tsx`), camelCase for hooks/utiliti
 - Tests may use `import()` after `vi.resetModules()`, `vi.stubEnv()`, or
   `vi.mock()` to load a fresh module instance.
 
+### Page titles
+
+Every page must name the browser tab; a new or changed page route must set its
+title in the same change. Never leave a page on the root's default `Hatch`.
+
+- `DeskWindow` and `StandaloneWindow` set the tab title from their `title`.
+  When the title bar does not name the page, or the name comes from what the
+  window shows (an open chat, a selected notification, the App's own page),
+  pass `documentTitle` to the `DeskWindow`, from the same query the page reads
+  so it follows renames and live updates. A `StandaloneWindow` always uses its
+  `title`.
+- Each window is the page's only title writer. A child inside a window must
+  not set the title itself, because a parent's effect runs after its child's
+  and overrides it; lift the value to the window's `documentTitle` instead.
+- A page without one of these windows calls `useDocumentTitle` from
+  `@mantine/hooks` once.
+- Do not set `title` in a route's `head`, write `document.title` directly, or
+  render a `<title>` element: the root `head` owns the shell's fallback title.
+- Use the plain page name (`Agent`, `Settings · Account`, the chat's title),
+  without a `· Hatch` suffix.
+
 ## Commit & Pull Request Guidelines
 
 Commits should mirror the existing short, imperative pattern (`use mantine components for index page`). Keep changes scoped and meaningful. PRs must include: a concise summary, linked issue/ticket, before/after screenshots for UI work, and confirmation that `pnpm lint` and `pnpm check:types` passed. Mention any config or env changes up front so reviewers can reproduce.
