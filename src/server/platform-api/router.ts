@@ -111,6 +111,8 @@ import {
 } from '~server/images/model';
 
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
+import { buildInfo } from '~/build-info';
 import { ModelService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/model_pb';
 import {
   listProviderModels,
@@ -939,6 +941,14 @@ export function registerPlatformApi(
         accent: input.accent,
         dockLabels: input.dockLabels,
       }),
+    }),
+  });
+  router.service(ServerService, {
+    getServerInfo: () => ({
+      server: {
+        commit: buildInfo.commit ?? undefined,
+        commitTime: buildInfo.commitTime ?? undefined,
+      },
     }),
   });
   router.service(PinService, {
