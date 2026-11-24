@@ -21,6 +21,7 @@ import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { useState } from 'react';
+import { Trans } from 'react-i18next';
 import {
   useMutation,
   useQueryClient,
@@ -34,6 +35,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { providersQueryOptions } from '~queries/agent';
 import {
   createModel,
@@ -76,18 +78,11 @@ function ProviderAvatar({ apiType }: { apiType: string }) {
   );
 }
 
-function baseUrlHint(apiType: string): string {
-  switch (apiType) {
-    case 'anthropic-messages':
-      return 'e.g. https://api.anthropic.com — the SDK appends /v1/messages';
-    case 'openai-responses':
-      return 'e.g. https://api.openai.com/v1 — the SDK appends /responses';
-    case 'openai-completions':
-      return 'e.g. https://api.openai.com/v1 — the SDK appends /chat/completions';
-    default:
-      return '';
-  }
-}
+const BASE_URL_HINTS: Record<string, PlainTranslationKey> = {
+  'anthropic-messages': 'providers.form.baseUrlHint.anthropicMessages',
+  'openai-responses': 'providers.form.baseUrlHint.openaiResponses',
+  'openai-completions': 'providers.form.baseUrlHint.openaiCompletions',
+};
 
 type ProviderFormValues = {
   name: string;
@@ -105,6 +100,7 @@ export function ProviderFormModal({
   onClose: () => void;
   provider?: ProviderWithModels;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const editing = Boolean(provider);
   const form = useForm<ProviderFormValues>({
@@ -115,9 +111,10 @@ export function ProviderFormModal({
       apiKey: '',
     },
     validate: {
-      name: (v) => (v.trim() ? null : 'Required'),
-      baseUrl: (v) => (v.trim() ? null : 'Required'),
-      apiKey: (v) => (editing || v.trim() ? null : 'Required'),
+      // Validation stores catalog keys; fieldError translates them on render.
+      name: (v) => (v.trim() ? null : 'providers.form.required'),
+      baseUrl: (v) => (v.trim() ? null : 'providers.form.required'),
+      apiKey: (v) => (editing || v.trim() ? null : 'providers.form.required'),
     },
   });
 
@@ -146,7 +143,13 @@ export function ProviderFormModal({
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: providersQueryOptions.queryKey });
-      toast.success(editing ? 'Provider updated' : 'Provider added');
+      toast.success(
+        t(
+          editing
+            ? 'providers.toast.providerUpdated'
+            : 'providers.toast.providerAdded',
+        ),
+      );
       form.reset();
       onClose();
     },
@@ -156,40 +159,49 @@ export function ProviderFormModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={editing ? 'Edit provider' : 'Add provider'}
+      title={t(editing ? 'providers.editProvider' : 'providers.addProvider')}
       centered
     >
       <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
         <Stack gap="sm">
           <TextInput
-            label="Name"
-            placeholder="My provider"
+            label={t('common.name')}
+            placeholder={t('providers.form.namePlaceholder')}
             {...form.getInputProps('name')}
+            error={fieldError(t, form.errors.name)}
           />
           <Select
-            label="API type"
+            label={t('providers.form.apiType')}
             data={API_TYPE_OPTIONS}
             allowDeselect={false}
             {...form.getInputProps('apiType')}
           />
           <TextInput
-            label="Base URL"
+            label={t('providers.form.baseUrl')}
             placeholder="https://api.example.com"
-            description={baseUrlHint(form.values.apiType)}
+            description={
+              form.values.apiType in BASE_URL_HINTS
+                ? t(BASE_URL_HINTS[form.values.apiType])
+                : ''
+            }
             {...form.getInputProps('baseUrl')}
+            error={fieldError(t, form.errors.baseUrl)}
           />
           <TextInput
-            label="API key"
+            label={t('providers.form.apiKey')}
             type="password"
-            placeholder={editing ? 'Leave blank to keep current key' : 'sk-...'}
+            placeholder={
+              editing ? t('providers.form.apiKeyKeepCurrent') : 'sk-...'
+            }
             {...form.getInputProps('apiKey')}
+            error={fieldError(t, form.errors.apiKey)}
           />
           <Group justify="flex-end" mt="xs">
             <Button type="button" variant="default" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
-              {editing ? 'Save' : 'Add provider'}
+              {editing ? t('common.save') : t('providers.addProvider')}
             </Button>
           </Group>
         </Stack>
@@ -208,10 +220,19 @@ type ModelFormValues = {
   maxTokens: number;
 };
 
-const MODEL_KIND_LABELS: Record<ProviderModel['kind'], string> = {
-  chat: 'Chat',
-  image: 'Image',
+const MODEL_KIND_LABELS: Record<ProviderModel['kind'], PlainTranslationKey> = {
+  chat: 'providers.model.kind.chat',
+  image: 'providers.model.kind.image',
 };
+
+type Translate = ReturnType<typeof useI18n>['t'];
+
+/** Form validation stores a catalog key; translate it when rendering. */
+function fieldError(t: Translate, error: unknown) {
+  return typeof error === 'string' && error
+    ? t(error as PlainTranslationKey)
+    : undefined;
+}
 
 function ModelFormModal({
   opened,
@@ -224,6 +245,7 @@ function ModelFormModal({
   provider: ProviderWithModels;
   model?: ProviderModel;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const editing = Boolean(model);
   const canMakeImages = provider.imageModelSuggestions.length > 0;
@@ -238,9 +260,11 @@ function ModelFormModal({
       maxTokens: model?.maxTokens ?? 8192,
     },
     validate: {
-      modelId: (v) => (v.trim() ? null : 'Required'),
+      modelId: (v) => (v.trim() ? null : 'providers.form.required'),
       description: (v) =>
-        Array.from(v.trim()).length > 200 ? 'At most 200 characters' : null,
+        Array.from(v.trim()).length > 200
+          ? 'providers.model.descriptionTooLong'
+          : null,
     },
   });
   const image = form.values.kind === 'image';
@@ -267,7 +291,13 @@ function ModelFormModal({
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: providersQueryOptions.queryKey });
-      toast.success(editing ? 'Model updated' : 'Model added');
+      toast.success(
+        t(
+          editing
+            ? 'providers.toast.modelUpdated'
+            : 'providers.toast.modelAdded',
+        ),
+      );
       form.reset();
       onClose();
     },
@@ -277,26 +307,26 @@ function ModelFormModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={editing ? 'Edit model' : 'Add model'}
+      title={t(editing ? 'providers.model.edit' : 'providers.model.add')}
       centered
     >
       <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
         <Stack gap="sm">
           <Select
-            label="Category"
-            description={
+            label={t('providers.model.category')}
+            description={t(
               canMakeImages
                 ? image
-                  ? 'Generates images, such as app icons'
-                  : 'Runs the Agent'
-                : 'This API type can’t generate images'
-            }
+                  ? 'providers.model.categoryImage'
+                  : 'providers.model.categoryChat'
+                : 'providers.model.categoryNoImages',
+            )}
             allowDeselect={false}
             data={[
-              { value: 'chat', label: MODEL_KIND_LABELS.chat },
+              { value: 'chat', label: t(MODEL_KIND_LABELS.chat) },
               {
                 value: 'image',
-                label: MODEL_KIND_LABELS.image,
+                label: t(MODEL_KIND_LABELS.image),
                 disabled: !canMakeImages,
               },
             ]}
@@ -304,23 +334,25 @@ function ModelFormModal({
           />
           {image ? (
             <Autocomplete
-              label="Model ID"
+              label={t('providers.model.modelId')}
               placeholder={provider.imageModelSuggestions[0]}
-              description="The identifier sent to the provider"
+              description={t('providers.model.modelIdDescription')}
               data={provider.imageModelSuggestions}
               {...form.getInputProps('modelId')}
+              error={fieldError(t, form.errors.modelId)}
             />
           ) : (
             <TextInput
-              label="Model ID"
+              label={t('providers.model.modelId')}
               placeholder="gpt-5.5"
-              description="The identifier sent to the provider"
+              description={t('providers.model.modelIdDescription')}
               {...form.getInputProps('modelId')}
+              error={fieldError(t, form.errors.modelId)}
             />
           )}
           <TextInput
-            label="Display name"
-            description="Optional — defaults to the model ID"
+            label={t('providers.model.displayName')}
+            description={t('providers.model.displayNameDescription')}
             placeholder={
               form.values.modelId.trim() || (image ? 'GPT Image' : 'GPT-5.5')
             }
@@ -328,27 +360,28 @@ function ModelFormModal({
           />
           {image ? (
             <Textarea
-              label="Best for"
-              description="Optional — helps the Agent choose between image models"
-              placeholder="Fast, cheap drafts"
+              label={t('providers.model.bestFor')}
+              description={t('providers.model.bestForDescription')}
+              placeholder={t('providers.model.bestForPlaceholder')}
               autosize
               minRows={2}
               maxRows={4}
               {...form.getInputProps('description')}
+              error={fieldError(t, form.errors.description)}
             />
           ) : null}
           {image ? null : (
             <>
               <Group grow>
                 <NumberInput
-                  label="Context window"
+                  label={t('providers.model.contextWindow')}
                   min={1000}
                   step={1000}
                   thousandSeparator=","
                   {...form.getInputProps('contextWindow')}
                 />
                 <NumberInput
-                  label="Max output tokens"
+                  label={t('providers.model.maxTokens')}
                   min={256}
                   step={256}
                   thousandSeparator=","
@@ -356,18 +389,18 @@ function ModelFormModal({
                 />
               </Group>
               <Switch
-                label="Reasoning model"
-                description="Enable extended thinking when supported"
+                label={t('providers.model.reasoning')}
+                description={t('providers.model.reasoningDescription')}
                 {...form.getInputProps('reasoning', { type: 'checkbox' })}
               />
             </>
           )}
           <Group justify="flex-end" mt="xs">
             <Button type="button" variant="default" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
-              {editing ? 'Save' : 'Add model'}
+              {editing ? t('common.save') : t('providers.model.add')}
             </Button>
           </Group>
         </Stack>
@@ -377,6 +410,7 @@ function ModelFormModal({
 }
 
 function ProviderCard({ provider }: { provider: ProviderWithModels }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [editOpen, editHandlers] = useDisclosure(false);
   // null = closed, 'new' = add model, ProviderModel = edit that model.
@@ -425,7 +459,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     mutationFn: () => deleteProvider({ data: { id: provider.id } }),
     onSuccess: async () => {
       await invalidate();
-      toast.success('Provider removed');
+      toast.success(t('providers.toast.providerRemoved'));
     },
   });
 
@@ -433,7 +467,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     mutationFn: (id: string) => deleteModel({ data: { id } }),
     onSuccess: async () => {
       await invalidate();
-      toast.success('Model removed');
+      toast.success(t('providers.toast.modelRemoved'));
     },
   });
 
@@ -449,7 +483,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
               </Text>
               {provider.enabled ? null : (
                 <Badge variant="default" size="sm">
-                  Off
+                  {t('providers.card.off')}
                 </Badge>
               )}
             </Group>
@@ -460,7 +494,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
         </Group>
         <Group gap="xs" wrap="nowrap">
           <Tooltip
-            label={provider.enabled ? 'Enabled' : 'Disabled'}
+            label={t(provider.enabled ? 'common.enabled' : 'common.disabled')}
             withArrow
             position="left"
           >
@@ -475,33 +509,42 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
               <ActionIcon
                 variant="subtle"
                 color="gray"
-                aria-label="Provider menu"
+                aria-label={t('providers.card.menu')}
               >
                 <IconDotsVertical size={18} stroke={1.6} />
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item onClick={editHandlers.open}>Edit provider</Menu.Item>
+              <Menu.Item onClick={editHandlers.open}>
+                {t('providers.editProvider')}
+              </Menu.Item>
               <Menu.Item
                 color="red"
                 leftSection={<IconTrash size={15} stroke={1.6} />}
                 onClick={() =>
                   modals.openConfirmModal({
-                    title: 'Remove provider',
+                    title: t('providers.removeProvider'),
                     centered: true,
                     children: (
                       <Text size="sm">
-                        Remove <b>{provider.name}</b> and its models? Sessions
-                        using it will fall back to another model.
+                        <Trans
+                          t={t}
+                          i18nKey="providers.removeProviderBody"
+                          values={{ name: provider.name }}
+                          components={{ b: <b /> }}
+                        />
                       </Text>
                     ),
-                    labels: { confirm: 'Remove', cancel: 'Cancel' },
+                    labels: {
+                      confirm: t('common.remove'),
+                      cancel: t('common.cancel'),
+                    },
                     confirmProps: { color: 'red' },
                     onConfirm: () => removeProvider.mutate(),
                   })
                 }
               >
-                Remove provider
+                {t('providers.removeProvider')}
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
@@ -533,7 +576,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                     variant="subtle"
                     color="gray"
                     size="sm"
-                    aria-label="Edit model"
+                    aria-label={t('providers.model.edit')}
                     onClick={() => setModelTarget(m)}
                   >
                     <IconPencil size={15} stroke={1.6} />
@@ -542,18 +585,25 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                     variant="subtle"
                     color="red"
                     size="sm"
-                    aria-label="Remove model"
+                    aria-label={t('providers.model.remove')}
                     onClick={() =>
                       modals.openConfirmModal({
-                        title: 'Remove model',
+                        title: t('providers.model.remove'),
                         centered: true,
                         children: (
                           <Text size="sm">
-                            Remove <b>{m.name}</b>? Sessions using it will fall
-                            back to another model.
+                            <Trans
+                              t={t}
+                              i18nKey="providers.model.removeBody"
+                              values={{ name: m.name }}
+                              components={{ b: <b /> }}
+                            />
                           </Text>
                         ),
-                        labels: { confirm: 'Remove', cancel: 'Cancel' },
+                        labels: {
+                          confirm: t('common.remove'),
+                          cancel: t('common.cancel'),
+                        },
                         confirmProps: { color: 'red' },
                         onConfirm: () => removeModel.mutate(m.id),
                       })
@@ -567,7 +617,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
           </Stack>
         ) : (
           <Text size="sm" c="dimmed" className={classes.emptyModels}>
-            No models yet — add one to enable this provider.
+            {t('providers.card.noModels')}
           </Text>
         )}
         <Group mt="xs">
@@ -579,7 +629,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
             leftSection={<IconPlus size={14} stroke={2} />}
             onClick={() => setModelTarget('new')}
           >
-            Add model
+            {t('providers.model.add')}
           </Button>
         </Group>
       </div>
@@ -607,6 +657,7 @@ export function ProvidersPanel({
 }: {
   onAddProvider: () => void;
 }) {
+  const { t } = useI18n();
   const { data: providers } = useSuspenseQuery(providersQueryOptions);
 
   if (providers.length === 0) {
@@ -616,11 +667,10 @@ export function ProvidersPanel({
           <IconRobot size={26} stroke={1.5} />
         </ThemeIcon>
         <Text fw={700} mt="xs">
-          No providers yet
+          {t('providers.empty.title')}
         </Text>
         <Text size="sm" c="dimmed" ta="center" maw={420}>
-          Add an LLM provider — Anthropic, OpenAI, or any compatible endpoint —
-          and its models so the Agent can start building apps.
+          {t('providers.empty.body')}
         </Text>
         <Button
           type="button"
@@ -628,7 +678,7 @@ export function ProvidersPanel({
           leftSection={<IconPlus size={16} stroke={1.8} />}
           onClick={onAddProvider}
         >
-          Add provider
+          {t('providers.addProvider')}
         </Button>
       </Stack>
     );

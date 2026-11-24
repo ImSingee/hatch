@@ -9,6 +9,10 @@
     "runTrigger.app",
     "runTrigger.webhook",
     "settings.agentRunner.label",
-    "settings.tailscale.label"
+    "settings.tailscale.label",
+    "agentRunner.runners.id",
+    "agentRunner.runs.runner",
+    "homepage.page.agent",
+    "backends.column.app"
   ]
 }

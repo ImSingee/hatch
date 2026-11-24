@@ -39,9 +39,14 @@ type ModelRow = typeof schema.agentModels.$inferSelect;
 
 function checkModelId(kind: AgentModelKind, value: string): string {
   const modelId = value.trim();
-  if (!modelId) throw new AppError('Model ID is required.', 400);
+  if (!modelId)
+    throw new AppError('Model ID is required.', 400, {
+      code: 'providers.modelIdRequired',
+    });
   if (kind === 'image' && !IMAGE_MODEL_ID_RE.test(modelId))
-    throw new AppError('Invalid image model id.', 400);
+    throw new AppError('Invalid image model id.', 400, {
+      code: 'providers.invalidImageModelId',
+    });
   return modelId;
 }
 
@@ -51,6 +56,10 @@ function checkDescription(value: string): string {
     throw new AppError(
       `Description must be at most ${MAX_MODEL_DESCRIPTION_LENGTH} characters.`,
       400,
+      {
+        code: 'providers.descriptionTooLong',
+        params: { max: MAX_MODEL_DESCRIPTION_LENGTH },
+      },
     );
   return description;
 }
@@ -66,9 +75,14 @@ export async function createProviderModel(
     where: { id: input.providerId },
     columns: { id: true, apiType: true },
   });
-  if (!provider) throw new AppError('Provider not found.', 404);
+  if (!provider)
+    throw new AppError('Provider not found.', 404, {
+      code: 'providers.providerNotFound',
+    });
   if (input.kind === 'image' && !canGenerateImages(provider.apiType))
-    throw new AppError('This provider cannot generate images.', 400);
+    throw new AppError('This provider cannot generate images.', 400, {
+      code: 'providers.cannotGenerateImages',
+    });
   const modelId = checkModelId(input.kind, input.modelId);
   const [row] = await db
     .insert(schema.agentModels)
@@ -100,7 +114,9 @@ export async function updateProviderModel(
     where: { id: input.id },
   });
   if (!current || (onlyKind && current.kind !== onlyKind))
-    throw new AppError('Model not found.', 404);
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
   const kind = input.kind ?? current.kind;
   if (kind === 'image' && kind !== current.kind) {
     const provider = await db.query.agentProviders.findFirst({
@@ -108,7 +124,9 @@ export async function updateProviderModel(
       columns: { apiType: true },
     });
     if (!provider || !canGenerateImages(provider.apiType))
-      throw new AppError('This provider cannot generate images.', 400);
+      throw new AppError('This provider cannot generate images.', 400, {
+        code: 'providers.cannotGenerateImages',
+      });
   }
   const patch: Partial<typeof schema.agentModels.$inferInsert> = {};
   if (kind !== current.kind) {
@@ -181,7 +199,10 @@ export async function setProviderModelKind(
 ): Promise<ProviderModelView> {
   await updateProviderModel({ id, kind });
   const model = (await listProviderModels()).find((item) => item.id === id);
-  if (!model) throw new AppError('Model not found.', 404);
+  if (!model)
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
   return model;
 }
 
@@ -197,7 +218,10 @@ export async function deleteProviderModel(
         : eq(schema.agentModels.id, id),
     )
     .returning({ id: schema.agentModels.id });
-  if (kind && !deleted.length) throw new AppError('Model not found.', 404);
+  if (kind && !deleted.length)
+    throw new AppError('Model not found.', 404, {
+      code: 'providers.modelNotFound',
+    });
 }
 
 /**
@@ -224,5 +248,6 @@ export async function assertApiTypeKeepsModels(
     throw new AppError(
       'This API type cannot generate images. Remove the provider’s image models first.',
       409,
+      { code: 'providers.apiTypeDropsImageModels' },
     );
 }
