@@ -592,7 +592,9 @@ export async function startNativePlayer(): Promise<void> {
     const { createPlayer } = (await import(
       /* @vite-ignore */ runtimeUrl(config.runtime.module)
     )) as { createPlayer: CreatePlayer };
-    player = await createPlayer(document.getElementById('app')!, {
+    // Surface messages stay queued (in order) until the player is ready:
+    // `player` is set only after the font wait, just before the drain.
+    const created = await createPlayer(document.getElementById('app')!, {
       wasm: runtimeUrl(config.runtime.wasm),
       data: mapValues(config.runtime.data, runtimeUrl),
       sides: Object.fromEntries(
@@ -620,9 +622,10 @@ export async function startNativePlayer(): Promise<void> {
       new Promise((resolve) => setTimeout(resolve, FONT_WAIT_MS)),
     ]);
     document.getElementById('status')?.setAttribute('hidden', '');
-    player.hostEvent('hatch.theme', { theme: theme() });
+    created.hostEvent('hatch.theme', { theme: theme() });
+    player = created;
     for (const message of pending.splice(0)) apply(message);
-    await player.runModule(appUrl(config.app.code), {
+    await created.runModule(appUrl(config.app.code), {
       capabilities: config.grant,
       appId: config.nshAppId,
       chunks: mapValues(config.app.chunks, appUrl),
