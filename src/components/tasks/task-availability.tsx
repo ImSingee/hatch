@@ -1,6 +1,7 @@
 import { Alert } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notice';
+import { useI18n } from '~i18n';
 import type { AppDetail } from '~server/apps';
 
 /**
@@ -14,10 +15,11 @@ export function TaskAvailabilityNotice({
   app: AppDetail;
   hasTasks: boolean;
 }) {
+  const { t } = useI18n();
   if (app.status === 'archived') {
     return (
       <Alert color="gray" variant="light" icon={<IconInfoCircle size={16} />}>
-        This App is archived. Restore it from Manage to run its tasks again.
+        {t('tasks.notice.archived')}
       </Alert>
     );
   }
@@ -31,8 +33,7 @@ export function TaskAvailabilityNotice({
         variant="light"
         icon={<IconInfoCircle size={16} />}
       >
-        This App isn&apos;t deployed yet. Deploy it from the Agent to run its
-        tasks.
+        {t('tasks.notice.notDeployed')}
       </Alert>
     );
   }
@@ -43,8 +44,7 @@ export function TaskAvailabilityNotice({
         variant="light"
         icon={<IconInfoCircle size={16} />}
       >
-        The active deployment declares no tasks. Ask the Agent to add a task (a
-        backend RPC method with run history) and redeploy.
+        {t('tasks.notice.noTasks')}
       </Alert>
     );
   }

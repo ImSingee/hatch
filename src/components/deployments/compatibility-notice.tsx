@@ -1,16 +1,21 @@
 import { Alert, Anchor, Text } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
 import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react';
+import { Trans } from 'react-i18next';
 import type { DeploymentCompatibility } from '~/deployment-compatibility';
+import { useI18n } from '~i18n';
 
 export function CompatibilityNotice({
-  resourceName,
   compatibility,
 }: {
-  resourceName: 'App';
   compatibility: DeploymentCompatibility | null;
 }) {
+  const { t } = useI18n();
   if (!compatibility || compatibility.isLatest) return null;
+
+  const agentLink = {
+    agent: <Anchor component={Link} to="/agent" fw={700} />,
+  };
 
   if (!compatibility.isSupported) {
     if (compatibility.version > compatibility.latestVersion) {
@@ -19,10 +24,13 @@ export function CompatibilityNotice({
           color="red"
           variant="light"
           icon={<IconAlertTriangle size={18} />}
-          title="Platform update required"
+          title={t('compatibility.platformUpdate.title')}
         >
           <Text size="sm">
-            {`This ${resourceName} uses compatibility v${compatibility.version}, newer than this platform's latest supported v${compatibility.latestVersion}. Its runtime is disabled. Update the platform before running it.`}
+            {t('compatibility.platformUpdate.body', {
+              version: compatibility.version,
+              latest: compatibility.latestVersion,
+            })}
           </Text>
         </Alert>
       );
@@ -33,16 +41,18 @@ export function CompatibilityNotice({
         color="red"
         variant="light"
         icon={<IconAlertTriangle size={18} />}
-        title={`${resourceName} update required`}
+        title={t('compatibility.appUpdate.title')}
       >
         <Text size="sm">
-          This {resourceName} uses compatibility v{compatibility.version}, below
-          the minimum supported v{compatibility.minimumSupportedVersion}. Its
-          runtime is disabled. Use the{' '}
-          <Anchor component={Link} to="/agent" fw={700}>
-            Agent
-          </Anchor>{' '}
-          to update and redeploy it.
+          <Trans
+            t={t}
+            i18nKey="compatibility.appUpdate.body"
+            values={{
+              version: compatibility.version,
+              minimum: compatibility.minimumSupportedVersion,
+            }}
+            components={agentLink}
+          />
         </Text>
       </Alert>
     );
@@ -53,16 +63,18 @@ export function CompatibilityNotice({
       color="orange"
       variant="light"
       icon={<IconRefresh size={18} />}
-      title="Compatibility update available"
+      title={t('compatibility.available.title')}
     >
       <Text size="sm">
-        This {resourceName} uses compatibility v{compatibility.version}; the
-        latest is v{compatibility.latestVersion}. It can keep running, but use
-        the{' '}
-        <Anchor component={Link} to="/agent" fw={700}>
-          Agent
-        </Anchor>{' '}
-        to redeploy it for the current platform.
+        <Trans
+          t={t}
+          i18nKey="compatibility.available.body"
+          values={{
+            version: compatibility.version,
+            latest: compatibility.latestVersion,
+          }}
+          components={agentLink}
+        />
       </Text>
     </Alert>
   );

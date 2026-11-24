@@ -18,7 +18,7 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema, type DB, type TX } from '~/db';
-import type { JsonValue } from '~/db/schema';
+import type { AgentMessageMode, JsonValue } from '~/db/schema';
 import type { AgentAttachmentRef } from '~agent/attachments';
 import {
   hasComposerText,
@@ -127,7 +127,8 @@ async function result(
 }
 
 /**
- * Add a message in the sender's preferred mode. When the session is idle
+ * Add a message in `mode`, or the sender's preferred mode when it is
+ * omitted. When the session is idle
  * (and not paused) it is delivered right away.
  *
  * With a `clientMessageId`, a resend of a message sent before (to this
@@ -140,6 +141,7 @@ export async function enqueuePendingMessage(input: {
   providerId: string;
   modelId: string;
   message: PendingMessageInput;
+  mode?: AgentMessageMode;
   clientMessageId?: string;
 }): Promise<PendingMessagesResult> {
   const receiptKey = input.clientMessageId
@@ -170,7 +172,8 @@ export async function enqueuePendingMessage(input: {
       if (receipt) return replay(receipt.runId);
     }
     await assertAgentModelAvailable(input.providerId, input.modelId);
-    const { messageMode: mode } = await readAgentPreferences(input.userId);
+    const mode =
+      input.mode ?? (await readAgentPreferences(input.userId)).messageMode;
     const replayed = await db.transaction(async (tx) => {
       await lockSession(tx, input.sessionId);
       if (receiptKey) {
@@ -254,15 +257,18 @@ export async function enqueuePendingMessage(input: {
 /**
  * Change a waiting message. Each given field replaces that part; an omitted
  * field stays unchanged. Attachments can only be removed (`attachmentIds`
- * lists the ones to keep); removed ones are released.
+ * lists the ones to keep); removed ones are released. `mode` switches how it
+ * is delivered; a message switched to steer joins the running reply at its
+ * next tool-call boundary.
  */
 export async function updatePendingMessage(input: {
   sessionId: string;
   messageId: string;
   message: Partial<PendingMessageInput>;
+  mode?: AgentMessageMode;
 }): Promise<PendingMessagesResult> {
   return enqueuePendingTask(input.sessionId, async () => {
-    await db.transaction(async (tx) => {
+    const steered = await db.transaction(async (tx) => {
       const row = await lockEditable(tx, input.sessionId, input.messageId);
       const current = pendingRowContent(row);
       const content = input.message.content ?? current.content;
@@ -314,10 +320,13 @@ export async function updatePendingMessage(input: {
           content: content as unknown as JsonValue[],
           images: images as unknown as JsonValue[],
           attachments: kept as unknown as JsonValue[],
+          ...(input.mode ? { mode: input.mode } : {}),
           updatedAt: new Date(),
         })
         .where(eq(schema.agentPendingMessages.id, input.messageId));
+      return input.mode === 'steer' && row.mode !== 'steer';
     });
+    if (steered) await notifyActiveRunOfSteer(input.sessionId);
     return result(input.sessionId);
   });
 }

@@ -2,6 +2,7 @@ import { Alert, Anchor, Button, Center, Text } from '@mantine/core';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { RunTable } from '~components/runs/run-table';
+import { useI18n } from '~i18n';
 import { appTaskRunsInfiniteQueryOptions } from '~queries/app-tasks';
 
 const PAGE = 50;
@@ -25,6 +26,7 @@ export function TaskRunList({
   limit?: number;
   showTask?: boolean;
 }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const query = useInfiniteQuery(
     appTaskRunsInfiniteQueryOptions(appId, task, limit ?? PAGE),
@@ -38,21 +40,22 @@ export function TaskRunList({
     });
   return (
     <RunTable
-      title={limit ? 'Recent runs' : 'Runs'}
+      title={limit ? t('tasks.runs.recent') : t('tasks.runs.title')}
       runs={runs}
       loading={query.isLoading}
       emptyText={
         failed
-          ? 'Could not load run history.'
+          ? t('tasks.runs.loadFailed')
           : task
-            ? 'No runs of this task yet. Run it to see its history here.'
-            : 'No task runs yet. Run a task to see its history here.'
+            ? t('tasks.runs.emptyTask')
+            : t('tasks.runs.emptyAll')
       }
       leadColumns={
         showTask
           ? [
               {
-                header: 'Task',
+                key: 'task',
+                header: t('taskRun.row.task'),
                 cell: (run) => (
                   <Text size="sm" fw={600}>
                     {run.taskName}
@@ -76,7 +79,7 @@ export function TaskRunList({
               />
             )}
           >
-            All runs ›
+            {t('tasks.runs.viewAll')}
           </Anchor>
         ) : undefined
       }
@@ -85,7 +88,7 @@ export function TaskRunList({
           <Alert color="red" variant="light" mt="sm" py="xs">
             <Center>
               <Text size="sm" mr="sm">
-                Could not load run history.
+                {t('tasks.runs.loadFailed')}
               </Text>
               <Button
                 type="button"
@@ -94,7 +97,7 @@ export function TaskRunList({
                 loading={query.isFetching}
                 onClick={() => void query.refetch()}
               >
-                Retry
+                {t('common.retry')}
               </Button>
             </Center>
           </Alert>
@@ -107,7 +110,7 @@ export function TaskRunList({
               loading={query.isFetchingNextPage}
               onClick={() => void query.fetchNextPage()}
             >
-              Show more
+              {t('common.showMore')}
             </Button>
           </Center>
         ) : null

@@ -1,6 +1,6 @@
 import { Badge, Code, Group, Text, Timeline } from '@mantine/core';
 import type { ReactNode } from 'react';
-import { useI18n, type PlainTranslationKey } from '~i18n';
+import { useI18n } from '~i18n';
 import {
   Column,
   Columns,
@@ -15,15 +15,8 @@ import {
   type RunDetailView,
   type RunStepView,
 } from '~lib/runs';
-import { RunStatusBadge, RunStatusBullet } from './run-status';
+import { RunStatusBadge, RunStatusBullet, RunTriggerLabel } from './run-status';
 import classes from './run-inspector.module.css';
-
-const TRIGGER_LABELS: Record<string, PlainTranslationKey> = {
-  manual: 'runTrigger.manual',
-  cron: 'runTrigger.cron',
-  webhook: 'runTrigger.webhook',
-  app: 'runTrigger.app',
-};
 
 function StepItem({ step }: { step: RunStepView }) {
   const { t } = useI18n();
@@ -80,7 +73,6 @@ export function RunInspector({
 }) {
   const { t } = useI18n();
   const active = isActiveRun(run.status);
-  const triggerLabel = TRIGGER_LABELS[run.trigger];
   return (
     <Columns>
       <Column grow basis={420}>
@@ -130,7 +122,7 @@ export function RunInspector({
               <RunStatusBadge status={run.status} />
             </Row>
             <Row label={t('runs.inspector.trigger')}>
-              {triggerLabel ? t(triggerLabel) : run.trigger}
+              <RunTriggerLabel trigger={run.trigger} />
             </Row>
             {run.version != null ? (
               <Row label={t('runs.inspector.version')}>v{run.version}</Row>

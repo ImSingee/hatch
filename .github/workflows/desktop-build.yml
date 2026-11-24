@@ -1,0 +1,70 @@
+name: Desktop Build
+
+# Builds the macOS desktop app (desktop/, Tauri 2) as a universal binary each
+# time a change lands on master, and uploads Hatch.app and the disk image as
+# workflow artifacts. The build is unsigned (ad-hoc); see desktop/README.md.
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build macOS app
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26.x
+          cache: 'pnpm'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @hatch/desktop
+
+      - name: Check types
+        run: pnpm --dir desktop check:types
+
+      # Tauri skips the Finder layout step of the disk image when CI is set,
+      # so the DMG builds without a GUI session.
+      - name: Build app and disk image
+        run: >-
+          pnpm --dir desktop tauri build
+          --target universal-apple-darwin
+          --bundles app,dmg
+
+      - name: Package app
+        working-directory: desktop/src-tauri/target/universal-apple-darwin/release/bundle
+        run: |
+          ditto -c -k --keepParent macos/Hatch.app Hatch-macos-universal.app.zip
+          ls -l Hatch-macos-universal.app.zip dmg/*.dmg
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hatch-desktop-macos-${{ github.sha }}
+          path: |
+            desktop/src-tauri/target/universal-apple-darwin/release/bundle/Hatch-macos-universal.app.zip
+            desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 30
