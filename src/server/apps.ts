@@ -19,7 +19,12 @@ import {
   extraPermissionsView,
 } from '~/extra-permissions';
 import { normalizedManifestFor } from './apps/access';
-import type { NormalizedManifest, WebhookAuth } from './apps/manifest';
+import {
+  APP_DOC_ID_RE,
+  type NormalizedManifest,
+  type WebhookAuth,
+} from './apps/manifest';
+import { readAppDoc } from './apps/docs';
 import {
   type AppCronRunView,
   ensureScheduler,
@@ -178,6 +183,16 @@ export const getNormalizedManifest = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .validator((id: string) => idSchema.parse(id))
   .handler(async ({ data: id }) => normalizedManifestFor(id));
+
+/** One external doc body of the current deployment, for the manage page. */
+export const getAppDocFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; docId: string }) =>
+    z
+      .object({ id: idSchema, docId: z.string().regex(APP_DOC_ID_RE) })
+      .parse(input),
+  )
+  .handler(async ({ data }) => readAppDoc(data.id, data.docId));
 
 export const listDeployments = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])

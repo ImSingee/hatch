@@ -1,6 +1,8 @@
 {
   "zh-CN": [
     "api.title",
+    "appManage.section.api",
+    "appManage.section.webhook",
     "dock.label",
     "library.groupByName",
     "nav.agent",

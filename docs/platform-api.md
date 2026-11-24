@@ -276,6 +276,18 @@ App) answers `TOO_MANY_REQUESTS`. `ListAppTaskRuns` pages newest first with
 `limit` (1-200) and `next_cursor`. See [App tasks](../skills/building-apps/references/tasks.md)
 and `hatch app task` in the [CLI README](../packages/hatch-cli/README.md).
 
+### App docs
+
+`AppService` adds `ListAppDocs` and `GetAppDoc`, read-only views of the
+Markdown docs an App's current deployment publishes for the services that call
+it (declared in the manifest's `docs` list). `ListAppDocs` returns the doc
+index, the deployment version and id, and the platform-relative webhook and
+RPC endpoints, paged with an offset `cursor`/`limit` (every doc when unset).
+`GetAppDoc` returns one body. Both accept every credential type. An archived
+or never-deployed App answers `CONFLICT`; an unknown doc answers `NOT_FOUND`.
+Rollback serves the docs of the restored deployment. See `hatch app docs` in
+the [CLI README](../packages/hatch-cli/README.md).
+
 ## Errors and recovery
 
 Errors use the standard Connect envelope and canonical codes. Protovalidate

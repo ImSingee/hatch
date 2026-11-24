@@ -90,6 +90,31 @@ export type AppApi = {
   protoFiles: ProtoFile[];
 };
 
+/**
+ * An external doc published with a deployment. The Markdown body is stored in
+ * the deployment artifact at `appDocArtifactPath(id)`; the manifest keeps only
+ * this index so manifest reads never carry document bodies.
+ */
+export type PublishedAppDoc = {
+  id: string;
+  title: string;
+  description?: string;
+  /** Source-relative path, e.g. `docs/webhook.md`. */
+  path: string;
+  /** UTF-8 byte length of the body. */
+  bytes: number;
+  /** Lowercase hex SHA-256 of the body. */
+  sha256: string;
+};
+
+/** Artifact-relative directory holding published external docs. */
+export const APP_DOCS_ARTIFACT_DIR = 'published-docs';
+
+/** Artifact-relative path of one published doc body. */
+export function appDocArtifactPath(docId: string): string {
+  return `${APP_DOCS_ARTIFACT_DIR}/${docId}.md`;
+}
+
 /** JSON Schema of a task's input, generated from its RPC request message. */
 export type TaskInputSchema = JsonObject;
 
@@ -181,6 +206,11 @@ export type NormalizedManifest = {
    * exactly which services + methods an app exposes.
    */
   api?: AppApi;
+  /**
+   * External docs published with this deployment, in manifest order. Set by
+   * the build; absent on deployments without docs and on historical ones.
+   */
+  docs?: PublishedAppDoc[];
 };
 
 /** Root path the platform serves an app's runtime APIs and assets under. */

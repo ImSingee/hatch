@@ -27,6 +27,7 @@ import {
   type AppTaskRun,
   type AppTaskRunStep,
   type AppTaskRunSummary,
+  type AppDoc,
   CreateAppRequestSchema,
   AppService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
@@ -147,6 +148,18 @@ const restored = (value: RestoredVersion) => ({
     ? {}
     : { dataSchemaMismatch: value.dataSchemaMismatch }),
 });
+const appDoc = (value: AppDoc | undefined) => {
+  const doc = required(value);
+  return {
+    id: doc.id,
+    title: doc.title,
+    description: doc.description ?? null,
+    path: doc.path,
+    bytes: doc.bytes,
+    sha256: doc.sha256,
+  };
+};
+export type AppDocView = ReturnType<typeof appDoc>;
 const icon = (app: string, value: AppIcon | undefined) => ({
   // The id or slug the caller passed; `path` carries the immutable id.
   app,
@@ -761,6 +774,41 @@ export function cliClient(transport: Transport) {
       },
     },
     apps: {
+      docs: {
+        list: async (input: {
+          id: string;
+          limit?: number;
+          cursor?: string;
+        }) => {
+          const result = await apps.listAppDocs(input);
+          const endpoints = result.endpoints;
+          return {
+            appId: result.appId,
+            version: result.version,
+            deploymentId: result.deploymentId,
+            docs: result.docs.map((value) => appDoc(value)),
+            endpoints: {
+              webhook: endpoints?.webhook
+                ? { url: endpoints.webhook.url, auth: endpoints.webhook.auth }
+                : null,
+              rpc: endpoints?.rpc
+                ? { url: endpoints.rpc.url, service: endpoints.rpc.service }
+                : null,
+            },
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        get: async (input: { id: string; docId: string }) => {
+          const result = await apps.getAppDoc(input);
+          return {
+            appId: result.appId,
+            version: result.version,
+            deploymentId: result.deploymentId,
+            doc: appDoc(result.doc),
+            content: result.content,
+          };
+        },
+      },
       icon: {
         get: async (input: { id: string }) =>
           icon(input.id, (await apps.getAppIcon(input)).icon),

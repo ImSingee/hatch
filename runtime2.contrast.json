@@ -1,0 +1,9 @@
+{
+  "selectedLabel": "Unsafe content",
+  "labelColorComputed": "rgb(30, 34, 48)",
+  "labelColorRGBA": [30, 34, 48, 255],
+  "indicatorBgComputed": "rgb(255, 255, 255)",
+  "indicatorBgRGBA": [255, 255, 255, 255],
+  "trackBgComputed": "rgb(228, 226, 220)",
+  "dataActive": "true"
+}

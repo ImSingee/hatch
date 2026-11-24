@@ -1,5 +1,5 @@
 /** The `ask` tool: surface multiple-choice questions to the user and block. */
-import { Type } from '@earendil-works/pi-ai';
+import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { AskAnswer, AskQuestion } from '../events';
 import { text, tool } from './shared';
@@ -44,26 +44,25 @@ export function createAskTool(askBridge: AskBridge): AgentTool {
       'least two options; the user can also type a custom answer. Returns the ' +
       "user's selections so you can continue.",
     executionMode: 'sequential',
-    parameters: Type.Object({
-      questions: Type.Array(
-        Type.Object({
-          prompt: Type.String({ description: 'The question to ask.' }),
-          options: Type.Array(
-            Type.Object({
-              label: Type.String({
-                description: 'A choice the user can pick.',
-              }),
-            }),
-            { description: 'Two or more options.' },
-          ),
-          allowMultiple: Type.Optional(
-            Type.Boolean({
-              description: 'Allow selecting more than one option.',
-            }),
-          ),
-        }),
-        { description: 'One or more questions to ask at once.' },
-      ),
+    parameters: z.object({
+      questions: z
+        .array(
+          z.object({
+            prompt: z.string().describe('The question to ask.'),
+            options: z
+              .array(
+                z.object({
+                  label: z.string().describe('A choice the user can pick.'),
+                }),
+              )
+              .describe('Two or more options.'),
+            allowMultiple: z
+              .boolean()
+              .describe('Allow selecting more than one option.')
+              .optional(),
+          }),
+        )
+        .describe('One or more questions to ask at once.'),
     }),
     execute: async (_id, params, signal) => {
       if (params.questions.length === 0) {

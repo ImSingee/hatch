@@ -79,3 +79,17 @@ test('shows only images stored by the platform', async () => {
     ),
   ).toEqual([]);
 });
+
+test('keeps dollar amounts and escaped brackets literal when math is off', async () => {
+  const text = 'Refunds cost $5 and orders $10.\n\nMatch \\[a-z\\] ids.';
+  const screen = await render(
+    <MantineProvider>
+      <Markdownish text={text} math={false} />
+    </MantineProvider>,
+  );
+  expect(screen.container.querySelector('.katex')).toBeNull();
+  expect(screen.container.textContent).toContain(
+    'Refunds cost $5 and orders $10.',
+  );
+  expect(screen.container.textContent).toContain('Match [a-z] ids.');
+});

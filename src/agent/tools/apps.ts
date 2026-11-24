@@ -5,7 +5,6 @@
  * platform's internal API); source trees live in runner-local worktrees fed
  * by git bundles.
  */
-import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { z } from 'zod';
 import { APP_NAME_MAX_LENGTH, APP_SLUG_MAX_LENGTH } from '~/app-identity';
@@ -119,7 +118,7 @@ export function createAppTools(options: {
     description:
       'List every app on the platform with its status, live version, and ' +
       'enabled capabilities.',
-    parameters: Type.Object({}),
+    parameters: z.object({}),
     execute: async () => {
       const apps = await platform.listApps();
       if (apps.length === 0) {
@@ -149,11 +148,7 @@ export function createAppTools(options: {
       'user-facing App URL, normalized widget/RPC/webhook URLs, runtime state ' +
       '(backend running, network declaration, cron jobs), and deployment ' +
       'history. Mirrors the app management panel.',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-    }),
+    parameters: z.object({ id: z.string().describe('App id.') }),
     execute: async (_id, params) => {
       requireIdSlug(params.id);
       const detail = await platform.getApp(params.id);
@@ -261,32 +256,31 @@ export function createAppTools(options: {
       'lockfile, generates Connect stubs, and materializes the platform-owned ' +
       'Hatch SDK. Dependency lifecycle scripts never run.',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-      clone: Type.Boolean({
-        description:
+    parameters: z.object({
+      id: z.string().describe('App id.'),
+      clone: z
+        .boolean()
+        .describe(
           'True to create a fresh checkout; false to update the existing ' +
-          'checkout at source_path.',
-      }),
-      source_path: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Absolute path inside this Agent workdir, or a path relative to ' +
+            'checkout at source_path.',
+        ),
+      source_path: z
+        .string()
+        .min(1)
+        .describe(
+          'Absolute path inside this Agent workdir, or a path relative to ' +
             'it. Required when clone is false. When clone is true, defaults ' +
             'to apps/<slug>.',
-        }),
-      ),
-      force: Type.Optional(
-        Type.Boolean({
-          description:
-            'Only valid when clone is true. Replace an existing source_path ' +
+        )
+        .optional(),
+      force: z
+        .boolean()
+        .describe(
+          'Only valid when clone is true. Replace an existing source_path ' +
             'with a fresh checkout. Defaults to false and permanently ' +
             'discards local work at that exact path.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -369,41 +363,40 @@ export function createAppTools(options: {
       'materializes the platform-owned Hatch SDK. Dependency lifecycle ' +
       'scripts never run.',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      slug: Type.String({
-        minLength: 1,
-        maxLength: APP_SLUG_MAX_LENGTH,
-        description:
+    parameters: z.object({
+      slug: z
+        .string()
+        .min(1)
+        .max(APP_SLUG_MAX_LENGTH)
+        .describe(
           'URL slug using lowercase letters, digits, and hyphens, starting ' +
-          'with a letter or digit. Used in the ' +
-          'human-facing /app/<slug> URL. It can be ' +
-          'changed later from the manage page, so it is not permanent; ' +
-          'technical APIs use the immutable app id.',
-      }),
-      name: Type.String({
-        minLength: 1,
-        maxLength: APP_NAME_MAX_LENGTH,
-        description: 'Human-readable name.',
-      }),
-      description: Type.Optional(
-        Type.String({ description: 'One-line description.' }),
-      ),
-      pin: Type.Optional(
-        Type.Boolean({
-          description:
-            'Pin the app to the sidebar. Pass true when the app will have a ' +
+            'with a letter or digit. Used in the ' +
+            'human-facing /app/<slug> URL. It can be ' +
+            'changed later from the manage page, so it is not permanent; ' +
+            'technical APIs use the immutable app id.',
+        ),
+      name: z
+        .string()
+        .min(1)
+        .max(APP_NAME_MAX_LENGTH)
+        .describe('Human-readable name.'),
+      description: z.string().describe('One-line description.').optional(),
+      pin: z
+        .boolean()
+        .describe(
+          'Pin the app to the sidebar. Pass true when the app will have a ' +
             'user-facing frontend (the default) so it is reachable right away, ' +
             'and false for backend-only or widget-only apps.',
-        }),
-      ),
-      target_path: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Absolute path inside this Agent workdir, or a path relative to ' +
+        )
+        .optional(),
+      target_path: z
+        .string()
+        .min(1)
+        .describe(
+          'Absolute path inside this Agent workdir, or a path relative to ' +
             'it. Defaults to apps/<slug>.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -482,38 +475,38 @@ export function createAppTools(options: {
       'Skill to repair validation errors. Reports the user-facing App URL ' +
       'plus widget/RPC URLs.',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-      source_path: Type.String({
-        minLength: 1,
-        description:
+    parameters: z.object({
+      id: z.string().describe('App id.'),
+      source_path: z
+        .string()
+        .min(1)
+        .describe(
           'Absolute path inside this Agent workdir, or a path relative to it, ' +
-          'for the app Git worktree. Use the path returned by create_app or ' +
-          'checkout_app.',
-      }),
-      message: Type.String({
-        description:
+            'for the app Git worktree. Use the path returned by create_app or ' +
+            'checkout_app.',
+        ),
+      message: z
+        .string()
+        .describe(
           'Required release note describing what this deployment changes ' +
-          '(e.g. "Add CSV export"). Shown in the deployment history.',
-      }),
-      allow_destructive_data_migration: Type.Optional(
-        Type.Boolean({
-          description:
-            'Set true only after the user explicitly approves the destructive ' +
+            '(e.g. "Add CSV export"). Shown in the deployment history.',
+        ),
+      allow_destructive_data_migration: z
+        .boolean()
+        .describe(
+          'Set true only after the user explicitly approves the destructive ' +
             'Data Table migration preview returned by a previous deploy attempt.',
-        }),
-      ),
-      data_migration_approval_token: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Exact approval token returned by the destructive Data Table ' +
+        )
+        .optional(),
+      data_migration_approval_token: z
+        .string()
+        .min(1)
+        .describe(
+          'Exact approval token returned by the destructive Data Table ' +
             'migration preview. Pass it together with ' +
             'allow_destructive_data_migration: true.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -575,13 +568,11 @@ export function createAppTools(options: {
       'database cannot be restored after that resource is permanently deleted. ' +
       'Restore its get_app source tag tree onto current master, commit, and ' +
       'deploy as a new release to provision an empty database.',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-      version: Type.Number({
-        description: 'Deployment version to restore, e.g. 4 for v4.',
-      }),
+    parameters: z.object({
+      id: z.string().describe('App id.'),
+      version: z
+        .number()
+        .describe('Deployment version to restore, e.g. 4 for v4.'),
     }),
     execute: async (_id, params) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -619,14 +610,9 @@ export function createAppTools(options: {
       'capabilities.database enabled first. A retained database remains ' +
       'queryable after the capability is disabled until the user deletes it. ' +
       'Returns up to 100 rows.',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-      sql: Type.String({
-        minLength: 1,
-        description: 'SQL statement to execute.',
-      }),
+    parameters: z.object({
+      id: z.string().describe('App id.'),
+      sql: z.string().min(1).describe('SQL statement to execute.'),
     }),
     execute: async (_id, params, signal) => {
       requireIdSlug(params.id);
@@ -652,56 +638,46 @@ export function createAppTools(options: {
       'The app must already have the kv capability enabled.',
     // Keep the root object-shaped: the Anthropic adapter forwards root
     // properties/required fields and would discard a root anyOf schema.
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-      action: Type.Union([
-        Type.Literal('list'),
-        Type.Literal('get'),
-        Type.Literal('set'),
-        Type.Literal('delete'),
+    parameters: z.object({
+      id: z.string().describe('App id.'),
+      action: z.union([
+        z.literal('list'),
+        z.literal('get'),
+        z.literal('set'),
+        z.literal('delete'),
       ]),
-      key: Type.Optional(
-        Type.String({
-          description: 'Required for get, set, and delete.',
-        }),
-      ),
-      value: Type.Optional(
-        Type.String({
-          description: 'Plaintext string value. Required for set.',
-        }),
-      ),
-      secret: Type.Optional(
-        Type.Boolean({
-          description:
-            'Set only: secret flag. Omit to preserve it on update; new keys ' +
+      key: z.string().describe('Required for get, set, and delete.').optional(),
+      value: z
+        .string()
+        .describe('Plaintext string value. Required for set.')
+        .optional(),
+      secret: z
+        .boolean()
+        .describe(
+          'Set only: secret flag. Omit to preserve it on update; new keys ' +
             'default to false.',
-        }),
-      ),
-      cursor: Type.Optional(
-        Type.Unsafe<string>({
-          // Derive provider constraints from the platform contract.
-          ...z.toJSONSchema(queryAppKvCursorSchema, { target: 'openapi-3.0' }),
-          description:
-            'List only: cursor returned by the previous call (up to 512 ' +
+        )
+        .optional(),
+      // Provider constraints come from the platform contract.
+      cursor: queryAppKvCursorSchema
+        .describe(
+          'List only: cursor returned by the previous call (up to 512 ' +
             'characters). Omit or pass an empty string for the first page.',
-        }),
-      ),
-      limit: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          maximum: 100,
-          description: 'List only: maximum entries. Defaults to 100.',
-        }),
-      ),
-      reveal_secrets: Type.Optional(
-        Type.Boolean({
-          description:
-            'List and get only: return secret values in plaintext. Defaults ' +
+        )
+        .optional(),
+      limit: z
+        .int()
+        .min(1)
+        .max(100)
+        .describe('List only: maximum entries. Defaults to 100.')
+        .optional(),
+      reveal_secrets: z
+        .boolean()
+        .describe(
+          'List and get only: return secret values in plaintext. Defaults ' +
             'to false.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     prepareArguments: (args) => {
       if (!args || typeof args !== 'object' || Array.isArray(args)) {
@@ -806,132 +782,116 @@ export function createAppTools(options: {
       '30000.',
     // Keep the root object-shaped: the Anthropic adapter forwards root
     // properties/required fields and would discard a root anyOf schema.
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'App id.',
-      }),
-      action: Type.Union([
-        Type.Literal('inspect'),
-        Type.Literal('query'),
-        Type.Literal('mutate'),
-        Type.Literal('raw_sql'),
+    parameters: z.object({
+      id: z.string().describe('App id.'),
+      action: z.union([
+        z.literal('inspect'),
+        z.literal('query'),
+        z.literal('mutate'),
+        z.literal('raw_sql'),
       ]),
-      table: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Inspect: optional table to inspect. Query: required table name.',
-        }),
-      ),
-      where: Type.Optional(
-        Type.Array(
-          Type.Object({
-            field: Type.String({ minLength: 1 }),
-            op: Type.Union([
-              Type.Literal('eq'),
-              Type.Literal('ne'),
-              Type.Literal('gt'),
-              Type.Literal('gte'),
-              Type.Literal('lt'),
-              Type.Literal('lte'),
-              Type.Literal('in'),
+      table: z
+        .string()
+        .min(1)
+        .describe(
+          'Inspect: optional table to inspect. Query: required table name.',
+        )
+        .optional(),
+      where: z
+        .array(
+          z.object({
+            field: z.string().min(1),
+            op: z.union([
+              z.literal('eq'),
+              z.literal('ne'),
+              z.literal('gt'),
+              z.literal('gte'),
+              z.literal('lt'),
+              z.literal('lte'),
+              z.literal('in'),
             ]),
-            value: Type.Any({
-              description:
+            value: z
+              .any()
+              .describe(
                 'JSON value to compare; use an array with the in operator.',
-            }),
+              ),
           }),
-          {
-            maxItems: 16,
-            description: 'Query only: AND-combined filters.',
-          },
-        ),
-      ),
-      order_by: Type.Optional(
-        Type.Object(
-          {
-            field: Type.String({ minLength: 1 }),
-            direction: Type.Optional(
-              Type.Union([Type.Literal('asc'), Type.Literal('desc')]),
-            ),
-          },
-          { description: 'Query only: sort field and direction.' },
-        ),
-      ),
-      cursor: Type.Optional(
-        Type.String({
-          maxLength: QUERY_APP_DATA_TABLE_CURSOR_MAX_LENGTH,
-          description: 'Query only: cursor returned by the previous call.',
-        }),
-      ),
-      limit: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          maximum: 200,
-          description: 'Query only: maximum rows. Defaults to 50.',
-        }),
-      ),
-      operations: Type.Optional(
-        Type.Array(
-          Type.Object({
-            type: Type.Union([
-              Type.Literal('insert'),
-              Type.Literal('patch'),
-              Type.Literal('increment'),
-              Type.Literal('delete'),
+        )
+        .max(16)
+        .describe('Query only: AND-combined filters.')
+        .optional(),
+      order_by: z
+        .object({
+          field: z.string().min(1),
+          direction: z.union([z.literal('asc'), z.literal('desc')]).optional(),
+        })
+        .describe('Query only: sort field and direction.')
+        .optional(),
+      cursor: z
+        .string()
+        .max(QUERY_APP_DATA_TABLE_CURSOR_MAX_LENGTH)
+        .describe('Query only: cursor returned by the previous call.')
+        .optional(),
+      limit: z
+        .int()
+        .min(1)
+        .max(200)
+        .describe('Query only: maximum rows. Defaults to 50.')
+        .optional(),
+      operations: z
+        .array(
+          z.object({
+            type: z.union([
+              z.literal('insert'),
+              z.literal('patch'),
+              z.literal('increment'),
+              z.literal('delete'),
             ]),
-            table: Type.String({ minLength: 1 }),
-            id: Type.Optional(Type.String({ minLength: 1 })),
-            value: Type.Optional(
-              Type.Record(Type.String(), Type.Any(), {
-                description: 'Insert or patch field values.',
-              }),
-            ),
-            unset: Type.Optional(
-              Type.Array(Type.String({ minLength: 1 }), {
-                description: 'Patch only: optional fields to clear.',
-              }),
-            ),
-            field: Type.Optional(
-              Type.String({
-                minLength: 1,
-                description: 'Increment only: numeric field name.',
-              }),
-            ),
-            amount: Type.Optional(
-              Type.Number({
-                description: 'Increment only: finite amount to add.',
-              }),
-            ),
+            table: z.string().min(1),
+            id: z.string().min(1).optional(),
+            value: z
+              .record(z.string(), z.any())
+              .describe('Insert or patch field values.')
+              .optional(),
+            unset: z
+              .array(z.string().min(1))
+              .describe('Patch only: optional fields to clear.')
+              .optional(),
+            field: z
+              .string()
+              .min(1)
+              .describe('Increment only: numeric field name.')
+              .optional(),
+            amount: z
+              .number()
+              .describe('Increment only: finite amount to add.')
+              .optional(),
           }),
-          {
-            minItems: 1,
-            maxItems: 100,
-            description:
-              'Mutate only: atomic operations; any failure rolls back all.',
-          },
-        ),
-      ),
-      sql: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'raw_sql only: SQL for querying or modifying existing rows. ' +
+        )
+        .min(1)
+        .max(100)
+        .describe('Mutate only: atomic operations; any failure rolls back all.')
+        .optional(),
+      sql: z
+        .string()
+        .min(1)
+        .describe(
+          'raw_sql only: SQL for querying or modifying existing rows. ' +
             'Never use DDL, TRUNCATE, maintenance, transaction control, or ' +
             '_hatch objects. Physical system columns use created_at and ' +
             'updated_at.',
-        }),
-      ),
-      timeout_ms: Type.Optional(
-        Type.Integer({
-          minimum: 1_000,
-          maximum: 1_800_000,
-          description:
-            'raw_sql only: timeout for the Raw SQL database operation, ' +
+        )
+        .optional(),
+      timeout_ms: z
+        .int()
+        .min(1_000)
+        .max(1_800_000)
+        .describe(
+          'raw_sql only: timeout for the Raw SQL database operation, ' +
             'including statement execution, in milliseconds. It does not ' +
             'cover App resolution or capability preflight. Defaults to 30000.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       requireIdSlug(params.id);
