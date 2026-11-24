@@ -6,7 +6,11 @@ import type { AgentPreferenceSettings } from '~server/agent-preference-settings'
 import { AgentPreferencesPanel } from './agent-preferences-panel';
 
 const fixture = vi.hoisted(() => ({
-  saved: { userId: 'a', messageMode: 'steer' } as AgentPreferenceSettings,
+  saved: {
+    userId: 'a',
+    messageMode: 'steer',
+    defaultModel: null,
+  } as AgentPreferenceSettings,
   saveFailure: false,
   update:
     vi.fn<
@@ -25,6 +29,16 @@ vi.mock('~auth/client', () => ({
 vi.mock('sonner', () => ({
   toast: { success: fixture.success, error: fixture.error },
 }));
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } =
+    await import('~components/agent/model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () => choicesFrom([]),
+    },
+  };
+});
 vi.mock('~server/agent-preference-settings', () => ({
   getAgentPreferenceSettings: async () => fixture.saved,
   updateAgentPreferenceSettings: fixture.update,
@@ -32,11 +46,11 @@ vi.mock('~server/agent-preference-settings', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  fixture.saved = { userId: 'a', messageMode: 'steer' };
+  fixture.saved = { userId: 'a', messageMode: 'steer', defaultModel: null };
   fixture.saveFailure = false;
   fixture.update.mockImplementation(async ({ data }) => {
     if (fixture.saveFailure) throw new Error('Save request failed');
-    fixture.saved = { userId: 'a', ...data };
+    fixture.saved = { userId: 'a', defaultModel: null, ...data };
     return fixture.saved;
   });
 });

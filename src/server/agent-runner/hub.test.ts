@@ -159,6 +159,7 @@ const runPayload: RunStartPayload = {
       contextWindow: 128_000,
       maxTokens: 8_192,
     },
+    thinkingLevel: 'off',
   },
 };
 

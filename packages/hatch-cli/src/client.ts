@@ -52,6 +52,16 @@ import {
   type ProviderModel,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/model_pb';
 import {
+  ProviderService,
+  type Provider,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/provider_pb';
+import {
+  CatalogService,
+  type CatalogModel,
+  type CatalogProvider,
+  type CatalogStatus,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/catalog_pb';
+import {
   PinService,
   type PinnedApp,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/pin_pb';
@@ -169,6 +179,80 @@ const providerModel = (value: ProviderModel | undefined) => {
     kind: model.kind,
     description: model.description,
     enabled: model.enabled,
+    catalogRef: model.catalogRef ?? null,
+    inCatalog: model.inCatalog,
+    // Effective chat metadata; null for image models.
+    chat: model.chat
+      ? {
+          reasoning: model.chat.reasoning,
+          thinkingLevels: model.chat.thinkingLevels,
+          defaultThinkingLevel: model.chat.defaultThinkingLevel,
+          contextWindow: model.chat.contextWindow,
+          maxTokens: model.chat.maxTokens,
+          overridden: model.chat.overridden,
+          reasoningOverride: model.chat.reasoningOverride ?? null,
+          contextWindowOverride: model.chat.contextWindowOverride ?? null,
+          maxTokensOverride: model.chat.maxTokensOverride ?? null,
+        }
+      : null,
+  };
+};
+const providerSummary = (value: Provider | undefined) => {
+  const provider = required(value);
+  return {
+    id: provider.id,
+    name: provider.name,
+    apiType: provider.apiType,
+    baseUrl: provider.baseUrl,
+    enabled: provider.enabled,
+    catalogProviderId: provider.catalogProviderId ?? null,
+    hasApiKey: provider.hasApiKey,
+    canGenerateImages: provider.canGenerateImages,
+    modelCount: provider.models.length,
+  };
+};
+const providerView = (value: Provider | undefined) => ({
+  ...providerSummary(value),
+  models: required(value).models.map(providerModel),
+});
+const catalogProvider = (provider: CatalogProvider) => ({
+  id: provider.id,
+  name: provider.name,
+  apiType: provider.apiType,
+  baseUrl: provider.baseUrl,
+  description: provider.description ?? null,
+  url: provider.url ?? null,
+  apiKeyUrl: provider.apiKeyUrl ?? null,
+  featured: provider.featured,
+  recommendedModels: provider.recommendedModels,
+});
+const catalogModel = (model: CatalogModel) => ({
+  ref: model.ref,
+  providerId: model.providerId,
+  modelId: model.modelId,
+  name: model.name,
+  kind: model.kind,
+  description: model.description ?? null,
+  releasedAt: model.releasedAt ?? null,
+  reasoning: model.reasoning,
+  thinkingLevels: model.thinkingLevels,
+  defaultThinkingLevel: model.defaultThinkingLevel ?? null,
+  contextWindow: model.contextWindow ?? null,
+  maxTokens: model.maxTokens ?? null,
+});
+const catalogStatus = (value: CatalogStatus | undefined) => {
+  const status = required(value);
+  return {
+    source: status.source,
+    generatedAt: status.generatedAt,
+    providerCount: status.providerCount,
+    modelCount: status.modelCount,
+    autoUpdate: status.autoUpdate,
+    sourceUrl: status.sourceUrl ?? null,
+    effectiveSourceUrl: status.effectiveSourceUrl,
+    lastCheckedAt: status.lastCheckedAt ?? null,
+    lastUpdatedAt: status.lastUpdatedAt ?? null,
+    lastError: status.lastError ?? null,
   };
 };
 const theme = (value: ThemeState | undefined) => {
@@ -507,11 +591,32 @@ export function cliClient(transport: Transport) {
   const pins = createClient(PinService, transport);
   const dashboards = createClient(DashboardService, transport);
   const preferences = createClient(PreferenceService, transport);
+  const providers = createClient(ProviderService, transport);
+  const catalog = createClient(CatalogService, transport);
   const agentPreferences = (
-    value: { messageMode: string } | undefined,
-  ): { agentMessageMode: string } => ({
-    agentMessageMode: required(value).messageMode,
-  });
+    value:
+      | {
+          messageMode: string;
+          defaultModel?: {
+            providerId: string;
+            modelId: string;
+            thinkingLevel?: string;
+          };
+        }
+      | undefined,
+  ) => {
+    const { messageMode, defaultModel } = required(value);
+    return {
+      agentMessageMode: messageMode,
+      defaultModel: defaultModel
+        ? {
+            providerId: defaultModel.providerId,
+            modelId: defaultModel.modelId,
+            thinkingLevel: defaultModel.thinkingLevel ?? null,
+          }
+        : null,
+    };
+  };
   return {
     dashboards: {
       list: async (page: { limit: number; cursor?: string }) => {
@@ -609,6 +714,8 @@ export function cliClient(transport: Transport) {
     models: {
       list: async (input: {
         kind?: string;
+        providerId?: string;
+        enabled?: boolean;
         limit: number;
         cursor?: string;
       }) => {
@@ -620,6 +727,120 @@ export function cliClient(transport: Transport) {
       },
       setKind: async (input: { id: string; kind: string }) =>
         providerModel((await models.setModelKind(input)).model),
+      create: async (input: {
+        providerId: string;
+        modelId: string;
+        kind?: string;
+        name?: string;
+        description?: string;
+        catalogRef?: string;
+        noCatalog?: boolean;
+        reasoning?: boolean;
+        contextWindow?: number;
+        maxTokens?: number;
+      }) => providerModel((await models.createModel(input)).model),
+      update: async (input: {
+        id: string;
+        modelId?: string;
+        name?: string;
+        description?: string;
+        catalogRef?: string;
+        noCatalog?: boolean;
+        reasoning?: boolean;
+        contextWindow?: number;
+        maxTokens?: number;
+        resetFields?: string[];
+        enabled?: boolean;
+      }) => providerModel((await models.updateModel(input)).model),
+      delete: async (input: { id: string }) => {
+        await models.deleteModel(input);
+        return { id: input.id, deleted: true };
+      },
+    },
+    providers: {
+      list: async () => ({
+        providers: (await providers.listProviders({})).providers.map(
+          providerSummary,
+        ),
+      }),
+      get: async (input: { id: string }) =>
+        providerView((await providers.getProvider(input)).provider),
+      create: async (input: {
+        catalogProviderId?: string;
+        name?: string;
+        apiType?: string;
+        baseUrl?: string;
+        apiKey: string;
+        models: { modelId: string; kind: string }[];
+        noModels: boolean;
+      }) => providerView((await providers.createProvider(input)).provider),
+      update: async (input: {
+        id: string;
+        name?: string;
+        apiType?: string;
+        baseUrl?: string;
+        apiKey?: string;
+        enabled?: boolean;
+        catalogProviderId?: string;
+        clearCatalogProvider?: boolean;
+      }) => providerView((await providers.updateProvider(input)).provider),
+      delete: async (input: { id: string }) => {
+        await providers.deleteProvider(input);
+        return { id: input.id, deleted: true };
+      },
+      test: async (input: { id: string; modelId?: string }) => {
+        const result = await providers.testProvider(input);
+        return {
+          providerId: input.id,
+          ok: result.ok,
+          modelId: result.modelId,
+          latencyMs: result.latencyMs,
+          error: result.error ?? null,
+        };
+      },
+      remoteModels: async (input: { id: string }) => ({
+        providerId: input.id,
+        models: (await providers.listRemoteModels(input)).models.map(
+          (model) => ({
+            modelId: model.modelId,
+            name: model.name ?? null,
+            catalogRef: model.catalogRef ?? null,
+            added: model.added,
+          }),
+        ),
+      }),
+    },
+    catalog: {
+      providers: async () =>
+        (await catalog.listCatalogProviders({})).providers.map(catalogProvider),
+      models: async (input: {
+        providerId?: string;
+        query?: string;
+        kind?: string;
+        limit: number;
+        cursor?: string;
+      }) => {
+        const result = await catalog.listCatalogModels(input);
+        return {
+          models: result.models.map(catalogModel),
+          total: result.total,
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
+      status: async () =>
+        catalogStatus((await catalog.getCatalogStatus({})).status),
+      refresh: async () => {
+        const result = await catalog.refreshCatalog({});
+        return {
+          outcome: result.outcome,
+          status: catalogStatus(result.status),
+        };
+      },
+      updateSettings: async (input: {
+        autoUpdate?: boolean;
+        sourceUrl?: string;
+        clearSourceUrl?: boolean;
+      }) => catalogStatus((await catalog.updateCatalogSettings(input)).status),
     },
     server: {
       info: async () => serverInfo((await servers.getServerInfo({})).server),
@@ -721,11 +942,21 @@ export function cliClient(transport: Transport) {
         agentPreferences(
           (await preferences.getAgentPreferences({})).preferences,
         ),
-      update: async (input: { agentMessageMode: string }) =>
+      update: async (input: {
+        agentMessageMode?: string;
+        defaultModel?: {
+          providerId: string;
+          modelId: string;
+          thinkingLevel?: string;
+        };
+        clearDefaultModel?: boolean;
+      }) =>
         agentPreferences(
           (
             await preferences.updateAgentPreferences({
               messageMode: input.agentMessageMode,
+              defaultModel: input.defaultModel,
+              clearDefaultModel: input.clearDefaultModel,
             })
           ).preferences,
         ),

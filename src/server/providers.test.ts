@@ -67,10 +67,11 @@ describe('unconditional model image input', () => {
         name: stored.name,
         // Old Platforms may still send this metadata; the Runner ignores it.
         input: ['text'],
-        reasoning: stored.reasoning,
-        contextWindow: stored.contextWindow,
-        maxTokens: stored.maxTokens,
+        reasoning: stored.reasoning ?? false,
+        contextWindow: stored.contextWindow ?? 128000,
+        maxTokens: stored.maxTokens ?? 8192,
       },
+      thinkingLevel: 'off',
     });
     let requestBody: unknown;
     const result = await models.completeSimple(

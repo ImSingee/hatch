@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     ensureScheduler: step('app-scheduler'),
     warmLongRunningBackends: asyncStep('backend-warmup'),
     ensureRetentionSweep: step('retention'),
+    ensureModelCatalogRefresh: step('model-catalog'),
     startNotificationDelivery: step('notification-delivery'),
   };
 });
@@ -63,6 +64,9 @@ vi.mock('~server/apps/tasks/service', () => ({
 }));
 vi.mock('~server/retention', () => ({
   ensureRetentionSweep: mocks.ensureRetentionSweep,
+}));
+vi.mock('~server/model-catalog/refresh', () => ({
+  ensureModelCatalogRefresh: mocks.ensureModelCatalogRefresh,
 }));
 vi.mock('~server/notifications/adapters', () => ({
   startNotificationDelivery: mocks.startNotificationDelivery,
@@ -103,6 +107,7 @@ describe('platform startup migrations', () => {
       'app-scheduler',
       'backend-warmup',
       'retention',
+      'model-catalog',
       'notification-delivery',
     ]);
   });

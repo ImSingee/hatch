@@ -5,6 +5,17 @@ import { render } from 'vitest-browser-react';
 import { userEvent } from 'vitest/browser';
 import { Chat } from './chat';
 
+const modelPreference = vi.hoisted(() => ({
+  saved: null as { providerId: string; modelId: string } | null,
+  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
+    async () => ({}),
+  ),
+}));
+vi.mock('~server/agent-preference-settings', () => ({
+  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
+  updateAgentPreferenceSettings: modelPreference.update,
+}));
+
 const fixtures = vi.hoisted(() => ({
   sessionFetchCount: 0,
   session: {
@@ -52,23 +63,27 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-  sessionQueryOptions: (sessionId: string) => ({
-    queryKey: ['test-agent-session', sessionId],
-    queryFn: async () => {
-      fixtures.sessionFetchCount += 1;
-      return structuredClone(fixtures.session);
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () =>
+        choicesFrom(fixtures.providers, modelPreference.saved),
     },
-  }),
-}));
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+    sessionQueryOptions: (sessionId: string) => ({
+      queryKey: ['test-agent-session', sessionId],
+      queryFn: async () => {
+        fixtures.sessionFetchCount += 1;
+        return structuredClone(fixtures.session);
+      },
+    }),
+  };
+});
 
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: {

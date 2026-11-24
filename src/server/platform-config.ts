@@ -33,6 +33,30 @@ const uiThemeConfigSchema = z.object({
 });
 export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
 
+/** Model catalog refresh settings (`~server/model-catalog/refresh`). */
+const modelCatalogConfigSchema = z.object({
+  autoUpdate: z.boolean().catch(true),
+  /** https mirror of aidy-models' models.json; null uses the default. */
+  sourceUrl: z
+    .string()
+    .max(500)
+    .regex(/^https:\/\/\S+$/)
+    .nullable()
+    .catch(null),
+});
+export type ModelCatalogConfig = z.infer<typeof modelCatalogConfigSchema>;
+
+/** Outcome of the last catalog check, for the settings page. */
+const modelCatalogStatusSchema = z.object({
+  lastCheckedAt: z.iso.datetime({ offset: true }).nullable().catch(null),
+  lastUpdatedAt: z.iso.datetime({ offset: true }).nullable().catch(null),
+  lastError: z.string().max(500).nullable().catch(null),
+  /** ETag of the last download, for the source it came from. */
+  etag: z.string().max(300).nullable().catch(null),
+  etagSourceUrl: z.string().max(500).nullable().catch(null),
+});
+export type ModelCatalogStatus = z.infer<typeof modelCatalogStatusSchema>;
+
 type ConfigEntry<T> = {
   schema: z.ZodType<T>;
   /** Value used when no row exists (fresh install / key never written). */
@@ -77,6 +101,20 @@ const REGISTRY = {
     schema: uiThemeConfigSchema,
     fallback: { accent: DEFAULT_ACCENT, dockLabels: false },
   } satisfies ConfigEntry<UiThemeConfig>,
+  'models.catalog': {
+    schema: modelCatalogConfigSchema,
+    fallback: { autoUpdate: true, sourceUrl: null },
+  } satisfies ConfigEntry<ModelCatalogConfig>,
+  'models.catalogStatus': {
+    schema: modelCatalogStatusSchema,
+    fallback: {
+      lastCheckedAt: null,
+      lastUpdatedAt: null,
+      lastError: null,
+      etag: null,
+      etagSourceUrl: null,
+    },
+  } satisfies ConfigEntry<ModelCatalogStatus>,
 } as const;
 
 export type PlatformConfigKey = keyof typeof REGISTRY;
@@ -121,7 +159,8 @@ function readStored<K extends PlatformConfigKey>(
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
 // Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
-// (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts).
+// (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts),
+// 8 (apps/tasks/service.ts), 9 (model-catalog/refresh.ts).
 const PLATFORM_CONFIG_LOCK_NS = 7;
 
 /**

@@ -1,4 +1,5 @@
 /** Browser requests for messages sent while an Agent run works. */
+import type { AgentThinkingLevel } from '~/db/schema';
 import type { ComposerInputPart } from '~agent/composer-content';
 import type {
   AgentPendingMessage,
@@ -48,6 +49,7 @@ export function enqueuePendingMessage(
     attachmentIds: string[];
     providerId: string;
     modelId: string;
+    thinkingLevel?: AgentThinkingLevel;
     /** Reused when resending the same draft (see `./draft-send`). */
     clientMessageId: string;
   },

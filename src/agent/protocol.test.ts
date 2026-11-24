@@ -96,8 +96,8 @@ describe('Workflow creation payload', () => {
 });
 
 describe('runner -> platform messages', () => {
-  it('uses protocol v21 for steer messages', () => {
-    expect(PROTOCOL_VERSION).toBe(21);
+  it('uses protocol v22 for thinking levels', () => {
+    expect(PROTOCOL_VERSION).toBe(22);
   });
 
   it('parses a steer claim and rejects one without a request id', () => {
@@ -459,10 +459,18 @@ describe('platform -> runner messages', () => {
           input: ['text', 'image'],
           contextWindow: 200_000,
           maxTokens: 64_000,
+          thinkingLevelMap: { minimal: null, xhigh: 'xhigh' },
+          compat: { forceAdaptiveThinking: true },
         },
+        thinkingLevel: 'xhigh',
       },
     });
     if (message.type !== 'run.start') throw new Error('wrong type');
+    expect(message.model.thinkingLevel).toBe('xhigh');
+    expect(message.model.model.thinkingLevelMap).toEqual({
+      minimal: null,
+      xhigh: 'xhigh',
+    });
     expect(message.model.model.id).toBe('m1');
     expect(message.composerContent).toEqual(composerContent);
   });

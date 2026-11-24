@@ -2,8 +2,31 @@ import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { LAST_SELECTED_MODEL_STORAGE_KEY } from './model-preference';
 import { NewChat } from './new-chat';
+
+const modelPreference = vi.hoisted(() => ({
+  saved: null as { providerId: string; modelId: string } | null,
+  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
+    async () => ({}),
+  ),
+}));
+// The model menu links to settings; these tests render without a router.
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  Link: ({
+    to,
+    children,
+    ...props
+  }: { to: string; children?: React.ReactNode } & Record<string, unknown>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}));
+vi.mock('~server/agent-preference-settings', () => ({
+  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
+  updateAgentPreferenceSettings: modelPreference.update,
+}));
 
 const fixtures = vi.hoisted(() => ({
   createSession: vi.fn<() => Promise<{ id: string }>>(async () => ({
@@ -39,16 +62,20 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-}));
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () =>
+        choicesFrom(fixtures.providers, modelPreference.saved),
+    },
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+  };
+});
 
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: {
@@ -70,11 +97,11 @@ vi.mock('./new-chat-api', () => ({
 
 beforeEach(() => {
   fixtures.createSession.mockClear();
-  localStorage.removeItem(LAST_SELECTED_MODEL_STORAGE_KEY);
+  modelPreference.update.mockClear();
+  modelPreference.saved = null;
 });
 
 afterEach(() => {
-  localStorage.removeItem(LAST_SELECTED_MODEL_STORAGE_KEY);
   vi.unstubAllGlobals();
 });
 
@@ -93,17 +120,22 @@ test('records an explicit model choice before the model is used', async () => {
   await screen.getByRole('button', { name: 'Model A' }).click();
   await screen.getByRole('menuitem', { name: 'Model B' }).click();
 
-  expect(
-    JSON.parse(localStorage.getItem(LAST_SELECTED_MODEL_STORAGE_KEY)!),
-  ).toBe('provider-b:model-b');
+  await vi.waitFor(() =>
+    expect(modelPreference.update).toHaveBeenCalledWith({
+      data: {
+        defaultModel: {
+          providerId: 'provider-b',
+          modelId: 'model-b',
+          thinkingLevel: 'off',
+        },
+      },
+    }),
+  );
   expect(fixtures.createSession).not.toHaveBeenCalled();
 });
 
-test('defaults a new chat to the last selected available model', async () => {
-  localStorage.setItem(
-    LAST_SELECTED_MODEL_STORAGE_KEY,
-    JSON.stringify('provider-b:model-b'),
-  );
+test('defaults a new chat to the saved default model', async () => {
+  modelPreference.saved = { providerId: 'provider-b', modelId: 'model-b' };
   let runBody: Record<string, unknown> | undefined;
   vi.stubGlobal(
     'fetch',
@@ -246,6 +278,7 @@ test('reuses its unbound session when the first run start fails', async () => {
       attachmentIds: [],
       providerId: 'provider-b',
       modelId: 'model-b',
+      thinkingLevel: 'off',
       clientMessageId: expect.any(String),
     },
     {
@@ -255,6 +288,7 @@ test('reuses its unbound session when the first run start fails', async () => {
       attachmentIds: [],
       providerId: 'provider-b',
       modelId: 'model-b',
+      thinkingLevel: 'off',
       clientMessageId: expect.any(String),
     },
   ]);
@@ -348,6 +382,7 @@ test('uploads a non-image file first and retains the draft when upload fails', a
     attachmentIds: [uploadedIds[0]],
     providerId: 'provider-a',
     modelId: 'model-a',
+    thinkingLevel: 'off',
     clientMessageId: expect.any(String),
   });
 });

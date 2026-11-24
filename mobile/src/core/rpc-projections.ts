@@ -160,6 +160,7 @@ export function catalogProjection(
     providers: catalog.providers.map((provider) => ({
       id: provider.id,
       name: provider.name,
+      catalogProviderId: provider.catalogProviderId,
       models: provider.models.map((model) => ({
         id: model.id,
         modelId: model.modelId,
@@ -167,12 +168,15 @@ export function catalogProjection(
         reasoning: model.reasoning,
         contextWindow: model.contextWindow,
         maxTokens: model.maxTokens,
+        thinkingLevels: model.thinkingLevels,
+        defaultThinkingLevel: model.defaultThinkingLevel,
       })),
     })),
     defaultModel: catalog.defaultModel
       ? {
           providerId: catalog.defaultModel.providerId,
           modelId: catalog.defaultModel.modelId,
+          thinkingLevel: catalog.defaultModel.thinkingLevel,
         }
       : null,
   };

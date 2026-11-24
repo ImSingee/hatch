@@ -17,6 +17,17 @@ import type { AppListItem } from '~server/apps';
 import { Chat } from './chat';
 import type { ChatMessage } from './types';
 
+const modelPreference = vi.hoisted(() => ({
+  saved: null as { providerId: string; modelId: string } | null,
+  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
+    async () => ({}),
+  ),
+}));
+vi.mock('~server/agent-preference-settings', () => ({
+  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
+  updateAgentPreferenceSettings: modelPreference.update,
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn<(message: string, options?: { id?: string }) => void>(),
@@ -56,25 +67,30 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-  sessionQueryOptions: (sessionId: string) => ({
-    queryKey: ['test-agent-session', sessionId],
-    queryFn: async () => {
-      fixtures.sessionFetches += 1;
-      if (fixtures.sessionGate) await fixtures.sessionGate;
-      if (fixtures.failSessionFetch) throw new Error('Session refetch failed');
-      return structuredClone(fixtures.session);
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () =>
+        choicesFrom(fixtures.providers, modelPreference.saved),
     },
-  }),
-}));
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+    sessionQueryOptions: (sessionId: string) => ({
+      queryKey: ['test-agent-session', sessionId],
+      queryFn: async () => {
+        fixtures.sessionFetches += 1;
+        if (fixtures.sessionGate) await fixtures.sessionGate;
+        if (fixtures.failSessionFetch)
+          throw new Error('Session refetch failed');
+        return structuredClone(fixtures.session);
+      },
+    }),
+  };
+});
 
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: {
@@ -123,6 +139,7 @@ function snapshot(overrides: Partial<SessionSnapshot>): SessionSnapshot {
     title: 'Tracker',
     appIds: [],
     providerId: 'provider-1',
+    thinkingLevel: null,
     modelId: 'model-1',
     runnerId: null,
     updatedAt: '2026-10-12T10:00:00.000Z',

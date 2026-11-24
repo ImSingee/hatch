@@ -22,6 +22,8 @@ message AgentProvider {
   string id = 1;
   string name = 2;
   repeated AgentModel models = 3;
+  // Built-in catalog provider it is linked to, for its icon.
+  optional string catalog_provider_id = 4;
 }
 message AgentModel {
   string id = 1;
@@ -30,10 +32,15 @@ message AgentModel {
   bool reasoning = 4;
   double context_window = 5;
   double max_tokens = 6;
+  // Thinking levels offered, in order; empty when the model does not reason.
+  repeated string thinking_levels = 7;
+  string default_thinking_level = 8;
 }
 message AgentModelSelection {
   string provider_id = 1;
   string model_id = 2;
+  // "off" for models that do not reason.
+  string thinking_level = 3;
 }
 message ListSessionsRequest {
   optional string app_id = 1 [(buf.validate.field).string = {

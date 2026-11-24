@@ -32,21 +32,20 @@ interface.
 | ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
 | Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed  |
-| Model category   | model list / set-kind                                                                               | ModelService/ListModels, SetModelKind; every provider model with its kind, moved like the Web Category field     |
+| Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt    |
+| Models           | model list / add / update / enable / disable / remove / set-kind                                    | ModelService; chat and image models, catalog link, chat metadata overrides and resets, kind like the Web field   |
+| Model catalog    | model catalog list / status / refresh / settings                                                    | CatalogService/ListCatalogModels, GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings                        |
 | Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap      |
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
-| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
+| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; queue/steer default, default chat model, thinking |
 | Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
 
-Not covered by the CLI: providers and their chat models (create, edit, API
-keys) remain Web-only. Image models are the provider models of kind `image`;
-the CLI covers every field the Web form sets for them (model id, name,
-description) but only on providers that already exist, and cannot create
-one. `model list` shows every provider model (chat and image) and
-`model set-kind` moves one between the two kinds, as the Web Category field
-does; the other chat model settings stay Web-only. See [App icons](app-icons.md).
+Image models are the provider models of kind `image`; `image-model` keeps
+its own commands (backed by `ImageService`), and `model add --kind image`,
+`model update` and `model remove` reach the same rows through `ModelService`.
+See [App icons](app-icons.md) and the section below.
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`
@@ -179,6 +178,55 @@ rejects a size the widget does not declare and names the sizes it does.
 device- or browser-bound operation, so there is no CLI exception.
 `WorkspaceService.SetDashboardAutoRefresh` stays for the mobile client and
 calls the same service.
+
+## Providers, models and the model catalog: CLI only, no Agent Tool
+
+`hatch provider ...`, `hatch model ...` and `hatch model catalog ...` call
+`ProviderService`, `ModelService` and `CatalogService`
+(`src/server/platform-api/model-rpc.ts`), which use the same
+`src/server/provider-service.ts`, `src/server/provider-models.ts` and
+`src/server/model-catalog/` services as the Settings → Providers page
+(Server Functions in `src/server/providers.ts`). The default model is part
+of `PreferenceService` (`preferences set --default-model`), like the default
+model in the Agent preferences settings panel. Web operation to command:
+
+| Web UI                                             | CLI                                                                | RPC                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------- |
+| Providers list                                     | provider list                                                      | ListProviders                                           |
+| Provider page with its models                      | provider get / model list --provider                               | GetProvider / ListModels                                |
+| Add provider gallery (presets, key link)           | provider catalog                                                   | ListCatalogProviders                                    |
+| Add provider (preset or custom, key, models)       | provider add                                                       | CreateProvider                                          |
+| Edit provider, replace key, enable switch, preset  | provider update                                                    | UpdateProvider                                          |
+| Delete provider                                    | provider remove --yes                                              | DeleteProvider                                          |
+| Test connection                                    | provider test                                                      | TestProvider                                            |
+| Fetch models from the provider                     | provider fetch-models                                              | ListRemoteModels                                        |
+| Add model (catalog search, metadata)               | model add, model catalog list                                      | CreateModel, ListCatalogModels                          |
+| Edit model, metadata overrides, reset to catalog   | model update (--reset / --reset-all)                               | UpdateModel                                             |
+| Model enable switch                                | model enable / disable                                             | UpdateModel (enabled)                                   |
+| Model Category field                               | model set-kind                                                     | SetModelKind                                            |
+| Delete model                                       | model remove --yes                                                 | DeleteModel                                             |
+| Catalog status, check for updates, update settings | model catalog status / refresh / settings                          | GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings |
+| Default model and thinking level for new chats     | preferences set --default-model --thinking / --clear-default-model | UpdateAgentPreferences                                  |
+
+API keys are write-only on every surface: the CLI reads one only from
+`--api-key-file <path|->`, never from an argument value, and responses carry
+`hasApiKey` instead. The services accept sessions, API keys and Run JWTs
+alike and have no device- or browser-bound operation, so there is no CLI
+exception. `AgentService/GetModelCatalog`, the per-chat model picker data,
+stays session-only (see Known gaps). No Agent Tool is added.
+
+Three lists print everything without `--limit`/`--cursor`, because each is
+small and bounded:
+
+- `provider list`: the instance's providers.
+- `provider catalog`: the curated presets, about two dozen.
+- `provider fetch-models`: one provider's own `/models` answer, capped at
+  2,000 ids by the server.
+
+`model catalog list` pages, since the catalog holds about a thousand models.
+A provider that cannot be reached, refuses the model list or answers
+something other than JSON is reported as `BAD_REQUEST` with the provider's
+message (exit 2), because the fix is in the provider's settings.
 
 ## App backend runtime: CLI only, no Agent Tool
 

@@ -1,3 +1,4 @@
+import type { AgentThinkingLevel } from '~/db/schema';
 import {
   Box,
   Center,
@@ -50,11 +51,15 @@ import {
   type PendingMessagesResult,
 } from './pending-api';
 import { PendingTray } from './pending-tray';
-import { useLastSelectedModel } from './model-preference';
+import { useRememberModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
 import { SessionHeader } from './session-header';
-import { resolveEffectiveModel, splitModelValue } from './model-value';
+import {
+  resolveEffectiveModel,
+  splitModelValue,
+  type ModelChoice,
+} from './model-value';
 import { StreamingBubble } from './streaming-bubble';
 import { type ChatMessage, pairToolResults } from './types';
 import {
@@ -105,10 +110,10 @@ export function Chat({ sessionId }: { sessionId: string }) {
   const sessionQuery = useQuery(sessionQueryOptions(sessionId));
   const appsQuery = useQuery(appsQueryOptions);
   const workflowsQuery = useQuery(workflowsQueryOptions);
-  const { groups, first, available } = useModelOptions();
+  const { groups, options, fallback } = useModelOptions();
 
-  const [model, setModel] = useState<string | null>(null);
-  const [, setLastSelectedModel] = useLastSelectedModel();
+  const [model, setModel] = useState<ModelChoice | null>(null);
+  const rememberModel = useRememberModel();
   const [reconnectToken, setReconnectToken] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<{
@@ -320,23 +325,27 @@ export function Chat({ sessionId }: { sessionId: string }) {
       : null;
   // The model the chat last ran with, by name when the catalog still has it.
   const sessionModelName = session?.modelId
-    ? (groups
-        .flatMap((group) => group.items)
-        .find((item) => item.value === sessionModel)?.label ?? session.modelId)
+    ? ((sessionModel && options.get(sessionModel)?.label) ?? session.modelId)
     : null;
   const sessionApps = (appsQuery.data ?? [])
     .filter((app) => session?.appIds.includes(app.id))
     .sort((left, right) => left.name.localeCompare(right.name));
+  // The composer's pick, else the chat's own model and level, else the
+  // user's default model.
   const effectiveModel = resolveEffectiveModel(
+    options,
     model,
-    sessionModel,
-    available,
-    first,
+    { value: sessionModel, thinkingLevel: session?.thinkingLevel },
+    fallback,
   );
-  const effectiveModelParts = useMemo(
-    () => (effectiveModel ? splitModelValue(effectiveModel) : null),
-    [effectiveModel],
-  );
+  const effectiveValue = effectiveModel?.value ?? null;
+  const effectiveThinking = effectiveModel?.thinkingLevel ?? null;
+  const effectiveModelParts = useMemo(() => {
+    const parts = effectiveValue ? splitModelValue(effectiveValue) : null;
+    return parts && effectiveThinking
+      ? { ...parts, thinkingLevel: effectiveThinking }
+      : null;
+  }, [effectiveValue, effectiveThinking]);
 
   const messages = useMemo(() => {
     const history = (session?.messages ?? []) as unknown as ChatMessage[];
@@ -427,7 +436,11 @@ export function Chat({ sessionId }: { sessionId: string }) {
       content: ComposerSubmit['content'],
       images: ComposerImage[],
       files: ComposerFile[],
-      model: { providerId: string; modelId: string },
+      model: {
+        providerId: string;
+        modelId: string;
+        thinkingLevel: AgentThinkingLevel;
+      },
       draft: DraftSend,
     ): Promise<boolean> => {
       let attachments;
@@ -460,7 +473,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
       content: ComposerSubmit['content'],
       images: ComposerImage[],
       files: ComposerFile[],
-      modelValue: string,
+      choice: ModelChoice,
     ): Promise<boolean> => {
       if (
         !hasComposerText(content) &&
@@ -468,8 +481,9 @@ export function Chat({ sessionId }: { sessionId: string }) {
         files.length === 0
       )
         return false;
-      const parsed = splitModelValue(modelValue);
-      if (!parsed) return false;
+      const split = splitModelValue(choice.value);
+      if (!split) return false;
+      const parsed = { ...split, thinkingLevel: choice.thinkingLevel };
       // A resend of a draft whose outcome is unknown (the response was lost)
       // names the same message, whichever path it takes now.
       const draft = draftSends.begin(sessionId, { content, images, files });
@@ -509,6 +523,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
         attachmentIds: attachments.map((attachment) => attachment.id),
         providerId: parsed.providerId,
         modelId: parsed.modelId,
+        thinkingLevel: parsed.thinkingLevel,
         clientMessageId: draft.clientMessageId,
       });
       if (!started) {
@@ -545,6 +560,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
                   : old.messages,
               providerId: parsed.providerId,
               modelId: parsed.modelId,
+              thinkingLevel: parsed.thinkingLevel,
               retry: null,
               activeRun: {
                 id: started.runId,
@@ -601,6 +617,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
         expectedSessionUpdatedAt: retryRevision,
         providerId: effectiveModelParts.providerId,
         modelId: effectiveModelParts.modelId,
+        thinkingLevel: effectiveModelParts.thinkingLevel,
       });
       if (!started) {
         // A concurrent tab/run may already have consumed this failed turn.
@@ -632,6 +649,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
           messages: old.messages.slice(0, retryInput.userMessageIndex + 1),
           providerId: effectiveModelParts.providerId,
           modelId: effectiveModelParts.modelId,
+          thinkingLevel: effectiveModelParts.thinkingLevel,
           retry: null,
           activeRun: {
             id: started.runId,
@@ -930,11 +948,12 @@ export function Chat({ sessionId }: { sessionId: string }) {
   };
 
   const selectModel = useCallback(
-    (value: string) => {
-      setModel(value);
-      setLastSelectedModel(value);
+    (value: string, thinkingLevel: AgentThinkingLevel) => {
+      const choice = { value, thinkingLevel };
+      setModel(choice);
+      rememberModel(choice);
     },
-    [setLastSelectedModel],
+    [rememberModel],
   );
 
   const stop = () => {
@@ -1229,7 +1248,8 @@ export function Chat({ sessionId }: { sessionId: string }) {
               modelControl={
                 <ModelPicker
                   groups={groups}
-                  value={effectiveModel}
+                  value={effectiveValue}
+                  thinkingLevel={effectiveThinking}
                   onChange={selectModel}
                   disabled={busy}
                 />

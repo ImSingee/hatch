@@ -14,12 +14,16 @@ import {
   uploadDraftFiles,
 } from '~components/agent/draft-send';
 import { Composer, type ComposerSubmit } from '~components/agent/composer';
-import { useLastSelectedModel } from '~components/agent/model-preference';
+import {
+  useImportLegacyModelChoice,
+  useRememberModel,
+} from '~components/agent/model-preference';
 import { ModelPicker } from '~components/agent/model-picker';
 import { useModelOptions } from '~components/agent/model-options';
 import {
   resolveEffectiveModel,
   splitModelValue,
+  type ModelChoice,
 } from '~components/agent/model-value';
 import { createEmptyAgentSession } from '~components/agent/new-chat-api';
 import { startAgentRunRequest } from '~components/agent/use-agent-stream';
@@ -39,14 +43,16 @@ export function QuickAgentChat() {
   const sessions = useQuery(sessionsQueryOptions);
   const apps = useQuery(appsQueryOptions);
   const workflows = useQuery(workflowsQueryOptions);
-  const { groups, first, available } = useModelOptions();
-  const [model, setModel] = useLastSelectedModel();
+  const { groups, options, fallback, savedDefault } = useModelOptions();
+  const [picked, setPicked] = useState<ModelChoice | null>(null);
+  const remember = useRememberModel();
+  useImportLegacyModelChoice(options, savedDefault);
   const [starting, setStarting] = useState(false);
   // A failed first send keeps its session so a retry does not leave empty
   // sessions behind.
   const createdSession = useRef<string | null>(null);
   const [draftSends] = useState(createDraftSendTracker);
-  const effectiveModel = resolveEffectiveModel(model, null, available, first);
+  const effectiveModel = resolveEffectiveModel(options, picked, fallback);
   const recent = (sessions.data ?? []).slice(0, 3);
 
   const start = async ({
@@ -55,7 +61,7 @@ export function QuickAgentChat() {
     files,
   }: ComposerSubmit): Promise<boolean> => {
     if (starting || !effectiveModel) return false;
-    const parsed = splitModelValue(effectiveModel);
+    const parsed = splitModelValue(effectiveModel.value);
     if (!parsed) return false;
     setStarting(true);
     try {
@@ -71,6 +77,7 @@ export function QuickAgentChat() {
         attachmentIds: attachments.map((attachment) => attachment.id),
         providerId: parsed.providerId,
         modelId: parsed.modelId,
+        thinkingLevel: effectiveModel.thinkingLevel,
       });
       draftSends.settle(draft);
       await queryClient.invalidateQueries({
@@ -153,7 +160,7 @@ export function QuickAgentChat() {
       </div>
 
       <div className={classes.composer}>
-        {first === null ? (
+        {groups.length === 0 ? (
           <div className={classes.guard}>
             <IconPlugConnected size={18} stroke={1.8} aria-hidden />
             <Text size="sm" fw={700}>
@@ -182,8 +189,13 @@ export function QuickAgentChat() {
             modelControl={
               <ModelPicker
                 groups={groups}
-                value={effectiveModel}
-                onChange={setModel}
+                value={effectiveModel?.value ?? null}
+                thinkingLevel={effectiveModel?.thinkingLevel ?? null}
+                onChange={(value, thinkingLevel) => {
+                  const choice = { value, thinkingLevel };
+                  setPicked(choice);
+                  remember(choice);
+                }}
                 disabled={starting}
               />
             }

@@ -38,8 +38,9 @@ and removing the icon (`hatch app icon clear <app>`) need no image model: run
 those commands directly. The steps below are for designing a new icon.
 
 1. Run `hatch image-model list --json`. If no model has `usable: true`, tell
-   the user to add an image model to an OpenAI provider under Settings → AI
-   Providers (category Image) and stop. Otherwise pick the model whose
+   the user to add an image model to an OpenAI provider (Settings → AI
+   Providers → Add model, then set its category to Image, or
+   `hatch model add --provider <id> --model-id <id> --kind image`) and stop. Otherwise pick the model whose
    `name` and `description` best fit polished app icons, or the user's
    stated preference; with no clear fit, use `defaultModelId`. Glossy and
    Glass need transparent backgrounds, which `gpt-image-2.6-flare` and

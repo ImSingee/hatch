@@ -16,10 +16,17 @@ import { sessionsQueryOptions } from '~queries/agent';
 import { workflowsQueryOptions } from '~queries/workflows';
 import { createDraftSendTracker, uploadDraftFiles } from './draft-send';
 import { Composer, type ComposerSubmit } from './composer';
-import { useLastSelectedModel } from './model-preference';
+import {
+  useImportLegacyModelChoice,
+  useRememberModel,
+} from './model-preference';
 import { ModelPicker } from './model-picker';
 import { useModelOptions } from './model-options';
-import { resolveEffectiveModel, splitModelValue } from './model-value';
+import {
+  resolveEffectiveModel,
+  splitModelValue,
+  type ModelChoice,
+} from './model-value';
 import { createEmptyAgentSession } from './new-chat-api';
 import { startAgentRunRequest } from './use-agent-stream';
 import classes from './chat.module.css';
@@ -62,8 +69,10 @@ export function NewChat({
   const qc = useQueryClient();
   const appsQuery = useQuery(appsQueryOptions);
   const workflowsQuery = useQuery(workflowsQueryOptions);
-  const { groups, first, available } = useModelOptions();
-  const [model, setModel] = useLastSelectedModel();
+  const { groups, options, fallback, savedDefault } = useModelOptions();
+  const [picked, setPicked] = useState<ModelChoice | null>(null);
+  const remember = useRememberModel();
+  useImportLegacyModelChoice(options, savedDefault);
   const [creating, setCreating] = useState(false);
   // Reuse a session created by a failed first attempt so a retry doesn't leave
   // a trail of empty "New chat" shells in the chat list.
@@ -74,7 +83,7 @@ export function NewChat({
     nonce: initialPrompt ? 1 : 0,
   });
 
-  const effectiveModel = resolveEffectiveModel(model, null, available, first);
+  const effectiveModel = resolveEffectiveModel(options, picked, fallback);
 
   const start = async ({
     content,
@@ -82,9 +91,8 @@ export function NewChat({
     files,
   }: ComposerSubmit): Promise<boolean> => {
     if (creating) return false;
-    const value = effectiveModel;
-    if (!value) return false;
-    const parsed = splitModelValue(value);
+    if (!effectiveModel) return false;
+    const parsed = splitModelValue(effectiveModel.value);
     if (!parsed) return false;
     const { providerId, modelId } = parsed;
 
@@ -103,6 +111,7 @@ export function NewChat({
         attachmentIds: attachments.map((attachment) => attachment.id),
         providerId,
         modelId,
+        thinkingLevel: effectiveModel.thinkingLevel,
       });
       draftSends.settle(draft);
       await qc.invalidateQueries({ queryKey: sessionsQueryOptions.queryKey });
@@ -132,7 +141,7 @@ export function NewChat({
           </p>
         </div>
 
-        {first === null ? (
+        {groups.length === 0 ? (
           <EmptyState
             variant="dashed"
             icon={<IconPlugConnected size={20} stroke={1.8} />}
@@ -168,8 +177,13 @@ export function NewChat({
               modelControl={
                 <ModelPicker
                   groups={groups}
-                  value={effectiveModel}
-                  onChange={setModel}
+                  value={effectiveModel?.value ?? null}
+                  thinkingLevel={effectiveModel?.thinkingLevel ?? null}
+                  onChange={(value, thinkingLevel) => {
+                    const choice = { value, thinkingLevel };
+                    setPicked(choice);
+                    remember(choice);
+                  }}
                   disabled={creating}
                 />
               }

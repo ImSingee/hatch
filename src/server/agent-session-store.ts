@@ -1,7 +1,7 @@
 /** Shared database operations for browser server functions and interactive HTTP clients. */
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
-import type { JsonValue } from '~/db/schema';
+import type { AgentThinkingLevel, JsonValue } from '~/db/schema';
 import { nextUserTurn } from '~agent/user-turns';
 import {
   getActiveAgentRun,
@@ -32,6 +32,8 @@ export type SessionDetail = {
   appIds: string[];
   providerId: string | null;
   modelId: string | null;
+  /** Thinking level the chat last ran with; null uses the model default. */
+  thinkingLevel: AgentThinkingLevel | null;
   /** Runner whose workspace holds this chat; null until a run is accepted. */
   runnerId: string | null;
   /** Changes whenever the persisted session is mutated; used as a Retry CAS. */
@@ -151,6 +153,7 @@ export async function loadSessionDetail(
         appIds: associations.map((association) => association.appId).sort(),
         providerId: row.providerId,
         modelId: row.modelId,
+        thinkingLevel: row.thinkingLevel,
         runnerId: row.workspaceRunnerId,
         updatedAt: row.updatedAt.toISOString(),
         messages: row.messages,

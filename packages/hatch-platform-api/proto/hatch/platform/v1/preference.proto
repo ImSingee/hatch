@@ -16,6 +16,32 @@ message AgentPreferences {
   // waits for the run to finish and starts its own run; "steer" is injected
   // into the running run after its current tool calls finish.
   string message_mode = 1;
+  // The model new chats start with, as saved; it may name a model removed
+  // since. Unset uses the first available model.
+  optional DefaultAgentModel default_model = 2;
+}
+
+message DefaultAgentModel {
+  string provider_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string model_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Unset uses the model's default level.
+  optional string thinking_level = 3 [(buf.validate.field).string = {
+    in: [
+      "off",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ]
+  }];
 }
 
 message GetAgentPreferencesRequest {}
@@ -32,6 +58,10 @@ message UpdateAgentPreferencesRequest {
       "steer"
     ]
   }];
+  // Replaces the default model.
+  optional DefaultAgentModel default_model = 2;
+  // Clears the default model. Excludes default_model.
+  bool clear_default_model = 3;
 }
 
 message UpdateAgentPreferencesResponse {

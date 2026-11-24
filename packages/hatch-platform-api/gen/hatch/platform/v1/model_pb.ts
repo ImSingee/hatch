@@ -21,7 +21,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_model: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ch1oYXRjaC9wbGF0Zm9ybS92MS9tb2RlbC5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEimwEKDVByb3ZpZGVyTW9kZWwSCgoCaWQYASABKAkSEwoLcHJvdmlkZXJfaWQYAiABKAkSFQoNcHJvdmlkZXJfbmFtZRgDIAEoCRIQCghtb2RlbF9pZBgEIAEoCRIMCgRuYW1lGAUgASgJEgwKBGtpbmQYBiABKAkSEwoLZGVzY3JpcHRpb24YByABKAkSDwoHZW5hYmxlZBgIIAEoCCKQAQoRTGlzdE1vZGVsc1JlcXVlc3QSJQoEa2luZBgBIAEoCUISukgPcg1SBGNoYXRSBWltYWdlSACIAQESKAoGY3Vyc29yGAIgASgJQhO6SBByDjIMXlswLTldezEsOX0kSAGIAQESFgoFbGltaXQYAyABKA1CB7pIBCoCGGRCBwoFX2tpbmRCCQoHX2N1cnNvciJwChJMaXN0TW9kZWxzUmVzcG9uc2USMAoGbW9kZWxzGAEgAygLMiAuaGF0Y2gucGxhdGZvcm0udjEuUHJvdmlkZXJNb2RlbBIYCgtuZXh0X2N1cnNvchgCIAEoCUgAiAEBQg4KDF9uZXh0X2N1cnNvciJPChNTZXRNb2RlbEtpbmRSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEiAKBGtpbmQYAiABKAlCErpID3INUgRjaGF0UgVpbWFnZSJHChRTZXRNb2RlbEtpbmRSZXNwb25zZRIvCgVtb2RlbBgBIAEoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLlByb3ZpZGVyTW9kZWwyygEKDE1vZGVsU2VydmljZRJZCgpMaXN0TW9kZWxzEiQuaGF0Y2gucGxhdGZvcm0udjEuTGlzdE1vZGVsc1JlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0TW9kZWxzUmVzcG9uc2USXwoMU2V0TW9kZWxLaW5kEiYuaGF0Y2gucGxhdGZvcm0udjEuU2V0TW9kZWxLaW5kUmVxdWVzdBonLmhhdGNoLnBsYXRmb3JtLnYxLlNldE1vZGVsS2luZFJlc3BvbnNlYgZwcm90bzM',
+    'Ch1oYXRjaC9wbGF0Zm9ybS92MS9tb2RlbC5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEilwIKDVByb3ZpZGVyTW9kZWwSCgoCaWQYASABKAkSEwoLcHJvdmlkZXJfaWQYAiABKAkSFQoNcHJvdmlkZXJfbmFtZRgDIAEoCRIQCghtb2RlbF9pZBgEIAEoCRIMCgRuYW1lGAUgASgJEgwKBGtpbmQYBiABKAkSEwoLZGVzY3JpcHRpb24YByABKAkSDwoHZW5hYmxlZBgIIAEoCBIYCgtjYXRhbG9nX3JlZhgJIAEoCUgAiAEBEhIKCmluX2NhdGFsb2cYCiABKAgSMwoEY2hhdBgLIAEoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLkNoYXRNb2RlbFNwZWNIAYgBAUIOCgxfY2F0YWxvZ19yZWZCBwoFX2NoYXQizwIKDUNoYXRNb2RlbFNwZWMSEQoJcmVhc29uaW5nGAEgASgIEhcKD3RoaW5raW5nX2xldmVscxgCIAMoCRIeChZkZWZhdWx0X3RoaW5raW5nX2xldmVsGAMgASgJEhYKDmNvbnRleHRfd2luZG93GAQgASgNEhIKCm1heF90b2tlbnMYBSABKA0SEgoKb3ZlcnJpZGRlbhgGIAMoCRIfChJyZWFzb25pbmdfb3ZlcnJpZGUYByABKAhIAIgBARIkChdjb250ZXh0X3dpbmRvd19vdmVycmlkZRgIIAEoDUgBiAEBEiAKE21heF90b2tlbnNfb3ZlcnJpZGUYCSABKA1IAogBAUIVChNfcmVhc29uaW5nX292ZXJyaWRlQhoKGF9jb250ZXh0X3dpbmRvd19vdmVycmlkZUIWChRfbWF4X3Rva2Vuc19vdmVycmlkZSLoAQoRTGlzdE1vZGVsc1JlcXVlc3QSJQoEa2luZBgBIAEoCUISukgPcg1SBGNoYXRSBWltYWdlSACIAQESKAoGY3Vyc29yGAIgASgJQhO6SBByDjIMXlswLTldezEsOX0kSAGIAQESFgoFbGltaXQYAyABKA1CB7pIBCoCGGQSJAoLcHJvdmlkZXJfaWQYBCABKAlCCrpIB3IFEAEYvwFIAogBARIUCgdlbmFibGVkGAUgASgISAOIAQFCBwoFX2tpbmRCCQoHX2N1cnNvckIOCgxfcHJvdmlkZXJfaWRCCgoIX2VuYWJsZWQicAoSTGlzdE1vZGVsc1Jlc3BvbnNlEjAKBm1vZGVscxgBIAMoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLlByb3ZpZGVyTW9kZWwSGAoLbmV4dF9jdXJzb3IYAiABKAlIAIgBAUIOCgxfbmV4dF9jdXJzb3IiTwoTU2V0TW9kZWxLaW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIgCgRraW5kGAIgASgJQhK6SA9yDVIEY2hhdFIFaW1hZ2UiRwoUU2V0TW9kZWxLaW5kUmVzcG9uc2USLwoFbW9kZWwYASABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5Qcm92aWRlck1vZGVsIrkDChJDcmVhdGVNb2RlbFJlcXVlc3QSHwoLcHJvdmlkZXJfaWQYASABKAlCCrpIB3IFEAEYvwESJQoEa2luZBgCIAEoCUISukgPcg1SBGNoYXRSBWltYWdlSACIAQESHAoIbW9kZWxfaWQYAyABKAlCCrpIB3IFEAEYyAESHQoEbmFtZRgEIAEoCUIKukgHcgUQARjIAUgBiAEBEiIKC2Rlc2NyaXB0aW9uGAUgASgJQgi6SAVyAxjIAUgCiAEBEiQKC2NhdGFsb2dfcmVmGAYgASgJQgq6SAdyBRADGKwCSAOIAQESEgoKbm9fY2F0YWxvZxgHIAEoCBIWCglyZWFzb25pbmcYCCABKAhIBIgBARIkCg5jb250ZXh0X3dpbmRvdxgJIAEoDUIHukgEKgIgAEgFiAEBEiAKCm1heF90b2tlbnMYCiABKA1CB7pIBCoCIABIBogBAUIHCgVfa2luZEIHCgVfbmFtZUIOCgxfZGVzY3JpcHRpb25CDgoMX2NhdGFsb2dfcmVmQgwKCl9yZWFzb25pbmdCEQoPX2NvbnRleHRfd2luZG93Qg0KC19tYXhfdG9rZW5zIkYKE0NyZWF0ZU1vZGVsUmVzcG9uc2USLwoFbW9kZWwYASABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5Qcm92aWRlck1vZGVsIv8DChJVcGRhdGVNb2RlbFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESIQoIbW9kZWxfaWQYAiABKAlCCrpIB3IFEAEYyAFIAIgBARIdCgRuYW1lGAMgASgJQgq6SAdyBRABGMgBSAGIAQESIgoLZGVzY3JpcHRpb24YBCABKAlCCLpIBXIDGMgBSAKIAQESJAoLY2F0YWxvZ19yZWYYBSABKAlCCrpIB3IFEAMYrAJIA4gBARISCgpub19jYXRhbG9nGAYgASgIEhYKCXJlYXNvbmluZxgHIAEoCEgEiAEBEiQKDmNvbnRleHRfd2luZG93GAggASgNQge6SAQqAiAASAWIAQESIAoKbWF4X3Rva2VucxgJIAEoDUIHukgEKgIgAEgGiAEBEkkKDHJlc2V0X2ZpZWxkcxgKIAMoCUIzukgwkgEtEAMiKXInUglyZWFzb25pbmdSDmNvbnRleHRfd2luZG93UgptYXhfdG9rZW5zEhQKB2VuYWJsZWQYCyABKAhIB4gBAUILCglfbW9kZWxfaWRCBwoFX25hbWVCDgoMX2Rlc2NyaXB0aW9uQg4KDF9jYXRhbG9nX3JlZkIMCgpfcmVhc29uaW5nQhEKD19jb250ZXh0X3dpbmRvd0INCgtfbWF4X3Rva2Vuc0IKCghfZW5hYmxlZCJGChNVcGRhdGVNb2RlbFJlc3BvbnNlEi8KBW1vZGVsGAEgASgLMiAuaGF0Y2gucGxhdGZvcm0udjEuUHJvdmlkZXJNb2RlbCIsChJEZWxldGVNb2RlbFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiFQoTRGVsZXRlTW9kZWxSZXNwb25zZTLkAwoMTW9kZWxTZXJ2aWNlElkKCkxpc3RNb2RlbHMSJC5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0TW9kZWxzUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RNb2RlbHNSZXNwb25zZRJfCgxTZXRNb2RlbEtpbmQSJi5oYXRjaC5wbGF0Zm9ybS52MS5TZXRNb2RlbEtpbmRSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuU2V0TW9kZWxLaW5kUmVzcG9uc2USXAoLQ3JlYXRlTW9kZWwSJS5oYXRjaC5wbGF0Zm9ybS52MS5DcmVhdGVNb2RlbFJlcXVlc3QaJi5oYXRjaC5wbGF0Zm9ybS52MS5DcmVhdGVNb2RlbFJlc3BvbnNlElwKC1VwZGF0ZU1vZGVsEiUuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlTW9kZWxSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlTW9kZWxSZXNwb25zZRJcCgtEZWxldGVNb2RlbBIlLmhhdGNoLnBsYXRmb3JtLnYxLkRlbGV0ZU1vZGVsUmVxdWVzdBomLmhhdGNoLnBsYXRmb3JtLnYxLkRlbGV0ZU1vZGVsUmVzcG9uc2ViBnByb3RvMw',
     [file_buf_validate_validate],
   );
 
@@ -30,8 +30,8 @@ export const file_hatch_platform_v1_model: GenFile =
  */
 export type ProviderModel = Message<'hatch.platform.v1.ProviderModel'> & {
   /**
-   * Model id taken by SetModelKind and, for image models, the image-model
-   * calls.
+   * Model id taken by the update calls and, for image models, the
+   * image-model calls.
    *
    * @generated from field: string id = 1;
    */
@@ -75,6 +75,27 @@ export type ProviderModel = Message<'hatch.platform.v1.ProviderModel'> & {
    * @generated from field: bool enabled = 8;
    */
   enabled: boolean;
+
+  /**
+   * Catalog entry supplying metadata ("<catalog provider>/<model id>").
+   *
+   * @generated from field: optional string catalog_ref = 9;
+   */
+  catalogRef?: string | undefined;
+
+  /**
+   * False when catalog_ref names an entry the catalog no longer has.
+   *
+   * @generated from field: bool in_catalog = 10;
+   */
+  inCatalog: boolean;
+
+  /**
+   * Effective chat metadata; unset for image models.
+   *
+   * @generated from field: optional hatch.platform.v1.ChatModelSpec chat = 11;
+   */
+  chat?: ChatModelSpec | undefined;
 };
 
 /**
@@ -84,6 +105,71 @@ export type ProviderModel = Message<'hatch.platform.v1.ProviderModel'> & {
 export const ProviderModelSchema: GenMessage<ProviderModel> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_model, 0);
+
+/**
+ * @generated from message hatch.platform.v1.ChatModelSpec
+ */
+export type ChatModelSpec = Message<'hatch.platform.v1.ChatModelSpec'> & {
+  /**
+   * @generated from field: bool reasoning = 1;
+   */
+  reasoning: boolean;
+
+  /**
+   * Thinking levels offered, in order; empty when the model does not reason.
+   *
+   * @generated from field: repeated string thinking_levels = 2;
+   */
+  thinkingLevels: string[];
+
+  /**
+   * @generated from field: string default_thinking_level = 3;
+   */
+  defaultThinkingLevel: string;
+
+  /**
+   * @generated from field: uint32 context_window = 4;
+   */
+  contextWindow: number;
+
+  /**
+   * @generated from field: uint32 max_tokens = 5;
+   */
+  maxTokens: number;
+
+  /**
+   * Overrides that differ from the catalog: "reasoning", "context_window"
+   * or "max_tokens".
+   *
+   * @generated from field: repeated string overridden = 6;
+   */
+  overridden: string[];
+
+  /**
+   * Stored overrides; unset follows the catalog.
+   *
+   * @generated from field: optional bool reasoning_override = 7;
+   */
+  reasoningOverride?: boolean | undefined;
+
+  /**
+   * @generated from field: optional uint32 context_window_override = 8;
+   */
+  contextWindowOverride?: number | undefined;
+
+  /**
+   * @generated from field: optional uint32 max_tokens_override = 9;
+   */
+  maxTokensOverride?: number | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.ChatModelSpec.
+ * Use `create(ChatModelSpecSchema)` to create a new message.
+ */
+export const ChatModelSpecSchema: GenMessage<ChatModelSpec> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 1);
 
 /**
  * @generated from message hatch.platform.v1.ListModelsRequest
@@ -110,6 +196,20 @@ export type ListModelsRequest =
      * @generated from field: uint32 limit = 3;
      */
     limit: number;
+
+    /**
+     * Only this provider's models.
+     *
+     * @generated from field: optional string provider_id = 4;
+     */
+    providerId?: string | undefined;
+
+    /**
+     * Only enabled (true) or disabled (false) models.
+     *
+     * @generated from field: optional bool enabled = 5;
+     */
+    enabled?: boolean | undefined;
   };
 
 /**
@@ -118,7 +218,7 @@ export type ListModelsRequest =
  */
 export const ListModelsRequestSchema: GenMessage<ListModelsRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_model, 1);
+  messageDesc(file_hatch_platform_v1_model, 2);
 
 /**
  * @generated from message hatch.platform.v1.ListModelsResponse
@@ -146,7 +246,7 @@ export type ListModelsResponse =
  */
 export const ListModelsResponseSchema: GenMessage<ListModelsResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_model, 2);
+  messageDesc(file_hatch_platform_v1_model, 3);
 
 /**
  * @generated from message hatch.platform.v1.SetModelKindRequest
@@ -170,7 +270,7 @@ export type SetModelKindRequest =
  */
 export const SetModelKindRequestSchema: GenMessage<SetModelKindRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_model, 3);
+  messageDesc(file_hatch_platform_v1_model, 4);
 
 /**
  * @generated from message hatch.platform.v1.SetModelKindResponse
@@ -189,12 +289,231 @@ export type SetModelKindResponse =
  */
 export const SetModelKindResponseSchema: GenMessage<SetModelKindResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_model, 4);
+  messageDesc(file_hatch_platform_v1_model, 5);
+
+/**
+ * @generated from message hatch.platform.v1.CreateModelRequest
+ */
+export type CreateModelRequest =
+  Message<'hatch.platform.v1.CreateModelRequest'> & {
+    /**
+     * @generated from field: string provider_id = 1;
+     */
+    providerId: string;
+
+    /**
+     * "chat" (default) or "image".
+     *
+     * @generated from field: optional string kind = 2;
+     */
+    kind?: string | undefined;
+
+    /**
+     * @generated from field: string model_id = 3;
+     */
+    modelId: string;
+
+    /**
+     * Defaults to the catalog name, then the model id.
+     *
+     * @generated from field: optional string name = 4;
+     */
+    name?: string | undefined;
+
+    /**
+     * @generated from field: optional string description = 5;
+     */
+    description?: string | undefined;
+
+    /**
+     * Catalog entry to take metadata from; matched by model id when unset.
+     *
+     * @generated from field: optional string catalog_ref = 6;
+     */
+    catalogRef?: string | undefined;
+
+    /**
+     * Take no catalog metadata. Excludes catalog_ref.
+     *
+     * @generated from field: bool no_catalog = 7;
+     */
+    noCatalog: boolean;
+
+    /**
+     * @generated from field: optional bool reasoning = 8;
+     */
+    reasoning?: boolean | undefined;
+
+    /**
+     * @generated from field: optional uint32 context_window = 9;
+     */
+    contextWindow?: number | undefined;
+
+    /**
+     * @generated from field: optional uint32 max_tokens = 10;
+     */
+    maxTokens?: number | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.CreateModelRequest.
+ * Use `create(CreateModelRequestSchema)` to create a new message.
+ */
+export const CreateModelRequestSchema: GenMessage<CreateModelRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 6);
+
+/**
+ * @generated from message hatch.platform.v1.CreateModelResponse
+ */
+export type CreateModelResponse =
+  Message<'hatch.platform.v1.CreateModelResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.ProviderModel model = 1;
+     */
+    model?: ProviderModel | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.CreateModelResponse.
+ * Use `create(CreateModelResponseSchema)` to create a new message.
+ */
+export const CreateModelResponseSchema: GenMessage<CreateModelResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 7);
+
+/**
+ * Unset fields stay unchanged.
+ *
+ * @generated from message hatch.platform.v1.UpdateModelRequest
+ */
+export type UpdateModelRequest =
+  Message<'hatch.platform.v1.UpdateModelRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: optional string model_id = 2;
+     */
+    modelId?: string | undefined;
+
+    /**
+     * @generated from field: optional string name = 3;
+     */
+    name?: string | undefined;
+
+    /**
+     * An empty description clears it.
+     *
+     * @generated from field: optional string description = 4;
+     */
+    description?: string | undefined;
+
+    /**
+     * @generated from field: optional string catalog_ref = 5;
+     */
+    catalogRef?: string | undefined;
+
+    /**
+     * Detach the model from the catalog. Excludes catalog_ref.
+     *
+     * @generated from field: bool no_catalog = 6;
+     */
+    noCatalog: boolean;
+
+    /**
+     * @generated from field: optional bool reasoning = 7;
+     */
+    reasoning?: boolean | undefined;
+
+    /**
+     * @generated from field: optional uint32 context_window = 8;
+     */
+    contextWindow?: number | undefined;
+
+    /**
+     * @generated from field: optional uint32 max_tokens = 9;
+     */
+    maxTokens?: number | undefined;
+
+    /**
+     * Overrides to clear so the catalog value applies again: "reasoning",
+     * "context_window", "max_tokens". A field cannot be both set and reset.
+     *
+     * @generated from field: repeated string reset_fields = 10;
+     */
+    resetFields: string[];
+
+    /**
+     * @generated from field: optional bool enabled = 11;
+     */
+    enabled?: boolean | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.UpdateModelRequest.
+ * Use `create(UpdateModelRequestSchema)` to create a new message.
+ */
+export const UpdateModelRequestSchema: GenMessage<UpdateModelRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 8);
+
+/**
+ * @generated from message hatch.platform.v1.UpdateModelResponse
+ */
+export type UpdateModelResponse =
+  Message<'hatch.platform.v1.UpdateModelResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.ProviderModel model = 1;
+     */
+    model?: ProviderModel | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.UpdateModelResponse.
+ * Use `create(UpdateModelResponseSchema)` to create a new message.
+ */
+export const UpdateModelResponseSchema: GenMessage<UpdateModelResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 9);
+
+/**
+ * @generated from message hatch.platform.v1.DeleteModelRequest
+ */
+export type DeleteModelRequest =
+  Message<'hatch.platform.v1.DeleteModelRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.DeleteModelRequest.
+ * Use `create(DeleteModelRequestSchema)` to create a new message.
+ */
+export const DeleteModelRequestSchema: GenMessage<DeleteModelRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 10);
+
+/**
+ * @generated from message hatch.platform.v1.DeleteModelResponse
+ */
+export type DeleteModelResponse =
+  Message<'hatch.platform.v1.DeleteModelResponse'> & {};
+
+/**
+ * Describes the message hatch.platform.v1.DeleteModelResponse.
+ * Use `create(DeleteModelResponseSchema)` to create a new message.
+ */
+export const DeleteModelResponseSchema: GenMessage<DeleteModelResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_model, 11);
 
 /**
  * The models configured under the instance's providers, of every kind.
- * Providers, their keys and chat model settings stay in the Web UI; this
- * service lists the models and moves one between chat and image.
  *
  * @generated from service hatch.platform.v1.ModelService
  */
@@ -214,5 +533,29 @@ export const ModelService: GenService<{
     methodKind: 'unary';
     input: typeof SetModelKindRequestSchema;
     output: typeof SetModelKindResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.ModelService.CreateModel
+   */
+  createModel: {
+    methodKind: 'unary';
+    input: typeof CreateModelRequestSchema;
+    output: typeof CreateModelResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.ModelService.UpdateModel
+   */
+  updateModel: {
+    methodKind: 'unary';
+    input: typeof UpdateModelRequestSchema;
+    output: typeof UpdateModelResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.ModelService.DeleteModel
+   */
+  deleteModel: {
+    methodKind: 'unary';
+    input: typeof DeleteModelRequestSchema;
+    output: typeof DeleteModelResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_model, 0);

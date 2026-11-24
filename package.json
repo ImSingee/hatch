@@ -32,7 +32,7 @@
     "migrations:apply": "drizzle-kit migrate",
     "migrations:push": "drizzle-kit push",
     "auth:generate": "pnpx auth@1.7.7 generate --config ./src/auth/server.ts --output ./src/db/auth-schema.ts -y && pnpm format",
-    "db:seed": "tsx scripts/seed-db.ts",
+    "catalog:sync": "tsx scripts/sync-model-catalog.ts",
     "drizzle:studio": "drizzle-kit studio",
     "platform-api:generate": "tsx scripts/generate-platform-api.ts",
     "platform-api:check": "tsx scripts/generate-platform-api.ts --check",

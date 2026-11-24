@@ -9,6 +9,17 @@ import type {
   SessionPendingMessages,
 } from './pending-api';
 
+const modelPreference = vi.hoisted(() => ({
+  saved: null as { providerId: string; modelId: string } | null,
+  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
+    async () => ({}),
+  ),
+}));
+vi.mock('~server/agent-preference-settings', () => ({
+  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
+  updateAgentPreferenceSettings: modelPreference.update,
+}));
+
 const fixtures = vi.hoisted(() => ({
   session: {
     id: 'session-1',
@@ -60,20 +71,24 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-  sessionQueryOptions: (sessionId: string) => ({
-    queryKey: ['test-agent-session', sessionId],
-    queryFn: async () => structuredClone(fixtures.session),
-  }),
-}));
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () =>
+        choicesFrom(fixtures.providers, modelPreference.saved),
+    },
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+    sessionQueryOptions: (sessionId: string) => ({
+      queryKey: ['test-agent-session', sessionId],
+      queryFn: async () => structuredClone(fixtures.session),
+    }),
+  };
+});
 
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: { queryKey: ['test-apps'], queryFn: async () => [] },
@@ -226,6 +241,7 @@ test('sends a message while the Agent works to the pending tray', async () => {
         attachmentIds: [],
         providerId: 'provider-1',
         modelId: 'model-1',
+        thinkingLevel: 'off',
         clientMessageId: expect.any(String),
       },
     },

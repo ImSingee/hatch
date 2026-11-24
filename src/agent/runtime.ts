@@ -330,7 +330,7 @@ export async function runAgentTurn(
     }
   }
 
-  const thinkingLevel = picked.model.reasoning ? 'medium' : 'off';
+  const thinkingLevel = picked.model.reasoning ? picked.thinkingLevel : 'off';
   const systemPrompt = buildSystemPrompt(
     opts.appUrl,
     { workflowBetaEnabled },

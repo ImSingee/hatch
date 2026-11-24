@@ -11,7 +11,8 @@ import {
   TOO_LARGE,
 } from '~server/agent-message-body';
 import { authenticateSessionRequest } from '~server/session-http-auth';
-import { startAgentRun } from '~server/agent-runs';
+import { assertAgentModelAvailable, startAgentRun } from '~server/agent-runs';
+import { thinkingLevelSchema } from '~agent/protocol';
 import { errorResponse } from '~server/errors';
 
 const startBodySchema = z.preprocess(
@@ -22,6 +23,8 @@ const startBodySchema = z.preprocess(
       retry: z.literal(false).optional(),
       providerId: z.string().min(1),
       modelId: z.string().min(1),
+      /** Unset reuses the chat's level, else the model default. */
+      thinkingLevel: thinkingLevelSchema.optional(),
       /** Reused when resending the same draft; see agent-message-receipts. */
       clientMessageId: clientMessageIdSchema.optional(),
       ...agentMessageFields,
@@ -40,6 +43,7 @@ const retryBodySchema = z
     expectedSessionUpdatedAt: z.string().min(1),
     providerId: z.string().min(1),
     modelId: z.string().min(1),
+    thinkingLevel: thinkingLevelSchema.optional(),
   })
   .strict();
 
@@ -65,6 +69,13 @@ export async function postAgentRun({
   }
 
   try {
+    // A level the user picked must suit the model; never swap it silently.
+    if (parsed.thinkingLevel)
+      await assertAgentModelAvailable(
+        parsed.providerId,
+        parsed.modelId,
+        parsed.thinkingLevel,
+      );
     const result = await startAgentRun({ ...parsed, userId: session.user.id });
     return Response.json(result);
   } catch (error) {

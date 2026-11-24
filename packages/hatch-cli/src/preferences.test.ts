@@ -22,6 +22,51 @@ describe('preferences command arguments', () => {
     ).toEqual({ kind: 'set', agentMessageMode: 'steer' });
   });
 
+  it('maps the default model, splitting on the first colon only', () => {
+    expect(
+      command(
+        'preferences',
+        'set',
+        '--default-model',
+        '01JPROVIDER:openrouter/meta/llama:free',
+        '--thinking',
+        'high',
+      ),
+    ).toEqual({
+      kind: 'set',
+      defaultModel: {
+        providerId: '01JPROVIDER',
+        modelId: 'openrouter/meta/llama:free',
+        thinkingLevel: 'high',
+      },
+    });
+    expect(
+      command(
+        'preferences',
+        'set',
+        '--clear-default-model',
+        '--agent-message-mode',
+        'queue',
+      ),
+    ).toEqual({
+      kind: 'set',
+      agentMessageMode: 'queue',
+      clearDefaultModel: true,
+    });
+    for (const args of [
+      ['--default-model', 'p1'],
+      ['--default-model', ':m1'],
+      ['--default-model', 'p1:'],
+      ['--default-model', 'p1:m1', '--clear-default-model'],
+      ['--thinking', 'high'],
+      ['--default-model', 'p1:m1', '--thinking', 'extreme'],
+      ['--default-model', 'p1:m1', '--default-model', 'p1:m2'],
+    ])
+      expect(rejected('preferences', 'set', ...args)).toMatch(
+        /--default-model|--thinking/,
+      );
+  });
+
   it('rejects incomplete, unknown or misplaced input before any request', () => {
     expect(rejected('preferences')).toMatch(/preferences get or/);
     expect(rejected('preferences', 'list')).toMatch(/preferences get or/);
