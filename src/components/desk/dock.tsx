@@ -80,7 +80,8 @@ function dockKeyOf(target: EventTarget | null) {
 /**
  * The dock: pinned Apps, then All apps, and pinned Workflows when there are
  * any, with a marker under each one whose window is open. Adding happens in
- * the dock's right-click menu; only an empty Apps group shows an add tile.
+ * the dock's right-click menu; only an empty Apps group shows an add tile,
+ * and a dock with no pins at all shows nothing else.
  */
 export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const navigate = useNavigate();
@@ -181,6 +182,9 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const unpinnedApps = openable.filter((s) => !pinnedIds.has(s.id));
   const pinnedApps = openable.filter((s) => pinnedIds.has(s.id));
   const pinnedWorkflows = (workflows ?? []).filter((w) => w.pinned);
+  // All apps closes the Apps group once anything is pinned; an empty dock
+  // shows only its add tile.
+  const hasPins = Boolean(pins?.length) || pinnedWorkflows.length > 0;
   const workflowCandidates = (workflows ?? []).filter((w) => !w.pinned);
 
   const goCreate = () => {
@@ -374,7 +378,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
             onContextMenu={(event) => setMenuKey(dockKeyOf(event.target))}
           >
             <div className={`${classes.group} ${classes.grow}`}>
-              <span className={classes.groupLabel}>Apps</span>
               <div className={classes.groupBody}>
                 <div className={classes.row}>
                   {pins && pins.length > 0 ? (
@@ -407,17 +410,17 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                     />
                   ) : null}
                   {pins && pins.length === 0 ? (
-                    <DockAddButton label="Pin an app to the dock">
-                      {appPicker}
-                    </DockAddButton>
+                    <DockAddButton label="Add app">{appPicker}</DockAddButton>
                   ) : null}
                 </div>
-                <DockItem
-                  label="All apps"
-                  open={pathname === '/apps'}
-                  glyph={<AllAppsGlyph />}
-                  renderLink={(props) => <Link to="/apps" {...props} />}
-                />
+                {hasPins ? (
+                  <DockItem
+                    label="All apps"
+                    open={pathname === '/apps'}
+                    glyph={<AllAppsGlyph />}
+                    renderLink={(props) => <Link to="/apps" {...props} />}
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -425,7 +428,6 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
               <>
                 <span aria-hidden className={classes.divider} />
                 <div className={classes.group}>
-                  <span className={classes.groupLabel}>Workflows</span>
                   <div className={classes.row}>
                     {pinnedWorkflows.map((w) => (
                       <DockItem

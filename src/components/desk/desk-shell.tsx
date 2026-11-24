@@ -50,6 +50,7 @@ export function DeskShell({
       </main>
       <footer className={classes.dock}>
         <div aria-hidden className={classes.dockEdge} />
+        <div aria-hidden className={classes.dockHandle} />
         <div className={classes.dockPanel}>
           <Dock openItems={openItems} />
         </div>

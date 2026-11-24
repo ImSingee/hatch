@@ -189,13 +189,13 @@ async function renderDesk(initialEntry: string) {
 }
 
 /**
- * With a mouse the dock waits below the bottom edge; point at the edge the
- * way a person would to bring it up.
+ * With a mouse the dock waits below the bottom edge, marked by a short bar;
+ * point at the bar the way a person would to bring it up.
  */
 async function revealDock() {
-  const edge = document.querySelector<HTMLElement>('[class*="dockEdge"]');
-  if (!edge) throw new Error('The dock has no bottom edge to point at');
-  await userEvent.hover(page.elementLocator(edge));
+  const handle = document.querySelector<HTMLElement>('[class*="dockHandle"]');
+  if (!handle) throw new Error('The waiting dock shows no handle');
+  await userEvent.hover(page.elementLocator(handle));
 }
 
 /** Whether the dock is on screen: its bottom is inside the viewport. */
@@ -531,7 +531,7 @@ test('the dock waits below the edge, rises at it, and stays while its menu is op
   await vi.waitFor(() => expect(dockShown()).toBe(false));
 });
 
-test('the dock shows an add tile only when empty, ends with All apps, and hides an empty Workflows group', async () => {
+test('an empty dock shows only its add tile; pins end the Apps group with All apps', async () => {
   fixtures.workflows = [
     { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
   ];
@@ -539,12 +539,21 @@ test('the dock shows an add tile only when empty, ends with All apps, and hides 
   const dock = screen.getByRole('navigation', { name: 'Dock' });
 
   await expect
-    .element(dock.getByRole('button', { name: 'Pin an app to the dock' }))
+    .element(dock.getByRole('button', { name: 'Add app' }))
     .toBeInTheDocument();
+  expect(dock.getByRole('link').elements()).toEqual([]);
+
+  // A pinned Workflow alone brings All apps back beside the add tile.
+  fixtures.workflows = [
+    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
+  ];
+  await queryClient.invalidateQueries();
   await expect
     .element(dock.getByRole('link', { name: 'All apps' }))
     .toHaveAttribute('href', '/apps');
-  await expect.element(dock.getByText('Workflows')).not.toBeInTheDocument();
+  await expect
+    .element(dock.getByRole('button', { name: 'Add app' }))
+    .toBeInTheDocument();
 
   fixtures.pins = [
     {
@@ -563,7 +572,7 @@ test('the dock shows an add tile only when empty, ends with All apps, and hides 
     .element(dock.getByRole('link', { name: 'Daily digest' }))
     .toBeInTheDocument();
   await expect
-    .element(dock.getByRole('button', { name: 'Pin an app to the dock' }))
+    .element(dock.getByRole('button', { name: 'Add app' }))
     .not.toBeInTheDocument();
   await expect
     .element(dock.getByRole('button', { name: /Pin a workflow/ }))

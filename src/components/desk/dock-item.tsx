@@ -88,7 +88,10 @@ export function DockItem({
   );
 }
 
-/** The dashed tile of an empty Apps group; opens the App picker. */
+/**
+ * The dashed tile of an empty Apps group, labelled like any other tile;
+ * opens the App picker.
+ */
 export function DockAddButton({
   label,
   children,
@@ -100,8 +103,12 @@ export function DockAddButton({
   return (
     <Menu position="top" shadow="md" width={240}>
       <Menu.Target>
-        <UnstyledButton className={classes.add} aria-label={label}>
-          <IconPlus size={16} stroke={2.4} aria-hidden />
+        <UnstyledButton className={classes.item}>
+          <span className={classes.add}>
+            <IconPlus size={16} stroke={2.4} aria-hidden />
+          </span>
+          <span className={classes.label}>{label}</span>
+          <span className={classes.marker} aria-hidden />
         </UnstyledButton>
       </Menu.Target>
       <Menu.Dropdown>{children}</Menu.Dropdown>

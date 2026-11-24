@@ -314,11 +314,15 @@ wide the two buttons become one back button at the start of the title bar.
 - Hover: the tile rises 3 px over 150 ms. Running marker: a 4 px accent dot
   under the label.
 - Workflow tiles use radius `12 12 12 3` to differ from App tiles by shape.
-- The Apps group ends with an All apps tile that is not a pin: four 10 dots
-  (teal, orange, violet, blue, shade 6) on a white tile with the `card`
-  shadow. It is never dragged and stays visible when the pins scroll.
-- "Add" tile: same size, 1.5 px dashed neutral shade-5 border, no fill. Only
-  an empty Apps group shows it. Otherwise adding lives in the dock's
+- The groups carry no labels; a hairline divider separates Apps from
+  Workflows.
+- Once anything is pinned, the Apps group ends with an All apps tile that is
+  not a pin: four 10 dots (teal, orange, violet, blue, shade 6) on a white
+  tile with the `card` shadow. It is never dragged and stays visible when the
+  pins scroll.
+- "Add app" tile: same size, 1.5 px dashed neutral shade-5 border, no fill,
+  labelled like any tile. Only an empty Apps group shows it, so a dock with
+  no pins shows this tile alone. Otherwise adding lives in the dock's
   right-click menu: the clicked pin's own actions (Edit, Unpin, Manage),
   then Add an app ›, Add a workflow › and New with Agent. The Workflows
   group, with its divider, shows only while a Workflow is pinned.
@@ -326,8 +330,11 @@ wide the two buttons become one back button at the start of the title bar.
   28 (`radius.dock`), `dock` shadow, padding 10 18 12. The tab bar that
   replaces it below 560 wide uses the same fill, border, radius and shadow.
 - With a mouse (`hover: hover`) the dock floats over the stage and takes no
-  room: it waits below the bottom edge. Pointing at the bottom 6 px of the
-  page, or at the dock, raises it after 80 ms with a `base` slide; it sinks
+  room: it waits below the bottom edge. While it waits, a 64 × 5 pill in
+  neutral shade 5, 6 above the bottom edge and centred, marks where it comes
+  from; it fades out (`fast`) while the dock is up. Pointing at the bottom
+  6 px of the page, at the pill (a 120 × 16 hit area) or at the dock raises
+  it after 80 ms with a `base` slide; it sinks
   300 ms after the pointer leaves. Keyboard focus inside it and an open menu
   of its own hold it up. A right-click does not move focus, like a native
   context menu. On touch it keeps its own row under the stage.
