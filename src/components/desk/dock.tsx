@@ -377,7 +377,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         }}
       >
         <Menu.ContextMenu>
-          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus; the dock's tiles stay the interactive elements. */}
+          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus and notes which tile a long press is on; the dock's tiles stay the interactive elements. */}
           <nav
             aria-label="Dock"
             className={classes.dock}
@@ -386,6 +386,9 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
               if (event.button === 2) event.preventDefault();
             }}
             onContextMenu={(event) => setMenuKey(dockKeyOf(event.target))}
+            // A long press opens the menu without a contextmenu event, so
+            // note the pressed tile when the touch starts.
+            onTouchStart={(event) => setMenuKey(dockKeyOf(event.target))}
           >
             <div className={`${classes.group} ${classes.grow}`}>
               <div className={classes.groupBody}>

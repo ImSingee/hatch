@@ -45,6 +45,12 @@ message SetThemeRequest {
   }];
   // Whether the web dock shows each tile's name under it.
   optional bool dock_labels = 2;
+
+  option (buf.validate.message).cel = {
+    id: "set_theme.field"
+    message: "set accent or dock_labels"
+    expression: "has(this.accent) || has(this.dock_labels)"
+  };
 }
 
 message SetThemeResponse {

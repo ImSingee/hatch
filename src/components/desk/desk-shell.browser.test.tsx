@@ -638,3 +638,67 @@ test('names stay out of the dock unless the instance shows them, and pointing at
   await queryClient.invalidateQueries({ queryKey: ['test-theme'] });
   await vi.waitFor(() => expect(printed()).toBeGreaterThan(0));
 });
+
+test('keyboard focus shows a tile its full name, and a long press opens that tile own actions', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-ledger',
+      appId: 'app-3',
+      appSlug: 'ledger',
+      label: 'Household ledger',
+      entryHash: null,
+    },
+  ];
+  const { screen } = await renderDesk('/apps');
+  const dock = screen.getByRole('navigation', { name: 'Dock' });
+  const ledger = dock.getByRole('link', { name: 'Household ledger' });
+  await expect.element(ledger).toBeInTheDocument();
+
+  // Tab into the dock from the page.
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  let focused = false;
+  for (let step = 0; step < 40 && !focused; step++) {
+    await userEvent.keyboard('{Tab}');
+    focused = document.activeElement === ledger.element();
+  }
+  expect(focused).toBe(true);
+  await expect
+    .element(screen.getByRole('tooltip', { name: 'Household ledger' }))
+    .toBeVisible();
+  (document.activeElement as HTMLElement).blur();
+
+  // A long press: touches without a contextmenu event, as iOS Safari sends.
+  const target = ledger.element();
+  const box = target.getBoundingClientRect();
+  const touch = new Touch({
+    identifier: 1,
+    target,
+    clientX: box.x + box.width / 2,
+    clientY: box.y + box.height / 2,
+  });
+  const press = (type: 'touchstart' | 'touchend') =>
+    target.dispatchEvent(
+      new TouchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        touches: type === 'touchstart' ? [touch] : [],
+        targetTouches: type === 'touchstart' ? [touch] : [],
+        changedTouches: [touch],
+      }),
+    );
+  // Hold past the long-press delay: the menu opens on that tile, with its
+  // own actions. (This runner has a mouse, so the dock sits in its clipped
+  // floating layer and the popover keeps itself hidden; on a touch device
+  // the dock has its own row. What the fix changes is the menu's content.)
+  press('touchstart');
+  await vi.waitFor(() => {
+    const menu = document.querySelector('[role="menu"]');
+    expect(menu?.textContent).toContain('Household ledger');
+    expect(
+      [...menu!.querySelectorAll('[role="menuitem"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(['Edit', 'Unpin', 'Manage', 'Add an app', 'New with Agent']);
+  });
+  press('touchend');
+});

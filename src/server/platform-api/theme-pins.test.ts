@@ -99,6 +99,10 @@ describe('theme and pin RPCs', () => {
         accent: 'teal',
         dockLabels: true,
       });
+      // Presence counts, not the value: false is a change of its own.
+      const hidden = await call('ThemeService/SetTheme', { dockLabels: false });
+      expect({ type, status: hidden.status }).toEqual({ type, status: 200 });
+      expect(hidden.data.theme.dockLabels ?? false).toBe(false);
       const pinned = await call('PinService/PinApp', { app: 'notes' });
       expect({ type, status: pinned.status }).toEqual({ type, status: 200 });
       const listed = await call('PinService/ListPins');

@@ -17,8 +17,9 @@ export type DockOpenItem =
   | { kind: 'workflow'; slug: string };
 
 /**
- * The full name above a tile while it is pointed at, whether or not the dock
- * prints names. Hidden while the dock's right-click menu is open.
+ * The full name above a tile while it is pointed at or has keyboard focus,
+ * whether or not the dock prints names. Hidden while the dock's right-click
+ * menu is open.
  */
 function TileName({
   label,
@@ -30,7 +31,15 @@ function TileName({
   children: ReactNode;
 }) {
   return (
-    <Tooltip label={label} position="top" offset={8} disabled={hidden}>
+    <Tooltip
+      label={label}
+      position="top"
+      offset={8}
+      disabled={hidden}
+      // Keyboard focus shows the name too; with names hidden, it is the only
+      // way to tell two shortcuts of one App apart.
+      events={{ hover: true, focus: true, touch: false }}
+    >
       {children}
     </Tooltip>
   );
