@@ -2,7 +2,7 @@
   "name": "hatch-fold",
   "version": "0.1.0",
   "private": true,
-  "description": "Reports where a foldable display divides a view, from UIKit's reserved regions.",
+  "description": "Reports where a foldable display divides a view, from UIKit's reserved regions, and the edge of its vertical bar.",
   "license": "UNLICENSED",
   "author": "Hatch",
   "homepage": "https://github.com/singee/hatch"

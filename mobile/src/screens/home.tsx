@@ -1,14 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSession } from '../state/session';
 import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
@@ -16,7 +9,7 @@ import { useAccent } from '../ui/accent';
 import { FoldContainer, TileGrid, useFoldSplit } from '../ui/columns';
 import { Glyph } from '../ui/glyph';
 import { Busy, Notice, errorText } from '../ui/primitives';
-import { AddTile, AppTile, ShortcutTile } from '../ui/rows';
+import { AddTile, AppTile, ShortcutTile, useShortcutGrid } from '../ui/rows';
 import {
   Masthead,
   PageRoot,
@@ -24,7 +17,7 @@ import {
   pageScrollProps,
 } from '../ui/screen';
 import { Text, type } from '../ui/text';
-import { sizes } from '../ui/theme';
+import { TileMenu } from '../ui/tile-menu';
 import {
   DashboardNotices,
   DashboardPager,
@@ -33,7 +26,6 @@ import {
   useDashboards,
 } from './dashboard';
 
-const TILE = sizes.deskTile;
 const GUTTER = 20;
 /** Three 80 px widget rows, their two gaps and the canvas padding. */
 const PEEK_HEIGHT = 300;
@@ -58,7 +50,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const { api, origin } = useSession();
   const accent = useAccent();
   const focused = useIsFocused();
-  const { fontScale } = useWindowDimensions();
+  const tile = useShortcutGrid();
   const queryClient = useQueryClient();
   const lifetime = useLifetimeSignal();
   const board = useDashboards(focused, { peek: true });
@@ -89,8 +81,8 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     (pin) => pin.appStatus !== 'archived',
   );
   const pinnedWorkflows = pinned.data?.workflows ?? [];
-  // Pins are shared by every client: a change re-reads them, and the lists
-  // that mark pinned rows.
+  // Pins are shared by every client: a change re-reads them, and the
+  // workspace that marks a pinned App on its App page.
   const changed = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: [origin, 'pins'] }),
@@ -103,18 +95,13 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
         : api!.setWorkflowPinned(target.workflowId, false, lifetime()),
     onSettled: changed,
   });
-  const askUnpin = (
-    name: string,
-    target: { pinId: string } | { workflowId: string },
-  ) =>
-    Alert.alert(`Unpin ${name}?`, 'It stays in Apps and can be pinned again.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Unpin',
-        style: 'destructive',
-        onPress: () => unpin.mutate(target),
-      },
-    ]);
+  // Unpinning is undone by pinning again, so the menu item acts at once.
+  const unpinAction = (target: { pinId: string } | { workflowId: string }) => ({
+    label: 'Unpin from Home',
+    glyph: 'pinSlash' as const,
+    destructive: true,
+    onPress: () => unpin.mutate(target),
+  });
   const pending = pinned.isPending;
   const failure = pinned.error ?? unpin.error;
   // Dated by the last read of the workspace, so the greeting follows the
@@ -129,8 +116,6 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     ? Math.max(280, height - 210)
     : // Room for a widget three rows tall, the canvas's common size.
       PEEK_HEIGHT;
-  // Large text needs wider tiles for their one-line labels.
-  const tile = { minTile: fontScale > 1.3 ? 104 : 76, gap: 8 };
 
   const widgets = (
     <View>
@@ -239,45 +224,62 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                         })
                       }
                     >
-                      <AddTile size={TILE} />
+                      <AddTile size={tile.tile} />
                     </ShortcutTile>
                   </View>
                 );
               const app = appById.get(pin.appId);
               return (
                 <View style={{ width: tileWidth, paddingBottom: 12 }}>
-                  <ShortcutTile
-                    width={tileWidth}
-                    label={pin.label}
-                    accessibilityLabel={[
-                      pin.label,
-                      app && app.name !== pin.label ? app.name : null,
-                      pin.entryHash ? `opens at ${pin.entryHash}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                    accessibilityHint="Touch and hold to unpin"
-                    onLongPress={() => askUnpin(pin.label, { pinId: pin.id })}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/apps/[id]',
-                        params: {
-                          id: pin.appId,
-                          slug: pin.appSlug,
-                          entryHash: pin.entryHash,
-                          label: pin.label,
-                        },
-                      })
-                    }
+                  <TileMenu
+                    actions={[
+                      {
+                        label: 'App details',
+                        glyph: 'info',
+                        onPress: () =>
+                          router.push({
+                            pathname: '/manage/[id]',
+                            params: { id: pin.appId, slug: pin.appSlug },
+                          }),
+                      },
+                      unpinAction({ pinId: pin.id }),
+                    ]}
                   >
-                    <AppTile
-                      name={app?.name ?? pin.label}
-                      seed={pin.appId}
-                      iconPath={app?.iconPath}
-                      size={TILE}
-                      lifted
-                    />
-                  </ShortcutTile>
+                    {(onLongPress) => (
+                      <ShortcutTile
+                        width={tileWidth}
+                        label={pin.label}
+                        accessibilityLabel={[
+                          pin.label,
+                          app && app.name !== pin.label ? app.name : null,
+                          pin.entryHash ? `opens at ${pin.entryHash}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(', ')}
+                        accessibilityHint="Touch and hold for App details or to unpin"
+                        onLongPress={onLongPress}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/apps/[id]',
+                            params: {
+                              id: pin.appId,
+                              slug: pin.appSlug,
+                              entryHash: pin.entryHash,
+                              label: pin.label,
+                            },
+                          })
+                        }
+                      >
+                        <AppTile
+                          name={app?.name ?? pin.label}
+                          seed={pin.appId}
+                          iconPath={app?.iconPath}
+                          size={tile.tile}
+                          lifted
+                        />
+                      </ShortcutTile>
+                    )}
+                  </TileMenu>
                 </View>
               );
             }}
@@ -291,29 +293,31 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
             render={({ item }, tileWidth) => (
               <View style={{ width: tileWidth, paddingBottom: 12 }}>
                 {item ? (
-                  <ShortcutTile
-                    width={tileWidth}
-                    label={item.name}
-                    accessibilityLabel={`${item.name}, workflow`}
-                    accessibilityHint="Touch and hold to unpin"
-                    onLongPress={() =>
-                      askUnpin(item.name, { workflowId: item.id })
-                    }
-                    onPress={() =>
-                      router.push({
-                        pathname: '/workflows/[id]',
-                        params: { id: item.id },
-                      })
-                    }
-                  >
-                    <AppTile
-                      name={item.name}
-                      seed={item.id}
-                      size={TILE}
-                      workflow
-                      lifted
-                    />
-                  </ShortcutTile>
+                  <TileMenu actions={[unpinAction({ workflowId: item.id })]}>
+                    {(onLongPress) => (
+                      <ShortcutTile
+                        width={tileWidth}
+                        label={item.name}
+                        accessibilityLabel={`${item.name}, workflow`}
+                        accessibilityHint="Touch and hold to unpin"
+                        onLongPress={onLongPress}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/workflows/[id]',
+                            params: { id: item.id },
+                          })
+                        }
+                      >
+                        <AppTile
+                          name={item.name}
+                          seed={item.id}
+                          size={tile.tile}
+                          workflow
+                          lifted
+                        />
+                      </ShortcutTile>
+                    )}
+                  </TileMenu>
                 ) : (
                   <ShortcutTile
                     muted
@@ -327,7 +331,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                       })
                     }
                   >
-                    <AddTile size={TILE} workflow />
+                    <AddTile size={tile.tile} workflow />
                   </ShortcutTile>
                 )}
               </View>

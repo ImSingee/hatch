@@ -17,7 +17,9 @@ System controls (tab bar, navigation bar, native fields and menus) keep the
 system font. A sheet on the ground floats on `shadows.card`; a group inside a
 sheet is divided by hairlines; never nest a shadowed sheet in another. App
 tiles go through `AppTile`, which shows the App's stored icon and falls back
-to the monogram; Workflows pass `workflow`. Keep every text/surface pair at
+to the monogram; Workflows pass `workflow`. A tile's touch-and-hold actions
+go through `TileMenu` (the system context menu on iOS, an anchored Material
+menu on Android), never an alert. Keep every text/surface pair at
 4.5:1 or better; `theme.test.ts` guards the pairings. Respect Reduce Motion
 for the egg loader.
 
@@ -58,13 +60,18 @@ screen, the device, orientation or a width read once. Where the display folds
 is what UIKit reports as division reserved regions, read by the local
 `modules/hatch-fold` view behind each container (iOS 27.1 SDK and later;
 older SDKs and systems report no fold). Two columns keep their gutter on a
-fold that crosses them, grids mirror an even count around it, and without a
-fold layouts split evenly and start at the leading edge. Toolbars, tab bars and navigation bars move to a vertical
+fold that crosses them, and without a fold layouts split evenly and start at
+the leading edge. Tile grids ignore the fold: like the system home screen,
+their tiles run across the whole width. Toolbars, tab bars and navigation bars move to a vertical
 bar on the side; that bar, like any safe area, may sit on one edge only, so
 read each edge's inset from the view that lays out (a nested
 `SafeAreaProvider` or `SafeAreaView`), never the window's. Put header actions
 in `Stack.Toolbar` items with both an SF Symbol and a title; custom
-`headerLeft`/`headerRight` views cannot join the vertical bar. The Agent list
+`headerLeft`/`headerRight` views cannot join the vertical bar. Where the
+system uses a vertical bar (`VerticalBarProbe`, from the trait's
+`verticalBarEdge`), an App screen drops its title and makes its navigation bar
+transparent, so the App takes the full height while back and reload stay on
+that bar; the WebView is never remounted for it. The Agent list
 shows the open conversation beside itself when both fit and pushes it on a
 compact width; folding or unfolding keeps that conversation open. Production
 builds need the iOS 27.1 SDK or later for the full-display Duo layout.

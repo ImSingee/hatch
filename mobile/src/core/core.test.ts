@@ -138,7 +138,20 @@ describe('instance and credential boundaries', () => {
     };
     const fetcher = vi
       .fn<FetchLike>()
-      .mockResolvedValueOnce(json({ resources: [app] }))
+      .mockResolvedValueOnce(
+        json({
+          resources: [
+            { ...app, view: { currentVersion: 3 } },
+            // A first deployment that failed leaves nothing to open.
+            {
+              ...app,
+              id: 'app-2',
+              status: 'failed',
+              view: { currentVersion: null },
+            },
+          ],
+        }),
+      )
       .mockResolvedValueOnce(json({ resource: app }))
       .mockResolvedValueOnce(json({}))
       .mockResolvedValueOnce(json({ id: session.id }))
@@ -146,8 +159,11 @@ describe('instance and credential boundaries', () => {
       .mockResolvedValueOnce(json(handoff));
     const { client, vault } = setup(fetcher);
     await vault.set(origin, 'fixture-token');
-    expect(await client.apps()).toEqual([app]);
-    expect(await client.app(app.id)).toEqual(app);
+    expect(await client.apps()).toEqual([
+      { ...app, live: true },
+      { ...app, id: 'app-2', status: 'failed', live: false },
+    ]);
+    expect(await client.app(app.id)).toEqual({ ...app, live: false });
     expect(await client.sessions(app.id)).toEqual([]);
     expect(await client.createSession()).toEqual({ id: session.id });
     expect(await client.session(session.id)).toEqual({

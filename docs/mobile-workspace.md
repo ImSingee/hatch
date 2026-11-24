@@ -34,8 +34,8 @@ reads every colour, radius, font, weight and shadow from
 | ---------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Home (`dashboard` tab) | `GetWorkspace`, `ListApps`, `ListWorkflows`, the dashboard canvas | One dashboard's widgets in a sheet, page dots to switch dashboard, then the pinned Apps and Workflows grid |
 | Widgets                | the dashboard canvas                                              | The same dashboard at full height; opened from Home with "All widgets"                                     |
-| Apps                   | `ListApps`, `ListWorkflows`, `GetWorkspace`                       | Every App, then every Workflow, searchable, by name or by latest change; pinned rows carry a pin           |
-| Workflows              | `ListWorkflows`, `GetWorkspace`                                   | Workflows alone; hidden from the tab bar by default                                                        |
+| Apps                   | `ListApps`, `ListWorkflows`                                       | Every App, then every Workflow, as tiles, searchable, by name or by latest change                          |
+| Workflows              | `ListWorkflows`                                                   | Workflows alone; hidden from the tab bar by default                                                        |
 | App page               | `GetApp`, `GetWorkspace`                                          | Icon, name, status, Open, and a link to the web management page                                            |
 | App                    | the App's `/app/:slug/embed/` page                                | The App itself, in an authenticated WebView                                                                |
 | Agent                  | the `AgentService` session RPCs                                   | Conversations; beside the open one when the width allows                                                   |
@@ -49,12 +49,23 @@ is Home, `more` is Me), so saved orders and `hatch://` links keep working.
 Home pages by dashboard, not by widget: widgets are web content rendered by the
 dashboard canvas, one WebView per dashboard. The pinned grid uses `appPins` as
 described above: one tile per pin, keyed by pin `id`, opening the App at the
-pin's `entryHash`. A tile on Home opens the App directly; a row in Apps opens
-the App page first.
+pin's `entryHash`. Apps shows every App and Workflow in the same kind of grid.
+A tile on Home or in Apps opens the App directly. An App without a successful
+deployment (the summary's `currentVersion` is null: never deployed, or a first
+deployment still building or failed) has nothing to open, so its tile in Apps
+opens the App page.
+Touching and holding an App tile opens a menu with the App page ("App
+details"); on Home it also offers to unpin. On iOS this is the system context
+menu, on Android a menu anchored to the tile.
 
 With room for two columns (an unfolded iPhone Duo, landscape), Home puts the
 widgets in the leading column and the pins in the trailing one, and Agent shows
 the list beside the conversation. Columns split on the fold when there is one.
+
+On an iPhone Duo, folded or open, the system moves navigation bar items to a
+vertical bar on the side. An open App then shows no top bar: back and reload
+sit on the vertical bar and the App takes the full height. The app reads this
+from UIKit's `verticalBarEdge` trait (iOS 27.1 SDK and later).
 
 The app runs natively on iPad. Wide screens (iPad, an unfolded Duo) get the
 same two-column layouts; pages that stay one column (sign-in, an App or
@@ -87,9 +98,9 @@ Icons are kept in memory only.
 
 The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
 (`ifAbsent`), `UnpinApp` (by pin id) and `SetWorkflowPinned`. An "Add" tile
-after each grid opens a picker of what is not pinned yet; touching and holding
-a tile offers to unpin it. Pins are shared by every client, so a change
-re-reads the pins and the lists that mark pinned rows. Reordering pins is not
+after each grid opens a picker of what is not pinned yet; a tile's
+touch-and-hold menu unpins it at once, since pinning again undoes it. Pins are shared by every client, so a change
+re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
 offered on the phone yet (`ReorderAppPins` exists).
 
 ### Accent and ground

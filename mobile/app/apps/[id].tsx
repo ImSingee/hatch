@@ -11,6 +11,7 @@ import {
 import { openSurfaceLink } from '../../src/state/deep-links';
 import { SecureSurface, type SurfaceHandle } from '../../src/ui/secure-surface';
 import { useSession } from '../../src/state/session';
+import { VerticalBarProbe } from '../../src/ui/fold-probe';
 import { useLinkedId } from '../../src/state/use-linked-id';
 import { useWebHistoryBack } from '../../src/state/use-web-history-back';
 import { glyphs } from '../../src/ui/glyph.types';
@@ -32,6 +33,10 @@ export default function AppScreen() {
   // Back steps through the App's own pages first, then leaves the screen.
   const surface = useRef<SurfaceHandle>(null);
   const [inPageBack, setInPageBack] = useState(false);
+  // Where the system moves the navigation bar's items to a vertical bar (an
+  // iPhone Duo), back and reload live there and a top bar would hold only
+  // the title: the App takes the whole height instead.
+  const [verticalBar, setVerticalBar] = useState(false);
   useWebHistoryBack(inPageBack, () => surface.current?.goBack());
   const linked = useLinkedId('apps', id, slug);
   const app = useQuery({
@@ -84,9 +89,9 @@ export default function AppScreen() {
     >
       <Stack.Screen
         options={{
-          title: name,
+          title: verticalBar ? '' : name,
           gestureEnabled: !inPageBack,
-          headerTransparent: false,
+          headerTransparent: verticalBar,
           headerStyle: { backgroundColor: c.card },
         }}
       />
@@ -97,6 +102,7 @@ export default function AppScreen() {
           Reload app
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
+      <VerticalBarProbe onChange={(edge) => setVerticalBar(edge !== 'none')} />
       {invalid ||
       linked.error ||
       handoff.error ||
