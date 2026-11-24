@@ -7,6 +7,7 @@ import { resolveImageModel } from './model';
 import { composeGlyphTile, composeSubjectTile, isTileColor } from './tile';
 
 export const MAX_IMAGES_PER_CALL = 4;
+const REQUEST_TIMEOUT_MS = 120_000;
 
 export type GenerateImagesInput = {
   prompt: string;
@@ -54,6 +55,7 @@ export async function generateImages(
   const { id, driver, provider, modelId } = await resolveImageModel(
     input.imageModelId,
   );
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const results = await Promise.allSettled(
     Array.from({ length: count }, async () => {
       const raw = await driver.generate(provider, {
@@ -61,7 +63,7 @@ export async function generateImages(
         prompt,
         quality: input.quality ?? 'low',
         background: subjectTile === undefined ? 'opaque' : 'transparent',
-        signal: signal ?? new AbortController().signal,
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
       // Never store provider bytes as-is: decode and re-encode.
       const png =
