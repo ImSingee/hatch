@@ -423,8 +423,10 @@ tasks), and each task with `inputSchema`, `cron` (with `nextRun`),
 `run` takes a JSON object (`--input` or `--file`, up to 1 MB; default `{}`)
 and prints `runId` and `status`: `queued`, or `failed` when the platform
 rejected the input (inspect the run for the reason). With `--wait` it polls
-until the run ends, writing status changes to stderr, prints the full run and
-exits 6 with `task_run_failed` or `task_run_canceled` unless the run succeeded.
+until the run ends, writing status changes to stderr, and prints the full run.
+A run that did not succeed exits 6 with `task_run_failed` or
+`task_run_canceled`; with `--json` the error envelope is the only output and
+carries the full run in `error.details.run`.
 `--timeout` defaults to 600 seconds with `--wait` (60 otherwise); when it
 expires the command exits 7 with `timeout` and the run keeps going. A full
 queue answers `TOO_MANY_REQUESTS` (exit 2). `get-run` prints steps, log,

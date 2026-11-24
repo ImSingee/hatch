@@ -208,6 +208,12 @@ export function runText(run: AppTaskRunView): string {
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
+    // Abort events are not replayed: an already-aborted signal must reject
+    // now, or polling would continue past the deadline.
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
     const timer = setTimeout(resolve, ms);
     signal.addEventListener(
       'abort',
@@ -234,7 +240,9 @@ export async function runTask(
     signal,
     AbortSignal.timeout(command.timeoutMs),
   ]);
-  const { task } = platformClient(credential, command.timeoutMs, signal).apps;
+  // Every request shares the overall deadline, so `--timeout` bounds the
+  // whole command, including each poll of a waited run.
+  const { task } = platformClient(credential, command.timeoutMs, deadline).apps;
   const write = (json: unknown, text: string) =>
     process.stdout.write(
       command.json ? `${JSON.stringify(json)}\n` : `${text}\n`,
@@ -312,34 +320,44 @@ export async function runTask(
     return;
   }
   process.stderr.write(`Run ${started.runId} ${started.status}; waiting…\n`);
-  let run = await task.get({ id: command.id, runId: started.runId });
-  let last = run.status;
-  while (!TERMINAL.has(run.status)) {
+  let status = started.status;
+  const poll = async (wait: boolean) => {
     try {
-      await sleep(POLL_MS, deadline);
-    } catch {
+      if (wait) await sleep(POLL_MS, deadline);
+      return await task.get({ id: command.id, runId: started.runId });
+    } catch (error) {
       if (signal.aborted) throw new CliError('canceled', 'Canceled.', 130);
+      if (!deadline.aborted) throw error;
       throw new CliError(
         'timeout',
-        `Run ${started.runId} is still ${run.status} after --timeout. Inspect it with hatch app task get-run ${command.id} ${started.runId}.`,
+        `Run ${started.runId} is still ${status} after --timeout. Inspect it with hatch app task get-run ${command.id} ${started.runId}.`,
         7,
         undefined,
-        { runId: started.runId, status: run.status },
+        { runId: started.runId, status },
       );
     }
-    run = await task.get({ id: command.id, runId: started.runId });
-    if (run.status !== last) {
+  };
+  let run = await poll(false);
+  status = run.status;
+  while (!TERMINAL.has(run.status)) {
+    run = await poll(true);
+    if (run.status !== status) {
       process.stderr.write(`Run ${run.id} ${run.status}\n`);
-      last = run.status;
+      status = run.status;
     }
   }
-  write(run, runText(run));
-  if (run.status !== 'succeeded')
-    throw new CliError(
-      run.status === 'canceled' ? 'task_run_canceled' : 'task_run_failed',
-      `Run ${run.id} ${run.status}${run.error ? `: ${run.error.split('\n')[0]}` : '.'}`,
-      6,
-      undefined,
-      { runId: run.id, status: run.status },
-    );
+  if (run.status === 'succeeded') {
+    write(run, runText(run));
+    return;
+  }
+  // With --json the error envelope is the only stdout document; it carries
+  // the full run so automation still gets steps, log and error.
+  if (!command.json) process.stdout.write(`${runText(run)}\n`);
+  throw new CliError(
+    run.status === 'canceled' ? 'task_run_canceled' : 'task_run_failed',
+    `Run ${run.id} ${run.status}${run.error ? `: ${run.error.split('\n')[0]}` : '.'}`,
+    6,
+    undefined,
+    { runId: run.id, status: run.status, run },
+  );
 }

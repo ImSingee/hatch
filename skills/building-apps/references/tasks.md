@@ -124,8 +124,9 @@ router.service(DigestService, {
 });
 ```
 
-- Return value: the response message becomes the run output; a Connect error
-  fails the run with its code and message.
+- Return value: the response message becomes the run output (up to 1 MiB; a
+  larger response is stored as a truncated preview); a Connect error fails the
+  run with its code and message.
 - `step(name, fn, { retry })` records each attempt (start, end, output or
   error) in the run inspector. Wrap meaningful units of work in it. Outside a
   task run it only runs and retries `fn`.
@@ -155,7 +156,9 @@ another App's tasks.
   `concurrency` for that task). Others stay queued in order; an App holds at
   most 100 queued runs, and further triggers are refused with 429.
 - A run that waits in the queue starts on the deployment active when it
-  starts. A deploy, rollback or stop never cuts a running run short: its
+  starts, and its input is validated again against that deployment's task:
+  new defaults are filled, and input that no longer fits fails the run. A
+  deploy, rollback or stop never cuts a running run short: its
   instance finishes the run on the old deployment, then exits. If the new
   deployment migrated the Data schema, the old code's Data Table calls fail
   with 409 and the run fails.

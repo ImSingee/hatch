@@ -338,24 +338,68 @@ async function dispatchPass(appId: string): Promise<void> {
       // Keep this run queued; later runs of other tasks may still fit.
       if (sameTask >= task.concurrency) continue;
     }
-    const claimed = await db
-      .update(schema.appTaskRuns)
-      .set({ status: 'running', startedAt: new Date() })
-      .where(
-        and(
-          eq(schema.appTaskRuns.id, run.id),
-          eq(schema.appTaskRuns.status, 'queued'),
-        ),
-      )
-      .returning({ id: schema.appTaskRuns.id });
-    if (claimed.length === 0) continue;
+    // Input was validated against the deployment active when the run was
+    // queued. The run executes on `context`'s deployment, whose definition
+    // may have added required fields, defaults or constraints since.
+    const validation = validateSchemaInput(task.inputSchema, run.input ?? {}, {
+      strict: true,
+    });
+    if (!validation.success) {
+      await db
+        .update(schema.appTaskRuns)
+        .set({
+          status: 'failed',
+          error: `Input validation failed for version ${context.version}: ${validation.message}`,
+          finishedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.appTaskRuns.id, run.id),
+            eq(schema.appTaskRuns.status, 'queued'),
+          ),
+        );
+      continue;
+    }
+    // Register before claiming: a cancel that commits once the claim has
+    // committed always finds this entry and aborts it, even while the claim
+    // response is still on its way back.
     const active: ActiveRun = {
       taskName: task.name,
       abort: new AbortController(),
       handle: null,
     };
     running.set(run.id, active);
-    void executeRun(context, task, run.id, run.input, run.trigger, active)
+    const claimed = await db
+      .update(schema.appTaskRuns)
+      .set({
+        status: 'running',
+        startedAt: new Date(),
+        input: validation.data as JsonValue,
+      })
+      .where(
+        and(
+          eq(schema.appTaskRuns.id, run.id),
+          eq(schema.appTaskRuns.status, 'queued'),
+        ),
+      )
+      .returning({ id: schema.appTaskRuns.id })
+      .catch((error: unknown) => {
+        running.delete(run.id);
+        throw error;
+      });
+    if (claimed.length === 0 || active.abort.signal.aborted) {
+      // Not ours, or canceled between the claim and now: nothing started.
+      running.delete(run.id);
+      continue;
+    }
+    void executeRun(
+      context,
+      task,
+      run.id,
+      validation.data as JsonValue,
+      run.trigger,
+      active,
+    )
       .catch(async (error) => {
         await finalizeRun(run.id, {
           status: 'failed',
@@ -504,11 +548,11 @@ function connectError(status: number, body: string): string {
   return text ? `HTTP ${status}: ${text}` : `HTTP ${status}`;
 }
 
-function parseOutput(body: string): JsonValue | null {
-  if (Buffer.byteLength(body) > MAX_TASK_OUTPUT_BYTES) {
+function parseOutput(body: string, truncated: boolean): JsonValue | null {
+  if (truncated) {
     return {
       truncated: true,
-      bytes: Buffer.byteLength(body),
+      limitBytes: MAX_TASK_OUTPUT_BYTES,
       preview: body.slice(0, 2000),
     };
   }
@@ -575,6 +619,8 @@ async function executeRun(
         headers,
         body,
       },
+      deploymentId: context.deploymentId,
+      maxResponseBytes: MAX_TASK_OUTPUT_BYTES,
       env: { HATCH_RUN_ID: runId, HATCH_TASK: task.name },
       onStdout: (chunk) => stream.stdout(chunk),
       onStderr: (chunk) => stream.stderr(chunk),
@@ -607,6 +653,26 @@ async function executeRun(
   await recorded.catch(() => {});
   const log = stream.text || null;
 
+  if (result.superseded) {
+    // A deploy activated another deployment before the request was sent:
+    // nothing ran, so queue the run again (keeping its place) to validate
+    // and execute it against the new deployment. A cancel still wins.
+    await db
+      .update(schema.appTaskRuns)
+      .set({
+        status: 'queued',
+        startedAt: null,
+        deploymentId: null,
+        version: null,
+      })
+      .where(
+        and(
+          eq(schema.appTaskRuns.id, runId),
+          eq(schema.appTaskRuns.status, 'running'),
+        ),
+      );
+    return;
+  }
   const response = result.response;
   if (stream.overflow) {
     await finalizeRun(runId, {
@@ -623,7 +689,7 @@ async function executeRun(
   if (response && response.status >= 200 && response.status < 300) {
     await finalizeRun(runId, {
       status: 'succeeded',
-      output: parseOutput(response.body),
+      output: parseOutput(response.body, response.truncated),
       error: null,
       log,
     });

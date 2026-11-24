@@ -55,6 +55,7 @@ import {
   extraPermissionsSchema,
   mergeDenoPermissionFlags,
 } from '~/extra-permissions';
+import { readTextPrefix } from '../http-body';
 import { internalPlatformUrl } from '../internal-platform-url';
 import { subprocessSandboxEnv } from '../sandbox-env';
 import {
@@ -1556,6 +1557,15 @@ export type DedicatedRunHandle = {
 
 export type DedicatedRunOptions = {
   request: DedicatedRunRequest;
+  /**
+   * The deployment the run was prepared for (its input was validated against
+   * this deployment's task definition). Only this deployment serves the run:
+   * if another one became active before the request was sent, the result is
+   * `superseded` and nothing ran.
+   */
+  deploymentId: string;
+  /** Response bytes kept; the rest of a longer body is never read. */
+  maxResponseBytes: number;
   /** Extra environment for the instance, e.g. `HATCH_RUN_ID`. */
   env: Record<string, string>;
   /** Output of the instance from the run's request until it exits. */
@@ -1570,23 +1580,32 @@ export type DedicatedRunOptions = {
 export type DedicatedRunResult = {
   /** The deployment that served the run; null if no instance started. */
   deploymentId: string | null;
-  /** The backend's answer, when the request got one. */
-  response: { status: number; body: string } | null;
+  /**
+   * The backend's answer, when the request got one. `truncated` means the
+   * body exceeded `maxResponseBytes` and only its first bytes are in `body`.
+   */
+  response: { status: number; body: string; truncated: boolean } | null;
   /** Why there is no response: boot failure, kill, timeout. */
   error: string | null;
+  /**
+   * The pinned deployment is no longer active and no request was sent: the
+   * caller may prepare the run again for the new deployment.
+   */
+  superseded?: boolean;
 };
 
 /** Boots of a run instance retried after a deploy or stop superseded them. */
 const MAX_RUN_BOOT_ATTEMPTS = 3;
 
 /**
- * Run one request in a fresh instance of the App's active deployment, then
- * retire the instance and resolve once it has exited and closed its output.
+ * Run one request in a fresh instance of `options.deploymentId`, then retire
+ * the instance and resolve once it has exited and closed its output.
  *
  * The instance joins the App's instance set as a `run` instance, so a deploy,
  * rollback or stop drains it (the request runs to completion) while a force
- * stop, archive or delete kills it. A deploy or stop that lands before the
- * request is sent re-resolves the active deployment and boots again.
+ * stop, archive or delete kills it. A stop that lands before the request is
+ * sent boots the same deployment again; a deploy or rollback that activated
+ * another deployment by then resolves `superseded` without sending it.
  */
 export async function runInDedicatedInstance(
   id: string,
@@ -1603,11 +1622,23 @@ export async function runInDedicatedInstance(
     }
     let spawned: SpawnedBackend;
     try {
-      spawned = await spawnBackendProcess(id, undefined, () => {}, options.env);
+      spawned = await spawnBackendProcess(
+        id,
+        options.deploymentId,
+        () => {},
+        options.env,
+      );
     } catch (error) {
+      if (error instanceof BackendDeploymentChangedError) {
+        return {
+          deploymentId: lastDeploymentId,
+          response: null,
+          error: 'another deployment became active before the run started',
+          superseded: true,
+        };
+      }
       if (
-        (error instanceof BackendStartSupersededError ||
-          error instanceof BackendDeploymentChangedError) &&
+        error instanceof BackendStartSupersededError &&
         attempt < MAX_RUN_BOOT_ATTEMPTS
       ) {
         continue;
@@ -1677,7 +1708,8 @@ export async function runInDedicatedInstance(
         };
       }
       // A deploy or stop retired the instance before it received the
-      // request: nothing ran yet, so boot the deployment that is active now.
+      // request: nothing ran yet, so boot again. The pinned boot reports
+      // `superseded` when a deploy activated another deployment.
       if (instance.draining) {
         killInstance(instance);
         await closed;
@@ -1709,7 +1741,11 @@ export async function runInDedicatedInstance(
             signal: options.signal,
           },
         );
-        response = { status: upstream.status, body: await upstream.text() };
+        const { text, truncated } = await readTextPrefix(
+          upstream.body,
+          options.maxResponseBytes,
+        );
+        response = { status: upstream.status, body: text, truncated };
       } catch (fetchError) {
         error = options.signal?.aborted
           ? 'aborted'

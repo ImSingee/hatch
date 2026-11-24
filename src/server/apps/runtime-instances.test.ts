@@ -79,6 +79,16 @@ Deno.addSignalListener('SIGTERM', () => {
 export default {
   fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/flood') {
+      // A response that never ends.
+      return new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(65536));
+          },
+        }),
+      );
+    }
     if (url.pathname !== '/stream') return new Response(String(Deno.pid));
     const holdMs = Number(url.searchParams.get('ms'));
     const gate = url.searchParams.get('gate');
@@ -481,10 +491,15 @@ it('kills every instance at once, draining and in-flight ones included', async (
 });
 
 /** Start a task run against the fixture and report its instance's pid. */
-function startRun(requestPath: string) {
+function startRun(
+  requestPath: string,
+  options: { deploymentId?: string; maxResponseBytes?: number } = {},
+) {
   let pid: number | null = null;
   const result = runInDedicatedInstance(appId, {
     request: { path: requestPath, headers: {}, body: '' },
+    deploymentId: options.deploymentId ?? DEPLOYMENT_ID,
+    maxResponseBytes: options.maxResponseBytes ?? 1024 * 1024,
     env: { HATCH_RUN_ID: 'run-1', HATCH_TASK: 'digest' },
     onStdout: () => {},
     onStderr: () => {},
@@ -531,4 +546,18 @@ it('lets a stop or deploy drain a task run to completion and a force stop end it
   const ended = await killed.result;
   expect(ended.response).toBeNull();
   expect(ended.error).toMatch(/stopped during the run/);
+}, 60_000);
+
+it('reads at most the response limit and never serves a run from a deployment it was not prepared for', async () => {
+  const flood = startRun('/flood', { maxResponseBytes: 4096 });
+  const bounded = await flood.result;
+  expect(bounded.response).toMatchObject({ status: 200, truncated: true });
+  expect(bounded.response?.body).toHaveLength(4096);
+  expect(isAlive(flood.pid() as number)).toBe(false);
+
+  activateNextDeployment();
+  const stale = startRun('/', { deploymentId: DEPLOYMENT_ID });
+  const superseded = await stale.result;
+  expect(superseded).toMatchObject({ response: null, superseded: true });
+  expect(stale.pid()).toBeNull();
 }, 60_000);
