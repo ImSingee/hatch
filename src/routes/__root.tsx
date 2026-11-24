@@ -1,4 +1,5 @@
 import {
+  ClientOnly,
   HeadContent,
   Scripts,
   createRootRouteWithContext,
@@ -128,11 +129,16 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           <AccentSync />
           <ModalsProvider>{children}</ModalsProvider>
 
-          <Toaster
-            position="top-center"
-            richColors
-            containerAriaLabel={t('nav.notifications')}
-          />
+          {/* Client-only: the shell is prerendered in English, and hydration
+              keeps prerendered attributes, so the translated label would
+              never replace it. */}
+          <ClientOnly>
+            <Toaster
+              position="top-center"
+              richColors
+              containerAriaLabel={t('nav.notifications')}
+            />
+          </ClientOnly>
           {/* A picture, not a control: it stays at the top edge even while
               idle, where the pointer must reach what is underneath. */}
           <NavigationProgress className="desk-route-progress" />

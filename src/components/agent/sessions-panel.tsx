@@ -36,6 +36,7 @@ import {
 import classes from './chat.module.css';
 import { formatSessionGroupLabel, groupSessionsByDate } from './session-groups';
 import { useLocalCalendarNow } from './use-local-calendar-now';
+import { displaySessionTitle } from './session-title';
 
 function SessionRow({
   session,
@@ -67,7 +68,7 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
       >
         <Text component="span" truncate inherit>
-          {session.title}
+          {displaySessionTitle(session.title, t)}
         </Text>
       </UnstyledButton>
       <Menu position="bottom-end" withArrow shadow="md" width={160}>
@@ -92,7 +93,9 @@ function SessionRow({
           <Menu.Item
             color="red"
             leftSection={<IconTrash size={15} stroke={1.7} />}
-            onClick={() => onDelete(session.id, session.title)}
+            onClick={() =>
+              onDelete(session.id, displaySessionTitle(session.title, t))
+            }
           >
             {t('common.delete')}
           </Menu.Item>

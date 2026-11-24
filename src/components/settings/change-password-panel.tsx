@@ -163,12 +163,18 @@ function ChangePasswordForm({
           {t('account.password.signOutOthers')}
         </Text>
         <PasswordInput
+          visibilityToggleButtonProps={{
+            'aria-label': t('system.togglePasswordVisibility'),
+          }}
           label={t('account.password.current')}
           autoComplete="current-password"
           disabled={change.isPending}
           {...inputProps('currentPassword')}
         />
         <PasswordInput
+          visibilityToggleButtonProps={{
+            'aria-label': t('system.togglePasswordVisibility'),
+          }}
           label={t('account.password.new')}
           description={t('account.password.newDescription')}
           autoComplete="new-password"
@@ -176,6 +182,9 @@ function ChangePasswordForm({
           {...inputProps('newPassword')}
         />
         <PasswordInput
+          visibilityToggleButtonProps={{
+            'aria-label': t('system.togglePasswordVisibility'),
+          }}
           label={t('account.password.confirm')}
           autoComplete="new-password"
           disabled={change.isPending}

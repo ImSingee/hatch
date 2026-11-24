@@ -74,6 +74,7 @@ import {
   type WorkTiming,
 } from './work-process';
 import classes from './chat.module.css';
+import { displaySessionTitle } from './session-title';
 
 /**
  * Collapse choices are kept per run and phase: a reply reopened after it
@@ -1178,7 +1179,11 @@ export function Chat({ sessionId }: { sessionId: string }) {
           {envAnnouncement}
         </Text>
         <SessionHeader
-          title={session?.title ?? t('agent.chat.untitled')}
+          title={
+            session
+              ? displaySessionTitle(session.title, t)
+              : t('agent.chat.untitled')
+          }
           model={sessionModelName}
           runnerId={session?.runnerId ?? null}
           apps={sessionApps}

@@ -26,6 +26,7 @@ import { translateError, useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import classes from './quick-agent-chat.module.css';
+import { displaySessionTitle } from '~components/agent/session-title';
 
 /**
  * The ultrawide desk's companion column: recent Agent sessions and a
@@ -131,7 +132,11 @@ export function QuickAgentChat() {
               params={{ threadId: session.id }}
               className={classes.session}
             >
-              <strong>{session.title || t('quickChat.newChat')}</strong>
+              <strong>
+                {session.title
+                  ? displaySessionTitle(session.title, t)
+                  : t('quickChat.newChat')}
+              </strong>
               <span>
                 {new Intl.DateTimeFormat(locale, {
                   month: 'short',

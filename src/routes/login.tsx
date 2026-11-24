@@ -204,6 +204,9 @@ function LoginPage() {
               {...fieldProps('email')}
             />
             <PasswordInput
+              visibilityToggleButtonProps={{
+                'aria-label': t('system.togglePasswordVisibility'),
+              }}
               size="md"
               label={t('login.password')}
               {...fieldProps('password')}

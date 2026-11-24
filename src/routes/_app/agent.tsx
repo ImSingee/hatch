@@ -27,6 +27,7 @@ import {
   sessionsQueryOptions,
 } from '~queries/agent';
 import classes from '~components/agent/chat.module.css';
+import { displaySessionTitle } from '~components/agent/session-title';
 
 export const Route = createFileRoute('/_app/agent')({
   loader: async ({ context }) => {
@@ -65,7 +66,10 @@ function AgentLayout() {
       fill
       maxWidth={1360}
       title={t('nav.agent')}
-      documentTitle={(threadId && chatTitle) || t('nav.agent')}
+      documentTitle={
+        (threadId && chatTitle && displaySessionTitle(chatTitle, t)) ||
+        t('nav.agent')
+      }
       tile={
         <ThemeIcon size={22} radius="xs" color="primary">
           <IconSparkles size={13} stroke={2.4} />

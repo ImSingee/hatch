@@ -1848,4 +1848,6 @@ export type TranslationResource = {
   'deployments.agentRestore.promptNewerPlatform': 'Restore App {{appId}} to v{{version}}. Its compatibility is newer than this platform, so keep its runtime disabled until the platform is updated.';
   'deployments.agentRestore.promptUpdate': 'Restore App {{appId}} to v{{version}}, then update and redeploy it for the latest platform compatibility.';
   'error.auth.ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED': 'Previously registered';
+  'agent.chat.defaultTitle': 'New chat';
+  'system.togglePasswordVisibility': 'Toggle password visibility';
 };

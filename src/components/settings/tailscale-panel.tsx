@@ -799,6 +799,9 @@ export function TailscalePanel({
             )}
             {usesAuthKey && (
               <PasswordInput
+                visibilityToggleButtonProps={{
+                  'aria-label': t('system.togglePasswordVisibility'),
+                }}
                 label={t('tailscale.method.authKey')}
                 description={
                   <Trans

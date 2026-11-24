@@ -1845,5 +1845,7 @@
   "notifications.kind.message": "消息",
   "deployments.agentRestore.promptNewerPlatform": "将 App {{appId}} 恢复到 v{{version}}。它的兼容性版本比当前平台更新，因此在平台更新之前请保持其运行时停用。",
   "deployments.agentRestore.promptUpdate": "将 App {{appId}} 恢复到 v{{version}}，然后更新并重新部署，使其兼容最新的平台。",
-  "error.auth.ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED": "此通行密钥已注册过"
+  "error.auth.ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED": "此通行密钥已注册过",
+  "agent.chat.defaultTitle": "新聊天",
+  "system.togglePasswordVisibility": "显示或隐藏密码"
 }
