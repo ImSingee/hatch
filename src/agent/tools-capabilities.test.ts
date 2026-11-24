@@ -1,4 +1,4 @@
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { NodeExecutionEnv } from './node-execution-env';
 import { describe, expect, it } from 'vitest';
 import type { PlatformClient } from './platform-client';
 import { createTools } from './tools';

@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { NodeExecutionEnv } from './node-execution-env';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SKILLS_DIR } from './paths';
 import type { PlatformClient } from './platform-client';

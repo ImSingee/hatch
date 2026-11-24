@@ -11,8 +11,8 @@ import {
   type FileInfo,
   type Result,
   type ShellExecOptions,
-} from '@earendil-works/pi-agent-core';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+} from './execution-env';
+import { NodeExecutionEnv } from './node-execution-env';
 import { agentWorkDir } from './paths';
 import { prepareAgentSessionSandbox, sandboxFileSpawn } from './shell-sandbox';
 
