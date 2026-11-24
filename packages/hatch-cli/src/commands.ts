@@ -467,9 +467,10 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['notification', 'revisions'],
-    usage: 'notification revisions <notification-id>',
+    usage:
+      'notification revisions <notification-id> [--limit <1-100>] [--cursor <cursor>]',
     description:
-      'List what a notification said before each edit, oldest first, and every answer it took (one per round of its reply form).',
+      'List what a notification said before each edit, newest first, a page at a time (default 20; the next cursor is printed), with the answers to the rounds the page covers (the first page also has the current round). A round that spans two pages shows its answer on both.',
   },
   {
     path: ['notification', 'recall'],

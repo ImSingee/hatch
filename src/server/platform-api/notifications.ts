@@ -407,8 +407,12 @@ export function registerNotificationApi(router: ConnectRouter) {
         return {};
       },
       listNotificationRevisions: async (input) => {
-        const history = await listNotificationRevisions(input.id);
+        const history = await listNotificationRevisions(input.id, {
+          cursor: input.cursor || undefined,
+          limit: input.limit || undefined,
+        });
         return {
+          nextCursor: history.nextCursor ?? undefined,
           revisions: history.revisions.map((revision) => ({
             ...revision,
             body: none(revision.body),

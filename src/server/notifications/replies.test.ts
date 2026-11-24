@@ -1187,6 +1187,40 @@ describe('new questions on the same notification', () => {
     expect(history.responses.map((response) => response.round)).toEqual([1, 2]);
   });
 
+  it('pages earlier versions newest first, each page with the answers to its rounds', async () => {
+    const id = await sendForm();
+    // Four answered rounds, each replaced by a new question: rounds 1-5,
+    // with round 5 still open.
+    for (let round = 1; round <= 4; round += 1) {
+      await answer(id, { decision: 'approve' });
+      const next = structuredClone(APPROVE_FORM);
+      next.fields[0]!.label = `Question ${round + 1}`;
+      await updateNotification(
+        { type: 'channel', channelId },
+        notificationUpdateSchema.parse({ id, reply: next }),
+      );
+    }
+    const first = await service.listNotificationRevisions(id, { limit: 2 });
+    expect(first.revisions.map((revision) => revision.replyRound)).toEqual([
+      4, 3,
+    ]);
+    expect(first.responses.map((response) => response.round)).toEqual([3, 4]);
+    expect(first.nextCursor).not.toBeNull();
+
+    const last = await service.listNotificationRevisions(id, {
+      limit: 2,
+      cursor: first.nextCursor!,
+    });
+    expect(last.revisions.map((revision) => revision.replyRound)).toEqual([
+      2, 1,
+    ]);
+    expect(last.responses.map((response) => response.round)).toEqual([1, 2]);
+    expect(last.nextCursor).toBeNull();
+    await expect(
+      service.listNotificationRevisions(id, { cursor: 'nope' }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
   it('delivers the answer to an earlier round with what it answered, after a new question changed the data', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
@@ -1356,6 +1390,6 @@ describe('cards', () => {
     const history = await service.listNotificationRevisions(id);
     expect(
       history.revisions.map((revision) => revision.card?.status?.label),
-    ).toEqual(['Running', 'Passed']);
+    ).toEqual(['Passed', 'Running']);
   });
 });

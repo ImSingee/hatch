@@ -2,7 +2,6 @@ import { Button, Center, Loader, Tooltip } from '@mantine/core';
 import {
   useInfiniteQuery,
   useMutation,
-  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -611,13 +610,24 @@ function CardBlock({ card }: { card: NotificationCard }) {
 function History({ item }: { item: TimelineItem }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const query = useQuery({
+  const query = useInfiniteQuery({
     ...notificationRevisionsQueryOptions(item.id),
     enabled: open,
   });
   const lines = useMemo(() => {
     if (!query.data) return [];
-    const { revisions, responses } = query.data;
+    // Pages come newest first; the list reads oldest first. A round that
+    // spans two pages has its answer on both.
+    const revisions = query.data.pages
+      .flatMap((page) => page.revisions)
+      .reverse();
+    const responses = [
+      ...new Map(
+        query.data.pages
+          .flatMap((page) => page.responses)
+          .map((response) => [response.round, response]),
+      ).values(),
+    ];
     // A round's answer belongs to the last version that asked that question.
     const lastOfRound = new Map(
       revisions.map((revision) => [revision.replyRound, revision.revision]),
@@ -665,6 +675,18 @@ function History({ item }: { item: TimelineItem }) {
       {open ? (
         query.data ? (
           <ol className={classes.historyList}>
+            {query.hasNextPage ? (
+              <li>
+                <button
+                  type="button"
+                  className={classes.historyToggle}
+                  disabled={query.isFetchingNextPage}
+                  onClick={() => void query.fetchNextPage()}
+                >
+                  {t('notifications.timeline.historyMore')}
+                </button>
+              </li>
+            ) : null}
             {lines.map((line) => (
               <li key={line.key} className={classes.historyLine}>
                 <Time iso={line.at} />

@@ -145,11 +145,20 @@ export const respondToNotificationFn = createServerFn({ method: 'POST' })
   });
 
 /** What a notification said before each edit, and every answer it took. */
+const revisionsPageSchema = z.object({
+  id: idSchema,
+  cursor: z.string().max(64).optional(),
+});
+
 export const listNotificationRevisionsFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .validator((id: string) => idSchema.parse(id))
+  .validator((input: z.input<typeof revisionsPageSchema>) =>
+    revisionsPageSchema.parse(input),
+  )
   .handler(async ({ data }) => {
-    const history = await listNotificationRevisions(data);
+    const history = await listNotificationRevisions(data.id, {
+      cursor: data.cursor,
+    });
     return {
       ...history,
       // Stored notification data is always a JSON object.

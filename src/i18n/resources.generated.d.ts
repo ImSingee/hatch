@@ -1885,6 +1885,7 @@ export type TranslationResource = {
   'notifications.timeline.unreadDivider_other': '{{count}} unread below';
   'notifications.timeline.history': 'Earlier versions';
   'notifications.timeline.historyHide': 'Hide earlier versions';
+  'notifications.timeline.historyMore': 'Show earlier versions';
   'notifications.timeline.historyAnswer': 'answered “{{answer}}”';
   'notifications.responseRoutes.target.destination': 'A webhook or App';
   'notifications.responseRoutes.target.agent': 'The Agent';

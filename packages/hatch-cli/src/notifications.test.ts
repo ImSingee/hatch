@@ -796,6 +796,21 @@ describe('notification reply commands', () => {
   });
 });
 
+describe('earlier versions', () => {
+  it('pages with --limit and --cursor and rejects an unusable limit', () => {
+    expect(
+      parse('revisions', 'n-1', '--limit', '5', '--cursor', '12').request,
+    ).toMatchObject({ id: 'n-1', limit: 5, cursor: '12' });
+    expect(parse('revisions', 'n-1').request).toMatchObject({
+      id: 'n-1',
+      limit: 0,
+    });
+    expect(() => parse('revisions', 'n-1', '--limit', '500')).toThrow(
+      '--limit must be an integer between 1 and 100.',
+    );
+  });
+});
+
 describe('read position commands', () => {
   it('marks through one notification or all of them, and needs exactly one', () => {
     expect(parse('mark-read', '--through', 'n-1').request).toMatchObject({

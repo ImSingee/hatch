@@ -596,10 +596,19 @@ message ListNotificationRevisionsRequest {
     min_len: 1
     max_len: 64
   }];
+  // Page size, 1-100; 0 or unset means 20.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+  // next_cursor of the page before; empty for the newest versions.
+  string cursor = 3 [(buf.validate.field).string.max_len = 64];
 }
 message ListNotificationRevisionsResponse {
+  // Newest first.
   repeated NotificationRevision revisions = 1;
+  // The answers to the rounds this page covers (the first page also has the
+  // current round's); a round that spans two pages is on both.
   repeated NotificationResponse responses = 2;
+  // Set while older versions remain.
+  optional string next_cursor = 3;
 }
 
 message NotificationReadState {

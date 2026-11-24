@@ -101,7 +101,12 @@ export const notificationReadStateQueryOptions = queryOptions({
 
 /** What a notification said before each edit, and every answer it took. */
 export const notificationRevisionsQueryOptions = (id: string) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: [...NOTIFICATIONS_KEY, 'revisions', id],
-    queryFn: () => listNotificationRevisionsFn({ data: id }),
+    queryFn: ({ pageParam }) =>
+      listNotificationRevisionsFn({
+        data: { id, cursor: pageParam ?? undefined },
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
   });

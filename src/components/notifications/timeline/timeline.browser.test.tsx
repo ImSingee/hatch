@@ -67,9 +67,15 @@ vi.mock('~queries/notifications', () => {
       queryFn: async () => fixtures.readState,
     }),
     notificationRevisionsQueryOptions: (id: string) =>
-      queryOptions({
+      infiniteQueryOptions({
         queryKey: [...key, 'revisions', id],
-        queryFn: async () => ({ revisions: [], responses: [] }),
+        queryFn: async () => ({
+          revisions: [],
+          responses: [],
+          nextCursor: null as string | null,
+        }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (page) => page.nextCursor,
       }),
     notificationDetailQueryOptions: (id: string) =>
       queryOptions({

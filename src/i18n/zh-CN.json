@@ -1883,6 +1883,7 @@
   "notifications.timeline.unreadDivider_other": "以下是 {{count}} 条未读",
   "notifications.timeline.history": "之前的版本",
   "notifications.timeline.historyHide": "收起之前的版本",
+  "notifications.timeline.historyMore": "显示更早的版本",
   "notifications.timeline.historyAnswer": "回复了「{{answer}}」",
   "notifications.responseRoutes.target.destination": "Webhook 或应用",
   "notifications.responseRoutes.target.agent": "Agent",

@@ -344,7 +344,9 @@ function DeliveryRow({
         <DeliveryOutcome delivery={delivery} revision={revision} />
       </Table.Td>
       <Table.Td>
-        {delivery.status === 'failed' && delivery.destinationId ? (
+        {/* An Agent chat has no destination record to lose. */}
+        {delivery.status === 'failed' &&
+        (delivery.destinationId || delivery.destinationType === 'agent') ? (
           <Button
             size="xs"
             variant="default"

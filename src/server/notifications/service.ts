@@ -17,6 +17,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
+import { EmptyFilter } from 'drizzle-orm/relations';
 import { db, schema, type TX } from '~/db';
 import type {
   NotificationDeliveryStatus,
@@ -647,23 +648,56 @@ export type NotificationRevisionView = {
  * What a notification said before each edit, oldest first, and every answer
  * it took (one per round).
  */
-export async function listNotificationRevisions(id: string): Promise<{
+const REVISIONS_PAGE = 20;
+const MAX_REVISIONS_PAGE = 100;
+
+/**
+ * Earlier versions of a notification, newest first, one page at a time
+ * (`cursor` is the `nextCursor` of the page before), with the answers to
+ * the rounds the page covers; the first page also has the current round's.
+ * A round that spans two pages has its answer on both.
+ */
+export async function listNotificationRevisions(
+  id: string,
+  page: { cursor?: string; limit?: number } = {},
+): Promise<{
   revisions: NotificationRevisionView[];
   responses: NotificationResponseView[];
+  nextCursor: string | null;
 }> {
   const row = await db.query.notifications.findFirst({
     where: { id },
     columns: { id: true },
   });
   if (!row) notFound('Notification');
-  const [revisions, responses] = await Promise.all([
-    db.query.notificationRevisions.findMany({
-      where: { notificationId: id },
-      orderBy: { revision: 'asc' },
-    }),
-    loadResponseHistory(id),
-  ]);
+  const before = page.cursor ? Number(page.cursor) : null;
+  if (before !== null && !(Number.isInteger(before) && before > 0)) {
+    throw new AppError('Invalid cursor.', 400);
+  }
+  const limit = Math.min(
+    Math.max(page.limit || REVISIONS_PAGE, 1),
+    MAX_REVISIONS_PAGE,
+  );
+  const fetched = await db.query.notificationRevisions.findMany({
+    where: {
+      notificationId: id,
+      revision: before === null ? EmptyFilter : { lt: before },
+    },
+    orderBy: { revision: 'desc' },
+    limit: limit + 1,
+  });
+  const revisions = fetched.slice(0, limit);
+  const more = fetched.length > limit;
+  const rounds = revisions.map((revision) => revision.replyRound);
+  // From the oldest round on this page (round 1 on the last page) up to its
+  // newest round, or every later one on the first page.
+  const lowest = more ? Math.min(...rounds) : 1;
+  const responses = await loadResponseHistory(id, {
+    from: lowest,
+    to: before === null ? undefined : Math.max(...rounds, 0),
+  });
   return {
+    nextCursor: more ? String(revisions.at(-1)!.revision) : null,
     revisions: revisions.map((revision) => ({
       revision: revision.revision,
       title: revision.title,

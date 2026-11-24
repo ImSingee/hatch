@@ -63,9 +63,16 @@ export async function loadResponseView(
 /** Every answer a notification took, oldest round first. */
 export async function loadResponseHistory(
   notificationId: string,
+  rounds: { from: number; to?: number } = { from: 1 },
 ): Promise<NotificationResponseView[]> {
   const rows = await db.query.notificationResponses.findMany({
-    where: { notificationId },
+    where: {
+      notificationId,
+      round:
+        rounds.to === undefined
+          ? { gte: rounds.from }
+          : { gte: rounds.from, lte: rounds.to },
+    },
     orderBy: { round: 'asc' },
   });
   return rows.map(responseView);

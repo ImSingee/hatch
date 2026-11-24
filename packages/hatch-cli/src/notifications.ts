@@ -939,9 +939,14 @@ const specs: Record<string, Spec> = {
   },
   revisions: {
     ...id,
-    build: ([notificationId]) => ({
+    options: { limit: { type: 'string' }, cursor: { type: 'string' } },
+    build: ([notificationId], values) => ({
       method: 'listNotificationRevisions',
-      request: { id: notificationId },
+      request: {
+        id: notificationId,
+        cursor: str(values, 'cursor'),
+        limit: pageLimit(values),
+      },
       text: (response) => {
         const revisions = rows(response.revisions);
         const answers = rows(response.responses);
@@ -953,13 +958,16 @@ const specs: Record<string, Spec> = {
           (row) =>
             `round ${field(row, 'round')}: answered by ${field(row, 'respondedByName')} via ${field(row, 'via')} at ${field(row, 'respondedAt')}`,
         );
-        return [
-          revisions.length
-            ? 'Earlier versions, oldest first:'
-            : 'No earlier versions: it was never edited.',
-          ...lines,
-          ...(answered.length ? ['', 'Answers:', ...answered] : []),
-        ].join('\n');
+        return page(
+          [
+            revisions.length
+              ? 'Earlier versions, newest first:'
+              : 'No earlier versions: it was never edited.',
+            ...lines,
+            ...(answered.length ? ['', 'Answers:', ...answered] : []),
+          ].join('\n'),
+          response,
+        );
       },
     }),
   },
