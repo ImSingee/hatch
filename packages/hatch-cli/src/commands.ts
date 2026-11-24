@@ -288,9 +288,10 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['provider', 'catalog'],
-    usage: 'provider catalog [--search <text>]',
+    usage:
+      'provider catalog [--search <text>] [--limit <n>] [--cursor <cursor>]',
     description:
-      'List the provider presets of the built-in model catalog, featured first: id (for provider add --catalog), name, apiType, baseUrl, description, apiKeyUrl (where to create a key) and recommendedModels (added by default). --search keeps presets whose id, name or description contain every word.',
+      'List the provider presets of the built-in model catalog, featured first: id (for provider add --catalog), name, apiType, baseUrl, description, apiKeyUrl (where to create a key) and recommendedModels (added by default). --search keeps presets whose id, name or description contain every word. Without --limit, lists every match; --limit (1-100) prints one page and a nextCursor to pass as --cursor.',
   },
   {
     path: ['provider', 'add'],

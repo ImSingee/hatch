@@ -32,6 +32,16 @@ describe('provider command arguments', () => {
       id: 'p1',
       page: { limit: 20, cursor: '40' },
     });
+    expect(
+      command('provider', 'catalog', '--search', 'open', '--limit', '5'),
+    ).toEqual({
+      kind: 'catalog',
+      search: 'open',
+      page: { limit: 5, cursor: undefined },
+    });
+    expect(failure('provider', 'catalog', '--cursor', 'next').code).toBe(
+      'invalid_arguments',
+    );
     expect(failure('provider', 'list', '--limit', '0').code).toBe(
       'invalid_arguments',
     );

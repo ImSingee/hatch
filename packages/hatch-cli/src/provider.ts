@@ -43,7 +43,7 @@ type ProviderFields = {
 export type ProviderCommand =
   | { kind: 'list'; page: Page }
   | { kind: 'get'; id: string }
-  | { kind: 'catalog'; search?: string }
+  | { kind: 'catalog'; search?: string; page: Page }
   | ({
       kind: 'add';
       catalogProviderId?: string;
@@ -166,6 +166,7 @@ export function parseProviderCommand(
   }
   if (operation === 'catalog') {
     const { flags, positionals } = parseCommandArgs(args, offset, 2, {
+      ...PAGE_OPTIONS,
       search: { type: 'string' },
     });
     if (positionals.length)
@@ -173,7 +174,11 @@ export function parseProviderCommand(
     const search = textFlag(flags, 'search')?.trim();
     if (search === '') throw invalid('--search must not be blank.');
     return {
-      command: { kind: 'catalog', ...(search ? { search } : {}) },
+      command: {
+        kind: 'catalog',
+        ...(search ? { search } : {}),
+        page: pageFlags(flags),
+      },
       flags,
     };
   }
@@ -338,14 +343,6 @@ async function withoutKey<T>(key: string | undefined, call: () => Promise<T>) {
   }
 }
 
-function matches(search: string, values: (string | null)[]) {
-  const text = values.join(' ').toLowerCase();
-  return search
-    .toLowerCase()
-    .split(/\s+/)
-    .every((word) => text.includes(word));
-}
-
 export async function runProvider(
   args: readonly string[],
   offset: number,
@@ -363,22 +360,12 @@ export async function runProvider(
     case 'get':
       result = await client.providers.get({ id: command.id });
       break;
-    case 'catalog': {
-      const { search } = command;
-      const providers = await client.catalog.providers();
-      result = {
-        providers: search
-          ? providers.filter((provider) =>
-              matches(search, [
-                provider.id,
-                provider.name,
-                provider.description,
-              ]),
-            )
-          : providers,
-      };
+    case 'catalog':
+      result = await client.catalog.providers({
+        query: command.search,
+        ...command.page,
+      });
       break;
-    }
     case 'add': {
       const apiKey = await readApiKey(command.apiKeyFile, workdir, signal);
       result = await withoutKey(apiKey, () =>

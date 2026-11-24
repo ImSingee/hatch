@@ -520,7 +520,7 @@ hatch model catalog settings --no-auto-update --source-url https://mirror.exampl
 Providers hold the endpoint and API key the Agent and image generation call.
 `provider catalog` lists the presets of the built-in model catalog (from
 aidy-models) with the `apiKeyUrl` where a key is created and the
-`recommendedModels`. `provider add --catalog <id>` takes the name, API type
+`recommendedModels`, a page at a time (`--limit`, `--cursor`). `provider add --catalog <id>` takes the name, API type
 and base URL from the preset unless `--name`, `--api-type` or `--base-url`
 override them; without `--catalog` all three are required. Without `--model`
 or `--image-model` the preset's recommended models are added; `--model` and

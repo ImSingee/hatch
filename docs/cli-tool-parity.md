@@ -212,9 +212,8 @@ alike and have no device- or browser-bound operation, so there is no CLI
 exception. `AgentService/GetModelCatalog`, the per-chat model picker data,
 stays session-only (see Known gaps). No Agent Tool is added.
 
-`provider catalog` prints every preset without `--limit`/`--cursor`: it is a
-fixed, curated list of about two dozen. `provider list`, `provider
-fetch-models` and `model catalog list` page.
+`provider list`, `provider catalog`, `provider fetch-models` and
+`model catalog list` all page with `--limit`/`--cursor`.
 
 A provider that cannot be reached, refuses the model list or answers
 something other than JSON is reported as `BAD_REQUEST` with the provider's

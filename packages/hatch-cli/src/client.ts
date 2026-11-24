@@ -828,8 +828,17 @@ export function cliClient(transport: Transport) {
       },
     },
     catalog: {
-      providers: async () =>
-        (await catalog.listCatalogProviders({})).providers.map(catalogProvider),
+      providers: async (input: {
+        query?: string;
+        limit: number;
+        cursor?: string;
+      }) => {
+        const page = await catalog.listCatalogProviders(input);
+        return {
+          providers: page.providers.map(catalogProvider),
+          nextCursor: page.nextCursor ?? null,
+        };
+      },
       models: async (input: {
         providerId?: string;
         query?: string;

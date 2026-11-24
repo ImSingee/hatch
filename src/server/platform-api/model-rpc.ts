@@ -319,12 +319,25 @@ export function registerModelServices(router: ConnectRouter): void {
   });
 
   router.service(CatalogService, {
-    listCatalogProviders: () => ({
-      providers: catalogProviders().map((provider) => ({
-        ...provider,
-        recommendedModels: provider.recommended,
-      })),
-    }),
+    listCatalogProviders: (input) => {
+      const words = (input.query ?? '')
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+      const matching = catalogProviders().filter((provider) => {
+        const text =
+          `${provider.id} ${provider.name} ${provider.description ?? ''}`.toLowerCase();
+        return words.every((word) => text.includes(word));
+      });
+      const page = listPage(matching, input);
+      return {
+        providers: page.items.map((provider) => ({
+          ...provider,
+          recommendedModels: provider.recommended,
+        })),
+        nextCursor: page.nextCursor,
+      };
+    },
     listCatalogModels: (input) => {
       const limit = input.limit || 50;
       const offset = input.cursor ? Number(input.cursor) : 0;
