@@ -18,6 +18,7 @@ import path from 'node:path';
 import * as esbuild from 'esbuild';
 import { BUILD_WORK_DIR, REPO_ROOT } from '~agent/paths';
 import {
+  APP_SDK,
   NATIVE_APP_SDK_DEFINITIONS,
   sdkImports,
 } from '../../../../sdk-internal/definitions';
@@ -582,9 +583,12 @@ export async function buildNativeFrontend(
     const player = await esbuild.build({
       ...options.esbuildResolve,
       stdin: {
+        // A platform-only SDK entry: no import map lists it, so App source
+        // cannot import it; it is loaded here by its materialized path.
         contents:
-          "import { startNativePlayer } from '@hatch/app/native/player';\n" +
-          'void startNativePlayer();\n',
+          `import { startNativePlayer } from ${JSON.stringify(
+            `./.hatch/sdk/${APP_SDK.manifest.name}/${APP_SDK.manifest.exports['./native/player'].default.slice(2)}`,
+          )};\n` + 'void startNativePlayer();\n',
         resolveDir: options.esbuildResolve.absWorkingDir,
         loader: 'js',
       },

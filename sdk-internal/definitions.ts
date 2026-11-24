@@ -9,12 +9,13 @@ type SdkManifest = {
 };
 
 /**
- * Which App frontend runtime may import an entry: `web` entries (React
- * adapters, browser storage scoping) stay out of `nsh.json`; `native` entries
- * (the NSH host bridge) stay out of the web and Deno import maps. Absent means
- * both.
+ * Which App runtime may import an entry: `web` entries (React adapters,
+ * browser storage scoping, backend task helpers) stay out of `nsh.json`;
+ * `native` entries (the NSH host bridge) stay out of the web and Deno import
+ * maps. Absent means both. `platform` entries are in neither: only platform
+ * builds load them, by path.
  */
-export type SdkEntryRuntime = 'web' | 'native';
+export type SdkEntryRuntime = 'web' | 'native' | 'platform';
 
 type SdkEntry = ({ source: string } | { reexport: string }) & {
   runtime?: SdkEntryRuntime;
@@ -62,7 +63,7 @@ export const APP_SDK: SdkDefinition = {
     './native': { source: 'native.ts', runtime: 'native' },
     './native/rpc': { source: 'native-rpc.ts', runtime: 'native' },
     // Not for App source: the platform bundles it as the native web player.
-    './native/player': { source: 'native-player.ts', runtime: 'web' },
+    './native/player': { source: 'native-player.ts', runtime: 'platform' },
   },
 };
 
@@ -92,7 +93,7 @@ export const NATIVE_APP_SDK_DEFINITIONS: readonly SdkDefinition[] = [APP_SDK];
  */
 export function sdkImports(
   definitions: readonly SdkDefinition[],
-  runtime: SdkEntryRuntime = 'web',
+  runtime: 'web' | 'native' = 'web',
 ): Record<string, string> {
   return Object.fromEntries(
     definitions.flatMap(({ manifest, entries }) =>
