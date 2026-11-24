@@ -50,7 +50,13 @@ signed-in user can see and change it.
 
 An answer reaches the Agent as a message in an Agent chat, queued like a
 message a person sends (it starts a run when the chat is idle) and sent as the
-person who answered (`src/server/notifications/agent-answers.ts`):
+person who answered (`src/server/notifications/agent-answers.ts`). The message
+holds only what Hatch or a member wrote: who answered, the notification id,
+round and source type, each answer by field id and option ids (both limited
+to `[a-z0-9_.-]`) or the typed text as a quoted string, and the routes'
+instructions. The title, body and labels come from the sender (for a Channel,
+anyone holding its token), so they never enter the turn; the Agent reads them
+with `hatch notification get` / `revisions`, as tool output.
 
 - A notification the Agent sent with its Run credential keeps that chat
   (`notifications.agent_session_id`); answers go back there.
@@ -725,6 +731,10 @@ opened, and the menu bar bell shows a dot while anything is unread. Users who
 existed when the position shipped start with everything read; a new user starts
 from when they joined. `GetNotificationReadState` and `MarkNotificationsRead`
 expose it (`hatch notification unread`, `hatch notification mark-read`).
+Marking read names the newest notification on screen and the activity time it
+was shown with (`activity_at`, `mark-read --at`); when an edit has moved it
+since, the position stops at the version shown, so the edit and whatever
+arrived in between stay unread on every device.
 
 The phone app's Notifications screen is the same timeline (shared layout in
 `packages/hatch-platform-api/notification-timeline.ts`): activity order, cards,

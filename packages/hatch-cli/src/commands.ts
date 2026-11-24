@@ -492,9 +492,10 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['notification', 'mark-read'],
-    usage: 'notification mark-read (--through <notification-id> | --latest)',
+    usage:
+      'notification mark-read (--through <notification-id> [--at <activity-time>] | --latest)',
     description:
-      "Mark notifications read up to and including one notification in timeline order, or all of them with --latest. The position only moves forward: an older one changes nothing. Changes the caller's position on every device.",
+      "Mark notifications read up to and including one notification in timeline order, or all of them with --latest. --at is the activity time list --order activity printed for it; if the notification was edited since, the edit and anything that arrived in between stay unread. The position only moves forward: an older one changes nothing. Changes the caller's position on every device.",
   },
   {
     path: ['notification', 'delete'],

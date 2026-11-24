@@ -807,6 +807,19 @@ describe('read position commands', () => {
     expect(() => parse('mark-read', '--through', 'n-1', '--latest')).toThrow(
       'Use either --through <notification-id> or --latest, not both.',
     );
+    expect(
+      parse('mark-read', '--through', 'n-1', '--at', '2026-11-25T01:02:03.456Z')
+        .request,
+    ).toMatchObject({
+      through: { case: 'notificationId', value: 'n-1' },
+      activityAt: '2026-11-25T01:02:03.456Z',
+    });
+    expect(() => parse('mark-read', '--latest', '--at', '2026-11-25')).toThrow(
+      '--at needs --through <notification-id>.',
+    );
+    expect(() =>
+      parse('mark-read', '--through', 'n-1', '--at', 'yesterday'),
+    ).toThrow(/--at must be an ISO 8601 time/);
     expect(parse('unread').method).toBe('getNotificationReadState');
   });
 });

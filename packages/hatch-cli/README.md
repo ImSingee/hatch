@@ -773,6 +773,7 @@ hatch notification list --order activity
 hatch notification update <notification-id> --card '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}'
 hatch notification unread
 hatch notification mark-read --latest
+hatch notification mark-read --through <notification-id> --at <activity-time>
 ```
 
 Each question takes one answer and it is final: answering again, or answering

@@ -969,11 +969,19 @@ const specs: Record<string, Spec> = {
     positionals: [],
     options: {
       through: { type: 'string' },
+      at: { type: 'string' },
       latest: { type: 'boolean' },
     },
     build: (_positionals, values) => {
       const through = str(values, 'through');
+      const at = str(values, 'at');
       const latest = values.latest === true;
+      if (at !== undefined && through === undefined)
+        invalid('--at needs --through <notification-id>.');
+      if (at !== undefined && Number.isNaN(new Date(at).getTime()))
+        invalid(
+          '--at must be an ISO 8601 time, the activity time list --order activity printed.',
+        );
       if (through !== undefined && latest)
         invalid(
           'Use either --through <notification-id> or --latest, not both.',
@@ -987,6 +995,7 @@ const specs: Record<string, Spec> = {
             through !== undefined
               ? { case: 'notificationId', value: through }
               : { case: 'latest', value: true },
+          activityAt: at === undefined ? '' : new Date(at).toISOString(),
         },
         text: readStateText,
       };

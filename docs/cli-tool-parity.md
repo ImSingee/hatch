@@ -131,7 +131,7 @@ settings page offers the per-notification chat with instructions, and the CLI
 also a fixed chat. A Run's `notification send` remembers its chat, so answers
 come back to the Agent there.
 
-`notification unread` and `notification mark-read (--through <id> | --latest)`
+`notification unread` and `notification mark-read (--through <id> [--at <time>] | --latest)`
 read and move the caller's timeline read position (`GetNotificationReadState`,
 `MarkNotificationsRead`), the same domain service as the web timeline. A Run
 has no user, so in a Run they act on the platform Agent's own position.

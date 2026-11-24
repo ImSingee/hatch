@@ -126,6 +126,34 @@ describe('timeline read positions', () => {
     });
   });
 
+  it('keep an edit unread when the reader acknowledges the version before it', async () => {
+    await push('n01');
+    const newest = await push('n02');
+    const shownAt = new Date(clock);
+    // Before the acknowledgement arrives, another notification comes in and
+    // the newest one is edited, which moves it after that one.
+    await push('n03');
+    clock += 60_000;
+    await db
+      .update(schema.notifications)
+      .set({ activityAt: new Date(clock) })
+      .where(eq(schema.notifications.id, newest));
+
+    expect(
+      await markNotificationsRead(ada, {
+        notificationId: newest,
+        activityAt: shownAt,
+      }),
+    ).toMatchObject({ unreadCount: 2, firstUnreadId: 'n03' });
+    // A time later than the notification itself never reads past it.
+    expect(
+      await markNotificationsRead(bob, {
+        notificationId: 'n01',
+        activityAt: new Date(clock + 3_600_000),
+      }),
+    ).toMatchObject({ unreadCount: 2, firstUnreadId: 'n03' });
+  });
+
   it('reject a position at a notification that does not exist', async () => {
     await expect(
       markNotificationsRead(ada, { notificationId: 'missing' }),

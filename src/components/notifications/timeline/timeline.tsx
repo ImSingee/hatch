@@ -169,19 +169,25 @@ export function NotificationTimeline() {
   }, [rows, jumped]);
 
   const markRead = useMutation({
-    mutationFn: (notificationId: string) =>
-      markNotificationsReadFn({ data: { notificationId } }),
+    // The activity time on screen: an edit on its way stays unread.
+    mutationFn: (newest: { id: string; activityAt: string }) =>
+      markNotificationsReadFn({
+        data: { notificationId: newest.id, activityAt: newest.activityAt },
+      }),
     onSuccess: (state) =>
       queryClient.setQueryData(
         notificationReadStateQueryOptions.queryKey,
         state,
       ),
   });
-  const newestId = items.at(-1)?.id;
+  const newest = items.at(-1);
+  const newestId = newest?.id;
+  const newestAt = newest?.activityAt;
   // Reading means the newest has been on screen for a moment in a visible tab.
   const readNewest = useEventCallback(() => {
     if (
       !newestId ||
+      !newestAt ||
       !atEnd.current ||
       document.visibilityState !== 'visible' ||
       markRead.isPending ||
@@ -190,14 +196,14 @@ export function NotificationTimeline() {
     ) {
       return;
     }
-    markRead.mutate(newestId);
+    markRead.mutate({ id: newestId, activityAt: newestAt });
   });
   const unreadNow = readState.data?.unreadCount ?? 0;
   useEffect(() => {
     if (!newestId || unreadNow === 0) return;
     const timer = setTimeout(readNewest, READ_AFTER);
     return () => clearTimeout(timer);
-  }, [newestId, unreadNow, readNewest]);
+  }, [newestId, newestAt, unreadNow, readNewest]);
   useEffect(() => {
     document.addEventListener('visibilitychange', readNewest);
     return () => document.removeEventListener('visibilitychange', readNewest);
@@ -225,13 +231,25 @@ export function NotificationTimeline() {
       data?.pages.some((page) =>
         page.items.some((item) => item.id === firstUnreadId),
       ) ?? false;
-    let result = await query.fetchNextPage();
-    for (
-      let page = 1;
-      !loaded(result.data) && result.hasNextPage && page < JUMP_PAGES;
-      page += 1
-    ) {
-      result = await query.fetchNextPage();
+    let found = false;
+    try {
+      let result = await query.fetchNextPage();
+      for (
+        let page = 1;
+        !loaded(result.data) && result.hasNextPage && page < JUMP_PAGES;
+        page += 1
+      ) {
+        result = await query.fetchNextPage();
+      }
+      found = loaded(result.data);
+    } finally {
+      // Not reached within the page budget, or a load failed: give scrolling
+      // its pages back, and offer the jump again to go on from here.
+      if (!found) {
+        pendingJump.current = false;
+        setJumped(false);
+        loadOlder();
+      }
     }
   };
 

@@ -1,5 +1,6 @@
 /** Connect adapter for the notification center management API. */
 import type { ConnectRouter, HandlerContext } from '@connectrpc/connect';
+import { AppError } from '~server/errors';
 import { NotificationService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
   cardInputFromMessage,
@@ -423,9 +424,18 @@ export function registerNotificationApi(router: ConnectRouter) {
         state: readState(await getReadState(readerOf(context))),
       }),
       markNotificationsRead: async (input, context) => {
+        const activityAt = input.activityAt
+          ? new Date(input.activityAt)
+          : undefined;
+        if (activityAt && Number.isNaN(activityAt.getTime())) {
+          throw new AppError('activity_at must be an RFC 3339 time.', 400);
+        }
+        if (activityAt && input.through.case !== 'notificationId') {
+          throw new AppError('activity_at needs notification_id.', 400);
+        }
         const through =
           input.through.case === 'notificationId'
-            ? { notificationId: input.through.value }
+            ? { notificationId: input.through.value, activityAt }
             : { latest: true as const };
         return {
           state: readState(

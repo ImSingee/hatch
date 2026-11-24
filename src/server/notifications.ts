@@ -169,7 +169,9 @@ export const getNotificationReadStateFn = createServerFn({ method: 'GET' })
   });
 
 const markReadSchema = z.union([
-  z.object({ notificationId: idSchema }),
+  // The activity time of the version on screen, so an edit that arrived
+  // since stays unread.
+  z.object({ notificationId: idSchema, activityAt: z.coerce.date() }),
   z.object({ latest: z.literal(true) }),
 ]);
 

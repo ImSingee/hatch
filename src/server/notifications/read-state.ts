@@ -107,10 +107,14 @@ export async function getReadState(
 /**
  * Mark everything up to and including one notification read, or everything
  * so far with `latest`. A position behind the current one changes nothing.
+ *
+ * `activityAt` is that notification's activity time in the version the
+ * reader saw. An edit moves a notification to the end; reading the version
+ * before it must not mark the edit, or what arrived in between, as read.
  */
 export async function markNotificationsRead(
   reader: NotificationReader,
-  through: { notificationId: string } | { latest: true },
+  through: { notificationId: string; activityAt?: Date } | { latest: true },
 ): Promise<NotificationReadState> {
   const n = schema.notifications;
   const [target] = await db
@@ -129,6 +133,13 @@ export async function markNotificationsRead(
     }
     return getReadState(reader);
   }
+  // Never past the notification itself, whatever time the reader sends.
+  const seenAt =
+    'activityAt' in through &&
+    through.activityAt &&
+    through.activityAt < target.activityAt
+      ? through.activityAt
+      : target.activityAt;
   const key = readerKey(reader);
   const c = schema.notificationReadCursors;
   const now = new Date();
@@ -137,18 +148,18 @@ export async function markNotificationsRead(
     .values({
       reader: key,
       userId: reader.type === 'user' ? reader.userId : null,
-      activityAt: target.activityAt,
+      activityAt: seenAt,
       notificationId: target.id,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: c.reader,
       set: {
-        activityAt: target.activityAt,
+        activityAt: seenAt,
         notificationId: target.id,
         updatedAt: now,
       },
-      setWhere: sql`(${c.activityAt}, ${c.notificationId}) < (${target.activityAt}, ${target.id})`,
+      setWhere: sql`(${c.activityAt}, ${c.notificationId}) < (${seenAt}, ${target.id})`,
     })
     .returning({ reader: c.reader });
   if (moved.length > 0) {

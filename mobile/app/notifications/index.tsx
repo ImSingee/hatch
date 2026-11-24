@@ -42,7 +42,13 @@ import {
 import { ScrollScreen } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
 import { useAccent } from '../../src/ui/accent';
-import { palette as c, pill, radii, tileFor } from '../../src/ui/theme';
+import {
+  palette as c,
+  pill,
+  radii,
+  tileFor,
+  weights,
+} from '../../src/ui/theme';
 
 /** How close to the end, in points, still counts as reading the newest. */
 const AT_END = 80;
@@ -168,20 +174,23 @@ export default function NotificationsScreen() {
   };
 
   const markRead = useMutation({
-    mutationFn: (notificationId: string) =>
-      api!.markNotificationsRead(notificationId),
+    // The activity time on screen: an edit on its way stays unread.
+    mutationFn: (newest: { id: string; activityAt: string }) =>
+      api!.markNotificationsRead(newest.id, newest.activityAt),
     onSuccess: (state) => queryClient.setQueryData(readStateKey(origin), state),
   });
   const { mutate: mark, isPending: marking } = markRead;
-  const newestId = items.at(-1)?.id;
+  const newest = items.at(-1);
+  const newestId = newest?.id;
+  const newestAt = newest?.activityAt;
   const unread = readState.data?.unreadCount ?? 0;
   useEffect(() => {
-    if (!focused || !newestId || unread === 0 || marking) return;
+    if (!focused || !newestId || !newestAt || unread === 0 || marking) return;
     const timer = setTimeout(() => {
-      if (atEnd.current) mark(newestId);
+      if (atEnd.current) mark({ id: newestId, activityAt: newestAt });
     }, READ_AFTER);
     return () => clearTimeout(timer);
-  }, [focused, newestId, unread, marking, mark]);
+  }, [focused, newestId, newestAt, unread, marking, mark]);
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -195,8 +204,8 @@ export default function NotificationsScreen() {
     ) {
       setJumped(true);
     }
-    if (atEnd.current && newestId && unread > 0 && !marking) {
-      mark(newestId);
+    if (atEnd.current && newestId && newestAt && unread > 0 && !marking) {
+      mark({ id: newestId, activityAt: newestAt });
     }
   };
 
@@ -605,7 +614,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 1,
   },
-  tileText: { color: c.onFill, fontSize: 13, fontWeight: '800' },
+  tileText: { color: c.onFill, fontSize: 13, fontWeight: weights.heading },
   main: { flex: 1, minWidth: 0, gap: 5 },
   meta: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   card: {
@@ -638,7 +647,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: 14,
     borderRadius: pill,
     backgroundColor: c.card,

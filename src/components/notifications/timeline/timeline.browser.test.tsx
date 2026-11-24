@@ -215,3 +215,25 @@ test('keeps loading older pages while the reader is already at the top', async (
   await vi.waitFor(() => expect(article(0)).not.toBeNull());
   expect(fixtures.pagesRequested).toBe(3);
 });
+
+test('gives paging back when the jump runs out of pages before the first unread', async () => {
+  fixtures.items = Array.from({ length: 1200 }, (_, index) =>
+    notification(index),
+  );
+  fixtures.readState.unreadCount = 1200;
+  fixtures.readState.firstUnreadId = fixtures.items[0]!.id;
+  const { screen, scroller } = await renderTimeline();
+  const jump = screen.getByRole('button', {
+    name: '1200 unread · Jump to where you left off',
+  });
+  await jump.click();
+  // One page on opening and twenty for the jump, without reaching it.
+  await expect.element(jump).toBeVisible();
+  expect(fixtures.pagesRequested).toBe(21);
+
+  // Scrolling to the top loads older pages again.
+  const view = scroller();
+  view.scrollTop = 0;
+  view.dispatchEvent(new Event('scroll'));
+  await vi.waitFor(() => expect(fixtures.pagesRequested).toBeGreaterThan(21));
+});

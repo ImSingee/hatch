@@ -489,15 +489,22 @@ export class HatchApiClient {
     );
     return readStateProjection(result.state);
   }
-  /** Mark the timeline read up to and including one notification. */
+  /**
+   * Mark the timeline read up to and including one notification, as of the
+   * activity time it was shown with.
+   */
   async markNotificationsRead(
     notificationId: string,
+    activityAt: string,
     signal?: AbortSignal,
   ): Promise<NotificationReadState> {
     const result = await this.rpcRequest(
       (signal) =>
         this.notificationRpc.markNotificationsRead(
-          { through: { case: 'notificationId', value: notificationId } },
+          {
+            through: { case: 'notificationId', value: notificationId },
+            activityAt,
+          },
           { signal },
         ),
       signal,
