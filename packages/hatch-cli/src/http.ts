@@ -1,4 +1,4 @@
-import { CliError } from './error';
+import { CliError, fetchFailure } from './error';
 
 import { platformClient } from './client';
 import type { Profile } from './config';
@@ -32,14 +32,16 @@ export async function request(
         AbortSignal.timeout(Math.max(1, options.timeout)),
       ]),
     });
-  } catch {
+  } catch (error) {
     if (options.signal.aborted)
       throw new CliError('cancelled', 'Cancelled.', 130);
-    throw new CliError(
-      'network_error',
-      'The platform could not be reached (or the request timed out).',
-      7,
-    );
+    if (error instanceof DOMException && error.name === 'TimeoutError')
+      throw new CliError(
+        'outcome_unknown',
+        `The platform at ${url} did not respond in time. Inspect platform state before retrying mutations.`,
+        7,
+      );
+    throw fetchFailure(url, error);
   }
   let body: unknown;
   try {

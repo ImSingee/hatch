@@ -60,3 +60,49 @@ export function argumentsError(error: unknown, command: string): CliError {
     `Invalid arguments${detail ? `: ${detail}` : ''}. ${help}`,
   );
 }
+
+// Socket errors raised before a connection exists, so no request byte left.
+const NOT_CONNECTED = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'EHOSTDOWN',
+  'ENETUNREACH',
+  'ENETDOWN',
+  'EADDRNOTAVAIL',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+function neverConnected(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== 'object' || depth > 8) return false;
+  const { code, cause, errors } = error as {
+    code?: unknown;
+    cause?: unknown;
+    errors?: unknown;
+  };
+  if (typeof code === 'string' && NOT_CONNECTED.has(code)) return true;
+  // Dual-stack hosts such as localhost reject with one error per address.
+  if (Array.isArray(errors) && errors.length > 0)
+    return errors.every((item) => neverConnected(item, depth + 1));
+  return neverConnected(cause, depth + 1);
+}
+
+/**
+ * The error for a `fetch` to the platform at `url` that rejected without a
+ * response. A failure before the connection opened sent nothing, so it is a
+ * plain `network_error`; any later failure may have reached the platform.
+ */
+export function fetchFailure(url: string, error: unknown): CliError {
+  return neverConnected(error)
+    ? new CliError(
+        'network_error',
+        `Cannot connect to the platform at ${url}. Check that it is running and that the URL is correct.`,
+        7,
+      )
+    : new CliError(
+        'outcome_unknown',
+        `The connection to the platform at ${url} failed. Inspect platform state before retrying mutations.`,
+        7,
+      );
+}
