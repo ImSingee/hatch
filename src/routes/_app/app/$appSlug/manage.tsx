@@ -35,6 +35,7 @@ import {
   IconHistory,
   IconKey,
   IconLayoutDashboard,
+  IconListCheck,
   IconPencil,
   IconPin,
   IconPinnedOff,
@@ -165,6 +166,7 @@ function AppDetailPage() {
     });
 
   const sections = useManageSections(app.id, Boolean(capabilities?.backend));
+  const manifestHasTasks = Boolean(capabilities?.tasks);
   const hash = useRouterState({ select: (state) => state.location.hash });
   const current = sections.some((section) => section.key === hash)
     ? hash
@@ -298,6 +300,22 @@ function AppDetailPage() {
             footer={
               <>
                 {openApp}
+                {manifestHasTasks ? (
+                  <Button
+                    fullWidth
+                    variant="default"
+                    renderRoot={(props) => (
+                      <Link
+                        to="/app/$appSlug/tasks"
+                        params={{ appSlug: app.slug }}
+                        {...props}
+                      />
+                    )}
+                    leftSection={<IconListCheck size={16} stroke={1.8} />}
+                  >
+                    Run tasks
+                  </Button>
+                ) : null}
                 <Button
                   fullWidth
                   variant="default"
@@ -353,6 +371,7 @@ function AppDetailPage() {
               <OperationsPanel
                 appId={app.id}
                 appName={app.name}
+                appSlug={app.slug}
                 runtimeSupported={runtimeSupported}
               />
 
@@ -419,6 +438,12 @@ function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
       label: 'Schedules',
       icon: icon(IconClock),
       color: 'amber',
+    },
+    Boolean(manifest?.tasks) && {
+      key: 'tasks',
+      label: 'Tasks',
+      icon: icon(IconListCheck),
+      color: 'primary',
     },
     ops?.webhook.enabled && {
       key: 'webhook',

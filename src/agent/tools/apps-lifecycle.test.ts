@@ -47,6 +47,7 @@ function manifest(frontend: boolean): NormalizedManifest {
       kv: false,
       dataTable: false,
       notifications: false,
+      tasks: false,
     },
     backendMode: 'serverless',
     ...(frontend

@@ -28,6 +28,7 @@ export const APP_SDK: SdkDefinition = {
     './storage': { source: 'storage.ts' },
     './storage/react': { source: 'storage-react.ts' },
     './storage/install': { source: 'storage-install.ts' },
+    './tasks': { source: 'tasks.ts' },
   },
 };
 

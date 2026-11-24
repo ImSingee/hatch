@@ -1,13 +1,17 @@
 /**
- * Server-only: validate a workflow's trigger input against the JSON Schema that
- * was captured (from the workflow's zod schema) at deploy time.
+ * Server-only: validate run input against a JSON Schema captured at deploy
+ * time, shared by Workflow runs and App task runs.
  *
- * The workflow bundle re-validates with the *real* zod schema at run time, so
- * this platform-side check is a fast, structural gate rather than the source of
- * truth. It deliberately errs toward acceptance: constraints it can't faithfully
- * represent (formats, patterns) are skipped instead of risking a false reject.
- * Per the design, the gate is built by turning the stored JSON Schema back into
- * a zod schema ("zod from json schema") and parsing the input with it.
+ * The gate is built by turning the stored JSON Schema back into a zod schema
+ * ("zod from json schema") and parsing the input with it.
+ *
+ * - Workflows (default, lenient): the bundle re-validates with the *real* zod
+ *   schema at run time, so this is a fast structural gate that errs toward
+ *   acceptance. Constraints it can't faithfully represent (patterns) are
+ *   skipped and unknown keys are stripped or kept.
+ * - App tasks (`strict`): the platform is the only validator before the
+ *   Connect request, whose JSON decoder rejects unknown fields. Patterns are
+ *   enforced and unknown keys are rejected with the field named.
  */
 import { z } from 'zod';
 
@@ -23,18 +27,26 @@ function typeOf(schema: JsonSchema): string | string[] | undefined {
   return schema.type as string | string[] | undefined;
 }
 
-/** Build a lenient zod schema from a (zod-produced) JSON Schema node. */
-export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
+export type SchemaInputOptions = {
+  /** Enforce `pattern` and reject undeclared object keys. */
+  strict?: boolean;
+};
+
+/** Build a zod schema from a JSON Schema node. */
+export function jsonSchemaToZod(
+  input: unknown,
+  options: SchemaInputOptions = {},
+): z.ZodTypeAny {
   const schema = asSchema(input);
   if (!schema) return z.any();
 
   // Unions first — zod emits these for `.or()`, nullable, and enums of objects.
   const union = (schema.anyOf ?? schema.oneOf) as unknown[] | undefined;
   if (Array.isArray(union) && union.length > 0) {
-    const options = union.map((u) => jsonSchemaToZod(u));
-    return options.length === 1
-      ? options[0]
-      : z.union(options as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
+    const members = union.map((u) => jsonSchemaToZod(u, options));
+    return members.length === 1
+      ? members[0]
+      : z.union(members as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }
 
   if ('const' in schema) {
@@ -51,10 +63,12 @@ export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
   const type = typeOf(schema);
   if (Array.isArray(type)) {
     // e.g. ["string", "null"] -> string | null
-    const options = type.map((t) => jsonSchemaToZod({ ...schema, type: t }));
-    return options.length === 1
-      ? options[0]
-      : z.union(options as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
+    const members = type.map((t) =>
+      jsonSchemaToZod({ ...schema, type: t }, options),
+    );
+    return members.length === 1
+      ? members[0]
+      : z.union(members as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }
 
   switch (type) {
@@ -62,6 +76,11 @@ export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
       let s = z.string();
       if (typeof schema.minLength === 'number') s = s.min(schema.minLength);
       if (typeof schema.maxLength === 'number') s = s.max(schema.maxLength);
+      if (options.strict && typeof schema.pattern === 'string') {
+        s = s.regex(new RegExp(schema.pattern), {
+          message: `Must match the pattern ${schema.pattern}`,
+        });
+      }
       return s;
     }
     case 'integer':
@@ -78,18 +97,21 @@ export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
       return z.null();
     case 'array': {
       const items = asSchema(schema.items);
-      return z.array(items ? jsonSchemaToZod(items) : z.any());
+      return z.array(items ? jsonSchemaToZod(items, options) : z.any());
     }
     case 'object':
-      return objectToZod(schema);
+      return objectToZod(schema, options);
     default:
       // No declared type but has object-ish keys -> treat as object.
-      if (schema.properties) return objectToZod(schema);
+      if (schema.properties) return objectToZod(schema, options);
       return z.any();
   }
 }
 
-function objectToZod(schema: JsonSchema): z.ZodTypeAny {
+function objectToZod(
+  schema: JsonSchema,
+  options: SchemaInputOptions,
+): z.ZodTypeAny {
   const props = asSchema(schema.properties) ?? {};
   const required = new Set(
     Array.isArray(schema.required) ? (schema.required as string[]) : [],
@@ -97,7 +119,7 @@ function objectToZod(schema: JsonSchema): z.ZodTypeAny {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const [key, raw] of Object.entries(props)) {
     const child = asSchema(raw) ?? {};
-    let field = jsonSchemaToZod(child);
+    let field = jsonSchemaToZod(child, options);
     if ('default' in child) {
       field = field.default(child.default as never);
     } else if (!required.has(key)) {
@@ -106,6 +128,9 @@ function objectToZod(schema: JsonSchema): z.ZodTypeAny {
     shape[key] = field;
   }
   const obj = z.object(shape);
+  if (options.strict && schema.additionalProperties === false) {
+    return obj.strict();
+  }
   // Mirror additionalProperties: false (the default for zod-produced schemas)
   // by stripping unknown keys rather than rejecting, to stay lenient.
   return schema.additionalProperties === false ? obj.strip() : obj.loose();
@@ -155,12 +180,12 @@ function coerceScalar(schema: JsonSchema, value: string): unknown {
 }
 
 /**
- * Coerce a flat query-string record toward the workflow's input schema so GET
- * webhooks (whose params are always strings) can satisfy numeric/boolean fields.
- * Unknown fields and unrepresentable types pass through untouched; the real zod
- * schema inside the bundle remains the source of truth.
+ * Coerce a flat query-string record toward an input schema so GET webhooks
+ * (whose params are always strings) can satisfy numeric/boolean fields.
+ * Unknown fields and unrepresentable types pass through untouched for the
+ * validator to judge.
  */
-export function coerceWorkflowQueryInput(
+export function coerceSchemaQueryInput(
   jsonSchema: unknown,
   raw: Record<string, string>,
 ): Record<string, unknown> {
@@ -175,20 +200,21 @@ export function coerceWorkflowQueryInput(
   return out;
 }
 
-export type WorkflowValidationResult =
+export type SchemaValidationResult =
   | { success: true; data: unknown }
   | { success: false; message: string };
 
 /** Validate raw trigger input against a stored JSON Schema. */
-export function validateWorkflowInput(
+export function validateSchemaInput(
   jsonSchema: unknown,
   rawInput: unknown,
-): WorkflowValidationResult {
+  options: SchemaInputOptions = {},
+): SchemaValidationResult {
   if (!asSchema(jsonSchema)) {
     // No schema captured (e.g. a workflow with no declared input) — accept.
     return { success: true, data: rawInput ?? {} };
   }
-  const zodSchema = jsonSchemaToZod(jsonSchema);
+  const zodSchema = jsonSchemaToZod(jsonSchema, options);
   const parsed = zodSchema.safeParse(rawInput ?? {});
   if (parsed.success) {
     return { success: true, data: parsed.data };

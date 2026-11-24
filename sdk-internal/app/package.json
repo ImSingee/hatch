@@ -30,6 +30,10 @@
     "./storage/install": {
       "types": "./dist/storage-install.d.ts",
       "default": "./dist/storage-install.js"
+    },
+    "./tasks": {
+      "types": "./dist/tasks.d.ts",
+      "default": "./dist/tasks.js"
     }
   },
   "sideEffects": false,

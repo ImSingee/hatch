@@ -23,7 +23,7 @@ import {
 } from './git';
 import type { NormalizedWorkflowManifest } from './manifest';
 import { reloadWorkflowScheduler } from './scheduler';
-import { validateWorkflowInput } from './validate';
+import { validateSchemaInput } from '../json-schema-input';
 
 export type DeployWorkflowResult = {
   deploymentId: string;
@@ -165,7 +165,7 @@ async function deployWorkflowInner(
           `Invalid cron schedule for job "${job.name}": ${cronError}`,
         );
       }
-      const inputCheck = validateWorkflowInput(
+      const inputCheck = validateSchemaInput(
         build.inputSchema,
         job.input ?? {},
       );

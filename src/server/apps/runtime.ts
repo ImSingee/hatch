@@ -17,6 +17,13 @@
  * Serverless backends start on the first request and are retired once they
  * have had no in-flight request for the idle timeout. Long-running backends
  * are never idle-stopped and restart automatically after an unexpected exit.
+ *
+ * Task runs use *run* instances: each run boots its own instance of the
+ * active deployment, sends it exactly one request and retires it. Run
+ * instances are never routable, idle-stopped or restarted, and they stay out
+ * of the backend's lifecycle snapshot, but they are members of the App's
+ * instance set: a deploy, rollback or stop drains them like any instance and
+ * a force stop, archive or delete kills them.
  */
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs';
@@ -70,6 +77,7 @@ import {
   dataTableUrl,
   notificationsUrl,
   kvUrl,
+  taskEnqueueUrl,
 } from './manifest';
 import {
   type BackendRuntimeSnapshot,
@@ -503,6 +511,11 @@ export function backendPortEnv(
 
 type BackendInstance = {
   appId: string;
+  /**
+   * `serve` instances take routed requests; a `run` instance serves exactly
+   * one task run and is invisible to routing and the lifecycle snapshot.
+   */
+  role: 'serve' | 'run';
   proc: ChildProcess;
   port: number;
   deploymentId: string;
@@ -528,6 +541,8 @@ type BackendInstance = {
   terminating: boolean;
   /** Drain deadline while requests are in flight, then the SIGKILL grace. */
   drainTimer: NodeJS.Timeout | null;
+  /** Why the platform ended the process early, for the run that used it. */
+  endedBy: 'kill' | 'drain-timeout' | null;
 };
 
 type StartingBackend = {
@@ -559,7 +574,7 @@ function instanceRegistry(): Map<string, Set<BackendInstance>> {
 /** The instance new requests go to, if the app has one. */
 function routableInstance(id: string): BackendInstance | undefined {
   for (const instance of instanceRegistry().get(id) ?? []) {
-    if (!instance.draining) return instance;
+    if (instance.role !== 'run' && !instance.draining) return instance;
   }
   return undefined;
 }
@@ -600,6 +615,7 @@ function clearInstanceTimers(instance: BackendInstance): void {
  */
 function killInstance(instance: BackendInstance): void {
   instance.draining = true;
+  if (isLive(instance)) instance.endedBy ??= 'kill';
   clearInstanceTimers(instance);
   try {
     instance.proc.kill('SIGKILL');
@@ -667,6 +683,7 @@ function retireInstance(instance: BackendInstance): void {
   }
   instance.drainTimer = setTimeout(() => {
     instance.drainTimer = null;
+    instance.endedBy ??= 'drain-timeout';
     terminateInstance(instance);
   }, drainTimeoutMs);
   instance.drainTimer.unref();
@@ -1057,11 +1074,27 @@ async function acquireInstance(
   }
 }
 
-async function startBackend(
+type SpawnedBackend = {
+  proc: ChildProcess;
+  port: number;
+  deploymentId: string;
+  backendMode: 'serverless' | 'long-running' | null;
+  epoch: number;
+  getLog: () => string;
+  spawnFailure: Promise<never>;
+};
+
+/**
+ * Resolve the App's active deployment, check it can run, and spawn one
+ * backend process for it. Shared by routable (`serve`) and task (`run`)
+ * instances; the caller registers the process and waits for readiness.
+ */
+async function spawnBackendProcess(
   id: string,
   expectedDeploymentId: string | undefined,
   onDeploymentResolved: (deploymentId: string) => void,
-): Promise<BackendInstance> {
+  extraEnv: Record<string, string> = {},
+): Promise<SpawnedBackend> {
   // Snapshot the stop epoch: if stopApp() runs while we're spawning, we abort
   // instead of registering/serving a build the caller has since superseded.
   const epoch = stopEpoch(id);
@@ -1197,6 +1230,10 @@ async function startBackend(
   const notificationsBaseUrl = appRow.capabilities?.notifications
     ? internalPlatformUrl(notificationsUrl(id))
     : null;
+  // Signed endpoint the backend calls to enqueue one of its own tasks.
+  const tasksEnqueueUrl = appRow.capabilities?.tasks
+    ? internalPlatformUrl(taskEnqueueUrl(id))
+    : null;
   const automaticNetworkDestinations = [
     `127.0.0.1:${port}`,
     ...(databaseEnv.DATABASE_URL
@@ -1207,6 +1244,7 @@ async function startBackend(
     ...(notificationsBaseUrl
       ? [networkDestinationFromUrl(notificationsBaseUrl)]
       : []),
+    ...(tasksEnqueueUrl ? [networkDestinationFromUrl(tasksEnqueueUrl)] : []),
     ...(workflowsConfig?.urls.map(networkDestinationFromUrl) ?? []),
   ];
 
@@ -1256,7 +1294,9 @@ async function startBackend(
       ...(notificationsBaseUrl
         ? { HATCH_NOTIFICATIONS_URL: notificationsBaseUrl }
         : {}),
+      ...(tasksEnqueueUrl ? { HATCH_TASKS_URL: tasksEnqueueUrl } : {}),
       HATCH_DEPLOYMENT_ID: backendDeploymentId,
+      ...extraEnv,
     }),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -1305,20 +1345,46 @@ async function startBackend(
     throw new BackendStartSupersededError(id);
   }
 
+  return {
+    proc,
+    port,
+    deploymentId: backendDeploymentId,
+    backendMode: appRow.backendMode ?? null,
+    epoch,
+    getLog: () => log,
+    spawnFailure,
+  };
+}
+
+async function startBackend(
+  id: string,
+  expectedDeploymentId: string | undefined,
+  onDeploymentResolved: (deploymentId: string) => void,
+): Promise<BackendInstance> {
+  const spawned = await spawnBackendProcess(
+    id,
+    expectedDeploymentId,
+    onDeploymentResolved,
+  );
+  const { proc, port, epoch, spawnFailure } = spawned;
+  const backendDeploymentId = spawned.deploymentId;
+  const log = () => spawned.getLog();
   const backend: BackendInstance = {
     appId: id,
+    role: 'serve',
     proc,
     port,
     deploymentId: backendDeploymentId,
     startedAt: Date.now(),
     ready: Promise.resolve(),
-    getLog: () => log,
-    idleStop: appRow.backendMode !== 'long-running',
+    getLog: log,
+    idleStop: spawned.backendMode !== 'long-running',
     activeRequests: 0,
     idleTimer: null,
     drainTimer: null,
     draining: false,
     terminating: false,
+    endedBy: null,
   };
   backend.ready = Promise.race([waitForPort(port, 20000), spawnFailure]);
   addInstance(backend);
@@ -1355,7 +1421,7 @@ async function startBackend(
     ) {
       void recordBackendLog(id, 'error', `backend exited with code ${code}`, {
         uptimeMs,
-        log: log.slice(-2000),
+        log: log().slice(-2000),
       });
     }
     // Long-running backends self-heal: if still marked keep-alive (i.e. not
@@ -1375,7 +1441,7 @@ async function startBackend(
         id,
         'error',
         `long-running backend exited (${signal ?? code}); restarting in ${delayMs}ms`,
-        { uptimeMs, attempt: attempt + 1, log: log.slice(-2000) },
+        { uptimeMs, attempt: attempt + 1, log: log().slice(-2000) },
       );
       const timer = setTimeout(() => {
         if (keepAliveSet().has(id) && !routableInstance(id)) {
@@ -1412,7 +1478,7 @@ async function startBackend(
     // would show a phantom "failed to start" on the Backends page.
     if (stopEpoch(id) !== epoch) throw new BackendStartSupersededError(id);
     recordBackendStartFailure(id, proc.pid ?? null, message);
-    throw new Error(`Failed to start app "${id}": ${message}\n${log}`);
+    throw new Error(`Failed to start app "${id}": ${message}\n${log()}`);
   }
 
   // Stop/redeploy landed during the readiness wait: drop this stale backend so
@@ -1469,6 +1535,205 @@ export async function callAppBackend(
     };
   } finally {
     release();
+  }
+}
+
+/** A request sent to a task's dedicated instance. */
+export type DedicatedRunRequest = {
+  /** Path on the backend, e.g. `/app.v1.DigestService/RunDigest`. */
+  path: string;
+  headers: Record<string, string>;
+  body: string;
+};
+
+export type DedicatedRunHandle = {
+  /** The deployment whose artifact the instance runs. */
+  deploymentId: string;
+  pid: number | null;
+  /** Kill the instance at once (cancel or timeout). */
+  kill: () => void;
+};
+
+export type DedicatedRunOptions = {
+  request: DedicatedRunRequest;
+  /** Extra environment for the instance, e.g. `HATCH_RUN_ID`. */
+  env: Record<string, string>;
+  /** Output of the instance from the run's request until it exits. */
+  onStdout: (chunk: Buffer) => void;
+  onStderr: (chunk: Buffer) => void;
+  /** Called once the instance is spawned, before readiness. */
+  onSpawn?: (handle: DedicatedRunHandle) => void;
+  /** Aborting it ends the request and kills the instance. */
+  signal?: AbortSignal;
+};
+
+export type DedicatedRunResult = {
+  /** The deployment that served the run; null if no instance started. */
+  deploymentId: string | null;
+  /** The backend's answer, when the request got one. */
+  response: { status: number; body: string } | null;
+  /** Why there is no response: boot failure, kill, timeout. */
+  error: string | null;
+};
+
+/** Boots of a run instance retried after a deploy or stop superseded them. */
+const MAX_RUN_BOOT_ATTEMPTS = 3;
+
+/**
+ * Run one request in a fresh instance of the App's active deployment, then
+ * retire the instance and resolve once it has exited and closed its output.
+ *
+ * The instance joins the App's instance set as a `run` instance, so a deploy,
+ * rollback or stop drains it (the request runs to completion) while a force
+ * stop, archive or delete kills it. A deploy or stop that lands before the
+ * request is sent re-resolves the active deployment and boots again.
+ */
+export async function runInDedicatedInstance(
+  id: string,
+  options: DedicatedRunOptions,
+): Promise<DedicatedRunResult> {
+  let lastDeploymentId: string | null = null;
+  for (let attempt = 1; ; attempt += 1) {
+    if (options.signal?.aborted) {
+      return {
+        deploymentId: lastDeploymentId,
+        response: null,
+        error: 'aborted',
+      };
+    }
+    let spawned: SpawnedBackend;
+    try {
+      spawned = await spawnBackendProcess(id, undefined, () => {}, options.env);
+    } catch (error) {
+      if (
+        (error instanceof BackendStartSupersededError ||
+          error instanceof BackendDeploymentChangedError) &&
+        attempt < MAX_RUN_BOOT_ATTEMPTS
+      ) {
+        continue;
+      }
+      return {
+        deploymentId: lastDeploymentId,
+        response: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    lastDeploymentId = spawned.deploymentId;
+    const { proc, port } = spawned;
+    const instance: BackendInstance = {
+      appId: id,
+      role: 'run',
+      proc,
+      port,
+      deploymentId: spawned.deploymentId,
+      startedAt: Date.now(),
+      ready: Promise.resolve(),
+      getLog: spawned.getLog,
+      idleStop: false,
+      activeRequests: 0,
+      idleTimer: null,
+      drainTimer: null,
+      draining: false,
+      terminating: false,
+      endedBy: null,
+    };
+    addInstance(instance);
+    const closed = new Promise<void>((resolve) => {
+      // `close` fires after `exit` and after stdout/stderr have ended, so
+      // every byte the run wrote has been delivered by then.
+      proc.once('close', () => resolve());
+    });
+    proc.once('exit', () => {
+      clearInstanceTimers(instance);
+      removeInstance(instance);
+    });
+    const kill = () => killInstance(instance);
+    options.onSpawn?.({
+      deploymentId: spawned.deploymentId,
+      pid: proc.pid ?? null,
+      kill,
+    });
+    const onAbort = () => kill();
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+
+    try {
+      try {
+        await Promise.race([waitForPort(port, 20000), spawned.spawnFailure]);
+      } catch (error) {
+        const retired = instance.draining;
+        if (isLive(instance)) killInstance(instance);
+        await closed;
+        if (retired && !options.signal?.aborted) {
+          if (attempt < MAX_RUN_BOOT_ATTEMPTS) continue;
+        }
+        return {
+          deploymentId: spawned.deploymentId,
+          response: null,
+          error: options.signal?.aborted
+            ? 'aborted'
+            : instance.endedBy === 'kill'
+              ? 'the instance was stopped while starting'
+              : `${error instanceof Error ? error.message : String(error)}\n${spawned.getLog()}`.trim(),
+        };
+      }
+      // A deploy or stop retired the instance before it received the
+      // request: nothing ran yet, so boot the deployment that is active now.
+      if (instance.draining) {
+        killInstance(instance);
+        await closed;
+        if (attempt < MAX_RUN_BOOT_ATTEMPTS && !options.signal?.aborted) {
+          continue;
+        }
+        return {
+          deploymentId: spawned.deploymentId,
+          response: null,
+          error: 'the App was stopped or redeployed before the run started',
+        };
+      }
+
+      // Output before readiness is the runtime's own startup chatter
+      // ("Listening on …"); the run's log starts with the request. A boot
+      // failure still reports the startup output through `error`.
+      proc.stdout?.on('data', options.onStdout);
+      proc.stderr?.on('data', options.onStderr);
+      const release = leaseInstance(instance);
+      let response: DedicatedRunResult['response'] = null;
+      let error: string | null = null;
+      try {
+        const upstream = await fetch(
+          `http://127.0.0.1:${port}${options.request.path}`,
+          {
+            method: 'POST',
+            headers: options.request.headers,
+            body: options.request.body,
+            signal: options.signal,
+          },
+        );
+        response = { status: upstream.status, body: await upstream.text() };
+      } catch (fetchError) {
+        error = options.signal?.aborted
+          ? 'aborted'
+          : instance.endedBy === 'kill'
+            ? 'the instance was stopped during the run'
+            : instance.endedBy === 'drain-timeout'
+              ? 'the instance was stopped when the drain timeout elapsed'
+              : fetchError instanceof Error
+                ? fetchError.message
+                : String(fetchError);
+      } finally {
+        release();
+      }
+      // The one request is done: retire the instance (SIGTERM, then SIGKILL
+      // after the grace) unless a drain already did.
+      if (!instance.draining) {
+        instance.draining = true;
+        terminateInstance(instance);
+      }
+      await closed;
+      return { deploymentId: spawned.deploymentId, response, error };
+    } finally {
+      options.signal?.removeEventListener('abort', onAbort);
+    }
   }
 }
 
@@ -1536,7 +1801,8 @@ export function getBackendRuntimeView(id: string): BackendRuntimeView {
     restartCount: snap?.restartCount ?? 0,
     keepAlive: keepAliveSet().has(id),
     drainingInstances: [...(instanceRegistry().get(id) ?? [])].filter(
-      (instance) => instance.draining && isLive(instance),
+      (instance) =>
+        instance.role !== 'run' && instance.draining && isLive(instance),
     ).length,
   };
 }
@@ -1624,10 +1890,10 @@ function invalidateLocalBackend(
   let stopped: BackendInstance | undefined;
   for (const instance of instances) {
     if (opts.kill) {
-      if (!instance.draining) stopped = instance;
+      if (instance.role !== 'run' && !instance.draining) stopped = instance;
       killInstance(instance);
     } else if (!instance.draining && instance.deploymentId !== keep) {
-      stopped = instance;
+      if (instance.role !== 'run') stopped = instance;
       retireInstance(instance);
     }
   }

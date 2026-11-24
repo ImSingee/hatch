@@ -1,7 +1,7 @@
 import { Badge, Loader, ThemeIcon } from '@mantine/core';
 import { IconCheck, IconClock, IconHandStop, IconX } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
-import type { WorkflowRunStatus, WorkflowRunStepStatus } from '~/db/schema';
+import type { RunStatus, RunStepStatus } from '~lib/runs';
 
 /**
  * Run/step status visuals. The theme avoids green badges, so a healthy
@@ -9,7 +9,7 @@ import type { WorkflowRunStatus, WorkflowRunStepStatus } from '~/db/schema';
  * than the conventional green.
  */
 const RUN_META: Record<
-  WorkflowRunStatus,
+  RunStatus,
   { label: string; color: string; icon: ReactNode }
 > = {
   queued: {
@@ -39,11 +39,11 @@ const RUN_META: Record<
   },
 };
 
-export function runStatusColor(status: WorkflowRunStatus): string {
+export function runStatusColor(status: RunStatus): string {
   return RUN_META[status].color;
 }
 
-export function RunStatusBadge({ status }: { status: WorkflowRunStatus }) {
+export function RunStatusBadge({ status }: { status: RunStatus }) {
   const meta = RUN_META[status];
   return (
     <Badge
@@ -66,7 +66,7 @@ export function RunStatusBullet({
   status,
   filled,
 }: {
-  status: WorkflowRunStatus | WorkflowRunStepStatus;
+  status: RunStatus | RunStepStatus;
   filled?: boolean;
 }) {
   const color =

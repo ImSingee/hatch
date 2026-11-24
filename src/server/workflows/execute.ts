@@ -22,20 +22,15 @@ import {
 } from './manifest';
 import { buildWorkflowDenoArgs } from './runtime-permissions';
 import { workflowSandboxEnv } from './sandbox-env';
-import { validateWorkflowInput } from './validate';
+import { validateSchemaInput } from '../json-schema-input';
+import {
+  MAX_RUN_STEP_EVENTS,
+  RunEventStream,
+  type StepEndEvent,
+  type StepStartEvent,
+} from '../run-events';
 
-const SENTINEL = '[[hatch]]';
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
-const MAX_LOG = 100_000;
-// Cap a single pending stdout record (a line with no newline yet). `MAX_LOG`
-// only bounds completed log lines, so without this an untrusted/buggy workflow
-// that streams megabytes on one line would grow the buffer until the Node
-// process runs out of memory, long before the run timeout fires.
-const MAX_STDOUT_BUFFER = 1_000_000;
-// Cap persisted step events per run. Each step attempt inserts a row, so a
-// workflow calling ctx.step() in a tight loop would otherwise flood
-// workflow_run_steps with an unbounded number of rows before the timeout.
-const MAX_STEP_EVENTS = 2000;
 
 type RuntimeGlobal = typeof globalThis & {
   __hatchWorkflowRuns__?: Map<string, ChildProcess>;
@@ -85,7 +80,7 @@ export async function startWorkflowRun(
   assertSupportedWorkflowCompatibility(deployment.compatibilityVersion);
   const version = deployment.version;
 
-  const validation = validateWorkflowInput(
+  const validation = validateSchemaInput(
     workflow.inputSchema,
     options.input ?? {},
   );
@@ -134,33 +129,6 @@ export async function startWorkflowRun(
 
   return { runId, status: 'queued' };
 }
-
-type StepStartEvent = {
-  t: 'step:start';
-  seq: number;
-  name: string;
-  attempt?: number;
-  startedAt?: string;
-};
-
-type StepEndEvent = {
-  t: 'step:end';
-  seq: number;
-  name: string;
-  attempt?: number;
-  status: 'succeeded' | 'failed' | 'retrying';
-  output?: unknown;
-  error?: string;
-  startedAt?: string;
-  finishedAt?: string;
-};
-
-type RunEndEvent = {
-  t: 'run:end';
-  status: 'succeeded' | 'failed';
-  output?: unknown;
-  error?: string;
-};
 
 async function upsertStepStart(
   runId: string,
@@ -342,106 +310,44 @@ async function executeRun(
   );
   runRegistry().set(runId, child);
 
-  let log = '';
-  const appendLog = (s: string) => {
-    log = (log + s).slice(-MAX_LOG);
-  };
-
-  // Held on an object so the closure assignment below isn't subject to
-  // let-narrowing (which would otherwise widen reads to `never`).
-  const outcome: { end: RunEndEvent | null } = { end: null };
-  let chain: Promise<void> = Promise.resolve();
-  let stepEvents = 0;
-  let stepsOverflowed = false;
-
-  const handleLine = async (line: string): Promise<void> => {
-    if (!line.startsWith(SENTINEL)) {
-      if (line.length > 0) appendLog(line + '\n');
-      return;
-    }
-    let event: { t?: string };
+  const killChild = () => {
     try {
-      event = JSON.parse(line.slice(SENTINEL.length));
+      child.kill('SIGKILL');
     } catch {
-      appendLog(line + '\n');
-      return;
-    }
-    if (event.t === 'step:start' || event.t === 'step:end') {
-      stepEvents += 1;
-      if (stepEvents > MAX_STEP_EVENTS) {
-        // Stop persisting and kill the child: a step loop this hot is a bug
-        // (or abuse), and every further event would be another DB insert.
-        if (!stepsOverflowed) {
-          stepsOverflowed = true;
-          try {
-            child.kill('SIGKILL');
-          } catch {
-            /* best-effort */
-          }
-        }
-        return;
-      }
-    }
-    if (event.t === 'step:start') {
-      await upsertStepStart(runId, event as StepStartEvent);
-    } else if (event.t === 'step:end') {
-      await upsertStepEnd(runId, event as StepEndEvent);
-    } else if (event.t === 'run:end') {
-      outcome.end = event as RunEndEvent;
+      /* best-effort */
     }
   };
-  const enqueue = (line: string) => {
-    chain = chain.then(() => handleLine(line));
-  };
-
-  let stdoutBuf = '';
-  let overflowed = false;
-  child.stdout.on('data', (d) => {
-    if (overflowed) return;
-    stdoutBuf += d.toString();
-    const parts = stdoutBuf.split('\n');
-    stdoutBuf = parts.pop() ?? '';
-    for (const part of parts) enqueue(part);
-    // Only the trailing, still-unterminated record remains in the buffer now.
-    // If it alone exceeds the cap the workflow is streaming one unbounded line,
-    // so kill the run rather than let it exhaust memory (complete lines were
-    // already drained above, so a chatty-but-newline-terminated workflow is
-    // unaffected). The close handler records the failure.
-    if (stdoutBuf.length > MAX_STDOUT_BUFFER) {
-      overflowed = true;
-      stdoutBuf = '';
-      try {
-        child.kill('SIGKILL');
-      } catch {
-        /* best-effort */
-      }
-    }
+  const stream = new RunEventStream({
+    onEvent: (event) =>
+      event.t === 'step:start'
+        ? upsertStepStart(runId, event)
+        : event.t === 'step:end'
+          ? upsertStepEnd(runId, event)
+          : Promise.resolve(),
+    onOverflow: killChild,
   });
-  child.stderr.on('data', (d) => appendLog(d.toString()));
+  child.stdout.on('data', (d) => stream.stdout(d));
+  child.stderr.on('data', (d) => stream.stderr(d));
 
   child.stdin.end(`${JSON.stringify(input ?? {})}\n`);
 
   let timedOut = false;
   const timeout = setTimeout(() => {
     timedOut = true;
-    try {
-      child.kill('SIGKILL');
-    } catch {
-      /* best-effort */
-    }
+    killChild();
   }, RUN_TIMEOUT_MS);
 
   await new Promise<void>((resolve) => {
     child.on('error', (err) => {
-      appendLog(`\nspawn error: ${err.message}`);
+      stream.appendLog(`\nspawn error: ${err.message}`);
       resolve();
     });
     child.on('close', () => resolve());
   });
   clearTimeout(timeout);
   runRegistry().delete(runId);
-  if (stdoutBuf) enqueue(stdoutBuf);
-  await chain;
+  await stream.finish();
+  const log = stream.text;
 
   // A concurrent cancel may have already marked the run; respect it.
   const current = await db.query.workflowRuns.findFirst({
@@ -458,15 +364,15 @@ async function executeRun(
 
   // A step-overflow kill may race the child's own run:end; the overflow
   // verdict wins so the failure cause is reported, not a bogus success.
-  const runEnd = stepsOverflowed ? null : outcome.end;
+  const runEnd = stream.runEnd;
   const succeeded = runEnd?.status === 'succeeded';
   const finalStatus: WorkflowRunStatus = succeeded ? 'succeeded' : 'failed';
   const error = succeeded
     ? null
     : (runEnd?.error ??
-      (stepsOverflowed
-        ? `Workflow exceeded ${MAX_STEP_EVENTS} step events`
-        : overflowed
+      (stream.overflow === 'steps'
+        ? `Workflow exceeded ${MAX_RUN_STEP_EVENTS} step events`
+        : stream.overflow === 'line'
           ? 'Workflow produced too much output on a single line'
           : timedOut
             ? 'Run timed out'

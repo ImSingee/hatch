@@ -2,7 +2,11 @@
 import esbuildPackage from 'esbuild/package.json' with { type: 'json' };
 import typescriptPackage from 'typescript/package.json' with { type: 'json' };
 import platformPackage from '../../../package.json' with { type: 'json' };
-import { PLATFORM_APP_BUF_GEN_YAML } from '~agent/app-codegen';
+import {
+  APP_TASK_OPTIONS_PROTO,
+  APP_TASK_OPTIONS_PROTO_FILE,
+  PLATFORM_APP_BUF_GEN_YAML,
+} from '~agent/app-codegen';
 import {
   SDK_DENO_TYPES,
   SDK_DENO_TYPES_LICENSE,
@@ -76,10 +80,18 @@ export async function sdkPayload(kind: 'app' | 'workflow') {
     ).toString('base64'),
   });
   if (kind === 'app')
-    files.push({
-      path: 'buf.gen.yaml',
-      contentBase64: Buffer.from(PLATFORM_APP_BUF_GEN_YAML).toString('base64'),
-    });
+    files.push(
+      {
+        path: 'buf.gen.yaml',
+        contentBase64: Buffer.from(PLATFORM_APP_BUF_GEN_YAML).toString(
+          'base64',
+        ),
+      },
+      {
+        path: APP_TASK_OPTIONS_PROTO_FILE,
+        contentBase64: Buffer.from(APP_TASK_OPTIONS_PROTO).toString('base64'),
+      },
+    );
   // Generated configuration is delivered, not rebuilt by the client, so the
   // platform, the Runner and the CLI check a source against the same bytes.
   for (const [file, contents] of Object.entries({

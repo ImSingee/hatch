@@ -176,6 +176,111 @@ export const cronJobSchema = z
 
 export type CronJob = z.infer<typeof cronJobSchema>;
 
+/** Task names appear in URLs and CLI arguments. */
+export const APP_TASK_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+export const APP_TASK_NAME_MAX_LENGTH = 64;
+/** Upper bound for `tasks.concurrency` and each task's own `concurrency`. */
+export const APP_TASK_MAX_CONCURRENCY = 32;
+export const APP_TASK_DEFAULT_CONCURRENCY = 4;
+
+const taskConcurrencySchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(APP_TASK_MAX_CONCURRENCY);
+
+/** A schedule that starts a task with a fixed input. */
+export const taskCronJobSchema = z
+  .object({
+    name: z.string().min(1),
+    /** Standard 5-field cron expression: minute hour day-of-month month day-of-week. */
+    schedule: z.string().min(1),
+    /** Input for every scheduled run; validated against the task's input. */
+    input: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+
+/**
+ * A runnable backend RPC method. Every run gets its own backend instance; the
+ * method's request message is the run input and drives the generated form.
+ */
+export const taskDefinitionSchema = z
+  .object({
+    name: z
+      .string()
+      .max(APP_TASK_NAME_MAX_LENGTH)
+      .regex(
+        APP_TASK_NAME_RE,
+        'task name must be lowercase letters, digits, and hyphens, starting with a letter or digit',
+      )
+      // `/app/<slug>/tasks/runs` lists every run of the App.
+      .refine((name) => name !== 'runs', {
+        message: 'task name "runs" is reserved',
+      }),
+    /** Unary method on the service named by `rpc.service`. */
+    method: z
+      .string()
+      .regex(
+        /^[A-Za-z_][A-Za-z0-9_]*$/,
+        'method must be an RPC method name such as "RunDigest"',
+      ),
+    title: singleLineNonEmpty.optional(),
+    description: z.string().max(500).optional(),
+    /** Per-task cap on simultaneous runs; at most `tasks.concurrency`. */
+    concurrency: taskConcurrencySchema.optional(),
+    cron: z.array(taskCronJobSchema).default([]),
+    /** Expose `/api/app/<id>/tasks/<name>/run` for webhook callers. */
+    webhook: z.boolean().default(false),
+  })
+  .strict();
+
+export type TaskDefinition = z.infer<typeof taskDefinitionSchema>;
+export type TaskCronJob = z.infer<typeof taskCronJobSchema>;
+
+export const tasksConfigSchema = z
+  .object({
+    /** Cap on simultaneous task runs (dedicated instances) for the App. */
+    concurrency: taskConcurrencySchema.default(APP_TASK_DEFAULT_CONCURRENCY),
+    definitions: z.array(taskDefinitionSchema).min(1),
+  })
+  .strict()
+  .superRefine((config, ctx) => {
+    const names = new Set<string>();
+    config.definitions.forEach((task, index) => {
+      if (names.has(task.name)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `duplicate task name "${task.name}"`,
+          path: ['definitions', index, 'name'],
+        });
+      }
+      names.add(task.name);
+      if (
+        task.concurrency !== undefined &&
+        task.concurrency > config.concurrency
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `task "${task.name}" concurrency ${task.concurrency} exceeds tasks.concurrency ${config.concurrency}`,
+          path: ['definitions', index, 'concurrency'],
+        });
+      }
+      const cronNames = new Set<string>();
+      task.cron.forEach((job, jobIndex) => {
+        if (cronNames.has(job.name)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `duplicate cron job name "${job.name}" in task "${task.name}"`,
+            path: ['definitions', index, 'cron', jobIndex, 'name'],
+          });
+        }
+        cronNames.add(job.name);
+      });
+    });
+  });
+
+export type TasksConfig = z.infer<typeof tasksConfigSchema>;
+
 /**
  * A reference to a top-level Workflow this app's backend is allowed to invoke.
  * The app does NOT define the workflow — it is created independently in the
@@ -263,6 +368,8 @@ const supportedCapabilitiesSchema = z.object({
   dataTable: z.boolean().default(false),
   /** Declares notification kinds and/or accepts routed notifications. */
   notifications: z.boolean().default(false),
+  /** Declares runnable backend RPC methods (tasks). */
+  tasks: z.boolean().default(false),
 });
 
 export const capabilitiesSchema = supportedCapabilitiesSchema
@@ -423,6 +530,8 @@ export const sourceManifestSchema = z
     workflows: appWorkflowsSchema,
     /** Notification kinds and destination declaration (notifications capability). */
     notifications: notificationsConfigSchema.optional(),
+    /** Runnable backend RPC methods (tasks capability). */
+    tasks: tasksConfigSchema.optional(),
   })
   .strict()
   .superRefine((manifest, ctx) => {
@@ -481,6 +590,37 @@ export const sourceManifestSchema = z
         message:
           'capabilities.notifications requires capabilities.backend and backend.entry',
         path: ['capabilities', 'notifications'],
+      });
+    }
+    if (manifest.capabilities.tasks !== Boolean(manifest.tasks)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: manifest.tasks
+          ? 'tasks is declared but capabilities.tasks is false'
+          : 'capabilities.tasks is true but tasks is not declared',
+        path: ['tasks'],
+      });
+    }
+    if (
+      manifest.capabilities.tasks &&
+      (!manifest.capabilities.backend || !manifest.backend || !manifest.rpc)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'capabilities.tasks requires capabilities.backend, backend.entry and rpc',
+        path: ['capabilities', 'tasks'],
+      });
+    }
+    if (
+      manifest.capabilities.tasks &&
+      manifest.backendMode === 'long-running'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'tasks require backendMode "serverless": every task run boots its own backend instance, which would duplicate the background work of a long-running backend',
+        path: ['backendMode'],
       });
     }
     if (manifest.capabilities.widgets && manifest.widgets.length === 0) {

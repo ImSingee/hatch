@@ -6,6 +6,7 @@ import { runLifecycle } from './lifecycle';
 import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
+import { runTask } from './task';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { parsePreferencesCommand, runPreferences } from './preferences';
@@ -76,6 +77,7 @@ try {
               ...([
                 'invoke',
                 'backend',
+                'task',
                 'icon',
                 'kv',
                 'data-table',
@@ -124,6 +126,8 @@ try {
       );
   } else if (name === 'app' && operation === 'backend')
     await runBackend(args, offset, controller.signal);
+  else if (name === 'app' && operation === 'task')
+    await runTask(args, offset, controller.signal);
   else if (
     name === 'image-model' ||
     name === 'image' ||

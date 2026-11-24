@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     ensureAgentAutoRetryScheduler: step('agent-auto-retry'),
     interruptStaleWorkflowRuns: asyncStep('workflow-interrupt'),
     ensureWorkflowScheduler: step('workflow-scheduler'),
+    recoverTaskRuns: asyncStep('task-recovery'),
     ensureScheduler: step('app-scheduler'),
     warmLongRunningBackends: asyncStep('backend-warmup'),
     ensureRetentionSweep: step('retention'),
@@ -56,6 +57,9 @@ vi.mock('~server/apps/runtime', () => ({
 }));
 vi.mock('~server/apps/scheduler', () => ({
   ensureScheduler: mocks.ensureScheduler,
+}));
+vi.mock('~server/apps/tasks/service', () => ({
+  recoverTaskRuns: mocks.recoverTaskRuns,
 }));
 vi.mock('~server/retention', () => ({
   ensureRetentionSweep: mocks.ensureRetentionSweep,
@@ -95,6 +99,7 @@ describe('platform startup migrations', () => {
       'agent-auto-retry',
       'workflow-interrupt',
       'workflow-scheduler',
+      'task-recovery',
       'app-scheduler',
       'backend-warmup',
       'retention',

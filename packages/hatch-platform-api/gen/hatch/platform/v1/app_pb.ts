@@ -24,7 +24,7 @@ import type {
   Source,
 } from './lifecycle_pb.js';
 import { file_hatch_platform_v1_lifecycle } from './lifecycle_pb.js';
-import type { Message } from '@bufbuild/protobuf';
+import type { JsonObject, Message } from '@bufbuild/protobuf';
 
 /**
  * Describes the file hatch/platform/v1/app.proto.
@@ -32,7 +32,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_app: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2UiLQoTR2V0QXBwU291cmNlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJBChRHZXRBcHBTb3VyY2VSZXNwb25zZRIpCgZzb3VyY2UYASABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5Tb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSL7AgoRQXBwQmFja2VuZFJ1bnRpbWUSDQoFc3RhdGUYASABKAkSEAoDcGlkGAIgASgNSACIAQESEQoEcG9ydBgDIAEoDUgBiAEBEhcKCnN0YXJ0ZWRfYXQYBCABKAlIAogBARIXCgpzdG9wcGVkX2F0GAUgASgJSAOIAQESGwoObGFzdF9leGl0X2NvZGUYBiABKAVIBIgBARIdChBsYXN0X2V4aXRfc2lnbmFsGAcgASgJSAWIAQESFwoKbGFzdF9lcnJvchgIIAEoCUgGiAEBEhUKDXJlc3RhcnRfY291bnQYCSABKA0SEgoKa2VlcF9hbGl2ZRgKIAEoCBIaChJkcmFpbmluZ19pbnN0YW5jZXMYCyABKA1CBgoEX3BpZEIHCgVfcG9ydEINCgtfc3RhcnRlZF9hdEINCgtfc3RvcHBlZF9hdEIRCg9fbGFzdF9leGl0X2NvZGVCEwoRX2xhc3RfZXhpdF9zaWduYWxCDQoLX2xhc3RfZXJyb3IilAEKCkFwcEJhY2tlbmQSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEgwKBG1vZGUYBCABKAkSGQoRcnVudGltZV9zdXBwb3J0ZWQYBSABKAgSNQoHcnVudGltZRgGIAEoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmRSdW50aW1lIm0KFkxpc3RBcHBCYWNrZW5kc1JlcXVlc3QSHQoFbGltaXQYASABKA1CCbpIBioEGGQoAUgAiAEBEh8KBmN1cnNvchgCIAEoCUIKukgHcgUQARi/AUgBiAEBQggKBl9saW1pdEIJCgdfY3Vyc29yInQKF0xpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEi8KCGJhY2tlbmRzGAEgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZBIYCgtuZXh0X2N1cnNvchgCIAEoCUgAiAEBQg4KDF9uZXh0X2N1cnNvciIuChRHZXRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJHChVHZXRBcHBCYWNrZW5kUmVzcG9uc2USLgoHYmFja2VuZBgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmQiMAoWU3RhcnRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJJChdTdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCI+ChVTdG9wQXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSAoWU3RvcEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJBChhSZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSwoZUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbjLhDQoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJfCgxHZXRBcHBTb3VyY2USJi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBTb3VyY2VSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwU291cmNlUmVzcG9uc2USVgoJRGVwbG95QXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkRlcGxveUFwcFJlc3BvbnNlElwKC1JvbGxiYWNrQXBwEiUuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXNwb25zZRJZCgpRdWVyeUFwcEt2EiQuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBLdlJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVzcG9uc2USbgoRUXVlcnlBcHBEYXRhVGFibGUSKy5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlc3BvbnNlElkKClF1ZXJ5QXBwRGISJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERiUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXNwb25zZRJ0ChNBc3NvY2lhdGVBcHBTZXNzaW9uEi0uaGF0Y2gucGxhdGZvcm0udjEuQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVzcG9uc2USaAoPTGlzdEFwcEJhY2tlbmRzEikuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcEJhY2tlbmRzUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEmIKDUdldEFwcEJhY2tlbmQSJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBCYWNrZW5kUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEJhY2tlbmRSZXNwb25zZRJoCg9TdGFydEFwcEJhY2tlbmQSKS5oYXRjaC5wbGF0Zm9ybS52MS5TdGFydEFwcEJhY2tlbmRSZXF1ZXN0GiouaGF0Y2gucGxhdGZvcm0udjEuU3RhcnRBcHBCYWNrZW5kUmVzcG9uc2USZQoOU3RvcEFwcEJhY2tlbmQSKC5oYXRjaC5wbGF0Zm9ybS52MS5TdG9wQXBwQmFja2VuZFJlcXVlc3QaKS5oYXRjaC5wbGF0Zm9ybS52MS5TdG9wQXBwQmFja2VuZFJlc3BvbnNlEm4KEVJlc3RhcnRBcHBCYWNrZW5kEisuaGF0Y2gucGxhdGZvcm0udjEuUmVzdGFydEFwcEJhY2tlbmRSZXF1ZXN0GiwuaGF0Y2gucGxhdGZvcm0udjEuUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRJZCgpHZXRBcHBJY29uEiQuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwSWNvblJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBJY29uUmVzcG9uc2USWQoKU2V0QXBwSWNvbhIkLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEljb25SZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwSWNvblJlc3BvbnNlEl8KDENsZWFyQXBwSWNvbhImLmhhdGNoLnBsYXRmb3JtLnYxLkNsZWFyQXBwSWNvblJlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5DbGVhckFwcEljb25SZXNwb25zZWIGcHJvdG8z',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2UiLQoTR2V0QXBwU291cmNlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJBChRHZXRBcHBTb3VyY2VSZXNwb25zZRIpCgZzb3VyY2UYASABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5Tb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSL7AgoRQXBwQmFja2VuZFJ1bnRpbWUSDQoFc3RhdGUYASABKAkSEAoDcGlkGAIgASgNSACIAQESEQoEcG9ydBgDIAEoDUgBiAEBEhcKCnN0YXJ0ZWRfYXQYBCABKAlIAogBARIXCgpzdG9wcGVkX2F0GAUgASgJSAOIAQESGwoObGFzdF9leGl0X2NvZGUYBiABKAVIBIgBARIdChBsYXN0X2V4aXRfc2lnbmFsGAcgASgJSAWIAQESFwoKbGFzdF9lcnJvchgIIAEoCUgGiAEBEhUKDXJlc3RhcnRfY291bnQYCSABKA0SEgoKa2VlcF9hbGl2ZRgKIAEoCBIaChJkcmFpbmluZ19pbnN0YW5jZXMYCyABKA1CBgoEX3BpZEIHCgVfcG9ydEINCgtfc3RhcnRlZF9hdEINCgtfc3RvcHBlZF9hdEIRCg9fbGFzdF9leGl0X2NvZGVCEwoRX2xhc3RfZXhpdF9zaWduYWxCDQoLX2xhc3RfZXJyb3IilAEKCkFwcEJhY2tlbmQSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEgwKBG1vZGUYBCABKAkSGQoRcnVudGltZV9zdXBwb3J0ZWQYBSABKAgSNQoHcnVudGltZRgGIAEoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmRSdW50aW1lIm0KFkxpc3RBcHBCYWNrZW5kc1JlcXVlc3QSHQoFbGltaXQYASABKA1CCbpIBioEGGQoAUgAiAEBEh8KBmN1cnNvchgCIAEoCUIKukgHcgUQARi/AUgBiAEBQggKBl9saW1pdEIJCgdfY3Vyc29yInQKF0xpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEi8KCGJhY2tlbmRzGAEgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZBIYCgtuZXh0X2N1cnNvchgCIAEoCUgAiAEBQg4KDF9uZXh0X2N1cnNvciIuChRHZXRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJHChVHZXRBcHBCYWNrZW5kUmVzcG9uc2USLgoHYmFja2VuZBgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmQiMAoWU3RhcnRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJJChdTdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCI+ChVTdG9wQXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSAoWU3RvcEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJBChhSZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSwoZUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiJ4CgtBcHBUYXNrQ3JvbhIMCgRuYW1lGAEgASgJEhAKCHNjaGVkdWxlGAIgASgJEiUKBWlucHV0GAMgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlEhUKCG5leHRfcnVuGAQgASgJSACIAQFCCwoJX25leHRfcnVuIj8KDUFwcFRhc2tSdW5SZWYSCgoCaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEhIKCmNyZWF0ZWRfYXQYAyABKAkisgMKB0FwcFRhc2sSDAoEbmFtZRgBIAEoCRIOCgZtZXRob2QYAiABKAkSEgoFdGl0bGUYAyABKAlIAIgBARIYCgtkZXNjcmlwdGlvbhgEIAEoCUgBiAEBEhgKC2NvbmN1cnJlbmN5GAUgASgNSAKIAQESEgoKaW5wdXRfdHlwZRgGIAEoCRItCgxpbnB1dF9zY2hlbWEYByABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EiwKBGNyb24YCCADKAsyHi5oYXRjaC5wbGF0Zm9ybS52MS5BcHBUYXNrQ3JvbhIPCgd3ZWJob29rGAkgASgIEhkKDHdlYmhvb2tfcGF0aBgKIAEoCUgDiAEBEg4KBnF1ZXVlZBgLIAEoDRIPCgdydW5uaW5nGAwgASgNEjkKCmxhdGVzdF9ydW4YDSABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5BcHBUYXNrUnVuUmVmSASIAQFCCAoGX3RpdGxlQg4KDF9kZXNjcmlwdGlvbkIOCgxfY29uY3VycmVuY3lCDwoNX3dlYmhvb2tfcGF0aEINCgtfbGF0ZXN0X3J1biItChNMaXN0QXBwVGFza3NSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIpoBChRMaXN0QXBwVGFza3NSZXNwb25zZRIOCgZhcHBfaWQYASABKAkSEQoJYXZhaWxhYmxlGAIgASgIEhMKC2NvbmN1cnJlbmN5GAMgASgNEg4KBnF1ZXVlZBgEIAEoDRIPCgdydW5uaW5nGAUgASgNEikKBXRhc2tzGAYgAygLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFzayJ7ChFSdW5BcHBUYXNrUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIXCgR0YXNrGAIgASgJQgm6SAZyBBABGEASKwoFaW5wdXQYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCCAoGX2lucHV0IjQKElJ1bkFwcFRhc2tSZXNwb25zZRIOCgZydW5faWQYASABKAkSDgoGc3RhdHVzGAIgASgJItgCChFBcHBUYXNrUnVuU3VtbWFyeRIKCgJpZBgBIAEoCRIMCgR0YXNrGAIgASgJEg8KB3RyaWdnZXIYAyABKAkSFgoJY3Jvbl9uYW1lGAQgASgJSACIAQESDgoGc3RhdHVzGAUgASgJEhQKB3ZlcnNpb24YBiABKA1IAYgBARISCgVlcnJvchgHIAEoCUgCiAEBEhIKCmNyZWF0ZWRfYXQYCCABKAkSFwoKc3RhcnRlZF9hdBgJIAEoCUgDiAEBEhgKC2ZpbmlzaGVkX2F0GAogASgJSASIAQESGAoLZHVyYXRpb25fbXMYCyABKARIBYgBARISCgpzdGVwX2NvdW50GAwgASgNQgwKCl9jcm9uX25hbWVCCgoIX3ZlcnNpb25CCAoGX2Vycm9yQg0KC19zdGFydGVkX2F0Qg4KDF9maW5pc2hlZF9hdEIOCgxfZHVyYXRpb25fbXMiggIKFkxpc3RBcHBUYXNrUnVuc1JlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHAoEdGFzaxgCIAEoCUIJukgGcgQQARhASACIAQESSAoGc3RhdHVzGAMgASgJQjO6SDByLlIGcXVldWVkUgdydW5uaW5nUglzdWNjZWVkZWRSBmZhaWxlZFIIY2FuY2VsZWRIAYgBARIeCgVsaW1pdBgEIAEoDUIKukgHKgUYyAEoAUgCiAEBEh8KBmN1cnNvchgFIAEoCUIKukgHcgUQARi/AUgDiAEBQgcKBV90YXNrQgkKB19zdGF0dXNCCAoGX2xpbWl0QgkKB19jdXJzb3IidwoXTGlzdEFwcFRhc2tSdW5zUmVzcG9uc2USMgoEcnVucxgBIAMoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcFRhc2tSdW5TdW1tYXJ5EhgKC25leHRfY3Vyc29yGAIgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIp4CCg5BcHBUYXNrUnVuU3RlcBILCgNzZXEYASABKA0SDAoEbmFtZRgCIAEoCRIOCgZzdGF0dXMYAyABKAkSDwoHYXR0ZW1wdBgEIAEoDRIrCgZvdXRwdXQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIAIgBARISCgVlcnJvchgGIAEoCUgBiAEBEhcKCnN0YXJ0ZWRfYXQYByABKAlIAogBARIYCgtmaW5pc2hlZF9hdBgIIAEoCUgDiAEBEhgKC2R1cmF0aW9uX21zGAkgASgESASIAQFCCQoHX291dHB1dEIICgZfZXJyb3JCDQoLX3N0YXJ0ZWRfYXRCDgoMX2ZpbmlzaGVkX2F0Qg4KDF9kdXJhdGlvbl9tcyL5AgoKQXBwVGFza1J1bhI1CgdzdW1tYXJ5GAEgASgLMiQuaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1blN1bW1hcnkSEgoFYWN0b3IYAiABKAlIAIgBARIaCg1kZXBsb3ltZW50X2lkGAMgASgJSAGIAQESKgoFaW5wdXQYBCABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIAogBARIrCgZvdXRwdXQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIA4gBARIQCgNsb2cYBiABKAlIBIgBARIbCg5xdWV1ZV9wb3NpdGlvbhgHIAEoDUgFiAEBEjAKBXN0ZXBzGAggAygLMiEuaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1blN0ZXBCCAoGX2FjdG9yQhAKDl9kZXBsb3ltZW50X2lkQggKBl9pbnB1dEIJCgdfb3V0cHV0QgYKBF9sb2dCEQoPX3F1ZXVlX3Bvc2l0aW9uIkoKFEdldEFwcFRhc2tSdW5SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhoKBnJ1bl9pZBgCIAEoCUIKukgHcgUQARi/ASJDChVHZXRBcHBUYXNrUnVuUmVzcG9uc2USKgoDcnVuGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1biJNChdDYW5jZWxBcHBUYXNrUnVuUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIaCgZydW5faWQYAiABKAlCCrpIB3IFEAEYvwEiPAoYQ2FuY2VsQXBwVGFza1J1blJlc3BvbnNlEhAKCGNhbmNlbGVkGAEgASgIEg4KBnN0YXR1cxgCIAEoCTLYEQoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJfCgxHZXRBcHBTb3VyY2USJi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBTb3VyY2VSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwU291cmNlUmVzcG9uc2USVgoJRGVwbG95QXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkRlcGxveUFwcFJlc3BvbnNlElwKC1JvbGxiYWNrQXBwEiUuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuUm9sbGJhY2tBcHBSZXNwb25zZRJZCgpRdWVyeUFwcEt2EiQuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBLdlJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVzcG9uc2USbgoRUXVlcnlBcHBEYXRhVGFibGUSKy5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERhdGFUYWJsZVJlc3BvbnNlElkKClF1ZXJ5QXBwRGISJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcERiUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXNwb25zZRJ0ChNBc3NvY2lhdGVBcHBTZXNzaW9uEi0uaGF0Y2gucGxhdGZvcm0udjEuQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVzcG9uc2USaAoPTGlzdEFwcEJhY2tlbmRzEikuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcEJhY2tlbmRzUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEmIKDUdldEFwcEJhY2tlbmQSJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBCYWNrZW5kUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEJhY2tlbmRSZXNwb25zZRJoCg9TdGFydEFwcEJhY2tlbmQSKS5oYXRjaC5wbGF0Zm9ybS52MS5TdGFydEFwcEJhY2tlbmRSZXF1ZXN0GiouaGF0Y2gucGxhdGZvcm0udjEuU3RhcnRBcHBCYWNrZW5kUmVzcG9uc2USZQoOU3RvcEFwcEJhY2tlbmQSKC5oYXRjaC5wbGF0Zm9ybS52MS5TdG9wQXBwQmFja2VuZFJlcXVlc3QaKS5oYXRjaC5wbGF0Zm9ybS52MS5TdG9wQXBwQmFja2VuZFJlc3BvbnNlEm4KEVJlc3RhcnRBcHBCYWNrZW5kEisuaGF0Y2gucGxhdGZvcm0udjEuUmVzdGFydEFwcEJhY2tlbmRSZXF1ZXN0GiwuaGF0Y2gucGxhdGZvcm0udjEuUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRJZCgpHZXRBcHBJY29uEiQuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwSWNvblJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBJY29uUmVzcG9uc2USWQoKU2V0QXBwSWNvbhIkLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEljb25SZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwSWNvblJlc3BvbnNlEl8KDENsZWFyQXBwSWNvbhImLmhhdGNoLnBsYXRmb3JtLnYxLkNsZWFyQXBwSWNvblJlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5DbGVhckFwcEljb25SZXNwb25zZRJfCgxMaXN0QXBwVGFza3MSJi5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwVGFza3NSZXF1ZXN0GicuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcFRhc2tzUmVzcG9uc2USWQoKUnVuQXBwVGFzaxIkLmhhdGNoLnBsYXRmb3JtLnYxLlJ1bkFwcFRhc2tSZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuUnVuQXBwVGFza1Jlc3BvbnNlEmgKD0xpc3RBcHBUYXNrUnVucxIpLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBUYXNrUnVuc1JlcXVlc3QaKi5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwVGFza1J1bnNSZXNwb25zZRJiCg1HZXRBcHBUYXNrUnVuEicuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwVGFza1J1blJlcXVlc3QaKC5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBUYXNrUnVuUmVzcG9uc2USawoQQ2FuY2VsQXBwVGFza1J1bhIqLmhhdGNoLnBsYXRmb3JtLnYxLkNhbmNlbEFwcFRhc2tSdW5SZXF1ZXN0GisuaGF0Y2gucGxhdGZvcm0udjEuQ2FuY2VsQXBwVGFza1J1blJlc3BvbnNlYgZwcm90bzM',
     [
       file_buf_validate_validate,
       file_google_protobuf_struct,
@@ -1032,6 +1032,649 @@ export const ClearAppIconResponseSchema: GenMessage<ClearAppIconResponse> =
   messageDesc(file_hatch_platform_v1_app, 38);
 
 /**
+ * A schedule that starts a task with a fixed input.
+ *
+ * @generated from message hatch.platform.v1.AppTaskCron
+ */
+export type AppTaskCron = Message<'hatch.platform.v1.AppTaskCron'> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string schedule = 2;
+   */
+  schedule: string;
+
+  /**
+   * @generated from field: google.protobuf.Value input = 3;
+   */
+  input?: Value | undefined;
+
+  /**
+   * Absent when the schedule never fires again.
+   *
+   * @generated from field: optional string next_run = 4;
+   */
+  nextRun?: string | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppTaskCron.
+ * Use `create(AppTaskCronSchema)` to create a new message.
+ */
+export const AppTaskCronSchema: GenMessage<AppTaskCron> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 39);
+
+/**
+ * @generated from message hatch.platform.v1.AppTaskRunRef
+ */
+export type AppTaskRunRef = Message<'hatch.platform.v1.AppTaskRunRef'> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * queued | running | succeeded | failed | canceled
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string created_at = 3;
+   */
+  createdAt: string;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppTaskRunRef.
+ * Use `create(AppTaskRunRefSchema)` to create a new message.
+ */
+export const AppTaskRunRefSchema: GenMessage<AppTaskRunRef> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 40);
+
+/**
+ * A runnable backend RPC method of the active deployment.
+ *
+ * @generated from message hatch.platform.v1.AppTask
+ */
+export type AppTask = Message<'hatch.platform.v1.AppTask'> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * Unary method on the App's RPC service.
+   *
+   * @generated from field: string method = 2;
+   */
+  method: string;
+
+  /**
+   * @generated from field: optional string title = 3;
+   */
+  title?: string | undefined;
+
+  /**
+   * @generated from field: optional string description = 4;
+   */
+  description?: string | undefined;
+
+  /**
+   * Own cap on simultaneous runs; absent means only the App cap applies.
+   *
+   * @generated from field: optional uint32 concurrency = 5;
+   */
+  concurrency?: number | undefined;
+
+  /**
+   * Fully-qualified request message type.
+   *
+   * @generated from field: string input_type = 6;
+   */
+  inputType: string;
+
+  /**
+   * JSON Schema of the input, generated from the request message.
+   *
+   * @generated from field: google.protobuf.Struct input_schema = 7;
+   */
+  inputSchema?: JsonObject | undefined;
+
+  /**
+   * @generated from field: repeated hatch.platform.v1.AppTaskCron cron = 8;
+   */
+  cron: AppTaskCron[];
+
+  /**
+   * @generated from field: bool webhook = 9;
+   */
+  webhook: boolean;
+
+  /**
+   * Platform path of the webhook trigger, when enabled. It accepts native
+   * credentials or the App's webhook secret shown in the Web UI.
+   *
+   * @generated from field: optional string webhook_path = 10;
+   */
+  webhookPath?: string | undefined;
+
+  /**
+   * @generated from field: uint32 queued = 11;
+   */
+  queued: number;
+
+  /**
+   * @generated from field: uint32 running = 12;
+   */
+  running: number;
+
+  /**
+   * @generated from field: optional hatch.platform.v1.AppTaskRunRef latest_run = 13;
+   */
+  latestRun?: AppTaskRunRef | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppTask.
+ * Use `create(AppTaskSchema)` to create a new message.
+ */
+export const AppTaskSchema: GenMessage<AppTask> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 41);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppTasksRequest
+ */
+export type ListAppTasksRequest =
+  Message<'hatch.platform.v1.ListAppTasksRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppTasksRequest.
+ * Use `create(ListAppTasksRequestSchema)` to create a new message.
+ */
+export const ListAppTasksRequestSchema: GenMessage<ListAppTasksRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 42);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppTasksResponse
+ */
+export type ListAppTasksResponse =
+  Message<'hatch.platform.v1.ListAppTasksResponse'> & {
+    /**
+     * @generated from field: string app_id = 1;
+     */
+    appId: string;
+
+    /**
+     * False when the App cannot run tasks now (not deployed, archived, no
+     * tasks declared); every other field is then empty.
+     *
+     * @generated from field: bool available = 2;
+     */
+    available: boolean;
+
+    /**
+     * Runs allowed at once across the App's tasks.
+     *
+     * @generated from field: uint32 concurrency = 3;
+     */
+    concurrency: number;
+
+    /**
+     * @generated from field: uint32 queued = 4;
+     */
+    queued: number;
+
+    /**
+     * @generated from field: uint32 running = 5;
+     */
+    running: number;
+
+    /**
+     * @generated from field: repeated hatch.platform.v1.AppTask tasks = 6;
+     */
+    tasks: AppTask[];
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppTasksResponse.
+ * Use `create(ListAppTasksResponseSchema)` to create a new message.
+ */
+export const ListAppTasksResponseSchema: GenMessage<ListAppTasksResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 43);
+
+/**
+ * @generated from message hatch.platform.v1.RunAppTaskRequest
+ */
+export type RunAppTaskRequest =
+  Message<'hatch.platform.v1.RunAppTaskRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: string task = 2;
+     */
+    task: string;
+
+    /**
+     * JSON object matching the task input; omitted means {}.
+     *
+     * @generated from field: optional google.protobuf.Struct input = 3;
+     */
+    input?: JsonObject | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.RunAppTaskRequest.
+ * Use `create(RunAppTaskRequestSchema)` to create a new message.
+ */
+export const RunAppTaskRequestSchema: GenMessage<RunAppTaskRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 44);
+
+/**
+ * @generated from message hatch.platform.v1.RunAppTaskResponse
+ */
+export type RunAppTaskResponse =
+  Message<'hatch.platform.v1.RunAppTaskResponse'> & {
+    /**
+     * @generated from field: string run_id = 1;
+     */
+    runId: string;
+
+    /**
+     * queued, or failed when the input was rejected.
+     *
+     * @generated from field: string status = 2;
+     */
+    status: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.RunAppTaskResponse.
+ * Use `create(RunAppTaskResponseSchema)` to create a new message.
+ */
+export const RunAppTaskResponseSchema: GenMessage<RunAppTaskResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 45);
+
+/**
+ * @generated from message hatch.platform.v1.AppTaskRunSummary
+ */
+export type AppTaskRunSummary =
+  Message<'hatch.platform.v1.AppTaskRunSummary'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: string task = 2;
+     */
+    task: string;
+
+    /**
+     * manual | cron | webhook | app
+     *
+     * @generated from field: string trigger = 3;
+     */
+    trigger: string;
+
+    /**
+     * @generated from field: optional string cron_name = 4;
+     */
+    cronName?: string | undefined;
+
+    /**
+     * queued | running | succeeded | failed | canceled
+     *
+     * @generated from field: string status = 5;
+     */
+    status: string;
+
+    /**
+     * @generated from field: optional uint32 version = 6;
+     */
+    version?: number | undefined;
+
+    /**
+     * @generated from field: optional string error = 7;
+     */
+    error?: string | undefined;
+
+    /**
+     * @generated from field: string created_at = 8;
+     */
+    createdAt: string;
+
+    /**
+     * @generated from field: optional string started_at = 9;
+     */
+    startedAt?: string | undefined;
+
+    /**
+     * @generated from field: optional string finished_at = 10;
+     */
+    finishedAt?: string | undefined;
+
+    /**
+     * @generated from field: optional uint64 duration_ms = 11;
+     */
+    durationMs?: bigint | undefined;
+
+    /**
+     * @generated from field: uint32 step_count = 12;
+     */
+    stepCount: number;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.AppTaskRunSummary.
+ * Use `create(AppTaskRunSummarySchema)` to create a new message.
+ */
+export const AppTaskRunSummarySchema: GenMessage<AppTaskRunSummary> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 46);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppTaskRunsRequest
+ */
+export type ListAppTaskRunsRequest =
+  Message<'hatch.platform.v1.ListAppTaskRunsRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: optional string task = 2;
+     */
+    task?: string | undefined;
+
+    /**
+     * @generated from field: optional string status = 3;
+     */
+    status?: string | undefined;
+
+    /**
+     * Page size; defaults to 50.
+     *
+     * @generated from field: optional uint32 limit = 4;
+     */
+    limit?: number | undefined;
+
+    /**
+     * next_cursor of the previous page.
+     *
+     * @generated from field: optional string cursor = 5;
+     */
+    cursor?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppTaskRunsRequest.
+ * Use `create(ListAppTaskRunsRequestSchema)` to create a new message.
+ */
+export const ListAppTaskRunsRequestSchema: GenMessage<ListAppTaskRunsRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 47);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppTaskRunsResponse
+ */
+export type ListAppTaskRunsResponse =
+  Message<'hatch.platform.v1.ListAppTaskRunsResponse'> & {
+    /**
+     * Newest first.
+     *
+     * @generated from field: repeated hatch.platform.v1.AppTaskRunSummary runs = 1;
+     */
+    runs: AppTaskRunSummary[];
+
+    /**
+     * Absent on the last page.
+     *
+     * @generated from field: optional string next_cursor = 2;
+     */
+    nextCursor?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppTaskRunsResponse.
+ * Use `create(ListAppTaskRunsResponseSchema)` to create a new message.
+ */
+export const ListAppTaskRunsResponseSchema: GenMessage<ListAppTaskRunsResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 48);
+
+/**
+ * @generated from message hatch.platform.v1.AppTaskRunStep
+ */
+export type AppTaskRunStep = Message<'hatch.platform.v1.AppTaskRunStep'> & {
+  /**
+   * @generated from field: uint32 seq = 1;
+   */
+  seq: number;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * running | succeeded | failed
+   *
+   * @generated from field: string status = 3;
+   */
+  status: string;
+
+  /**
+   * @generated from field: uint32 attempt = 4;
+   */
+  attempt: number;
+
+  /**
+   * @generated from field: optional google.protobuf.Value output = 5;
+   */
+  output?: Value | undefined;
+
+  /**
+   * @generated from field: optional string error = 6;
+   */
+  error?: string | undefined;
+
+  /**
+   * @generated from field: optional string started_at = 7;
+   */
+  startedAt?: string | undefined;
+
+  /**
+   * @generated from field: optional string finished_at = 8;
+   */
+  finishedAt?: string | undefined;
+
+  /**
+   * @generated from field: optional uint64 duration_ms = 9;
+   */
+  durationMs?: bigint | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppTaskRunStep.
+ * Use `create(AppTaskRunStepSchema)` to create a new message.
+ */
+export const AppTaskRunStepSchema: GenMessage<AppTaskRunStep> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 49);
+
+/**
+ * @generated from message hatch.platform.v1.AppTaskRun
+ */
+export type AppTaskRun = Message<'hatch.platform.v1.AppTaskRun'> & {
+  /**
+   * @generated from field: hatch.platform.v1.AppTaskRunSummary summary = 1;
+   */
+  summary?: AppTaskRunSummary | undefined;
+
+  /**
+   * User id, "agent" for an Agent Run; absent for schedules and webhooks
+   * authenticated by the shared secret.
+   *
+   * @generated from field: optional string actor = 2;
+   */
+  actor?: string | undefined;
+
+  /**
+   * @generated from field: optional string deployment_id = 3;
+   */
+  deploymentId?: string | undefined;
+
+  /**
+   * @generated from field: optional google.protobuf.Value input = 4;
+   */
+  input?: Value | undefined;
+
+  /**
+   * @generated from field: optional google.protobuf.Value output = 5;
+   */
+  output?: Value | undefined;
+
+  /**
+   * @generated from field: optional string log = 6;
+   */
+  log?: string | undefined;
+
+  /**
+   * Position among the App's queued runs (1 = next), while queued.
+   *
+   * @generated from field: optional uint32 queue_position = 7;
+   */
+  queuePosition?: number | undefined;
+
+  /**
+   * @generated from field: repeated hatch.platform.v1.AppTaskRunStep steps = 8;
+   */
+  steps: AppTaskRunStep[];
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppTaskRun.
+ * Use `create(AppTaskRunSchema)` to create a new message.
+ */
+export const AppTaskRunSchema: GenMessage<AppTaskRun> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 50);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppTaskRunRequest
+ */
+export type GetAppTaskRunRequest =
+  Message<'hatch.platform.v1.GetAppTaskRunRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: string run_id = 2;
+     */
+    runId: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetAppTaskRunRequest.
+ * Use `create(GetAppTaskRunRequestSchema)` to create a new message.
+ */
+export const GetAppTaskRunRequestSchema: GenMessage<GetAppTaskRunRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 51);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppTaskRunResponse
+ */
+export type GetAppTaskRunResponse =
+  Message<'hatch.platform.v1.GetAppTaskRunResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppTaskRun run = 1;
+     */
+    run?: AppTaskRun | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetAppTaskRunResponse.
+ * Use `create(GetAppTaskRunResponseSchema)` to create a new message.
+ */
+export const GetAppTaskRunResponseSchema: GenMessage<GetAppTaskRunResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 52);
+
+/**
+ * @generated from message hatch.platform.v1.CancelAppTaskRunRequest
+ */
+export type CancelAppTaskRunRequest =
+  Message<'hatch.platform.v1.CancelAppTaskRunRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: string run_id = 2;
+     */
+    runId: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.CancelAppTaskRunRequest.
+ * Use `create(CancelAppTaskRunRequestSchema)` to create a new message.
+ */
+export const CancelAppTaskRunRequestSchema: GenMessage<CancelAppTaskRunRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 53);
+
+/**
+ * @generated from message hatch.platform.v1.CancelAppTaskRunResponse
+ */
+export type CancelAppTaskRunResponse =
+  Message<'hatch.platform.v1.CancelAppTaskRunResponse'> & {
+    /**
+     * False when the run had already finished.
+     *
+     * @generated from field: bool canceled = 1;
+     */
+    canceled: boolean;
+
+    /**
+     * @generated from field: string status = 2;
+     */
+    status: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.CancelAppTaskRunResponse.
+ * Use `create(CancelAppTaskRunResponseSchema)` to create a new message.
+ */
+export const CancelAppTaskRunResponseSchema: GenMessage<CancelAppTaskRunResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 54);
+
+/**
  * Public API for CLI and native clients. Platform Web UI uses Server Functions.
  *
  * @generated from service hatch.platform.v1.AppService
@@ -1183,5 +1826,52 @@ export const AppService: GenService<{
     methodKind: 'unary';
     input: typeof ClearAppIconRequestSchema;
     output: typeof ClearAppIconResponseSchema;
+  };
+  /**
+   * Tasks of the active deployment with their triggers and current load.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.ListAppTasks
+   */
+  listAppTasks: {
+    methodKind: 'unary';
+    input: typeof ListAppTasksRequestSchema;
+    output: typeof ListAppTasksResponseSchema;
+  };
+  /**
+   * Validate input and queue a manual run. Invalid input is recorded as a
+   * failed run and returned with status "failed".
+   *
+   * @generated from rpc hatch.platform.v1.AppService.RunAppTask
+   */
+  runAppTask: {
+    methodKind: 'unary';
+    input: typeof RunAppTaskRequestSchema;
+    output: typeof RunAppTaskResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.ListAppTaskRuns
+   */
+  listAppTaskRuns: {
+    methodKind: 'unary';
+    input: typeof ListAppTaskRunsRequestSchema;
+    output: typeof ListAppTaskRunsResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.AppService.GetAppTaskRun
+   */
+  getAppTaskRun: {
+    methodKind: 'unary';
+    input: typeof GetAppTaskRunRequestSchema;
+    output: typeof GetAppTaskRunResponseSchema;
+  };
+  /**
+   * Cancel a queued or running run; a running one has its instance killed.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.CancelAppTaskRun
+   */
+  cancelAppTaskRun: {
+    methodKind: 'unary';
+    input: typeof CancelAppTaskRunRequestSchema;
+    output: typeof CancelAppTaskRunResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_app, 0);

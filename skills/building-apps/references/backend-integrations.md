@@ -117,6 +117,11 @@ Use `hatch app invoke webhook` below for plain HTTP/raw-byte handlers.
 
 ## Cron
 
+For new scheduled work prefer [tasks](tasks.md): a cron entry on a task gets an
+input, step records, run history and its own instance. RPC cron jobs below
+call the serving instance and fit a long-running backend that acts on its own
+in-memory state.
+
 Enable `cron` and `backend`, then declare a proto RPC method for each job. The
 method must exist on the service named by `rpc.service`.
 

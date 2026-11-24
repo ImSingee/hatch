@@ -1,4 +1,12 @@
 import { listPage } from '~server/list-page';
+import {
+  cancelTaskRun,
+  getTaskRun,
+  listAppTasks,
+  listTaskRuns,
+  startTaskRun,
+} from '~server/apps/tasks/service';
+import { runMessage, runSummaryMessage, tasksMessage } from './app-tasks';
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
 import { EmptyFilter } from 'drizzle-orm/relations';
@@ -757,6 +765,71 @@ export function registerPlatformApi(
   router.rpc(AppService.method.clearAppIcon, async (input) =>
     iconMessage(await clearAppIcon((await find('apps', input.id)).id)),
   );
+  router.rpc(AppService.method.listAppTasks, async (input) => {
+    try {
+      const { id } = await find('apps', input.id);
+      return tasksMessage(id, await listAppTasks(id));
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.runAppTask, async (input, context) => {
+    try {
+      const { id } = await find('apps', input.id);
+      const { status, run } = context.values.get(publicApiContext);
+      const user = (status as { user?: { id?: string } } | undefined)?.user;
+      const result = await startTaskRun(id, input.task, {
+        trigger: 'manual',
+        input: input.input ?? {},
+        // Every credential has the same authority; a Run acts as the Agent.
+        actor: run ? 'agent' : (user?.id ?? null),
+      });
+      return { runId: result.runId, status: result.status };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.listAppTaskRuns, async (input) => {
+    try {
+      const { id } = await find('apps', input.id);
+      const page = await listTaskRuns(id, {
+        taskName: input.task,
+        status: input.status as
+          | 'queued'
+          | 'running'
+          | 'succeeded'
+          | 'failed'
+          | 'canceled'
+          | undefined,
+        limit: input.limit,
+        cursor: input.cursor,
+      });
+      return {
+        runs: page.runs.map(runSummaryMessage),
+        nextCursor: page.nextCursor ?? undefined,
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.getAppTaskRun, async (input) => {
+    try {
+      const { id } = await find('apps', input.id);
+      const run = await getTaskRun(id, input.runId);
+      if (!run) throw publicApiError('NOT_FOUND', 'Task run not found.');
+      return { run: runMessage(run) };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.cancelAppTaskRun, async (input) => {
+    try {
+      const { id } = await find('apps', input.id);
+      return await cancelTaskRun(id, input.runId);
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
   router.service(PreferenceService, {
     getAgentPreferences: async (_input, context) => ({
       preferences: await readAgentPreferences(await preferenceUserId(context)),

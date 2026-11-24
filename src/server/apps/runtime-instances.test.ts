@@ -66,6 +66,7 @@ const {
   getBackendRuntimeView,
   killApp,
   proxyAppRequest,
+  runInDedicatedInstance,
   setKeepAlive,
   startAppBackend,
   stopApp,
@@ -422,7 +423,7 @@ it('keeps a boot of the deployment a deploy activated while the deploy finalizes
     port,
     drainingInstances: 0,
   });
-});
+}, 60_000);
 
 it('does not take down the active instance for a caller holding a superseded deployment', async () => {
   activateNextDeployment();
@@ -478,3 +479,56 @@ it('kills every instance at once, draining and in-flight ones included', async (
   await draining.reader.cancel().catch(() => {});
   await routable.reader.cancel().catch(() => {});
 });
+
+/** Start a task run against the fixture and report its instance's pid. */
+function startRun(requestPath: string) {
+  let pid: number | null = null;
+  const result = runInDedicatedInstance(appId, {
+    request: { path: requestPath, headers: {}, body: '' },
+    env: { HATCH_RUN_ID: 'run-1', HATCH_TASK: 'digest' },
+    onStdout: () => {},
+    onStderr: () => {},
+    onSpawn: (handle) => {
+      pid = handle.pid;
+      if (pid) spawnedPids.add(pid);
+    },
+  });
+  return { result, pid: () => pid };
+}
+
+it('serves a task run in its own instance that routing never uses and that exits with the run', async () => {
+  const served = await callPid();
+  const run = startRun('/');
+  await waitUntil(() => run.pid() !== null, 20_000);
+  // While the run instance is alive, routing still reaches the served one.
+  expect(await callPid()).toBe(served);
+  const { response, deploymentId } = await run.result;
+  const runPid = Number(response?.body);
+  expect(runPid).not.toBe(served);
+  expect(deploymentId).toBe(DEPLOYMENT_ID);
+  // The result resolves once the instance has exited and closed its output.
+  expect(isAlive(run.pid() as number)).toBe(false);
+  // The backend's view never reports the run instance.
+  expect(getBackendRuntimeView(appId).pid).not.toBe(runPid);
+}, 60_000);
+
+it('lets a stop or deploy drain a task run to completion and a force stop end it', async () => {
+  const drained = startRun('/stream?gate=run-drain');
+  await waitUntil(() => drained.pid() !== null, 20_000);
+  // Wait until the request is in flight before retiring the instance.
+  await delay(1500);
+  stopApp(appId);
+  expect(isAlive(drained.pid() as number)).toBe(true);
+  releaseGate(DEPLOYMENT_ID, 'run-drain');
+  const finished = await drained.result;
+  expect(finished.response?.status).toBe(200);
+  expect(finished.error).toBeNull();
+
+  const killed = startRun('/stream?gate=run-kill');
+  await waitUntil(() => killed.pid() !== null, 20_000);
+  await delay(1500);
+  killApp(appId);
+  const ended = await killed.result;
+  expect(ended.response).toBeNull();
+  expect(ended.error).toMatch(/stopped during the run/);
+}, 60_000);

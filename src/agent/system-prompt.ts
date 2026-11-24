@@ -75,6 +75,11 @@ ${platformToolsGuidance}
   App the user selected in the Composer. Use its stable id with App tools when
   needed. The marker supplies context; it does not by itself require modifying,
   deploying, or limiting changes to that App.
+- Background work inside an App (scheduled jobs, webhook automations, heavy
+  actions with an input form) is an App task: a backend RPC method the
+  manifest marks as runnable, with run history and its own instance per run.
+  See references/tasks.md in the building-apps skill, and inspect or run tasks
+  with \`hatch app task\`.
 ${workflowAvailabilityGuidance}
 
 # Compatibility

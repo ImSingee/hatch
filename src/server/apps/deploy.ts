@@ -700,10 +700,15 @@ async function deployAppInner(
     // secret (rollback only flips the deployment pointer and never re-mints).
     // The secret is hidden from the UI/inspect while the live mode is 'none'.
     const webhookAuth = build.source.webhook?.auth ?? 'platform';
+    // Task webhooks always authenticate with the same per-App secret,
+    // whether or not the App's own `/__webhook` endpoint is enabled.
+    const taskWebhooks = (build.normalized.tasks?.definitions ?? []).some(
+      (task) => task.webhook,
+    );
     let webhookSecret = app.webhookSecret ?? null;
     if (
-      build.source.capabilities.webhook &&
-      webhookAuth === 'platform' &&
+      ((build.source.capabilities.webhook && webhookAuth === 'platform') ||
+        taskWebhooks) &&
       !webhookSecret
     ) {
       webhookSecret = randomUUID().replaceAll('-', '');
