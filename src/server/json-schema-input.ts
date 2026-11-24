@@ -284,6 +284,15 @@ export function validateSchemaInput(
     // No schema captured (e.g. a workflow with no declared input) — accept.
     return { success: true, data: rawInput ?? {} };
   }
+  // Strict inputs arrive from callers (webhooks, the RPC): refuse one with
+  // more values than any form needs before zod walks it, so validation work
+  // and the issues it collects stay bounded.
+  if (options.strict && exceedsValueCount(rawInput, MAX_INPUT_VALUES)) {
+    return {
+      success: false,
+      message: `Input has more than ${MAX_INPUT_VALUES} values.`,
+    };
+  }
   const zodSchema = jsonSchemaToZod(jsonSchema, {
     ...options,
     patternBudget: { remainingMs: PATTERN_BUDGET_MS },
@@ -292,11 +301,37 @@ export function validateSchemaInput(
   if (parsed.success) {
     return { success: true, data: parsed.data };
   }
-  const message = parsed.error.issues
-    .map((i) => {
-      const path = i.path.join('.');
-      return path ? `${path}: ${i.message}` : i.message;
-    })
-    .join('; ');
+  const issues = parsed.error.issues;
+  const shown = issues.slice(0, MAX_REPORTED_ISSUES).map((i) => {
+    const path = i.path.join('.');
+    return path ? `${path}: ${i.message}` : i.message;
+  });
+  if (issues.length > shown.length) {
+    shown.push(`and ${issues.length - shown.length} more issue(s)`);
+  }
+  const message = shown.join('; ').slice(0, MAX_ISSUE_MESSAGE);
   return { success: false, message: message || 'Invalid input' };
+}
+
+/** Values (array items and object members, nested) a strict input may hold. */
+const MAX_INPUT_VALUES = 10_000;
+/** Issues spelled out in a failure message, and its length. */
+const MAX_REPORTED_ISSUES = 20;
+const MAX_ISSUE_MESSAGE = 4000;
+
+/** Whether `value` holds more than `limit` values, counted iteratively. */
+function exceedsValueCount(value: unknown, limit: number): boolean {
+  let count = 0;
+  const pending: unknown[] = [value];
+  while (pending.length > 0) {
+    const next = pending.pop();
+    if (!next || typeof next !== 'object') continue;
+    const children = Array.isArray(next) ? next : Object.values(next);
+    count += children.length;
+    if (count > limit) return true;
+    for (const child of children) {
+      if (child && typeof child === 'object') pending.push(child);
+    }
+  }
+  return false;
 }
