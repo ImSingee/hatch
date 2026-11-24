@@ -8,7 +8,7 @@ import type net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../build';
+import { AppBuildError, buildApp } from '../build';
 import { NATIVE_HOST_CALLS } from './build-native';
 import { nshBinary, NSH_RELEASE_SHA256, NSH_VERSION } from './nsh-toolchain';
 import { nshRuntimeDir } from './runtime-store';
@@ -90,8 +90,12 @@ async function buildError(edit: Record<string, string | null>) {
     () => null,
     (cause: unknown) => cause,
   );
-  expect(error).toBeInstanceOf(Error);
-  return (error as Error).message;
+  // A failed check is a definite rejection whose message reaches the CLI
+  // and the Agent, not an internal failure with an unknown outcome.
+  // (The public API maps a 4xx AppError to BAD_REQUEST with its message.)
+  expect(error).toBeInstanceOf(AppBuildError);
+  expect((error as AppBuildError).status).toBe(400);
+  return (error as AppBuildError).message;
 }
 
 describe('the pinned NSH release', () => {

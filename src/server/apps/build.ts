@@ -60,6 +60,7 @@ import {
 import { assertDenoPermissionFlags } from '../deno-permissions';
 import { run as runSubprocess } from '../subprocess';
 import { buildNativeFrontend } from './native/build-native';
+import { AppError } from '../errors';
 
 export type BuildResult = {
   source: SourceManifest;
@@ -67,6 +68,20 @@ export type BuildResult = {
   dataSchema?: DataSchemaDescriptor;
   log: string;
 };
+
+/**
+ * A failed build: source validation, codegen, a deploy check or bundling.
+ * Nothing has been released when it is thrown, so callers report it as a
+ * definite rejection with its message (files and lines for the author)
+ * instead of an internal failure with an unknown outcome.
+ */
+export class AppBuildError extends AppError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, 400);
+    this.name = 'AppBuildError';
+    if (options && 'cause' in options) this.cause = options.cause;
+  }
+}
 
 export type BuildAppOptions = {
   sourceDir?: string;
@@ -625,6 +640,21 @@ function resolveTaskInputs(
 export async function buildApp(
   id: string,
   options: BuildAppOptions = {},
+): Promise<BuildResult> {
+  try {
+    return await buildAppInner(id, options);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppBuildError(
+      error instanceof Error ? error.message : String(error),
+      { cause: error },
+    );
+  }
+}
+
+async function buildAppInner(
+  id: string,
+  options: BuildAppOptions,
 ): Promise<BuildResult> {
   const originalSrc = options.sourceDir ?? appSrcDir(id);
   const out = options.outputDir ?? appBuildDir(id);
