@@ -106,7 +106,8 @@ export function createNativeHost(
   config: NativePlayerConfig,
   shell: {
     accent(): string;
-    visible(): Promise<void>;
+    /** Resolves true once the App is visible, or false after `ms`. */
+    visibleWithin(ms: number): Promise<boolean>;
     post(message: PlayerMessage): boolean;
     setTitle(title: string | null): void;
     setRoute(route: string): void;
@@ -236,9 +237,13 @@ export function createNativeHost(
         'hatch.data.events needs { table, since }.',
       );
     }
-    // A hidden App gets no change events; it catches up once shown again,
-    // because the cursor it sends then still names what it last saw.
-    await shell.visible();
+    // A hidden App gets no change events: the call answers "none" after the
+    // usual wait (well inside the App's call timeout) without touching the
+    // network, and the App catches up once shown, because the cursor it
+    // sends then still names what it last saw.
+    if (!(await shell.visibleWithin(DATA_EVENTS_WAIT_MS))) {
+      return { ok: true, events: [] };
+    }
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), DATA_EVENTS_WAIT_MS);
     const found: { revision?: number; reset: boolean }[] = [];
@@ -523,10 +528,21 @@ export async function startNativePlayer(): Promise<void> {
 
   const host = createNativeHost(config, {
     accent: () => accent,
-    visible: () =>
+    visibleWithin: (ms) =>
       visible
-        ? Promise.resolve()
-        : new Promise<void>((resolve) => showWaiters.push(resolve)),
+        ? Promise.resolve(true)
+        : new Promise<boolean>((resolve) => {
+            const waiter = () => {
+              clearTimeout(timer);
+              resolve(true);
+            };
+            const timer = setTimeout(() => {
+              const index = showWaiters.indexOf(waiter);
+              if (index >= 0) showWaiters.splice(index, 1);
+              resolve(false);
+            }, ms);
+            showWaiters.push(waiter);
+          }),
     post,
     setTitle(title) {
       document.title = title ?? config.name;

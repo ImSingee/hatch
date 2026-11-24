@@ -440,6 +440,13 @@ export async function buildNativeFrontend(
     );
     await fs.chmod(work, 0o755);
     await fs.chmod(smokeHost, 0o644);
+    // `nsh test` writes its step harness to `<entry dir>/.nsh/test/`. The
+    // build copy belongs to the platform and the check runs as the sandbox
+    // identity, so give it exactly that one fresh, writable directory.
+    const testDir = path.join(src, entryDir, '.nsh', 'test');
+    await fs.rm(testDir, { recursive: true, force: true });
+    await fs.mkdir(testDir, { recursive: true });
+    await fs.chmod(testDir, 0o777);
     await nshRun(
       'Start-up check (nsh test)',
       ['test', app.entry, '--web-host', smokeHost],

@@ -38,11 +38,14 @@ const config: NativePlayerConfig = {
   defaultAccent: 'indigo',
 };
 
-function setup(fetchImpl: (url: string, init?: RequestInit) => Response) {
+function setup(
+  fetchImpl: (url: string, init?: RequestInit) => Response,
+  visible = true,
+) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const shell = {
     accent: () => 'indigo',
-    visible: () => Promise.resolve(),
+    visibleWithin: () => Promise.resolve(visible),
     post: vi.fn<(message: unknown) => boolean>(() => true),
     setTitle: vi.fn<(title: string | null) => void>(),
     setRoute: vi.fn<(route: string) => void>(),
@@ -175,6 +178,14 @@ describe('native App host', () => {
       events: [{ revision: 9, reset: false }],
     });
     expect(calls[0].url).toBe('/api/app/notes/data/events?since=4&table=notes');
+  });
+
+  it('answers no change events for a hidden App without a request', async () => {
+    const { host, calls } = setup(() => Response.json({}), false);
+    await expect(
+      host.call('hatch.data.events', { table: 'notes', since: 4 }),
+    ).resolves.toEqual({ ok: true, events: [] });
+    expect(calls).toEqual([]);
   });
 
   it('validates navigation and refuses names that are not host functions', async () => {

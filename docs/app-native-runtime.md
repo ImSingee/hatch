@@ -157,8 +157,9 @@ own session. The grant is exactly these names (plus, later, the
   `/api/app/<id>/data/*` with the deployment header.
 - A call cannot be cancelled once sent; it ends with its answer or its
   `host.call` timeout. `hatch.data.events` waits up to 25 s for a change and
-  is not answered while the App is hidden; the App's cursor makes it catch up
-  when shown.
+  answers `events: []` if none came; while the App is hidden it answers
+  `events: []` after the wait without a request, and the App's cursor makes it
+  catch up when shown.
 - Events the shell sends (`player.hostEvent` on the web): `hatch.theme`
   `{ theme }`, `hatch.nav` `{ route }`, `hatch.visibility` `{ visible }`,
   `hatch.update` `{}`.
