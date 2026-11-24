@@ -79,7 +79,10 @@ backend, widgets and schema). In the disposable build copy it:
    rows, and a 60 s limit.
 6. `nsh package --target web` links the App's module for the web player.
 
-Every failure names App-relative files and lines (`app/main.tsx:12:7`).
+Every failure names App-relative files and lines (`app/main.tsx:12:7`). A
+failed build is an `AppBuildError` (`src/server/apps/build.ts`): the public
+deploy RPC rejects it as `BAD_REQUEST` with the build output as its message,
+so `hatch app deploy` exits 2 and prints it, and nothing was released.
 
 Outputs, in the deployment's `app/` directory:
 

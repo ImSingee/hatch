@@ -306,6 +306,12 @@ or intervening data schema produces a new approval fingerprint. No automatic
 approval or destructive retry is performed. Definite 4xx rejections clear the
 pending marker; source/data protection is owned by existing platform services.
 
+A deploy whose source fails to build (type check, codegen, bundling, or a
+native App's deploy check) is a definite rejection: `BAD_REQUEST` (exit 2)
+whose message is the build output, naming files and lines, for example
+`app/custom/ui.tsx:17: bare colour in a class`. Nothing was released; fix the
+source and deploy again.
+
 Create/deploy/rollback are never automatically retried. Network/5xx/cancel can
 leave an unknown server outcome. Deploy fsyncs a pending commit before sending:
 
