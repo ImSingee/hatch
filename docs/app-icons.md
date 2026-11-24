@@ -10,9 +10,10 @@ designs icons in chat; people can also upload a file.
    names a provider row; the API key stays in `agent_providers`. Choose it
    under Settings → AI Providers or with `hatch image-model set`.
 2. **Skill.** `skills/app-icon/SKILL.md` holds the versioned prompt set: how to
-   pick one subject, the tile palette and the fixed style template. The Agent
-   sends only a short subject phrase derived from the App's name and
-   description.
+   pick three distinct subjects, the tile palette and the fixed style
+   template. The Agent sends only a short subject phrase derived from the
+   App's name and description, one prompt per candidate: repeating one prompt
+   (`--count`) returns near-identical glyphs once the tile is normalised.
 3. **Generation.** `hatch image generate` (`ImageService/GenerateImages`) asks
    the model for a white glyph on black. With `--glyph-tile <#RRGGBB>` the
    platform turns luminance into opacity, scales the glyph to a fixed share of

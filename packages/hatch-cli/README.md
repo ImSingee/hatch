@@ -450,7 +450,7 @@ promise compatibility with older CLI binaries.
 ```sh
 hatch image-model get --json
 hatch image-model set --provider <provider-id> --model gpt-image-1-mini
-hatch image generate --prompt-file prompt.txt --count 3 --glyph-tile '#3E63DD' --json
+hatch image generate --prompt-file prompt.txt --glyph-tile '#3E63DD' --json
 hatch app icon set my-app --candidate <candidate-id>
 hatch app icon set my-app --file icon.png
 hatch app icon get my-app --json
@@ -462,6 +462,8 @@ hatch image-model clear
 model ids; `set` replaces the single selection and uses that provider's stored
 API key. `image generate` costs provider credit and prints one candidate
 `id` and authenticated `path` per image; candidates expire after one day.
+`--count` (1 to 4) repeats the same prompt, so its results are close
+variations; run one command per prompt to compare different designs.
 `--glyph-tile` expects the model to draw a white glyph on black and returns a
 finished 512 px tile in that colour. `--output-dir` also writes `<id>.png`.
 `app icon set` takes exactly one of `--file` (PNG, JPEG or WebP, at most 4 MB,

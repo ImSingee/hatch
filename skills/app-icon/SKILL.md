@@ -5,7 +5,7 @@ description: Design an App icon with the instance image model, let the user choo
 
 # Design an App icon
 
-Prompt set version: 1.
+Prompt set version: 2.
 
 Every App tile in Hatch is one family: a rounded square with one solid colour
 and one simple white line glyph, shown as small as 22 px. You write the prompt
@@ -32,16 +32,25 @@ those commands directly. The steps below are for designing a new icon.
 1. Run `hatch image-model get --json`. If `selected` is null or
    `selected.usable` is false, tell the user to choose an image model under
    Settings → AI Providers (or with `hatch image-model set`) and stop.
-2. Pick the subject and the colour (rules below) from the App's name and
-   description. Use nothing else about the App or the user in the prompt.
-3. Write the prompt from the template to a file and generate three candidates:
+2. Pick three different subjects and one colour (rules below) from the App's
+   name and description. Use nothing else about the App or the user in the
+   prompt. The candidates exist to offer a real choice, so each one needs its
+   own subject: the same prompt run several times returns near-identical
+   glyphs, because the style rules leave little room and the platform
+   normalises size, position and colour.
+3. Write one prompt file per subject from the template, then generate one
+   image per file. Issue the three commands in the same turn so they run in
+   parallel:
 
    ```sh
-   hatch image generate --prompt-file icon-prompt.txt --count 3 \
-     --glyph-tile '#3E63DD' --json
+   hatch image generate --prompt-file icon-a.txt --glyph-tile '#3E63DD' --json
+   hatch image generate --prompt-file icon-b.txt --glyph-tile '#3E63DD' --json
+   hatch image generate --prompt-file icon-c.txt --glyph-tile '#3E63DD' --json
    ```
 
-   Each candidate has an `id` and a `path`. Candidates expire after one day.
+   Never use `--count` above 1 for icon candidates. Each result has an `id`
+   and a `path`. Candidates expire after one day. If one command fails, show
+   the candidates that succeeded rather than retrying at once.
 
 4. Call `ask` with one question whose text shows the candidates as Markdown
    images, using each `path` exactly as returned and a letter label:
@@ -52,13 +61,13 @@ those commands directly. The steps below are for designing a new icon.
    A ![A](/api/images/candidates/<id-a>) B ![B](/api/images/candidates/<id-b>) C ![C](/api/images/candidates/<id-c>)
    ```
 
-   Offer one option per candidate ("A", "B", "C") plus "Try a different
-   idea". Only these platform paths render as images; never link an external
+   Offer one option per candidate ("A", "B", "C") plus "Try different
+   ideas". Only these platform paths render as images; never link an external
    image.
 
 5. Set the chosen one: `hatch app icon set <app-id> --candidate <id> --json`.
-   For "Try a different idea", change the subject (not the style rules) and
-   generate again. Stop after three rounds and ask what the user has in mind.
+   For "Try different ideas", pick three new subjects (not new style rules)
+   and generate again. Stop after three rounds and ask what the user has in mind.
 
 To use a file the user provides, run
 `hatch app icon set <app-id> --file <path>` (PNG, JPEG or WebP, at most 4 MB).
@@ -67,7 +76,10 @@ To remove the icon, run `hatch app icon clear <app-id>`. `hatch app icon get
 
 ## Subject
 
-Choose one concrete, everyday object that stands for what the App does.
+Each candidate shows one concrete, everyday object that stands for what the
+App does. Choose three objects that differ in outline, not three views of the
+same object: for an API quota App, "a semicircular gauge dial with a needle",
+"a battery with one charge bar" and "an hourglass" rather than three gauges.
 
 - One object only. Never combine two ("a calendar with a magnifying glass",
   "a sun behind a cloud"): at 22 px the parts merge into a blob. Pick the one
