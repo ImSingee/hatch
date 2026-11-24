@@ -6,6 +6,7 @@ import {
   Sheet as BaseSheet,
 } from 'nsh/base';
 import { phone, touch } from '../core/env';
+import { InOverlayContext } from '../core/overlay';
 import { BACKDROP } from '../core/styles';
 import { HeadingText } from '../display/Text';
 import { IconX } from '../icons/icons.gen';
@@ -105,15 +106,17 @@ export function Dialog(props: DialogProps): JSX.Element {
       backdropClass={BACKDROP}
       class={`m-auto w-full ${DIALOG_WIDTH[props.size ?? 'md']} overflow-hidden rounded-(--radius-window) bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none`}
     >
-      <View class="gap-4 px-6 pb-6 pt-5 max-sm:flex-1 max-sm:pt-[env(safe-area-inset-top)]">
-        <OverlayHeader
-          title={props.title}
-          description={props.description}
-          onClose={close}
-        />
-        {props.children}
-      </View>
-      {props.actions ? <Footer>{props.actions}</Footer> : null}
+      <InOverlayContext.Provider value>
+        <View class="gap-4 px-6 pb-6 pt-5 max-sm:flex-1 max-sm:pt-[env(safe-area-inset-top)]">
+          <OverlayHeader
+            title={props.title}
+            description={props.description}
+            onClose={close}
+          />
+          {props.children}
+        </View>
+        {props.actions ? <Footer>{props.actions}</Footer> : null}
+      </InOverlayContext.Provider>
     </BaseDialog>
   );
 }
@@ -143,16 +146,24 @@ export function Sheet(props: SheetProps): JSX.Element {
           ? 'max-h-[90%] rounded-t-(--radius-window) bg-card shadow-window'
           : 'h-full w-full max-w-md border-l border-hairline bg-card shadow-window'
       }
-      footer={props.actions ? <Footer>{props.actions}</Footer> : undefined}
+      footer={
+        props.actions ? (
+          <InOverlayContext.Provider value>
+            <Footer>{props.actions}</Footer>
+          </InOverlayContext.Provider>
+        ) : undefined
+      }
     >
-      <View class="flex-1 gap-4 px-6 pb-6 pt-4">
-        <OverlayHeader
-          title={props.title}
-          description={props.description}
-          onClose={close}
-        />
-        {props.children}
-      </View>
+      <InOverlayContext.Provider value>
+        <View class="flex-1 gap-4 px-6 pb-6 pt-4">
+          <OverlayHeader
+            title={props.title}
+            description={props.description}
+            onClose={close}
+          />
+          {props.children}
+        </View>
+      </InOverlayContext.Provider>
     </BaseSheet>
   );
 }

@@ -15,7 +15,7 @@ function Header(props: {
     <View class="flex-row items-start gap-3">
       <View class="flex-1 gap-0.5">
         {props.title ? (
-          <HeadingText level={3} class="text-subsection text-foreground">
+          <HeadingText level={2} class="text-subsection text-foreground">
             {props.title}
           </HeadingText>
         ) : null}

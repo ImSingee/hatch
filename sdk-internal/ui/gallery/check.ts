@@ -44,6 +44,9 @@ const sections = [
 const only = process.env.ONLY?.split(':');
 
 const problems: string[] = [];
+/** Behaviour of NSH 0.6.1 itself that the library cannot change; reported,
+ * not failed. */
+const known: string[] = [];
 
 function watch(page: Page, context: string): void {
   page.on('console', (message) => {
@@ -133,6 +136,87 @@ async function patterns(page: Page, prefix: string): Promise<void> {
   }
 }
 
+/** What has the keyboard focus: its role and accessible name, and whether it
+ * is drawn (a hidden panel must not hold the focus). */
+function focused(page: Page) {
+  return page.evaluate(() => {
+    const element = document.activeElement as HTMLElement | null;
+    if (!element || element === document.body) return null;
+    const box = element.getBoundingClientRect();
+    return {
+      role: element.getAttribute('role') ?? element.tagName.toLowerCase(),
+      name: (element.getAttribute('aria-label') ?? element.textContent ?? '')
+        .trim()
+        .slice(0, 40),
+      visible: box.width > 0 && box.height > 0,
+    };
+  });
+}
+
+/** Walks a section with Tab and checks the focus never lands on a view that
+ * is not drawn; returns the focus order for the record. */
+async function keyboard(page: Page, prefix: string): Promise<string[]> {
+  const order: string[] = [];
+  for (const name of ['Inputs', 'Feedback']) {
+    await section(page, name);
+    await page.getByRole('tab', { name, exact: true }).focus();
+    for (let step = 0; step < 40; step += 1) {
+      await page.keyboard.press('Tab');
+      const now = await focused(page);
+      if (!now) continue;
+      order.push(`${name}: ${now.role} "${now.name}"`);
+      // NSH 0.6.1's Combobox root takes a Tab stop without a name; its input
+      // carries the label. Any other unnamed stop is a defect.
+      if (!now.name && now.role !== 'combobox') {
+        problems.push(`${prefix}: Tab reached a ${now.role} without a name`);
+      }
+      if (!now.visible) {
+        problems.push(
+          `${prefix}: Tab reached ${now.role} "${now.name}", which is not drawn`,
+        );
+      }
+    }
+  }
+  // A dialog takes the focus, Escape closes it, and the focus returns.
+  await section(page, 'Feedback');
+  await page.getByRole('tab', { name: 'Feedback', exact: true }).focus();
+  for (let step = 0; step < 10; step += 1) {
+    await page.keyboard.press('Tab');
+    if ((await focused(page))?.name === 'Open dialog') break;
+  }
+  await page.keyboard.press('Enter');
+  const dialog = page
+    .locator('[aria-modal="true"][aria-label="Rename the bed"]')
+    .filter({ visible: true });
+  await dialog.waitFor();
+  // NSH 0.6.1's web backdrop is a focusable button without a name; the
+  // second Tab reaches the dialog's own controls.
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  const inside = await focused(page);
+  if (inside?.name !== 'Close') {
+    problems.push(
+      `${prefix}: Tab in the dialog reached ${inside?.role} "${inside?.name}"`,
+    );
+  }
+  // Escape first dismisses the Close button's tooltip, then the dialog.
+  for (let press = 0; press < 3 && (await dialog.count()) > 0; press += 1) {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(700);
+  }
+  if ((await dialog.count()) > 0) {
+    await shot(page, `${prefix}-escape`);
+    problems.push(`${prefix}: Escape did not close the dialog`);
+  }
+  const back = await focused(page);
+  if (back?.name !== 'Open dialog') {
+    known.push(
+      `${prefix}: after the dialog closed, the focus is on ${back ? `${back.role} "${back.name}"` : 'the page'}, not its opener`,
+    );
+  }
+  return order;
+}
+
 async function main(): Promise<void> {
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch();
@@ -157,6 +241,15 @@ async function main(): Promise<void> {
           await section(page, name);
           await shot(page, `${prefix}-${name.toLowerCase()}`);
         }
+        // Keyboard first: a tooltip left under the pointer by the steps
+        // below keeps Escape in NSH 0.6.1.
+        if (layout.name === 'desktop-1280') {
+          const order = await keyboard(page, prefix);
+          fs.writeFileSync(
+            path.join(out, `${prefix}-focus-order.txt`),
+            order.join('\n'),
+          );
+        }
         await popups(page, prefix);
         await patterns(page, prefix);
         await context.close();
@@ -165,6 +258,9 @@ async function main(): Promise<void> {
     }
   } finally {
     await browser.close();
+  }
+  if (known.length > 0) {
+    console.log(`known NSH behaviour:\n${known.join('\n')}`);
   }
   if (problems.length > 0) {
     console.error(problems.join('\n'));

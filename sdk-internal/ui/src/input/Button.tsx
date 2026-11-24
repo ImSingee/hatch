@@ -6,6 +6,7 @@ import type { ControlSize, IconData } from '../core/types';
 import { Spinner } from '../display/Spinner';
 import { TooltipBubble } from '../feedback/Tooltip';
 import { touch } from '../core/env';
+import { InOverlayContext } from '../core/overlay';
 import { Glyph } from '../icons/Icon';
 import type { GlyphColor, IconSize } from '../icons/Icon';
 import { FormContext } from './form-context';
@@ -175,6 +176,7 @@ export type IconButtonProps = {
 
 /** A square button with an icon only. */
 export function IconButton(props: IconButtonProps): JSX.Element {
+  const inOverlay = InOverlayContext();
   const kind = () => props.kind ?? 'subtle';
   const size = () => props.size ?? 'md';
   return (
@@ -183,7 +185,9 @@ export function IconButton(props: IconButtonProps): JSX.Element {
       disabled={props.disabled}
       selected={props.selected}
       accessibilityLabel={props.label}
-      tooltip={touch ? undefined : <TooltipBubble label={props.label} />}
+      tooltip={
+        touch || inOverlay ? undefined : <TooltipBubble label={props.label} />
+      }
       class={[
         BASE,
         props.selected ? 'bg-primary-tint' : KIND[kind()],
