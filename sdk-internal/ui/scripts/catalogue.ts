@@ -400,7 +400,7 @@ const NSH_DOCS: Record<string, string> = {
   effect:
     'Runs after rendering and again when the signals it reads change; a returned function cleans up.',
   resource:
-    'Loads a value asynchronously: `resource(source, fetcher)` gives an accessor with `loading`, `error` and `refetch()`.',
+    'Loads a value asynchronously: `const notes = resource(() => client.listNotes({}))`, or `resource(source, (value) => …)` to load again when the `source` accessor changes. Read `notes()` (undefined until loaded); `notes.loading()`, `notes.error()`, `notes.state()`, `notes.refetch()` and `notes.mutate(value)` control it.',
 };
 
 function describe(

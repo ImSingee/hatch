@@ -216,14 +216,7 @@ export type ProgressProps = {
 export function Progress(props: ProgressProps): JSX.Element {
   const value = () => Math.max(0, Math.min(100, props.value ?? 0));
   return (
-    <BaseProgress
-      value={value()}
-      indeterminate={props.indeterminate}
-      accessibilityLabel={props.label}
-      class="self-stretch gap-1.5"
-      trackClass="h-1.5 self-stretch overflow-hidden rounded-full bg-track"
-      indicatorClass={`h-full rounded-full ${TONE_FILL[props.tone ?? 'accent']} ${props.indeterminate ? 'w-1/3 animate-pulse' : ''}`}
-    >
+    <View class="self-stretch gap-1.5">
       <View class="flex-row justify-between gap-3">
         <NshText class="flex-1 text-caption font-label text-foreground">
           {props.label}
@@ -234,7 +227,15 @@ export function Progress(props: ProgressProps): JSX.Element {
           </NshText>
         ) : null}
       </View>
-    </BaseProgress>
+      <BaseProgress
+        value={value()}
+        indeterminate={props.indeterminate}
+        accessibilityLabel={props.label}
+        class="self-stretch"
+        trackClass="h-1.5 self-stretch overflow-hidden rounded-full bg-track"
+        indicatorClass={`h-full rounded-full ${TONE_FILL[props.tone ?? 'accent']} ${props.indeterminate ? 'w-1/3 animate-pulse motion-reduce:animate-none' : ''}`}
+      />
+    </View>
   );
 }
 

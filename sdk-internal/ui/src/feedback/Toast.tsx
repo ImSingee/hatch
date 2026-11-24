@@ -174,12 +174,9 @@ export function ToastRegion(): JSX.Element {
         placement={compact() ? 'bottomCenter' : 'bottomRight'}
         class="pointer-events-auto w-full max-w-sm"
         onExpandedChange={(event) => expanded.set(event.expanded)}
-        onCancel={() => {
-          const newest = shown()
-            .filter((entry) => entry.status !== 'ending')
-            .at(-1);
-          if (newest) dismiss(newest.id);
-        }}
+        // Escape belongs to the dialog, sheet or menu the user is in; a toast
+        // goes on its own, by a swipe or by its action.
+        closeOnEscape={false}
       >
         <Each of={shown()} key={(entry) => entry.id}>
           {(entry) => <ToastCard entry={entry} />}

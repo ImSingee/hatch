@@ -85,23 +85,84 @@ async function section(page: Page, name: string): Promise<void> {
   await page.waitForTimeout(150);
 }
 
+/** Moves the shown page's scroll view (the tallest one) to `top`; returns
+ * whether more lies below what is now shown. */
+function scrollPage(page: Page, top: number): Promise<boolean> {
+  return page.evaluate((offset) => {
+    const view = [...document.querySelectorAll<HTMLElement>('.nsh-scroll')]
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.width > 200 && element.scrollHeight > element.clientHeight;
+      })
+      .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+    if (!view) return false;
+    view.scrollTop = offset;
+    return view.scrollTop + view.clientHeight < view.scrollHeight - 1;
+  }, top);
+}
+
+/** Screenshots a whole section, one viewport at a time, top to bottom. */
+async function sectionShots(
+  page: Page,
+  name: string,
+  layout: Layout,
+): Promise<void> {
+  const stride = Math.round(layout.height * 0.85);
+  for (let part = 1; part <= 12; part += 1) {
+    const more = await scrollPage(page, (part - 1) * stride);
+    await shot(page, `${name}-${part}`);
+    if (!more) break;
+  }
+  await scrollPage(page, 0);
+}
+
+/** Scrolls the element `locator` names into the middle of the view. */
+async function reveal(
+  page: Page,
+  label: string,
+  role: 'button' | 'combobox' = 'button',
+) {
+  const target = page.getByRole(role, { name: label, exact: true }).first();
+  await target.evaluate((element) =>
+    element.scrollIntoView({ block: 'center' }),
+  );
+  await page.waitForTimeout(150);
+  return target;
+}
+
 async function close(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(250);
 }
 
-/** Opens each kind of popup, so their classes are resolved and seen. */
-async function popups(page: Page, prefix: string): Promise<void> {
+/** Opens each kind of popup, so their classes are resolved and seen, and
+ * answers the confirmations. */
+async function popups(
+  page: Page,
+  prefix: string,
+  layout: Layout,
+): Promise<void> {
   await section(page, 'Inputs');
-  await page
-    .getByRole('combobox', { name: 'Plot', exact: true })
-    .first()
-    .click();
+  await (await reveal(page, 'Plot', 'combobox')).click();
   await shot(page, `${prefix}-select`);
   await close(page);
-  await page.getByRole('combobox', { name: 'Sown on', exact: true }).click();
+  await (await reveal(page, 'Plot, searchable', 'combobox')).click();
+  await shot(page, `${prefix}-select-search`);
+  await close(page);
+  const tags = page.getByRole('combobox', { name: 'Tags', exact: true });
+  await tags.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  await tags.click();
+  await page.keyboard.type('er');
+  await page.waitForTimeout(300);
+  await shot(page, `${prefix}-combobox`);
+  await close(page);
+  await (await reveal(page, 'Sown on', 'combobox')).click();
   await shot(page, `${prefix}-date-picker`);
   await close(page);
+  await (await reveal(page, 'Next watering', 'combobox')).click();
+  await shot(page, `${prefix}-date-time-picker`);
+  await close(page);
+  await scrollPage(page, 0);
 
   await section(page, 'Feedback');
   await page.getByRole('button', { name: 'Open dialog', exact: true }).click();
@@ -113,9 +174,82 @@ async function popups(page: Page, prefix: string): Promise<void> {
   await page.getByRole('button', { name: 'More actions', exact: true }).click();
   await shot(page, `${prefix}-menu`);
   await close(page);
+  await page.getByRole('button', { name: 'Sort', exact: true }).click();
+  await shot(page, `${prefix}-menu-sort`);
+  await close(page);
+  if (!layout.touch) {
+    await page
+      .getByRole('img', { name: 'About this bed', exact: true })
+      .hover();
+    await page.waitForTimeout(900);
+    await shot(page, `${prefix}-tooltip`);
+    await page.mouse.move(0, 0);
+  }
+
+  // Confirm: answer it, and check the App got the answer.
+  await page.getByRole('button', { name: 'Delete bed…', exact: true }).click();
+  await page.waitForTimeout(400);
+  await shot(page, `${prefix}-confirm`);
+  await page
+    .getByRole('button', { name: 'Delete', exact: true })
+    .last()
+    .click();
+  try {
+    await page
+      .getByText('Deleted.', { exact: true })
+      .waitFor({ timeout: 3000 });
+  } catch {
+    problems.push(
+      `${prefix}: confirming the alert dialog did not report "Deleted."`,
+    );
+  }
+  await page.getByRole('button', { name: 'Show notice', exact: true }).click();
+  await page.waitForTimeout(400);
+  await shot(page, `${prefix}-alert`);
+  await page.getByRole('button', { name: 'OK', exact: true }).last().click();
+  await page.waitForTimeout(300);
+
   await page.getByRole('button', { name: 'Success', exact: true }).click();
   await page.getByRole('button', { name: 'With undo', exact: true }).click();
   await shot(page, `${prefix}-toasts`);
+}
+
+/** The accent changes while the App runs (the `hatch.theme` event), the
+ * way an instance setting reaches open Apps. */
+async function liveAccent(
+  page: Page,
+  prefix: string,
+  next: string,
+): Promise<void> {
+  await section(page, 'Basics');
+  await page.evaluate((accent) => {
+    (window as { setAccent?: (accent: string) => void }).setAccent?.(accent);
+  }, next);
+  await page.waitForTimeout(400);
+  await shot(page, `${prefix}-live-${next}`);
+  await section(page, 'Data');
+  await shot(page, `${prefix}-live-${next}-data`);
+}
+
+/** Heights of the controls a finger presses, in points. */
+async function targets(page: Page): Promise<string[]> {
+  const measure = async (role: 'button' | 'textbox' | 'tab', name: string) => {
+    const box = await page
+      .getByRole(role, { name, exact: true })
+      .first()
+      .boundingBox();
+    return `${role} "${name}": ${box ? Math.round(box.height) : 'missing'}`;
+  };
+  await section(page, 'Inputs');
+  const found = [
+    await measure('button', 'Add plant'),
+    await measure('button', 'Search'),
+    await measure('textbox', 'Plant name'),
+    await measure('tab', 'Inputs'),
+  ];
+  await section(page, 'Data');
+  found.push(await measure('button', 'North bed, 12 plants'));
+  return found;
 }
 
 async function patterns(page: Page, prefix: string): Promise<void> {
@@ -184,11 +318,17 @@ async function keyboard(page: Page, prefix: string): Promise<string[]> {
     await page.keyboard.press('Tab');
     if ((await focused(page))?.name === 'Open dialog') break;
   }
+  // A toast on screen must not take Escape from the dialog.
+  await page.getByRole('button', { name: 'With undo', exact: true }).click();
+  await page.getByRole('button', { name: 'Open dialog', exact: true }).focus();
   await page.keyboard.press('Enter');
   const dialog = page
     .locator('[aria-modal="true"][aria-label="Rename the bed"]')
     .filter({ visible: true });
   await dialog.waitFor();
+  // NSH 0.6.1: a Tab pressed in the first moments after a dialog mounts
+  // leaves Escape unable to close it; a person takes longer than that.
+  await page.waitForTimeout(400);
   // NSH 0.6.1's web backdrop is a focusable button without a name; the
   // second Tab reaches the dialog's own controls.
   await page.keyboard.press('Tab');
@@ -199,14 +339,24 @@ async function keyboard(page: Page, prefix: string): Promise<string[]> {
       `${prefix}: Tab in the dialog reached ${inside?.role} "${inside?.name}"`,
     );
   }
-  // Escape first dismisses the Close button's tooltip, then the dialog.
-  for (let press = 0; press < 3 && (await dialog.count()) > 0; press += 1) {
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(700);
-  }
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(700);
   if ((await dialog.count()) > 0) {
     await shot(page, `${prefix}-escape`);
-    problems.push(`${prefix}: Escape did not close the dialog`);
+    const state = await page.evaluate(() => ({
+      tooltips: [...document.querySelectorAll('[role=tooltip]')].map(
+        (t) => t.textContent,
+      ),
+      modals: [...document.querySelectorAll('[aria-modal]')].map((m) =>
+        m.getAttribute('aria-label'),
+      ),
+      focus: document.activeElement?.getAttribute('aria-label'),
+    }));
+    problems.push(
+      `${prefix}: Escape did not close the dialog ${JSON.stringify(state)}`,
+    );
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.waitForTimeout(500);
   }
   const back = await focused(page);
   if (back?.name !== 'Open dialog') {
@@ -239,10 +389,8 @@ async function main(): Promise<void> {
         await open(page, layout, accent);
         for (const name of sections) {
           await section(page, name);
-          await shot(page, `${prefix}-${name.toLowerCase()}`);
+          await sectionShots(page, `${prefix}-${name.toLowerCase()}`, layout);
         }
-        // Keyboard first: a tooltip left under the pointer by the steps
-        // below keeps Escape in NSH 0.6.1.
         if (layout.name === 'desktop-1280') {
           const order = await keyboard(page, prefix);
           fs.writeFileSync(
@@ -250,8 +398,22 @@ async function main(): Promise<void> {
             order.join('\n'),
           );
         }
-        await popups(page, prefix);
+        await popups(page, prefix, layout);
         await patterns(page, prefix);
+        if (layout.name === 'desktop-1280' && accent === 'indigo') {
+          await liveAccent(page, prefix, 'teal');
+        }
+        if (layout.touch && accent === 'indigo') {
+          const heights = await targets(page);
+          fs.writeFileSync(
+            path.join(out, `${prefix}-touch-targets.txt`),
+            heights.join('\n'),
+          );
+          for (const line of heights) {
+            const points = Number(line.split(': ')[1]);
+            if (!(points >= 44)) problems.push(`${prefix}: ${line}, below 44`);
+          }
+        }
         await context.close();
         console.log(`checked ${prefix}`);
       }
