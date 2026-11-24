@@ -81,6 +81,8 @@ headers. `--idle-timeout` (default 120s, at most 86400) fails the call with
 `stream_idle_timeout` (exit 7) when no bytes arrive for that long; comments
 count, so the App should send a `: ping` comment at least every 30 seconds.
 `--max-duration` (at most 86400s, unset by default) ends the stream normally.
+It bounds the whole run: if stdout is still not read 5 seconds later, the CLI
+says so on stderr and exits 7 with the pending output discarded.
 
 `--sse --json` prints NDJSON, one record per line, as each event arrives:
 
