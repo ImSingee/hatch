@@ -231,9 +231,19 @@ function NewProviderForm({
   const recommended = useRecommended(preset);
   // null = still the recommended set; edits make it explicit.
   const [models, setModels] = useState<PickedModel[] | null>(null);
+  // Until the user edits the list, show the preset's recommended ids right
+  // away (names fill in once loaded) and let the server add them.
   const picked = useMemo(
-    () => models ?? recommended.data ?? [],
-    [models, recommended.data],
+    () =>
+      models ??
+      recommended.data ??
+      (preset?.recommended ?? []).map((modelId): PickedModel => ({
+        modelId,
+        name: modelId,
+        kind: 'chat',
+        catalogRef: `${preset!.id}/${modelId}`,
+      })),
+    [models, recommended.data, preset],
   );
   const presets = useQuery(catalogProvidersQueryOptions);
   const form = useForm<FormValues>({
@@ -260,10 +270,17 @@ function NewProviderForm({
           apiType: values.apiType as ApiType,
           baseUrl: values.baseUrl,
           apiKey: values.apiKey,
-          models: picked.map((model) => ({
-            modelId: model.modelId,
-            kind: model.kind,
-          })),
+          // Untouched: the server adds the preset's recommended models.
+          // A custom provider adds only what was picked, even when linked.
+          models:
+            models === null
+              ? preset
+                ? undefined
+                : []
+              : models.map((model) => ({
+                  modelId: model.modelId,
+                  kind: model.kind,
+                })),
         },
       }),
     onSuccess: async () => {

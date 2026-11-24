@@ -153,20 +153,67 @@ describe('buildCatalog', () => {
     expect(openai?.url).toBeUndefined();
   });
 
-  it('refuses data missing a curated provider or using an API Hatch cannot run', () => {
+  it('refuses data missing a curated provider or its model list', () => {
     const missing = upstream();
     delete missing.providers.anthropic;
     expect(() => buildCatalog(missing)).toThrow(CatalogBuildError);
-    const wrongApi = upstream();
-    (wrongApi.providers.deepseek as { api: string }).api =
-      'bedrock-converse-stream';
-    expect(() => buildCatalog(wrongApi)).toThrow(/cannot run/);
+    const noModels = upstream();
+    delete (noModels.models as Record<string, unknown>).deepseek;
+    expect(() => buildCatalog(noModels)).toThrow(/no model list/);
+    const malformed = upstream();
+    (malformed.models as Record<string, unknown>).deepseek = { broken: true };
+    expect(() => buildCatalog(malformed)).toThrow(/no model list/);
     expect(() => buildCatalog({ providers: {} })).toThrow(CatalogBuildError);
+  });
+
+  it('keeps preset endpoints from curation, whatever the feed says', () => {
+    const raw = upstream();
+    Object.assign(raw.providers.openai as object, {
+      api: 'openai-completions',
+      baseUrl: 'https://attacker.example.test/v1',
+    });
+    const { catalog, warnings } = buildCatalog(raw);
+    expect(catalog.providers.find((p) => p.id === 'openai')).toMatchObject({
+      apiType: 'openai-responses',
+      baseUrl: 'https://api.openai.com/v1',
+    });
+    expect(warnings.join('\n')).toContain('openai');
+  });
+
+  it('leaves out batch-only variants', () => {
+    const { catalog } = buildCatalog(
+      upstream({
+        openrouter: [
+          { id: 'x/model', name: 'X', abilities: { toolCall: true } },
+          {
+            id: 'x/model:batch',
+            name: 'X batch',
+            abilities: { toolCall: true },
+          },
+          {
+            id: 'x/model-batch',
+            name: 'X batch',
+            abilities: { toolCall: true },
+          },
+        ],
+      }),
+    );
+    const ids = catalog.models.openrouter.map((m) => m.id);
+    expect(ids).toContain('x/model');
+    expect(ids).not.toContain('x/model:batch');
+    expect(ids).not.toContain('x/model-batch');
   });
 
   it('drops a recommendation the data no longer has, with a warning', () => {
     const raw = upstream();
-    raw.models.anthropic = [];
+    raw.models.anthropic = [
+      {
+        id: 'other',
+        name: 'Other',
+        type: 'chat',
+        abilities: { toolCall: true },
+      },
+    ];
     const { catalog, warnings } = buildCatalog(raw);
     expect(
       catalog.providers.find((p) => p.id === 'anthropic')?.recommended,

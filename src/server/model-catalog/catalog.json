@@ -3,7 +3,7 @@
   "source": {
     "repository": "ImSingee/aidy-models",
     "generatedAt": "2026-11-24T15:05:27.865Z",
-    "curation": "v1-c728d982d8b3b2aa"
+    "curation": "v1-2739fc7ca615994f"
   },
   "providers": [
     {
@@ -1296,23 +1296,6 @@
         }
       },
       {
-        "id": "google/gemini-4-neon:batch",
-        "name": "Google: Gemini 4 Neon (batch)",
-        "kind": "chat",
-        "description": "Gemini 4 Neon is a fast, mid-priced model in the Gemini 4 family from Google, built for coding and agentic work. It is suited for repository and terminal coding, web...",
-        "releasedAt": "2026-11-18",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 1.5,
-          "output": 7.5,
-          "cacheRead": 0.075,
-          "cacheWrite": 0.083333333333
-        }
-      },
-      {
         "id": "openai/gpt-6.2-astra",
         "name": "OpenAI: GPT-6.2 Astra",
         "kind": "chat",
@@ -1327,23 +1310,6 @@
           "output": 40,
           "cacheRead": 0.4,
           "cacheWrite": 10
-        }
-      },
-      {
-        "id": "openai/gpt-6.2-astra:batch",
-        "name": "OpenAI: GPT-6.2 Astra (batch)",
-        "kind": "chat",
-        "description": "GPT-6.2 Astra is the flagship model in the GPT-6.2 series from OpenAI, built for the hardest projects. It is suited for real-world engineering, professional work and scientific research, with stronger...",
-        "releasedAt": "2026-11-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 4,
-          "output": 20,
-          "cacheRead": 0.2,
-          "cacheWrite": 5
         }
       },
       {
@@ -1364,23 +1330,6 @@
         }
       },
       {
-        "id": "openai/gpt-6.2-astra-pro:batch",
-        "name": "OpenAI: GPT-6.2 Astra Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6.2 Astra Pro is the same underlying model as [GPT-6.2 Astra](https://openrouter.ai/openai/gpt-6.2-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-11-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 4,
-          "output": 20,
-          "cacheRead": 0.2,
-          "cacheWrite": 5
-        }
-      },
-      {
         "id": "openai/gpt-6.2-sol",
         "name": "OpenAI: GPT-6.2 Sol",
         "kind": "chat",
@@ -1398,23 +1347,6 @@
         }
       },
       {
-        "id": "openai/gpt-6.2-sol:batch",
-        "name": "OpenAI: GPT-6.2 Sol (batch)",
-        "kind": "chat",
-        "description": "GPT-6.2 Sol is an upgrade to GPT-6.1 Sol from OpenAI, positioned below the flagship GPT-6.2 Astra in the GPT-6.2 series. It is an efficient, versatile model for everyday work, suited...",
-        "releasedAt": "2026-11-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
-        }
-      },
-      {
         "id": "openai/gpt-6.2-sol-pro",
         "name": "OpenAI: GPT-6.2 Sol Pro",
         "kind": "chat",
@@ -1429,23 +1361,6 @@
           "output": 10,
           "cacheRead": 0.1,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "openai/gpt-6.2-sol-pro:batch",
-        "name": "OpenAI: GPT-6.2 Sol Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6.2 Sol Pro is the same underlying model as [GPT-6.2 Sol](https://openrouter.ai/openai/gpt-6.2-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-11-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -1517,23 +1432,6 @@
         }
       },
       {
-        "id": "google/gemini-4-hydrogen:batch",
-        "name": "Google: Gemini 4 Hydrogen (batch)",
-        "kind": "chat",
-        "description": "Gemini 4 Hydrogen is the high-efficiency workhorse model of the Gemini 4 family from Google, built for high-throughput agentic workflows, coding and multi-model routing at lower cost and latency than...",
-        "releasedAt": "2026-11-12",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 0.75,
-          "output": 3.75,
-          "cacheRead": 0.0375,
-          "cacheWrite": 0.083333333333
-        }
-      },
-      {
         "id": "baidu/ernie-5.5-flash-preview:free",
         "name": "Baidu: ERNIE-5.5-Flash-Preview (free)",
         "kind": "chat",
@@ -1585,23 +1483,6 @@
         }
       },
       {
-        "id": "google/gemini-4-carbon:batch",
-        "name": "Google: Gemini 4 Carbon (batch)",
-        "kind": "chat",
-        "description": "Gemini 4 Carbon is a frontier Gemini 4 model from Google for coding, agentic and complex reasoning work. It takes text, image, audio, video and file input, supports long decode...",
-        "releasedAt": "2026-11-10",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 0.1875
-        }
-      },
-      {
         "id": "nex-agi/nex-n2.6",
         "name": "Nex AGI: Nex-N2.6",
         "kind": "chat",
@@ -1633,23 +1514,6 @@
           "output": 40,
           "cacheRead": 0.2,
           "cacheWrite": 10
-        }
-      },
-      {
-        "id": "anthropic/claude-fable-5.2:batch",
-        "name": "Anthropic: Claude Fable 5.2 (batch)",
-        "kind": "chat",
-        "description": "Claude Fable 5.2 is Anthropic's most capable model for the most demanding technical work, with gains over Fable 5.1 in coding, reasoning, and vision. In prerelease testing it completed otherwise-infeasible...",
-        "releasedAt": "2026-11-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 4,
-          "output": 20,
-          "cacheRead": 0.1,
-          "cacheWrite": 5
         }
       },
       {
@@ -1895,23 +1759,6 @@
         }
       },
       {
-        "id": "openai/gpt-6.1-terra:batch",
-        "name": "OpenAI: GPT-6.1 Terra (batch)",
-        "kind": "chat",
-        "description": "GPT-6.1 Terra is the mid-tier model in OpenAI's GPT-6.1 series, priced below GPT-6.1 Sol. It is suited for everyday agentic, coding, and writing work, is particularly strong at understanding screenshots...",
-        "releasedAt": "2026-10-26",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.5,
-          "output": 2.5,
-          "cacheRead": 0.025,
-          "cacheWrite": 0.625
-        }
-      },
-      {
         "id": "openai/gpt-6.1-terra-pro",
         "name": "OpenAI: GPT-6.1 Terra Pro",
         "kind": "chat",
@@ -1929,23 +1776,6 @@
         }
       },
       {
-        "id": "openai/gpt-6.1-terra-pro:batch",
-        "name": "OpenAI: GPT-6.1 Terra Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6.1 Terra Pro is the same underlying model as [GPT-6.1 Terra](https://openrouter.ai/openai/gpt-6.1-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-10-26",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.5,
-          "output": 2.5,
-          "cacheRead": 0.025,
-          "cacheWrite": 0.625
-        }
-      },
-      {
         "id": "moonshotai/kimi-k3.1-pro",
         "name": "MoonshotAI: Kimi K3.1 Pro",
         "kind": "chat",
@@ -1959,23 +1789,6 @@
           "input": 0.2403,
           "output": 8.4023,
           "cacheRead": 0.2,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "moonshotai/kimi-k3.1-pro:batch",
-        "name": "MoonshotAI: Kimi K3.1 Pro (batch)",
-        "kind": "chat",
-        "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D...",
-        "releasedAt": "2026-10-23",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 0.372,
-          "output": 5.583,
-          "cacheRead": 0.1,
           "cacheWrite": 0
         }
       },
@@ -2027,23 +1840,6 @@
           "input": 0.03,
           "output": 0.2,
           "cacheRead": 0.001,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "deepseek/deepseek-v4.1-flash-1017:batch",
-        "name": "DeepSeek: DeepSeek V4.1 Flash 1017 (batch)",
-        "kind": "chat",
-        "description": "DeepSeek V4.1 Flash 1017 is the October 17, 2026 snapshot of DeepSeek V4.1 Flash, served by DeepSeek under the `deepseek-flash` API model name. V4.1 Flash is a sparse mixture-of-experts model...",
-        "releasedAt": "2026-10-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 0.035,
-          "output": 0.149,
-          "cacheRead": 0.0029,
           "cacheWrite": 0
         }
       },
@@ -2184,23 +1980,6 @@
         }
       },
       {
-        "id": "google/gemini-4-argon:batch",
-        "name": "Google: Gemini 4 Argon (batch)",
-        "kind": "chat",
-        "description": "Gemini 4 Argon is Google's flagship reasoning model, built for complex software engineering, deep mathematical and scientific problem solving, and autonomous multi-step agents. Google trained it to keep context across...",
-        "releasedAt": "2026-10-13",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 0.1875
-        }
-      },
-      {
         "id": "liquid/lfm-2.5-24b-a2b",
         "name": "LiquidAI: LFM2.5-24B-A2B",
         "kind": "chat",
@@ -2303,23 +2082,6 @@
         }
       },
       {
-        "id": "anthropic/claude-haiku-5.5:batch",
-        "name": "Anthropic: Claude Haiku 5.5 (batch)",
-        "kind": "chat",
-        "description": "Claude Haiku 5.5 is Anthropic's small, fast model for high-volume, cost-sensitive work such as summarization, subagents, and browser use. It succeeds Claude Haiku 4.5 with stronger coding, computer use, and...",
-        "releasedAt": "2026-10-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.05,
-          "output": 0.25,
-          "cacheRead": 0.005,
-          "cacheWrite": 0.0625
-        }
-      },
-      {
         "id": "google/gemini-nano-banana-2.1",
         "name": "Google: Nano Banana 2.1",
         "kind": "chat",
@@ -2405,23 +2167,6 @@
         }
       },
       {
-        "id": "openai/gpt-6.1-sol:batch",
-        "name": "OpenAI: GPT-6.1 Sol (batch)",
-        "kind": "chat",
-        "description": "GPT-6.1 Sol is an upgrade to GPT-6 Sol from OpenAI, positioned below the flagship GPT-6 Astra in the GPT-6 series. It is suited for agentic coding, computer use, document-heavy professional...",
-        "releasedAt": "2026-09-29",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
-        }
-      },
-      {
         "id": "openai/gpt-6.1-sol-pro",
         "name": "OpenAI: GPT-6.1 Sol Pro",
         "kind": "chat",
@@ -2439,23 +2184,6 @@
         }
       },
       {
-        "id": "openai/gpt-6.1-sol-pro:batch",
-        "name": "OpenAI: GPT-6.1 Sol Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6.1 Sol Pro is the same underlying model as [GPT-6.1 Sol](https://openrouter.ai/openai/gpt-6.1-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-09-29",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
-        }
-      },
-      {
         "id": "anthropic/claude-sonnet-5.5",
         "name": "Anthropic: Claude Sonnet 5.5",
         "kind": "chat",
@@ -2470,23 +2198,6 @@
           "output": 10,
           "cacheRead": 0.1,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "anthropic/claude-sonnet-5.5:batch",
-        "name": "Anthropic: Claude Sonnet 5.5 (batch)",
-        "kind": "chat",
-        "description": "Claude Sonnet 5.5 is Anthropic's Sonnet-class model for well-scoped everyday work, succeeding Claude Sonnet 5 as a direct upgrade. It is especially strong at building features, fixing bugs, and producing...",
-        "releasedAt": "2026-09-28",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -2645,23 +2356,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-5.5:batch",
-        "name": "Anthropic: Claude Opus 5.5 (batch)",
-        "kind": "chat",
-        "description": "Claude Opus 5.5 is Anthropic's flagship model for demanding reasoning, coding, and long-horizon agentic work, succeeding Claude Opus 5. It is particularly strong at multi-step changes in large codebases, code...",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2,
-          "output": 10,
-          "cacheRead": 0.1,
-          "cacheWrite": 2.5
-        }
-      },
-      {
         "id": "cohere/command-a-plus",
         "name": "Cohere: Command A+",
         "kind": "chat",
@@ -2696,23 +2390,6 @@
         }
       },
       {
-        "id": "openai/gpt-6-luna:batch",
-        "name": "OpenAI: GPT-6 Luna (batch)",
-        "kind": "chat",
-        "description": "GPT-6 Luna is the fast, cost-efficient model in OpenAI's GPT-6 series, positioned below GPT-6 Sol. It is suited for high-volume and latency-sensitive workloads such as chat, classification, and lightweight agentic...",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.05,
-          "output": 0.25,
-          "cacheRead": 0.005,
-          "cacheWrite": 0.0625
-        }
-      },
-      {
         "id": "openai/gpt-6-luna-pro",
         "name": "OpenAI: GPT-6 Luna Pro",
         "kind": "chat",
@@ -2727,23 +2404,6 @@
           "output": 0.5,
           "cacheRead": 0.01,
           "cacheWrite": 0.125
-        }
-      },
-      {
-        "id": "openai/gpt-6-luna-pro:batch",
-        "name": "OpenAI: GPT-6 Luna Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6 Luna Pro is the same underlying model as [GPT-6 Luna](https://openrouter.ai/openai/gpt-6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.05,
-          "output": 0.25,
-          "cacheRead": 0.005,
-          "cacheWrite": 0.0625
         }
       },
       {
@@ -2764,23 +2424,6 @@
         }
       },
       {
-        "id": "openai/gpt-6-sol:batch",
-        "name": "OpenAI: GPT-6 Sol (batch)",
-        "kind": "chat",
-        "description": "GPT-6 Sol is the cost-efficient high-end model in OpenAI's GPT-6 series, positioned below the flagship GPT-6 Astra and above the fast GPT-6 Luna tier. It is suited for demanding professional...",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.1,
-          "cacheWrite": 1.25
-        }
-      },
-      {
         "id": "openai/gpt-6-sol-pro",
         "name": "OpenAI: GPT-6 Sol Pro",
         "kind": "chat",
@@ -2795,23 +2438,6 @@
           "output": 10,
           "cacheRead": 0.2,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "openai/gpt-6-sol-pro:batch",
-        "name": "OpenAI: GPT-6 Sol Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6 Sol Pro is the same underlying model as [GPT-6 Sol](https://openrouter.ai/openai/gpt-6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.1,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -2845,23 +2471,6 @@
           "input": 2,
           "output": 6,
           "cacheRead": 0.5,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "x-ai/grok-4.7:batch",
-        "name": "SpaceXSI: Grok 4.7 (batch)",
-        "kind": "chat",
-        "description": "Grok 4.7 is SpaceXSI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
-        "releasedAt": "2026-09-21",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 500000,
-        "maxTokens": 450000,
-        "cost": {
-          "input": 1.6,
-          "output": 4.8,
-          "cacheRead": 0.4,
           "cacheWrite": 0
         }
       },
@@ -3104,23 +2713,6 @@
         }
       },
       {
-        "id": "deepseek/deepseek-v4.1-flash:batch",
-        "name": "DeepSeek: DeepSeek V4.1 Flash (batch)",
-        "kind": "chat",
-        "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the first built on the company's Causal Encoder-Decoder (CED) architecture. It activates 8B parameters on input and 16B on...",
-        "releasedAt": "2026-09-10",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 384000,
-        "cost": {
-          "input": 0.05,
-          "output": 0.15,
-          "cacheRead": 0.004,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "inclusionai/ling-3.0-flash-vl",
         "name": "inclusionAI: Ling 3.0 Flash VL",
         "kind": "chat",
@@ -3172,23 +2764,6 @@
         }
       },
       {
-        "id": "openai/gpt-6-astra:batch",
-        "name": "OpenAI: GPT-6 Astra (batch)",
-        "kind": "chat",
-        "description": "GPT-6 Astra is OpenAI's flagship model for demanding end-to-end work. It is suited for advanced analysis, software engineering, deep research, scientific work, and document creation, with particular strengths in long-horizon...",
-        "releasedAt": "2026-09-04",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.5,
-          "cacheWrite": 6.25
-        }
-      },
-      {
         "id": "openai/gpt-6-astra-pro",
         "name": "OpenAI: GPT-6 Astra Pro",
         "kind": "chat",
@@ -3203,23 +2778,6 @@
           "output": 50,
           "cacheRead": 1,
           "cacheWrite": 12.5
-        }
-      },
-      {
-        "id": "openai/gpt-6-astra-pro:batch",
-        "name": "OpenAI: GPT-6 Astra Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-6 Astra Pro is the same underlying model as [GPT-6 Astra](https://openrouter.ai/openai/gpt-6-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-09-04",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.5,
-          "cacheWrite": 6.25
         }
       },
       {
@@ -3240,23 +2798,6 @@
         }
       },
       {
-        "id": "qwen/qwen3.8-max-0902:batch",
-        "name": "Qwen: Qwen3.8 Max (0902) (batch)",
-        "kind": "chat",
-        "description": "Qwen3.8 Max 0902 is an updated snapshot of Qwen3.8 Max from Alibaba's Qwen team. It is a 2.4-trillion-parameter mixture-of-experts model that accepts text, image, and video input and returns text,...",
-        "releasedAt": "2026-09-03",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 262144,
-        "maxTokens": 131072,
-        "cost": {
-          "input": 1.15,
-          "output": 3.45,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "google/gemini-3.8-flash",
         "name": "Google: Gemini 3.8 Flash",
         "kind": "chat",
@@ -3270,23 +2811,6 @@
           "input": 0.825,
           "output": 4.125,
           "cacheRead": 0.0825,
-          "cacheWrite": 0.041666666667
-        }
-      },
-      {
-        "id": "google/gemini-3.8-flash:batch",
-        "name": "Google: Gemini 3.8 Flash (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.8 Flash is Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
-        "releasedAt": "2026-09-02",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.375,
-          "output": 1.875,
-          "cacheRead": 0.0375,
           "cacheWrite": 0.041666666667
         }
       },
@@ -3339,23 +2863,6 @@
           "output": 50,
           "cacheRead": 0.25,
           "cacheWrite": 12.5
-        }
-      },
-      {
-        "id": "anthropic/claude-fable-5.1:batch",
-        "name": "Anthropic: Claude Fable 5.1 (batch)",
-        "kind": "chat",
-        "description": "Claude Fable 5.1 improves on Claude Fable 5 across the board, with the biggest gains in agentic coding, long-running agentic workflows, and knowledge work: long code refactors, front-end and visual...",
-        "releasedAt": "2026-09-01",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.125,
-          "cacheWrite": 6.25
         }
       },
       {
@@ -3444,23 +2951,6 @@
         }
       },
       {
-        "id": "z-ai/glm-5.3-flash:batch",
-        "name": "Z.ai: GLM 5.3 Flash (batch)",
-        "kind": "chat",
-        "description": "GLM-5.3-Flash is a native multimodal model from Z.ai. It is suited for efficient coding and long-horizon agent tasks. Its hybrid sparse and linear attention architecture maintains accurate long-context behavior while...",
-        "releasedAt": "2026-08-26",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943717,
-        "cost": {
-          "input": 0.023,
-          "output": 0.068,
-          "cacheRead": 0.009,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "deepseek/deepseek-v4-flash-vision-exp",
         "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
         "kind": "chat",
@@ -3529,23 +3019,6 @@
         }
       },
       {
-        "id": "z-ai/glm-5.3:batch",
-        "name": "Z.ai: GLM 5.3 (batch)",
-        "kind": "chat",
-        "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
-        "releasedAt": "2026-08-18",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943717,
-        "cost": {
-          "input": 0.28,
-          "output": 1.249,
-          "cacheRead": 0.061,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "dots-studio/dots-3-note-preview:free",
         "name": "Dots Studio: Dots3-Note Preview (free)",
         "kind": "chat",
@@ -3580,23 +3053,6 @@
         }
       },
       {
-        "id": "qwen/qwen3.8-27b:batch",
-        "name": "Qwen: Qwen3.8 27B (batch)",
-        "kind": "chat",
-        "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be...",
-        "releasedAt": "2026-08-14",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 262144,
-        "maxTokens": 235929,
-        "cost": {
-          "input": 0.16,
-          "output": 2,
-          "cacheRead": 0.04,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "google/gemini-3.7-flash",
         "name": "Google: Gemini 3.7 Flash",
         "kind": "chat",
@@ -3610,23 +3066,6 @@
           "input": 0.75,
           "output": 3.75,
           "cacheRead": 0.075,
-          "cacheWrite": 0.041666666667
-        }
-      },
-      {
-        "id": "google/gemini-3.7-flash:batch",
-        "name": "Google: Gemini 3.7 Flash (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.7 Flash is a multimodal model from Google for fast agentic workflows, coding, and complex multi-step reasoning. It is designed for tasks that require responsive performance and reliable multi-step...",
-        "releasedAt": "2026-08-13",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.375,
-          "output": 1.875,
-          "cacheRead": 0.0375,
           "cacheWrite": 0.041666666667
         }
       },
@@ -3695,23 +3134,6 @@
           "input": 2,
           "output": 6,
           "cacheRead": 0.5,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "x-ai/grok-4.6:batch",
-        "name": "SpaceXSI: Grok 4.6 (batch)",
-        "kind": "chat",
-        "description": "Grok 4.6 is a model from SpaceXSI with frontier performance on coding, knowledge work, and STEM. It is succeeded by [Grok 4.7](/x-ai/grok-4.7).",
-        "releasedAt": "2026-08-12",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 500000,
-        "maxTokens": 450000,
-        "cost": {
-          "input": 1.6,
-          "output": 4.8,
-          "cacheRead": 0.4,
           "cacheWrite": 0
         }
       },
@@ -3809,23 +3231,6 @@
         }
       },
       {
-        "id": "meta/muse-glimmer-30b:batch",
-        "name": "Meta: Muse Glimmer 30B (batch)",
-        "kind": "chat",
-        "description": "Muse Glimmer 30B is a dense, open-weight multimodal model from Meta Superintelligence Labs, distilled from Muse Spark and optimized for autonomous agents on consumer hardware. It is suited for long-horizon...",
-        "releasedAt": "2026-08-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 131072,
-        "maxTokens": 16384,
-        "cost": {
-          "input": 0.24,
-          "output": 0.96,
-          "cacheRead": 0.032,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "inclusionai/ling-3.0-tiny",
         "name": "inclusionAI: Ling 3.0 Tiny",
         "kind": "chat",
@@ -3894,23 +3299,6 @@
         }
       },
       {
-        "id": "deepseek/deepseek-v4-flash-0731:batch",
-        "name": "DeepSeek: DeepSeek V4 Flash 0731 (batch)",
-        "kind": "chat",
-        "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows....",
-        "releasedAt": "2026-07-31",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 384000,
-        "cost": {
-          "input": 0.048,
-          "output": 0.144,
-          "cacheRead": 0.012,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "thinkingmachines/inkling-small",
         "name": "Thinking Machines: Inkling Small",
         "kind": "chat",
@@ -3924,23 +3312,6 @@
           "input": 0.45,
           "output": 1.2,
           "cacheRead": 0.1,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "thinkingmachines/inkling-small:batch",
-        "name": "Thinking Machines: Inkling Small (batch)",
-        "kind": "chat",
-        "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
-        "releasedAt": "2026-07-30",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 524288,
-        "maxTokens": 262144,
-        "cost": {
-          "input": 0.36,
-          "output": 0.96,
-          "cacheRead": 0.08,
           "cacheWrite": 0
         }
       },
@@ -3979,23 +3350,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-5:batch",
-        "name": "Anthropic: Claude Opus 5 (batch)",
-        "kind": "chat",
-        "description": "Claude Opus 5 is Anthropic’s flagship model for demanding reasoning, coding, and long-horizon agentic work. It is particularly strong at end-to-end software tasks, code review and bug finding, visual analysis...",
-        "releasedAt": "2026-07-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
-        }
-      },
-      {
         "id": "inclusionai/ling-3.0-flash",
         "name": "inclusionAI: Ling 3.0 Flash",
         "kind": "chat",
@@ -4030,23 +3384,6 @@
         }
       },
       {
-        "id": "google/gemini-3.5-flash-lite:batch",
-        "name": "Google: Gemini 3.5 Flash Lite (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.5 Flash Lite is a high-efficiency model from Google with upgraded agentic capabilities. It is suited for subagents that execute focused tasks within complex, multi-agent workflows.",
-        "releasedAt": "2026-07-21",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.15,
-          "output": 1.25,
-          "cacheRead": 0.015,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "google/gemini-3.6-flash",
         "name": "Google: Gemini 3.6 Flash",
         "kind": "chat",
@@ -4060,23 +3397,6 @@
           "input": 0.75,
           "output": 3.75,
           "cacheRead": 0.075,
-          "cacheWrite": 0.041666666667
-        }
-      },
-      {
-        "id": "google/gemini-3.6-flash:batch",
-        "name": "Google: Gemini 3.6 Flash (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.6 Flash is a high-efficiency model from Google for coding, agentic workflows, and web and app development. It is designed to produce polished outputs with fewer unnecessary edits and...",
-        "releasedAt": "2026-07-21",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.375,
-          "output": 1.875,
-          "cacheRead": 0.0375,
           "cacheWrite": 0.041666666667
         }
       },
@@ -4143,23 +3463,6 @@
         }
       },
       {
-        "id": "moonshotai/kimi-k3:batch",
-        "name": "MoonshotAI: Kimi K3 (batch)",
-        "kind": "chat",
-        "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
-        "releasedAt": "2026-07-16",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 16384,
-        "cost": {
-          "input": 2.28,
-          "output": 11.4,
-          "cacheRead": 0.228,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.6-luna",
         "name": "OpenAI: GPT-5.6 Luna",
         "kind": "chat",
@@ -4174,23 +3477,6 @@
           "output": 1.2,
           "cacheRead": 0.02,
           "cacheWrite": 0.25
-        }
-      },
-      {
-        "id": "openai/gpt-5.6-luna:batch",
-        "name": "OpenAI: GPT-5.6 Luna (batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Luna is a fast, cost-efficient model in OpenAI's GPT-5.6 series. It is suited for high-volume, latency-sensitive tasks such as chat, classification, and lightweight agentic workflows, providing capable reasoning for...",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.1,
-          "output": 0.6,
-          "cacheRead": 0.01,
-          "cacheWrite": 0
         }
       },
       {
@@ -4211,23 +3497,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.6-luna-pro:batch",
-        "name": "OpenAI: GPT-5.6 Luna Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Luna Pro is the same underlying model as [GPT-5.6 Luna](https://openrouter.ai/openai/gpt-5.6-luna), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.1,
-          "output": 0.6,
-          "cacheRead": 0.01,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.6-sol",
         "name": "OpenAI: GPT-5.6 Sol",
         "kind": "chat",
@@ -4242,23 +3511,6 @@
           "output": 20,
           "cacheRead": 0.4,
           "cacheWrite": 5
-        }
-      },
-      {
-        "id": "openai/gpt-5.6-sol:batch",
-        "name": "OpenAI: GPT-5.6 Sol (batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Sol is the flagship model in OpenAI's GPT-5.6 series. It is suited for complex reasoning, coding, and agentic workflows, and is particularly strong at command-line and multi-step coding tasks...",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2,
-          "output": 10,
-          "cacheRead": 0.2,
-          "cacheWrite": 2.5
         }
       },
       {
@@ -4279,23 +3531,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.6-sol-pro:batch",
-        "name": "OpenAI: GPT-5.6 Sol Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Sol Pro is the same underlying model as [GPT-5.6 Sol](https://openrouter.ai/openai/gpt-5.6-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2,
-          "output": 10,
-          "cacheRead": 0.2,
-          "cacheWrite": 2.5
-        }
-      },
-      {
         "id": "openai/gpt-5.6-terra",
         "name": "OpenAI: GPT-5.6 Terra",
         "kind": "chat",
@@ -4313,23 +3548,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.6-terra:batch",
-        "name": "OpenAI: GPT-5.6 Terra (batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Terra is a balanced model in OpenAI's GPT-5.6 series, positioned between the flagship Sol tier and the cost-efficient Luna tier. It is suited for everyday coding, reasoning, and agentic...",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 6,
-          "cacheRead": 0.1,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.6-terra-pro",
         "name": "OpenAI: GPT-5.6 Terra Pro",
         "kind": "chat",
@@ -4344,23 +3562,6 @@
           "output": 12,
           "cacheRead": 0.2,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "openai/gpt-5.6-terra-pro:batch",
-        "name": "OpenAI: GPT-5.6 Terra Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Terra Pro is the same underlying model as [GPT-5.6 Terra](https://openrouter.ai/openai/gpt-5.6-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 6,
-          "cacheRead": 0.1,
-          "cacheWrite": 0
         }
       },
       {
@@ -4466,23 +3667,6 @@
         }
       },
       {
-        "id": "anthropic/claude-sonnet-5:batch",
-        "name": "Anthropic: Claude Sonnet 5 (batch)",
-        "kind": "chat",
-        "description": "Sonnet 5 is Anthropic's most capable Sonnet-class model, with frontier performance across coding, agents, and professional work. It supports adaptive thinking with selectable reasoning effort levels (low, medium, high, max,...",
-        "releasedAt": "2026-06-30",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.1,
-          "cacheWrite": 1.25
-        }
-      },
-      {
         "id": "sakana/fugu-ultra",
         "name": "Sakana: Fugu Ultra",
         "kind": "chat",
@@ -4534,23 +3718,6 @@
         }
       },
       {
-        "id": "z-ai/glm-5.2:batch",
-        "name": "Z.ai: GLM 5.2 (batch)",
-        "kind": "chat",
-        "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
-        "releasedAt": "2026-06-16",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 943718,
-        "cost": {
-          "input": 0.322,
-          "output": 0.989,
-          "cacheRead": 0.109,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "moonshotai/kimi-k2.7-code",
         "name": "MoonshotAI: Kimi K2.7 Code",
         "kind": "chat",
@@ -4582,23 +3749,6 @@
           "output": 50,
           "cacheRead": 1,
           "cacheWrite": 12.5
-        }
-      },
-      {
-        "id": "anthropic/claude-fable-5:batch",
-        "name": "Anthropic: Claude Fable 5 (batch)",
-        "kind": "chat",
-        "description": "Claude Fable 5 is a Mythos-class model from Anthropic, built for autonomous knowledge work and coding. It supports text, image, and file inputs with text output, with reasoning support and...",
-        "releasedAt": "2026-06-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.5,
-          "cacheWrite": 6.25
         }
       },
       {
@@ -4670,23 +3820,6 @@
         }
       },
       {
-        "id": "qwen/qwen3.7-plus:batch",
-        "name": "Qwen: Qwen3.7 Plus (batch)",
-        "kind": "chat",
-        "description": "Qwen3.7-Plus is a cost-effective model in Alibaba's Qwen3.7 series. It supports text and image input with text output, building on the series' text capabilities with a comprehensive upgrade to its...",
-        "releasedAt": "2026-06-03",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 262144,
-        "maxTokens": 131072,
-        "cost": {
-          "input": 0.23,
-          "output": 0.92,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "minimax/minimax-m3",
         "name": "MiniMax: MiniMax M3",
         "kind": "chat",
@@ -4700,23 +3833,6 @@
           "input": 0.3,
           "output": 1.2,
           "cacheRead": 0.06,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "minimax/minimax-m3:batch",
-        "name": "MiniMax: MiniMax M3 (batch)",
-        "kind": "chat",
-        "description": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited for long-horizon agentic work, coding,...",
-        "releasedAt": "2026-05-31",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 524288,
-        "maxTokens": 512000,
-        "cost": {
-          "input": 0.224,
-          "output": 0.88,
-          "cacheRead": 0.0448,
           "cacheWrite": 0
         }
       },
@@ -4755,23 +3871,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-4.8:batch",
-        "name": "Anthropic: Claude Opus 4.8 (batch)",
-        "kind": "chat",
-        "description": "Claude Opus 4.8 is Anthropic's most capable generally available model in the Opus family. It supports text, image, and file inputs with text output, with reasoning support and a 1M-token...",
-        "releasedAt": "2026-05-27",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
-        }
-      },
-      {
         "id": "qwen/qwen3.7-max",
         "name": "Qwen: Qwen3.7 Max",
         "kind": "chat",
@@ -4806,23 +3905,6 @@
         }
       },
       {
-        "id": "google/gemini-3.5-flash:batch",
-        "name": "Google: Gemini 3.5 Flash (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.5 Flash is Google's high-efficiency multimodal model, bringing near-Pro level coding and reasoning at Flash-tier cost and speed. It is highly optimized for coding proficiency and parallel agentic execution...",
-        "releasedAt": "2026-05-19",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.75,
-          "output": 4.5,
-          "cacheRead": 0.075,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "google/gemini-3.1-flash-lite",
         "name": "Google: Gemini 3.1 Flash Lite",
         "kind": "chat",
@@ -4837,23 +3919,6 @@
           "output": 1.5,
           "cacheRead": 0.025,
           "cacheWrite": 0.083333333333
-        }
-      },
-      {
-        "id": "google/gemini-3.1-flash-lite:batch",
-        "name": "Google: Gemini 3.1 Flash Lite (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.1 Flash Lite is Google’s GA high-efficiency multimodal model optimized for low-latency, high-volume workloads. It supports text, image, video, audio, and PDF inputs, and is designed for lightweight agentic...",
-        "releasedAt": "2026-05-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.125,
-          "output": 0.75,
-          "cacheRead": 0.0125,
-          "cacheWrite": 0
         }
       },
       {
@@ -4891,23 +3956,6 @@
         }
       },
       {
-        "id": "mistralai/mistral-medium-3-5:batch",
-        "name": "Mistral: Mistral Medium 3.5 (batch)",
-        "kind": "chat",
-        "description": "Mistral Medium 3.5 is a dense 128B instruction-following model from Mistral AI. It supports text and image inputs with text output, and is designed for agentic workflows, coding, and complex...",
-        "releasedAt": "2026-04-30",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 262144,
-        "maxTokens": 209715,
-        "cost": {
-          "input": 0.75,
-          "output": 3.75,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "x-ai/grok-4.3",
         "name": "SpaceXSI: Grok 4.3",
         "kind": "chat",
@@ -4921,23 +3969,6 @@
           "input": 1.25,
           "output": 2.5,
           "cacheRead": 0.2,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "x-ai/grok-4.3:batch",
-        "name": "SpaceXSI: Grok 4.3 (batch)",
-        "kind": "chat",
-        "description": "Grok 4.3 is a reasoning model from SpaceXSI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
-        "releasedAt": "2026-04-30",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 900000,
-        "cost": {
-          "input": 1,
-          "output": 2,
-          "cacheRead": 0.16,
           "cacheWrite": 0
         }
       },
@@ -5180,23 +4211,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.5:batch",
-        "name": "OpenAI: GPT-5.5 (batch)",
-        "kind": "chat",
-        "description": "GPT-5.5 is OpenAI’s frontier model designed for complex professional workloads, building on GPT-5.4 with stronger reasoning, higher reliability, and improved token efficiency on hard tasks. It features a 1M+ token...",
-        "releasedAt": "2026-04-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 15,
-          "cacheRead": 0.25,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.5-pro",
         "name": "OpenAI: GPT-5.5 Pro",
         "kind": "chat",
@@ -5209,23 +4223,6 @@
         "cost": {
           "input": 30,
           "output": 180,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.5-pro:batch",
-        "name": "OpenAI: GPT-5.5 Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5.5 Pro is OpenAI’s high-capability model optimized for deep reasoning and accuracy on complex, high-stakes workloads. It features a 1M+ token context window (922K input, 128K output) with support for...",
-        "releasedAt": "2026-04-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 15,
-          "output": 90,
           "cacheRead": 0,
           "cacheWrite": 0
         }
@@ -5290,23 +4287,6 @@
           "output": 25,
           "cacheRead": 0.5,
           "cacheWrite": 6.25
-        }
-      },
-      {
-        "id": "anthropic/claude-opus-4.7:batch",
-        "name": "Anthropic: Claude Opus 4.7 (batch)",
-        "kind": "chat",
-        "description": "Opus 4.7 is the next generation of Anthropic's Opus family, built for long-running, asynchronous agents. Building on the coding and agentic strengths of Opus 4.6, it delivers stronger performance on...",
-        "releasedAt": "2026-04-16",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
         }
       },
       {
@@ -5497,23 +4477,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.4-mini:batch",
-        "name": "OpenAI: GPT-5.4 Mini (batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 mini brings the core capabilities of GPT-5.4 to a faster, more efficient model optimized for high-throughput workloads. It supports text and image inputs with strong performance across reasoning, coding,...",
-        "releasedAt": "2026-03-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.375,
-          "output": 2.25,
-          "cacheRead": 0.0375,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.4-nano",
         "name": "OpenAI: GPT-5.4 Nano",
         "kind": "chat",
@@ -5527,23 +4490,6 @@
           "input": 0.2,
           "output": 1.25,
           "cacheRead": 0.02,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.4-nano:batch",
-        "name": "OpenAI: GPT-5.4 Nano (batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 nano is the most lightweight and cost-efficient variant of the GPT-5.4 family, optimized for speed-critical and high-volume tasks. It supports text and image inputs and is designed for low-latency...",
-        "releasedAt": "2026-03-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.1,
-          "output": 0.625,
-          "cacheRead": 0.01,
           "cacheWrite": 0
         }
       },
@@ -5633,23 +4579,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.4:batch",
-        "name": "OpenAI: GPT-5.4 (batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 is OpenAI’s latest frontier model, unifying the Codex and GPT lines into a single system. It features a 1M+ token context window (922K input, 128K output) with support for...",
-        "releasedAt": "2026-03-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1.25,
-          "output": 7.5,
-          "cacheRead": 0.125,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.4-pro",
         "name": "OpenAI: GPT-5.4 Pro",
         "kind": "chat",
@@ -5662,23 +4591,6 @@
         "cost": {
           "input": 30,
           "output": 180,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.4-pro:batch",
-        "name": "OpenAI: GPT-5.4 Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 Pro is OpenAI's most advanced model, building on GPT-5.4's unified architecture with enhanced reasoning capabilities for complex, high-stakes tasks. It features a 1M+ token context window (922K input, 128K...",
-        "releasedAt": "2026-03-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 15,
-          "output": 90,
           "cacheRead": 0,
           "cacheWrite": 0
         }
@@ -5854,23 +4766,6 @@
         }
       },
       {
-        "id": "google/gemini-3.1-pro-preview:batch",
-        "name": "Google: Gemini 3.1 Pro Preview (batch)",
-        "kind": "chat",
-        "description": "Gemini 3.1 Pro Preview is Google’s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation...",
-        "releasedAt": "2026-02-19",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 1,
-          "output": 6,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "anthropic/claude-sonnet-4.6",
         "name": "Anthropic: Claude Sonnet 4.6",
         "kind": "chat",
@@ -5885,23 +4780,6 @@
           "output": 15,
           "cacheRead": 0.3,
           "cacheWrite": 3.75
-        }
-      },
-      {
-        "id": "anthropic/claude-sonnet-4.6:batch",
-        "name": "Anthropic: Claude Sonnet 4.6 (batch)",
-        "kind": "chat",
-        "description": "Sonnet 4.6 is Anthropic's most capable Sonnet-class model yet, with frontier performance across coding, agents, and professional work. It excels at iterative development, complex codebase navigation, end-to-end project management with...",
-        "releasedAt": "2026-02-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1.5,
-          "output": 7.5,
-          "cacheRead": 0.15,
-          "cacheWrite": 1.875
         }
       },
       {
@@ -5987,23 +4865,6 @@
           "output": 25,
           "cacheRead": 0.5,
           "cacheWrite": 6.25
-        }
-      },
-      {
-        "id": "anthropic/claude-opus-4.6:batch",
-        "name": "Anthropic: Claude Opus 4.6 (batch)",
-        "kind": "chat",
-        "description": "Opus 4.6 is Anthropic’s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective...",
-        "releasedAt": "2026-02-04",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
         }
       },
       {
@@ -6160,23 +5021,6 @@
         }
       },
       {
-        "id": "google/gemini-3-flash-preview:batch",
-        "name": "Google: Gemini 3 Flash Preview (batch)",
-        "kind": "chat",
-        "description": "Gemini 3 Flash Preview is a high speed, high value thinking model designed for agentic workflows, multi turn chat, and coding assistance. It delivers near Pro level reasoning and tool...",
-        "releasedAt": "2025-12-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65536,
-        "cost": {
-          "input": 0.25,
-          "output": 1.5,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "nvidia/nemotron-3-nano-30b-a3b",
         "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
         "kind": "chat",
@@ -6211,23 +5055,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.2:batch",
-        "name": "OpenAI: GPT-5.2 (batch)",
-        "kind": "chat",
-        "description": "GPT-5.2 is the latest frontier-grade model in the GPT-5 series, offering stronger agentic and long context perfomance compared to GPT-5.1. It uses adaptive reasoning to allocate computation dynamically, responding quickly...",
-        "releasedAt": "2025-12-10",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.875,
-          "output": 7,
-          "cacheRead": 0.0875,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.2-chat",
         "name": "OpenAI: GPT-5.2 Chat",
         "kind": "chat",
@@ -6257,23 +5084,6 @@
         "cost": {
           "input": 21,
           "output": 168,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.2-pro:batch",
-        "name": "OpenAI: GPT-5.2 Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5.2 Pro is OpenAI’s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning,...",
-        "releasedAt": "2025-12-10",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 10.5,
-          "output": 84,
           "cacheRead": 0,
           "cacheWrite": 0
         }
@@ -6466,23 +5276,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-4.5:batch",
-        "name": "Anthropic: Claude Opus 4.5 (batch)",
-        "kind": "chat",
-        "description": "Claude Opus 4.5 is Anthropic’s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. It offers strong multimodal capabilities, competitive performance across real-world coding and...",
-        "releasedAt": "2025-11-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
-        }
-      },
-      {
         "id": "openai/gpt-5.1",
         "name": "OpenAI: GPT-5.1",
         "kind": "chat",
@@ -6496,23 +5289,6 @@
           "input": 1.25,
           "output": 10,
           "cacheRead": 0.125,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.1:batch",
-        "name": "OpenAI: GPT-5.1 (batch)",
-        "kind": "chat",
-        "description": "GPT-5.1 is the latest frontier-grade model in the GPT-5 series, offering stronger general-purpose reasoning, improved instruction adherence, and a more natural conversational style compared to GPT-5. It uses adaptive reasoning...",
-        "releasedAt": "2025-11-13",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.625,
-          "output": 5,
-          "cacheRead": 0.0625,
           "cacheWrite": 0
         }
       },
@@ -6602,23 +5378,6 @@
         }
       },
       {
-        "id": "anthropic/claude-haiku-4.5:batch",
-        "name": "Anthropic: Claude Haiku 4.5 (batch)",
-        "kind": "chat",
-        "description": "Claude Haiku 4.5 is Anthropic’s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4’s performance...",
-        "releasedAt": "2025-10-15",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 0.5,
-          "output": 2.5,
-          "cacheRead": 0.05,
-          "cacheWrite": 0.625
-        }
-      },
-      {
         "id": "qwen/qwen3-vl-8b-instruct",
         "name": "Qwen: Qwen3 VL 8B Instruct",
         "kind": "chat",
@@ -6648,23 +5407,6 @@
         "cost": {
           "input": 15,
           "output": 120,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5-pro:batch",
-        "name": "OpenAI: GPT-5 Pro (batch)",
-        "kind": "chat",
-        "description": "GPT-5 Pro is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and...",
-        "releasedAt": "2025-10-06",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 7.5,
-          "output": 60,
           "cacheRead": 0,
           "cacheWrite": 0
         }
@@ -6718,23 +5460,6 @@
           "output": 15,
           "cacheRead": 0.3,
           "cacheWrite": 3.75
-        }
-      },
-      {
-        "id": "anthropic/claude-sonnet-4.5:batch",
-        "name": "Anthropic: Claude Sonnet 4.5 (batch)",
-        "kind": "chat",
-        "description": "Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date, optimized for real-world agents and coding workflows. It delivers state-of-the-art performance on coding benchmarks such as SWE-bench Verified, with...",
-        "releasedAt": "2025-09-29",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 1.5,
-          "output": 7.5,
-          "cacheRead": 0.15,
-          "cacheWrite": 1.875
         }
       },
       {
@@ -6891,23 +5616,6 @@
         }
       },
       {
-        "id": "openai/gpt-5:batch",
-        "name": "OpenAI: GPT-5 (batch)",
-        "kind": "chat",
-        "description": "GPT-5 is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy...",
-        "releasedAt": "2025-08-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.625,
-          "output": 5,
-          "cacheRead": 0.0625,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5-mini",
         "name": "OpenAI: GPT-5 Mini",
         "kind": "chat",
@@ -6921,23 +5629,6 @@
           "input": 0.25,
           "output": 2,
           "cacheRead": 0.025,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5-mini:batch",
-        "name": "OpenAI: GPT-5 Mini (batch)",
-        "kind": "chat",
-        "description": "GPT-5 Mini is a compact version of GPT-5, designed to handle lighter-weight reasoning tasks. It provides the same instruction-following and safety-tuning benefits as GPT-5, but with reduced latency and cost....",
-        "releasedAt": "2025-08-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.125,
-          "output": 1,
-          "cacheRead": 0.0125,
           "cacheWrite": 0
         }
       },
@@ -6959,23 +5650,6 @@
         }
       },
       {
-        "id": "openai/gpt-5-nano:batch",
-        "name": "OpenAI: GPT-5 Nano (batch)",
-        "kind": "chat",
-        "description": "GPT-5-Nano is the smallest and fastest variant in the GPT-5 system, optimized for developer tools, rapid interactions, and ultra-low latency environments. While limited in reasoning depth compared to its larger...",
-        "releasedAt": "2025-08-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.025,
-          "output": 0.2,
-          "cacheRead": 0.0025,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "anthropic/claude-opus-4.1",
         "name": "Anthropic: Claude Opus 4.1",
         "kind": "chat",
@@ -6990,23 +5664,6 @@
           "output": 75,
           "cacheRead": 1.5,
           "cacheWrite": 18.75
-        }
-      },
-      {
-        "id": "anthropic/claude-opus-4.1:batch",
-        "name": "Anthropic: Claude Opus 4.1 (batch)",
-        "kind": "chat",
-        "description": "Claude Opus 4.1 is an updated version of Anthropic’s flagship model, offering improved performance in coding, reasoning, and agentic tasks. It achieves 74.5% on SWE-bench Verified and shows notable gains...",
-        "releasedAt": "2025-08-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 32000,
-        "cost": {
-          "input": 7.5,
-          "output": 37.5,
-          "cacheRead": 0.75,
-          "cacheWrite": 9.375
         }
       },
       {
@@ -7027,23 +5684,6 @@
         }
       },
       {
-        "id": "openai/gpt-oss-120b:batch",
-        "name": "OpenAI: gpt-oss-120b (batch)",
-        "kind": "chat",
-        "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
-        "releasedAt": "2025-08-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 131072,
-        "maxTokens": 117964,
-        "cost": {
-          "input": 0.0296,
-          "output": 0.136,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-oss-20b",
         "name": "OpenAI: gpt-oss-20b",
         "kind": "chat",
@@ -7057,23 +5697,6 @@
           "input": 0.03,
           "output": 0.13,
           "cacheRead": 0.03,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-oss-20b:batch",
-        "name": "OpenAI: gpt-oss-20b (batch)",
-        "kind": "chat",
-        "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for...",
-        "releasedAt": "2025-08-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 131072,
-        "maxTokens": 117964,
-        "cost": {
-          "input": 0.024,
-          "output": 0.112,
-          "cacheRead": 0,
           "cacheWrite": 0
         }
       },
@@ -7350,40 +5973,6 @@
         }
       },
       {
-        "id": "openai/o3:batch",
-        "name": "OpenAI: o3 (batch)",
-        "kind": "chat",
-        "description": "o3 is a well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. It also excels at technical writing and instruction-following....",
-        "releasedAt": "2025-04-16",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 100000,
-        "cost": {
-          "input": 1,
-          "output": 4,
-          "cacheRead": 0.25,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/o4-mini:batch",
-        "name": "OpenAI: o4 Mini (batch)",
-        "kind": "chat",
-        "description": "OpenAI o4-mini is a compact reasoning model in the o-series, optimized for fast, cost-efficient performance while retaining strong multimodal and agentic capabilities. It supports tool use and demonstrates competitive reasoning...",
-        "releasedAt": "2025-04-16",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 100000,
-        "cost": {
-          "input": 0.55,
-          "output": 2.2,
-          "cacheRead": 0.1375,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-4.1",
         "name": "OpenAI: GPT-4.1",
         "kind": "chat",
@@ -7397,23 +5986,6 @@
           "input": 2,
           "output": 8,
           "cacheRead": 0.5,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-4.1:batch",
-        "name": "OpenAI: GPT-4.1 (batch)",
-        "kind": "chat",
-        "description": "GPT-4.1 is a flagship large language model optimized for advanced instruction following, real-world software engineering, and long-context reasoning. It supports a 1 million token context window and outperforms GPT-4o and...",
-        "releasedAt": "2025-04-14",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 1047576,
-        "maxTokens": 32768,
-        "cost": {
-          "input": 1,
-          "output": 4,
-          "cacheRead": 0.25,
           "cacheWrite": 0
         }
       },
@@ -7435,23 +6007,6 @@
         }
       },
       {
-        "id": "openai/gpt-4.1-mini:batch",
-        "name": "OpenAI: GPT-4.1 Mini (batch)",
-        "kind": "chat",
-        "description": "GPT-4.1 Mini is a mid-sized model delivering performance competitive with GPT-4o at substantially lower latency and cost. It retains a 1 million token context window and scores 45.1% on hard...",
-        "releasedAt": "2025-04-14",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 1047576,
-        "maxTokens": 32768,
-        "cost": {
-          "input": 0.2,
-          "output": 0.8,
-          "cacheRead": 0.05,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-4.1-nano",
         "name": "OpenAI: GPT-4.1 Nano",
         "kind": "chat",
@@ -7465,23 +6020,6 @@
           "input": 0.1,
           "output": 0.4,
           "cacheRead": 0.03,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-4.1-nano:batch",
-        "name": "OpenAI: GPT-4.1 Nano (batch)",
-        "kind": "chat",
-        "description": "For tasks that demand low latency, GPT‑4.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
-        "releasedAt": "2025-04-14",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 1047576,
-        "maxTokens": 32768,
-        "cost": {
-          "input": 0.05,
-          "output": 0.2,
-          "cacheRead": 0.0125,
           "cacheWrite": 0
         }
       },
@@ -7636,23 +6174,6 @@
           "output": 0.78,
           "cacheRead": 0.052,
           "cacheWrite": 0.325
-        }
-      },
-      {
-        "id": "openai/o3-mini:batch",
-        "name": "OpenAI: o3 Mini (batch)",
-        "kind": "chat",
-        "description": "OpenAI o3-mini is a cost-efficient language model optimized for STEM reasoning tasks, particularly excelling in science, mathematics, and coding. This model supports the `reasoning_effort` parameter, which can be set to...",
-        "releasedAt": "2025-01-31",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 100000,
-        "cost": {
-          "input": 0.55,
-          "output": 2.2,
-          "cacheRead": 0.275,
-          "cacheWrite": 0
         }
       },
       {
@@ -7945,23 +6466,6 @@
         }
       },
       {
-        "id": "openai/gpt-4o-mini:batch",
-        "name": "OpenAI: GPT-4o-mini (batch)",
-        "kind": "chat",
-        "description": "GPT-4o mini is OpenAI's newest model after [GPT-4 Omni](/models/openai/gpt-4o), supporting both text and image inputs with text outputs. As their most advanced small model, it is many multiples more affordable...",
-        "releasedAt": "2024-07-18",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 128000,
-        "maxTokens": 16384,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3,
-          "cacheRead": 0.0375,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-4o",
         "name": "OpenAI: GPT-4o",
         "kind": "chat",
@@ -7996,23 +6500,6 @@
         }
       },
       {
-        "id": "openai/gpt-4o:batch",
-        "name": "OpenAI: GPT-4o (batch)",
-        "kind": "chat",
-        "description": "GPT-4o (\"o\" for \"omni\") is OpenAI's latest AI model, supporting both text and image inputs with text outputs. It maintains the intelligence level of [GPT-4 Turbo](/models/openai/gpt-4-turbo) while being twice as...",
-        "releasedAt": "2024-05-13",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 128000,
-        "maxTokens": 16384,
-        "cost": {
-          "input": 1.25,
-          "output": 5,
-          "cacheRead": 0.625,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "mistralai/mixtral-8x22b-instruct",
         "name": "Mistral: Mixtral 8x22B Instruct",
         "kind": "chat",
@@ -8026,23 +6513,6 @@
           "input": 2,
           "output": 6,
           "cacheRead": 0.2,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-4-turbo:batch",
-        "name": "OpenAI: GPT-4 Turbo (batch)",
-        "kind": "chat",
-        "description": "The latest GPT-4 Turbo model with vision capabilities. Vision requests can now use JSON mode and function calling.\n\nTraining data: up to December 2023.",
-        "releasedAt": "2024-04-09",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 128000,
-        "maxTokens": 4096,
-        "cost": {
-          "input": 5,
-          "output": 15,
-          "cacheRead": 0,
           "cacheWrite": 0
         }
       },
@@ -8877,23 +7347,6 @@
         }
       },
       {
-        "id": "anthropic/claude-fable-5.2-batch",
-        "name": "Claude Fable 5.2 (Batch)",
-        "kind": "chat",
-        "description": "Claude Fable 5.2 supports agentic coding, knowledge work, and research with always-on adaptive thinking and adjustable reasoning effort from low through max.",
-        "releasedAt": "2026-11-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 4,
-          "output": 20,
-          "cacheRead": 0.1,
-          "cacheWrite": 5
-        }
-      },
-      {
         "id": "anthropic/claude-fable-5.2-fast",
         "name": "Claude Fable 5.2 (Fast)",
         "kind": "chat",
@@ -9370,23 +7823,6 @@
         }
       },
       {
-        "id": "anthropic/claude-haiku-5.5-batch",
-        "name": "Claude Haiku 5.5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Haiku 5.5 brings adaptive reasoning to Anthropic’s low-cost Haiku family for everyday tasks, tool use, and scaled sub-agent deployments. It is the first Haiku with adjustable effort levels, letting developers balance reasoning depth and token usage for each task, with the option to turn thinking off for simpler requests.",
-        "releasedAt": "2026-10-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.05,
-          "output": 0.25,
-          "cacheRead": 0.005,
-          "cacheWrite": 0.0625
-        }
-      },
-      {
         "id": "stealth/glyph-cluster",
         "name": "Glyph Cluster",
         "kind": "chat",
@@ -9435,23 +7871,6 @@
           "output": 10,
           "cacheRead": 0.1,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "openai/gpt-6.1-sol-batch",
-        "name": "GPT-6.1 Sol (Batch)",
-        "kind": "chat",
-        "description": "GPT-6.1 Sol is OpenAI's reasoning model for complex coding, computer use, and professional work. It accepts text and images, generates text, and supports a 1,050,000-token context window with up to 128,000 output tokens. Configurable reasoning effort, structured outputs, prompt caching, and Responses API tools support multi-step workflows.",
-        "releasedAt": "2026-09-29",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -9506,23 +7925,6 @@
         }
       },
       {
-        "id": "anthropic/claude-sonnet-5.5-batch",
-        "name": "Claude Sonnet 5.5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Sonnet 5.5 is a step-change improvement over Sonnet 5 for well-scoped everyday work like building features, fixing bugs, and creating polished documents, slides, and spreadsheets. It also writes more clearly than Sonnet 5.",
-        "releasedAt": "2026-09-28",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.05,
-          "cacheWrite": 1.25
-        }
-      },
-      {
         "id": "fireworks/ember-1",
         "name": "Ember-1",
         "kind": "chat",
@@ -9574,23 +7976,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-5.5-batch",
-        "name": "Claude Opus 5.5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Opus 5.5 is a step-change improvement over Opus 5 for agentic coding, long-running agentic tasks, knowledge work, communication, and vision. It is more token-efficient per completed task and reports progress, findings, and next steps in clear language.",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2,
-          "output": 10,
-          "cacheRead": 0.1,
-          "cacheWrite": 2.5
-        }
-      },
-      {
         "id": "anthropic/claude-opus-5.5-fast",
         "name": "Claude Opus 5.5 (Fast)",
         "kind": "chat",
@@ -9625,23 +8010,6 @@
         }
       },
       {
-        "id": "openai/gpt-6-luna-batch",
-        "name": "GPT-6 Luna (Batch)",
-        "kind": "chat",
-        "description": "GPT-6 Luna is OpenAI's efficient reasoning model for focused, high-volume tasks. It accepts text and images, generates text, and supports a 1,050,000-token context window with up to 128,000 output tokens. Configurable reasoning effort, structured outputs, prompt caching, and Responses API tools support cost-sensitive applications, coding tasks, and automated workflows.",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.05,
-          "output": 0.25,
-          "cacheRead": 0.005,
-          "cacheWrite": 0.0625
-        }
-      },
-      {
         "id": "openai/gpt-6-luna-fast",
         "name": "GPT-6 Luna (Fast)",
         "kind": "chat",
@@ -9673,23 +8041,6 @@
           "output": 10,
           "cacheRead": 0.2,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "openai/gpt-6-sol-batch",
-        "name": "GPT-6 Sol (Batch)",
-        "kind": "chat",
-        "description": "GPT-6 Sol is OpenAI's reasoning model for complex coding and agentic workflows. It accepts text and images, generates text, and supports a 1,050,000-token context window with up to 128,000 output tokens. Configurable reasoning effort, structured outputs, prompt caching, and Responses API tools make it suited to software development and multi-step automation.",
-        "releasedAt": "2026-09-22",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.1,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -9948,23 +8299,6 @@
         }
       },
       {
-        "id": "openai/gpt-6-astra-batch",
-        "name": "GPT-6 Astra (Batch)",
-        "kind": "chat",
-        "description": "GPT-6 Astra is OpenAI's most capable model for complex reasoning, coding, computer use, research, and document creation.",
-        "releasedAt": "2026-09-04",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.5,
-          "cacheWrite": 6.25
-        }
-      },
-      {
         "id": "openai/gpt-6-astra-fast",
         "name": "GPT-6 Astra (Fast)",
         "kind": "chat",
@@ -10098,23 +8432,6 @@
           "output": 50,
           "cacheRead": 0.25,
           "cacheWrite": 12.5
-        }
-      },
-      {
-        "id": "anthropic/claude-fable-5.1-batch",
-        "name": "Claude Fable 5.1 (Batch)",
-        "kind": "chat",
-        "description": "Claude Fable 5.1 improves on Fable 5 across long-running agentic coding, knowledge work, and research, following instructions precisely over sessions that run unattended for hours.",
-        "releasedAt": "2026-08-31",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.125,
-          "cacheWrite": 6.25
         }
       },
       {
@@ -10515,23 +8832,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-5-batch",
-        "name": "Claude Opus 5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Opus 5 is the latest model in Anthropic's Opus family and a step-change improvement over Opus 4.8. It delivers major gains over Opus 4.8 in agentic coding, professional knowledge work, and long-horizon reasoning, and it is stronger per token across effort levels.",
-        "releasedAt": "2026-07-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
-        }
-      },
-      {
         "id": "anthropic/claude-opus-5-fast",
         "name": "Claude Opus 5 (Fast)",
         "kind": "chat",
@@ -10566,23 +8866,6 @@
         }
       },
       {
-        "id": "google/gemini-3.5-flash-lite-batch",
-        "name": "Gemini 3.5 Flash Lite (Batch)",
-        "kind": "chat",
-        "description": "Gemini 3.5 Flash Lite features upgraded agentic capabilities, making the model ideal for subagents in complex workflows.",
-        "releasedAt": "2026-07-21",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 65000,
-        "cost": {
-          "input": 0.15,
-          "output": 1.25,
-          "cacheRead": 0.015,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "google/gemini-3.6-flash",
         "name": "Gemini 3.6 Flash",
         "kind": "chat",
@@ -10596,23 +8879,6 @@
           "input": 0.75,
           "output": 3.75,
           "cacheRead": 0.075,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "google/gemini-3.6-flash-batch",
-        "name": "Gemini 3.6 Flash (Batch)",
-        "kind": "chat",
-        "description": "Gemini 3.6 Flash delivers higher quality across coding, agentic workflows, and web development with reduced token consumption and fewer model calls compared to previous model iterations.",
-        "releasedAt": "2026-07-21",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 0.375,
-          "output": 1.875,
-          "cacheRead": 0.0375,
           "cacheWrite": 0
         }
       },
@@ -10676,23 +8942,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.6-luna-batch",
-        "name": "GPT 5.6 Luna (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Luna is a fast, affordable GPT-5.6 model that brings strong capability at the lowest cost in the series.",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.1,
-          "output": 0.6,
-          "cacheRead": 0.01,
-          "cacheWrite": 0.125
-        }
-      },
-      {
         "id": "openai/gpt-5.6-luna-fast",
         "name": "GPT 5.6 Luna (Fast)",
         "kind": "chat",
@@ -10727,23 +8976,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.6-sol-batch",
-        "name": "GPT 5.6 Sol (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Sol is the flagship of OpenAI's GPT-5.6 series, its most capable model for long-horizon agentic work across coding, biology, and cybersecurity.",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2,
-          "output": 10,
-          "cacheRead": 0.2,
-          "cacheWrite": 2.5
-        }
-      },
-      {
         "id": "openai/gpt-5.6-sol-fast",
         "name": "GPT 5.6 Sol (Fast)",
         "kind": "chat",
@@ -10775,23 +9007,6 @@
           "output": 12,
           "cacheRead": 0.2,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "openai/gpt-5.6-terra-batch",
-        "name": "GPT 5.6 Terra (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.6 Terra is a balanced GPT-5.6 model for everyday work, with performance comparable to the previous generation at half the cost.",
-        "releasedAt": "2026-07-09",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 6,
-          "cacheRead": 0.1,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -10880,23 +9095,6 @@
         }
       },
       {
-        "id": "anthropic/claude-fable-5-batch",
-        "name": "Claude Fable 5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Fable 5 is a Mythos-class model with robust safeguards. It can handle long-running, complex, and asynchronous tasks where previous models would have needed more frequent check-ins.",
-        "releasedAt": "2026-07-01",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 5,
-          "output": 25,
-          "cacheRead": 0.5,
-          "cacheWrite": 6.25
-        }
-      },
-      {
         "id": "anthropic/claude-sonnet-5",
         "name": "Claude Sonnet 5",
         "kind": "chat",
@@ -10911,23 +9109,6 @@
           "output": 10,
           "cacheRead": 0.2,
           "cacheWrite": 2.5
-        }
-      },
-      {
-        "id": "anthropic/claude-sonnet-5-batch",
-        "name": "Claude Sonnet 5 (Batch)",
-        "kind": "chat",
-        "description": "Sonnet 5 is an upgrade to Sonnet 4.6, with gains across agentic coding and professional work. It builds on the strengths of previous Sonnet models, bringing top-tier intelligence at Sonnet pricing for coding, agents, and everyday professional work at scale.",
-        "releasedAt": "2026-06-29",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1,
-          "output": 5,
-          "cacheRead": 0.1,
-          "cacheWrite": 1.25
         }
       },
       {
@@ -11109,23 +9290,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-4.8-batch",
-        "name": "Claude Opus 4.8 (Batch)",
-        "kind": "chat",
-        "description": "Opus 4.8 is a focused upgrade to Opus 4.7 and is Anthropic's best generally available model for coding, agentic tasks, and enterprise workflows. It builds on the strengths of previous Opus models with stronger performance on complex, multi-step coding tasks. Anthropic recommends using it on long-horizon coding and agentic tasks. It is also stronger on professional work, including document drafting, data analysis, and presentations.",
-        "releasedAt": "2026-05-28",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
-        }
-      },
-      {
         "id": "anthropic/claude-opus-4.8-fast",
         "name": "Claude Opus 4.8 (Fast)",
         "kind": "chat",
@@ -11219,23 +9383,6 @@
         }
       },
       {
-        "id": "google/gemini-3.1-flash-lite-batch",
-        "name": "Gemini 3.1 Flash Lite (Batch)",
-        "kind": "chat",
-        "description": "Gemini 3.1 Flash Lite outperforms 2.5 Flash Lite on overall quality and lands close to 2.5 Flash performance across key capability areas. It is a workhorse model for high-volume use cases, with improvements across audio input/ASR, RAG snippet ranking, translation, data extraction, and code completion.",
-        "releasedAt": "2026-05-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 65000,
-        "cost": {
-          "input": 0.125,
-          "output": 0.75,
-          "cacheRead": 0.015,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "spacexai/grok-4.3",
         "name": "Grok 4.3",
         "kind": "chat",
@@ -11249,23 +9396,6 @@
           "input": 1.25,
           "output": 2.5,
           "cacheRead": 0.2,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "spacexai/grok-4.3-batch",
-        "name": "Grok 4.3 (Batch)",
-        "kind": "chat",
-        "description": "Grok 4.3 is a new model matching the scale of Grok 4.20 with an improved architecture and a December 2025 knowledge cutoff.",
-        "releasedAt": "2026-04-30",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 1000000,
-        "cost": {
-          "input": 1,
-          "output": 2,
-          "cacheRead": 0.16,
           "cacheWrite": 0
         }
       },
@@ -11321,23 +9451,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.5-batch",
-        "name": "GPT 5.5 (Batch)",
-        "kind": "chat",
-        "description": "GPT‑5.5 understands what you’re trying to do faster and can carry more of the work itself. It excels at writing and debugging code, researching online, analyzing data, creating documents and spreadsheets, operating software, and moving across tools until a task is finished. Instead of carefully managing every step, you can give GPT‑5.5 a messy, multi-part task and trust it to plan, use tools, check its work, navigate through ambiguity, and keep going.",
-        "releasedAt": "2026-04-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 15,
-          "cacheRead": 0.25,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.5-fast",
         "name": "GPT 5.5 (Fast)",
         "kind": "chat",
@@ -11366,22 +9479,6 @@
         "cost": {
           "input": 30,
           "output": 180,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.5-pro-batch",
-        "name": "GPT 5.5 Pro (Batch)",
-        "kind": "chat",
-        "releasedAt": "2026-04-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 15,
-          "output": 90,
           "cacheRead": 0,
           "cacheWrite": 0
         }
@@ -11499,23 +9596,6 @@
           "output": 25,
           "cacheRead": 0.5,
           "cacheWrite": 6.25
-        }
-      },
-      {
-        "id": "anthropic/claude-opus-4.7-batch",
-        "name": "Claude Opus 4.7 (Batch)",
-        "kind": "chat",
-        "description": "Opus 4.7 builds on the coding and agentic strengths of Opus 4.6 with stronger performance on complex, multi-step tasks and more reliable agentic execution. It also brings improved performance on knowledge work, from drafting documents to building presentations and analyzing data.",
-        "releasedAt": "2026-04-16",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
         }
       },
       {
@@ -11646,23 +9726,6 @@
         }
       },
       {
-        "id": "openai/gpt-5.4-mini-batch",
-        "name": "GPT 5.4 Mini (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 Mini brings the strengths of GPT-5.4 to a faster, more efficient model designed for high-volume workloads.",
-        "releasedAt": "2026-03-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.375,
-          "output": 2.25,
-          "cacheRead": 0.0375,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.4-mini-fast",
         "name": "GPT 5.4 Mini (Fast)",
         "kind": "chat",
@@ -11693,23 +9756,6 @@
           "input": 0.2,
           "output": 1.25,
           "cacheRead": 0.02,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.4-nano-batch",
-        "name": "GPT 5.4 Nano (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 Nano is designed for tasks where speed and cost matter most like classification, data extraction, ranking, and sub-agents.",
-        "releasedAt": "2026-03-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.1,
-          "output": 0.625,
-          "cacheRead": 0.01,
           "cacheWrite": 0
         }
       },
@@ -11816,23 +9862,6 @@
         }
       },
       {
-        "id": "spacexai/grok-4.20-multi-agent-batch",
-        "name": "Grok 4.20 Multi-Agent (Batch)",
-        "kind": "chat",
-        "description": "Multiple agents collaborate in parallel to perform deep research tasks.",
-        "releasedAt": "2026-03-10",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 2000000,
-        "maxTokens": 2000000,
-        "cost": {
-          "input": 1,
-          "output": 2,
-          "cacheRead": 0.16,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "spacexai/grok-4.20-non-reasoning",
         "name": "Grok 4.20 Non-Reasoning",
         "kind": "chat",
@@ -11846,23 +9875,6 @@
           "input": 1.25,
           "output": 2.5,
           "cacheRead": 0.2,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "spacexai/grok-4.20-non-reasoning-batch",
-        "name": "Grok 4.20 Non-Reasoning (Batch)",
-        "kind": "chat",
-        "description": "Grok 4.20 Beta is the newest flagship model from xAI with industry-leading speed and agentic tool calling capabilities. It combines the lowest hallucination rate on the market with strict prompt adherence, delivering consistently precise and truthful responses.",
-        "releasedAt": "2026-03-10",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 2000000,
-        "maxTokens": 2000000,
-        "cost": {
-          "input": 1,
-          "output": 2,
-          "cacheRead": 0.16,
           "cacheWrite": 0
         }
       },
@@ -11884,23 +9896,6 @@
         }
       },
       {
-        "id": "spacexai/grok-4.20-reasoning-batch",
-        "name": "Grok 4.20 Reasoning (Batch)",
-        "kind": "chat",
-        "description": "Grok 4.20 Beta is the newest flagship model from xAI with industry-leading speed and agentic tool calling capabilities. It combines the lowest hallucination rate on the market with strict prompt adherence, delivering consistently precise and truthful responses.",
-        "releasedAt": "2026-03-10",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 2000000,
-        "maxTokens": 2000000,
-        "cost": {
-          "input": 1,
-          "output": 2,
-          "cacheRead": 0.16,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.4",
         "name": "GPT 5.4",
         "kind": "chat",
@@ -11914,23 +9909,6 @@
           "input": 2.5,
           "output": 15,
           "cacheRead": 0.25,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.4-batch",
-        "name": "GPT 5.4 (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.4 is OpenAI's best general-purpose model, part of the GPT-5 flagship model family. It's their most intelligent model yet for both general and agentic tasks.",
-        "releasedAt": "2026-03-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1050000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1.25,
-          "output": 7.5,
-          "cacheRead": 0.125,
           "cacheWrite": 0
         }
       },
@@ -12011,23 +9989,6 @@
         }
       },
       {
-        "id": "google/gemini-3.1-pro-preview-batch",
-        "name": "Gemini 3.1 Pro Preview (Batch)",
-        "kind": "chat",
-        "description": "Improved SWE and agentic capabilities, improved token efficiency and thinking, and expanded thinking levels.",
-        "releasedAt": "2026-02-19",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 1,
-          "output": 6,
-          "cacheRead": 0.2,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "anthropic/claude-sonnet-4.6",
         "name": "Claude Sonnet 4.6",
         "kind": "chat",
@@ -12042,23 +10003,6 @@
           "output": 15,
           "cacheRead": 0.3,
           "cacheWrite": 3.75
-        }
-      },
-      {
-        "id": "anthropic/claude-sonnet-4.6-batch",
-        "name": "Claude Sonnet 4.6 (Batch)",
-        "kind": "chat",
-        "description": "Claude Sonnet 4.6 is the most capable Sonnet-class model yet, with frontier performance across coding, agents, and professional work. It excels at iterative development, complex codebase navigation, end-to-end project management with memory, polished document creation, and confident computer use for web QA and workflow automation.",
-        "releasedAt": "2026-02-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 1.5,
-          "output": 7.5,
-          "cacheRead": 0.15,
-          "cacheWrite": 1.875
         }
       },
       {
@@ -12135,23 +10079,6 @@
           "output": 25,
           "cacheRead": 0.5,
           "cacheWrite": 6.25
-        }
-      },
-      {
-        "id": "anthropic/claude-opus-4.6-batch",
-        "name": "Claude Opus 4.6 (Batch)",
-        "kind": "chat",
-        "description": "Opus 4.6 is the world’s best model for coding and professional work, built to power agents that take on whole categories of real-world work. It excels across the entire SDLC, breaking through on hard problems, identifying complex bugs, and demonstrating deeper codebase understanding. It also delivers a step-change in knowledge work, with near-production-ready documents, presentations, and spreadsheets on the first pass.",
-        "releasedAt": "2026-02-05",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
         }
       },
       {
@@ -12308,23 +10235,6 @@
         }
       },
       {
-        "id": "google/gemini-3-flash-batch",
-        "name": "Gemini 3 Flash (Batch)",
-        "kind": "chat",
-        "description": "Google's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
-        "releasedAt": "2025-12-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 0.25,
-          "output": 1.5,
-          "cacheRead": 0.05,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5.2",
         "name": "GPT 5.2",
         "kind": "chat",
@@ -12355,23 +10265,6 @@
           "input": 21,
           "output": 168,
           "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5.2-batch",
-        "name": "GPT 5.2 (Batch)",
-        "kind": "chat",
-        "description": "GPT-5.2 is OpenAI's best general-purpose model, part of the GPT-5 flagship model family. It's their most intelligent model yet for both general and agentic tasks.",
-        "releasedAt": "2025-12-11",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.875,
-          "output": 7,
-          "cacheRead": 0.0875,
           "cacheWrite": 0
         }
       },
@@ -12512,23 +10405,6 @@
         }
       },
       {
-        "id": "anthropic/claude-opus-4.5-batch",
-        "name": "Claude Opus 4.5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Opus 4.5 is Anthropic’s latest model in the Opus series, meant for demanding reasoning tasks and complex problem solving. This model has improvements in general intelligence and vision compared to previous iterations. In addition, it is suited for difficult coding tasks and agentic workflows, especially those with computer use and tool use, and can effectively handle context usage and external memory files.",
-        "releasedAt": "2025-11-24",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 2.5,
-          "output": 12.5,
-          "cacheRead": 0.25,
-          "cacheWrite": 3.125
-        }
-      },
-      {
         "id": "openai/gpt-5.1-codex-max",
         "name": "GPT 5.1 Codex Max",
         "kind": "chat",
@@ -12665,23 +10541,6 @@
         }
       },
       {
-        "id": "anthropic/claude-haiku-4.5-batch",
-        "name": "Claude Haiku 4.5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Haiku 4.5 matches Sonnet 4's performance on coding, computer use, and agent tasks at substantially lower cost and faster speeds. It delivers near-frontier performance and Claude’s unique character at a price point that works for scaled sub-agent deployments, free tier products, and intelligence-sensitive applications with budget constraints.",
-        "releasedAt": "2025-10-15",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 200000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 0.5,
-          "output": 2.5,
-          "cacheRead": 0.05,
-          "cacheWrite": 0.625
-        }
-      },
-      {
         "id": "interfaze/interfaze-beta",
         "name": "Interfaze Beta",
         "kind": "chat",
@@ -12711,23 +10570,6 @@
         "cost": {
           "input": 15,
           "output": 120,
-          "cacheRead": 0,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5-pro-batch",
-        "name": "GPT-5 pro (Batch)",
-        "kind": "chat",
-        "description": "GPT-5 pro uses more compute to think harder and provide consistently better answers. Since GPT-5 pro is designed to tackle tough problems, some requests may take several minutes to finish.",
-        "releasedAt": "2025-10-06",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 272000,
-        "cost": {
-          "input": 7.5,
-          "output": 60,
           "cacheRead": 0,
           "cacheWrite": 0
         }
@@ -12764,23 +10606,6 @@
           "output": 15,
           "cacheRead": 0.3,
           "cacheWrite": 3.75
-        }
-      },
-      {
-        "id": "anthropic/claude-sonnet-4.5-batch",
-        "name": "Claude Sonnet 4.5 (Batch)",
-        "kind": "chat",
-        "description": "Claude Sonnet 4.5 is the newest model in the Sonnet series, offering improvements and updates over Sonnet 4.",
-        "releasedAt": "2025-09-29",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 1.5,
-          "output": 7.5,
-          "cacheRead": 0.15,
-          "cacheWrite": 1.875
         }
       },
       {
@@ -12903,23 +10728,6 @@
         }
       },
       {
-        "id": "openai/gpt-5-batch",
-        "name": "GPT-5 (Batch)",
-        "kind": "chat",
-        "description": "GPT-5 is OpenAI's flagship language model that excels at complex reasoning, broad real-world knowledge, code-intensive, and multi-step agentic tasks.",
-        "releasedAt": "2025-08-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.625,
-          "output": 5,
-          "cacheRead": 0.0625,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5-fast",
         "name": "GPT-5 (Fast)",
         "kind": "chat",
@@ -12954,23 +10762,6 @@
         }
       },
       {
-        "id": "openai/gpt-5-mini-batch",
-        "name": "GPT-5 mini (Batch)",
-        "kind": "chat",
-        "description": "GPT-5 mini is a cost optimized model that excels at reasoning/chat tasks. It offers an optimal balance between speed, cost, and capability.",
-        "releasedAt": "2025-08-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.125,
-          "output": 1,
-          "cacheRead": 0.0125,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-5-mini-fast",
         "name": "GPT-5 mini (Fast)",
         "kind": "chat",
@@ -13001,23 +10792,6 @@
           "input": 0.05,
           "output": 0.4,
           "cacheRead": 0.005,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-5-nano-batch",
-        "name": "GPT-5 nano (Batch)",
-        "kind": "chat",
-        "description": "GPT-5 nano is a high throughput model that excels at simple instruction or classification tasks.",
-        "releasedAt": "2025-08-07",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 400000,
-        "maxTokens": 128000,
-        "cost": {
-          "input": 0.025,
-          "output": 0.2,
-          "cacheRead": 0.0025,
           "cacheWrite": 0
         }
       },
@@ -13158,23 +10932,6 @@
         }
       },
       {
-        "id": "google/gemini-2.5-flash-lite-batch",
-        "name": "Gemini 2.5 Flash Lite (Batch)",
-        "kind": "chat",
-        "description": "Gemini 2.5 Flash-Lite is a balanced, low-latency model with configurable thinking budgets and tool connectivity (e.g., Google Search grounding and code execution). It supports multimodal input and offers a 1M-token context window.",
-        "releasedAt": "2025-06-17",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65535,
-        "cost": {
-          "input": 0.05,
-          "output": 0.2,
-          "cacheRead": 0.01,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/o3-pro",
         "name": "o3 Pro",
         "kind": "chat",
@@ -13205,23 +10962,6 @@
           "input": 0.4,
           "output": 1.6,
           "cacheRead": 0.1,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-4.1-mini-batch",
-        "name": "GPT-4.1 mini (Batch)",
-        "kind": "chat",
-        "description": "GPT 4.1 mini provides a balance between intelligence, speed, and cost that makes it an attractive model for many use cases.",
-        "releasedAt": "2025-05-14",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 1047576,
-        "maxTokens": 32768,
-        "cost": {
-          "input": 0.2,
-          "output": 0.8,
-          "cacheRead": 0.05,
           "cacheWrite": 0
         }
       },
@@ -13345,23 +11085,6 @@
         }
       },
       {
-        "id": "openai/gpt-4.1-batch",
-        "name": "GPT-4.1 (Batch)",
-        "kind": "chat",
-        "description": "GPT 4.1 is OpenAI's flagship model for complex tasks. It is well suited for problem solving across domains.",
-        "releasedAt": "2025-04-14",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 1047576,
-        "maxTokens": 32768,
-        "cost": {
-          "input": 1,
-          "output": 4,
-          "cacheRead": 0.25,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-4.1-fast",
         "name": "GPT-4.1 (Fast)",
         "kind": "chat",
@@ -13430,23 +11153,6 @@
         }
       },
       {
-        "id": "google/gemini-2.5-flash-batch",
-        "name": "Gemini 2.5 Flash (Batch)",
-        "kind": "chat",
-        "description": "Gemini 2.5 Flash is a thinking model that offers great, well-rounded capabilities. It is designed to offer a balance between price and performance with multimodal support and a 1M token context window.",
-        "releasedAt": "2025-03-20",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1000000,
-        "maxTokens": 64000,
-        "cost": {
-          "input": 0.15,
-          "output": 1.25,
-          "cacheRead": 0.03,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "google/gemini-2.5-pro",
         "name": "Gemini 2.5 Pro",
         "kind": "chat",
@@ -13459,23 +11165,6 @@
         "cost": {
           "input": 1.25,
           "output": 10,
-          "cacheRead": 0.125,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "google/gemini-2.5-pro-batch",
-        "name": "Gemini 2.5 Pro (Batch)",
-        "kind": "chat",
-        "description": "Gemini 2.5 Pro is our most advanced reasoning Gemini model, capable of solving complex problems. Gemini 2.5 Pro can comprehend vast datasets and challenging problems from different information sources, including text, audio, images, video, and even entire code repositories.",
-        "releasedAt": "2025-03-20",
-        "reasoning": true,
-        "thinkingLevels": [],
-        "contextWindow": 1048576,
-        "maxTokens": 65535,
-        "cost": {
-          "input": 0.625,
-          "output": 5,
           "cacheRead": 0.125,
           "cacheWrite": 0
         }
@@ -13668,23 +11357,6 @@
         }
       },
       {
-        "id": "openai/gpt-4o-mini-batch",
-        "name": "GPT-4o mini (Batch)",
-        "kind": "chat",
-        "description": "GPT-4o mini from OpenAI is their most advanced and cost-efficient small model. It is multi-modal (accepting text or image inputs and outputting text) and has higher intelligence than gpt-3.5-turbo but is just as fast.",
-        "releasedAt": "2024-07-18",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 128000,
-        "maxTokens": 16384,
-        "cost": {
-          "input": 0.075,
-          "output": 0.3,
-          "cacheRead": 0.0375,
-          "cacheWrite": 0
-        }
-      },
-      {
         "id": "openai/gpt-4o-mini-fast",
         "name": "GPT-4o mini (Fast)",
         "kind": "chat",
@@ -13749,23 +11421,6 @@
           "input": 2.5,
           "output": 10,
           "cacheRead": 1.25,
-          "cacheWrite": 0
-        }
-      },
-      {
-        "id": "openai/gpt-4o-batch",
-        "name": "GPT-4o (Batch)",
-        "kind": "chat",
-        "description": "GPT-4o from OpenAI has broad general knowledge and domain expertise allowing it to follow complex instructions in natural language and solve difficult problems accurately. It matches GPT-4 Turbo performance with a faster and cheaper API.",
-        "releasedAt": "2024-05-13",
-        "reasoning": false,
-        "thinkingLevels": [],
-        "contextWindow": 128000,
-        "maxTokens": 16384,
-        "cost": {
-          "input": 1.25,
-          "output": 5,
-          "cacheRead": 0.625,
           "cacheWrite": 0
         }
       },

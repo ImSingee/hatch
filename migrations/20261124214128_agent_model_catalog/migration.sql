@@ -23,23 +23,35 @@ ALTER TABLE "agent_models" ALTER COLUMN "max_tokens" DROP NOT NULL;--> statement
 ALTER TABLE "agent_pending_messages" ADD CONSTRAINT "agent_pending_messages_thinking_level_check" CHECK ("agent_pending_messages"."thinking_level" in ('off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'));--> statement-breakpoint
 ALTER TABLE "agent_runs" ADD CONSTRAINT "agent_runs_thinking_level_check" CHECK ("agent_runs"."thinking_level" in ('off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'));--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_thinking_level_check" CHECK ("agent_sessions"."thinking_level" in ('off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'));--> statement-breakpoint
--- Link providers that point at a known vendor endpoint to the built-in
--- catalog. Their existing reasoning, context window and max tokens values
+-- Link providers that point at a built-in preset's endpoint (or a known
+-- alias of one) to the catalog. Their existing reasoning, context window and max tokens values
 -- stay as explicit overrides; the catalog adds what Hatch never stored:
 -- thinking levels and the request-format flags pi expects for the model.
 UPDATE "agent_providers" SET "catalog_provider_id" = CASE rtrim(lower(btrim("base_url")), '/')
-	WHEN 'https://api.openai.com/v1' THEN 'openai'
 	WHEN 'https://api.anthropic.com' THEN 'anthropic'
+	WHEN 'https://api.openai.com/v1' THEN 'openai'
 	WHEN 'https://api.deepseek.com' THEN 'deepseek'
-	WHEN 'https://api.deepseek.com/v1' THEN 'deepseek'
 	WHEN 'https://openrouter.ai/api/v1' THEN 'openrouter'
 	WHEN 'https://api.moonshot.ai/v1' THEN 'moonshotai'
-	WHEN 'https://api.moonshot.cn/v1' THEN 'moonshotai-cn'
-	WHEN 'https://api.x.ai/v1' THEN 'xai'
 	WHEN 'https://api.z.ai/api/paas/v4' THEN 'zai'
-	WHEN 'https://open.bigmodel.cn/api/paas/v4' THEN 'zhipuai'
-	WHEN 'https://api.mistral.ai/v1' THEN 'mistral'
+	WHEN 'https://api.x.ai/v1' THEN 'xai'
 	WHEN 'https://ai-gateway.vercel.sh/v1' THEN 'vercel-ai-gateway'
+	WHEN 'https://api.mistral.ai/v1' THEN 'mistral'
+	WHEN 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' THEN 'alibaba'
+	WHEN 'https://ark.cn-beijing.volces.com/api/v3' THEN 'volcengine'
+	WHEN 'https://open.bigmodel.cn/api/paas/v4' THEN 'zhipuai'
+	WHEN 'https://api.moonshot.cn/v1' THEN 'moonshotai-cn'
+	WHEN 'https://api.z.ai/api/coding/paas/v4' THEN 'zai-coding-plan'
+	WHEN 'https://open.bigmodel.cn/api/coding/paas/v4' THEN 'zhipuai-coding-plan'
+	WHEN 'https://api.minimaxi.com/anthropic' THEN 'minimax-cn'
+	WHEN 'https://api.kimi.com/coding' THEN 'kimi-coding'
+	WHEN 'https://api.siliconflow.com/v1' THEN 'siliconflow'
+	WHEN 'https://api.groq.com/openai/v1' THEN 'groq'
+	WHEN 'https://api.cerebras.ai/v1' THEN 'cerebras'
+	WHEN 'https://integrate.api.nvidia.com/v1' THEN 'nvidia'
+	WHEN 'https://api.xiaomimimo.com/v1' THEN 'xiaomi'
+	WHEN 'https://api.stepfun.com/v1' THEN 'stepfun'
+	WHEN 'https://api.deepseek.com/v1' THEN 'deepseek'
 END
 WHERE "catalog_provider_id" IS NULL;--> statement-breakpoint
 -- A reference the catalog does not contain is ignored at read time, so this

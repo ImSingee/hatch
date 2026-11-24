@@ -12,7 +12,6 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { CURATED_PROVIDERS } from './curation';
 import {
-  CATALOG_API_TYPES,
   CATALOG_SCHEMA_VERSION,
   THINKING_LEVELS,
   catalogSchema,
@@ -36,6 +35,9 @@ export const CURATION_FINGERPRINT = `v${CATALOG_SCHEMA_VERSION}-${createHash(
   .slice(0, 16)}`;
 
 export class CatalogBuildError extends Error {}
+
+/** `openrouter/x:batch`, `vercel/x-batch`: offline batch-only variants. */
+const BATCH_VARIANT = /[:-]batch$/;
 
 const rawTopSchema = z.object({
   _meta: z.object({ generatedAt: z.iso.datetime({ offset: true }) }),
@@ -117,10 +119,6 @@ function cleanHttpsUrl(value: string | undefined): string | undefined {
   for (const key of tracking) url.searchParams.delete(key);
   const text = url.toString();
   return text.length <= 500 ? text : undefined;
-}
-
-function isApiType(value: unknown): value is CatalogProvider['apiType'] {
-  return (CATALOG_API_TYPES as readonly unknown[]).includes(value);
 }
 
 /** aidy `reasoningEffort` values in pi order; `none` becomes `off`. */
@@ -238,25 +236,30 @@ export function buildCatalog(raw: unknown): CatalogBuildResult {
         `Provider "${curated.id}" is missing or malformed in the model data.`,
       );
     const upstream = parsed.data;
-    const apiType = curated.apiType ?? upstream.api;
-    if (!isApiType(apiType))
-      throw new CatalogBuildError(
-        `Provider "${curated.id}" uses API type "${String(apiType)}", which Hatch cannot run.`,
-      );
-    const baseUrl = curated.baseUrl ?? upstream.baseUrl;
-    if (!baseUrl || !/^https?:\/\//.test(baseUrl))
-      throw new CatalogBuildError(
-        `Provider "${curated.id}" has no usable base URL.`,
+    // Endpoint and API type come from curation, never from the feed.
+    const { apiType, baseUrl } = curated;
+    if (upstream.api !== apiType)
+      warnings.push(
+        `Provider "${curated.id}" lists API type "${String(upstream.api)}"; kept "${apiType}".`,
       );
 
+    // A curated provider's list must be there: losing it is a broken feed,
+    // not churn, and would publish a preset with no models.
     const rawModels = top.data.models[curated.id];
+    if (!Array.isArray(rawModels) || rawModels.length === 0)
+      throw new CatalogBuildError(
+        `Provider "${curated.id}" has no model list in the model data.`,
+      );
     const list: CatalogModel[] = [];
     const seen = new Set<string>();
-    for (const entry of Array.isArray(rawModels) ? rawModels : []) {
+    for (const entry of rawModels) {
       const result = rawModelSchema.safeParse(entry);
       if (!result.success || result.data.deprecated) continue;
       const model = result.data;
       if (seen.has(model.id)) continue;
+      // Batch variants are served through a separate batch API, not the
+      // interactive endpoint a run calls.
+      if (BATCH_VARIANT.test(model.id)) continue;
       const type = model.type ?? 'chat';
       if (type === 'chat') {
         // A chat model may speak another API than its provider; one Hatch
