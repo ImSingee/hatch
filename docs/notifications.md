@@ -41,10 +41,27 @@ signed-in user can see and change it.
   card only adds to them; envelopes carry it as `notification.card`. Pushes
   set it and edits replace or remove it (`card: null`); empty spellings mean
   no card. The rules live in `packages/hatch-platform-api/notification-card*.ts`.
-- **Response route**: `(sourceType, sourceId?, kind?) → destination`, where the
-  destination is a webhook or an App that accepts responses. Every matching
-  response route receives the answer once. An App may receive answers to its
-  own notifications.
+- **Response route**: `(sourceType, sourceId?, kind?) → target`, where the
+  target is a webhook, an App that accepts responses, or the Agent. Every
+  matching response route receives the answer once. An App may receive answers
+  to its own notifications.
+
+### Answers the Agent acts on
+
+An answer reaches the Agent as a message in an Agent chat, queued like a
+message a person sends (it starts a run when the chat is idle) and sent as the
+person who answered (`src/server/notifications/agent-answers.ts`):
+
+- A notification the Agent sent with its Run credential keeps that chat
+  (`notifications.agent_session_id`); answers go back there.
+- A response route with an `agent` target sends answers to a fixed chat
+  (`agent_session_id`), or opens one chat per notification on its first
+  answer, which later questions on the same notification reuse. Its optional
+  `agent_instructions` follow the answer in the message.
+- An answer the Agent gave itself (a Run has no user) is never sent back.
+  Hand-off happens after the answer is stored; a missing Agent model is logged
+  and leaves the answer recorded. The message names the notification and the
+  round, so retries never queue it twice.
 
 Code: `src/server/notifications/` (`ingest.ts`, `dispatcher.ts`, `service.ts`,
 `adapters/*`, `apns/*`). Tables: `notifications`, `notification_deliveries`,

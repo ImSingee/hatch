@@ -1138,6 +1138,14 @@ export const notifications = snakeCase.table(
     }),
     /** Sender of a `user` notification; cleared when the user is deleted. */
     userId: text().references(() => user.id, { onDelete: 'set null' }),
+    /**
+     * The Agent chat answers continue: the one whose Run sent it, or the one
+     * an Agent response route opened for it. Cleared with the chat.
+     */
+    agentSessionId: ulid('agent_session_id').references(
+      () => agentSessions.id,
+      { onDelete: 'set null' },
+    ),
     sourceName: text().notNull(),
     kind: text().notNull(),
     kindName: text().notNull(),
@@ -1510,10 +1518,12 @@ export const notificationRevisions = snakeCase.table(
   (table) => [primaryKey({ columns: [table.notificationId, table.revision] })],
 );
 
+export type NotificationResponseTargetType = 'destination' | 'agent';
+
 /**
  * Where answers go: answers to notifications matching (source, kind) are
- * sent to one webhook or App destination. A null sourceId/kind matches any
- * value.
+ * sent to one webhook or App destination, or to the Agent as a message in a
+ * chat. A null sourceId/kind matches any value.
  */
 export const notificationResponseRoutes = snakeCase.table(
   'notification_response_routes',
@@ -1526,14 +1536,36 @@ export const notificationResponseRoutes = snakeCase.table(
       onDelete: 'cascade',
     }),
     kind: text(),
-    targetDestinationId: ulid()
+    targetType: text('target_type')
+      .$type<NotificationResponseTargetType>()
       .notNull()
-      .references(() => notificationDestinations.id, { onDelete: 'cascade' }),
+      .default('destination'),
+    /** The webhook or App, for a `destination` target. */
+    targetDestinationId: ulid().references(() => notificationDestinations.id, {
+      onDelete: 'cascade',
+    }),
+    /**
+     * For an `agent` target: the chat every answer goes to, or null for one
+     * chat per notification (opened by its first answer).
+     */
+    agentSessionId: ulid('agent_session_id').references(
+      () => agentSessions.id,
+      { onDelete: 'set null' },
+    ),
+    /** For an `agent` target: what the Agent should do with the answer. */
+    agentInstructions: text('agent_instructions'),
     enabled: boolean().notNull().default(true),
     createdAt,
     updatedAt,
   },
   () => [
+    check(
+      'notification_response_routes_target_check',
+      sql`(
+        ("notification_response_routes"."target_type" = 'destination' and "notification_response_routes"."target_destination_id" is not null and "notification_response_routes"."agent_session_id" is null and "notification_response_routes"."agent_instructions" is null)
+        or ("notification_response_routes"."target_type" = 'agent' and "notification_response_routes"."target_destination_id" is null)
+      )`,
+    ),
     check(
       'notification_response_routes_source_check',
       sql`(

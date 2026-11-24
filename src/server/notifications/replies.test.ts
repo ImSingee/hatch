@@ -297,7 +297,7 @@ describe('answering', () => {
       sourceType: 'channel',
       sourceId: channelId,
       kind: 'deploy',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     received.length = 0;
@@ -468,7 +468,7 @@ describe('direct notifications from a member', () => {
   it('take answers but are never sent along response routes', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const sent = await service.sendNotification({
       to: { type: 'destination', id: deviceId },
@@ -545,7 +545,7 @@ describe('answer events', () => {
   it('keep the revision the answer created, even after a later edit', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     await respondToNotification(
@@ -573,7 +573,7 @@ describe('answer events', () => {
   it('never share a revision with notification events', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const events = async (body: Record<string, unknown>, edit: boolean) => {
       // Answered (and maybe edited) before anything was delivered.
@@ -617,7 +617,7 @@ describe('answer events', () => {
   it('survive history retention until they are delivered', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     await respondToNotification(
@@ -651,7 +651,7 @@ describe('dispatching answers under load', () => {
   it('claims answer deliveries even while notifications are backed up', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const answered = await sendForm();
     await respondToNotification(
@@ -721,7 +721,7 @@ describe('answered notifications', () => {
   it('let response route edits keep a concurrent disable', async () => {
     const route = await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     await Promise.all([
       service.updateResponseRoute({ id: route.id, enabled: false }),
@@ -740,7 +740,7 @@ describe('answered notifications', () => {
         await service.createResponseRoute({
           name,
           sourceType: 'any',
-          destinationId: webhookId,
+          target: { destinationId: webhookId },
         }),
       );
     // ULIDs created in the same millisecond have random suffixes.
@@ -939,14 +939,14 @@ describe('response routes', () => {
     await expect(
       service.createResponseRoute({
         sourceType: 'any',
-        destinationId: deviceId,
+        target: { destinationId: deviceId },
       }),
     ).rejects.toMatchObject({ status: 400 });
     const appDestination = await seedApp(false);
     await expect(
       service.createResponseRoute({
         sourceType: 'any',
-        destinationId: appDestination,
+        target: { destinationId: appDestination },
       }),
     ).rejects.toMatchObject({ status: 400 });
     const views = await service.listDestinations();
@@ -963,7 +963,7 @@ describe('response routes', () => {
     await service.createResponseRoute({
       sourceType: 'any',
       kind: 'deploy',
-      destinationId: appDestination,
+      target: { destinationId: appDestination },
     });
     vi.mocked(callAppBackend).mockResolvedValue({
       status: 200,
@@ -1017,7 +1017,7 @@ describe('response routes', () => {
   it('retries a failed answer delivery', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     webhookStatus = 400;
@@ -1115,7 +1115,7 @@ describe('new questions on the same notification', () => {
   it('takes one answer per round, sends each one along response routes, and keeps what each edit replaced', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     await answer(id, { decision: 'approve' });

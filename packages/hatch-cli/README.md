@@ -791,6 +791,7 @@ the answer and its deliveries. Answers go where response routes send them:
 
 ```sh
 hatch notification response-route create --source-type channel --source <channel-id> --destination <webhook-id>
+hatch notification response-route create --source-type channel --source <channel-id> --agent --agent-instructions 'When the answer is Fix it, fix the failing check.'
 ```
 
 A response route targets a webhook, or an App whose manifest sets

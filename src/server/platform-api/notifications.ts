@@ -154,6 +154,41 @@ function responseRoute(view: ResponseRouteView) {
     name: none(view.name),
     sourceId: none(view.sourceId),
     kind: none(view.kind),
+    destinationId: none(view.destinationId),
+    agentSessionId: none(view.agentSessionId),
+    agentInstructions: none(view.agentInstructions),
+  };
+}
+
+/**
+ * The target an UpdateResponseRoute names: a destination, the Agent (unset
+ * chat or instructions keep theirs; an empty string clears them), or none.
+ */
+function agentOrDestination(input: {
+  destinationId?: string;
+  agent: boolean;
+  agentSessionId?: string;
+  agentInstructions?: string;
+}) {
+  if (input.destinationId && input.agent) {
+    throw publicApiError(
+      'BAD_REQUEST',
+      'Set either destination_id or agent, not both.',
+    );
+  }
+  if (input.destinationId) return { destinationId: input.destinationId };
+  const agentChange =
+    input.agentSessionId !== undefined || input.agentInstructions !== undefined;
+  if (!input.agent && !agentChange) return undefined;
+  return {
+    agent: {
+      ...(input.agentSessionId !== undefined
+        ? { sessionId: input.agentSessionId || null }
+        : {}),
+      ...(input.agentInstructions !== undefined
+        ? { instructions: input.agentInstructions || null }
+        : {}),
+    },
   };
 }
 
@@ -278,9 +313,15 @@ export function registerNotificationApi(router: ConnectRouter) {
           : input.groupId
             ? { type: 'group' as const, id: input.groupId }
             : { type: 'destination' as const, id: input.destinationId };
+        const sender = senderOf(context);
+        const run = context.values.get(publicApiContext).run;
         const result = await sendNotification({
           to,
-          sender: senderOf(context),
+          // A Run's send remembers its chat, so answers come back to it.
+          sender:
+            sender.type === 'platform' && run
+              ? { ...sender, agentSessionId: run.sessionId }
+              : sender,
           body: {
             kind: input.kind || undefined,
             title: input.title,
@@ -565,18 +606,39 @@ export function registerNotificationApi(router: ConnectRouter) {
           nextCursor: none(page.nextCursor),
         };
       },
-      createResponseRoute: async (input) => ({
-        route: responseRoute(
-          await createResponseRoute({
-            name: input.name,
-            sourceType: input.sourceType as NotificationRouteSourceType,
-            sourceId: input.sourceId,
-            kind: input.kind,
-            destinationId: input.destinationId,
-            enabled: input.enabled,
-          }),
-        ),
-      }),
+      createResponseRoute: async (input) => {
+        if (Boolean(input.destinationId) === input.agent) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set exactly one of destination_id and agent.',
+          );
+        }
+        if (!input.agent && (input.agentSessionId || input.agentInstructions)) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'agent_session_id and agent_instructions need agent.',
+          );
+        }
+        return {
+          route: responseRoute(
+            await createResponseRoute({
+              name: input.name,
+              sourceType: input.sourceType as NotificationRouteSourceType,
+              sourceId: input.sourceId,
+              kind: input.kind,
+              target: input.agent
+                ? {
+                    agent: {
+                      sessionId: input.agentSessionId || null,
+                      instructions: input.agentInstructions || null,
+                    },
+                  }
+                : { destinationId: input.destinationId! },
+              enabled: input.enabled,
+            }),
+          ),
+        };
+      },
       updateResponseRoute: async (input) => ({
         route: responseRoute(
           await updateResponseRoute({
@@ -587,7 +649,7 @@ export function registerNotificationApi(router: ConnectRouter) {
               | undefined,
             sourceId: input.sourceId,
             kind: input.kind,
-            destinationId: input.destinationId,
+            target: agentOrDestination(input),
             enabled: input.enabled,
           }),
         ),

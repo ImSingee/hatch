@@ -23,6 +23,7 @@ import type {
   NotificationDestinationType,
   NotificationKindDeclaration,
   NotificationRouteSourceType,
+  NotificationResponseTargetType,
   NotificationSourceType,
 } from '~/db/schema';
 import { getPlatformEnv } from '~/env';
@@ -262,7 +263,14 @@ export type ResponseRouteView = {
   sourceType: NotificationRouteSourceType;
   sourceId: string | null;
   kind: string | null;
-  destinationId: string;
+  /** `destination`: a webhook or App. `agent`: a message in an Agent chat. */
+  targetType: NotificationResponseTargetType;
+  /** The webhook or App, for a `destination` target. */
+  destinationId: string | null;
+  /** For an `agent` target: its chat, or null for one chat per notification. */
+  agentSessionId: string | null;
+  /** For an `agent` target: what the Agent should do with each answer. */
+  agentInstructions: string | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1398,12 +1406,23 @@ export async function deleteRoute(id: string): Promise<void> {
 
 /** ================== response routes ================== */
 
+/** Longest instructions an Agent response route gives with each answer. */
+export const MAX_AGENT_INSTRUCTIONS = 2000;
+
+/**
+ * Where a response route sends answers: a webhook or App destination, or the
+ * Agent (a fixed chat, or with `sessionId: null` one chat per notification).
+ */
+export type ResponseRouteTarget =
+  | { destinationId: string }
+  | { agent: { sessionId: string | null; instructions: string | null } };
+
 export type ResponseRouteInput = {
   name?: string | null;
   sourceType: NotificationRouteSourceType;
   sourceId?: string | null;
   kind?: string | null;
-  destinationId: string;
+  target: ResponseRouteTarget;
   enabled?: boolean;
 };
 
@@ -1416,7 +1435,10 @@ function responseRouteView(row: ResponseRouteRow): ResponseRouteView {
     sourceType: row.sourceType,
     sourceId: row.appId ?? row.channelId,
     kind: row.kind,
+    targetType: row.targetType,
     destinationId: row.targetDestinationId,
+    agentSessionId: row.agentSessionId,
+    agentInstructions: row.agentInstructions,
     enabled: row.enabled,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
@@ -1431,9 +1453,38 @@ async function responseRouteValues(
   },
 ) {
   const source = await routeSource(input, checks.source);
+  const name = input.name?.trim() ? cleanName(input.name, 'Route name') : null;
+  const enabled = input.enabled ?? true;
+  if ('agent' in input.target) {
+    const { sessionId } = input.target.agent;
+    const instructions = input.target.agent.instructions?.trim() || null;
+    if (instructions && instructions.length > MAX_AGENT_INSTRUCTIONS) {
+      throw new AppError(
+        `Agent instructions must be at most ${MAX_AGENT_INSTRUCTIONS} characters.`,
+        400,
+      );
+    }
+    if (checks.target && sessionId) {
+      const session = await db.query.agentSessions.findFirst({
+        where: { id: sessionId },
+        columns: { id: true },
+      });
+      if (!session) notFound('Agent chat');
+    }
+    return {
+      name,
+      ...source,
+      targetType: 'agent' as const,
+      targetDestinationId: null,
+      agentSessionId: sessionId || null,
+      agentInstructions: instructions,
+      enabled,
+    };
+  }
+  const { destinationId } = input.target;
   if (checks.target) {
     const destination = await db.query.notificationDestinations.findFirst({
-      where: { id: input.destinationId },
+      where: { id: destinationId },
       columns: { id: true, type: true, acceptsResponses: true },
     });
     if (!destination) notFound('Destination');
@@ -1448,10 +1499,13 @@ async function responseRouteValues(
     }
   }
   return {
-    name: input.name?.trim() ? cleanName(input.name, 'Route name') : null,
+    name,
     ...source,
-    targetDestinationId: input.destinationId,
-    enabled: input.enabled ?? true,
+    targetType: 'destination' as const,
+    targetDestinationId: destinationId,
+    agentSessionId: null,
+    agentInstructions: null,
+    enabled,
   };
 }
 
@@ -1492,8 +1546,23 @@ export async function createResponseRoute(
   return responseRouteView(row!);
 }
 
+/**
+ * Change a response route. Omitted fields keep their value. A target replaces
+ * the current one; for an Agent target, an omitted `sessionId` or
+ * `instructions` keeps the current one when the route already goes to the
+ * Agent.
+ */
 export async function updateResponseRoute(
-  input: { id: string } & Partial<ResponseRouteInput>,
+  input: { id: string } & Partial<Omit<ResponseRouteInput, 'target'>> & {
+      target?:
+        | { destinationId: string }
+        | {
+            agent: {
+              sessionId?: string | null;
+              instructions?: string | null;
+            };
+          };
+    },
 ): Promise<ResponseRouteView> {
   // Lock the row: fields left out keep their current value, never one read
   // before a concurrent change (such as a disable) committed.
@@ -1511,9 +1580,37 @@ export async function updateResponseRoute(
 async function writeResponseRoute(
   tx: TX,
   existing: ResponseRouteRow,
-  input: { id: string } & Partial<ResponseRouteInput>,
+  input: Parameters<typeof updateResponseRoute>[0],
 ): Promise<ResponseRouteView> {
   const current = responseRouteView(existing);
+  const wasAgent = current.targetType === 'agent';
+  const target: ResponseRouteTarget = !input.target
+    ? wasAgent
+      ? {
+          agent: {
+            sessionId: current.agentSessionId,
+            instructions: current.agentInstructions,
+          },
+        }
+      : { destinationId: current.destinationId! }
+    : 'destinationId' in input.target
+      ? { destinationId: input.target.destinationId }
+      : {
+          agent: {
+            sessionId:
+              input.target.agent.sessionId !== undefined
+                ? input.target.agent.sessionId
+                : wasAgent
+                  ? current.agentSessionId
+                  : null,
+            instructions:
+              input.target.agent.instructions !== undefined
+                ? input.target.agent.instructions
+                : wasAgent
+                  ? current.agentInstructions
+                  : null,
+          },
+        };
   const merged: ResponseRouteInput = {
     name: input.name !== undefined ? input.name : current.name,
     sourceType: input.sourceType ?? current.sourceType,
@@ -1524,7 +1621,7 @@ async function writeResponseRoute(
           ? null
           : current.sourceId,
     kind: input.kind !== undefined ? input.kind : current.kind,
-    destinationId: input.destinationId ?? current.destinationId,
+    target,
     enabled: input.enabled ?? current.enabled,
   };
   const checks = {
@@ -1532,7 +1629,11 @@ async function writeResponseRoute(
       merged.sourceType !== current.sourceType ||
       (merged.sourceId || null) !== current.sourceId ||
       (merged.kind || null) !== current.kind,
-    target: merged.destinationId !== current.destinationId,
+    target:
+      'agent' in target
+        ? !wasAgent ||
+          (target.agent.sessionId || null) !== current.agentSessionId
+        : target.destinationId !== current.destinationId,
   };
   const [row] = await tx
     .update(schema.notificationResponseRoutes)

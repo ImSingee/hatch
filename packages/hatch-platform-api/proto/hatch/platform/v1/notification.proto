@@ -987,10 +987,19 @@ message NotificationResponseRoute {
   optional string source_id = 4;
   // Absent: any kind.
   optional string kind = 5;
-  string destination_id = 6;
+  // The webhook or App answers go to; absent for an agent target.
+  optional string destination_id = 6;
   bool enabled = 7;
   string created_at = 8;
   string updated_at = 9;
+  // destination: a webhook or App. agent: each answer becomes a message in an
+  // Agent chat, which starts a run.
+  string target_type = 10;
+  // Agent target: the chat every answer goes to; absent for one chat per
+  // notification (opened by its first answer, reused by later questions).
+  optional string agent_session_id = 11;
+  // Agent target: what the Agent should do with each answer.
+  optional string agent_instructions = 12;
 }
 
 message ListResponseRoutesRequest {
@@ -1015,11 +1024,20 @@ message CreateResponseRouteRequest {
   }];
   optional string source_id = 3 [(buf.validate.field).string.max_len = 191];
   optional string kind = 4 [(buf.validate.field).string.max_len = 64];
-  string destination_id = 5 [(buf.validate.field).string = {
+  // Send answers to this webhook or App. Set exactly one of destination_id
+  // and agent.
+  optional string destination_id = 5 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
   }];
   optional bool enabled = 6;
+  // Send answers to the Agent as a message in a chat.
+  bool agent = 7;
+  // With agent: the chat every answer goes to; unset for one chat per
+  // notification.
+  optional string agent_session_id = 8 [(buf.validate.field).string.max_len = 64];
+  // With agent: what the Agent should do with each answer.
+  optional string agent_instructions = 9 [(buf.validate.field).string.max_len = 2000];
 }
 message CreateResponseRouteResponse {
   NotificationResponseRoute route = 1;
@@ -1042,11 +1060,19 @@ message UpdateResponseRouteRequest {
   optional string source_id = 4 [(buf.validate.field).string.max_len = 191];
   // Empty string clears the kind (any kind).
   optional string kind = 5 [(buf.validate.field).string.max_len = 64];
+  // Send answers to this webhook or App instead. Not with agent.
   optional string destination_id = 6 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
   }];
   optional bool enabled = 7;
+  // Send answers to the Agent instead. Not with destination_id.
+  bool agent = 8;
+  // Agent target: the chat every answer goes to; empty string for one chat
+  // per notification. Unset keeps the current chat.
+  optional string agent_session_id = 9 [(buf.validate.field).string.max_len = 64];
+  // Agent target: empty string removes them. Unset keeps them.
+  optional string agent_instructions = 10 [(buf.validate.field).string.max_len = 2000];
 }
 message UpdateResponseRouteResponse {
   NotificationResponseRoute route = 1;

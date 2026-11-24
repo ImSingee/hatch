@@ -21,6 +21,7 @@ import {
 } from '../../../packages/hatch-platform-api/notification-reply';
 import { wakeNotificationDispatcher } from './dispatcher';
 import type { NotificationSource } from './ingest';
+import { handAnswerToAgent } from './agent-answers';
 import { requeueDelivered } from './lifecycle';
 import { decryptDeviceKey } from './secrets';
 
@@ -110,10 +111,19 @@ type RoutedResponseTarget = {
   routeIds: string[];
 };
 
+/** An enabled response route that hands answers to the Agent. */
+export type AgentResponseRoute = {
+  id: string;
+  /** The chat every answer goes to; null for one chat per notification. */
+  agentSessionId: string | null;
+  agentInstructions: string | null;
+};
+
 /**
- * Destinations that receive answers to a notification from `source` of
- * `kind`. Disabled routes and destinations never match, and an App
- * destination must still declare that it accepts responses.
+ * Where answers to a notification from `source` of `kind` go: webhook and
+ * App destinations, and Agent routes. Disabled routes and destinations never
+ * match, and an App destination must still declare that it accepts
+ * responses.
  */
 export async function resolveResponseTargets(
   tx: TX,
@@ -125,9 +135,12 @@ export async function resolveResponseTargets(
       >
     | { type: 'platform' },
   kind: string,
-): Promise<RoutedResponseTarget[]> {
-  if (source.type === 'platform') return [];
-  const routes = (
+): Promise<{
+  destinations: RoutedResponseTarget[];
+  agents: AgentResponseRoute[];
+}> {
+  if (source.type === 'platform') return { destinations: [], agents: [] };
+  const matching = (
     await tx.query.notificationResponseRoutes.findMany({
       where: { enabled: true },
     })
@@ -140,30 +153,43 @@ export async function resolveResponseTargets(
     }
     return route.channelId === null || route.channelId === source.channelId;
   });
-  if (routes.length === 0) return [];
+  const agents = matching
+    .filter((route) => route.targetType === 'agent')
+    .map((route) => ({
+      id: route.id,
+      agentSessionId: route.agentSessionId,
+      agentInstructions: route.agentInstructions,
+    }));
   const routeIds = new Map<string, string[]>();
-  for (const route of routes) {
+  for (const route of matching) {
+    if (route.targetType !== 'destination' || !route.targetDestinationId) {
+      continue;
+    }
     const list = routeIds.get(route.targetDestinationId) ?? [];
     list.push(route.id);
     routeIds.set(route.targetDestinationId, list);
   }
+  if (routeIds.size === 0) return { destinations: [], agents };
   const destinations = await tx.query.notificationDestinations.findMany({
     where: { id: { in: [...routeIds.keys()] }, enabled: true },
     columns: { id: true, type: true, name: true, acceptsResponses: true },
   });
-  return destinations.flatMap((destination) =>
-    destination.type === 'webhook' ||
-    (destination.type === 'app' && destination.acceptsResponses)
-      ? [
-          {
-            id: destination.id,
-            type: destination.type,
-            name: destination.name,
-            routeIds: [...(routeIds.get(destination.id) ?? [])].sort(),
-          },
-        ]
-      : [],
-  );
+  return {
+    destinations: destinations.flatMap((destination) =>
+      destination.type === 'webhook' ||
+      (destination.type === 'app' && destination.acceptsResponses)
+        ? [
+            {
+              id: destination.id,
+              type: destination.type,
+              name: destination.name,
+              routeIds: [...(routeIds.get(destination.id) ?? [])].sort(),
+            },
+          ]
+        : [],
+    ),
+    agents,
+  };
 }
 
 export type Responder = {
@@ -256,7 +282,7 @@ export async function respondToNotification(
 
     // Like routing, response routes apply to App and Channel notifications;
     // a member's direct notification keeps its answer in history only.
-    const targets = await resolveResponseTargets(
+    const { destinations: targets, agents } = await resolveResponseTargets(
       tx,
       notification.sourceType === 'app' && notification.appId
         ? { type: 'app', appId: notification.appId }
@@ -278,11 +304,21 @@ export async function respondToNotification(
         })),
       );
     }
-    return responseView(row!);
+    return { view: responseView(row!), agents };
   });
   publishPlatformEvent({ type: 'notification.updated', notificationId });
   wakeNotificationDispatcher();
-  return outcome;
+  // The Agent hears about the answer as a message in a chat: the one that
+  // asked, and those Agent routes pick. The answer itself is already kept.
+  handAnswerToAgent(notificationId, outcome.view, outcome.agents).catch(
+    (error: unknown) => {
+      console.error(
+        'Could not hand a notification answer to the Agent.',
+        error,
+      );
+    },
+  );
+  return outcome.view;
 }
 
 /** ================== answers signed by a device ================== */

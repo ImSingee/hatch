@@ -327,12 +327,22 @@ export const listResponseRoutesFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .handler(async () => (await listResponseRoutes()).routes);
 
+const agentTargetSchema = z.object({
+  sessionId: idSchema.nullable().optional(),
+  instructions: z.string().max(2000).nullable().optional(),
+});
+
+const responseRouteTargetSchema = z.union([
+  z.object({ destinationId: idSchema }),
+  z.object({ agent: agentTargetSchema }),
+]);
+
 const responseRouteSchema = z.object({
   name: shortText.nullable().optional(),
   sourceType: z.enum(['app', 'channel', 'any']),
   sourceId: idSchema.nullable().optional(),
   kind: z.string().max(64).nullable().optional(),
-  destinationId: idSchema,
+  target: responseRouteTargetSchema,
   enabled: z.boolean().optional(),
 });
 
@@ -341,7 +351,20 @@ export const createResponseRouteFn = createServerFn({ method: 'POST' })
   .validator((input: z.input<typeof responseRouteSchema>) =>
     responseRouteSchema.parse(input),
   )
-  .handler(({ data }) => createResponseRoute(data));
+  .handler(({ data }) =>
+    createResponseRoute({
+      ...data,
+      target:
+        'agent' in data.target
+          ? {
+              agent: {
+                sessionId: data.target.agent.sessionId ?? null,
+                instructions: data.target.agent.instructions ?? null,
+              },
+            }
+          : data.target,
+    }),
+  );
 
 const updateResponseRouteSchema = responseRouteSchema
   .partial()

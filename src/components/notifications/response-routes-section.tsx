@@ -10,6 +10,7 @@ import {
   Table,
   Text,
   TextInput,
+  Textarea,
   Tooltip,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
@@ -33,6 +34,7 @@ import { SectionTitle } from './section-title';
 import { useNotificationMutation } from './use-notification-mutation';
 
 type SourceType = 'any' | 'app' | 'channel';
+type TargetType = 'destination' | 'agent';
 const ANY = '__any__';
 
 function ResponseRouteModal({ onClose }: { onClose: () => void }) {
@@ -44,7 +46,10 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
   const [sourceType, setSourceType] = useState<SourceType>('any');
   const [sourceId, setSourceId] = useState<string>(ANY);
   const [kind, setKind] = useState<string>(ANY);
+  const [targetType, setTargetType] = useState<TargetType>('destination');
   const [destinationId, setDestinationId] = useState<string | null>(null);
+  const [instructions, setInstructions] = useState('');
+  const ready = targetType === 'agent' || Boolean(destinationId);
 
   const create = useNotificationMutation(
     (input: Parameters<typeof createResponseRouteFn>[0]['data']) =>
@@ -71,13 +76,21 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!destinationId) return;
+    if (!ready) return;
     create.mutate({
       name: name.trim() || null,
       sourceType,
       sourceId: sourceType === 'any' || sourceId === ANY ? null : sourceId,
       kind: kind === ANY ? null : kind,
-      destinationId,
+      target:
+        targetType === 'agent'
+          ? {
+              agent: {
+                sessionId: null,
+                instructions: instructions.trim() || null,
+              },
+            }
+          : { destinationId: destinationId! },
     });
   };
 
@@ -124,17 +137,44 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
             allowDeselect={false}
             searchable
           />
-          <Select
-            label="Send the answer to"
-            description="A webhook, or an App whose manifest sets notifications.destination.responses."
-            placeholder="Choose a destination"
-            data={targets}
-            value={destinationId}
-            onChange={setDestinationId}
-            required
-            searchable
-            nothingFoundMessage="Add a webhook first"
-          />
+          <Stack gap={6}>
+            <Text size="sm" fw={600}>
+              Send the answer to
+            </Text>
+            <SegmentedControl
+              value={targetType}
+              onChange={(value) => setTargetType(value as TargetType)}
+              data={[
+                { value: 'destination', label: 'A webhook or App' },
+                { value: 'agent', label: 'The Agent' },
+              ]}
+            />
+          </Stack>
+          {targetType === 'agent' ? (
+            <Textarea
+              label="What should the Agent do?"
+              description="Each answer starts the Agent in a chat of its own for that notification; later questions on it continue there. Leave empty to just pass the answer on."
+              placeholder="For example: when the answer is Fix it, fix the failing check on the pull request's branch."
+              value={instructions}
+              onChange={(event) => setInstructions(event.currentTarget.value)}
+              autosize
+              minRows={2}
+              maxRows={8}
+              maxLength={2000}
+            />
+          ) : (
+            <Select
+              label="Destination"
+              description="A webhook, or an App whose manifest sets notifications.destination.responses."
+              placeholder="Choose a destination"
+              data={targets}
+              value={destinationId}
+              onChange={setDestinationId}
+              required
+              searchable
+              nothingFoundMessage="Add a webhook first"
+            />
+          )}
           <TextInput
             label="Name"
             description="Optional, shown in the list."
@@ -146,11 +186,7 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
             <Button variant="default" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              loading={create.isPending}
-              disabled={!destinationId}
-            >
+            <Button type="submit" loading={create.isPending} disabled={!ready}>
               Create response route
             </Button>
           </Group>
@@ -215,6 +251,12 @@ export function ResponseRoutesSection() {
   };
   const target = (route: ResponseRouteView) =>
     destinations.find((destination) => destination.id === route.destinationId);
+  const targetLabel = (route: ResponseRouteView) =>
+    route.targetType === 'agent'
+      ? route.agentSessionId
+        ? 'The Agent, in one chat'
+        : 'The Agent, a chat per notification'
+      : (target(route)?.name ?? 'Removed destination');
 
   const confirmDelete = (route: ResponseRouteView) =>
     modals.openConfirmModal({
@@ -223,7 +265,10 @@ export function ResponseRoutesSection() {
       children: (
         <Text size="sm">
           Answers to matching notifications stop being sent to{' '}
-          {target(route)?.name ?? 'this destination'}.
+          {route.targetType === 'agent'
+            ? 'the Agent'
+            : (target(route)?.name ?? 'this destination')}
+          .
         </Text>
       ),
       labels: { confirm: 'Delete response route', cancel: 'Cancel' },
@@ -235,7 +280,7 @@ export function ResponseRoutesSection() {
     <Stack gap="md">
       <SectionTitle
         title="Response routes"
-        description="Where answers go when a notification asks a question. Each notification takes one answer; every matching route receives it."
+        description="Where answers go when a notification asks a question: a webhook, an App, or the Agent. Each question takes one answer; every matching route receives it."
         action={
           <Button
             variant="default"
@@ -291,8 +336,13 @@ export function ResponseRoutesSection() {
                         />
                         <Stack gap={0} miw={0}>
                           <Text size="sm" truncate>
-                            {destination?.name ?? 'Removed destination'}
+                            {targetLabel(route)}
                           </Text>
+                          {route.agentInstructions ? (
+                            <Text size="xs" c="dimmed" truncate>
+                              {route.agentInstructions}
+                            </Text>
+                          ) : null}
                           {stale ? (
                             <Text size="xs" c="red.8">
                               No longer accepts responses

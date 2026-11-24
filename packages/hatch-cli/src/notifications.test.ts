@@ -752,7 +752,7 @@ describe('notification reply commands', () => {
     });
     expect(() =>
       parse('response-route', 'create', '--source-type', 'any'),
-    ).toThrow('Supply --destination <id>.');
+    ).toThrow('Supply --destination <id> or --agent.');
     expect(() => parse('response-route', 'update', 'route-1')).toThrow(
       'Supply at least one response route change.',
     );
@@ -879,5 +879,72 @@ describe('cards', () => {
     expect(() =>
       parse('update', 'notification-1', '--card', '{}', '--clear-card'),
     ).toThrow('Use either --card/--card-file or --clear-card, not both.');
+  });
+});
+
+describe('response routes to the Agent', () => {
+  it('maps the agent target and rejects contradictory or orphaned options', () => {
+    expect(
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'channel',
+        '--agent',
+        '--agent-instructions',
+        'Fix the failing check.',
+      ).request,
+    ).toMatchObject({
+      agent: true,
+      destinationId: undefined,
+      agentInstructions: 'Fix the failing check.',
+    });
+    expect(() =>
+      parse('response-route', 'create', '--source-type', 'any'),
+    ).toThrow('Supply --destination <id> or --agent.');
+    expect(() =>
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'any',
+        '--destination',
+        'd-1',
+        '--agent',
+      ),
+    ).toThrow('Use either --destination <id> or --agent, not both.');
+    expect(() =>
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'any',
+        '--destination',
+        'd-1',
+        '--agent-session',
+        's-1',
+      ),
+    ).toThrow('--agent-session and --agent-instructions need --agent.');
+
+    expect(
+      parse(
+        'response-route',
+        'update',
+        'route-1',
+        '--chat-per-notification',
+        '--clear-agent-instructions',
+      ).request,
+    ).toMatchObject({ agentSessionId: '', agentInstructions: '' });
+    expect(() =>
+      parse(
+        'response-route',
+        'update',
+        'route-1',
+        '--destination',
+        'd-1',
+        '--agent-instructions',
+        'x',
+      ),
+    ).toThrow(/Agent options cannot be combined with --destination/);
   });
 });

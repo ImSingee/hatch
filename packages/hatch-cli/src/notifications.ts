@@ -357,7 +357,9 @@ function responseRouteLine(row: Row) {
     field(row, 'id'),
     row.enabled === false ? 'disabled' : 'enabled',
     `${source} / ${field(row, 'kind') || '*'}`,
-    `→ destination:${field(row, 'destinationId')}`,
+    field(row, 'targetType') === 'agent'
+      ? `→ agent:${field(row, 'agentSessionId') || 'chat per notification'}`
+      : `→ destination:${field(row, 'destinationId')}`,
     field(row, 'name'),
   ];
 }
@@ -1388,10 +1390,14 @@ const specs: Record<string, Spec> = {
       source: { type: 'string' },
       kind: { type: 'string' },
       destination: { type: 'string' },
+      agent: { type: 'boolean' },
+      'agent-session': { type: 'string' },
+      'agent-instructions': { type: 'string' },
       name: { type: 'string' },
       disabled: { type: 'boolean' },
     },
     build: (_positionals, values) => {
+      const agent = values.agent === true;
       const type = sourceType(str(values, 'source-type'), [
         'app',
         'channel',
@@ -1401,7 +1407,17 @@ const specs: Record<string, Spec> = {
       if (type === 'any' && values.source !== undefined)
         invalid('--source cannot be combined with --source-type any.');
       const destinationId = str(values, 'destination');
-      if (!destinationId) invalid('Supply --destination <id>.');
+      if (destinationId && agent)
+        invalid('Use either --destination <id> or --agent, not both.');
+      if (!destinationId && !agent)
+        invalid('Supply --destination <id> or --agent.');
+      const agentSessionId = str(values, 'agent-session');
+      const agentInstructions = str(values, 'agent-instructions');
+      if (
+        !agent &&
+        (agentSessionId !== undefined || agentInstructions !== undefined)
+      )
+        invalid('--agent-session and --agent-instructions need --agent.');
       return {
         method: 'createResponseRoute',
         request: {
@@ -1410,6 +1426,9 @@ const specs: Record<string, Spec> = {
           sourceId: str(values, 'source'),
           kind: str(values, 'kind'),
           destinationId,
+          agent,
+          agentSessionId,
+          agentInstructions,
           enabled: values.disabled ? false : undefined,
         },
         text: (response) =>
@@ -1426,6 +1445,11 @@ const specs: Record<string, Spec> = {
       kind: { type: 'string' },
       'any-kind': { type: 'boolean' },
       destination: { type: 'string' },
+      agent: { type: 'boolean' },
+      'agent-session': { type: 'string' },
+      'chat-per-notification': { type: 'boolean' },
+      'agent-instructions': { type: 'string' },
+      'clear-agent-instructions': { type: 'boolean' },
       name: { type: 'string' },
       enable: { type: 'boolean' },
       disable: { type: 'boolean' },
@@ -1433,6 +1457,24 @@ const specs: Record<string, Spec> = {
     build: ([routeId], values) => {
       exclusive(values, 'source', 'any-source');
       exclusive(values, 'kind', 'any-kind');
+      exclusive(values, 'agent-session', 'chat-per-notification');
+      exclusive(values, 'agent-instructions', 'clear-agent-instructions');
+      const agent = values.agent === true;
+      if (agent && values.destination !== undefined)
+        invalid('Use either --destination <id> or --agent, not both.');
+      const agentSessionId = values['chat-per-notification']
+        ? ''
+        : str(values, 'agent-session');
+      const agentInstructions = values['clear-agent-instructions']
+        ? ''
+        : str(values, 'agent-instructions');
+      if (
+        values.destination !== undefined &&
+        (agentSessionId !== undefined || agentInstructions !== undefined)
+      )
+        invalid(
+          'Agent options cannot be combined with --destination; the route would go to the destination.',
+        );
       const request = {
         id: routeId,
         name: str(values, 'name'),
@@ -1445,6 +1487,9 @@ const specs: Record<string, Spec> = {
         sourceId: values['any-source'] ? '' : str(values, 'source'),
         kind: values['any-kind'] ? '' : str(values, 'kind'),
         destinationId: str(values, 'destination'),
+        agent: agent || undefined,
+        agentSessionId,
+        agentInstructions,
         enabled: enabledFlag(values),
       };
       if (

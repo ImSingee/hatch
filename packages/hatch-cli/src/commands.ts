@@ -611,15 +611,16 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'response-route', 'create'],
     usage:
-      'notification response-route create --source-type app|channel|any [--source <id>] [--kind <kind>] --destination <id> [--name <name>] [--disabled]',
+      'notification response-route create --source-type app|channel|any [--source <id>] [--kind <kind>] (--destination <id> | --agent [--agent-session <id>] [--agent-instructions <text>]) [--name <name>] [--disabled]',
     description:
-      'Send answers to matching notifications to a webhook, or to an App whose manifest sets notifications.destination.responses. Omit --source/--kind to match any.',
+      'Send answers to matching notifications to a webhook, to an App whose manifest sets notifications.destination.responses, or with --agent to the Agent: each answer becomes a message (sent as the person who answered) that starts a run in a chat, the --agent-session chat or else one chat per notification, reused by later questions on it. --agent-instructions tells the Agent what to do with each answer. Omit --source/--kind to match any.',
   },
   {
     path: ['notification', 'response-route', 'update'],
     usage:
-      'notification response-route update <id> [--source-type app|channel|any] [--source <id> | --any-source] [--kind <kind> | --any-kind] [--destination <id>] [--name <name>] [--enable | --disable]',
-    description: 'Change a response route.',
+      'notification response-route update <id> [--source-type app|channel|any] [--source <id> | --any-source] [--kind <kind> | --any-kind] [--destination <id> | --agent] [--agent-session <id> | --chat-per-notification] [--agent-instructions <text> | --clear-agent-instructions] [--name <name>] [--enable | --disable]',
+    description:
+      'Change a response route. --destination or --agent switches where answers go; the agent options also switch a destination route to the Agent and otherwise keep the current chat and instructions.',
   },
   {
     path: ['notification', 'response-route', 'delete'],

@@ -129,6 +129,14 @@ versions".
 `UpdateNotification.card` / `clear_card`), checked locally with the platform's
 card schema before any request.
 
+`notification response-route create|update --agent [--agent-session <id> |
+--chat-per-notification] [--agent-instructions <text> |
+--clear-agent-instructions]` sends answers to the Agent (`agent`,
+`agent_session_id`, `agent_instructions` on the response route RPCs); the
+settings page offers the per-notification chat with instructions, and the CLI
+also a fixed chat. A Run's `notification send` remembers its chat, so answers
+come back to the Agent there.
+
 `notification unread` and `notification mark-read (--through <id> | --latest)`
 read and move the caller's timeline read position (`GetNotificationReadState`,
 `MarkNotificationsRead`), the same domain service as the web timeline. A Run
