@@ -113,7 +113,8 @@ success, blue = information. Colour never carries state alone; pair it with an
 icon or a word.
 
 `tiles` holds eleven saturated fills for monogram tiles. All carry white text
-at 4.5:1 or better.
+at 4.5:1 or better, also under `tileLight`, the top-lit overlay (white 12% to
+black 18%) painted over them.
 
 ## Typography
 
@@ -277,8 +278,7 @@ A rounded square. Sizes: 22 (radius 6), 26 widget header (radius 9,
   a palette colour (`docs/app-icons.md`).
 - Without one (and for Workflows, which have no icons): a monogram, the first
   character of the name, white 800 on one of `tiles`, chosen by a stable hash
-  of the id, under the same top light: a vertical overlay from white 12% to
-  black 18%, which keeps the letter at 4.5:1 on every fill. Text from 12 at 22
+  of the id, under the `tileLight` overlay. Text from 12 at 22
   up to 26 at 72.
 
 An icon shown inline in a chat message is 96 square with the window radius.

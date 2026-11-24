@@ -13,7 +13,15 @@ import { useAccent } from './accent';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import { Text, type } from './text';
-import { palette as c, radii, shadows, sizes, tileFor, weights } from './theme';
+import {
+  palette as c,
+  radii,
+  shadows,
+  sizes,
+  tileFor,
+  tileLight,
+  weights,
+} from './theme';
 
 /** Tile radius by rendered size, on the token scale. */
 function tileRadius(size: number) {
@@ -105,9 +113,7 @@ export function AppTile({
         frame,
         {
           backgroundColor: tileFor(seed ?? name),
-          // Same top light as the web monogram and generated App icons.
-          backgroundImage:
-            'linear-gradient(rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.18))',
+          backgroundImage: tileLight,
           alignItems: 'center',
           justifyContent: 'center',
         },

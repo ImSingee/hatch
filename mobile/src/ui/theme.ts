@@ -131,6 +131,12 @@ export const weights = {
   heading: String(tokens.fontWeights.heading) as Weight,
 } as const;
 
+/**
+ * Top light over a monogram tile fill, used as a React Native
+ * `backgroundImage`; keeps the white letter at 4.5:1 on every tile.
+ */
+export const tileLight: string = tokens.tileLight;
+
 /** CSS shadows, used as React Native `boxShadow` values. */
 export const shadows = tokens.shadows;
 

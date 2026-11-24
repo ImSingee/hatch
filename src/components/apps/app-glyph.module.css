@@ -3,10 +3,8 @@
   place-items: center;
   flex-shrink: 0;
   border-radius: var(--glyph-radius);
-  /* Lit from the top like generated App icons; mild enough to keep the
-     white letter at 4.5:1 on every tile fill (DESIGN.md, App tile). */
-  background:
-    linear-gradient(rgb(255 255 255 / 12%), rgb(0 0 0 / 18%)), var(--glyph-bg);
+  /* Lit from the top like generated App icons (DESIGN.md, App tile). */
+  background: var(--tile-light), var(--glyph-bg);
   color: var(--mantine-color-white);
   font-weight: var(--font-weight-heading);
   line-height: 1;
