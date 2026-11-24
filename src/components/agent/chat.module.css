@@ -1342,3 +1342,11 @@ button.stepHeader:hover {
   object-fit: cover;
   vertical-align: middle;
 }
+
+/* In an ask prompt every candidate gets its own line: a block image inside
+   the paragraph puts each letter label above its tile instead of packing
+   all candidates onto one wrapped row. */
+.askCard .markdownImage {
+  display: block;
+  margin: 8px 0;
+}

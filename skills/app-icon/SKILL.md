@@ -77,12 +77,16 @@ those commands directly. The steps below are for designing a new icon.
 
 4. Call `ask` with one question whose text shows the candidates as Markdown
    images, using each `path` exactly as returned and a letter label with the
-   style name:
+   style name, one candidate per line:
 
    ```markdown
    Which icon do you prefer?
 
-   A (Glossy) ![A](/api/images/candidates/<id-a>) B (Glass) ![B](/api/images/candidates/<id-b>) C (Line) ![C](/api/images/candidates/<id-c>)
+   A (Glossy) ![A](/api/images/candidates/<id-a>)
+
+   B (Glass) ![B](/api/images/candidates/<id-b>)
+
+   C (Line) ![C](/api/images/candidates/<id-c>)
    ```
 
    Offer one option per candidate ("A", "B", "C") plus "Try different
