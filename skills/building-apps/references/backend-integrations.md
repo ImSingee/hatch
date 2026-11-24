@@ -379,8 +379,13 @@ await updateNotification(id, { title: 'Order delivered', body: null });
 await recallNotification(id);
 ```
 
-`updateNotification` changes any of `title`, `body`, `url`, `autoOpenUrl` and
-`data`. Omitted fields keep their value; `null` clears `body`, `url` or
+`updateNotification` changes any of `title`, `body`, `url`, `autoOpenUrl`,
+`data` and `reply`. Use one notification per thing the user follows (an order,
+a pull request) and update it as it changes: it moves to the end of the user's
+timeline, and the earlier versions stay visible there. `reply` asks a new
+question (for example "Merge?" after "Fix the failing check?"): a form replaces
+the current one and `null` removes it, starting the next round, which takes its
+own answer. Omitted fields keep their value; `null` clears `body`, `url` or
 `data`. Phones replace the shown notification in place and alert again by
 default, even if the content is unchanged. Pass `silent: true` to only change
 content, or `{}` to repeat the alert with current content. Destinations that
@@ -463,11 +468,12 @@ handled. Without the flag only `hatch.notification` arrives. Switch on
 With `"responses": true`, response routes may send the App
 `hatch.notification.responded`. `notification.reply` is the form, with every
 default filled in, and `notification.response` the answer:
-`{ answers, respondedBy: { userId, name }, via, respondedAt }`. `answers` is
-keyed by field id: an option id for `buttons` and `single`, a list of option
-ids for `multiple`, the text for `text`. Unanswered optional fields are
-absent. Each notification has exactly one answer, so handle it once per
-`notification.id`.
+`{ round, answers, respondedBy: { userId, name }, via, respondedAt }`. `answers`
+is keyed by field id: an option id for `buttons` and `single`, a list of
+option ids for `multiple`, the text for `text`. Unanswered optional fields
+are absent. Each round of the form has exactly one answer, so handle it once
+per `(notification.id, response.round)`; a round after 1 answers a question
+the App asked later with `updateNotification(id, { reply })`.
 
 Always verify the platform signature (HMAC over `<timestamp>.<raw body>`):
 

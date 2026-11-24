@@ -378,12 +378,13 @@ export async function recordOutcome(
   }
 }
 
-/** The answer to a notification, when it has one. */
+/** The answer to one round of a notification, when it has one. */
 export async function loadResponse(
   notificationId: string,
+  round: number,
 ): Promise<NotificationResponseRecord | null> {
   const row = await db.query.notificationResponses.findFirst({
-    where: { notificationId },
+    where: { notificationId, round },
   });
   return row ?? null;
 }
@@ -454,7 +455,7 @@ export async function runClaimedDelivery(
         // response routes, never with the notification itself.
         response:
           destination.type === 'device' && notification.respondedAt
-            ? await loadResponse(notification.id)
+            ? await loadResponse(notification.id, notification.replyRound)
             : null,
         destination,
         sourceSlug: await sourceSlugOf(notification.appId),
@@ -548,7 +549,7 @@ export async function runClaimedResponseDelivery(
       db.query.notifications.findFirst({
         where: { id: delivery.notificationId },
       }),
-      loadResponse(delivery.notificationId),
+      loadResponse(delivery.notificationId, delivery.round),
       delivery.destinationId
         ? db.query.notificationDestinations.findFirst({
             where: { id: delivery.destinationId },

@@ -181,11 +181,16 @@ export async function updateNotification(
         409,
       );
     }
+    // A new question starts the next round; asking the same one again
+    // changes nothing.
+    const newRound =
+      update.reply !== undefined && !sameJson(update.reply, current.reply);
     // Answers are delivered with `data`, which receivers use to tell what
     // was answered; changing it afterwards would pin the answer on something
-    // else.
+    // else, unless the edit asks a new question for the new data.
     if (
       current.respondedAt &&
+      !newRound &&
       update.data !== undefined &&
       !sameJson(update.data, current.data)
     ) {
@@ -214,6 +219,7 @@ export async function updateNotification(
       throw new NotificationLifecycleError('autoOpenUrl requires url', 400);
     }
     const changed =
+      newRound ||
       next.title !== current.title ||
       next.body !== current.body ||
       next.url !== current.url ||
@@ -221,6 +227,24 @@ export async function updateNotification(
       !sameJson(next.data, current.data);
     if (!changed && update.silent === true) {
       return { id: current.id, revision: current.revision, changed: false };
+    }
+    // Keep what the edit replaces, so the timeline can show how it got here.
+    if (changed) {
+      await tx
+        .insert(schema.notificationRevisions)
+        .values({
+          notificationId: current.id,
+          revision: current.revision,
+          title: current.title,
+          body: current.body,
+          url: current.url,
+          data: current.data,
+          reply: current.reply,
+          replyRound: current.replyRound,
+          activityAt: current.activityAt,
+          replacedAt: now,
+        })
+        .onConflictDoNothing();
     }
     const [row] = await tx
       .update(schema.notifications)
@@ -231,6 +255,13 @@ export async function updateNotification(
           ? {}
           : { alertRevision: current.revision + 1 }),
         ...(changed ? { editedAt: now } : {}),
+        ...(newRound
+          ? {
+              reply: update.reply ?? null,
+              replyRound: current.replyRound + 1,
+              respondedAt: null,
+            }
+          : {}),
         // Only a changed or re-alerting edit gets here; either one moves the
         // notification to the end of the timeline.
         activityAt: now,

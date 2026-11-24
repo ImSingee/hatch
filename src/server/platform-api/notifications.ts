@@ -47,6 +47,7 @@ import {
   updateChannel,
   updateDestination,
   updateGroup,
+  listNotificationRevisions,
   updateResponseRoute,
   updateRoute,
   type ChannelView,
@@ -138,6 +139,7 @@ function response(view: NotificationResponseView) {
     via: view.via,
     destinationId: none(view.destinationId),
     respondedAt: view.respondedAt,
+    round: view.round,
   };
 }
 
@@ -294,6 +296,12 @@ export function registerNotificationApi(router: ConnectRouter) {
         };
       },
       updateNotification: async (input) => {
+        if (input.reply && input.clearReply) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set either reply or clear_reply, not both.',
+          );
+        }
         const result = await updateNotificationAsMember({
           id: input.id,
           title: input.title,
@@ -308,6 +316,11 @@ export function registerNotificationApi(router: ConnectRouter) {
               : input.dataJson === ''
                 ? null
                 : dataObject(input.dataJson),
+          reply: input.clearReply
+            ? null
+            : input.reply
+              ? replyInputFromMessage(input.reply)
+              : undefined,
         });
         return { revision: result.revision, changed: result.changed };
       },
@@ -332,6 +345,19 @@ export function registerNotificationApi(router: ConnectRouter) {
       deleteNotification: async (input) => {
         await deleteNotification(input.id);
         return {};
+      },
+      listNotificationRevisions: async (input) => {
+        const history = await listNotificationRevisions(input.id);
+        return {
+          revisions: history.revisions.map((revision) => ({
+            ...revision,
+            body: none(revision.body),
+            url: none(revision.url),
+            dataJson: revision.data ? JSON.stringify(revision.data) : undefined,
+            reply: revision.reply ? replyToMessage(revision.reply) : undefined,
+          })),
+          responses: history.responses.map(response),
+        };
       },
       getNotificationReadState: async (_input, context) => ({
         state: readState(await getReadState(readerOf(context))),

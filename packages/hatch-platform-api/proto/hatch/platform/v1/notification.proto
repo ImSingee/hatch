@@ -31,6 +31,9 @@ service NotificationService {
   rpc DeleteNotification(DeleteNotificationRequest) returns (DeleteNotificationResponse);
   // How far the caller has read the timeline, shared by all their devices:
   // the calling user, or the platform Agent for a Run (Runs have no user).
+  // What a notification said before each edit, oldest first, and every
+  // answer it took (one per round of its reply form).
+  rpc ListNotificationRevisions(ListNotificationRevisionsRequest) returns (ListNotificationRevisionsResponse);
   rpc GetNotificationReadState(GetNotificationReadStateRequest) returns (GetNotificationReadStateResponse);
   // Move the caller's read position forward to one notification, or to the
   // newest. A position behind the current one changes nothing.
@@ -120,8 +123,11 @@ message NotificationSummary {
   // changed the content or asked to alert again. Answers and recalls leave it
   // unchanged. The order of ListNotifications with order "activity".
   string activity_at = 21;
-  // The answer to the reply form, once given.
+  // The answer to the current round of the reply form, once given.
   NotificationResponse response = 22;
+  // Which question reply is: 1 for the form it was sent with, one more for
+  // each edit that replaced or removed it.
+  uint32 reply_round = 23;
 }
 
 // ---------------------------------------------------------------- replies
@@ -200,6 +206,9 @@ message NotificationResponse {
   optional string destination_id = 5;
   // ISO-8601.
   string responded_at = 6;
+  // The round of the reply form this answers: 1 for the form the
+  // notification was sent with, one more for each new question an edit asked.
+  uint32 round = 7;
 }
 
 message RespondToNotificationRequest {
@@ -439,6 +448,11 @@ message UpdateNotificationRequest {
   // Update without another phone alert. Unset/false alerts again, even when
   // content is unchanged. With no content fields, this repeats the alert.
   bool silent = 8;
+  // Ask a new question: replaces the reply form and starts the next round,
+  // which takes its own answer. The same form again changes nothing.
+  NotificationReply reply = 9;
+  // Remove the reply form (also starts the next round). Not with reply.
+  bool clear_reply = 10;
 }
 message UpdateNotificationResponse {
   // 1 for the original; every edit and the recall increment it.
@@ -469,6 +483,33 @@ message DeleteNotificationRequest {
   }];
 }
 message DeleteNotificationResponse {}
+
+message NotificationRevision {
+  // The notification revision while this version was current.
+  uint32 revision = 1;
+  string title = 2;
+  optional string body = 3;
+  optional string url = 4;
+  // JSON object.
+  optional string data_json = 5;
+  // The question it asked then; absent when it asked nothing.
+  NotificationReply reply = 6;
+  uint32 reply_round = 7;
+  // ISO-8601: when this version became current, and when an edit replaced it.
+  string activity_at = 8;
+  string replaced_at = 9;
+}
+
+message ListNotificationRevisionsRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+message ListNotificationRevisionsResponse {
+  repeated NotificationRevision revisions = 1;
+  repeated NotificationResponse responses = 2;
+}
 
 message NotificationReadState {
   // The last notification read; absent before the reader read any.

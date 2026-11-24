@@ -1170,13 +1170,18 @@ export const notifications = snakeCase.table(
     activityAt: timestamp('activity_at').notNull().defaultNow(),
     /** Set once when the source recalls the notification. */
     recalledAt: timestamp('recalled_at'),
-    /** Form the notification asks people to answer; fixed once sent. */
+    /**
+     * Form the notification asks people to answer now. An edit may replace or
+     * clear it, which starts the next round; each round takes one answer.
+     */
     reply: jsonb().$type<ReplyForm>(),
-    /** Set once when someone answers `reply` (one answer per notification). */
+    /** Which question `reply` is: 1 for the form it was sent with. */
+    replyRound: integer('reply_round').notNull().default(1),
+    /** Set when someone answers the current round; cleared by a new round. */
     respondedAt: timestamp('responded_at'),
     /**
-     * The revision the answer created. Only phones are told about it, so
-     * webhooks and Apps do not count it as a change they missed.
+     * The revision the latest answer created. Only phones are told about it,
+     * so webhooks and Apps do not count it as a change they missed.
      */
     responseRevision: integer(),
     createdAt,
@@ -1445,24 +1450,61 @@ export const notificationDeliveries = snakeCase.table(
 
 export type NotificationResponseVia = 'push' | 'mobile' | 'web' | 'cli';
 
-/** The one answer to a notification's reply form. Never changes. */
-export const notificationResponses = snakeCase.table('notification_responses', {
-  notificationId: ulid()
-    .primaryKey()
-    .references(() => notifications.id, { onDelete: 'cascade' }),
-  answers: jsonb().$type<ReplyAnswers>().notNull(),
-  respondedByUserId: text().references(() => user.id, {
-    onDelete: 'set null',
-  }),
-  /** Snapshot so the answer stays attributed after the user is removed. */
-  respondedByName: text().notNull(),
-  via: text().$type<NotificationResponseVia>().notNull(),
-  /** Device that answered from the push itself. */
-  destinationId: ulid().references(() => notificationDestinations.id, {
-    onDelete: 'set null',
-  }),
-  createdAt,
-});
+/**
+ * The answer to one round of a notification's reply form: one per round,
+ * never changed.
+ */
+export const notificationResponses = snakeCase.table(
+  'notification_responses',
+  {
+    notificationId: ulid()
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    /** The `replyRound` this answers. */
+    round: integer().notNull().default(1),
+    /** The notification revision this answer created. */
+    revision: integer(),
+    answers: jsonb().$type<ReplyAnswers>().notNull(),
+    respondedByUserId: text().references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    /** Snapshot so the answer stays attributed after the user is removed. */
+    respondedByName: text().notNull(),
+    via: text().$type<NotificationResponseVia>().notNull(),
+    /** Device that answered from the push itself. */
+    destinationId: ulid().references(() => notificationDestinations.id, {
+      onDelete: 'set null',
+    }),
+    createdAt,
+  },
+  (table) => [primaryKey({ columns: [table.notificationId, table.round] })],
+);
+
+/**
+ * What a notification said before an edit changed it: one row per replaced
+ * version, so the timeline can show how it got here.
+ */
+export const notificationRevisions = snakeCase.table(
+  'notification_revisions',
+  {
+    notificationId: ulid()
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    /** The notification's revision while this version was current. */
+    revision: integer().notNull(),
+    title: text().notNull(),
+    body: text(),
+    url: text(),
+    data: jsonb().$type<JsonObject>(),
+    reply: jsonb().$type<ReplyForm>(),
+    replyRound: integer('reply_round').notNull(),
+    /** When this version became current (its activity time). */
+    activityAt: timestamp('activity_at').notNull(),
+    /** When an edit replaced it. */
+    replacedAt: timestamp('replaced_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.notificationId, table.revision] })],
+);
 
 /**
  * Where answers go: answers to notifications matching (source, kind) are
@@ -1499,7 +1541,7 @@ export const notificationResponseRoutes = snakeCase.table(
   ],
 );
 
-/** One answer delivery per (notification, destination), retried like any. */
+/** One answer delivery per (notification, round, destination), retried like any. */
 export const notificationResponseDeliveries = snakeCase.table(
   'notification_response_deliveries',
   {
@@ -1507,6 +1549,8 @@ export const notificationResponseDeliveries = snakeCase.table(
     notificationId: ulid()
       .notNull()
       .references(() => notifications.id, { onDelete: 'cascade' }),
+    /** The round whose answer this delivers. */
+    round: integer().notNull().default(1),
     destinationId: ulid().references(() => notificationDestinations.id, {
       onDelete: 'set null',
     }),
@@ -1531,7 +1575,7 @@ export const notificationResponseDeliveries = snakeCase.table(
   (table) => [
     uniqueIndex(
       'notification_response_deliveries_notification_destination_idx',
-    ).on(table.notificationId, table.destinationId),
+    ).on(table.notificationId, table.round, table.destinationId),
     index('notification_response_deliveries_due_idx')
       .on(table.status, table.nextAttemptAt)
       .where(

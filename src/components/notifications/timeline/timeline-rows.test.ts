@@ -29,6 +29,7 @@ function item(
     editedAt: null,
     recalledAt: null,
     reply: null,
+    replyRound: 1,
     respondedAt: null,
     response: null,
     status: 'delivered',

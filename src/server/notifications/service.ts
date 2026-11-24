@@ -59,6 +59,7 @@ import {
   type LifecycleResult,
 } from './lifecycle';
 import {
+  loadResponseHistory,
   loadResponseView,
   loadResponseViews,
   type NotificationResponseView,
@@ -150,10 +151,15 @@ export type NotificationSummaryView = {
   revision: number;
   editedAt: string | null;
   recalledAt: string | null;
-  /** Form people answer once; null when the notification asks nothing. */
+  /**
+   * The question the notification asks now; null when it asks nothing. Each
+   * round takes one answer.
+   */
   reply: ReplyForm | null;
+  /** Which question `reply` is: 1 for the form it was sent with. */
+  replyRound: number;
   respondedAt: string | null;
-  /** The answer to `reply`; null until someone answers. */
+  /** The answer to the current round; null until someone answers. */
   response: NotificationResponseView | null;
   status: NotificationStatus;
   deliveries: DeliveryCounts;
@@ -371,6 +377,7 @@ function summaryView(
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
     reply: row.reply,
+    replyRound: row.replyRound,
     respondedAt: isoOrNull(row.respondedAt),
     response,
     status: deliveryStatus(deliveries),
@@ -487,7 +494,7 @@ export async function listNotifications(
   const ids = page.map((row) => row.id);
   const [counts, responses] = await Promise.all([
     deliveryCounts(ids),
-    loadResponseViews(ids),
+    loadResponseViews(page),
   ]);
   const last = page.at(-1);
   return {
@@ -545,7 +552,9 @@ export async function getNotification(
       where: { notificationId: id },
       orderBy: { createdAt: 'asc' },
     }),
-    row.respondedAt ? loadResponseView(id) : Promise.resolve(null),
+    row.respondedAt
+      ? loadResponseView(id, row.replyRound)
+      : Promise.resolve(null),
   ]);
   const counts = (await deliveryCounts([id])).get(id);
   return {
@@ -554,6 +563,57 @@ export async function getNotification(
     dedupeKey: row.dedupeKey,
     deliveryList: deliveries.map(deliveryView),
     responseDeliveryList: responseDeliveries.map(deliveryView),
+  };
+}
+
+export type NotificationRevisionView = {
+  /** The revision while this version was current. */
+  revision: number;
+  title: string;
+  body: string | null;
+  url: string | null;
+  data: Record<string, unknown> | null;
+  reply: ReplyForm | null;
+  replyRound: number;
+  /** When this version became current. */
+  activityAt: string;
+  /** When an edit replaced it. */
+  replacedAt: string;
+};
+
+/**
+ * What a notification said before each edit, oldest first, and every answer
+ * it took (one per round).
+ */
+export async function listNotificationRevisions(id: string): Promise<{
+  revisions: NotificationRevisionView[];
+  responses: NotificationResponseView[];
+}> {
+  const row = await db.query.notifications.findFirst({
+    where: { id },
+    columns: { id: true },
+  });
+  if (!row) notFound('Notification');
+  const [revisions, responses] = await Promise.all([
+    db.query.notificationRevisions.findMany({
+      where: { notificationId: id },
+      orderBy: { revision: 'asc' },
+    }),
+    loadResponseHistory(id),
+  ]);
+  return {
+    revisions: revisions.map((revision) => ({
+      revision: revision.revision,
+      title: revision.title,
+      body: revision.body,
+      url: revision.url,
+      data: revision.data,
+      reply: revision.reply,
+      replyRound: revision.replyRound,
+      activityAt: iso(revision.activityAt),
+      replacedAt: iso(revision.replacedAt),
+    })),
+    responses,
   };
 }
 
@@ -1734,10 +1794,8 @@ export async function updateNotificationAsMember(
 ): Promise<LifecycleResult> {
   const update = notificationUpdateSchema.safeParse(body);
   if (!update.success) {
-    throw new AppError(
-      `${update.error.issues[0]?.message ?? 'Invalid request'}.`,
-      400,
-    );
+    // Reply form issues name the field to fix (`reply.fields.0: …`).
+    throw new AppError(`${pushIssueMessage(update.error)}.`, 400);
   }
   return asAppError(() => updateNotification({ type: 'member' }, update.data));
 }

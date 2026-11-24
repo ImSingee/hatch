@@ -802,3 +802,37 @@ describe('read position commands', () => {
     expect(parse('unread').method).toBe('getNotificationReadState');
   });
 });
+
+describe('asking a new question in an edit', () => {
+  const form =
+    '{"fields":[{"id":"merge","type":"buttons","label":"Merge?","options":[{"id":"merge","label":"Merge"},{"id":"hold","label":"Hold"}]}]}';
+
+  it('sends the whole new form, or clears it, and rejects both at once', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--reply', form, '--silent'),
+    );
+    expect(received.updateNotification?.reply?.fields[0]).toMatchObject({
+      id: 'merge',
+    });
+    expect(received.updateNotification?.clearReply).toBe(false);
+
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--clear-reply'),
+    );
+    expect(received.updateNotification).toMatchObject({ clearReply: true });
+    expect(received.updateNotification?.reply).toBeUndefined();
+
+    expect(() =>
+      parse('update', 'notification-1', '--reply', form, '--clear-reply'),
+    ).toThrow('Use either --reply/--reply-file or --clear-reply, not both.');
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse('update', 'notification-1', '--reply', '{"fields":[]}'),
+      ),
+    ).rejects.toThrow(/--reply/);
+  });
+});

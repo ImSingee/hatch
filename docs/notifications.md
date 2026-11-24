@@ -29,8 +29,10 @@ signed-in user can see and change it.
   Platform and user notifications are never routed: they name their
   recipient, and their deliveries record no routes.
 - **Reply form**: an optional form a notification asks people to answer
-  (`buttons`, `single`, `multiple` and `text` fields). It takes one answer,
-  from whoever answers first, and the answer never changes.
+  (`buttons`, `single`, `multiple` and `text` fields). An edit may ask a
+  new question by replacing or removing the form, which starts the next
+  round (`replyRound`). Each round takes one answer, from whoever answers
+  first, and the answer never changes.
 - **Response route**: `(sourceType, sourceId?, kind?) → destination`, where the
   destination is a webhook or an App that accepts responses. Every matching
   response route receives the answer once. An App may receive answers to its
@@ -270,11 +272,24 @@ The rules live in `packages/hatch-platform-api/notification-reply*.ts`, shared
 by ingress, the CLI and the mobile app. Empty values (`null`, `""`, `[]`, `0`)
 mean "omitted"; settings that do not apply to a field type are rejected. The
 stored form is normalized with every default filled in, and a `400` names the
-field to fix (`reply.fields.0.options: …`). The form is fixed once sent: edits
-cannot change it, and recalling the notification closes it. Once answered, the
-notification's `data` cannot change either (`409`), because answers are
-delivered with it and receivers use it to tell what was answered; its other
-content may still be edited. With a form,
+field to fix (`reply.fields.0.options: …`). An edit with `reply` asks a new
+question: a form replaces the current one and `null` removes it, either way
+starting the next round (`replyRound` + 1, `respondedAt` cleared), which takes
+its own answer; the same form again changes nothing. Recalling the
+notification closes the form. Once the current round is answered, the
+notification's `data` cannot change (`409`) unless the same edit asks a new
+question, because answers are delivered with it and receivers use it to tell
+what was answered; its other content may still be edited. Answers are stored
+per round (`notification_responses` keyed by notification and round), each
+`hatch.notification.responded` names its `response.round`, and receivers
+identify an answer by `(notification.id, response.round)`. A phone answering
+from the notification answers the current form: every new question re-pushes
+the notification, and answers that no longer fit are rejected (`400`).
+
+Every edit that changes content or asks a new question keeps the replaced
+version in `notification_revisions`. `ListNotificationRevisions` (`hatch
+notification revisions <id>`) returns them oldest first with every answer;
+the timeline shows them under "Earlier versions". With a form,
 `autoOpenUrl` defaults to `false`, so a phone tap opens the form.
 
 Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or

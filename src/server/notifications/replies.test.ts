@@ -43,6 +43,7 @@ const { deliverToWebhook } = await import('./adapters/webhook');
 const { deliverToApp } = await import('./adapters/app');
 const { pushPlaintext } = await import('./adapters/device');
 const { recallNotification, updateNotification } = await import('./lifecycle');
+const { notificationUpdateSchema } = await import('./contract');
 const { pruneHistory } = await import('~server/retention');
 const { syncAppNotificationDestination } = await import('./app-destinations');
 const {
@@ -1089,6 +1090,103 @@ describe('timeline order', () => {
     } while (cursor);
     expect(seen).toEqual([...ids].reverse());
     await expect(activityIds(1, ids[0])).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+});
+
+describe('new questions on the same notification', () => {
+  const MERGE_FORM = {
+    fields: [
+      {
+        id: 'merge',
+        type: 'buttons',
+        label: 'Merge now?',
+        options: [
+          { id: 'merge', label: 'Merge' },
+          { id: 'hold', label: 'Hold' },
+        ],
+      },
+    ],
+  };
+  const answer = (id: string, answers: Record<string, string>) =>
+    respondToNotification(id, answers, { userId: 'user-1', via: 'web' });
+
+  it('takes one answer per round, sends each one along response routes, and keeps what each edit replaced', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      destinationId: webhookId,
+    });
+    const id = await sendForm();
+    await answer(id, { decision: 'approve' });
+    await runAll();
+
+    // The next question may come with data for it, even though the first
+    // round was answered.
+    // Through the same schema an App or Channel edit is parsed with.
+    await updateNotification(
+      { type: 'channel', channelId },
+      notificationUpdateSchema.parse({
+        id,
+        title: 'CI passed',
+        data: { pr: 261 },
+        reply: MERGE_FORM,
+      }),
+    );
+    let summary = (await service.listNotifications()).items[0]!;
+    expect(summary).toMatchObject({
+      replyRound: 2,
+      respondedAt: null,
+      response: null,
+    });
+    expect(summary.reply?.fields[0]?.id).toBe('merge');
+
+    // The old question is gone: its answers no longer fit.
+    await expect(answer(id, { decision: 'approve' })).rejects.toMatchObject({
+      status: 400,
+    });
+    received.length = 0;
+    await answer(id, { merge: 'merge' });
+    await expect(answer(id, { merge: 'hold' })).rejects.toBeInstanceOf(
+      AlreadyRespondedError,
+    );
+    await runAll();
+
+    const envelopes = received
+      .filter(
+        (entry) =>
+          entry.headers['x-hatch-event'] === 'hatch.notification.responded',
+      )
+      .map((entry) => JSON.parse(entry.body));
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0].notification.response).toMatchObject({
+      round: 2,
+      answers: { merge: 'merge' },
+    });
+    summary = (await service.listNotifications()).items[0]!;
+    expect(summary.response).toMatchObject({ round: 2 });
+    expect(
+      (await service.getNotification(id)).responseDeliveryList,
+    ).toHaveLength(2);
+
+    const history = await service.listNotificationRevisions(id);
+    expect(history.revisions).toMatchObject([
+      { title: 'Deploy?', replyRound: 1 },
+    ]);
+    expect(history.responses.map((response) => response.round)).toEqual([1, 2]);
+  });
+
+  it('asks nothing after the form is removed, and repeating the same form starts no round', async () => {
+    const id = await sendForm();
+    const sender = { type: 'channel' as const, channelId };
+    const form = (await service.getNotification(id)).reply!;
+    await updateNotification(sender, { id, reply: form, silent: true });
+    expect((await service.getNotification(id)).replyRound).toBe(1);
+
+    await updateNotification(sender, { id, reply: null });
+    const detail = await service.getNotification(id);
+    expect(detail).toMatchObject({ reply: null, replyRound: 2 });
+    await expect(answer(id, { decision: 'approve' })).rejects.toMatchObject({
       status: 400,
     });
   });

@@ -102,5 +102,8 @@
   "notifications.timeline.unreadJump_one": "{{count}} 条未读 · 跳到上次看到的位置",
   "notifications.timeline.unreadJump_other": "{{count}} 条未读 · 跳到上次看到的位置",
   "notifications.timeline.unreadDivider_one": "以下是 {{count}} 条未读",
-  "notifications.timeline.unreadDivider_other": "以下是 {{count}} 条未读"
+  "notifications.timeline.unreadDivider_other": "以下是 {{count}} 条未读",
+  "notifications.timeline.history": "之前的版本",
+  "notifications.timeline.historyHide": "收起之前的版本",
+  "notifications.timeline.historyAnswer": "回复了「{{answer}}」"
 }

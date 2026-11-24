@@ -553,7 +553,7 @@ Read only the reference relevant to the requested capability:
 - [Notifications](references/backend-integrations.md#notifications): declare
   notification kinds, push with `notify()` from `@hatch/app/notifications`
   (edit or recall later with `updateNotification` / `recallNotification`, or
-  ask for one answer with a `reply` form), and receive routed notifications
+  ask a question with a `reply` form; an edit can ask the next one), and receive routed notifications
   (and, with `destination.responses`, answers) on `/__notification` when the
   App declares `notifications.destination`. Users configure routing; Apps never pick
   recipients. Verify the signature on every `/__notification` request.

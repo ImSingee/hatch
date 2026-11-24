@@ -118,6 +118,12 @@ tokens) are printed only by the create/rotate commands that mint them.
 push or content/alerting edit first) and prints that time; it uses the same
 `ListNotifications` RPC and cursor rules as the timeline.
 
+`notification update <id> --reply <json> | --reply-file <path|-> | --clear-reply`
+asks a new question on the same notification (`UpdateNotification.reply` /
+`clear_reply`), and `notification revisions <id>` lists earlier versions and
+every answer (`ListNotificationRevisions`), matching the timeline's "Earlier
+versions".
+
 `notification unread` and `notification mark-read (--through <id> | --latest)`
 read and move the caller's timeline read position (`GetNotificationReadState`,
 `MarkNotificationsRead`), the same domain service as the web timeline. A Run

@@ -4,6 +4,7 @@ import {
   getApnsStatusFn,
   getNotificationFn,
   getNotificationReadStateFn,
+  listNotificationRevisionsFn,
   listChannelsFn,
   listDestinationsFn,
   listGroupsFn,
@@ -97,3 +98,10 @@ export const notificationReadStateQueryOptions = queryOptions({
   queryKey: [...NOTIFICATIONS_KEY, 'read-state'],
   queryFn: () => getNotificationReadStateFn(),
 });
+
+/** What a notification said before each edit, and every answer it took. */
+export const notificationRevisionsQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: [...NOTIFICATIONS_KEY, 'revisions', id],
+    queryFn: () => listNotificationRevisionsFn({ data: id }),
+  });

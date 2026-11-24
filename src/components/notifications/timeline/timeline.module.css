@@ -334,3 +334,57 @@
   height: 1px;
   background: var(--mantine-primary-color-filled);
 }
+
+.history {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.historyToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-left: -8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--mantine-radius-sm);
+  background: transparent;
+  color: var(--mantine-color-dimmed);
+  font: inherit;
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.historyToggle:hover {
+  background: var(--surface-hover);
+}
+
+/* Earlier versions hang off a hairline rail, oldest first. */
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 0 6px;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--border-hairline);
+  list-style: none;
+}
+
+.historyLine {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-strong);
+}
+
+.historyText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

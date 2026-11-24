@@ -2,6 +2,7 @@ import { Button, Center, Loader, Tooltip } from '@mantine/core';
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -33,6 +34,7 @@ import { useEventCallback } from '~hooks/use-latest-committed';
 import { formatExact } from '~lib/format';
 import {
   notificationReadStateQueryOptions,
+  notificationRevisionsQueryOptions,
   notificationTimelineQueryOptions,
 } from '~queries/notifications';
 import { markNotificationsReadFn } from '~server/notifications';
@@ -396,7 +398,8 @@ function SourceTile({ item }: { item: TimelineItem }) {
 
 /**
  * One notification: a bubble for a message a person sent, a card for
- * everything else, with its reply form until someone answers.
+ * everything else, with its reply form until someone answers and, once its
+ * source edited it, what it said before.
  */
 function TimelineEntry({
   item,
@@ -423,7 +426,11 @@ function TimelineEntry({
           <h3 className={classes.title}>{item.title}</h3>
           {item.body ? <p className={classes.body}>{item.body}</p> : null}
           {item.url ? <NotificationLink url={item.url} /> : null}
-          {item.reply ? <Answer item={item} userId={userId} /> : null}
+          {item.reply ? (
+            // A new question is a new form: keyed by round, no draft carries over.
+            <Answer key={item.replyRound} item={item} userId={userId} />
+          ) : null}
+          {item.editedAt ? <History item={item} /> : null}
         </div>
       </div>
     </article>
@@ -467,6 +474,84 @@ function Answer({
             })}
       </span>
     </p>
+  );
+}
+
+/** What the notification said before each edit, with each round's answer. */
+function History({ item }: { item: TimelineItem }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const query = useQuery({
+    ...notificationRevisionsQueryOptions(item.id),
+    enabled: open,
+  });
+  const lines = useMemo(() => {
+    if (!query.data) return [];
+    const { revisions, responses } = query.data;
+    // A round's answer belongs to the last version that asked that question.
+    const lastOfRound = new Map(
+      revisions.map((revision) => [revision.replyRound, revision.revision]),
+    );
+    return revisions.map((revision) => {
+      const response =
+        revision.reply &&
+        lastOfRound.get(revision.replyRound) === revision.revision
+          ? responses.find((entry) => entry.round === revision.replyRound)
+          : undefined;
+      return {
+        key: revision.revision,
+        at: revision.activityAt,
+        title: revision.title,
+        answer:
+          response && revision.reply
+            ? describeAnswers(revision.reply, response.answers)
+                .map((line) => line.value)
+                .join(' · ')
+            : null,
+      };
+    });
+  }, [query.data]);
+  return (
+    <div className={classes.history}>
+      <button
+        type="button"
+        className={classes.historyToggle}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <IconChevronRight
+          size={13}
+          stroke={2.2}
+          className={classes.chevron}
+          data-open={open || undefined}
+          aria-hidden
+        />
+        {open
+          ? t('notifications.timeline.historyHide')
+          : t('notifications.timeline.history')}
+      </button>
+      {open ? (
+        query.data ? (
+          <ol className={classes.historyList}>
+            {lines.map((line) => (
+              <li key={line.key} className={classes.historyLine}>
+                <Time iso={line.at} />
+                <span className={classes.historyText}>
+                  {line.title}
+                  {line.answer
+                    ? ` · ${t('notifications.timeline.historyAnswer', {
+                        answer: line.answer,
+                      })}`
+                    : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <Loader size="xs" />
+        )
+      ) : null}
+    </div>
   );
 }
 

@@ -78,6 +78,12 @@ export type NotificationReply = {
 export type NotificationAnswers = { [fieldId: string]: string | string[] };
 
 export type NotificationResponse = {
+  /**
+   * The round of the reply form this answers: 1 for the form it was sent
+   * with, one more for each new question an edit asked. A notification takes
+   * one answer per round, so `(notification.id, round)` identifies an answer.
+   */
+  round: number;
   answers: NotificationAnswers;
   respondedBy: { userId: string | null; name: string };
   /** Where it was answered. */
@@ -206,7 +212,9 @@ export async function notify(
  * New content for a notification this App sent. Omitted fields keep their
  * value; `null` clears `body`, `url` or `data`. Without `autoOpenUrl`, adding
  * a `url` opens it on tap (as when pushing), clearing it turns that off, and
- * replacing it keeps the current setting.
+ * replacing it keeps the current setting. `reply` asks a new question: a
+ * form replaces the current one and `null` removes it, either way starting
+ * the next round, which takes its own answer (`response.round`).
  */
 export type NotificationUpdateInput = {
   /** Only change content, without another alert. Defaults to false. */
@@ -216,6 +224,7 @@ export type NotificationUpdateInput = {
   url?: string | null;
   autoOpenUrl?: boolean;
   data?: { [key: string]: NotificationJson } | null;
+  reply?: NotificationReplyInput | null;
 };
 
 /**
@@ -237,7 +246,7 @@ export type NotificationChangeResult = {
  * the alert. Destinations that take edit events receive
  * `hatch.notification.updated`. A recalled notification cannot be edited
  * (409), and an answered one cannot change its `data` (409), which its answer
- * is delivered with.
+ * is delivered with, unless the same edit asks a new question.
  */
 export async function updateNotification(
   id: string,

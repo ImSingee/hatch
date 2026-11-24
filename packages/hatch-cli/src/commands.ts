@@ -458,9 +458,15 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'update'],
     usage:
-      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--silent]',
+      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--reply <json> | --reply-file <path|-> | --clear-reply] [--silent]',
     description:
-      'Edit any notification by id and alert phones again, even with unchanged content. Use --silent to only change content. With no fields, repeats the alert. Destinations that take edits receive hatch.notification.updated.',
+      'Edit any notification by id and alert phones again, even with unchanged content; it moves to the end of the timeline and the replaced version is kept (see notification revisions). Use --silent to only change content. With no fields, repeats the alert. --reply asks a new question (replaces the whole form and starts the next round, which takes its own answer); --clear-reply removes the form. Destinations that take edits receive hatch.notification.updated.',
+  },
+  {
+    path: ['notification', 'revisions'],
+    usage: 'notification revisions <notification-id>',
+    description:
+      'List what a notification said before each edit, oldest first, and every answer it took (one per round of its reply form).',
   },
   {
     path: ['notification', 'recall'],

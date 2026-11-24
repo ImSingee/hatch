@@ -780,9 +780,12 @@ hatch notification unread
 hatch notification mark-read --latest
 ```
 
-A notification takes one answer and it is final: answering again, or answering
+Each question takes one answer and it is final: answering again, or answering
 a recalled notification, is a conflict (exit 6), and an answer that does not
-fit the form is `BAD_REQUEST` (exit 2) naming the field. `get` shows the form,
+fit the form is `BAD_REQUEST` (exit 2) naming the field. To ask a new
+question on the same notification, edit it with
+`update <id> --reply <json>` (or `--clear-reply`); the new round takes its own
+answer, and `revisions <id>` lists earlier versions and every answer. `get` shows the form,
 the answer and its deliveries. Answers go where response routes send them:
 
 ```sh

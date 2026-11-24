@@ -767,9 +767,16 @@ const specs: Record<string, Spec> = {
       'no-auto-open-url': { type: 'boolean' },
       data: { type: 'string' },
       'clear-data': { type: 'boolean' },
+      reply: { type: 'string' },
+      'reply-file': { type: 'string' },
+      'clear-reply': { type: 'boolean' },
     },
     build: ([id], values) => {
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
+      const reply = jsonInput(values, 'reply');
+      const clearReply = values['clear-reply'] === true;
+      if (reply && clearReply)
+        invalid('Use either --reply/--reply-file or --clear-reply, not both.');
       const title = str(values, 'title');
       if (title !== undefined && !title.trim())
         invalid('--title cannot be empty.');
@@ -786,18 +793,32 @@ const specs: Record<string, Spec> = {
             ? false
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
+        clearReply: clearReply || undefined,
       };
       const { id: _, silent, ...changes } = request;
       if (
         silent &&
+        !reply &&
         Object.values(changes).every((value) => value === undefined)
       )
         invalid(
-          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
+          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url, --[clear-]data or --reply/--clear-reply.',
         );
       return {
         method: 'updateNotification',
         request,
+        ...(reply
+          ? {
+              prepare: async (signal: AbortSignal) => ({
+                reply: replyToMessage(
+                  parseReplyForm(
+                    await reply(signal),
+                    values.reply === undefined ? 'reply-file' : 'reply',
+                  ),
+                ),
+              }),
+            }
+          : {}),
         text: (response) =>
           response.changed === true
             ? `Updated notification ${id} (revision ${field(response, 'revision')}). ${silent ? 'Content changes without another phone alert.' : 'Phones alert again with the latest content.'} Destinations that take edits receive the update.`
@@ -848,6 +869,32 @@ const specs: Record<string, Spec> = {
         },
       };
     },
+  },
+  revisions: {
+    ...id,
+    build: ([notificationId]) => ({
+      method: 'listNotificationRevisions',
+      request: { id: notificationId },
+      text: (response) => {
+        const revisions = rows(response.revisions);
+        const answers = rows(response.responses);
+        const lines = revisions.map(
+          (row) =>
+            `revision ${field(row, 'revision')} (${field(row, 'activityAt')} → ${field(row, 'replacedAt')}, round ${field(row, 'replyRound')}): ${field(row, 'title')}`,
+        );
+        const answered = answers.map(
+          (row) =>
+            `round ${field(row, 'round')}: answered by ${field(row, 'respondedByName')} via ${field(row, 'via')} at ${field(row, 'respondedAt')}`,
+        );
+        return [
+          revisions.length
+            ? 'Earlier versions, oldest first:'
+            : 'No earlier versions: it was never edited.',
+          ...lines,
+          ...(answered.length ? ['', 'Answers:', ...answered] : []),
+        ].join('\n');
+      },
+    }),
   },
   unread: {
     positionals: [],

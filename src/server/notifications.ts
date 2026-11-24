@@ -25,6 +25,7 @@ import {
   listChannels,
   listDestinations,
   listGroups,
+  listNotificationRevisions,
   listNotificationSources,
   listNotifications,
   listResponseRoutes,
@@ -137,6 +138,22 @@ export const respondToNotificationFn = createServerFn({ method: 'POST' })
       userId: user.id,
       via: 'web',
     });
+  });
+
+/** What a notification said before each edit, and every answer it took. */
+export const listNotificationRevisionsFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((id: string) => idSchema.parse(id))
+  .handler(async ({ data }) => {
+    const history = await listNotificationRevisions(data);
+    return {
+      ...history,
+      // Stored notification data is always a JSON object.
+      revisions: history.revisions.map((revision) => ({
+        ...revision,
+        data: revision.data as JsonObject | null,
+      })),
+    };
   });
 
 /** How far the signed-in user has read the timeline. */

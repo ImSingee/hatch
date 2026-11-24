@@ -105,4 +105,7 @@ export type TranslationResource = {
   'notifications.timeline.unreadJump_other': '{{count}} unread · Jump to where you left off';
   'notifications.timeline.unreadDivider_one': '{{count}} unread below';
   'notifications.timeline.unreadDivider_other': '{{count}} unread below';
+  'notifications.timeline.history': 'Earlier versions';
+  'notifications.timeline.historyHide': 'Hide earlier versions';
+  'notifications.timeline.historyAnswer': 'answered “{{answer}}”';
 };

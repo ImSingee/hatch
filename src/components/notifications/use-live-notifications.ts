@@ -33,6 +33,9 @@ export function useLiveNotifications() {
   usePlatformEvent('notification.updated', (event) => {
     void refreshHistory();
     void refreshDetail(event.notificationId);
+    void queryClient.invalidateQueries({
+      queryKey: [...NOTIFICATIONS_KEY, 'revisions', event.notificationId],
+    });
   });
   usePlatformEvent('notification.deleted', (event) => {
     void refreshHistory();

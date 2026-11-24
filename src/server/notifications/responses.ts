@@ -1,8 +1,9 @@
 /**
  * Answers to notification reply forms.
  *
- * A notification takes one answer, from whoever answers first, and the answer
- * never changes. Answering bumps the notification's revision so phones that
+ * Each round of a notification's reply form takes one answer, from whoever
+ * answers first, and the answer never changes. An edit that asks a new
+ * question starts the next round. Answering bumps the notification's revision so phones that
  * show it replace it with the answered state, and queues one delivery of the
  * answer to every destination a response route selects.
  */
@@ -24,6 +25,8 @@ import { requeueDelivered } from './lifecycle';
 import { decryptDeviceKey } from './secrets';
 
 export type NotificationResponseView = {
+  /** The round of the reply form this answers. */
+  round: number;
   answers: ReplyAnswers;
   respondedBy: { userId: string | null; name: string };
   via: NotificationResponseVia;
@@ -36,6 +39,7 @@ export function responseView(
   row: typeof schema.notificationResponses.$inferSelect,
 ): NotificationResponseView {
   return {
+    round: row.round,
     answers: row.answers,
     respondedBy: { userId: row.respondedByUserId, name: row.respondedByName },
     via: row.via,
@@ -44,24 +48,45 @@ export function responseView(
   };
 }
 
+/** The answer to one round of a notification's reply form. */
 export async function loadResponseView(
   notificationId: string,
+  round: number,
 ): Promise<NotificationResponseView | null> {
   const row = await db.query.notificationResponses.findFirst({
-    where: { notificationId },
+    where: { notificationId, round },
   });
   return row ? responseView(row) : null;
 }
 
-/** The answers of several notifications, keyed by notification id. */
-export async function loadResponseViews(
-  notificationIds: string[],
-): Promise<Map<string, NotificationResponseView>> {
-  if (notificationIds.length === 0) return new Map();
+/** Every answer a notification took, oldest round first. */
+export async function loadResponseHistory(
+  notificationId: string,
+): Promise<NotificationResponseView[]> {
   const rows = await db.query.notificationResponses.findMany({
-    where: { notificationId: { in: notificationIds } },
+    where: { notificationId },
+    orderBy: { round: 'asc' },
   });
-  return new Map(rows.map((row) => [row.notificationId, responseView(row)]));
+  return rows.map(responseView);
+}
+
+/**
+ * The answers to the current round of several notifications, keyed by
+ * notification id.
+ */
+export async function loadResponseViews(
+  notifications: { id: string; replyRound: number }[],
+): Promise<Map<string, NotificationResponseView>> {
+  if (notifications.length === 0) return new Map();
+  const current = new Map(notifications.map((n) => [n.id, n.replyRound]));
+  const rows = await db.query.notificationResponses.findMany({
+    where: { notificationId: { in: [...current.keys()] } },
+  });
+  return new Map(
+    rows
+      .filter((row) => current.get(row.notificationId) === row.round)
+      .map((row) => [row.notificationId, responseView(row)]),
+  );
 }
 
 /** Someone answered first; carries their answer. */
@@ -183,9 +208,10 @@ export async function respondToNotification(
     if (!notification.reply) {
       throw new AppError('This notification has no reply form.', 400);
     }
+    const round = notification.replyRound;
     if (notification.respondedAt) {
       const existing = await tx.query.notificationResponses.findFirst({
-        where: { notificationId },
+        where: { notificationId, round },
       });
       if (existing) throw new AlreadyRespondedError(responseView(existing));
     }
@@ -206,6 +232,8 @@ export async function respondToNotification(
       .insert(schema.notificationResponses)
       .values({
         notificationId,
+        round,
+        revision: notification.revision + 1,
         answers: normalized,
         respondedByUserId: responder.userId,
         respondedByName: await responderName(tx, responder),
@@ -241,6 +269,7 @@ export async function respondToNotification(
       await tx.insert(schema.notificationResponseDeliveries).values(
         targets.map((target) => ({
           notificationId,
+          round,
           destinationId: target.id,
           destinationType: target.type,
           destinationName: target.name,
