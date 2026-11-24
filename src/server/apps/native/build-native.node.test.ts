@@ -191,7 +191,9 @@ describe.skipIf(!nshAvailable())(
       const message = await buildError({ 'app/main.tsx': main });
       expect(message).toContain('nsh check failed');
       expect(message).toMatch(
-        new RegExp(`app/main\\.tsx[:(]${lineOf(main, 'const broken')}[,:]`),
+        new RegExp(
+          `(?<![\\w/])app/main\\.tsx[:(]${lineOf(main, 'const broken')}[,:]`,
+        ),
       );
     });
 

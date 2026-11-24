@@ -13,7 +13,7 @@
  * then `nsh package --target web` produces the linked module the player runs.
  */
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
 import { BUILD_WORK_DIR, REPO_ROOT } from '~agent/paths';
@@ -122,17 +122,24 @@ export function nativeEntryTsconfig(): string {
 }
 
 /**
- * Rewrite paths NSH prints relative to the entry's directory (`main.tsx:4:2`,
- * `main.tsx(4,2)`, `../gen/x.ts`) to App-root paths (`app/main.tsx:4:2`).
+ * Rewrite the paths NSH prints to App-root paths. `nsh build` and `nsh test`
+ * print them relative to the entry's directory (`main.tsx:4:2`,
+ * `../gen/x.ts`); TypeScript in `nsh check` prints them relative to the App
+ * root (`app/main.tsx(4,2)`). A path is read against the entry's directory
+ * when a file exists there, else kept as an App-root path.
  */
 export function appRelativeDiagnostics(
   output: string,
   entryDir: string,
+  exists: (appRelative: string) => boolean,
 ): string {
   return output.replace(
     /(^|[\s('"`])((?:\.\.?\/)*[\w@][\w@./-]*\.(?:tsx|ts|jsx|js|mts|cts))(?=[:(]\d)/gm,
-    (_match, lead: string, file: string) =>
-      `${lead}${path.posix.normalize(path.posix.join(entryDir, file))}`,
+    (_match, lead: string, file: string) => {
+      const fromEntry = path.posix.normalize(path.posix.join(entryDir, file));
+      const fromRoot = path.posix.normalize(file);
+      return `${lead}${exists(fromEntry) || !exists(fromRoot) ? fromEntry : fromRoot}`;
+    },
   );
 }
 
@@ -375,7 +382,11 @@ export async function buildNativeFrontend(
         env,
         timeoutMs: extra.timeoutMs,
       });
-      const output = appRelativeDiagnostics(result.output.trim(), entryDir);
+      const output = appRelativeDiagnostics(
+        result.output.trim(),
+        entryDir,
+        (file) => existsSync(path.join(src, ...file.split('/'))),
+      );
       logs.push(`$ nsh ${args.join(' ')}\n${output}`);
       if (result.code !== 0) {
         throw new NativeBuildError(`${step} failed:\n${output}`);
