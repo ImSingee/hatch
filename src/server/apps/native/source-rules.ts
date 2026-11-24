@@ -5,8 +5,9 @@
  *
  * - Outside `app/custom/`, App files take their UI from `@hatch/ui` and may
  *   not import `nsh` or `nsh/*` directly.
- * - No bare colours: arbitrary Tailwind colour values (`bg-[#f00]`), which
- *   NSH accepts silently, and colour literals given to colour style keys.
+ * - No bare colours: arbitrary Tailwind colour values (`bg-[#f00]`) and
+ *   Tailwind palette classes (`bg-red-500`), which NSH accepts silently,
+ *   and colour literals given to colour style keys.
  * - No calls to streaming RPC methods: the host bridge carries unary calls.
  */
 import { promises as fs } from 'node:fs';
@@ -213,6 +214,20 @@ const COLOR_FUNCTION = '(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\(';
 const ARBITRARY_COLOR = new RegExp(
   `(?:^|[\\s:!])[a-z][\\w-]*-\\[(?:color:)?(?:#[0-9a-fA-F]{3,8}|${COLOR_FUNCTION}[^\\]]*\\))\\]`,
 );
+/**
+ * Tailwind's built-in palette (`bg-red-500`, `text-white/80`): NSH knows
+ * these classes, so they pass its unknown-class check, but they are fixed
+ * colours that follow neither the theme nor the accent. A theme token never
+ * has a palette name followed by a shade (`neutral-fill` is a token).
+ */
+const PALETTE_COLOR = new RegExp(
+  '(?:^|[\\s:!])(?:bg|text|border(?:-[xytrblse])?|outline|ring(?:-offset)?|' +
+    'divide|fill|stroke|from|via|to|placeholder|caret|accent|decoration|' +
+    'shadow|inset-shadow|inset-ring)-(?:(?:slate|gray|zinc|neutral|stone|' +
+    'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|' +
+    'violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)|black|white)' +
+    '(?:\\/\\d+)?(?=$|[\\s!])',
+);
 const COLOR_KEY = /^(?:color|fill|stroke|fillStyle|strokeStyle|[a-z]\w*Color)$/;
 const NAMED_COLORS = new Set(
   (
@@ -260,7 +275,10 @@ export function bareColorFindings(
   const list = tokens(source);
   for (let index = 0; index < list.length; index += 1) {
     const token = list[index];
-    if (token.kind === 'string' && ARBITRARY_COLOR.test(token.value)) {
+    if (
+      token.kind === 'string' &&
+      (ARBITRARY_COLOR.test(token.value) || PALETTE_COLOR.test(token.value))
+    ) {
       findings.push({
         file,
         line: token.line,

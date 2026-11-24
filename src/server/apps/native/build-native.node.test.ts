@@ -208,6 +208,7 @@ describe.skipIf(!nshAvailable())(
     it('fails on a bare colour in a class or a colour style', async () => {
       const ui = (await fixtureFile('app/custom/ui.tsx'))
         .replace('bg-background', 'bg-[#f5f5f5]')
+        .replace('font-bold text-foreground', 'font-bold text-red-500/80')
         .replace(
           '<Text class="text-foreground">',
           '<Text class="text-foreground" style={{ color: \'#ff0000\' }}>',
@@ -215,6 +216,10 @@ describe.skipIf(!nshAvailable())(
       const message = await buildError({ 'app/custom/ui.tsx': ui });
       expect(message).toContain(
         `app/custom/ui.tsx:${lineOf(ui, 'bg-[#f5f5f5]')}: bare colour in a class`,
+      );
+      // A Tailwind palette class is known to NSH but follows no theme.
+      expect(message).toContain(
+        `app/custom/ui.tsx:${lineOf(ui, 'text-red-500/80')}: bare colour in a class`,
       );
       expect(message).toContain(
         `app/custom/ui.tsx:${lineOf(ui, "'#ff0000'")}: bare colour "#ff0000" for color`,

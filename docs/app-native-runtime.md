@@ -64,8 +64,9 @@ backend, widgets and schema). In the disposable build copy it:
 3. Source rules NSH does not enforce (`source-rules.ts`), over the App files
    the entry reaches:
    - outside `app/custom/`, no import of `nsh` or `nsh/*`;
-   - no bare colours: arbitrary Tailwind colour values (`bg-[#f00]`) in any
-     string, and colour literals given to colour style keys (`color`,
+   - no bare colours: arbitrary Tailwind colour values (`bg-[#f00]`) and
+     Tailwind palette classes (`bg-red-500`, `text-white/80`) in any string,
+     and colour literals given to colour style keys (`color`,
      `*Color`, `fill`, `stroke`, `fillStyle`, `strokeStyle`);
    - no call of a streaming RPC method (`client.watchThings(...)` for a
      method the proto declares streaming): the bridge carries unary calls.
