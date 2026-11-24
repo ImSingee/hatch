@@ -222,3 +222,19 @@ describe('answers handed to the Agent', () => {
     expect(enqueued.mock.calls[0]![0].sessionId).toBe('session-fixed');
   });
 });
+
+describe('Agent response routes without a model', () => {
+  it('are refused, since answers would have nowhere to run', async () => {
+    const catalog = await import('~server/agent-model-catalog');
+    const spy = vi
+      .spyOn(catalog, 'getAgentModelCatalog')
+      .mockResolvedValueOnce({ providers: [], defaultModel: null } as never);
+    await expect(
+      service.createResponseRoute({
+        sourceType: 'any',
+        target: { agent: { sessionId: null, instructions: null } },
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    spy.mockRestore();
+  });
+});

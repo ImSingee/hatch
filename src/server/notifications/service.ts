@@ -28,6 +28,7 @@ import type {
 } from '~/db/schema';
 import { getPlatformEnv } from '~/env';
 import type { NormalizedManifest } from '~server/apps/manifest';
+import { getAgentModelCatalog } from '~server/agent-model-catalog';
 import { AppError } from '~server/errors';
 import { publishPlatformEvent } from '~server/platform-events';
 import { describeApnsCredentials } from './apns/credentials';
@@ -1464,12 +1465,24 @@ async function responseRouteValues(
         400,
       );
     }
-    if (checks.target && sessionId) {
-      const session = await db.query.agentSessions.findFirst({
-        where: { id: sessionId },
-        columns: { id: true },
-      });
-      if (!session) notFound('Agent chat');
+    if (checks.target) {
+      const session = sessionId
+        ? await db.query.agentSessions.findFirst({
+            where: { id: sessionId },
+            columns: { providerId: true, modelId: true },
+          })
+        : null;
+      if (sessionId && !session) notFound('Agent chat');
+      // Answers would only be logged and dropped without a model to run.
+      if (
+        !(session?.providerId && session.modelId) &&
+        !(await getAgentModelCatalog()).defaultModel
+      ) {
+        throw new AppError(
+          'Add an AI provider with a model before sending answers to the Agent.',
+          409,
+        );
+      }
     }
     return {
       name,

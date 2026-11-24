@@ -58,6 +58,8 @@ person who answered (`src/server/notifications/agent-answers.ts`):
   (`agent_session_id`), or opens one chat per notification on its first
   answer, which later questions on the same notification reuse. Its optional
   `agent_instructions` follow the answer in the message.
+- Creating or retargeting an Agent route needs a model to run the answers:
+  the fixed chat's model or a configured AI provider, else `409`.
 - An answer the Agent gave itself (a Run has no user) is never sent back.
   Hand-off happens after the answer is stored; a missing Agent model is logged
   and leaves the answer recorded. The message names the notification and the
