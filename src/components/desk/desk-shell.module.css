@@ -123,6 +123,14 @@
   }
 }
 
+/* The floating dock leaves the bottom free: keep a window off the edge
+   strip that raises the dock. */
+@media (max-width: 48em) and (hover: hover) {
+  .shell[data-view='window'] .stage {
+    padding-bottom: 12px;
+  }
+}
+
 /* Below 560: the dock becomes the tab bar, and a window is the whole page. */
 @media (max-width: 35em) {
   .dock {
