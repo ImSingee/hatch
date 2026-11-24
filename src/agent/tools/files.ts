@@ -1,6 +1,6 @@
 /** Workspace file tools: list, read, write, and exact-string edit. */
 import path from 'node:path';
-import { Type } from '@earendil-works/pi-ai';
+import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ExecutionEnv } from '../execution-env';
 import { isAppManagedPathSegment } from '~/app-managed-path';
@@ -308,10 +308,8 @@ export function createFileTools(
     description:
       'List a directory in the workspace, or an absolute directory under a ' +
       'read-only resource root referenced by the system prompt.',
-    parameters: Type.Object({
-      path: Type.Optional(
-        Type.String({ description: 'Directory path. Defaults to ".".' }),
-      ),
+    parameters: z.object({
+      path: z.string().describe('Directory path. Defaults to ".".').optional(),
     }),
     selectStreamStartDetails: (args) =>
       inputFilePathDetails(
@@ -354,22 +352,22 @@ export function createFileTools(
       inputFilePathDetails(env, args.path, readOnlyRoots),
     selectStreamDetails: (details) =>
       isFilePathDetails(details) ? details : undefined,
-    parameters: Type.Object({
-      path: Type.String({ description: 'File path to read.' }),
-      offset: Type.Optional(
-        Type.Integer({
-          minimum: 0,
-          maximum: Number.MAX_SAFE_INTEGER,
-          description: 'Zero-based character offset. Defaults to 0.',
-        }),
-      ),
-      limit: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          maximum: MAX_FILE_CHARS,
-          description: `Maximum characters to return. Defaults to ${MAX_FILE_CHARS}.`,
-        }),
-      ),
+    parameters: z.object({
+      path: z.string().describe('File path to read.'),
+      offset: z
+        .int()
+        .min(0)
+        .max(Number.MAX_SAFE_INTEGER)
+        .describe('Zero-based character offset. Defaults to 0.')
+        .optional(),
+      limit: z
+        .int()
+        .min(1)
+        .max(MAX_FILE_CHARS)
+        .describe(
+          `Maximum characters to return. Defaults to ${MAX_FILE_CHARS}.`,
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const resolved = await resolveReadablePath(
@@ -415,9 +413,9 @@ export function createFileTools(
       isWriteFileDetails(details) || isFilePathDetails(details)
         ? details
         : undefined,
-    parameters: Type.Object({
-      path: Type.String({ description: 'File path to write.' }),
-      content: Type.String({ description: 'Full file contents.' }),
+    parameters: z.object({
+      path: z.string().describe('File path to write.'),
+      content: z.string().describe('Full file contents.'),
     }),
     execute: async (_id, params, signal) => {
       const writable = await resolveWritableTextFile(env, params.path, signal);
@@ -447,18 +445,18 @@ export function createFileTools(
       isEditFileDetails(details) || isFilePathDetails(details)
         ? details
         : undefined,
-    parameters: Type.Object({
-      path: Type.String({ description: 'File path to edit.' }),
-      old_string: Type.String({
-        description:
+    parameters: z.object({
+      path: z.string().describe('File path to edit.'),
+      old_string: z
+        .string()
+        .describe(
           'Exact text to replace. Keep it as short as possible while unique.',
-      }),
-      new_string: Type.String({ description: 'Replacement text.' }),
-      replace_all: Type.Optional(
-        Type.Boolean({
-          description: 'Replace every occurrence of old_string.',
-        }),
-      ),
+        ),
+      new_string: z.string().describe('Replacement text.'),
+      replace_all: z
+        .boolean()
+        .describe('Replace every occurrence of old_string.')
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const resolved = await resolveWorkspaceTextFile(env, params.path, signal);

@@ -1,5 +1,5 @@
 /** Download Platform-managed chat attachments into the Agent workspace. */
-import { Type } from '@earendil-works/pi-ai';
+import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import path from 'node:path';
 import { safeAttachmentName } from '../attachments';
@@ -22,15 +22,15 @@ export function createAttachmentTool(options: {
       'Download a user-provided chat attachment into this Agent workdir. ' +
       'Use the attachment id listed in the user message. Returns the saved path.',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      attachment_id: Type.String({ description: 'Attachment id from chat.' }),
-      path: Type.Optional(
-        Type.String({
-          description:
-            'Destination inside this Agent workdir. Defaults to ' +
+    parameters: z.object({
+      attachment_id: z.string().describe('Attachment id from chat.'),
+      path: z
+        .string()
+        .describe(
+          'Destination inside this Agent workdir. Defaults to ' +
             'attachments/<id>/<original-name>.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);

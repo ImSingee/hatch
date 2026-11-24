@@ -3,7 +3,7 @@
  * Mirrors the app tools: platform state via PlatformClient, source in
  * runner-local worktrees fed by git bundles.
  */
-import { Type } from '@earendil-works/pi-ai';
+import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { workflowHatchSdkMaterializer } from '../hatch-sdk';
 import {
@@ -94,7 +94,7 @@ export function createWorkflowTools(options: {
       'List every workflow on the platform with its status, live version, and ' +
       'triggers. Use this to discover existing workflows before get_workflow ' +
       'or checkout_workflow.',
-    parameters: Type.Object({}),
+    parameters: z.object({}),
     execute: async () => {
       const workflows = await platform.listWorkflows();
       if (workflows.length === 0) {
@@ -127,10 +127,8 @@ export function createWorkflowTools(options: {
       "Get one workflow's details: status, live version, input JSON Schema, " +
       'network declaration, triggers (cron + webhook), recent runs, and ' +
       'deployment history. Mirrors the workflow management panel.',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'Workflow id to inspect.',
-      }),
+    parameters: z.object({
+      id: z.string().describe('Workflow id to inspect.'),
     }),
     execute: async (_id, params) => {
       requireIdSlug(params.id);
@@ -202,30 +200,31 @@ export function createWorkflowTools(options: {
       'replaces a path. The platform-owned Hatch SDK is materialized before ' +
       'returning.',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      id: Type.String({ description: 'Workflow id.' }),
-      clone: Type.Boolean({
-        description:
+    parameters: z.object({
+      id: z.string().describe('Workflow id.'),
+      clone: z
+        .boolean()
+        .describe(
           'True to create a fresh checkout; false to update the existing ' +
-          'checkout at source_path.',
-      }),
-      source_path: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Absolute path inside this Agent workdir, or a path relative to ' +
+            'checkout at source_path.',
+        ),
+      source_path: z
+        .string()
+        .min(1)
+        .describe(
+          'Absolute path inside this Agent workdir, or a path relative to ' +
             'it. Required when clone is false. When clone is true, defaults ' +
             'to workflows/<slug>.',
-        }),
-      ),
-      force: Type.Optional(
-        Type.Boolean({
-          description:
-            'Only valid when clone is true. Replace an existing source_path ' +
+        )
+        .optional(),
+      force: z
+        .boolean()
+        .describe(
+          'Only valid when clone is true. Replace an existing source_path ' +
             'with a fresh checkout. Defaults to false and permanently ' +
             'discards local work at that exact path.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -286,35 +285,34 @@ export function createWorkflowTools(options: {
       'Workflows run periodic/repetitive tasks; they ' +
       'have no custom UI/API, only manual/cron/webhook triggers.',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      slug: Type.String({
-        minLength: 1,
-        maxLength: WORKFLOW_SLUG_MAX_LENGTH,
-        description:
+    parameters: z.object({
+      slug: z
+        .string()
+        .min(1)
+        .max(WORKFLOW_SLUG_MAX_LENGTH)
+        .describe(
           'URL slug using lowercase letters, digits, and hyphens, starting ' +
-          'with a letter or digit. Used in ' +
-          'the human-facing /workflow/<slug> URL and changeable later; ' +
-          'technical APIs use the generated Workflow id.',
-      }),
-      name: Type.String({ minLength: 1, description: 'Human-readable name.' }),
-      description: Type.Optional(
-        Type.String({ description: 'One-line description.' }),
-      ),
-      pin: Type.Optional(
-        Type.Boolean({
-          description:
-            'Pin the workflow to the sidebar (default true) so it is reachable ' +
+            'with a letter or digit. Used in ' +
+            'the human-facing /workflow/<slug> URL and changeable later; ' +
+            'technical APIs use the generated Workflow id.',
+        ),
+      name: z.string().min(1).describe('Human-readable name.'),
+      description: z.string().describe('One-line description.').optional(),
+      pin: z
+        .boolean()
+        .describe(
+          'Pin the workflow to the sidebar (default true) so it is reachable ' +
             'right away.',
-        }),
-      ),
-      target_path: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Absolute path inside this Agent workdir, or a path relative to ' +
+        )
+        .optional(),
+      target_path: z
+        .string()
+        .min(1)
+        .describe(
+          'Absolute path inside this Agent workdir, or a path relative to ' +
             'it. Defaults to workflows/<slug>.',
-        }),
-      ),
+        )
+        .optional(),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -380,20 +378,22 @@ export function createWorkflowTools(options: {
       'declare a supported compatibilityVersion. Reports the deployment and ' +
       'compatibility versions plus the webhook URL (if enabled).',
     executionMode: 'sequential',
-    parameters: Type.Object({
-      id: Type.String({ description: 'Workflow id to deploy.' }),
-      source_path: Type.String({
-        minLength: 1,
-        description:
+    parameters: z.object({
+      id: z.string().describe('Workflow id to deploy.'),
+      source_path: z
+        .string()
+        .min(1)
+        .describe(
           'Absolute path inside this Agent workdir, or a path relative to it, ' +
-          'for the workflow Git worktree. Use the path returned by ' +
-          'create_workflow or checkout_workflow.',
-      }),
-      message: Type.String({
-        description:
+            'for the workflow Git worktree. Use the path returned by ' +
+            'create_workflow or checkout_workflow.',
+        ),
+      message: z
+        .string()
+        .describe(
           'Required release note describing what this deployment changes ' +
-          '(shown in the deployment history).',
-      }),
+            '(shown in the deployment history).',
+        ),
     }),
     execute: async (_id, params, signal) => {
       const sessionId = requireSessionId(options.sessionId);
@@ -440,11 +440,9 @@ export function createWorkflowTools(options: {
       "version's bundled program and source. Agent restore remains available " +
       "outside the platform's supported compatibility range, but that " +
       'Workflow cannot run until the Workflow or platform is updated.',
-    parameters: Type.Object({
-      id: Type.String({
-        description: 'Workflow id to roll back.',
-      }),
-      version: Type.Number({ description: 'Deployment version to restore.' }),
+    parameters: z.object({
+      id: z.string().describe('Workflow id to roll back.'),
+      version: z.number().describe('Deployment version to restore.'),
     }),
     execute: async (_id, params) => {
       requireIdSlug(params.id);
