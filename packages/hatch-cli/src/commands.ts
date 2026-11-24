@@ -631,3 +631,33 @@ export const commandDefinitions = definitions.map((definition) => ({
   ...definition,
   supported: true,
 }));
+
+/** One-line summaries of command groups, keyed by space-joined path. */
+export const commandGroups: Readonly<Record<string, string>> = {
+  auth: 'Sign in, inspect the current credential and sign out.',
+  server: 'Inspect the connected platform server.',
+  app: 'Create, sync, deploy and operate Apps.',
+  'app invoke': 'Call a deployed App backend or webhook.',
+  'app backend': 'Inspect and control App backend processes.',
+  'app task': 'List, run and inspect App tasks and their runs.',
+  'app kv': 'Read and write App key-value data.',
+  'app data-table': 'Inspect and change App data tables.',
+  'app db': 'Query App databases.',
+  'app icon': 'Show, set or clear an App icon.',
+  workflow: 'Create, sync and deploy Workflows.',
+  model: 'List models and choose the model for each kind.',
+  'image-model': 'Manage image generation models.',
+  image: 'Generate images.',
+  theme: 'Show or change the instance theme.',
+  pin: 'Manage navigation pins for Apps, Workflows and dashboards.',
+  dashboard: 'Manage dashboards.',
+  'dashboard widget': 'Add, arrange and remove dashboard widgets.',
+  preferences: 'Show or change personal preferences.',
+  notification: 'Send, inspect and route notifications.',
+  'notification destination': 'Manage devices and other delivery targets.',
+  'notification webhook': 'Manage webhook destinations.',
+  'notification group': 'Manage destination groups.',
+  'notification route': 'Manage notification routing rules.',
+  'notification response-route': 'Manage where reply-form answers go.',
+  'notification channel': 'Manage channels for external systems.',
+};

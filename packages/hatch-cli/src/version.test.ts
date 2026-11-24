@@ -93,24 +93,34 @@ it('advertises implemented invocation and data commands in binary text and JSON 
     'app invoke backend',
     'app invoke webhook',
   ];
-  const help = JSON.parse(invoke(['help', '--json'])) as {
+  type Help = {
     commands: { path: string[]; supported: boolean; description: string }[];
+    groups: { path: string[] }[];
   };
-  const dataCommands = help.commands.filter((command) =>
-    expected.includes(command.path.join(' ')),
+  const root = JSON.parse(invoke(['help', '--json'])) as Help;
+  expect(root.commands.every((command) => command.path.length === 1)).toBe(
+    true,
   );
-  expect(dataCommands).toHaveLength(expected.length);
+  expect(root.groups.map((group) => group.path)).toContainEqual(['app']);
+  expect(
+    root.groups.some((group) => ['operation'].includes(group.path[0])),
+  ).toBe(false);
+  const auth = JSON.parse(invoke(['help', 'auth', '--json'])) as Help;
+  expect(auth.groups).toEqual([]);
+  expect(auth.commands.some((command) => command.path[1] === 'key')).toBe(
+    false,
+  );
+  const dataCommands = ['kv', 'data-table', 'db', 'invoke'].flatMap(
+    (group) =>
+      (JSON.parse(invoke(['app', group, '--help', '--json'])) as Help).commands,
+  );
+  expect(dataCommands.map((command) => command.path.join(' ')).sort()).toEqual(
+    [...expected].sort(),
+  );
   for (const command of dataCommands) {
     expect(command.supported).toBe(true);
     expect(command.description).not.toContain('Unsupported');
   }
-  expect(
-    help.commands.some(
-      (command) =>
-        command.path[0] === 'operation' ||
-        (command.path[0] === 'auth' && command.path[1] === 'key'),
-    ),
-  ).toBe(false);
   const text = invoke(['help']);
   expect(text).not.toContain('auth key');
   expect(text).not.toMatch(/^operation /m);
