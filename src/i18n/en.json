@@ -271,5 +271,19 @@
   "appDocs.copyCommand": "Copy command",
   "appDocs.commandCopied": "Command copied",
   "appDocs.loadFailed": "This doc could not be loaded.",
-  "appDocs.stale": "This doc changed with a new deployment. Reloading the docs."
+  "appDocs.stale": "This doc changed with a new deployment. Reloading the docs.",
+  "runs.inspector.steps": "Steps",
+  "runs.inspector.error": "Error",
+  "runs.inspector.output": "Output",
+  "runs.inspector.summary": "Summary",
+  "runs.inspector.input": "Input",
+  "runs.inspector.log": "Log",
+  "runs.inspector.status": "Status",
+  "runs.inspector.trigger": "Trigger",
+  "runs.inspector.version": "Version",
+  "runs.inspector.started": "Started",
+  "runs.inspector.duration": "Duration",
+  "runs.steps.attempt": "attempt {{attempt}}",
+  "runs.steps.waiting": "Waiting for the first step…",
+  "runs.steps.empty": "This run recorded no steps."
 }

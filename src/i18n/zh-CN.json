@@ -271,5 +271,19 @@
   "appDocs.copyCommand": "复制命令",
   "appDocs.commandCopied": "已复制命令",
   "appDocs.loadFailed": "无法加载此文档。",
-  "appDocs.stale": "此文档已随新部署变更，正在重新加载文档。"
+  "appDocs.stale": "此文档已随新部署变更，正在重新加载文档。",
+  "runs.inspector.steps": "步骤",
+  "runs.inspector.error": "错误",
+  "runs.inspector.output": "输出",
+  "runs.inspector.summary": "概要",
+  "runs.inspector.input": "输入",
+  "runs.inspector.log": "日志",
+  "runs.inspector.status": "状态",
+  "runs.inspector.trigger": "触发方式",
+  "runs.inspector.version": "版本",
+  "runs.inspector.started": "开始时间",
+  "runs.inspector.duration": "耗时",
+  "runs.steps.attempt": "第 {{attempt}} 次尝试",
+  "runs.steps.waiting": "正在等待第一个步骤…",
+  "runs.steps.empty": "本次运行没有记录步骤。"
 }
