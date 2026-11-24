@@ -92,7 +92,12 @@ export default function AppScreen() {
           title: verticalBar ? '' : name,
           gestureEnabled: !inPageBack,
           headerTransparent: verticalBar,
-          headerStyle: { backgroundColor: c.card },
+          // A transparent bar still paints its own background, which would
+          // leave a band the bar's height above the App.
+          headerStyle: {
+            backgroundColor: verticalBar ? 'transparent' : c.card,
+          },
+          headerShadowVisible: !verticalBar,
         }}
       />
       {/* A native bar item, not a custom view, so the system can move it to
