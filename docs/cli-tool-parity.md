@@ -162,7 +162,7 @@ refetches without a reload. Web operation to command:
 | Rename, edit description, auto-refresh menu    | dashboard update                                   | UpdateDashboard              |
 | Delete dashboard                               | dashboard delete --yes                             | DeleteDashboard              |
 | Add widget panel: widgets on offer             | dashboard widget available [--limit --cursor]      | ListAvailableWidgets (paged) |
-| All apps, App detail: Pin to desk              | dashboard widget add <dashboard-id> --app --widget | AddDashboardWidget           |
+| All apps right-click menu: Pin to desk         | dashboard widget add <dashboard-id> --app --widget | AddDashboardWidget           |
 | Add widget                                     | dashboard widget add                               | AddDashboardWidget           |
 | Drag, resize or size buttons, per layout width | dashboard widget layout --breakpoint …             | SetDashboardWidgetLayout     |
 | Remove widget                                  | dashboard widget remove                            | RemoveDashboardWidget        |

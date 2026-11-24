@@ -1,11 +1,15 @@
-import { Anchor, Button, Drawer, SegmentedControl } from '@mantine/core';
-import { useMediaQuery } from '@mantine/hooks';
+import { Button, HoverCard, Menu, SegmentedControl, Text } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import {
+  IconAppWindow,
+  IconPin,
   IconPinFilled,
+  IconPinnedOff,
   IconPlus,
   IconSearchOff,
+  IconSettings,
+  IconSparkles,
   IconStack2,
 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
@@ -17,6 +21,7 @@ import {
   ToolbarSearch,
   WindowBody,
 } from '~components/page/page';
+import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
 import { StatusBadge } from '~components/system/status-badge';
 import { formatRelative } from '~lib/format';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
@@ -25,7 +30,7 @@ import type { AppListItem } from '~server/apps';
 import { setSidebarPin } from '~server/sidebar';
 import { setWorkflowPinFn, type WorkflowListItem } from '~server/workflows';
 import { AppGlyph } from './app-glyph';
-import { usePinToDesk } from './pin-to-desk';
+import { PinToDeskItems } from './pin-to-desk';
 import classes from './app-library.module.css';
 
 type Entry = {
@@ -103,19 +108,26 @@ function plural(count: number, noun: string) {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
+/** Which tile a right-click or long press landed on. */
+function entryKeyOf(target: EventTarget | null) {
+  if (!(target instanceof Element)) return null;
+  return (
+    target.closest<HTMLElement>('[data-entry-key]')?.dataset.entryKey ?? null
+  );
+}
+
 /**
- * All apps: every App and Workflow as a tile. Picking a tile shows what it
- * is and what can be done with it; double-clicking opens it.
+ * All apps: every App and Workflow as a tile. A click opens it. Pointing at a
+ * tile shows what it is; its actions (manage, dock, desk, Agent) are in the
+ * right-click menu, also opened by a long press or Shift+F10.
  */
 export function AppLibrary({ apps }: { apps: AppListItem[] }) {
-  const navigate = useNavigate();
   const { data: workflows } = useQuery(workflowsQueryOptions);
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
-  const narrow = useMediaQuery('(max-width: 50em)') ?? false;
   const [query, setQuery] = useState('');
   const [grouping, setGrouping] = useState<Grouping>('kind');
-  const [picked, setPicked] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const pinnedApps = new Set((pins ?? []).map((pin) => pin.appId));
   const entries: Entry[] = [
@@ -150,18 +162,9 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
       )
     : entries;
   const groups = groupEntries(matching, grouping);
-  const selected =
-    matching.find((entry) => keyOf(entry) === picked) ??
-    groups[0]?.items[0] ??
-    null;
-
-  const open = (entry: Entry) =>
-    entry.kind === 'app'
-      ? navigate({ to: '/app/$appSlug', params: { appSlug: entry.slug } })
-      : navigate({
-          to: '/workflow/$workflowSlug',
-          params: { workflowSlug: entry.slug },
-        });
+  const menuEntry = entries.find((entry) => keyOf(entry) === menuKey) ?? null;
+  const noteTarget = (target: EventTarget | null) =>
+    setMenuKey(entryKeyOf(target));
 
   const workflowCount = workflows?.length ?? 0;
 
@@ -232,78 +235,158 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
           No app or workflow matches “{query.trim()}”.
         </EmptyState>
       ) : (
-        <div className={classes.layout}>
-          <div className={classes.groups}>
-            {groups.map((group) => (
-              <section key={group.title} aria-label={group.title}>
-                <h3 className={classes.groupHead}>
-                  {group.title}
-                  <span className={classes.groupCount}>
-                    {group.items.length}
-                  </span>
-                  <span className={classes.groupRule} aria-hidden />
-                </h3>
-                <div className={classes.grid}>
-                  {group.items.map((entry) => (
-                    <button
-                      key={keyOf(entry)}
-                      type="button"
-                      className={classes.tile}
-                      aria-pressed={
-                        !narrow && selected !== null
-                          ? keyOf(selected) === keyOf(entry)
-                          : undefined
-                      }
-                      title={`${entry.name} — double-click to open`}
-                      onClick={() => {
-                        setPicked(keyOf(entry));
-                        if (narrow) setSheetOpen(true);
-                      }}
-                      onDoubleClick={() => void open(entry)}
-                    >
-                      <span className={classes.tileIcon}>
-                        <AppGlyph
-                          size="xl"
-                          name={entry.name}
-                          seed={entry.id}
-                          icon={entry.kind === 'app'}
-                          shape={entry.kind}
-                        />
-                        {entry.pinned ? (
-                          <span className={classes.pinned}>
-                            <IconPinFilled size={9} aria-label="Pinned" />
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className={classes.tileName}>{entry.name}</span>
-                      <span className={classes.tileMeta}>
-                        {formatRelative(entry.updatedAt)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-          {selected ? <EntryDetail entry={selected} /> : null}
-        </div>
+        <Menu
+          shadow="md"
+          width={230}
+          onOpen={() => setMenuOpen(true)}
+          onClose={() => setMenuOpen(false)}
+        >
+          <Menu.ContextMenu>
+            {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- Notes which tile a right-click, long press or Shift+F10 is on; the tiles stay the interactive elements. */}
+            <div
+              className={classes.groups}
+              onContextMenu={(event) => noteTarget(event.target)}
+              // A long press opens the menu without a contextmenu event.
+              onTouchStart={(event) => noteTarget(event.target)}
+              onKeyDown={openContextMenuFromKeyboard}
+            >
+              {groups.map((group) => (
+                <section key={group.title} aria-label={group.title}>
+                  <h3 className={classes.groupHead}>
+                    {group.title}
+                    <span className={classes.groupCount}>
+                      {group.items.length}
+                    </span>
+                    <span className={classes.groupRule} aria-hidden />
+                  </h3>
+                  <div className={classes.grid}>
+                    {group.items.map((entry) => (
+                      <EntryTile
+                        key={keyOf(entry)}
+                        entry={entry}
+                        cardHidden={menuOpen}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </Menu.ContextMenu>
+          <Menu.Dropdown>
+            {menuEntry ? <EntryMenu entry={menuEntry} /> : null}
+          </Menu.Dropdown>
+        </Menu>
       )}
-
-      <Drawer
-        opened={narrow && sheetOpen && selected !== null}
-        onClose={() => setSheetOpen(false)}
-        position="bottom"
-        size={460}
-        classNames={{ content: classes.sheet }}
-        title={selected?.kind === 'workflow' ? 'Workflow' : 'App'}
-      >
-        {selected ? <EntryDetail entry={selected} inline /> : null}
-      </Drawer>
     </WindowBody>
   );
 }
 
-function EntryDetail({ entry, inline }: { entry: Entry; inline?: boolean }) {
+/** The link a tile or a menu item opens. */
+function EntryLink({
+  entry,
+  manage,
+  ...props
+}: {
+  entry: Entry;
+  manage?: boolean;
+  className?: string;
+  children?: ReactNode;
+  'data-entry-key'?: string;
+}) {
+  return entry.kind === 'app' ? (
+    <Link
+      to={manage ? '/app/$appSlug/manage' : '/app/$appSlug'}
+      params={{ appSlug: entry.slug }}
+      {...props}
+    />
+  ) : (
+    <Link
+      to={manage ? '/workflow/$workflowSlug/manage' : '/workflow/$workflowSlug'}
+      params={{ workflowSlug: entry.slug }}
+      {...props}
+    />
+  );
+}
+
+/** One App or Workflow: a link that opens it, with its details on hover. */
+function EntryTile({
+  entry,
+  cardHidden,
+}: {
+  entry: Entry;
+  cardHidden: boolean;
+}) {
+  const isApp = entry.kind === 'app';
+  return (
+    <HoverCard
+      openDelay={500}
+      closeDelay={80}
+      position="bottom"
+      width={280}
+      disabled={cardHidden}
+    >
+      <HoverCard.Target>
+        <EntryLink
+          entry={entry}
+          className={classes.tile}
+          data-entry-key={keyOf(entry)}
+        >
+          <span className={classes.tileIcon}>
+            <AppGlyph
+              size="xl"
+              name={entry.name}
+              seed={entry.id}
+              icon={isApp}
+              shape={entry.kind}
+            />
+            {entry.pinned ? (
+              <span className={classes.pinned}>
+                <IconPinFilled size={9} aria-label="Pinned" />
+              </span>
+            ) : null}
+          </span>
+          <span className={classes.tileName}>{entry.name}</span>
+          <span className={classes.tileMeta}>
+            {formatRelative(entry.updatedAt)}
+          </span>
+        </EntryLink>
+      </HoverCard.Target>
+      <HoverCard.Dropdown className={classes.card}>
+        <div className={classes.cardHead}>
+          <AppGlyph
+            size="lg"
+            name={entry.name}
+            seed={entry.id}
+            icon={isApp}
+            shape={entry.kind}
+          />
+          <div className={classes.cardTitle}>
+            <span className={classes.cardName}>{entry.name}</span>
+            <span className={classes.cardMeta}>
+              {isApp ? 'App' : 'Workflow'} · Updated{' '}
+              {formatRelative(entry.updatedAt)}
+            </span>
+          </div>
+        </div>
+        <div className={classes.cardBadges}>
+          <StatusBadge status={entry.status} />
+          {entry.pinned ? (
+            <span className={classes.cardFact}>In the dock</span>
+          ) : null}
+        </div>
+        <p className={classes.cardText}>
+          {entry.description || 'No description yet.'}
+        </p>
+        <span className={classes.cardHint}>
+          Click to open · right-click for more
+        </span>
+      </HoverCard.Dropdown>
+    </HoverCard>
+  );
+}
+
+/** What the right-click menu offers for one App or Workflow. */
+function EntryMenu({ entry }: { entry: Entry }) {
   const queryClient = useQueryClient();
   const pin = useMutation({
     mutationFn: async (pinned: boolean) => {
@@ -324,138 +407,48 @@ function EntryDetail({ entry, inline }: { entry: Entry; inline?: boolean }) {
         }),
       ]),
   });
-  const isApp = entry.kind === 'app';
 
-  return (
-    <aside
-      className={classes.detail}
-      data-inline={inline || undefined}
-      aria-label={`${entry.name} details`}
-    >
-      <AppGlyph
-        size="hero"
-        name={entry.name}
-        seed={entry.id}
-        icon={isApp}
-        shape={entry.kind}
-      />
-      <div>
-        <h3 className={classes.detailName}>{entry.name}</h3>
-        <span className={classes.detailMeta}>
-          {isApp ? 'App' : 'Workflow'} · Updated{' '}
-          {formatRelative(entry.updatedAt)}
-        </span>
-      </div>
-      <StatusBadge status={entry.status} />
-      <p className={classes.detailText}>
-        {entry.description || 'No description yet.'}
-      </p>
-      <div className={classes.fact}>
-        <span>Dock</span>
-        <span className={classes.factValue}>
-          {entry.pinned ? 'Pinned' : 'Not pinned'}
-        </span>
-      </div>
-      <div className={classes.actions}>
-        {isApp ? (
-          <>
-            <Button
-              renderRoot={(props) => (
-                <Link
-                  to="/app/$appSlug"
-                  params={{ appSlug: entry.slug }}
-                  {...props}
-                />
-              )}
-            >
-              Open
-            </Button>
-            <Button
-              variant="default"
-              renderRoot={(props) => (
-                <Link
-                  to="/app/$appSlug/manage"
-                  params={{ appSlug: entry.slug }}
-                  {...props}
-                />
-              )}
-            >
-              Manage
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              renderRoot={(props) => (
-                <Link
-                  to="/workflow/$workflowSlug"
-                  params={{ workflowSlug: entry.slug }}
-                  {...props}
-                />
-              )}
-            >
-              Open
-            </Button>
-            <Button
-              variant="default"
-              renderRoot={(props) => (
-                <Link
-                  to="/workflow/$workflowSlug/manage"
-                  params={{ workflowSlug: entry.slug }}
-                  {...props}
-                />
-              )}
-            >
-              Manage
-            </Button>
-          </>
-        )}
-      </div>
-      {isApp ? (
-        <AppPinActions
-          appId={entry.id}
-          dockButton={
-            <Button
-              variant="default"
-              loading={pin.isPending}
-              onClick={() => pin.mutate(!entry.pinned)}
-            >
-              {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
-            </Button>
-          }
-        />
-      ) : (
-        <Button
-          variant="default"
-          loading={pin.isPending}
-          onClick={() => pin.mutate(!entry.pinned)}
-        >
-          {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
-        </Button>
-      )}
-      <Anchor component={Link} to="/agent" size="sm">
-        Continue editing with the Agent ›
-      </Anchor>
-    </aside>
-  );
-}
-
-/** The dock pin beside "Pin to desk", and why the latter is unavailable. */
-function AppPinActions({
-  appId,
-  dockButton,
-}: {
-  appId: string;
-  dockButton: ReactNode;
-}) {
-  const desk = usePinToDesk(appId);
   return (
     <>
-      <div className={classes.pinActions}>
-        {dockButton}
-        {desk.control}
-      </div>
-      {desk.reason ? <p className={classes.actionNote}>{desk.reason}</p> : null}
+      <Menu.Label>
+        <Text component="span" size="xs" fw={700} truncate display="block">
+          {entry.name}
+        </Text>
+      </Menu.Label>
+      <Menu.Item
+        leftSection={<IconAppWindow size={15} stroke={1.7} />}
+        renderRoot={(props) => <EntryLink entry={entry} {...props} />}
+      >
+        Open
+      </Menu.Item>
+      <Menu.Item
+        leftSection={<IconSettings size={15} stroke={1.7} />}
+        renderRoot={(props) => <EntryLink entry={entry} manage {...props} />}
+      >
+        Manage
+      </Menu.Item>
+      <Menu.Divider />
+      <Menu.Item
+        leftSection={
+          entry.pinned ? (
+            <IconPinnedOff size={15} stroke={1.7} />
+          ) : (
+            <IconPin size={15} stroke={1.7} />
+          )
+        }
+        disabled={pin.isPending}
+        onClick={() => pin.mutate(!entry.pinned)}
+      >
+        {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
+      </Menu.Item>
+      {entry.kind === 'app' ? <PinToDeskItems appId={entry.id} /> : null}
+      <Menu.Divider />
+      <Menu.Item
+        leftSection={<IconSparkles size={15} stroke={1.7} />}
+        renderRoot={(props) => <Link to="/agent" {...props} />}
+      >
+        Continue with the Agent
+      </Menu.Item>
     </>
   );
 }

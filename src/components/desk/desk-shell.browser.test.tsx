@@ -639,7 +639,7 @@ test('names stay out of the dock unless the instance shows them, and pointing at
   await vi.waitFor(() => expect(printed()).toBeGreaterThan(0));
 });
 
-test('keyboard focus shows a tile its full name, and a long press opens that tile own actions', async () => {
+test('keyboard focus shows a tile its full name and Shift+F10 its actions, and so does a long press', async () => {
   fixtures.pins = [
     {
       id: 'pin-ledger',
@@ -665,6 +665,14 @@ test('keyboard focus shows a tile its full name, and a long press opens that til
   await expect
     .element(screen.getByRole('tooltip', { name: 'Household ledger' }))
     .toBeVisible();
+  // Shift+F10 opens the tile's right-click menu, on every platform.
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain(
+      'Unpin',
+    ),
+  );
+  await userEvent.keyboard('{Escape}');
   (document.activeElement as HTMLElement).blur();
 
   // A long press: touches without a contextmenu event, as iOS Safari sends.

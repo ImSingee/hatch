@@ -1,4 +1,4 @@
-import { MantineProvider } from '@mantine/core';
+import { MantineProvider, Menu } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
@@ -38,19 +38,23 @@ vi.mock('~server/dashboards', () => ({
 }));
 
 async function renderPinToDesk(appId: string) {
-  const [{ usePinToDesk }, { rememberDashboard }] = await Promise.all([
+  const [{ PinToDeskItems }, { rememberDashboard }] = await Promise.all([
     import('./pin-to-desk'),
     import('~components/desk/last-dashboard'),
   ]);
   // The person last looked at the Weekend desk.
   rememberDashboard('weekend');
+  // The items as the All apps right-click menu shows them.
   function Harness() {
-    const { control, reason } = usePinToDesk(appId);
     return (
-      <>
-        {control}
-        {reason ? <p>{reason}</p> : null}
-      </>
+      <Menu opened>
+        <Menu.Target>
+          <button type="button">Menu</button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <PinToDeskItems appId={appId} />
+        </Menu.Dropdown>
+      </Menu>
     );
   }
   return render(
@@ -78,9 +82,9 @@ test('pin to desk places the widget on the desk shown last', async () => {
   // Already on another desk does not count.
   fixtures.placed = { home: [{ appId: 'notes', widgetId: 'today' }] };
   const screen = await renderPinToDesk('notes');
-  const button = screen.getByRole('button', { name: 'Pin to desk' });
-  await expect.element(button).toBeEnabled();
-  await button.click();
+  const item = screen.getByRole('menuitem', { name: /^Pin to desk/ });
+  await expect.element(item).toBeEnabled();
+  await item.click();
   await vi.waitFor(() =>
     expect(fixtures.added).toEqual([
       { dashboardId: 'weekend', appId: 'notes', widgetId: 'today' },
@@ -94,7 +98,7 @@ test('a widget already on that desk is not added twice', async () => {
   const screen = await renderPinToDesk('notes');
   await expect.element(screen.getByText('Already on Weekend.')).toBeVisible();
   await expect
-    .element(screen.getByRole('button', { name: 'Pin to desk' }))
+    .element(screen.getByRole('menuitem', { name: /^Pin to desk/ }))
     .toBeDisabled();
 });
 
@@ -105,8 +109,29 @@ test('an App without a widget says why it cannot be pinned', async () => {
     .element(screen.getByText('This App has no widget to put on the desk.'))
     .toBeVisible();
   await expect
-    .element(screen.getByRole('button', { name: 'Pin to desk' }))
+    .element(screen.getByRole('menuitem', { name: /^Pin to desk/ }))
     .toBeDisabled();
+});
+
+test('an App with several widgets offers each one that is not on the desk yet', async () => {
+  fixtures.available = [
+    { appId: 'notes', widgetId: 'today', name: 'Today' },
+    { appId: 'notes', widgetId: 'streak', name: 'Streak' },
+    { appId: 'notes', widgetId: 'goals', name: 'Goals' },
+  ];
+  fixtures.placed = { weekend: [{ appId: 'notes', widgetId: 'goals' }] };
+  const screen = await renderPinToDesk('notes');
+  await screen.getByRole('menuitem', { name: /^Pin to desk/ }).hover();
+  await expect.element(screen.getByText('Add to Weekend')).toBeVisible();
+  await expect
+    .element(screen.getByRole('menuitem', { name: 'Goals' }))
+    .not.toBeInTheDocument();
+  await screen.getByRole('menuitem', { name: 'Streak' }).click();
+  await vi.waitFor(() =>
+    expect(fixtures.added).toEqual([
+      { dashboardId: 'weekend', appId: 'notes', widgetId: 'streak' },
+    ]),
+  );
 });
 
 test('an App with several widgets waits for the dashboards before the menu', async () => {
@@ -118,6 +143,6 @@ test('an App with several widgets waits for the dashboards before the menu', asy
   const screen = await renderPinToDesk('notes');
   // Widgets are known but no dashboard is: no crash, the button stays off.
   await expect
-    .element(screen.getByRole('button', { name: 'Pin to desk' }))
+    .element(screen.getByRole('menuitem', { name: /^Pin to desk/ }))
     .toBeDisabled();
 });

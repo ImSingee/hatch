@@ -317,7 +317,7 @@ wide the two buttons become one back button at the start of the title bar.
   full name whether or not names are shown. Running marker: a 4 px accent
   dot under the name, or 5 under the tile when names are hidden.
 - A tile has no button of its own: its actions are in the dock's right-click
-  menu (a long press on touch).
+  menu (a long press on touch, Shift+F10 or the Menu key from the keyboard).
 - Workflow tiles use radius `12 12 12 3` to differ from App tiles by shape.
 - The groups carry no labels; a hairline divider separates Apps from
   Workflows.
@@ -406,6 +406,13 @@ fill, border or bubble radius.
 Menu and popover: white, hairline border, radius 16, `dock` shadow, padding 6;
 items 32 high, radius 9, 14 / 600, hover wash. Tooltip: ink fill, white text
 12 / 600, radius 9.
+
+A right-click menu belongs to a group of tiles (the dock, All apps), not to
+each tile: right-clicking a tile shows that tile's actions first, then the
+group's. It opens by right-click, by a long press on touch, and by Shift+F10
+or the Menu key on a focused tile, so it has a keyboard path on every
+platform. A tile carries no ⋯ button; a hover card (500 ms delay, 280 wide)
+may describe it, and is hidden while the menu is open.
 
 ## Conventions
 
