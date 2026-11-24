@@ -11,6 +11,7 @@ import { AppGlyph } from '~components/apps/app-glyph';
 import { DeskWindow } from '~components/desk/window';
 import { LinkTabs, WindowBody } from '~components/page/page';
 import { StatusBadge } from '~components/system/status-badge';
+import { useI18n } from '~i18n';
 import type { AppDetail } from '~server/apps';
 import classes from './tasks-window.module.css';
 
@@ -32,16 +33,21 @@ export function TasksWindow({
   title?: string;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const params = { appSlug: app.slug };
   return (
     <DeskWindow
       fill
-      title={`${app.name} · ${title ?? 'Tasks'}`}
+      title={
+        title
+          ? `${app.name} · ${title}`
+          : t('tasks.window.title', { app: app.name })
+      }
       tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
       badge={<StatusBadge status={app.status} />}
       closeTo={{
         link: { to: '/app/$appSlug/manage', params },
-        label: `${app.name} · Manage`,
+        label: t('tasks.window.closeLabel', { app: app.name }),
       }}
     >
       <WindowBody>
@@ -54,7 +60,9 @@ export function TasksWindow({
             {app.description ? (
               <p className={classes.description}>{app.description}</p>
             ) : null}
-            <span className={classes.meta}>App · Tasks · {app.slug}</span>
+            <span className={classes.meta}>
+              {t('tasks.window.meta', { slug: app.slug })}
+            </span>
           </div>
           <div className={classes.actions}>
             <Button
@@ -64,7 +72,7 @@ export function TasksWindow({
               to="/agent"
               leftSection={<IconSparkles size={16} stroke={1.8} />}
             >
-              Edit with the Agent
+              {t('tasks.window.editWithAgent')}
             </Button>
             <Button
               size="md"
@@ -74,23 +82,23 @@ export function TasksWindow({
               )}
               leftSection={<IconSettings size={16} stroke={1.8} />}
             >
-              Manage
+              {t('common.manage')}
             </Button>
           </div>
         </header>
         <LinkTabs
-          label="Task pages"
+          label={t('tasks.window.tabsLabel')}
           tabs={[
             {
               key: 'run',
-              label: 'Run',
+              label: t('tasks.window.tab.run'),
               icon: <IconPlayerPlay size={16} stroke={1.8} />,
               link: { to: '/app/$appSlug/tasks', params },
               current: page === 'run',
             },
             {
               key: 'runs',
-              label: 'Runs',
+              label: t('tasks.runs.title'),
               icon: <IconTimeline size={16} stroke={1.8} />,
               link: { to: '/app/$appSlug/tasks/runs', params },
               current: page === 'runs',

@@ -1,6 +1,7 @@
 import { Center, Loader, Table, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
-import { formatDuration, formatRelative } from '~lib/format';
+import { useI18n } from '~i18n';
+import { formatDuration, formatRelativeTime } from '~lib/format';
 import type { RunListItem } from '~lib/runs';
 import {
   EmptyLine,
@@ -8,9 +9,11 @@ import {
   Section,
   TableCard,
 } from '~components/page/page';
-import { RunStatusBadge } from './run-status';
+import { RunStatusBadge, RunTriggerLabel } from './run-status';
 
 export type RunTableColumn<T> = {
+  /** Stable React key; the header is translated copy. */
+  key: string;
   header: string;
   cell: (run: T) => ReactNode;
 };
@@ -45,6 +48,7 @@ export function RunTable<T extends RunListItem>({
   renderLink: (run: T, children: ReactNode) => ReactNode;
   onOpen: (run: T) => void;
 }) {
+  const { t, locale } = useI18n();
   const count = total ?? runs.length;
   return (
     <Section
@@ -67,13 +71,13 @@ export function RunTable<T extends RunListItem>({
           <Table.Thead>
             <Table.Tr>
               {leadColumns.map((column) => (
-                <Table.Th key={column.header}>{column.header}</Table.Th>
+                <Table.Th key={column.key}>{column.header}</Table.Th>
               ))}
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Trigger</Table.Th>
-              <Table.Th>Steps</Table.Th>
-              <Table.Th>Duration</Table.Th>
-              <Table.Th>Started</Table.Th>
+              <Table.Th>{t('executions.column.status')}</Table.Th>
+              <Table.Th>{t('executions.column.trigger')}</Table.Th>
+              <Table.Th>{t('executions.column.steps')}</Table.Th>
+              <Table.Th>{t('executions.column.duration')}</Table.Th>
+              <Table.Th>{t('executions.column.started')}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -84,14 +88,14 @@ export function RunTable<T extends RunListItem>({
                 onClick={() => onOpen(run)}
               >
                 {leadColumns.map((column) => (
-                  <Table.Td key={column.header}>{column.cell(run)}</Table.Td>
+                  <Table.Td key={column.key}>{column.cell(run)}</Table.Td>
                 ))}
                 <Table.Td>
                   {renderLink(run, <RunStatusBadge status={run.status} />)}
                 </Table.Td>
                 <Table.Td>
-                  <Text size="sm" c="dimmed" tt="capitalize">
-                    {run.trigger}
+                  <Text size="sm" c="dimmed">
+                    <RunTriggerLabel trigger={run.trigger} />
                   </Text>
                 </Table.Td>
                 <Table.Td>
@@ -106,7 +110,7 @@ export function RunTable<T extends RunListItem>({
                 </Table.Td>
                 <Table.Td>
                   <Text size="sm" c="dimmed">
-                    {formatRelative(run.startedAt ?? run.createdAt)}
+                    {formatRelativeTime(run.startedAt ?? run.createdAt, locale)}
                   </Text>
                 </Table.Td>
               </Table.Tr>
