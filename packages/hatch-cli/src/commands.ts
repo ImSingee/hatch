@@ -635,6 +635,7 @@ export const commandDefinitions = definitions.map((definition) => ({
 /** One-line summaries of command groups, keyed by space-joined path. */
 export const commandGroups: Readonly<Record<string, string>> = {
   auth: 'Sign in, inspect the current credential and sign out.',
+  server: 'Inspect the connected platform server.',
   app: 'Create, sync, deploy and operate Apps.',
   'app invoke': 'Call a deployed App backend or webhook.',
   'app backend': 'Inspect and control App backend processes.',
