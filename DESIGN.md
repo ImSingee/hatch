@@ -327,7 +327,7 @@ wide the two buttons become one back button at the start of the title bar.
   then Add an app ›, Add a workflow › and New with Agent. The Workflows
   group, with its divider, shows only while a Workflow is pinned.
 - The dock itself: `surfaces.dock` fill with blur, 1 px white border, radius
-  28 (`radius.dock`), `dock` shadow, padding 10 18 12. The tab bar that
+  28 (`radius.dock`), `dock` shadow, padding 14 18 8, so the space above the tiles matches the space under the labels. The tab bar that
   replaces it below 560 wide uses the same fill, border, radius and shadow.
 - With a mouse (`hover: hover`) the dock floats over the stage and takes no
   room: it waits below the bottom edge. While it waits, a 64 × 5 pill in
