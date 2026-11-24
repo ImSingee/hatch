@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Autocomplete,
   Badge,
   Button,
   Group,
@@ -10,6 +11,7 @@ import {
   Stack,
   Switch,
   Text,
+  Textarea,
   TextInput,
   ThemeIcon,
   Tooltip,
@@ -197,49 +199,70 @@ export function ProviderFormModal({
 }
 
 type ModelFormValues = {
+  kind: ProviderModel['kind'];
   modelId: string;
   name: string;
+  description: string;
   reasoning: boolean;
   contextWindow: number;
   maxTokens: number;
 };
 
+const MODEL_KIND_LABELS: Record<ProviderModel['kind'], string> = {
+  chat: 'Chat',
+  image: 'Image',
+};
+
 function ModelFormModal({
   opened,
   onClose,
-  providerId,
+  provider,
   model,
 }: {
   opened: boolean;
   onClose: () => void;
-  providerId: string;
+  provider: ProviderWithModels;
   model?: ProviderModel;
 }) {
   const qc = useQueryClient();
   const editing = Boolean(model);
+  const canMakeImages = provider.imageModelSuggestions.length > 0;
   const form = useForm<ModelFormValues>({
     initialValues: {
+      kind: model?.kind ?? 'chat',
       modelId: model?.modelId ?? '',
       name: model?.name ?? '',
+      description: model?.description ?? '',
       reasoning: model?.reasoning ?? false,
       contextWindow: model?.contextWindow ?? 128000,
       maxTokens: model?.maxTokens ?? 8192,
     },
     validate: {
       modelId: (v) => (v.trim() ? null : 'Required'),
+      description: (v) =>
+        Array.from(v.trim()).length > 200 ? 'At most 200 characters' : null,
     },
   });
+  const image = form.values.kind === 'image';
 
   const mutation = useMutation({
-    mutationFn: async (values: ModelFormValues) => {
+    mutationFn: async ({ kind, ...values }: ModelFormValues) => {
       // Display name is optional: fall back to the model ID when left blank.
       const name = values.name.trim() || values.modelId.trim();
+      const fields =
+        kind === 'image'
+          ? {
+              modelId: values.modelId,
+              name,
+              description: values.description,
+            }
+          : { ...values, name };
       if (model) {
-        await updateModel({ data: { id: model.id, ...values, name } });
+        await updateModel({ data: { id: model.id, kind, ...fields } });
         return;
       }
       await createModel({
-        data: { providerId, ...values, name },
+        data: { providerId: provider.id, kind, ...fields },
       });
     },
     onSuccess: async () => {
@@ -259,39 +282,86 @@ function ModelFormModal({
     >
       <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
         <Stack gap="sm">
-          <TextInput
-            label="Model ID"
-            placeholder="gpt-5.5"
-            description="The identifier sent to the provider"
-            {...form.getInputProps('modelId')}
+          <Select
+            label="Category"
+            description={
+              canMakeImages
+                ? image
+                  ? 'Generates images, such as app icons'
+                  : 'Runs the Agent'
+                : 'This API type can’t generate images'
+            }
+            allowDeselect={false}
+            data={[
+              { value: 'chat', label: MODEL_KIND_LABELS.chat },
+              {
+                value: 'image',
+                label: MODEL_KIND_LABELS.image,
+                disabled: !canMakeImages,
+              },
+            ]}
+            {...form.getInputProps('kind')}
           />
+          {image ? (
+            <Autocomplete
+              label="Model ID"
+              placeholder={provider.imageModelSuggestions[0]}
+              description="The identifier sent to the provider"
+              data={provider.imageModelSuggestions}
+              {...form.getInputProps('modelId')}
+            />
+          ) : (
+            <TextInput
+              label="Model ID"
+              placeholder="gpt-5.5"
+              description="The identifier sent to the provider"
+              {...form.getInputProps('modelId')}
+            />
+          )}
           <TextInput
             label="Display name"
             description="Optional — defaults to the model ID"
-            placeholder={form.values.modelId.trim() || 'GPT-5.5'}
+            placeholder={
+              form.values.modelId.trim() || (image ? 'GPT Image' : 'GPT-5.5')
+            }
             {...form.getInputProps('name')}
           />
-          <Group grow>
-            <NumberInput
-              label="Context window"
-              min={1000}
-              step={1000}
-              thousandSeparator=","
-              {...form.getInputProps('contextWindow')}
+          {image ? (
+            <Textarea
+              label="Best for"
+              description="Optional — helps the Agent choose between image models"
+              placeholder="Fast, cheap drafts"
+              autosize
+              minRows={2}
+              maxRows={4}
+              {...form.getInputProps('description')}
             />
-            <NumberInput
-              label="Max output tokens"
-              min={256}
-              step={256}
-              thousandSeparator=","
-              {...form.getInputProps('maxTokens')}
-            />
-          </Group>
-          <Switch
-            label="Reasoning model"
-            description="Enable extended thinking when supported"
-            {...form.getInputProps('reasoning', { type: 'checkbox' })}
-          />
+          ) : null}
+          {image ? null : (
+            <>
+              <Group grow>
+                <NumberInput
+                  label="Context window"
+                  min={1000}
+                  step={1000}
+                  thousandSeparator=","
+                  {...form.getInputProps('contextWindow')}
+                />
+                <NumberInput
+                  label="Max output tokens"
+                  min={256}
+                  step={256}
+                  thousandSeparator=","
+                  {...form.getInputProps('maxTokens')}
+                />
+              </Group>
+              <Switch
+                label="Reasoning model"
+                description="Enable extended thinking when supported"
+                {...form.getInputProps('reasoning', { type: 'checkbox' })}
+              />
+            </>
+          )}
           <Group justify="flex-end" mt="xs">
             <Button type="button" variant="default" onClick={onClose}>
               Cancel
@@ -525,7 +595,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
         key={modelTarget && modelTarget !== 'new' ? modelTarget.id : 'new'}
         opened={modelTarget !== null}
         onClose={() => setModelTarget(null)}
-        providerId={provider.id}
+        provider={provider}
         model={modelTarget && modelTarget !== 'new' ? modelTarget : undefined}
       />
     </div>

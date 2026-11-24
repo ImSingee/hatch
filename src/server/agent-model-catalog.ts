@@ -10,6 +10,7 @@ export async function getAgentModelCatalog() {
     ? await db.query.agentModels.findMany({
         where: {
           enabled: true,
+          kind: 'chat',
           providerId: { in: providers.map((provider) => provider.id) },
         },
         columns: {

@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// The models configured under the instance's providers, of every kind.
+// Providers, their keys and chat model settings stay in the Web UI; this
+// service lists the models and moves one between chat and image.
+service ModelService {
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc SetModelKind(SetModelKindRequest) returns (SetModelKindResponse);
+}
+
+message ProviderModel {
+  // Model id taken by SetModelKind and, for image models, the image-model
+  // calls.
+  string id = 1;
+  string provider_id = 2;
+  string provider_name = 3;
+  // Model id sent to the provider.
+  string model_id = 4;
+  string name = 5;
+  // "chat" runs the Agent; "image" generates images.
+  string kind = 6;
+  string description = 7;
+  bool enabled = 8;
+}
+
+message ListModelsRequest {
+  // Only models of this kind; every kind when unset.
+  optional string kind = 1 [(buf.validate.field).string = {
+    in: [
+      "chat",
+      "image"
+    ]
+  }];
+  // The next_cursor of the previous page.
+  optional string cursor = 2 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Models per page; 0 returns every model.
+  uint32 limit = 3 [(buf.validate.field).uint32.lte = 100];
+}
+
+message ListModelsResponse {
+  // Provider order, then each provider's model order.
+  repeated ProviderModel models = 1;
+  // Set when more models follow this page.
+  optional string next_cursor = 2;
+}
+
+message SetModelKindRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string kind = 2 [(buf.validate.field).string = {
+    in: [
+      "chat",
+      "image"
+    ]
+  }];
+}
+
+message SetModelKindResponse {
+  ProviderModel model = 1;
+}

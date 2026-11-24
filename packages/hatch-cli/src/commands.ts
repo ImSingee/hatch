@@ -216,28 +216,49 @@ const definitions: readonly CliCommandDefinition[] = [
       'Delete the App icon so the App shows its monogram again. Succeeds when there is none.',
   },
   {
-    path: ['image-model', 'get'],
-    usage: 'image-model get',
+    path: ['model', 'list'],
+    usage: 'model list [--kind chat|image] [--limit <n>] [--cursor <cursor>]',
     description:
-      'Show the selected image model (null when none) and every provider that can generate images with suggested model ids. Never prints API keys.',
+      'List the models under every provider in provider order: id, provider, provider model id, name, kind (chat runs the Agent, image generates images), description and enabled. --kind keeps one kind. --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys.',
   },
   {
-    path: ['image-model', 'set'],
-    usage: 'image-model set --provider <provider-id> --model <model-id>',
+    path: ['model', 'set-kind'],
+    usage: 'model set-kind <model-id> --kind chat|image',
     description:
-      'Select the instance image model, replacing the previous choice. The provider must be one listed by image-model get; its existing API key is used.',
+      'Move a model between chat and image, like the Category field of the Web model form. A model made image leaves the Agent model picker and becomes available to image generate; only providers whose API can generate images accept image. Prints the model.',
   },
   {
-    path: ['image-model', 'clear'],
-    usage: 'image-model clear',
-    description: 'Unselect the image model; image generate then fails.',
+    path: ['image-model', 'list'],
+    usage: 'image-model list [--limit <n>] [--cursor <cursor>]',
+    description:
+      'Without --limit, list every image model with its id, provider, provider model id, name, description and whether it is usable; defaultModelId is the one image generate uses without --model (the first usable model). Also lists the providers that can hold image models, with suggested model ids, on every page. --limit (1-100) prints one page of models and a nextCursor to pass as --cursor; no nextCursor means the last page. Never prints API keys.',
+  },
+  {
+    path: ['image-model', 'add'],
+    usage:
+      'image-model add --provider <provider-id> --model-id <model-id> [--name <text>] [--description <text>]',
+    description:
+      'Add an image model to a provider listed by image-model list; its existing API key is used. --name defaults to the model id. --description (at most 200 characters) says what the model is good at, so callers can pick between models. Prints the new image model with its id.',
+  },
+  {
+    path: ['image-model', 'update'],
+    usage:
+      'image-model update <image-model-id> [--model-id <model-id>] [--name <text>] [--description <text> | --clear-description]',
+    description:
+      'Change an image model; omitted fields stay unchanged. Its provider cannot change.',
+  },
+  {
+    path: ['image-model', 'remove'],
+    usage: 'image-model remove <image-model-id> --yes',
+    description:
+      'Permanently delete an image model; cannot be undone, so --yes is required. When it was the default, the next usable model becomes the default.',
   },
   {
     path: ['image', 'generate'],
     usage:
-      'image generate (--prompt <text> | --prompt-file <path|->) [--count <1-4>] [--quality low|medium|high] [--subject-tile <#RRGGBB> | --glyph-tile <#RRGGBB>] [--output-dir <path>]',
+      'image generate (--prompt <text> | --prompt-file <path|->) [--model <image-model-id>] [--count <1-4>] [--quality low|medium|high] [--subject-tile <#RRGGBB> | --glyph-tile <#RRGGBB>] [--output-dir <path>]',
     description:
-      'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. --count runs the same prompt that many times, so results are close variations; write a separate prompt per design to compare different ideas. Prints each candidate id and authenticated path; candidates expire after one day. Both tile flags return a 512px tile on a gradient of that colour: --subject-tile asks the model for a transparent background and centres the cut-out subject; --glyph-tile expects a white glyph on black. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
+      'Generate 1024px square images; costs provider credit, limited to 30 images per hour. --model picks an image model from image-model list (choose by its description); without it the default model is used. --count runs the same prompt that many times, so results are close variations; write a separate prompt per design to compare different ideas. Prints the image model used and each candidate id and authenticated path; candidates expire after one day. Both tile flags return a 512px tile on a gradient of that colour: --subject-tile asks the model for a transparent background and centres the cut-out subject; --glyph-tile expects a white glyph on black. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
   },
   {
     path: ['theme', 'get'],

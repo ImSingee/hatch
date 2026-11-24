@@ -1,6 +1,6 @@
 ---
 name: app-icon
-description: Design an App icon with the instance image model, let the user choose among candidates in chat, and set the chosen one. Use when the user asks for an App icon or logo, wants to change or remove one, or right after the first successful deployment of a new App.
+description: Design an App icon with one of the instance's image models, let the user choose among candidates in chat, and set the chosen one. Use when the user asks for an App icon or logo, wants to change or remove one, or right after the first successful deployment of a new App.
 ---
 
 # Design an App icon
@@ -37,9 +37,14 @@ Uploading a file the user supplies (`hatch app icon set <app> --file <path>`)
 and removing the icon (`hatch app icon clear <app>`) need no image model: run
 those commands directly. The steps below are for designing a new icon.
 
-1. Run `hatch image-model get --json`. If `selected` is null or
-   `selected.usable` is false, tell the user to choose an image model under
-   Settings → AI Providers (or with `hatch image-model set`) and stop.
+1. Run `hatch image-model list --json`. If no model has `usable: true`, tell
+   the user to add an image model to an OpenAI provider under Settings → AI
+   Providers (category Image) and stop. Otherwise pick the model whose
+   `name` and `description` best fit polished app icons, or the user's
+   stated preference; with no clear fit, use `defaultModelId`. Glossy and
+   Glass need transparent backgrounds, which `gpt-image-2.6-flare` and
+   `gpt-image-2.6-sunburst` support. Pass the chosen `id` as `--model` to
+   every generate command below so all candidates come from the same model.
 2. From the App's name and description, pick three different subjects and
    give each one its own style, so the three candidates offer a real choice
    of both look and idea. Use nothing else about the App or the user in the
@@ -59,9 +64,9 @@ those commands directly. The steps below are for designing a new icon.
    they run in parallel:
 
    ```sh
-   hatch image generate --prompt-file icon-glossy.txt --subject-tile '#3E63DD' --json
-   hatch image generate --prompt-file icon-glass.txt --subject-tile '#3E63DD' --json
-   hatch image generate --prompt-file icon-line.txt --glyph-tile '#3E63DD' --json
+   hatch image generate --model <id> --prompt-file icon-glossy.txt --subject-tile '#3E63DD' --json
+   hatch image generate --model <id> --prompt-file icon-glass.txt --subject-tile '#3E63DD' --json
+   hatch image generate --model <id> --prompt-file icon-line.txt --glyph-tile '#3E63DD' --json
    ```
 
    Never use `--count` above 1 for icon candidates: the same prompt returns
@@ -191,7 +196,10 @@ asking for a coloured background or a scene, makes generation fail.
 
 ## Failures
 
-- `CONFLICT` "No image model is configured": step 1 applies.
+- `CONFLICT` "No usable image model is configured", or the chosen model's
+  provider is disabled or has no API key: step 1 applies; another usable
+  model may be picked instead.
+- `NOT_FOUND` for the image model: it was removed; run step 1 again.
 - `BAD_REQUEST` naming the image provider: relay the provider's reason; do
   not retry that prompt.
 - `TOO_MANY_REQUESTS`: the hourly image limit is reached; generate nothing
@@ -201,5 +209,6 @@ asking for a coloured background or a scene, makes generation fail.
   Generate that candidate once more with the template unchanged; if it fails
   again, drop it. This is the only failure worth retrying. When the Glossy
   and Glass candidates both fail with the transparent-background error, the
-  selected image model cannot produce transparency: tell the user to choose
-  `gpt-image-2.6-flare` or `gpt-image-2.6-sunburst`.
+  chosen image model cannot produce transparency: pick another usable model
+  (`gpt-image-2.6-flare` or `gpt-image-2.6-sunburst`) and generate again, or
+  tell the user to add one.

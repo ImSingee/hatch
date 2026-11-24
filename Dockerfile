@@ -63,6 +63,7 @@ RUN apt-get update \
     ca-certificates \
     curl \
     git \
+    jq \
     python-is-python3 \
     python3 \
     python3-pip \
@@ -70,6 +71,7 @@ RUN apt-get update \
     rsync \
     unzip \
     util-linux \
+    vim \
     wget \
   && rm -rf /var/lib/apt/lists/*
 

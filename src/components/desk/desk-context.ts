@@ -28,3 +28,18 @@ export const WindowFrameProvider = WindowFrameContext.Provider;
 export function useWindowFrame() {
   return useContext(WindowFrameContext);
 }
+
+/**
+ * Whether the open window fills the whole screen, with the menu bar hidden
+ * until the pointer reaches the top edge. Only the desk shell provides it;
+ * elsewhere (standalone pages, the macOS app) windows cannot maximize.
+ */
+export type WindowMaximize = { maximized: boolean; toggle: () => void };
+
+const WindowMaximizeContext = createContext<WindowMaximize | null>(null);
+
+export const WindowMaximizeProvider = WindowMaximizeContext.Provider;
+
+export function useWindowMaximize() {
+  return useContext(WindowMaximizeContext);
+}

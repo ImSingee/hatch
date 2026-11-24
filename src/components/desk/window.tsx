@@ -1,6 +1,8 @@
 import { Link, type LinkProps, useRouter } from '@tanstack/react-router';
 import {
   IconAppWindow,
+  IconArrowsDiagonal,
+  IconArrowsDiagonalMinimize2,
   IconChevronLeft,
   IconMinus,
   IconX,
@@ -13,7 +15,7 @@ import {
   useId,
   useRef,
 } from 'react';
-import { useWindowFrame } from './desk-context';
+import { useWindowFrame, useWindowMaximize } from './desk-context';
 import { DESK_HOME } from './paths';
 import classes from './window.module.css';
 
@@ -32,9 +34,9 @@ export type DeskWindowProps = {
   tile?: ReactNode;
   /** Shown after the title, for a status chip. */
   badge?: ReactNode;
-  /** Controls of this window, placed before minimise and close. */
+  /** Controls of this window, placed before the window buttons. */
   toolbar?: ReactNode;
-  /** Where closing leads. Defaults to the desk; minimise always goes there. */
+  /** Where closing leads. Defaults to the desk. */
   closeTo?: WindowTarget;
   /** Fill the stage instead of fitting the content. */
   fill?: boolean;
@@ -71,9 +73,10 @@ function isEditing(target: EventTarget | null) {
 
 /**
  * The frame every page is shown in. The window is a layout component and
- * holds no state of its own: which window is open is the URL, so closing and
- * minimising are links, and reload, deep links and the back button work as
- * for any page.
+ * holds no state of its own: which window is open is the URL, so closing is a
+ * link, and reload, deep links and the back button work as for any page.
+ * Maximizing belongs to the desk shell, so the next window opens the same
+ * way. Minimise is shown but disabled until windows can wait on the desk.
  *
  * Keyboard: opening a window moves focus into it unless the page already
  * placed focus, and Escape closes it when nothing above it (a menu, a modal)
@@ -92,6 +95,8 @@ export function DeskWindow({
   const titleId = useId();
   const frame = useRef<HTMLElement>(null);
   const hosted = useWindowFrame() === 'host';
+  const maximizable = useWindowMaximize();
+  const maximize = hosted ? null : maximizable;
   const router = useRouter();
   const close = useEffectEvent(() => {
     void router.navigate(closeTo.link as never);
@@ -136,6 +141,7 @@ export function DeskWindow({
       className={classes.window}
       data-fill={fill || undefined}
       data-frame={hosted ? 'host' : undefined}
+      data-maximized={maximize?.maximized || undefined}
       style={{ '--window-max-width': `${maxWidth}px` } as CSSProperties}
     >
       <header
@@ -143,6 +149,12 @@ export function DeskWindow({
         // Tauri's drag script: the bar moves the native window, while its
         // links and buttons stay clickable. Inert in a browser.
         data-tauri-drag-region={hosted ? 'deep' : undefined}
+        // As on a desktop, double-clicking the bar maximizes or restores.
+        onDoubleClick={(event) => {
+          if (!maximize) return;
+          if ((event.target as Element).closest('a, button, input')) return;
+          maximize.toggle();
+        }}
       >
         <Link
           {...closeTo.link}
@@ -166,13 +178,35 @@ export function DeskWindow({
         {toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
         {hosted ? null : (
           <>
-            <Link
-              to={DESK_HOME}
+            <button
+              type="button"
               className={`${classes.button} ${classes.wide}`}
-              aria-label="Minimise window, back to the desk"
+              aria-label="Minimise window"
+              title="Minimise is not available yet"
+              disabled
             >
               <IconMinus size={14} stroke={2.4} aria-hidden />
-            </Link>
+            </button>
+            {maximize ? (
+              <button
+                type="button"
+                className={`${classes.button} ${classes.wide}`}
+                aria-label={
+                  maximize.maximized ? 'Restore window' : 'Maximize window'
+                }
+                onClick={maximize.toggle}
+              >
+                {maximize.maximized ? (
+                  <IconArrowsDiagonalMinimize2
+                    size={14}
+                    stroke={2.4}
+                    aria-hidden
+                  />
+                ) : (
+                  <IconArrowsDiagonal size={14} stroke={2.4} aria-hidden />
+                )}
+              </button>
+            ) : null}
             <Link
               {...closeTo.link}
               className={`${classes.button} ${classes.wide}`}

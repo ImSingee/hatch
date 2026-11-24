@@ -33,12 +33,16 @@ import {
 import { AuthService } from '../../hatch-platform-api/gen/hatch/platform/v1/auth_pb';
 import {
   ImageService,
-  type ImageModelState,
+  type ImageModel,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/image_pb';
 import {
   ThemeService,
   type ThemeState,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import {
+  ModelService,
+  type ProviderModel,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/model_pb';
 import {
   PinService,
   type PinnedApp,
@@ -146,6 +150,19 @@ const icon = (app: string, value: AppIcon | undefined) => ({
   path: required(value).path ?? null,
   sizes: required(value).sizes,
 });
+const providerModel = (value: ProviderModel | undefined) => {
+  const model = required(value);
+  return {
+    id: model.id,
+    providerId: model.providerId,
+    providerName: model.providerName,
+    modelId: model.modelId,
+    name: model.name,
+    kind: model.kind,
+    description: model.description,
+    enabled: model.enabled,
+  };
+};
 const theme = (value: ThemeState | undefined) => {
   const state = required(value);
   return {
@@ -228,23 +245,16 @@ type WidgetPositionInput = {
   w?: number;
   h?: number;
 };
-const imageModel = (value: ImageModelState | undefined) => {
-  const state = required(value);
+const imageModel = (value: ImageModel | undefined) => {
+  const model = required(value);
   return {
-    selected: state.selected
-      ? {
-          providerId: state.selected.providerId,
-          providerName: state.selected.providerName,
-          modelId: state.selected.modelId,
-          usable: state.selected.usable,
-        }
-      : null,
-    providers: state.providers.map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      enabled: provider.enabled,
-      suggestedModels: provider.suggestedModels,
-    })),
+    id: model.id,
+    providerId: model.providerId,
+    providerName: model.providerName,
+    modelId: model.modelId,
+    name: model.name,
+    description: model.description,
+    usable: model.usable,
   };
 };
 type CreateInput = {
@@ -399,6 +409,7 @@ export function cliClient(transport: Transport) {
   const sdk = createClient(SdkService, transport);
   const images = createClient(ImageService, transport);
   const themes = createClient(ThemeService, transport);
+  const models = createClient(ModelService, transport);
   const pins = createClient(PinService, transport);
   const dashboards = createClient(DashboardService, transport);
   const preferences = createClient(PreferenceService, transport);
@@ -500,6 +511,21 @@ export function cliClient(transport: Transport) {
           ).detail,
         ),
       }),
+    },
+    models: {
+      list: async (input: {
+        kind?: string;
+        limit: number;
+        cursor?: string;
+      }) => {
+        const result = await models.listModels(input);
+        return {
+          models: result.models.map(providerModel),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
+      setKind: async (input: { id: string; kind: string }) =>
+        providerModel((await models.setModelKind(input)).model),
     },
     theme: {
       get: async () => theme((await themes.getTheme({})).theme),
@@ -608,20 +634,47 @@ export function cliClient(transport: Transport) {
         ),
     },
     images: {
-      model: async () => imageModel((await images.getImageModel({})).state),
-      setModel: async (input: { providerId: string; modelId: string }) =>
-        imageModel((await images.setImageModel(input)).state),
-      clearModel: async () =>
-        imageModel((await images.clearImageModel({})).state),
+      models: async (page: { limit: number; cursor?: string }) => {
+        const list = await images.listImageModels(page);
+        return {
+          ...(list.nextCursor ? { nextCursor: list.nextCursor } : {}),
+          models: list.models.map(imageModel),
+          defaultModelId: list.defaultModelId ?? null,
+          providers: list.providers.map((provider) => ({
+            id: provider.id,
+            name: provider.name,
+            enabled: provider.enabled,
+            suggestedModels: provider.suggestedModels,
+          })),
+        };
+      },
+      createModel: async (input: {
+        providerId: string;
+        modelId: string;
+        name?: string;
+        description?: string;
+      }) => imageModel((await images.createImageModel(input)).model),
+      updateModel: async (input: {
+        id: string;
+        modelId?: string;
+        name?: string;
+        description?: string;
+      }) => imageModel((await images.updateImageModel(input)).model),
+      deleteModel: async (input: { id: string }) => {
+        await images.deleteImageModel(input);
+        return { id: input.id, deleted: true };
+      },
       generate: async (input: {
         prompt: string;
         count: number;
         quality?: string;
         glyphTile?: string;
         subjectTile?: string;
+        imageModelId?: string;
       }) => {
         const result = await images.generateImages(input);
         return {
+          imageModelId: result.imageModelId,
           modelId: result.modelId,
           candidates: result.candidates.map((candidate) => ({
             id: candidate.id,

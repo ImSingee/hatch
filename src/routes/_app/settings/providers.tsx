@@ -2,13 +2,11 @@ import { Button, Center, Loader } from '@mantine/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { IconPlus } from '@tabler/icons-react';
 import { Suspense, useState } from 'react';
-import { GroupCard } from '~components/page/page';
 import { SectionHead } from '~components/settings/section-head';
 import {
   ProviderFormModal,
   ProvidersPanel,
 } from '~components/settings/providers-panel';
-import { ImageModelPanel } from '~components/settings/image-model-panel';
 import { providersQueryOptions } from '~queries/agent';
 
 export const Route = createFileRoute('/_app/settings/providers')({
@@ -24,7 +22,7 @@ function ProvidersRoute() {
     <>
       <SectionHead
         title="AI Providers"
-        description="Connect model providers so the Agent can build and run apps."
+        description="Connect model providers and add their chat and image models."
         action={
           <Button
             leftSection={<IconPlus size={16} stroke={1.8} />}
@@ -42,9 +40,6 @@ function ProvidersRoute() {
         }
       >
         <ProvidersPanel onAddProvider={() => setCreateOpen(true)} />
-        <GroupCard padded>
-          <ImageModelPanel />
-        </GroupCard>
       </Suspense>
 
       {createOpen && (

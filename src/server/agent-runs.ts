@@ -809,7 +809,7 @@ async function resolveRunModelConfig(
   }
 
   const model = await db.query.agentModels.findFirst({
-    where: { providerId, modelId, enabled: true },
+    where: { providerId, modelId, kind: 'chat', enabled: true },
   });
   if (!model) {
     throw new AppError('The selected Agent model is unavailable.', 409);

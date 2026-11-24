@@ -16,6 +16,7 @@ const fixtures = vi.hoisted(() => ({
       enabled: true,
       models: [
         {
+          kind: 'chat',
           modelId: 'model-a',
           name: 'Model A',
           enabled: true,
@@ -28,6 +29,7 @@ const fixtures = vi.hoisted(() => ({
       enabled: true,
       models: [
         {
+          kind: 'chat',
           modelId: 'model-b',
           name: 'Model B',
           enabled: true,

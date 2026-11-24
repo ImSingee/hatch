@@ -1,4 +1,3 @@
-import { rememberDashboard } from '~components/desk/last-dashboard';
 import { routeErrorMessage } from '~components/system/route-error';
 import { Button, Skeleton, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
@@ -123,10 +122,6 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
   const { data: available } = useSuspenseQuery(availableWidgetsQueryOptions);
   const { data: apps } = useSuspenseQuery(appsQueryOptions);
   const current = dashboards.find((dashboard) => dashboard.id === dashboardId);
-  useEffect(() => {
-    // "Pin to desk" elsewhere targets the desk shown last.
-    rememberDashboard(dashboardId);
-  }, [dashboardId]);
   const [editing, setEditing] = useState(false);
   const [previewBreakpoint, setPreviewBreakpoint] =
     useState<DashboardBreakpoint>('desktop');

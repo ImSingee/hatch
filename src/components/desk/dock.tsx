@@ -26,6 +26,7 @@ import {
   normalizedManifestQueryOptions,
 } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
+import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
 import { themeQueryOptions } from '~queries/theme';
 import { workflowsQueryOptions } from '~queries/workflows';
 import {
@@ -377,7 +378,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         }}
       >
         <Menu.ContextMenu>
-          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus and notes which tile a long press is on; the dock's tiles stay the interactive elements. */}
+          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus, notes which tile a long press is on, and opens the menu from Shift+F10; the dock's tiles stay the interactive elements. */}
           <nav
             aria-label="Dock"
             className={classes.dock}
@@ -389,6 +390,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
             // A long press opens the menu without a contextmenu event, so
             // note the pressed tile when the touch starts.
             onTouchStart={(event) => setMenuKey(dockKeyOf(event.target))}
+            onKeyDown={openContextMenuFromKeyboard}
           >
             <div className={`${classes.group} ${classes.grow}`}>
               <div className={classes.groupBody}>

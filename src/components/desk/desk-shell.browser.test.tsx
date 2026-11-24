@@ -286,12 +286,9 @@ test('a deep link opens its window, and closing returns to the desk', async () =
   await expect
     .element(screen.getByRole('heading', { name: 'Workflows' }))
     .toBeVisible();
-
-  await screen.getByRole('link', { name: /^Minimise window/ }).click();
-  await vi.waitFor(() => expect(path()).toBe('/dashboard'));
 });
 
-test('close leads to the parent a window names; minimise to the desk', async () => {
+test('close leads to the parent a window names; minimise is not available yet', async () => {
   const { router, screen, path } = await renderDesk('/app/todo/manage');
 
   await screen
@@ -300,8 +297,10 @@ test('close leads to the parent a window names; minimise to the desk', async () 
   await vi.waitFor(() => expect(path()).toBe('/apps'));
 
   await router.navigate({ to: '/app/todo/manage' as never });
-  await screen.getByRole('link', { name: /^Minimise window/ }).click();
-  await vi.waitFor(() => expect(path()).toBe('/dashboard'));
+  await expect
+    .element(screen.getByRole('button', { name: 'Minimise window' }))
+    .toBeDisabled();
+  expect(path()).toBe('/app/todo/manage');
 });
 
 test('Escape closes the window unless a field or a menu owns the key', async () => {
@@ -639,7 +638,7 @@ test('names stay out of the dock unless the instance shows them, and pointing at
   await vi.waitFor(() => expect(printed()).toBeGreaterThan(0));
 });
 
-test('keyboard focus shows a tile its full name, and a long press opens that tile own actions', async () => {
+test('keyboard focus shows a tile its full name and Shift+F10 its actions, and so does a long press', async () => {
   fixtures.pins = [
     {
       id: 'pin-ledger',
@@ -665,6 +664,14 @@ test('keyboard focus shows a tile its full name, and a long press opens that til
   await expect
     .element(screen.getByRole('tooltip', { name: 'Household ledger' }))
     .toBeVisible();
+  // Shift+F10 opens the tile's right-click menu, on every platform.
+  await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain(
+      'Unpin',
+    ),
+  );
+  await userEvent.keyboard('{Escape}');
   (document.activeElement as HTMLElement).blur();
 
   // A long press: touches without a contextmenu event, as iOS Safari sends.
@@ -701,4 +708,51 @@ test('keyboard focus shows a tile its full name, and a long press opens that til
     ).toEqual(['Edit', 'Unpin', 'Manage', 'Add an app', 'New with Agent']);
   });
   press('touchend');
+});
+
+test('a maximized window fills the screen, the menu bar waits at the top edge, and the next window opens the same way', async () => {
+  await page.viewport(1280, 800);
+  localStorage.removeItem('hatch.desk.windowMaximized');
+  const { router, screen } = await renderDesk('/settings');
+  const window_ = () => screen.getByRole('region', { name: 'Settings' });
+  await expect.element(window_()).toBeVisible();
+  const menuBar = () =>
+    document.querySelector<HTMLElement>('[class*="menuBar"] > *')!;
+  const menuBarShown = () => menuBar().getBoundingClientRect().bottom > 1;
+
+  await screen.getByRole('button', { name: 'Maximize window' }).click();
+  await expect.element(window_()).toHaveAttribute('data-maximized', 'true');
+  await vi.waitFor(() => {
+    const box = window_().element().getBoundingClientRect();
+    expect(box.top).toBeLessThanOrEqual(1);
+    expect(box.left).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThanOrEqual(window.innerWidth - 1);
+  });
+  // The menu bar waits above the edge, and comes down at the edge.
+  await userEvent.hover(screen.getByRole('heading', { name: 'Settings' }));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(false));
+  const edge = document.querySelector<HTMLElement>('[class*="menuEdge"]')!;
+  await userEvent.hover(page.elementLocator(edge));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(true));
+  // It floats over the top of the window; the window stays where it is.
+  expect(window_().element().getBoundingClientRect().top).toBeLessThanOrEqual(
+    1,
+  );
+
+  // The next window opens maximized, and restoring brings the bar back.
+  await router.navigate({ to: '/apps' as never });
+  await expect
+    .element(screen.getByRole('region', { name: 'Apps' }))
+    .toHaveAttribute('data-maximized', 'true');
+  expect(localStorage.getItem('hatch.desk.windowMaximized')).toBe('true');
+  // Move into the window so the bar goes up and uncovers its buttons.
+  await userEvent.hover(screen.getByRole('textbox', { name: 'Note' }));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(false));
+  await screen.getByRole('button', { name: 'Restore window' }).click();
+  await expect
+    .element(screen.getByRole('region', { name: 'Apps' }))
+    .not.toHaveAttribute('data-maximized');
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(true));
+  expect(localStorage.getItem('hatch.desk.windowMaximized')).toBeNull();
 });
