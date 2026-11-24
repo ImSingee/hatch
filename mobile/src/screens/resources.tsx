@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
-import { RefreshControl, View } from 'react-native';
+import { Alert, RefreshControl, View } from 'react-native';
 import type { AppSummary } from '../core';
 import { useNavigationPreferences } from '../state/navigation';
 import { openSection } from '../state/open-section';
@@ -9,21 +9,22 @@ import { useSession } from '../state/session';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
 import { useAccent } from '../ui/accent';
 import { IconButton } from '../ui/button';
-import { Reflow } from '../ui/columns';
+import { TileGrid } from '../ui/columns';
 import { NativeField } from '../ui/native-field';
 import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
-import { AppTile, Group, ListRow } from '../ui/rows';
+import { AppTile, ShortcutTile, useShortcutGrid } from '../ui/rows';
 import { ScopeTabs } from '../ui/scope-tabs';
 import { ScrollScreen, SectionLabel } from '../ui/screen';
-import { sizes } from '../ui/theme';
 
 type Order = 'name' | 'recent';
 type Kind = 'apps' | 'workflows';
 
 /**
- * Every App and Workflow of the instance, searchable, by name or by latest
- * change. Pinned ones carry a pin; the pins themselves live on the home
- * screen. The Workflows tab lists Workflows alone.
+ * Every App and Workflow of the instance as a grid of tiles, searchable, by
+ * name or by latest change. A tile opens its App, like a pin on Home; an App
+ * never deployed has nothing to open and goes to its App page, which touching
+ * and holding any App tile also offers. The Workflows tab lists Workflows
+ * alone.
  */
 export function ResourcesScreen({
   kind = 'apps',
@@ -48,15 +49,10 @@ export function ResourcesScreen({
     queryFn: ({ signal }) => api!.workflows(signal),
     enabled: Boolean(api),
   });
-  const workspace = useQuery({
-    queryKey: [origin, 'workspace'],
-    queryFn: ({ signal }) => api!.workspace(signal),
-    enabled: Boolean(api),
-  });
+  const tile = useShortcutGrid();
   const refresh = () =>
     Promise.all([
       workflows.refetch(),
-      workspace.refetch(),
       ...(kind === 'apps' ? [apps.refetch()] : []),
     ]);
   const pull = usePullToRefresh(focused, refresh);
@@ -73,10 +69,6 @@ export function ResourcesScreen({
           ? a.name.localeCompare(b.name)
           : b.updatedAt.localeCompare(a.updatedAt),
       );
-  const pinnedApps = new Set(
-    (workspace.data?.appPins ?? []).map((pin) => pin.appId),
-  );
-  const pinnedWorkflows = new Set(workspace.data?.pinnedWorkflowIds ?? []);
   const sections: { kind: Kind; title: string; items: AppSummary[] }[] = [
     ...(kind === 'apps'
       ? [{ kind: 'apps' as const, title: 'Apps', items: arrange(apps.data) }]
@@ -87,15 +79,27 @@ export function ResourcesScreen({
     (sum, section) => sum + section.items.length,
     0,
   );
-  // The lists matter; a failed pin lookup only hides the pin marks.
   const failure = (kind === 'apps' ? apps.error : null) ?? workflows.error;
   const pending = (kind === 'apps' && apps.isPending) || workflows.isPending;
-  const open = (item: AppSummary, of: Kind) =>
+  const details = (item: AppSummary) =>
     router.push({
-      pathname: of === 'apps' ? '/manage/[id]' : '/workflows/[id]',
-      params:
-        of === 'apps' ? { id: item.id, slug: item.slug } : { id: item.id },
+      pathname: '/manage/[id]',
+      params: { id: item.id, slug: item.slug },
     });
+  const open = (item: AppSummary, of: Kind) =>
+    of === 'workflows'
+      ? router.push({ pathname: '/workflows/[id]', params: { id: item.id } })
+      : item.status === 'draft'
+        ? details(item)
+        : router.push({
+            pathname: '/apps/[id]',
+            params: { id: item.id, slug: item.slug, label: item.name },
+          });
+  const askDetails = (item: AppSummary) =>
+    Alert.alert(item.name, undefined, [
+      { text: 'App details', onPress: () => details(item) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   const noun = kind === 'apps' ? 'Apps' : 'Workflows';
   return (
     <ScrollScreen
@@ -171,40 +175,45 @@ export function ResourcesScreen({
                   <SectionLabel count={section.items.length}>
                     {section.title}
                   </SectionLabel>
-                  <Reflow
+                  <TileGrid
                     items={section.items}
-                    render={(column) => (
-                      <Group>
-                        {column.map((item) => {
-                          const pinned = (
+                    keyOf={(item) => item.id}
+                    minTile={tile.minTile}
+                    gap={tile.gap}
+                    render={(item, tileWidth) => (
+                      <View style={{ width: tileWidth, paddingBottom: 12 }}>
+                        <ShortcutTile
+                          width={tileWidth}
+                          label={item.name}
+                          accessibilityLabel={
                             section.kind === 'apps'
-                              ? pinnedApps
-                              : pinnedWorkflows
-                          ).has(item.id);
-                          return (
-                            <ListRow
-                              key={item.id}
-                              title={item.name}
-                              detail={item.description || undefined}
-                              mark={
-                                pinned
-                                  ? { glyph: 'pin', label: 'pinned' }
-                                  : undefined
-                              }
-                              leading={
-                                <AppTile
-                                  name={item.name}
-                                  seed={item.id}
-                                  iconPath={item.iconPath}
-                                  workflow={section.kind === 'workflows'}
-                                  size={sizes.dockTile}
-                                />
-                              }
-                              onPress={() => open(item, section.kind)}
-                            />
-                          );
-                        })}
-                      </Group>
+                              ? item.status === 'draft'
+                                ? `${item.name}, not deployed yet`
+                                : item.name
+                              : `${item.name}, workflow`
+                          }
+                          accessibilityHint={
+                            section.kind === 'apps'
+                              ? 'Touch and hold for App details'
+                              : undefined
+                          }
+                          onPress={() => open(item, section.kind)}
+                          onLongPress={
+                            section.kind === 'apps'
+                              ? () => askDetails(item)
+                              : undefined
+                          }
+                        >
+                          <AppTile
+                            name={item.name}
+                            seed={item.id}
+                            iconPath={item.iconPath}
+                            workflow={section.kind === 'workflows'}
+                            size={tile.tile}
+                            lifted
+                          />
+                        </ShortcutTile>
+                      </View>
                     )}
                   />
                 </View>

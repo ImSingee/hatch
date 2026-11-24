@@ -7,13 +7,13 @@ import {
   type PropsWithChildren,
   type ReactNode,
 } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSession } from '../state/session';
 import { useAccent } from './accent';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import { Text, type } from './text';
-import { palette as c, radii, shadows, tileFor, weights } from './theme';
+import { palette as c, radii, shadows, sizes, tileFor, weights } from './theme';
 
 /** Tile radius by rendered size, on the token scale. */
 function tileRadius(size: number) {
@@ -243,8 +243,22 @@ export function ListRow({
 }
 
 /**
- * A pinned shortcut on the home screen: a tile over its one-line label. A pin
- * keeps its own label and destination, even for the same App.
+ * Sizes of a grid of shortcut tiles (Home's pins, every App in Apps): the
+ * desk tile, and the narrowest column a tile and its label may take. Large
+ * text needs wider columns for the one-line labels.
+ */
+export function useShortcutGrid() {
+  const { fontScale } = useWindowDimensions();
+  return {
+    tile: sizes.deskTile,
+    minTile: fontScale > 1.3 ? 104 : 76,
+    gap: 8,
+  };
+}
+
+/**
+ * A shortcut tile over its one-line label, on Home and in Apps. A pin keeps
+ * its own label and destination, even for the same App.
  */
 export function ShortcutTile({
   label,

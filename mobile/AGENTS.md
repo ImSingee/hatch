@@ -58,8 +58,9 @@ screen, the device, orientation or a width read once. Where the display folds
 is what UIKit reports as division reserved regions, read by the local
 `modules/hatch-fold` view behind each container (iOS 27.1 SDK and later;
 older SDKs and systems report no fold). Two columns keep their gutter on a
-fold that crosses them, grids mirror an even count around it, and without a
-fold layouts split evenly and start at the leading edge. Toolbars, tab bars and navigation bars move to a vertical
+fold that crosses them, and without a fold layouts split evenly and start at
+the leading edge. Tile grids ignore the fold: like the system home screen,
+their tiles run across the whole width. Toolbars, tab bars and navigation bars move to a vertical
 bar on the side; that bar, like any safe area, may sit on one edge only, so
 read each edge's inset from the view that lays out (a nested
 `SafeAreaProvider` or `SafeAreaView`), never the window's. Put header actions

@@ -49,7 +49,7 @@ export function useFoldSplit({
     minColumn,
     rtl: I18nManager.isRTL,
   });
-  return { onLayout, onFolds: setFolds, width, split, folded: Boolean(fold) };
+  return { onLayout, onFolds: setFolds, width, split };
 }
 
 /** A container that measures itself and the fold across it. */
@@ -154,80 +154,46 @@ export function Columns({
 }
 
 /**
- * Tiles in rows, starting at the leading edge. Where the display folds across
- * the grid each side of the fold gets its own tiles, mirrored around it, so a
- * row has an even count and the fold falls between tiles, not through one.
+ * Tiles in rows across the container's whole width, starting at the leading
+ * edge. A fold across the grid is ignored: tiles run straight across it, the
+ * way the system home screen lays out icons on an unfolded display.
  */
 export function TileGrid<T>({
   items,
   keyOf,
   render,
   minTile,
-  maxPerRow,
   gap = 10,
 }: {
   items: readonly T[];
   keyOf: (item: T) => string;
   render: (item: T, width: number) => ReactNode;
   minTile: number;
-  /** Caps a row, for example at large text sizes. */
-  maxPerRow?: number;
   gap?: number;
 }) {
-  const { onLayout, onFolds, width, split, folded } = useFoldSplit({
-    minColumn: minTile,
-    gap,
-  });
-  // The row cap applies to the whole row: a row capped below two tiles is
-  // never split, so one tile keeps the full width.
-  const cap = maxPerRow ?? Infinity;
-  const halved = folded && split && cap >= 2 ? split : null;
-  const halves = halved ? [halved.leading, halved.trailing] : [width];
-  // Around a fold both halves use the narrower one's width: the tiles stay
-  // one size and the gutter stays on the fold, while the wider side (the one
-  // without a vertical bar) takes the slack as margin.
-  const inner = Math.min(...halves);
-  const perHalf = Math.max(
-    1,
-    Math.min(Math.floor(cap / halves.length), tilesPerRow(inner, minTile, gap)),
-  );
-  const perRow = perHalf * halves.length;
-  const tile = (inner - gap * (perHalf - 1)) / perHalf;
+  const [width, setWidth] = useState(0);
+  const perRow = tilesPerRow(width, minTile, gap);
+  const tile = (width - gap * (perRow - 1)) / perRow;
   const rows: T[][] = [];
   for (let index = 0; index < items.length; index += perRow)
     rows.push(items.slice(index, index + perRow));
   return (
-    <FoldContainer onLayout={onLayout} onFolds={onFolds} style={{ gap }}>
+    <View
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{ gap }}
+    >
       {width
         ? rows.map((row) => (
             <View
               key={row.map(keyOf).join()}
-              style={{ flexDirection: 'row', gap: halved?.gutter ?? gap }}
+              style={{ flexDirection: 'row', gap }}
             >
-              {halves.map((half, side) => {
-                const part = row.slice(side * perHalf, (side + 1) * perHalf);
-                return (
-                  <View
-                    key={side}
-                    style={{
-                      width: half,
-                      flexDirection: 'row',
-                      // Before a fold, the leading tiles end at its gutter.
-                      paddingStart: side ? 0 : half - inner,
-                      gap,
-                    }}
-                  >
-                    {part.map((item) => (
-                      <Fragment key={keyOf(item)}>
-                        {render(item, tile)}
-                      </Fragment>
-                    ))}
-                  </View>
-                );
-              })}
+              {row.map((item) => (
+                <Fragment key={keyOf(item)}>{render(item, tile)}</Fragment>
+              ))}
             </View>
           ))
         : null}
-    </FoldContainer>
+    </View>
   );
 }

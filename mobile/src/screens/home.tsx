@@ -6,7 +6,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSession } from '../state/session';
@@ -16,7 +15,7 @@ import { useAccent } from '../ui/accent';
 import { FoldContainer, TileGrid, useFoldSplit } from '../ui/columns';
 import { Glyph } from '../ui/glyph';
 import { Busy, Notice, errorText } from '../ui/primitives';
-import { AddTile, AppTile, ShortcutTile } from '../ui/rows';
+import { AddTile, AppTile, ShortcutTile, useShortcutGrid } from '../ui/rows';
 import {
   Masthead,
   PageRoot,
@@ -24,7 +23,6 @@ import {
   pageScrollProps,
 } from '../ui/screen';
 import { Text, type } from '../ui/text';
-import { sizes } from '../ui/theme';
 import {
   DashboardNotices,
   DashboardPager,
@@ -33,7 +31,6 @@ import {
   useDashboards,
 } from './dashboard';
 
-const TILE = sizes.deskTile;
 const GUTTER = 20;
 /** Three 80 px widget rows, their two gaps and the canvas padding. */
 const PEEK_HEIGHT = 300;
@@ -58,7 +55,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const { api, origin } = useSession();
   const accent = useAccent();
   const focused = useIsFocused();
-  const { fontScale } = useWindowDimensions();
+  const tile = useShortcutGrid();
   const queryClient = useQueryClient();
   const lifetime = useLifetimeSignal();
   const board = useDashboards(focused, { peek: true });
@@ -89,8 +86,8 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     (pin) => pin.appStatus !== 'archived',
   );
   const pinnedWorkflows = pinned.data?.workflows ?? [];
-  // Pins are shared by every client: a change re-reads them, and the lists
-  // that mark pinned rows.
+  // Pins are shared by every client: a change re-reads them, and the
+  // workspace that marks a pinned App on its App page.
   const changed = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: [origin, 'pins'] }),
@@ -129,8 +126,6 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
     ? Math.max(280, height - 210)
     : // Room for a widget three rows tall, the canvas's common size.
       PEEK_HEIGHT;
-  // Large text needs wider tiles for their one-line labels.
-  const tile = { minTile: fontScale > 1.3 ? 104 : 76, gap: 8 };
 
   const widgets = (
     <View>
@@ -239,7 +234,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                         })
                       }
                     >
-                      <AddTile size={TILE} />
+                      <AddTile size={tile.tile} />
                     </ShortcutTile>
                   </View>
                 );
@@ -274,7 +269,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                       name={app?.name ?? pin.label}
                       seed={pin.appId}
                       iconPath={app?.iconPath}
-                      size={TILE}
+                      size={tile.tile}
                       lifted
                     />
                   </ShortcutTile>
@@ -309,7 +304,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                     <AppTile
                       name={item.name}
                       seed={item.id}
-                      size={TILE}
+                      size={tile.tile}
                       workflow
                       lifted
                     />
@@ -327,7 +322,7 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
                       })
                     }
                   >
-                    <AddTile size={TILE} workflow />
+                    <AddTile size={tile.tile} workflow />
                   </ShortcutTile>
                 )}
               </View>
