@@ -270,10 +270,10 @@ export function validateSchemaInput(
     // No schema captured — accept.
     return { success: true, data: rawInput ?? {} };
   }
-  // Strict inputs arrive from callers (webhooks, the RPC): refuse one with
-  // more values than any form needs before zod walks it, so validation work
-  // and the issues it collects stay bounded.
-  if (options.strict && exceedsValueCount(rawInput, MAX_INPUT_VALUES)) {
+  // Inputs arrive from callers (webhooks, the RPC): refuse one with more
+  // values than any form needs before zod walks it, so validation work and
+  // the issues it collects stay bounded.
+  if (exceedsValueCount(rawInput, MAX_INPUT_VALUES)) {
     return {
       success: false,
       message: `Input has more than ${MAX_INPUT_VALUES} values.`,
@@ -298,7 +298,7 @@ export function validateSchemaInput(
   return { success: false, message: message || 'Invalid input' };
 }
 
-/** Values (array items and object members, nested) a strict input may hold. */
+/** Values (array items and object members, nested) an input may hold. */
 const MAX_INPUT_VALUES = 10_000;
 /** Issues spelled out in a failure message, and its length. */
 const MAX_REPORTED_ISSUES = 20;

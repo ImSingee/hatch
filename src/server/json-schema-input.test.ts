@@ -194,23 +194,19 @@ describe('coerceSchemaQueryInput', () => {
     expect(result.success).toBe(false);
   });
 
-  it('refuses an oversized strict input and bounds the failure message', () => {
+  it('refuses an oversized input and bounds the failure message', () => {
     const schema = {
       type: 'object',
       properties: { n: { type: 'array', items: { type: 'integer' } } },
     };
     expect(
-      validateSchemaInput(
-        schema,
-        { n: Array.from({ length: 500_000 }, () => 'x') },
-        { strict: true },
-      ),
+      validateSchemaInput(schema, {
+        n: Array.from({ length: 500_000 }, () => 'x'),
+      }),
     ).toEqual({ success: false, message: 'Input has more than 10000 values.' });
-    const result = validateSchemaInput(
-      schema,
-      { n: Array.from({ length: 5000 }, () => 'x') },
-      { strict: true },
-    );
+    const result = validateSchemaInput(schema, {
+      n: Array.from({ length: 5000 }, () => 'x'),
+    });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.message.length).toBeLessThanOrEqual(4000);
