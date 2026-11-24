@@ -285,5 +285,16 @@
   "runs.inspector.duration": "耗时",
   "runs.steps.attempt": "第 {{attempt}} 次尝试",
   "runs.steps.waiting": "正在等待第一个步骤…",
-  "runs.steps.empty": "本次运行没有记录步骤。"
+  "runs.steps.empty": "本次运行没有记录步骤。",
+  "taskRun.title": "{{app}} · 运行",
+  "taskRun.closeLabel": "{{app}} 的任务运行",
+  "taskRun.backToRuns": "‹ {{app}} 的全部运行",
+  "taskRun.toast.canceled": "已取消运行",
+  "taskRun.toast.alreadyFinished": "该运行已经结束",
+  "taskRun.row.task": "任务",
+  "taskRun.row.queue": "排队",
+  "taskRun.row.schedule": "定时计划",
+  "taskRun.queue.next": "下一个开始",
+  "taskRun.queue.ahead_one": "前面还有 {{count}} 个运行",
+  "taskRun.queue.ahead_other": "前面还有 {{count}} 个运行"
 }

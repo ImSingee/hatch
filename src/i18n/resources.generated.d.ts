@@ -288,4 +288,15 @@ export type TranslationResource = {
   'runs.steps.attempt': 'attempt {{attempt}}';
   'runs.steps.waiting': 'Waiting for the first step…';
   'runs.steps.empty': 'This run recorded no steps.';
+  'taskRun.title': '{{app}} · Run';
+  'taskRun.closeLabel': '{{app}} task runs';
+  'taskRun.backToRuns': '‹ All runs of {{app}}';
+  'taskRun.toast.canceled': 'Run canceled';
+  'taskRun.toast.alreadyFinished': 'The run had already finished';
+  'taskRun.row.task': 'Task';
+  'taskRun.row.queue': 'Queue';
+  'taskRun.row.schedule': 'Schedule';
+  'taskRun.queue.next': 'Next to start';
+  'taskRun.queue.ahead_one': '{{count}} run ahead';
+  'taskRun.queue.ahead_other': '{{count}} runs ahead';
 };
