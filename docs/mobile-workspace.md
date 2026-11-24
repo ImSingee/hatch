@@ -50,8 +50,10 @@ Home pages by dashboard, not by widget: widgets are web content rendered by the
 dashboard canvas, one WebView per dashboard. The pinned grid uses `appPins` as
 described above: one tile per pin, keyed by pin `id`, opening the App at the
 pin's `entryHash`. Apps shows every App and Workflow in the same kind of grid.
-A tile on Home or in Apps opens the App directly; an App never deployed
-(`draft`) has nothing to open, so its tile in Apps opens the App page.
+A tile on Home or in Apps opens the App directly. An App without a successful
+deployment (the summary's `currentVersion` is null: never deployed, or a first
+deployment still building or failed) has nothing to open, so its tile in Apps
+opens the App page.
 Touching and holding an App tile opens a menu with the App page ("App
 details"); on Home it also offers to unpin. On iOS this is the system context
 menu, on Android a menu anchored to the tile.

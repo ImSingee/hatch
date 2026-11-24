@@ -23,9 +23,10 @@ type Kind = 'apps' | 'workflows';
 /**
  * Every App and Workflow of the instance as a grid of tiles, searchable, by
  * name or by latest change. A tile opens its App, like a pin on Home; an App
- * never deployed has nothing to open and goes to its App page, which touching
- * and holding any App tile also offers. The Workflows tab lists Workflows
- * alone.
+ * without a successful deployment (never deployed, or a first deployment
+ * still building or failed) has nothing to open and goes to its App page,
+ * which touching and holding any App tile also offers. The Workflows tab
+ * lists Workflows alone.
  */
 export function ResourcesScreen({
   kind = 'apps',
@@ -90,7 +91,7 @@ export function ResourcesScreen({
   const open = (item: AppSummary, of: Kind) =>
     of === 'workflows'
       ? router.push({ pathname: '/workflows/[id]', params: { id: item.id } })
-      : item.status === 'draft'
+      : !item.live
         ? details(item)
         : router.push({
             pathname: '/apps/[id]',
@@ -107,7 +108,7 @@ export function ResourcesScreen({
       label={item.name}
       accessibilityLabel={
         of === 'apps'
-          ? item.status === 'draft'
+          ? !item.live
             ? `${item.name}, not deployed yet`
             : item.name
           : `${item.name}, workflow`

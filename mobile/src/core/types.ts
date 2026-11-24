@@ -34,6 +34,11 @@ export type AppSummary = Omit<Plain<Resource>, 'description' | 'iconPath'> & {
   description: string | null;
   /** Apps only: where the icon PNG is served; null while it shows a monogram. */
   iconPath: string | null;
+  /**
+   * Has a successful deployment to open. An App whose first deployment is
+   * still building or failed has none, whatever its status says.
+   */
+  live: boolean;
 };
 export type AppDetail = AppSummary;
 export type Model = Plain<AgentModel>;

@@ -32,7 +32,15 @@ export function appProjection(app: Resource): AppSummary {
     createdAt: app.createdAt,
     updatedAt: app.updatedAt,
     iconPath: app.iconPath ?? null,
+    live: hasLiveVersion(app),
   };
+}
+/** The view names the live deployment's version: Apps `currentVersion`, Workflows `liveVersion`. */
+function hasLiveVersion(app: Resource) {
+  const view = app.view ? toJson(ValueSchema, app.view) : null;
+  if (!view || typeof view !== 'object' || Array.isArray(view)) return false;
+  const version = view.currentVersion ?? view.liveVersion;
+  return typeof version === 'number';
 }
 export function summaryProjection(
   session: AgentSessionSummary,
