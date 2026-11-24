@@ -52,6 +52,7 @@ import dayjs from 'dayjs';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { APP_SLUG_MAX_LENGTH } from '~/app-identity';
+import { useI18n } from '~i18n';
 import { DeskWindow } from '~components/desk/window';
 import {
   Column,
@@ -410,6 +411,7 @@ function useManageSections(
   hasApi: boolean,
   isArchived: boolean,
 ): ManageSection[] {
+  const { t } = useI18n();
   const { data: ops } = useQuery(appOpsQueryOptions(appId));
   const { data: manifest } = useQuery(normalizedManifestQueryOptions(appId));
   const icon = (Icon: typeof IconLayoutDashboard) => (
@@ -418,75 +420,80 @@ function useManageSections(
   const sections: (ManageSection | false | undefined)[] = [
     {
       key: 'overview',
-      label: 'Overview',
+      label: t('appManage.section.overview'),
       icon: icon(IconLayoutDashboard),
       color: 'primary',
     },
     ops?.backend.capable && {
       key: 'backend',
-      label: 'Backend',
+      label: t('appManage.section.backend'),
       icon: icon(IconServerBolt),
       color: 'dark',
     },
     (ops?.database.enabled || Boolean(ops?.database.dbName)) && {
       key: 'database',
-      label: 'Database',
+      label: t('appManage.section.database'),
       icon: icon(IconDatabase),
       color: 'blue',
     },
     ops?.storage.enabled && {
       key: 'storage',
-      label: 'Storage',
+      label: t('appManage.section.storage'),
       icon: icon(IconFolder),
       color: 'gray',
     },
     (ops?.dataTable.enabled || Boolean(ops?.dataTable.dbName)) && {
       key: 'data-tables',
-      label: 'Data tables',
+      label: t('appManage.section.dataTables'),
       icon: icon(IconTable),
       color: 'teal',
     },
     ops?.cron.enabled && {
       key: 'schedules',
-      label: 'Schedules',
+      label: t('appManage.section.schedules'),
       icon: icon(IconClock),
       color: 'amber',
     },
     Boolean(manifest?.tasks) && {
       key: 'tasks',
-      label: 'Tasks',
+      label: t('appManage.section.tasks'),
       icon: icon(IconListCheck),
       color: 'primary',
     },
     ops?.webhook.enabled && {
       key: 'webhook',
-      label: 'Webhook',
+      label: t('appManage.section.webhook'),
       icon: icon(IconWebhook),
       color: 'violet',
     },
     ops?.kv.enabled && {
       key: 'kv',
-      label: 'Key-value store',
+      label: t('appManage.section.kv'),
       icon: icon(IconKey),
       color: 'indigo',
     },
     Boolean(manifest?.notifications) && {
       key: 'notifications',
-      label: 'Notifications',
+      label: t('appManage.section.notifications'),
       icon: icon(IconBell),
       color: 'pink',
     },
-    hasApi && { key: 'api', label: 'API', icon: icon(IconApi), color: 'blue' },
+    hasApi && {
+      key: 'api',
+      label: t('appManage.section.api'),
+      icon: icon(IconApi),
+      color: 'blue',
+    },
     !isArchived &&
       Boolean(manifest?.docs?.length) && {
         key: 'docs',
-        label: 'Docs',
+        label: t('appManage.section.docs'),
         icon: icon(IconBook),
         color: 'cyan',
       },
     {
       key: 'deployments',
-      label: 'Deployments',
+      label: t('appManage.section.deployments'),
       icon: icon(IconHistory),
       color: 'dark',
     },

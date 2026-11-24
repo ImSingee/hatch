@@ -17,13 +17,16 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import type { PublishedAppDoc } from '~server/apps/manifest';
 import {
+  StaleAppDocError,
   appDocQueryOptions,
   normalizedManifestQueryOptions,
 } from '~queries/apps';
+import { useI18n } from '~i18n';
 import { Markdownish } from '~components/agent/markdownish';
 import { GroupCard, Section } from '~components/page/page';
 
 function DocBody({ appId, doc }: { appId: string; doc: PublishedAppDoc }) {
+  const { t } = useI18n();
   const query = useQuery(appDocQueryOptions(appId, doc.id, doc.sha256));
   if (query.isLoading) {
     return (
@@ -35,9 +38,9 @@ function DocBody({ appId, doc }: { appId: string; doc: PublishedAppDoc }) {
   if (query.isError || !query.data) {
     return (
       <Text size="sm" c="red">
-        {query.error instanceof Error
-          ? query.error.message
-          : 'This doc could not be loaded.'}
+        {query.error instanceof StaleAppDocError
+          ? t('appDocs.stale')
+          : t('appDocs.loadFailed')}
       </Text>
     );
   }
@@ -45,18 +48,19 @@ function DocBody({ appId, doc }: { appId: string; doc: PublishedAppDoc }) {
 }
 
 function CliCommand({ command }: { command: string }) {
+  const { t } = useI18n();
   return (
     <Group gap={6} wrap="nowrap" align="center">
       <Code style={{ fontSize: 'var(--mantine-font-size-xs)' }}>{command}</Code>
-      <Tooltip label="Copy command" withArrow position="top">
+      <Tooltip label={t('appDocs.copyCommand')} withArrow position="top">
         <ActionIcon
           variant="subtle"
           color="gray"
           size="sm"
-          aria-label="Copy command"
+          aria-label={t('appDocs.copyCommand')}
           onClick={() => {
             copy(command);
-            toast.success('Command copied');
+            toast.success(t('appDocs.commandCopied'));
           }}
         >
           <IconCopy size={14} />
@@ -71,6 +75,7 @@ function CliCommand({ command }: { command: string }) {
  * this App. Self-hides when the deployment publishes none.
  */
 export function DocsPanel({ appId, slug }: { appId: string; slug: string }) {
+  const { t } = useI18n();
   const { data: manifest } = useQuery(normalizedManifestQueryOptions(appId));
   const docs = manifest?.docs ?? [];
   const [selected, setSelected] = useState<string | null>(null);
@@ -80,16 +85,16 @@ export function DocsPanel({ appId, slug }: { appId: string; slug: string }) {
   return (
     <Section
       id="docs"
-      title="Docs"
-      meta={`${docs.length} published`}
-      note="Published with the current deployment for services that call this App. Readable with the hatch CLI."
+      title={t('appDocs.title')}
+      meta={t('appDocs.published', { count: docs.length })}
+      note={t('appDocs.note')}
     >
       <GroupCard padded>
         <Stack gap="md">
           {/* Scrolls sideways instead of widening the page for long titles. */}
           <ScrollArea type="auto" scrollbarSize={6} offsetScrollbars="x">
             <SegmentedControl
-              aria-label="Published docs"
+              aria-label={t('appDocs.selector')}
               value={active.id}
               onChange={setSelected}
               data={docs.map((doc) => ({ value: doc.id, label: doc.title }))}
