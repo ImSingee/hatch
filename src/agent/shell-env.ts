@@ -28,8 +28,30 @@ import {
   WORKSPACE_ROOT,
 } from './paths';
 
+/** Author and committer of every commit the Agent makes. */
+const AGENT_GIT_NAME = 'Hatch Agent';
+const AGENT_GIT_EMAIL = 'agent@hatch.local';
+
 /** Platform-provided CLI shims used by App codegen and Agent instructions. */
 const PLATFORM_NODE_BIN_DIR = path.join(REPO_ROOT, 'node_modules', '.bin');
+/**
+ * This checkout's `hatch` CLI shim. Production images install the CLI as
+ * /usr/local/bin/hatch; a development Runner gets it from here once
+ * `pnpm build:cli` has produced the build the shim runs.
+ */
+const PLATFORM_CLI_BIN_DIR = path.join(
+  REPO_ROOT,
+  'packages',
+  'hatch-cli',
+  'bin',
+);
+const PLATFORM_CLI_BUILD = path.join(
+  REPO_ROOT,
+  'packages',
+  'hatch-cli',
+  'dist',
+  'main.mjs',
+);
 
 /**
  * Variables a dev shell legitimately needs (git / pnpm / deno / node / tools).
@@ -110,8 +132,15 @@ export function agentTrustedPath(): string {
   } catch {
     // A dependency install may not have populated the platform CLI bin yet.
   }
+  let cliBin: string[] = [];
+  try {
+    if (statSync(PLATFORM_CLI_BUILD).isFile()) cliBin = [PLATFORM_CLI_BIN_DIR];
+  } catch {
+    // No development CLI build: rely on an installed `hatch` (production).
+  }
   const entries = [
     PLATFORM_NODE_BIN_DIR,
+    ...cliBin,
     ...inheritedPath().split(path.delimiter),
   ];
   const seen = new Set<string>();
@@ -170,5 +199,11 @@ export function agentShellEnv(sessionId?: string): NodeJS.ProcessEnv {
   env.DENO_DIR = path.join(home, '.cache', 'deno');
   env.PNPM_HOME = path.join(home, '.local', 'share', 'pnpm');
   env.PATH = agentTrustedPath();
+  // The sandbox home has no Git identity, and a container host name gives Git
+  // nothing to derive one from, so every Agent commit names the Agent.
+  env.GIT_AUTHOR_NAME = AGENT_GIT_NAME;
+  env.GIT_AUTHOR_EMAIL = AGENT_GIT_EMAIL;
+  env.GIT_COMMITTER_NAME = AGENT_GIT_NAME;
+  env.GIT_COMMITTER_EMAIL = AGENT_GIT_EMAIL;
   return env;
 }

@@ -162,9 +162,10 @@ is rejected with `workspace_instance_mismatch`.
   symlink traversal and nested checkouts, and prepares before replacing. On
   preparation failure the old directory remains intact; on swap failure it is
   restored. Recoverable preparation work remains at the reported path.
-- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`),
-  immutable ID, manifest, current platform generation and source history before
-  adding CLI metadata. Local HEAD must contain platform master; dirty work and origin are
+- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`;
+  the file itself may be absent, as `create_app` never wrote it), immutable ID,
+  manifest, current platform generation and source history before adding CLI
+  metadata. Local HEAD must contain platform master; dirty work and origin are
   preserved. Empty canonical source is ambiguous unless an uncommitted checkout
   belongs to the verified Run's session. Adoption never resets local history.
 - **Update:** require clean source; fetch platform `master` and the platform's
