@@ -26,7 +26,6 @@ export class SseParser {
   #pendingEventId = '';
   #lastEventId = '';
   #retry: number | null = null;
-  #events = 0;
 
   constructor(readonly maxEventLength = MAX_SSE_EVENT_LENGTH) {}
 
@@ -40,13 +39,12 @@ export class SseParser {
     return this.#retry;
   }
 
-  /** How many events have been dispatched. */
-  get events(): number {
-    return this.#events;
-  }
-
-  /** Feed raw bytes; returns the events they complete. */
-  push(chunk: Uint8Array): SseEvent[] {
+  /**
+   * Feed raw bytes and yield the events they complete, one at a time. A
+   * failure (an oversized event) throws only once the events before it in the
+   * same chunk have been taken, so the caller can deliver them first.
+   */
+  push(chunk: Uint8Array): Generator<SseEvent, void, undefined> {
     // TextDecoder drops a leading BOM and holds split multi-byte sequences.
     return this.#feed(this.#decoder.decode(chunk, { stream: true }));
   }
@@ -55,13 +53,11 @@ export class SseParser {
    * Flush at end of stream. A trailing event without its blank line is
    * discarded, as the specification requires.
    */
-  end(): SseEvent[] {
-    this.#feed(this.#decoder.decode());
-    return [];
+  end(): void {
+    for (const _ of this.#feed(this.#decoder.decode()));
   }
 
-  #feed(text: string): SseEvent[] {
-    const events: SseEvent[] = [];
+  *#feed(text: string): Generator<SseEvent, void, undefined> {
     let start = 0;
     // A CR ended the previous chunk; an LF opening this one completes CRLF.
     if (this.#skipLineFeed && text) {
@@ -80,11 +76,10 @@ export class SseParser {
       }
       start = index + 1;
       const dispatched = this.#processLine(event);
-      if (dispatched) events.push(dispatched);
+      if (dispatched) yield dispatched;
     }
     this.#line += text.slice(start);
     this.#checkLength(this.#line.length);
-    return events;
   }
 
   /**
@@ -138,7 +133,6 @@ export class SseParser {
     this.#event = '';
     this.#blockRetry = undefined;
     if (!hasData) return;
-    this.#events++;
     return result;
   }
 }

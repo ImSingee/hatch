@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { credentialHeaders, platformClient } from './client';
 import { configPath, resolveCredential } from './config';
 import { argumentsError, CliError } from './error';
-import { SseParser } from './sse';
+import { type SseEvent, SseParser } from './sse';
 
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -365,15 +365,18 @@ async function streamEvents(
     );
   }
   const parser = new SseParser();
+  // Resume data follows what reached stdout, not what the parser has seen:
+  // an event parsed but not yet written must not be skipped on resume.
+  const delivered = { lastEventId: null as string | null, events: 0 };
+  const deliver = (event: SseEvent) => {
+    delivered.lastEventId = event.id;
+    delivered.events++;
+  };
   const resume = () =>
-    parser.lastEventId === null
+    delivered.lastEventId === null
       ? 'No event ID was received; resubscribe from the start.'
-      : `Resume with --header 'Last-Event-ID:${parser.lastEventId}'.`;
-  const details = () => ({
-    lastEventId: parser.lastEventId,
-    events: parser.events,
-    retry: parser.retry,
-  });
+      : `Resume with --header 'Last-Event-ID:${delivered.lastEventId}'.`;
+  const details = () => ({ ...delivered, retry: parser.retry });
   let stop: 'idle' | 'max' | undefined;
   let idleTimer: NodeJS.Timeout | undefined;
   const armIdle = () => {
@@ -403,9 +406,15 @@ async function streamEvents(
           // The idle timer covers only waiting for the App. Suspend it while
           // stdout applies backpressure, then restart it for the next chunk.
           clearTimeout(idleTimer);
-          const events = parser.push(chunk);
-          if (!options.json) await write(chunk, output);
-          else for (const event of events) await emit(event);
+          if (options.json)
+            for (const event of parser.push(chunk)) {
+              await emit(event);
+              deliver(event);
+            }
+          else {
+            await write(chunk, output);
+            for (const event of parser.push(chunk)) deliver(event);
+          }
           armIdle();
         }
       parser.end();
@@ -450,7 +459,7 @@ async function streamEvents(
       await emit({ type: 'end', ok: true, reason, ...details() }, signal);
     else
       process.stderr.write(
-        `Stream ${reason === 'closed' ? 'closed by the App' : 'reached --max-duration'} after ${parser.events} events; last event ID: ${parser.lastEventId ?? 'none'}.\n`,
+        `Stream ${reason === 'closed' ? 'closed by the App' : 'reached --max-duration'} after ${delivered.events} events; last event ID: ${delivered.lastEventId ?? 'none'}.\n`,
       );
   } finally {
     clearTimeout(idleTimer);

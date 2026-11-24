@@ -342,6 +342,26 @@ describe('server-sent event subscriptions', () => {
     });
   });
 
+  it('delivers events before an oversized one and resumes after the last delivered', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.end(
+        `id: 1\ndata: valid\n\nid: 2\ndata: ${'x'.repeat(1024 * 1024 + 1)}`,
+      );
+    };
+    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await expect(sse('--json')).rejects.toMatchObject({
+      code: 'stream_event_too_large',
+      details: { lastEventId: '1', events: 1 },
+    });
+    expect(records(output).at(-1)).toEqual({
+      type: 'event',
+      event: 'message',
+      id: '1',
+      data: 'valid',
+    });
+  });
+
   it('reports interrupted, non-2xx and non-stream responses distinctly', async () => {
     stream = (_, response) => {
       open(response);

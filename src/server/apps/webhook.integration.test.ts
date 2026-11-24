@@ -773,7 +773,8 @@ describe.runIf(Boolean(databaseUrl && cliEntry))(
         ok: true,
         contentType: 'text/event-stream',
       });
-    }, 60000);
+      // Includes a full redeploy, which the fixture allows up to 180s.
+    }, 240000);
 
     it.runIf(Boolean(process.env.HATCH_WEBHOOK_TEST_CONTAINER_IMAGE))(
       'invokes through the installed bundle in a nonroot read-only container',

@@ -5,9 +5,9 @@ const bytes = (text: string) => new TextEncoder().encode(text);
 
 function parse(chunks: (string | Uint8Array)[], max?: number) {
   const parser = new SseParser(max);
-  const events = chunks.flatMap((chunk) =>
-    parser.push(typeof chunk === 'string' ? bytes(chunk) : chunk),
-  );
+  const events = chunks.flatMap((chunk) => [
+    ...parser.push(typeof chunk === 'string' ? bytes(chunk) : chunk),
+  ]);
   parser.end();
   return { events, parser };
 }
@@ -52,7 +52,7 @@ describe('server-sent event parsing contract', () => {
       { type: 'event', event: 'message', id: '9', data: 'x' },
       { type: 'event', event: 'message', id: null, data: 'reset' },
     ]);
-    expect(parser).toMatchObject({ events: 3, lastEventId: null, retry: 1500 });
+    expect(parser).toMatchObject({ lastEventId: null, retry: 1500 });
   });
 
   it('rejects an oversized event however the network splits it', () => {
@@ -64,6 +64,17 @@ describe('server-sent event parsing contract', () => {
           exitCode: 7,
         }),
       );
+  });
+
+  it('yields completed events before failing on a later oversized one', () => {
+    const parser = new SseParser(32);
+    const events = parser.push(
+      bytes(`id: 1\ndata: valid\n\nid: 2\ndata: ${'x'.repeat(64)}`),
+    );
+    expect(events.next().value).toMatchObject({ id: '1', data: 'valid' });
+    expect(() => events.next()).toThrow(
+      expect.objectContaining({ code: 'stream_event_too_large' }),
+    );
   });
 
   it('advances the resume ID only when an event block completes', () => {
