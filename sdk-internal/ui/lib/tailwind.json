@@ -1,0 +1,30 @@
+{
+  "fontSize": {
+    "display": [30, 1.2667],
+    "title": [24, 1.3333],
+    "section": [20, 1.4],
+    "modal": [18, 1.4444],
+    "subsection": [17, 1.4118],
+    "body-lg": [16, 1.5],
+    "control": [15, 1.4667],
+    "body": [14, 1.4286],
+    "control-sm": [13, 1.3846],
+    "caption": [12, 1.5],
+    "eyebrow": [11, 1.4545]
+  },
+  "fontWeight": {
+    "body": 500,
+    "strong": 600,
+    "label": 700,
+    "heading": 800
+  },
+  "tracking": {
+    "heading": -0.01,
+    "eyebrow": 0.06
+  },
+  "shadow": {
+    "card": "0 2px 10px rgba(30, 34, 48, 0.06)",
+    "dock": "0 10px 28px rgba(30, 34, 48, 0.12)",
+    "window": "0 24px 60px rgba(30, 34, 48, 0.16), 0 2px 6px rgba(30, 34, 48, 0.06)"
+  }
+}
