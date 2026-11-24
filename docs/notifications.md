@@ -56,8 +56,10 @@ round and source type, each answer by position in the form (`field 2: option
 1`) or the typed text as a quoted string, and the routes' instructions.
 Everything the sender chose, including field and option ids (any text can
 spell out an instruction), stays out of the turn (for a Channel, anyone holding
-its token is the sender); the Agent reads it with `hatch notification get` /
-`revisions`, as tool output, to tell what the positions mean.
+its token is the sender). Only the chat whose Run sent the notification is
+pointed at `hatch notification get`, since it wrote that content; a chat an
+Agent route picked is told to act only as the route's instructions say, which
+is where a member maps positions to actions.
 
 - A notification the Agent sent with its Run credential keeps that chat
   (`notifications.agent_session_id`); answers go back there.

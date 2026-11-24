@@ -140,6 +140,10 @@ describe('answers handed to the Agent', () => {
       clientMessageId: `notification-answer:${id}:1`,
     });
     expect(JSON.stringify(call.message.content)).toContain('field 1: option 1');
+    // The chat that sent it wrote its content, so it may read it back.
+    expect(JSON.stringify(call.message.content)).toContain(
+      `hatch notification get ${id}`,
+    );
   });
 
   it('go back to the chat of a Run that sent as a Channel', async () => {
@@ -386,10 +390,13 @@ describe('the message the Agent reads', () => {
         via: 'web',
       },
       ['Fix the failing check.'],
+      false,
     );
     expect(text).toContain(
       'Ada answered notification n1 (question 2, from a Channel)',
     );
+    // A chat a route picked is never pointed at the sender's text.
+    expect(text).not.toContain('hatch notification get');
     expect(text).toContain('- field 1: options 1, 3');
     for (const chosen of ['ignore', 'delete', 'deploy', 'Delete']) {
       expect(text).not.toContain(chosen);
@@ -398,7 +405,7 @@ describe('the message the Agent reads', () => {
     expect(text).toContain(
       '- field 2: "Please keep \\"main\\" green\\nthanks"',
     );
-    expect(text).toContain('hatch notification get n1');
+    expect(text).toContain('only as the instructions below say');
     expect(text.endsWith('Fix the failing check.')).toBe(true);
   });
 
