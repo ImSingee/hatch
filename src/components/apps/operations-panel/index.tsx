@@ -7,10 +7,11 @@ import {
   BackendControls,
   BackendStatus,
   BackendTime,
-  backendLastExitLabel,
+  BackendLastExit,
 } from '~components/apps/backend-controls';
 import { GroupCard, Section } from '~components/page/page';
 import { ExtraPermissionsDetails } from '~components/system/extra-permissions';
+import { useI18n } from '~i18n';
 import { NetworkAccessDetails } from '~components/system/network-access';
 import {
   appBackendsQueryOptions,
@@ -67,19 +68,24 @@ function BackendSection({
   const entry = backends?.find((b) => b.id === appId);
   const runtime = entry?.runtime ?? null;
   const mode = entry?.mode ?? backend.mode ?? 'serverless';
+  const { t } = useI18n();
+  const modeLabel =
+    mode === 'long-running'
+      ? t('ops.backend.mode.longRunning')
+      : t('ops.backend.mode.serverless');
 
   return (
     <Stack gap={6}>
       <SectionHeader
         icon={<IconServerBolt size={16} stroke={1.8} />}
-        title="Backend"
+        title={t('ops.backend.title')}
         meta={
           runtime ? (
             <Group gap={10} wrap="nowrap">
               <Group gap={6} wrap="nowrap">
                 <BackendStatus runtime={runtime} size="xs" dimmed />
                 <Text size="xs" c="dimmed">
-                  · {mode}
+                  · {modeLabel}
                 </Text>
               </Group>
               <BackendControls
@@ -91,25 +97,25 @@ function BackendSection({
             </Group>
           ) : backends ? (
             <Text size="xs" c="dimmed">
-              not deployed · {mode}
+              {t('ops.backend.notDeployed', { mode: modeLabel })}
             </Text>
           ) : null
         }
       />
       <Text size="xs" c="dimmed">
         {mode === 'long-running'
-          ? 'Kept warm by the platform and restarted automatically if it exits.'
-          : 'Started on demand and stopped once it has been idle for a while; the next request starts a fresh instance.'}
+          ? t('ops.backend.longRunningNote')
+          : t('ops.backend.serverlessNote')}
       </Text>
-      <RuntimeFact label="Network">
+      <RuntimeFact label={t('ops.backend.network')}>
         <NetworkAccessDetails access={backend.network} appPlatformChannels />
       </RuntimeFact>
-      <RuntimeFact label="Extra permissions">
+      <RuntimeFact label={t('ops.backend.extraPermissions')}>
         <ExtraPermissionsDetails access={backend.extraPermissions} />
       </RuntimeFact>
       {runtime ? (
         <Stack gap={6} mt={4}>
-          <RuntimeFact label="PID / Port">
+          <RuntimeFact label={t('ops.backend.pidPort')}>
             {runtime.state === 'running' && runtime.pid != null ? (
               <Text size="sm" ff="monospace">
                 {runtime.pid} · :{runtime.port}
@@ -120,16 +126,14 @@ function BackendSection({
               </Text>
             )}
           </RuntimeFact>
-          <RuntimeFact label="Started">
+          <RuntimeFact label={t('ops.backend.started')}>
             <BackendTime value={runtime.startedAt} />
           </RuntimeFact>
-          <RuntimeFact label="Last stopped">
+          <RuntimeFact label={t('ops.backend.lastStopped')}>
             <BackendTime value={runtime.stoppedAt} />
           </RuntimeFact>
-          <RuntimeFact label="Last exit">
-            <Text size="sm" c="dimmed" ff="monospace">
-              {backendLastExitLabel(runtime)}
-            </Text>
+          <RuntimeFact label={t('ops.backend.lastExit')}>
+            <BackendLastExit runtime={runtime} />
           </RuntimeFact>
         </Stack>
       ) : null}
@@ -138,21 +142,20 @@ function BackendSection({
 }
 
 function PersistentStorageSection() {
+  const { t } = useI18n();
   return (
     <Stack gap={6}>
       <SectionHeader
         icon={<IconFolder size={16} stroke={1.8} />}
-        title="Persistent storage"
+        title={t('ops.storage.title')}
         meta={
           <Text size="xs" c="dimmed">
-            enabled
+            {t('ops.storage.enabled')}
           </Text>
         }
       />
       <Text size="xs" c="dimmed">
-        A private backend directory available through STORAGE_DIR. Files survive
-        restarts, deployments, and rollbacks, and are deleted with the app.
-        Disabling storage keeps the files but revokes access.
+        {t('ops.storage.body')}
       </Text>
     </Stack>
   );
@@ -179,12 +182,13 @@ export function OperationsPanel({
     enabled: Boolean(manifestQuery.data?.tasks),
   });
   const queryClient = useQueryClient();
+  const { t } = useI18n();
 
   const deleteDatabase = async (dbName: string, confirmation: string) => {
     await deleteAppDatabaseFn({
       data: { id: appId, dbName, appName: confirmation },
     });
-    toast.success('Database deleted');
+    toast.success(t('ops.toast.databaseDeleted'));
     await Promise.allSettled([
       queryClient.invalidateQueries(appOpsQueryOptions(appId)),
       queryClient.invalidateQueries(deploymentsQueryOptions(appId)),
@@ -195,7 +199,7 @@ export function OperationsPanel({
     await deleteAppDataDatabaseFn({
       data: { id: appId, dbName, appName: confirmation },
     });
-    toast.success('Data Table data deleted');
+    toast.success(t('ops.toast.dataTableDeleted'));
     await Promise.allSettled([
       queryClient.invalidateQueries(appOpsQueryOptions(appId)),
       queryClient.invalidateQueries(deploymentsQueryOptions(appId)),
@@ -204,7 +208,7 @@ export function OperationsPanel({
 
   if (query.isLoading) {
     return (
-      <Section id="operations" title="Operations">
+      <Section id="operations" title={t('ops.title')}>
         <GroupCard padded>
           <Center py="lg">
             <Loader size="sm" />
@@ -232,12 +236,11 @@ export function OperationsPanel({
     Boolean(tasks);
 
   return (
-    <Section id="operations" title="Operations">
+    <Section id="operations" title={t('ops.title')}>
       {!hasOperations ? (
         <GroupCard padded>
           <Text size="sm" c="dimmed">
-            No database, Data Tables, persistent storage, backend, scheduled
-            jobs, webhook, KV, or notifications to manage for this app.
+            {t('ops.empty')}
           </Text>
         </GroupCard>
       ) : (

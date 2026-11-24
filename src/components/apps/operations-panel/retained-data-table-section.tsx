@@ -1,6 +1,8 @@
 import { ActionIcon, Box, Group, Stack, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { IconTable, IconTrash } from '@tabler/icons-react';
+import { Trans } from 'react-i18next';
+import { useI18n } from '~i18n';
 import { DeleteDatabaseForm } from './delete-database-form';
 import { SectionHeader, StatusDot } from './section-header';
 
@@ -17,11 +19,12 @@ export function RetainedDataTableSection({
   schemaHash: string | null;
   onDelete: (dbName: string, appName: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const confirmDelete = () => {
     const modalId = `delete-app-data-database-${appId}`;
     modals.open({
       modalId,
-      title: 'Delete retained Data Table data?',
+      title: t('ops.retained.deleteTitle'),
       centered: true,
       children: (
         <DeleteDatabaseForm
@@ -40,12 +43,12 @@ export function RetainedDataTableSection({
         <Box style={{ minWidth: 0 }}>
           <SectionHeader
             icon={<IconTable size={16} stroke={1.8} />}
-            title="Data Tables"
+            title={t('ops.dataTable.title')}
             meta={
               <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
                 <StatusDot active={false} />
                 <Text size="xs" c="dimmed">
-                  Disabled
+                  {t('common.disabled')}
                 </Text>
                 <Text size="xs" c="dimmed">
                   ·
@@ -58,7 +61,7 @@ export function RetainedDataTableSection({
           />
         </Box>
         <Tooltip
-          label="Delete retained Data Table data"
+          label={t('ops.retained.deleteTooltip')}
           withArrow
           position="top"
         >
@@ -66,7 +69,7 @@ export function RetainedDataTableSection({
             variant="subtle"
             color="red"
             size="sm"
-            aria-label={`Delete Data Table database ${dbName}`}
+            aria-label={t('ops.retained.deleteLabel', { name: dbName })}
             onClick={confirmDelete}
           >
             <IconTrash size={15} stroke={1.8} />
@@ -74,15 +77,18 @@ export function RetainedDataTableSection({
         </Tooltip>
       </Group>
       <Text size="xs" c="dimmed">
-        The capability is disabled. This managed database is retained, but App,
-        Agent, and Realtime access is unavailable.
+        {t('ops.retained.body')}
       </Text>
       {schemaHash ? (
         <Text size="xs" c="dimmed">
-          Latest schema:{' '}
-          <Text span ff="monospace" title={schemaHash}>
-            {schemaHash.slice(0, 10)}
-          </Text>
+          <Trans
+            t={t}
+            i18nKey="ops.retained.latestSchema"
+            values={{ hash: schemaHash.slice(0, 10) }}
+            components={{
+              hash: <Text span ff="monospace" title={schemaHash} />,
+            }}
+          />
         </Text>
       ) : null}
     </Stack>

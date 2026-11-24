@@ -12,7 +12,7 @@ import {
 import { AppGlyph } from '~components/apps/app-glyph';
 import { RunStatusBadge, RunTriggerLabel } from '~components/runs/run-status';
 import { useI18n } from '~i18n';
-import { formatDuration, formatRelative } from '~lib/format';
+import { formatDuration, formatRelativeTime } from '~lib/format';
 import { isActiveRun, type RunListItem } from '~lib/runs';
 import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
 import { listRecentTaskRunsFn } from '~server/app-tasks';
@@ -27,7 +27,7 @@ const pollActive = (runs: { status: RunListItem['status'] }[] | undefined) =>
   (runs ?? []).some((run) => isActiveRun(run.status)) ? 1500 : 15_000;
 
 function ExecutionsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const initial = Route.useLoaderData();
   const navigate = useNavigate();
   const taskQuery = useQuery({
@@ -138,7 +138,10 @@ function ExecutionsPage() {
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">
-                      {formatRelative(run.startedAt ?? run.createdAt)}
+                      {formatRelativeTime(
+                        run.startedAt ?? run.createdAt,
+                        locale,
+                      )}
                     </Text>
                   </Table.Td>
                 </Table.Tr>

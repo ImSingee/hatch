@@ -220,14 +220,24 @@ function tableFromSchema(
   name: string,
 ): DataTable {
   const table = ownValue(schema.tables, name);
-  if (!table) throw new AppError(`Unknown Data Table "${name}".`, 400);
+  if (!table) {
+    throw new AppError(`Unknown Data Table "${name}".`, 400, {
+      code: 'ops.dataTable.unknownTable',
+      params: { name },
+    });
+  }
   return table;
 }
 
 function fieldFromTable(table: DataTable, name: string): DataField | null {
   if (Object.hasOwn(systemFields, name)) return null;
   const field = ownValue(table.fields, name);
-  if (!field) throw new AppError(`Unknown Data Table field "${name}".`, 400);
+  if (!field) {
+    throw new AppError(`Unknown Data Table field "${name}".`, 400, {
+      code: 'ops.dataTable.unknownField',
+      params: { name },
+    });
+  }
   return field;
 }
 
@@ -241,7 +251,9 @@ function validateFieldValue(field: DataField, value: JsonValue): void {
     // fields use SQL NULL only when the field is omitted from an insert.
     if (field.kind === 'json') return;
     if (!field.optional)
-      throw new AppError('Required field cannot be null.', 400);
+      throw new AppError('Required field cannot be null.', 400, {
+        code: 'ops.dataTable.requiredNull',
+      });
     return;
   }
   const valid = (() => {
@@ -262,9 +274,16 @@ function validateFieldValue(field: DataField, value: JsonValue): void {
         return true;
     }
   })();
-  if (!valid) throw new AppError(`Invalid ${field.kind} field value.`, 400);
+  if (!valid) {
+    throw new AppError(`Invalid ${field.kind} field value.`, 400, {
+      code: 'ops.dataTable.invalidFieldValue',
+      params: { kind: field.kind },
+    });
+  }
   if (field.kind === 'datetime' && !isValidDataDateTime(value)) {
-    throw new AppError('Invalid datetime field value.', 400);
+    throw new AppError('Invalid datetime field value.', 400, {
+      code: 'ops.dataTable.invalidDatetime',
+    });
   }
 }
 
@@ -309,6 +328,10 @@ function assertRowSize(row: Record<string, JsonValue>): void {
     throw new AppError(
       `Data Table row exceeds ${DATA_ROW_MAX_BYTES} bytes.`,
       413,
+      {
+        code: 'ops.dataTable.rowTooLarge',
+        params: { max: DATA_ROW_MAX_BYTES },
+      },
     );
   }
 }
@@ -410,6 +433,7 @@ async function acquireReadLock(tx: DataReadGuardClient): Promise<void> {
     throw new AppError(
       'Data Table migration is in progress. Retry shortly.',
       503,
+      { code: 'ops.dataTable.migrating' },
     );
   }
 }
@@ -434,10 +458,14 @@ async function assertCurrentAppState(
     !app.currentDeploymentId ||
     !app.capabilities?.dataTable
   ) {
-    throw new AppError('Data Table is not available.', 404);
+    throw new AppError('Data Table is not available.', 404, {
+      code: 'ops.dataTable.unavailable',
+    });
   }
   if (app.dataActivationId) {
-    throw new AppError('Data Table deployment is being finalized.', 503);
+    throw new AppError('Data Table deployment is being finalized.', 503, {
+      code: 'ops.dataTable.finalizing',
+    });
   }
   if (
     options.expectedDeploymentId &&
@@ -500,7 +528,11 @@ async function schemaInTransaction(
   const [row] = await tx<{ schema_snapshot: unknown }[]>`
     select schema_snapshot from _hatch.migrations order by id desc limit 1
   `;
-  if (!row) throw new AppError('Data Table schema is not deployed.', 409);
+  if (!row) {
+    throw new AppError('Data Table schema is not deployed.', 409, {
+      code: 'ops.dataTable.schemaNotDeployed',
+    });
+  }
   return parseDataSchemaDescriptor(row.schema_snapshot);
 }
 
@@ -1253,7 +1285,10 @@ async function insertRow(
   for (const key of Object.keys(value)) {
     const field = fieldFromTable(table, key);
     if (!field) {
-      throw new AppError(`Cannot insert system field "${key}".`, 400);
+      throw new AppError(`Cannot insert system field "${key}".`, 400, {
+        code: 'ops.dataTable.insertSystemField',
+        params: { name: key },
+      });
     }
   }
   const completed: Record<string, JsonValue> = { ...value };
@@ -1262,7 +1297,12 @@ async function insertRow(
       const defaulted = defaultValue(field);
       if (defaulted !== undefined) completed[name] = defaulted;
       else if (field.optional) continue;
-      else throw new AppError(`Missing required field "${name}".`, 400);
+      else {
+        throw new AppError(`Missing required field "${name}".`, 400, {
+          code: 'ops.dataTable.missingField',
+          params: { name },
+        });
+      }
     }
     validateFieldValue(field, completed[name]);
   }
@@ -1306,8 +1346,12 @@ async function patchRow(
   const assigned = new Set<string>();
   for (const [name, child] of Object.entries(value)) {
     const field = fieldFromTable(table, name);
-    if (!field)
-      throw new AppError(`Cannot update system field "${name}".`, 400);
+    if (!field) {
+      throw new AppError(`Cannot update system field "${name}".`, 400, {
+        code: 'ops.dataTable.updateSystemField',
+        params: { name },
+      });
+    }
     validateFieldValue(field, child);
     assigned.add(name);
     params.push(parameterValue(field, child));
@@ -1320,12 +1364,21 @@ async function patchRow(
       throw new AppError(
         `Data Table field "${name}" cannot be both updated and unset.`,
         400,
+        { code: 'ops.dataTable.updateAndUnset', params: { name } },
       );
     }
     const field = fieldFromTable(table, name);
-    if (!field) throw new AppError(`Cannot unset system field "${name}".`, 400);
+    if (!field) {
+      throw new AppError(`Cannot unset system field "${name}".`, 400, {
+        code: 'ops.dataTable.unsetSystemField',
+        params: { name },
+      });
+    }
     if (!field.optional) {
-      throw new AppError(`Cannot unset required field "${name}".`, 400);
+      throw new AppError(`Cannot unset required field "${name}".`, 400, {
+        code: 'ops.dataTable.unsetRequiredField',
+        params: { name },
+      });
     }
     assigned.add(name);
     assignments.push(`${qi(name)} = null`);

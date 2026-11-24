@@ -305,7 +305,12 @@ export async function runCronJobNow(
 ): Promise<{ status: number; body: string }> {
   const jobs = await cronJobsFor(appId);
   const job = jobs.find((j) => j.name === jobName);
-  if (!job) throw new Error(`Cron job "${jobName}" not found.`);
+  if (!job) {
+    throw new AppError(`Cron job "${jobName}" not found.`, 404, {
+      code: 'ops.cron.jobNotFound',
+      params: { name: jobName },
+    });
+  }
   const startedAt = Date.now();
   try {
     const res = await invokeCron(appId, job);

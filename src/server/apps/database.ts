@@ -1,6 +1,7 @@
 /** Server-only: registered App Database lifecycle and manual deletion. */
 import { eq } from 'drizzle-orm';
 import { db, schema } from '~/db';
+import { AppError } from '~server/errors';
 import { appDeployLock } from './deploy-lock';
 import { withAppDataCutoverLock } from './data-table/provision';
 import {
@@ -35,24 +36,38 @@ export async function deleteAppDatabase(
         });
         if (!app) throw new Error(`App "${id}" not found.`);
         if (app.status === 'building') {
-          throw new Error(
+          throw new AppError(
             'Cannot delete the app database while a deployment is in progress.',
+            409,
+            { code: 'ops.database.deployInProgress' },
           );
         }
         if (app.capabilities?.database) {
-          throw new Error(
+          throw new AppError(
             'Disable capabilities.database before deleting the app database.',
+            409,
+            { code: 'ops.database.capabilityEnabled' },
           );
         }
         if (!app.dbName) {
-          throw new Error(APP_DATABASE_NOT_PROVISIONED_ERROR);
+          throw new AppError(APP_DATABASE_NOT_PROVISIONED_ERROR, 409, {
+            code: 'ops.database.notProvisioned',
+          });
         }
         if (app.dbName !== expectedDbName) {
-          throw new Error('Database name confirmation does not match.');
+          throw new AppError(
+            'Database name confirmation does not match.',
+            400,
+            {
+              code: 'ops.database.nameMismatch',
+            },
+          );
         }
 
         if (app.name !== expectedAppName) {
-          throw new Error('App name confirmation does not match.');
+          throw new AppError('App name confirmation does not match.', 400, {
+            code: 'ops.appNameMismatch',
+          });
         }
 
         await database.drop();
