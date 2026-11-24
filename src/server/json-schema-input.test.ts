@@ -131,4 +131,45 @@ describe('coerceSchemaQueryInput', () => {
   it('passes through untouched when there is no usable schema', () => {
     expect(coerceSchemaQueryInput(null, { a: '1' })).toEqual({ a: '1' });
   });
+
+  it('bounds a backtracking pattern instead of stalling the process', () => {
+    const schema = {
+      type: 'object',
+      properties: { s: { type: 'string', pattern: '^(a+)+$' } },
+    };
+    const started = Date.now();
+    const result = validateSchemaInput(
+      schema,
+      { s: `${'a'.repeat(40)}b` },
+      { strict: true },
+    );
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result).toMatchObject({
+      success: false,
+      message: expect.stringMatching(
+        /s: Checking the pattern .* took too long/,
+      ),
+    });
+    expect(
+      validateSchemaInput(schema, { s: 'aaa' }, { strict: true }).success,
+    ).toBe(true);
+  });
+
+  it('requires RFC 3339 date-times in strict mode only', () => {
+    const schema = {
+      type: 'object',
+      properties: { at: { type: 'string', format: 'date-time' } },
+    };
+    expect(
+      validateSchemaInput(schema, { at: 'tomorrow' }, { strict: true }),
+    ).toMatchObject({ success: false, message: expect.stringMatching(/at:/) });
+    expect(
+      validateSchemaInput(
+        schema,
+        { at: '2026-11-24T10:00:20.021+08:00' },
+        { strict: true },
+      ).success,
+    ).toBe(true);
+    expect(validateSchemaInput(schema, { at: 'tomorrow' }).success).toBe(true);
+  });
 });

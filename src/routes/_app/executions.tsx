@@ -44,9 +44,9 @@ type ExecutionRow = RunListItem & {
   open: () => void;
 };
 
-/** Live-refresh while any run is still in flight. */
+/** Fast refresh while a run is in flight; slow idle poll picks up new ones. */
 const pollActive = (runs: { status: RunListItem['status'] }[] | undefined) =>
-  (runs ?? []).some((run) => isActiveRun(run.status)) ? 1500 : false;
+  (runs ?? []).some((run) => isActiveRun(run.status)) ? 1500 : 15_000;
 
 function ExecutionsPage() {
   const initial = Route.useLoaderData();

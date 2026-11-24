@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { isActiveRun } from '~lib/runs';
 import {
   getAppTaskRunFn,
@@ -35,6 +35,33 @@ export const appTaskRunsQueryOptions = (
     refetchInterval: (q) =>
       pollWhile(
         (q.state.data?.runs ?? []).some((run) => isActiveRun(run.status)),
+      ),
+  });
+
+/**
+ * Cursor-paged run history. Each request asks for `pageSize` rows (at most
+ * 200, the server cap); further pages follow the server's `nextCursor`.
+ */
+export const appTaskRunsInfiniteQueryOptions = (
+  appId: string,
+  task: string | undefined,
+  pageSize: number,
+) =>
+  infiniteQueryOptions({
+    // Shares the ['app-task-runs', appId] prefix with the options above so
+    // one invalidation covers both.
+    queryKey: ['app-task-runs', appId, task ?? null, 'pages', pageSize],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      listAppTaskRunsFn({
+        data: { id: appId, task, limit: pageSize, cursor: pageParam },
+      }),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    refetchInterval: (q) =>
+      pollWhile(
+        (q.state.data?.pages ?? []).some((page) =>
+          page.runs.some((run) => isActiveRun(run.status)),
+        ),
       ),
   });
 

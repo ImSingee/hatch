@@ -53,12 +53,15 @@ function effectiveSchema(schema: JsonSchema): JsonSchema {
   const union = schema.anyOf ?? schema.oneOf;
   if (!Array.isArray(union) || union.length === 0) return schema;
   const member = union.find((m) => m && m.type !== 'null') ?? union[0] ?? {};
+  const declared = 'default' in schema ? schema : member;
   return {
     ...member,
+    // Only carry `default` when the parent or member declares one; an
+    // explicit `default: undefined` would defeat initialValues' fallbacks.
+    ...('default' in declared ? { default: declared.default } : {}),
     title: schema.title ?? member.title,
     description: schema.description ?? member.description,
     enum: schema.enum ?? member.enum,
-    default: 'default' in schema ? schema.default : member.default,
     'x-hatch-placeholder':
       schema['x-hatch-placeholder'] ?? member['x-hatch-placeholder'],
     'x-hatch-multiline':
@@ -155,6 +158,9 @@ export function SchemaRunForm({
   // Raw JSON editor used when the schema isn't a simple flat object.
   const [rawJson, setRawJson] = useState('{}');
   const [error, setError] = useState<string | null>(null);
+  // Fields the user has edited; an explicitly cleared string is submitted
+  // as '' while untouched optional fields stay omitted.
+  const [edited, setEdited] = useState<ReadonlySet<string>>(new Set());
 
   // Reset the form when the target (or its input schema) changes without a
   // remount — e.g. navigating between two run pages, or a redeploy that
@@ -167,10 +173,13 @@ export function SchemaRunForm({
     setValues(fields ? initialValues(fields) : {});
     setRawJson('{}');
     setError(null);
+    setEdited(new Set());
   }
 
-  const setValue = (key: string, value: unknown) =>
+  const setValue = (key: string, value: unknown) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+    setEdited((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  };
 
   const submit = () => {
     setError(null);
@@ -206,8 +215,11 @@ export function SchemaRunForm({
           }
           continue;
         }
-        // Skip empty optional fields so schema defaults apply.
-        if ((v === '' || v === undefined) && !f.required) continue;
+        // Skip untouched empty optional fields so schema defaults apply; an
+        // optional string the user cleared is sent as '' on purpose.
+        if ((v === '' || v === undefined) && !f.required) {
+          if (!(f.kind === 'string' && v === '' && edited.has(f.key))) continue;
+        }
         if (f.kind === 'enum') {
           // The Select stores the stringified option label; map it back to the
           // original enum value so non-string enums (e.g. [1, 2]) keep their

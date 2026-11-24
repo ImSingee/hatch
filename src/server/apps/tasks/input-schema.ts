@@ -273,8 +273,20 @@ function applyOptions(
         `${path}: min and max apply only to numeric fields.`,
       );
     }
-    if (options.min !== undefined) out.minimum = options.min;
-    if (options.max !== undefined) out.maximum = options.max;
+    // Intersect with the protobuf type's own range (e.g. uint32 >= 0): an
+    // option may narrow it, never widen it.
+    if (options.min !== undefined) {
+      out.minimum =
+        typeof schema.minimum === 'number'
+          ? Math.max(schema.minimum, options.min)
+          : options.min;
+    }
+    if (options.max !== undefined) {
+      out.maximum =
+        typeof schema.maximum === 'number'
+          ? Math.min(schema.maximum, options.max)
+          : options.max;
+    }
   }
   if (
     options.minLength !== undefined ||
@@ -319,7 +331,8 @@ function applyOptions(
         `${path}: default ${options.default} does not fit the field (${check.message.replace(/^value: /, '')}).`,
       );
     }
-    out.default = value;
+    // The parsed value: a message default gets its nested defaults filled.
+    out.default = (check.data as { value: unknown }).value;
   }
   return out;
 }

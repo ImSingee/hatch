@@ -8,6 +8,8 @@
  * only decides where the events are stored.
  */
 
+import { StringDecoder } from 'node:string_decoder';
+
 export const RUN_EVENT_SENTINEL = '[[hatch]]';
 /** Completed log lines kept per run (tail). */
 export const MAX_RUN_LOG = 100_000;
@@ -54,7 +56,28 @@ export type RunEndEvent = {
 export type RunEvent = StepStartEvent | StepEndEvent | RunEndEvent;
 
 /** Why a stream asked for its process to be killed, if it did. */
-export type RunStreamOverflow = 'steps' | 'line' | null;
+export type RunStreamOverflow = 'steps' | 'line' | 'backlog' | null;
+
+/**
+ * Cap on step-event bytes waiting to be persisted. Events are written one at
+ * a time; a process that emits them faster than the database accepts them
+ * would otherwise grow this queue without bound.
+ */
+export const MAX_RUN_EVENT_BACKLOG = 16 * 1024 * 1024;
+
+/** The run error for a stream overflow; `subject` names the run kind. */
+export function runOverflowError(
+  overflow: Exclude<RunStreamOverflow, null>,
+  subject: string,
+): string {
+  if (overflow === 'steps') {
+    return `${subject} exceeded ${MAX_RUN_STEP_EVENTS} step events`;
+  }
+  if (overflow === 'line') {
+    return `${subject} produced too much output on a single line`;
+  }
+  return `${subject} reported steps faster than they could be recorded`;
+}
 
 export type RunEventStreamOptions = {
   /** Persist one event. Calls are serialized in stdout order. */
@@ -108,11 +131,17 @@ function parseEvent(payload: string): RunEvent | 'ignored' | null {
  * Line splitter, log accumulator and serialized event sink for one run.
  * Feed it the child's output, then `await finish()` once the child closed
  * stdout so every event is persisted before the run's terminal status.
+ *
+ * Plain lines go to the log as they arrive; only step events wait for the
+ * (serialized) `onEvent`, and their backlog is bounded.
  */
 export class RunEventStream {
   private log = '';
   private pending = '';
+  private readonly stdoutDecoder = new StringDecoder('utf8');
+  private readonly stderrDecoder = new StringDecoder('utf8');
   private chain: Promise<void> = Promise.resolve();
+  private backlog = 0;
   private stepEvents = 0;
   private overflowReason: RunStreamOverflow = null;
   private ended: RunEndEvent | null = null;
@@ -141,10 +170,12 @@ export class RunEventStream {
   /** Feed a chunk of stdout. */
   stdout(chunk: Buffer | string): void {
     if (this.overflowReason === 'line') return;
-    this.pending += chunk.toString();
+    // The decoder keeps a multibyte character split across chunks whole.
+    this.pending +=
+      typeof chunk === 'string' ? chunk : this.stdoutDecoder.write(chunk);
     const parts = this.pending.split('\n');
     this.pending = parts.pop() ?? '';
-    for (const part of parts) this.enqueue(part);
+    for (const part of parts) this.accept(part);
     // Only the trailing, still-unterminated record remains in the buffer. If
     // it alone exceeds the cap the process streams one unbounded line.
     if (this.pending.length > MAX_RUN_STDOUT_BUFFER) {
@@ -155,7 +186,9 @@ export class RunEventStream {
 
   /** Feed a chunk of stderr (always plain log output). */
   stderr(chunk: Buffer | string): void {
-    this.appendLog(chunk.toString());
+    this.appendLog(
+      typeof chunk === 'string' ? chunk : this.stderrDecoder.write(chunk),
+    );
   }
 
   /**
@@ -163,10 +196,12 @@ export class RunEventStream {
    * handed to `onEvent`. Rejects with the first persistence error.
    */
   async finish(): Promise<void> {
-    if (this.pending) {
-      this.enqueue(this.pending);
-      this.pending = '';
+    this.appendLog(this.stderrDecoder.end());
+    if (this.overflowReason !== 'line') {
+      this.pending += this.stdoutDecoder.end();
+      if (this.pending) this.accept(this.pending);
     }
+    this.pending = '';
     await this.chain;
     if (this.failure) throw this.failure;
   }
@@ -177,18 +212,8 @@ export class RunEventStream {
     this.options.onOverflow();
   }
 
-  private enqueue(line: string): void {
-    this.chain = this.chain.then(async () => {
-      if (this.failure) return;
-      try {
-        await this.handle(line);
-      } catch (error) {
-        this.failure = error;
-      }
-    });
-  }
-
-  private async handle(line: string): Promise<void> {
+  /** Handle one complete stdout line. */
+  private accept(line: string): void {
     if (!line.startsWith(RUN_EVENT_SENTINEL)) {
       if (line.length > 0) this.appendLog(`${line}\n`);
       return;
@@ -203,7 +228,7 @@ export class RunEventStream {
       this.ended = event;
       return;
     }
-    if (this.overflowReason === 'steps') return;
+    if (this.overflowReason) return;
     this.stepEvents += 1;
     if (this.stepEvents > MAX_RUN_STEP_EVENTS) {
       // A step loop this hot is a bug (or abuse); every further event would
@@ -211,6 +236,20 @@ export class RunEventStream {
       this.trip('steps');
       return;
     }
-    await this.options.onEvent(event);
+    const size = line.length;
+    if (this.backlog + size > MAX_RUN_EVENT_BACKLOG) {
+      this.trip('backlog');
+      return;
+    }
+    this.backlog += size;
+    this.chain = this.chain.then(async () => {
+      try {
+        if (!this.failure) await this.options.onEvent(event);
+      } catch (error) {
+        this.failure = error;
+      } finally {
+        this.backlog -= size;
+      }
+    });
   }
 }

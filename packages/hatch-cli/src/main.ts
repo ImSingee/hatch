@@ -6,7 +6,7 @@ import { runLifecycle } from './lifecycle';
 import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
-import { runTask } from './task';
+import { parseTaskCommand, runTask } from './task';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { parsePreferencesCommand, runPreferences } from './preferences';
@@ -64,6 +64,9 @@ try {
   // offline.
   // Reject bad arguments before a Run credential refresh can mask them.
   if (!help && name === 'preferences') parsePreferencesCommand(args, offset);
+  // Reject malformed task arguments locally, before any network request.
+  if (!help && name === 'app' && args[offset + 1] === 'task')
+    parseTaskCommand(args, offset);
   if (!help && !['version', '--version'].includes(name))
     await refreshRunEnvironment(process.env, controller.signal);
   if (help) {

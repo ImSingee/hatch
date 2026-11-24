@@ -127,6 +127,17 @@ message Req {
     expect(rejected.success).toBe(false);
   });
 
+  it('stores a message default with its nested defaults filled', () => {
+    const registry = compile(`
+message Inner { int32 limit = 1 [(hatch.app.v1.field) = { default: "20" }]; }
+message Req { Inner inner = 1 [(hatch.app.v1.field) = { default: "{}" }]; }
+`);
+    const schema = taskInputSchema(registry, 'app.v1.Req') as {
+      properties: { inner: { default: unknown } };
+    };
+    expect(schema.properties.inner.default).toEqual({ limit: 20 });
+  });
+
   it.each([
     ['a map', 'message Req { map<string, string> tags = 1; }', /map/],
     [
@@ -144,6 +155,11 @@ message Req {
       'a default of the wrong type',
       'message Req { int32 n = 1 [(hatch.app.v1.field) = { default: "\\"x\\"" }]; }',
       /default "x" does not fit/,
+    ],
+    [
+      'a default outside the protobuf type range',
+      'message Req { uint32 n = 1 [(hatch.app.v1.field) = { min: -1, default: "-1" }]; }',
+      /default -1 does not fit/,
     ],
     [
       'bounds on a string',

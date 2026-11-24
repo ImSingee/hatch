@@ -24,7 +24,7 @@ import { buildWorkflowDenoArgs } from './runtime-permissions';
 import { workflowSandboxEnv } from './sandbox-env';
 import { validateSchemaInput } from '../json-schema-input';
 import {
-  MAX_RUN_STEP_EVENTS,
+  runOverflowError,
   RunEventStream,
   type StepEndEvent,
   type StepStartEvent,
@@ -370,13 +370,11 @@ async function executeRun(
   const error = succeeded
     ? null
     : (runEnd?.error ??
-      (stream.overflow === 'steps'
-        ? `Workflow exceeded ${MAX_RUN_STEP_EVENTS} step events`
-        : stream.overflow === 'line'
-          ? 'Workflow produced too much output on a single line'
-          : timedOut
-            ? 'Run timed out'
-            : 'Workflow exited before completing (see log).'));
+      (stream.overflow
+        ? runOverflowError(stream.overflow, 'Workflow')
+        : timedOut
+          ? 'Run timed out'
+          : 'Workflow exited before completing (see log).'));
   if (!succeeded) {
     await failRunningSteps(runId, error ?? 'Run failed');
   }

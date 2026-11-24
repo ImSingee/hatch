@@ -276,6 +276,9 @@ describe('App task runs', () => {
       canceled: true,
       status: 'canceled',
     });
+    // The running instance is told to stop, not just relabeled.
+    expect(launches[0].options.signal?.aborted).toBe(true);
+    await until(() => launches[0].done);
     await sleep(30);
     expect(await statusOf(running.runId)).toBe('canceled');
     expect(launches).toHaveLength(1);
@@ -347,16 +350,16 @@ describe('App task runs', () => {
       trigger: 'manual',
       input: { repo: 'a/1' },
     });
-    const fits = await startTaskRun(APP, 'digest', {
+    const defaults = await startTaskRun(APP, 'digest', {
       trigger: 'manual',
-      input: { repo: 'a/2', limit: 3 },
+      input: { repo: 'a/2' },
     });
     const stale = await startTaskRun(APP, 'digest', {
       trigger: 'manual',
-      input: { repo: 'a/3' },
+      input: { repo: 'a/3', limit: 9 },
     });
     await until(() => launches.length === 1);
-    // A deploy while both wait: a new default and a tighter limit.
+    // A deploy while both wait: a new field and default, a tighter limit.
     const properties = digest.inputSchema.properties;
     await db.update(schema.deployments).set({
       manifestNormalized: {
@@ -370,7 +373,7 @@ describe('App task runs', () => {
                 ...digest.inputSchema,
                 properties: {
                   ...properties,
-                  limit: { ...properties.limit, maximum: 5 },
+                  limit: { type: 'integer', default: 5, maximum: 5 },
                   mode: { type: 'string', default: 'fast' },
                 },
               },
@@ -383,24 +386,86 @@ describe('App task runs', () => {
       response: { status: 200, body: '{}', truncated: false },
     });
     await until(() => launches.length === 2);
+    // The executing deployment's defaults, not those of the one that queued.
     expect(JSON.parse(launches[1].options.request.body)).toEqual({
       repo: 'a/2',
-      limit: 3,
+      limit: 5,
       mode: 'fast',
     });
-    expect((await getTaskRun(APP, fits.runId))?.input).toMatchObject({
-      mode: 'fast',
+    // The run keeps the input as it was sent.
+    expect((await getTaskRun(APP, defaults.runId))?.input).toEqual({
+      repo: 'a/2',
     });
     launches[1].finish({
       response: { status: 200, body: '{}', truncated: false },
     });
-    // Its stored limit (the old default, 20) breaks the new maximum.
     await until(async () => (await statusOf(stale.runId)) === 'failed');
     expect((await getTaskRun(APP, stale.runId))?.error).toMatch(
       /Input validation failed for version 3: limit/,
     );
     expect(launches).toHaveLength(2);
     expect(await statusOf(first.runId)).toBe('succeeded');
+  });
+
+  it('keeps queued runs and retries dispatch after a transient database error', async () => {
+    const realFindFirst = db.query.apps.findFirst.bind(db.query.apps);
+    let calls = 0;
+    const spy = vi.spyOn(db.query.apps, 'findFirst').mockImplementation(((
+      ...args: Parameters<typeof realFindFirst>
+    ) => {
+      calls += 1;
+      // The first call admits the run; the dispatch pass's lookup fails.
+      if (calls === 2) return Promise.reject(new Error('connection reset'));
+      return realFindFirst(...args);
+    }) as never);
+    try {
+      const { runId } = await startTaskRun(APP, 'digest', {
+        trigger: 'manual',
+        input: { repo: 'a/b' },
+      });
+      await sleep(50);
+      expect(await statusOf(runId)).toBe('queued');
+      expect(launches).toHaveLength(0);
+      // The retry (after one second) starts it.
+      await until(() => launches.length === 1);
+      expect(await statusOf(runId)).toBe('running');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('admits at most the queue limit under concurrent triggers', async () => {
+    await seed({ concurrency: 1, definitions: [digest] });
+    // One running run fills the only slot, so dispatch leaves the queue be.
+    await startTaskRun(APP, 'digest', {
+      trigger: 'manual',
+      input: { repo: 'a/0' },
+    });
+    await until(() => launches.length === 1);
+    await db.insert(schema.appTaskRuns).values(
+      Array.from({ length: 99 }, (_, i) => ({
+        id: `queued-${String(i).padStart(3, '0')}`,
+        appId: APP,
+        taskName: 'digest',
+        trigger: 'manual' as const,
+        status: 'queued' as const,
+        input: { repo: 'a/b' },
+      })),
+    );
+    const results = await Promise.allSettled([
+      startTaskRun(APP, 'digest', {
+        trigger: 'manual',
+        input: { repo: 'a/1' },
+      }),
+      startTaskRun(APP, 'digest', {
+        trigger: 'manual',
+        input: { repo: 'a/2' },
+      }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
   });
 
   it('queues a run again when a deploy superseded its deployment before it started', async () => {
@@ -479,7 +544,7 @@ describe('App task runs', () => {
     }
   });
 
-  it('fails runs a previous process left running', async () => {
+  it('fails runs a previous process left running, with their steps', async () => {
     await db.insert(schema.appTaskRuns).values({
       id: 'stale-run',
       appId: APP,
@@ -487,9 +552,19 @@ describe('App task runs', () => {
       trigger: 'cron',
       status: 'running',
     });
+    await db.insert(schema.appTaskRunSteps).values({
+      runId: 'stale-run',
+      seq: 0,
+      name: 'collect',
+      status: 'running',
+      attempt: 1,
+    });
     await recoverTaskRuns();
     const run = await getTaskRun(APP, 'stale-run');
     expect(run?.status).toBe('failed');
     expect(run?.error).toMatch(/platform restarted/);
+    expect(run?.steps).toMatchObject([
+      { status: 'failed', error: 'Platform restarted' },
+    ]);
   });
 });

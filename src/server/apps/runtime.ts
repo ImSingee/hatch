@@ -560,6 +560,7 @@ type RuntimeGlobal = typeof globalThis & {
   __hatchAppInstances__?: Map<string, Set<BackendInstance>>;
   __hatchAppStarting__?: Map<string, StartingBackend>;
   __hatchAppStopEpoch__?: Map<string, number>;
+  __hatchAppKillEpoch__?: Map<string, number>;
   __hatchAppKeepAlive__?: Set<string>;
   __hatchAppRestarts__?: Map<string, number>;
   __hatchAppCleanup__?: boolean;
@@ -759,6 +760,20 @@ function bumpStopEpoch(id: string): void {
   const g = globalThis as RuntimeGlobal;
   g.__hatchAppStopEpoch__ ??= new Map<string, number>();
   g.__hatchAppStopEpoch__.set(id, (g.__hatchAppStopEpoch__.get(id) ?? 0) + 1);
+}
+
+/**
+ * Per-app counter bumped only by a force stop ({@link killApp}), so a task run
+ * can tell "stopped for good" from a graceful stop or deploy it may survive.
+ */
+function killEpoch(id: string): number {
+  return (globalThis as RuntimeGlobal).__hatchAppKillEpoch__?.get(id) ?? 0;
+}
+
+function bumpKillEpoch(id: string): void {
+  const g = globalThis as RuntimeGlobal;
+  g.__hatchAppKillEpoch__ ??= new Map<string, number>();
+  g.__hatchAppKillEpoch__.set(id, killEpoch(id) + 1);
 }
 
 function keepAliveSet(): Set<string> {
@@ -1612,12 +1627,22 @@ export async function runInDedicatedInstance(
   options: DedicatedRunOptions,
 ): Promise<DedicatedRunResult> {
   let lastDeploymentId: string | null = null;
+  // A force stop, archive or delete ends the run for good: every retry below
+  // passes through this check, so a killed boot is never replaced.
+  const killMark = killEpoch(id);
   for (let attempt = 1; ; attempt += 1) {
     if (options.signal?.aborted) {
       return {
         deploymentId: lastDeploymentId,
         response: null,
         error: 'aborted',
+      };
+    }
+    if (killEpoch(id) !== killMark) {
+      return {
+        deploymentId: lastDeploymentId,
+        response: null,
+        error: 'the App was force-stopped before the run started',
       };
     }
     let spawned: SpawnedBackend;
@@ -1651,6 +1676,21 @@ export async function runInDedicatedInstance(
     }
     lastDeploymentId = spawned.deploymentId;
     const { proc, port } = spawned;
+    // A stop that landed after the spawn's own epoch check would miss this
+    // still-unregistered process: kill it and decide again above.
+    if (stopEpoch(id) !== spawned.epoch) {
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        /* best-effort */
+      }
+      if (attempt < MAX_RUN_BOOT_ATTEMPTS) continue;
+      return {
+        deploymentId: lastDeploymentId,
+        response: null,
+        error: 'the App was stopped or redeployed before the run started',
+      };
+    }
     const instance: BackendInstance = {
       appId: id,
       role: 'run',
@@ -1686,6 +1726,8 @@ export async function runInDedicatedInstance(
     });
     const onAbort = () => kill();
     options.signal?.addEventListener('abort', onAbort, { once: true });
+    // An abort while the process was spawning fired before the listener.
+    if (options.signal?.aborted) onAbort();
 
     try {
       try {
@@ -1911,6 +1953,7 @@ function invalidateLocalBackend(
   },
 ): void {
   if (!opts.preserveKeepAlive) keepAliveSet().delete(id);
+  if (opts.kill) bumpKillEpoch(id);
   const keep = opts.kill ? undefined : opts.keepDeploymentId;
   // Invalidate any in-flight cold start so a subsequent ensureAppRunning() (e.g.
   // the long-running warm start right after a deploy/rollback) boots the current

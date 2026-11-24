@@ -1,17 +1,15 @@
-import { Anchor, Button, Center, Text } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { Alert, Anchor, Button, Center, Text } from '@mantine/core';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
 import { RunTable } from '~components/runs/run-table';
-import { appTaskRunsQueryOptions } from '~queries/app-tasks';
+import { appTaskRunsInfiniteQueryOptions } from '~queries/app-tasks';
 
 const PAGE = 50;
-const MAX_ROWS = 200;
 
 /**
  * Run history of an App's tasks, newest first. With `limit` it shows only
  * the latest runs and links to the full list; otherwise it grows a page at
- * a time.
+ * a time by following the server's cursor.
  */
 export function TaskRunList({
   appId,
@@ -28,10 +26,11 @@ export function TaskRunList({
   showTask?: boolean;
 }) {
   const navigate = useNavigate();
-  const [rows, setRows] = useState(limit ?? PAGE);
-  const query = useQuery(appTaskRunsQueryOptions(appId, task, rows));
-  const runs = query.data?.runs ?? [];
-  const more = Boolean(query.data?.nextCursor);
+  const query = useInfiniteQuery(
+    appTaskRunsInfiniteQueryOptions(appId, task, limit ?? PAGE),
+  );
+  const runs = query.data?.pages.flatMap((page) => page.runs) ?? [];
+  const failed = query.isError && !query.data;
   const open = (runId: string) =>
     navigate({
       to: '/app/$appSlug/tasks/runs/$runId',
@@ -43,9 +42,11 @@ export function TaskRunList({
       runs={runs}
       loading={query.isLoading}
       emptyText={
-        task
-          ? 'No runs of this task yet. Run it to see its history here.'
-          : 'No task runs yet. Run a task to see its history here.'
+        failed
+          ? 'Could not load run history.'
+          : task
+            ? 'No runs of this task yet. Run it to see its history here.'
+            : 'No task runs yet. Run a task to see its history here.'
       }
       leadColumns={
         showTask
@@ -80,14 +81,31 @@ export function TaskRunList({
         ) : undefined
       }
       footer={
-        !limit && more && rows < MAX_ROWS ? (
+        failed ? (
+          <Alert color="red" variant="light" mt="sm" py="xs">
+            <Center>
+              <Text size="sm" mr="sm">
+                Could not load run history.
+              </Text>
+              <Button
+                type="button"
+                variant="default"
+                size="xs"
+                loading={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                Retry
+              </Button>
+            </Center>
+          </Alert>
+        ) : !limit && query.hasNextPage ? (
           <Center mt="sm">
             <Button
               type="button"
               variant="default"
               size="xs"
-              loading={query.isFetching}
-              onClick={() => setRows((n) => Math.min(n + PAGE, MAX_ROWS))}
+              loading={query.isFetchingNextPage}
+              onClick={() => void query.fetchNextPage()}
             >
               Show more
             </Button>

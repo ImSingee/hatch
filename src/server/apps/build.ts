@@ -758,6 +758,18 @@ export async function buildApp(
       dataSchema = await describeDataSchema(src, toolchain);
     }
 
+    // Task inputs come from the compiled proto: resolve (and validate) them
+    // with the other source checks, before the output is replaced.
+    let tasks: NormalizedManifest['tasks'];
+    {
+      const preview = normalizeManifest(manifest);
+      if (preview.tasks) {
+        if (api) preview.api = api;
+        resolveTaskInputs(preview, descriptors);
+        tasks = preview.tasks;
+      }
+    }
+
     // Only start replacing the requested output after every source validation
     // step has passed. Deploy builds use a fresh path, while direct callers do
     // not lose a prior output merely because new source fails validation.
@@ -912,8 +924,8 @@ export async function buildApp(
       };
     }
     if (api) normalized.api = api;
-    if (normalized.tasks) {
-      resolveTaskInputs(normalized, descriptors);
+    if (tasks) {
+      normalized.tasks = tasks;
       logs.push(
         `captured ${normalized.tasks.definitions.length} task input schema(s)`,
       );

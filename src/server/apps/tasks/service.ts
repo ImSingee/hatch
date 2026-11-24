@@ -24,7 +24,7 @@ import { AppError } from '~server/errors';
 import { runDurationMs, type RunDetailView } from '~lib/runs';
 import { validateSchemaInput } from '../../json-schema-input';
 import {
-  MAX_RUN_STEP_EVENTS,
+  runOverflowError,
   RunEventStream,
   type StepEndEvent,
   type StepStartEvent,
@@ -47,6 +47,16 @@ import { type DedicatedRunHandle, runInDedicatedInstance } from '../runtime';
 export const TASK_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Queued runs one App may hold before new ones are refused. */
 export const TASK_QUEUE_LIMIT = 100;
+
+// Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
+// Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
+// (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts),
+// 7 (platform-config.ts).
+const APP_TASK_QUEUE_LOCK_NS = 8;
+
+/** Retries of a dispatch pass that failed (e.g. the database was down). */
+const DISPATCH_RETRY_LIMIT = 6;
+const DISPATCH_RETRY_BASE_MS = 1000;
 /** Output bytes kept from a method's response. */
 const MAX_TASK_OUTPUT_BYTES = 1024 * 1024;
 
@@ -194,20 +204,29 @@ export async function startTaskRun(
     });
     return { runId: base.id, status: 'failed' };
   }
-  const [{ queued }] = await db
-    .select({ queued: sql<number>`count(*)::int` })
-    .from(schema.appTaskRuns)
-    .where(
-      and(
-        eq(schema.appTaskRuns.appId, appId),
-        eq(schema.appTaskRuns.status, 'queued'),
-      ),
+  // Count and insert under a per-App lock so concurrent triggers cannot both
+  // take the last queue slot.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${APP_TASK_QUEUE_LOCK_NS}, hashtext(${appId}))`,
     );
-  if (queued >= TASK_QUEUE_LIMIT) throw new TaskQueueFullError(taskName);
-  await db.insert(schema.appTaskRuns).values({
-    ...base,
-    status: 'queued',
-    input: validation.data as JsonValue,
+    const [{ queued }] = await tx
+      .select({ queued: sql<number>`count(*)::int` })
+      .from(schema.appTaskRuns)
+      .where(
+        and(
+          eq(schema.appTaskRuns.appId, appId),
+          eq(schema.appTaskRuns.status, 'queued'),
+        ),
+      );
+    if (queued >= TASK_QUEUE_LIMIT) throw new TaskQueueFullError(taskName);
+    // The caller's input, as sent: defaults come from the deployment that
+    // executes the run and are applied when it starts.
+    await tx.insert(schema.appTaskRuns).values({
+      ...base,
+      status: 'queued',
+      input: rawInput as JsonValue,
+    });
   });
   dispatch(appId);
   return { runId: base.id, status: 'queued' };
@@ -223,7 +242,7 @@ type ActiveRun = {
 
 type TaskGlobal = typeof globalThis & {
   __hatchTaskRuns__?: Map<string, Map<string, ActiveRun>>;
-  __hatchTaskDispatch__?: Map<string, { running: boolean; again: boolean }>;
+  __hatchTaskDispatch__?: Map<string, DispatchState>;
 };
 
 /** Runs this platform process is executing, per App. */
@@ -238,12 +257,20 @@ function activeRuns(appId: string): Map<string, ActiveRun> {
   return runs;
 }
 
-function dispatchState(appId: string): { running: boolean; again: boolean } {
+type DispatchState = {
+  running: boolean;
+  again: boolean;
+  /** Consecutive failed passes; drives the retry backoff. */
+  failures: number;
+  retry: NodeJS.Timeout | null;
+};
+
+function dispatchState(appId: string): DispatchState {
   const g = globalThis as TaskGlobal;
   g.__hatchTaskDispatch__ ??= new Map();
   let state = g.__hatchTaskDispatch__.get(appId);
   if (!state) {
-    state = { running: false, again: false };
+    state = { running: false, again: false, failures: 0, retry: null };
     g.__hatchTaskDispatch__.set(appId, state);
   }
   return state;
@@ -265,12 +292,26 @@ export function dispatch(appId: string): void {
     try {
       do {
         state.again = false;
-        await dispatchPass(appId).catch((error) => {
+        try {
+          await dispatchPass(appId);
+          state.failures = 0;
+        } catch (error) {
           console.error(
             `[tasks] dispatch for App "${appId}" failed:`,
             error instanceof Error ? error.message : error,
           );
-        });
+          // Nothing else may wake this App (no run is active to finish), so
+          // try again with backoff instead of leaving accepted runs queued.
+          if (state.failures < DISPATCH_RETRY_LIMIT && !state.retry) {
+            const delay = DISPATCH_RETRY_BASE_MS * 2 ** state.failures;
+            state.failures += 1;
+            state.retry = setTimeout(() => {
+              state.retry = null;
+              dispatch(appId);
+            }, delay);
+            state.retry.unref();
+          }
+        }
       } while (state.again);
     } finally {
       state.running = false;
@@ -278,13 +319,13 @@ export function dispatch(appId: string): void {
   })();
 }
 
-async function failQueuedRuns(appId: string, error: string): Promise<void> {
+async function failQueuedRuns(runIds: string[], error: string): Promise<void> {
   await db
     .update(schema.appTaskRuns)
     .set({ status: 'failed', error, finishedAt: new Date() })
     .where(
       and(
-        eq(schema.appTaskRuns.appId, appId),
+        inArray(schema.appTaskRuns.id, runIds),
         eq(schema.appTaskRuns.status, 'queued'),
       ),
     );
@@ -302,11 +343,13 @@ async function dispatchPass(appId: string): Promise<void> {
   try {
     context = await activeTaskContext(appId);
   } catch (error) {
+    // Infrastructure errors leave the queue alone; the pass is retried.
+    if (!(error instanceof AppError)) throw error;
     // The App can no longer run tasks (archived, tasks removed, unsupported
-    // deployment): nothing queued will ever start, so say why now.
+    // deployment): the runs seen here will never start, so say why now.
     await failQueuedRuns(
-      appId,
-      error instanceof Error ? error.message : String(error),
+      queued.map((run) => run.id),
+      error.message,
     );
     return;
   }
@@ -371,11 +414,7 @@ async function dispatchPass(appId: string): Promise<void> {
     running.set(run.id, active);
     const claimed = await db
       .update(schema.appTaskRuns)
-      .set({
-        status: 'running',
-        startedAt: new Date(),
-        input: validation.data as JsonValue,
-      })
+      .set({ status: 'running', startedAt: new Date() })
       .where(
         and(
           eq(schema.appTaskRuns.id, run.id),
@@ -640,7 +679,14 @@ async function executeRun(
                 version: row?.version ?? null,
               })
               .where(eq(schema.appTaskRuns.id, runId)),
-          );
+          )
+          .catch((error: unknown) => {
+            // Version metadata only; the run itself goes on.
+            console.error(
+              `[tasks] recording the deployment of run ${runId} failed:`,
+              error instanceof Error ? error.message : error,
+            );
+          });
       },
       signal: active.abort.signal,
     });
@@ -649,8 +695,19 @@ async function executeRun(
   }
   // Steps arrive on stdout and the result over HTTP; the instance has exited
   // and closed stdout, so persist every step before the terminal status.
-  await stream.finish();
-  await recorded.catch(() => {});
+  await recorded;
+  try {
+    await stream.finish();
+  } catch (error) {
+    // A step write failed: fail the run but keep what it logged.
+    await finalizeRun(runId, {
+      status: 'failed',
+      output: null,
+      error: `Recording the run's steps failed: ${error instanceof Error ? error.message : String(error)}`,
+      log: stream.text || null,
+    });
+    return;
+  }
   const log = stream.text || null;
 
   if (result.superseded) {
@@ -678,10 +735,7 @@ async function executeRun(
     await finalizeRun(runId, {
       status: 'failed',
       output: null,
-      error:
-        stream.overflow === 'steps'
-          ? `Task exceeded ${MAX_RUN_STEP_EVENTS} step events`
-          : 'Task produced too much output on a single line',
+      error: runOverflowError(stream.overflow, 'Task'),
       log,
     });
     return;
@@ -727,7 +781,15 @@ export async function cancelTaskRun(
       ),
     )
     .returning({ id: schema.appTaskRuns.id });
-  if (canceled.length === 0) return { canceled: false, status: run.status };
+  if (canceled.length === 0) {
+    // The run ended between the read and the update: report how it ended.
+    const current = await db.query.appTaskRuns.findFirst({
+      where: { id: runId, appId },
+      columns: { status: true },
+    });
+    if (!current) throw new AppError(`Task run "${runId}" not found.`, 404);
+    return { canceled: false, status: current.status };
+  }
   activeRuns(appId).get(runId)?.abort.abort();
   return { canceled: true, status: 'canceled' };
 }
@@ -737,18 +799,36 @@ export async function cancelTaskRun(
  * more, so fail them; queued runs never started and are dispatched again.
  */
 export async function recoverTaskRuns(): Promise<void> {
-  const stale = await db
-    .update(schema.appTaskRuns)
-    .set({
-      status: 'failed',
-      error: 'Task run was interrupted because the platform restarted.',
-      finishedAt: new Date(),
-    })
-    .where(eq(schema.appTaskRuns.status, 'running'))
-    .returning({ id: schema.appTaskRuns.id });
-  for (const run of stale) {
-    await failRunningSteps(run.id, 'Platform restarted');
-  }
+  // One transaction: a failed attempt leaves every interrupted run (and its
+  // steps) `running`, so the next boot finds and recovers them again.
+  await db.transaction(async (tx) => {
+    const stale = await tx
+      .update(schema.appTaskRuns)
+      .set({
+        status: 'failed',
+        error: 'Task run was interrupted because the platform restarted.',
+        finishedAt: new Date(),
+      })
+      .where(eq(schema.appTaskRuns.status, 'running'))
+      .returning({ id: schema.appTaskRuns.id });
+    if (stale.length === 0) return;
+    await tx
+      .update(schema.appTaskRunSteps)
+      .set({
+        status: 'failed',
+        error: 'Platform restarted',
+        finishedAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(
+            schema.appTaskRunSteps.runId,
+            stale.map((run) => run.id),
+          ),
+          eq(schema.appTaskRunSteps.status, 'running'),
+        ),
+      );
+  });
   const apps = await db
     .selectDistinct({ appId: schema.appTaskRuns.appId })
     .from(schema.appTaskRuns)
@@ -784,7 +864,27 @@ export type AppTaskRunDetail = RunDetailView & {
   queuePosition: number | null;
 };
 
-type RunRow = typeof schema.appTaskRuns.$inferSelect;
+/** The columns a run list needs; never the (large) input, output or log. */
+// A function, not a module constant: importing this module must not touch
+// the schema (tests mock `~/db` without it).
+const summaryColumns = () => ({
+  id: schema.appTaskRuns.id,
+  appId: schema.appTaskRuns.appId,
+  taskName: schema.appTaskRuns.taskName,
+  trigger: schema.appTaskRuns.trigger,
+  cronName: schema.appTaskRuns.cronName,
+  status: schema.appTaskRuns.status,
+  version: schema.appTaskRuns.version,
+  error: schema.appTaskRuns.error,
+  createdAt: schema.appTaskRuns.createdAt,
+  startedAt: schema.appTaskRuns.startedAt,
+  finishedAt: schema.appTaskRuns.finishedAt,
+});
+
+type RunRow = Pick<
+  typeof schema.appTaskRuns.$inferSelect,
+  keyof ReturnType<typeof summaryColumns>
+>;
 
 function listItem(row: RunRow, stepCount: number): AppTaskRunListItem {
   return {
@@ -832,7 +932,7 @@ export async function listTaskRuns(
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
   const runs = schema.appTaskRuns;
   const rows = await db
-    .select()
+    .select(summaryColumns())
     .from(runs)
     .where(
       and(
@@ -874,7 +974,8 @@ export async function getTaskRun(
         and(
           eq(schema.appTaskRuns.appId, appId),
           eq(schema.appTaskRuns.status, 'queued'),
-          lt(schema.appTaskRuns.createdAt, row.createdAt),
+          // Dispatch order, compared in SQL at the database's precision.
+          sql`(${schema.appTaskRuns.createdAt}, ${schema.appTaskRuns.id}) < (select r.created_at, r.id from ${schema.appTaskRuns} r where r.id = ${runId})`,
         ),
       );
     queuePosition = ahead + 1;
@@ -1089,10 +1190,11 @@ export type AppTaskRunGlobalItem = AppTaskRunListItem & {
 export async function listRecentTaskRuns(
   limit = 100,
 ): Promise<AppTaskRunGlobalItem[]> {
-  const rows = await db.query.appTaskRuns.findMany({
-    orderBy: { id: 'desc' },
-    limit,
-  });
+  const rows = await db
+    .select(summaryColumns())
+    .from(schema.appTaskRuns)
+    .orderBy(desc(schema.appTaskRuns.id))
+    .limit(limit);
   if (rows.length === 0) return [];
   const counts = await stepCounts(rows.map((row) => row.id));
   const apps = await db.query.apps.findMany({

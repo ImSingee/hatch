@@ -142,11 +142,17 @@ router.service(DigestService, {
 ```ts
 import { enqueueTask } from '@hatch/app/tasks';
 
-const { runId } = await enqueueTask('digest', { repo: 'denoland/deno' });
+const { runId, status } = await enqueueTask('digest', {
+  repo: 'denoland/deno',
+});
+if (status === 'failed') {
+  // The input did not fit the task; nothing was queued. Inspect the run.
+}
 ```
 
-The call returns once the run is queued (trigger `app`); it cannot start
-another App's tasks.
+The call returns once the run is recorded (trigger `app`): `status` is
+`queued`, or `failed` when the input was rejected (the run then never starts).
+It cannot start another App's tasks.
 
 ## How runs execute
 
@@ -156,9 +162,11 @@ another App's tasks.
   `concurrency` for that task). Others stay queued in order; an App holds at
   most 100 queued runs, and further triggers are refused with 429.
 - A run that waits in the queue starts on the deployment active when it
-  starts, and its input is validated again against that deployment's task:
-  new defaults are filled, and input that no longer fits fails the run. A
-  deploy, rollback or stop never cuts a running run short: its
+  starts. The run records the input as sent; it is validated again against
+  that deployment's task when the run starts, which fills that deployment's
+  defaults, and input that no longer fits fails the run. A deploy, rollback
+  or stop does not cut a running run short within the platform's drain
+  timeout (`HATCH_APP_DRAIN_TIMEOUT_SECONDS`, 300 seconds by default): its
   instance finishes the run on the old deployment, then exits. If the new
   deployment migrated the Data schema, the old code's Data Table calls fail
   with 409 and the run fails.

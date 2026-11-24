@@ -13,7 +13,37 @@
  *   Connect request, whose JSON decoder rejects unknown fields. Patterns are
  *   enforced and unknown keys are rejected with the field named.
  */
+import vm from 'node:vm';
 import { z } from 'zod';
+
+/**
+ * Patterns are App-authored and run against request-supplied strings, so a
+ * backtracking-prone pattern must not stall the platform process. Matching
+ * runs in a vm context, whose timeout interrupts a runaway match.
+ */
+const PATTERN_TIMEOUT_MS = 100;
+const patternContext = vm.createContext({ pattern: /^/, value: '' });
+const patternTest = new vm.Script('pattern.test(value)');
+
+function matchPattern(pattern: RegExp, value: string): boolean | 'timeout' {
+  patternContext.pattern = pattern;
+  patternContext.value = value;
+  try {
+    return patternTest.runInContext(patternContext, {
+      timeout: PATTERN_TIMEOUT_MS,
+    }) as boolean;
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
+      return 'timeout';
+    }
+    throw error;
+  } finally {
+    patternContext.value = '';
+  }
+}
+
+/** RFC 3339, as protobuf JSON requires for `google.protobuf.Timestamp`. */
+const dateTime = z.iso.datetime({ offset: true });
 
 type JsonSchema = Record<string, unknown>;
 
@@ -76,12 +106,33 @@ export function jsonSchemaToZod(
       let s = z.string();
       if (typeof schema.minLength === 'number') s = s.min(schema.minLength);
       if (typeof schema.maxLength === 'number') s = s.max(schema.maxLength);
-      if (options.strict && typeof schema.pattern === 'string') {
-        s = s.regex(new RegExp(schema.pattern), {
-          message: `Must match the pattern ${schema.pattern}`,
-        });
-      }
-      return s;
+      if (!options.strict) return s;
+      const pattern =
+        typeof schema.pattern === 'string' ? schema.pattern : undefined;
+      const regex = pattern === undefined ? null : new RegExp(pattern);
+      const format = schema.format === 'date-time';
+      if (!regex && !format) return s;
+      return s.superRefine((value, ctx) => {
+        if (format && !dateTime.safeParse(value).success) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Must be an RFC 3339 date-time',
+          });
+        }
+        if (!regex) return;
+        const matched = matchPattern(regex, value);
+        if (matched === 'timeout') {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Checking the pattern ${pattern} took too long`,
+          });
+        } else if (!matched) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Must match the pattern ${pattern}`,
+          });
+        }
+      });
     }
     case 'integer':
     case 'number': {
