@@ -7,23 +7,7 @@ import { resolveImageModel } from './model';
 import { composeGlyphTile, composeSubjectTile, isTileColor } from './tile';
 
 export const MAX_IMAGES_PER_CALL = 4;
-export const MAX_PROMPT_LENGTH = 4000;
-export const MAX_IMAGES_PER_HOUR = 30;
 const REQUEST_TIMEOUT_MS = 120_000;
-const HOUR_MS = 60 * 60 * 1000;
-
-/** Start times of recent images; a spend guard, reset by a restart. */
-const recent: number[] = [];
-
-function reserve(count: number, now: number): void {
-  while (recent.length && now - recent[0] > HOUR_MS) recent.shift();
-  if (recent.length + count > MAX_IMAGES_PER_HOUR)
-    throw new AppError(
-      `Image generation is limited to ${MAX_IMAGES_PER_HOUR} images per hour. Try again later.`,
-      429,
-    );
-  for (let index = 0; index < count; index += 1) recent.push(now);
-}
 
 export type GenerateImagesInput = {
   prompt: string;
@@ -56,12 +40,7 @@ export async function generateImages(
   signal?: AbortSignal,
 ): Promise<GeneratedImages> {
   const prompt = input.prompt.trim();
-  // Code points, matching the Protovalidate limit on the public request.
-  if (!prompt || Array.from(prompt).length > MAX_PROMPT_LENGTH)
-    throw new AppError(
-      `Prompt must be 1 to ${MAX_PROMPT_LENGTH} characters.`,
-      400,
-    );
+  if (!prompt) throw new AppError('Prompt must not be empty.', 400);
   const count = input.count ?? 1;
   if (!Number.isInteger(count) || count < 1 || count > MAX_IMAGES_PER_CALL)
     throw new AppError(`Count must be 1 to ${MAX_IMAGES_PER_CALL}.`, 400);
@@ -76,7 +55,6 @@ export async function generateImages(
   const { id, driver, provider, modelId } = await resolveImageModel(
     input.imageModelId,
   );
-  reserve(count, Date.now());
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const results = await Promise.allSettled(
     Array.from({ length: count }, async () => {
