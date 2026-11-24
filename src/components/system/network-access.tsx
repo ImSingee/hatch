@@ -39,7 +39,7 @@ export function NetworkAccessDetails({
       ) : null}
       <Text size="xs" c="dimmed">
         {appPlatformChannels
-          ? `${t('network.coverage')} ${t('network.platformChannels')}`
+          ? t('network.coverageWithPlatformChannels')
           : t('network.coverage')}
       </Text>
     </Stack>

@@ -110,6 +110,14 @@ export function translateError(
   return t(fallback);
 }
 
+/**
+ * `translateError` outside React (the global mutation toast), using the
+ * language active when it is called.
+ */
+export function errorText(error: unknown, fallback: PlainTranslationKey) {
+  return translateError(i18n.t, currentLocale(), error, fallback);
+}
+
 /** `translateError` bound to the active language. */
 export function useErrorText() {
   const { t, locale } = useI18n();

@@ -185,7 +185,6 @@
   "network.unrestrictedLegacy": "不受限制（未声明）",
   "network.unrestricted": "不受限制",
   "network.coverage": "涵盖通过 Deno 进行的 HTTP、HTTPS、TCP、UDP、DNS 和网络监听。",
-  "network.platformChannels": "平台监听器以及已启用的 Database、Data Tables 和 KV 通道仍然可用。",
   "apiKeys.expiration.days_one": "{{count}} 天",
   "apiKeys.expiration.days_other": "{{count}} 天",
   "apiKeys.expiration.oneYear": "1 年",
@@ -413,5 +412,19 @@
   "tasks.runs.viewAll": "全部运行 ›",
   "tasks.runs.loadFailed": "无法加载运行记录。",
   "tasks.runs.emptyTask": "这个任务还没有运行过。运行后即可在这里查看记录。",
-  "tasks.runs.emptyAll": "还没有任务运行记录。运行任务后即可在这里查看记录。"
+  "tasks.runs.emptyAll": "还没有任务运行记录。运行任务后即可在这里查看记录。",
+  "error.generic": "操作失败，请重试。",
+  "error.account.avatar.empty": "头像图片为空。",
+  "error.account.avatar.tooLarge": "头像图片超过 4 MB。",
+  "error.account.avatar.unsupportedFormat": "头像必须是 PNG、JPEG 或 WebP 图片。",
+  "error.account.avatar.badSize": "头像边长必须在 {{min}} 到 {{max}} 像素之间。",
+  "error.account.avatar.undecodable": "无法解码头像图片。",
+  "account.sessions.dateTime": "{{date}} {{time}}",
+  "agent.error.platform.leaseExpired": "Agent 运行已中断：Agent Runner 断开连接的时间超过了租约期限。",
+  "agent.error.platform.runnerRestarted": "Agent 运行已中断：Agent Runner 已重启。",
+  "agent.error.platform.runnerGone": "Agent 运行已中断：Agent Runner 已离线。",
+  "agent.error.platform.interrupted": "Agent 运行已中断。",
+  "agent.error.platform.noLongerActive": "Agent 运行已不再活跃（其 Runner 已离线）。",
+  "agent.error.platform.failed": "Agent 运行失败。",
+  "network.coverageWithPlatformChannels": "涵盖通过 Deno 进行的 HTTP、HTTPS、TCP、UDP、DNS 和网络监听。平台监听器以及已启用的 Database、Data Tables 和 KV 通道仍然可用。"
 }

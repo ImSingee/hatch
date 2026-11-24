@@ -187,7 +187,6 @@ export type TranslationResource = {
   'network.unrestrictedLegacy': 'Unrestricted (not declared)';
   'network.unrestricted': 'Unrestricted';
   'network.coverage': 'Covers HTTP, HTTPS, TCP, UDP, DNS, and network listeners through Deno.';
-  'network.platformChannels': 'The platform listener and enabled Database, Data Tables, and KV channels remain available.';
   'apiKeys.expiration.days_one': '{{count}} day';
   'apiKeys.expiration.days_other': '{{count}} days';
   'apiKeys.expiration.oneYear': '1 year';
@@ -416,4 +415,18 @@ export type TranslationResource = {
   'tasks.runs.loadFailed': 'Could not load run history.';
   'tasks.runs.emptyTask': 'No runs of this task yet. Run it to see its history here.';
   'tasks.runs.emptyAll': 'No task runs yet. Run a task to see its history here.';
+  'error.generic': 'Something went wrong. Please try again.';
+  'error.account.avatar.empty': 'Avatar image is empty.';
+  'error.account.avatar.tooLarge': 'Avatar image exceeds 4 MB.';
+  'error.account.avatar.unsupportedFormat': 'Avatar must be a PNG, JPEG or WebP image.';
+  'error.account.avatar.badSize': 'Avatar sides must be {{min}} to {{max}} pixels.';
+  'error.account.avatar.undecodable': 'Avatar image could not be decoded.';
+  'account.sessions.dateTime': '{{date}} at {{time}}';
+  'agent.error.platform.leaseExpired': 'Agent run was interrupted because its Agent Runner stayed disconnected past the lease window.';
+  'agent.error.platform.runnerRestarted': 'Agent run was interrupted because the Agent Runner restarted.';
+  'agent.error.platform.runnerGone': 'Agent run was interrupted because its Agent Runner went away.';
+  'agent.error.platform.interrupted': 'Agent run was interrupted.';
+  'agent.error.platform.noLongerActive': 'Agent run is no longer active (its runner went away).';
+  'agent.error.platform.failed': 'Agent run failed.';
+  'network.coverageWithPlatformChannels': 'Covers HTTP, HTTPS, TCP, UDP, DNS, and network listeners through Deno. The platform listener and enabled Database, Data Tables, and KV channels remain available.';
 };
