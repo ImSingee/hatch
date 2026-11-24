@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { addAbortSignal } from 'node:stream';
 import { parseArgs } from 'node:util';
 import { credentialHeaders, platformClient } from './client';
+import { PAGE_OPTIONS, pageFlags, type Page } from './command-session';
 import { configPath, resolveCredential } from './config';
 import { argumentsError, CliError } from './error';
 import { readTextInput } from './input';
@@ -21,7 +22,7 @@ type OptionSpec = Record<string, { type: 'string' | 'boolean' }>;
 const invalid = (message: string) => new CliError('invalid_arguments', message);
 
 export type ImageCommand =
-  | { kind: 'model-list' }
+  | { kind: 'model-list'; page: Page }
   | {
       kind: 'model-add';
       providerId: string;
@@ -136,8 +137,8 @@ export function parseImageCommand(
   const [name, operation, action] = args.slice(offset);
   if (name === 'image-model') {
     if (operation === 'list') {
-      const { flags } = parse(args, offset, 2, {}, 0);
-      return { command: { kind: 'model-list' }, flags };
+      const { flags } = parse(args, offset, 2, PAGE_OPTIONS, 0);
+      return { command: { kind: 'model-list', page: pageFlags(flags) }, flags };
     }
     if (operation === 'add') {
       const { flags } = parse(
@@ -199,10 +200,14 @@ export function parseImageCommand(
         args,
         offset,
         2,
-        {},
+        { yes: { type: 'boolean' } },
         1,
         'image model id',
       );
+      if (flags.yes !== true)
+        throw invalid(
+          'Removing an image model cannot be undone and may change the default model; pass --yes.',
+        );
       return { command: { kind: 'model-remove', id: positionals[0] }, flags };
     }
     throw invalid('Use hatch image-model list, add, update or remove.');
@@ -378,7 +383,8 @@ export async function runImage(
   const client = platformClient(credential, timeoutMs, signal);
 
   let result: unknown;
-  if (command.kind === 'model-list') result = await client.images.models();
+  if (command.kind === 'model-list')
+    result = await client.images.models(command.page);
   else if (command.kind === 'model-add')
     result = await client.images.createModel({
       providerId: command.providerId,

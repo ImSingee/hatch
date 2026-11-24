@@ -601,9 +601,10 @@ export function cliClient(transport: Transport) {
         ),
     },
     images: {
-      models: async () => {
-        const list = await images.listImageModels({});
+      models: async (page: { limit: number; cursor?: string }) => {
+        const list = await images.listImageModels(page);
         return {
+          ...(list.nextCursor ? { nextCursor: list.nextCursor } : {}),
           models: list.models.map(imageModel),
           defaultModelId: list.defaultModelId ?? null,
           providers: list.providers.map((provider) => ({

@@ -248,7 +248,8 @@ builds only.
 ### App icons and images
 
 `AppService` adds `GetAppIcon`, `SetAppIcon` and `ClearAppIcon`;
-`ImageService` has `ListImageModels`, `CreateImageModel`, `UpdateImageModel`,
+`ImageService` has `ListImageModels` (offset `cursor`/`limit` paging like
+`ListDashboards`), `CreateImageModel`, `UpdateImageModel`,
 `DeleteImageModel` and `GenerateImages`, whose optional `image_model_id` picks
 one of several image models (the first usable one when unset) and whose
 response names the `image_model_id` used. `GetImageModel`, `SetImageModel`,

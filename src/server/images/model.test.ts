@@ -201,6 +201,14 @@ describe('image models', () => {
     await expect(
       assertApiTypeKeepsModels(FIRST, 'openai-completions'),
     ).resolves.toBeUndefined();
+    // Saving a provider resends its unchanged API type; that never blocks.
+    await db
+      .update(schema.agentProviders)
+      .set({ apiType: 'anthropic-messages' })
+      .where(eq(schema.agentProviders.id, FIRST));
+    await expect(
+      assertApiTypeKeepsModels(FIRST, 'anthropic-messages'),
+    ).resolves.toBeUndefined();
     await expect(
       assertApiTypeKeepsModels(SECOND, 'anthropic-messages'),
     ).resolves.toBeUndefined();

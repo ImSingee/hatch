@@ -217,9 +217,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['image-model', 'list'],
-    usage: 'image-model list',
+    usage: 'image-model list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List every image model with its id, provider, provider model id, name, description and whether it is usable; defaultModelId is the one image generate uses without --model (the first usable model). Also lists the providers that can hold image models, with suggested model ids. Never prints API keys.',
+      'Without --limit, list every image model with its id, provider, provider model id, name, description and whether it is usable; defaultModelId is the one image generate uses without --model (the first usable model). Also lists the providers that can hold image models, with suggested model ids, on every page. --limit (1-100) prints one page of models and a nextCursor to pass as --cursor; no nextCursor means the last page. Never prints API keys.',
   },
   {
     path: ['image-model', 'add'],
@@ -237,9 +237,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['image-model', 'remove'],
-    usage: 'image-model remove <image-model-id>',
+    usage: 'image-model remove <image-model-id> --yes',
     description:
-      'Delete an image model. When it was the default, the next usable model becomes the default.',
+      'Permanently delete an image model; cannot be undone, so --yes is required. When it was the default, the next usable model becomes the default.',
   },
   {
     path: ['image', 'generate'],

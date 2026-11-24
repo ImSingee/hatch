@@ -458,16 +458,17 @@ hatch app icon set my-app --candidate <candidate-id>
 hatch app icon set my-app --file icon.png
 hatch app icon get my-app --json
 hatch app icon clear my-app
-hatch image-model remove <image-model-id>
+hatch image-model remove <image-model-id> --yes
 ```
 
 An instance can have several image models, each a provider model of the
 image category with an optional description of what it suits.
 `image-model list` prints every model with its `id`, whether it is `usable`,
 the `defaultModelId` and the providers that can hold image models with
-suggested model ids. `add` attaches a model to such a provider and uses its
+suggested model ids; `--limit` (1 to 100) prints one page of models and a
+`nextCursor` for `--cursor`. `add` attaches a model to such a provider and uses its
 stored API key; `update` changes only the given fields (`--clear-description`
-empties the description); `remove` deletes one. `image generate --model <id>`
+empties the description); `remove --yes` deletes one; it cannot be undone. `image generate --model <id>`
 picks the model; without it the default, the first usable model, is used.
 `image generate` costs provider credit and prints the `imageModelId` used and
 one candidate `id` and authenticated `path` per image; candidates expire after

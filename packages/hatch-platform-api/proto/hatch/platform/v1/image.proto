@@ -38,7 +38,12 @@ message ImageProvider {
   repeated string suggested_models = 4;
 }
 
-message ListImageModelsRequest {}
+message ListImageModelsRequest {
+  // The next_cursor of the previous page.
+  optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Image models per page; 0 returns every model.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+}
 
 message ListImageModelsResponse {
   // Provider order, then each provider's model order.
@@ -46,7 +51,10 @@ message ListImageModelsResponse {
   // The model GenerateImages uses without image_model_id: the first usable
   // one. Unset when none is usable.
   optional string default_model_id = 2;
+  // Every provider that can hold image models, on each page.
   repeated ImageProvider providers = 3;
+  // Set when more image models follow this page.
+  optional string next_cursor = 4;
 }
 
 message CreateImageModelRequest {

@@ -766,9 +766,15 @@ export function registerPlatformApi(
     }),
   });
   router.service(ImageService, {
-    listImageModels: async () => {
+    listImageModels: async (input) => {
       const list = await listImageModels();
-      return { ...list, defaultModelId: list.defaultModelId ?? undefined };
+      const page = listPage(list.models, input);
+      return {
+        models: page.items,
+        defaultModelId: list.defaultModelId ?? undefined,
+        providers: list.providers,
+        nextCursor: page.nextCursor,
+      };
     },
     createImageModel: async (input) => ({
       model: await createImageModel({

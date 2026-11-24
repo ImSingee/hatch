@@ -159,6 +159,13 @@ export async function assertApiTypeKeepsModels(
   apiType: ProviderApiType,
 ): Promise<void> {
   if (canGenerateImages(apiType)) return;
+  // The provider form resends the API type on every save; only a change can
+  // strand image models.
+  const provider = await db.query.agentProviders.findFirst({
+    where: { id: providerId },
+    columns: { apiType: true },
+  });
+  if (!provider || provider.apiType === apiType) return;
   const image = await db.query.agentModels.findFirst({
     where: { providerId, kind: 'image' },
     columns: { id: true },

@@ -14,7 +14,13 @@ const CANDIDATE = 'a'.repeat(32);
 
 describe('image command arguments', () => {
   it('maps each command to one explicit operation', () => {
-    expect(command('image-model', 'list')).toEqual({ kind: 'model-list' });
+    expect(command('image-model', 'list')).toEqual({
+      kind: 'model-list',
+      page: { limit: 0, cursor: undefined },
+    });
+    expect(
+      command('image-model', 'list', '--limit', '2', '--cursor', '2'),
+    ).toEqual({ kind: 'model-list', page: { limit: 2, cursor: '2' } });
     expect(
       command(
         'image-model',
@@ -54,7 +60,7 @@ describe('image command arguments', () => {
     expect(
       command('image-model', 'update', 'm1', '--clear-description'),
     ).toMatchObject({ kind: 'model-update', description: '' });
-    expect(command('image-model', 'remove', 'm1')).toEqual({
+    expect(command('image-model', 'remove', 'm1', '--yes')).toEqual({
       kind: 'model-remove',
       id: 'm1',
     });
@@ -157,8 +163,12 @@ describe('image command arguments', () => {
         'a',
         '--clear-description',
       ],
-      ['image-model', 'remove'],
-      ['image-model', 'remove', 'm1', 'm2'],
+      ['image-model', 'remove', '--yes'],
+      ['image-model', 'remove', 'm1', 'm2', '--yes'],
+      // Deleting needs an explicit --yes.
+      ['image-model', 'remove', 'm1'],
+      ['image-model', 'list', '--limit', '0'],
+      ['image-model', 'list', '--cursor', 'next'],
       ['image-model', 'list', 'extra'],
       ['image-model', 'get'],
       ['image-model', 'set', '--provider', 'p1', '--model', 'gpt-x'],
