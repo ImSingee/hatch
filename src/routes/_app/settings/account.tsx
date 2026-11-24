@@ -8,6 +8,7 @@ import { HomepagePanel } from '~components/settings/homepage-panel';
 import { ChangePasswordPanel } from '~components/settings/change-password-panel';
 import { PasskeysPanel } from '~components/settings/passkeys-panel';
 import { SectionHead } from '~components/settings/section-head';
+import { useI18n } from '~i18n';
 import { passkeyOriginQueryOptions } from '~queries/passkeys';
 
 export const Route = createFileRoute('/_app/settings/account')({
@@ -17,12 +18,13 @@ export const Route = createFileRoute('/_app/settings/account')({
 });
 
 function AccountRoute() {
+  const { t } = useI18n();
   const appOrigin = Route.useLoaderData();
   return (
     <>
       <SectionHead
-        title="Account"
-        description="Manage your profile and how you sign in to this space."
+        title={t('settings.account.label')}
+        description={t('account.description')}
       />
       <Columns>
         <Column basis={380}>

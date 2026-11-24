@@ -13,23 +13,33 @@ import { useEffect, useId, useRef } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { authClient } from '~auth/client';
+import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
+import { CodedError } from '~lib/error-codes';
 import { accountSessionsQueryOptions } from '~queries/account-sessions';
+
+/** Issue messages are catalog keys, translated when the form renders. */
+const issue = (key: PlainTranslationKey) => key;
 
 const passwordSchema = z
   .object({
-    currentPassword: z.string().min(1, 'Enter your current password'),
+    currentPassword: z
+      .string()
+      .min(1, issue('account.password.currentRequired')),
     newPassword: z
       .string()
-      .min(8, 'Use at least 8 characters')
-      .max(128, 'Use no more than 128 characters'),
+      .min(8, issue('account.password.tooShort'))
+      .max(128, issue('account.password.tooLong')),
     confirmPassword: z.string(),
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
-    message: 'Passwords do not match',
+    message: issue('account.password.mismatch'),
     path: ['confirmPassword'],
   });
 
+type PasswordField = 'currentPassword' | 'newPassword' | 'confirmPassword';
+
 export function ChangePasswordPanel() {
+  const { t } = useI18n();
   const modalId = useId();
 
   useEffect(() => () => modals.close(modalId), [modalId]);
@@ -37,7 +47,7 @@ export function ChangePasswordPanel() {
   const open = () => {
     modals.open({
       modalId,
-      title: 'Change password',
+      title: t('account.password.change'),
       centered: true,
       children: (
         <ChangePasswordForm
@@ -58,13 +68,13 @@ export function ChangePasswordPanel() {
   return (
     <Stack gap="md" align="flex-start">
       <Stack gap={2}>
-        <Text fw={700}>Password</Text>
+        <Text fw={700}>{t('account.password.title')}</Text>
         <Text size="sm" c="dimmed">
-          Update the password you use to sign in.
+          {t('account.password.description')}
         </Text>
       </Stack>
       <Button type="button" onClick={open}>
-        Change password
+        {t('account.password.change')}
       </Button>
     </Stack>
   );
@@ -77,6 +87,8 @@ function ChangePasswordForm({
   onClose: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const submitting = useRef(false);
   const form = useForm({
     initialValues: {
@@ -107,9 +119,10 @@ function ChangePasswordForm({
         revokeOtherSessions: true,
       });
       if (result.error)
-        throw new Error(
+        throw new CodedError(
           result.error.message ??
             'Could not change your password. Please try again.',
+          result.error.code ? `account.${result.error.code}` : undefined,
         );
     },
     onSuccess: () => {
@@ -117,7 +130,7 @@ function ChangePasswordForm({
         queryKey: accountSessionsQueryOptions.queryKey,
       });
       form.reset();
-      toast.success('Password changed');
+      toast.success(t('account.password.changed'));
       onClose();
     },
     onSettled: () => {
@@ -125,6 +138,14 @@ function ChangePasswordForm({
       onPendingChange(false);
     },
   });
+  // Validation stores catalog keys; translate them on render.
+  const inputProps = (field: PasswordField) => {
+    const props = form.getInputProps(field);
+    return {
+      ...props,
+      error: props.error ? t(props.error as PlainTranslationKey) : undefined,
+    };
+  };
 
   return (
     <form
@@ -139,30 +160,34 @@ function ChangePasswordForm({
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Other devices will be signed out. You will stay signed in here.
+          {t('account.password.signOutOthers')}
         </Text>
         <PasswordInput
-          label="Current password"
+          label={t('account.password.current')}
           autoComplete="current-password"
           disabled={change.isPending}
-          {...form.getInputProps('currentPassword')}
+          {...inputProps('currentPassword')}
         />
         <PasswordInput
-          label="New password"
-          description="Use 8–128 characters."
+          label={t('account.password.new')}
+          description={t('account.password.newDescription')}
           autoComplete="new-password"
           disabled={change.isPending}
-          {...form.getInputProps('newPassword')}
+          {...inputProps('newPassword')}
         />
         <PasswordInput
-          label="Confirm new password"
+          label={t('account.password.confirm')}
           autoComplete="new-password"
           disabled={change.isPending}
-          {...form.getInputProps('confirmPassword')}
+          {...inputProps('confirmPassword')}
         />
         {change.error && (
-          <Alert color="red" title="Password could not be changed" role="alert">
-            {change.error.message}
+          <Alert
+            color="red"
+            title={t('account.password.changeFailed')}
+            role="alert"
+          >
+            {errorText(change.error, 'account.password.changeFailedBody')}
           </Alert>
         )}
         <Group justify="flex-end">
@@ -172,10 +197,10 @@ function ChangePasswordForm({
             disabled={change.isPending}
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="submit" loading={change.isPending}>
-            Change password
+            {t('account.password.change')}
           </Button>
         </Group>
       </Stack>

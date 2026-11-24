@@ -21,7 +21,6 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '~auth/client';
@@ -30,9 +29,12 @@ import { getPasskeyOriginError } from '~auth/passkey-origin';
 import {
   browserSupportsPasskeys,
   isPasskeyCancellation,
-  passkeyErrorMessage,
+  type PasskeyClientError,
 } from '~auth/passkey-browser';
+import { type PlainTranslationKey, translateError, useI18n } from '~i18n';
 import classes from './passkeys-panel.module.css';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 type EditingName = {
   id: string;
@@ -40,6 +42,7 @@ type EditingName = {
 };
 
 export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
+  const { t, locale } = useI18n();
   const { data: passkeys, isPending, error } = authClient.useListPasskeys();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<EditingName | null>(null);
@@ -54,22 +57,36 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
     if (editingId) nameInputRef.current?.focus();
   }, [editingId]);
 
+  // Better Auth reports a stable code; codes without a catalog entry keep the
+  // English message in English and show `fallback` elsewhere.
+  const passkeyError = (
+    error: PasskeyClientError,
+    fallback: PlainTranslationKey,
+  ) =>
+    translateError(
+      t,
+      locale,
+      {
+        code: error.code ? `passkeys.${error.code}` : undefined,
+        message: error.message?.trim(),
+      },
+      fallback,
+    );
+
   const addPasskey = async () => {
     setAdding(true);
     try {
       const result = await authClient.passkey.addPasskey();
       if (result.error) {
         if (!isPasskeyCancellation(result.error)) {
-          toast.error(
-            passkeyErrorMessage(result.error, 'Could not add the passkey.'),
-          );
+          toast.error(passkeyError(result.error, 'account.passkeys.addFailed'));
         }
         return;
       }
 
-      toast.success('Passkey added');
+      toast.success(t('account.passkeys.added'));
     } catch {
-      toast.error('Could not add the passkey. Please try again.');
+      toast.error(t('account.passkeys.addFailedRetry'));
     } finally {
       setAdding(false);
     }
@@ -89,15 +106,15 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
       });
       if (result.error) {
         toast.error(
-          passkeyErrorMessage(result.error, 'Could not rename the passkey.'),
+          passkeyError(result.error, 'account.passkeys.renameFailed'),
         );
         return;
       }
 
       setEditing(null);
-      toast.success('Passkey renamed');
+      toast.success(t('account.passkeys.renamed'));
     } catch {
-      toast.error('Could not rename the passkey. Please try again.');
+      toast.error(t('account.passkeys.renameFailedRetry'));
     } finally {
       setSavingId(null);
     }
@@ -109,32 +126,30 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
       const result = await authClient.passkey.deletePasskey({ id: passkey.id });
       if (result.error) {
         toast.error(
-          passkeyErrorMessage(result.error, 'Could not delete the passkey.'),
+          passkeyError(result.error, 'account.passkeys.deleteFailed'),
         );
         return;
       }
 
       if (editing?.id === passkey.id) setEditing(null);
-      toast.success('Passkey deleted');
+      toast.success(t('account.passkeys.deleted'));
     } catch {
-      toast.error('Could not delete the passkey. Please try again.');
+      toast.error(t('account.passkeys.deleteFailedRetry'));
     } finally {
       setDeletingId(null);
     }
   };
 
   const confirmDelete = (passkey: Passkey) => {
-    const name = displayName(passkey);
+    const name = displayName(passkey, t);
     modals.openConfirmModal({
-      title: `Delete ${name}?`,
+      title: t('account.passkeys.confirmTitle', { name }),
       centered: true,
-      children: (
-        <Text size="sm">
-          This passkey will stop working for sign-in. You can continue to use
-          your password or another passkey.
-        </Text>
-      ),
-      labels: { confirm: 'Delete passkey', cancel: 'Cancel' },
+      children: <Text size="sm">{t('account.passkeys.confirmBody')}</Text>,
+      labels: {
+        confirm: t('account.passkeys.confirm'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => void deletePasskey(passkey),
     });
@@ -148,9 +163,9 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
         className={classes.header}
       >
         <Stack gap={2} style={{ flex: '1 1 220px' }}>
-          <Text fw={700}>Passkeys</Text>
+          <Text fw={700}>{t('account.passkeys.title')}</Text>
           <Text size="sm" c="dimmed">
-            Sign in with your device, password manager, or a security key.
+            {t('account.passkeys.description')}
           </Text>
         </Stack>
         <Button
@@ -160,7 +175,7 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
           onClick={addPasskey}
           className={classes.addButton}
         >
-          Add passkey
+          {t('account.passkeys.add')}
         </Button>
       </Group>
 
@@ -169,14 +184,15 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
           icon={<IconAlertCircle size={18} />}
           title={
             originError
-              ? 'Passkeys are not available at this address'
-              : 'Passkeys are not available in this browser'
+              ? t('account.passkeys.originUnavailable')
+              : t('account.passkeys.browserUnavailable')
           }
           color="yellow"
         >
-          {originError ??
-            'Open Hatch from a secure, supported browser to add or use a passkey.'}{' '}
-          You can still manage passkeys already linked to your account.
+          {/* The origin check has one requirement, worded in the catalog. */}
+          {originError
+            ? t('account.passkeys.originUnavailableBody')
+            : t('account.passkeys.browserUnavailableBody')}
         </Alert>
       )}
 
@@ -185,15 +201,15 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
       ) : error ? (
         <Alert
           icon={<IconAlertCircle size={18} />}
-          title="Passkeys could not be loaded"
+          title={t('account.passkeys.loadFailed')}
           color="red"
         >
-          Refresh the page to try again. Password sign-in is unaffected.
+          {t('account.passkeys.loadFailedBody')}
         </Alert>
       ) : passkeys && passkeys.length > 0 ? (
         <div className={classes.list}>
           {passkeys.map((passkey) => {
-            const name = displayName(passkey);
+            const name = displayName(passkey, t);
             const isEditing = editing?.id === passkey.id;
 
             return (
@@ -204,7 +220,7 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                   </ThemeIcon>
                   {isEditing ? (
                     <TextInput
-                      aria-label={`Name for ${name}`}
+                      aria-label={t('account.passkeys.nameFor', { name })}
                       value={editing.value}
                       onChange={(event) =>
                         setEditing({
@@ -217,7 +233,11 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                         if (event.key === 'Escape') setEditing(null);
                       }}
                       disabled={savingId === passkey.id}
-                      error={editing.value.trim() ? undefined : 'Enter a name'}
+                      error={
+                        editing.value.trim()
+                          ? undefined
+                          : t('account.passkeys.nameRequired')
+                      }
                       ref={nameInputRef}
                       className={classes.nameInput}
                     />
@@ -227,7 +247,11 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                         {name}
                       </Text>
                       <Text size="xs" c="dimmed">
-                        Added {dayjs(passkey.createdAt).format('MMM D, YYYY')}
+                        {t('account.passkeys.createdOn', {
+                          date: new Intl.DateTimeFormat(locale, {
+                            dateStyle: 'medium',
+                          }).format(new Date(passkey.createdAt)),
+                        })}
                       </Text>
                     </Stack>
                   )}
@@ -236,10 +260,12 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                 <Group gap={4} wrap="nowrap" className={classes.actions}>
                   {isEditing ? (
                     <>
-                      <Tooltip label="Save name">
+                      <Tooltip label={t('account.passkeys.saveName')}>
                         <ActionIcon
                           variant="subtle"
-                          aria-label={`Save name for ${name}`}
+                          aria-label={t('account.passkeys.saveNameFor', {
+                            name,
+                          })}
                           loading={savingId === passkey.id}
                           disabled={!editing.value.trim()}
                           onClick={() => void saveName()}
@@ -247,11 +273,13 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                           <IconCheck size={17} stroke={1.7} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Cancel">
+                      <Tooltip label={t('common.cancel')}>
                         <ActionIcon
                           variant="subtle"
                           color="gray"
-                          aria-label={`Cancel renaming ${name}`}
+                          aria-label={t('account.passkeys.cancelRename', {
+                            name,
+                          })}
                           disabled={savingId === passkey.id}
                           onClick={() => setEditing(null)}
                         >
@@ -261,11 +289,13 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                     </>
                   ) : (
                     <>
-                      <Tooltip label="Rename">
+                      <Tooltip label={t('common.rename')}>
                         <ActionIcon
                           variant="subtle"
                           color="gray"
-                          aria-label={`Rename ${name}`}
+                          aria-label={t('account.passkeys.renameName', {
+                            name,
+                          })}
                           disabled={deletingId === passkey.id}
                           onClick={() =>
                             setEditing({ id: passkey.id, value: name })
@@ -274,11 +304,13 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
                           <IconEdit size={17} stroke={1.7} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Delete">
+                      <Tooltip label={t('common.delete')}>
                         <ActionIcon
                           variant="subtle"
                           color="red"
-                          aria-label={`Delete ${name}`}
+                          aria-label={t('account.passkeys.deleteName', {
+                            name,
+                          })}
                           loading={deletingId === passkey.id}
                           onClick={() => confirmDelete(passkey)}
                         >
@@ -299,12 +331,12 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
           </ThemeIcon>
           <Stack gap={2} align="center">
             <Text size="sm" fw={700}>
-              No passkeys yet
+              {t('account.passkeys.empty')}
             </Text>
             <Text size="sm" c="dimmed" ta="center">
               {supported
-                ? 'Add one to sign in without typing your password.'
-                : 'Password sign-in is still available.'}
+                ? t('account.passkeys.emptyBody')
+                : t('account.passkeys.emptyUnsupported')}
             </Text>
           </Stack>
         </div>
@@ -313,15 +345,18 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
   );
 }
 
-function displayName(passkey: Passkey): string {
+function displayName(passkey: Passkey, t: Translate): string {
   return (
-    passkey.name?.trim() || getAuthenticatorName(passkey.aaguid) || 'Passkey'
+    passkey.name?.trim() ||
+    getAuthenticatorName(passkey.aaguid) ||
+    t('account.passkeys.defaultName')
   );
 }
 
 function PasskeysSkeleton() {
+  const { t } = useI18n();
   return (
-    <Stack gap="xs" aria-label="Loading passkeys">
+    <Stack gap="xs" aria-label={t('account.passkeys.loading')}>
       {[0, 1].map((key) => (
         <Group key={key} gap="sm" wrap="nowrap" py="xs">
           <Skeleton height={34} width={34} radius="md" />
