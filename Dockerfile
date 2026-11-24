@@ -11,6 +11,40 @@ RUN go mod download
 COPY packages/tailscale/*.go ./
 RUN CGO_ENABLED=0 go build -trimpath -o /hatch-tailscale .
 
+# --- Native Shell (NSH): builds and checks `native` App frontends ------------
+# Pinned by version and SHA-256 (src/server/apps/native/nsh-toolchain.ts keeps
+# the same values). The CLI finds its runtimes at bin/../runtime; the web
+# runtime component is installed beside it so deploys never download it.
+FROM debian:trixie-slim AS nsh
+ARG TARGETARCH
+ARG NSH_VERSION=0.6.1
+ARG NSH_COMMIT=2f51d86
+ARG NSH_LINUX_X86_64_SHA256=9a7ac692f1c229df476be8ff83a3c5912d271453b644e313f02cb19d18696070
+ARG NSH_LINUX_ARM64_SHA256=d7d54b8a62aa8bd4a9fb73fcc0abce8cc565185926f226aa90f48622f3e410a3
+ARG NSH_WEB_SHA256=e509e35fbad261a4a5e27a9225c364ff0d9ddd202a638b02bbfd13fb5cd1b9f1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+  case "$TARGETARCH" in \
+    amd64) archive=nsh-linux-x86_64.tar.gz; sum="$NSH_LINUX_X86_64_SHA256" ;; \
+    arm64) archive=nsh-linux-arm64.tar.gz; sum="$NSH_LINUX_ARM64_SHA256" ;; \
+    *) echo "unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+  esac; \
+  base="https://github.com/longbridge/nsh/releases/download/v${NSH_VERSION}"; \
+  curl -fsSL -o /tmp/nsh.tar.gz "$base/$archive"; \
+  echo "$sum  /tmp/nsh.tar.gz" | sha256sum -c -; \
+  curl -fsSL -o /tmp/nsh-web.tar.gz "$base/nsh-web.tar.gz"; \
+  echo "$NSH_WEB_SHA256  /tmp/nsh-web.tar.gz" | sha256sum -c -; \
+  mkdir -p /opt; \
+  tar -xzf /tmp/nsh.tar.gz -C /opt; \
+  tar -xzf /tmp/nsh-web.tar.gz -C /opt; \
+  mkdir -p /opt/nsh/components; \
+  printf '{"version":"%s","commit":"%s"}' "$NSH_VERSION" "$NSH_COMMIT" \
+    > /opt/nsh/components/web.json; \
+  /opt/nsh/bin/nsh --version | grep -q "^nsh ${NSH_VERSION} "; \
+  rm -f /tmp/nsh.tar.gz /tmp/nsh-web.tar.gz
+
 # --- Base image with pnpm ----------------------------------------------------
 # pnpm installs the platform itself and, at deploy time, the dependencies of
 # pnpm-lockfile Apps. The version matches `packageManager`.
@@ -83,6 +117,9 @@ RUN useradd --system --user-group --no-create-home hatch-sandbox
 
 # Deno runs the app backends the platform spawns.
 COPY --from=deno /deno /usr/local/bin/deno
+# NSH builds native App frontends (HATCH_NSH_BIN points the platform at it).
+COPY --from=nsh /opt/nsh /opt/nsh
+ENV HATCH_NSH_BIN=/opt/nsh/bin/nsh
 COPY --from=tailscale /hatch-tailscale /app/bin/hatch-tailscale
 
 # Runtime needs: the built server, the full dependency tree (esbuild bundling,

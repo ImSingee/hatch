@@ -8,12 +8,43 @@ type SdkManifest = {
   peerDependencies: Record<string, string>;
 };
 
-type SdkEntry = { source: string } | { reexport: string };
+/**
+ * Which App frontend runtime may import an entry: `web` entries (React
+ * adapters, browser storage scoping) stay out of `nsh.json`; `native` entries
+ * (the NSH host bridge) stay out of the web and Deno import maps. Absent means
+ * both.
+ */
+export type SdkEntryRuntime = 'web' | 'native';
+
+type SdkEntry = ({ source: string } | { reexport: string }) & {
+  runtime?: SdkEntryRuntime;
+};
+
+/** An NSH theme: shadcn `cssVars`, as `nsh.json` "theme" and `setTheme` take. */
+export type SdkNshTheme = {
+  cssVars: {
+    theme?: Record<string, string | number>;
+    light?: Record<string, string | number>;
+    dark?: Record<string, string | number>;
+  };
+};
 
 export type SdkDefinition = {
   directory: string;
   manifest: SdkManifest;
   entries: Record<string, SdkEntry>;
+  /**
+   * What a native UI library contributes to every native App: the generated
+   * `nsh.json` "theme" and "tailwind", and the theme shells push with
+   * `hatch.theme`. At most one definition in NATIVE_APP_SDK_DEFINITIONS sets
+   * it; without one the platform's own token theme applies.
+   */
+  nsh?: {
+    /** The complete theme for an accent name (`indigo`, `teal`, ...). */
+    theme?: (accent: string) => SdkNshTheme;
+    /** `nsh.json` "tailwind" (an object, inlined). */
+    tailwind?: Record<string, unknown>;
+  };
 };
 
 export const APP_SDK: SdkDefinition = {
@@ -22,12 +53,16 @@ export const APP_SDK: SdkDefinition = {
   entries: {
     '.': { source: 'app.ts' },
     './data': { source: 'data.ts' },
-    './data/react': { source: 'data-react.ts' },
+    './data/react': { source: 'data-react.ts', runtime: 'web' },
     './notifications': { source: 'notifications.ts' },
-    './storage': { source: 'storage.ts' },
-    './storage/react': { source: 'storage-react.ts' },
-    './storage/install': { source: 'storage-install.ts' },
-    './tasks': { source: 'tasks.ts' },
+    './storage': { source: 'storage.ts', runtime: 'web' },
+    './storage/react': { source: 'storage-react.ts', runtime: 'web' },
+    './storage/install': { source: 'storage-install.ts', runtime: 'web' },
+    './tasks': { source: 'tasks.ts', runtime: 'web' },
+    './native': { source: 'native.ts', runtime: 'native' },
+    './native/rpc': { source: 'native-rpc.ts', runtime: 'native' },
+    // Not for App source: the platform bundles it as the native web player.
+    './native/player': { source: 'native-player.ts', runtime: 'web' },
   },
 };
 
@@ -43,17 +78,40 @@ export const LEGACY_DATA_SDK: SdkDefinition = {
 /** Every SDK a source receives: `@hatch/app` and its legacy alias. */
 export const SDK_DEFINITIONS = [APP_SDK, LEGACY_DATA_SDK];
 
+/**
+ * SDKs a `native` (NSH) App frontend may import. The platform generates one
+ * exact `nsh.json` alias per entry of these, so adding a library here is all
+ * it takes to make it importable. They are materialized with the App SDK.
+ */
+export const NATIVE_APP_SDK_DEFINITIONS: readonly SdkDefinition[] = [APP_SDK];
+
+/**
+ * Public specifier -> target below `.hatch/` for every entry `runtime` may
+ * import. Web and Deno resolution (the default) never see native-only
+ * entries.
+ */
 export function sdkImports(
   definitions: readonly SdkDefinition[],
+  runtime: SdkEntryRuntime = 'web',
 ): Record<string, string> {
   return Object.fromEntries(
-    definitions.flatMap(({ manifest }) =>
-      Object.entries(manifest.exports).map(([key, entry]) => [
-        key === '.' ? manifest.name : `${manifest.name}${key.slice(1)}`,
-        `./sdk/${manifest.name}/${entry.default.slice(2)}`,
-      ]),
+    definitions.flatMap(({ manifest, entries }) =>
+      Object.entries(manifest.exports)
+        .filter(([key]) => {
+          const only = entries[key]?.runtime;
+          return only === undefined || only === runtime;
+        })
+        .map(([key, entry]) => [
+          key === '.' ? manifest.name : `${manifest.name}${key.slice(1)}`,
+          `./sdk/${manifest.name}/${entry.default.slice(2)}`,
+        ]),
     ),
   );
+}
+
+/** Every SDK package materialized into an App root. */
+export function appMaterializedSdkDefinitions(): SdkDefinition[] {
+  return [...new Set([...SDK_DEFINITIONS, ...NATIVE_APP_SDK_DEFINITIONS])];
 }
 
 /** Deno namespace declarations shipped beside the generated tsconfig. */

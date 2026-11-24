@@ -11,6 +11,7 @@ import {
   SDK_DENO_TYPES,
   SDK_DENO_TYPES_LICENSE,
   SDK_DEFINITIONS,
+  appMaterializedSdkDefinitions,
   sdkImports,
   sdkToolchainFiles,
 } from '../../../sdk-internal/definitions';
@@ -19,8 +20,8 @@ import {
 // the source repository are not part of the public SDK delivery contract.
 const builtFiles = import.meta.glob<string>(
   [
-    '../../../sdk-internal/{app,data}/package.json',
-    '../../../sdk-internal/{app,data}/dist/**/*',
+    '../../../sdk-internal/{app,data,ui}/package.json',
+    '../../../sdk-internal/{app,data,ui}/dist/**/*',
   ],
   { eager: true, query: '?raw', import: 'default' },
 );
@@ -60,12 +61,14 @@ export function platformTooling() {
 export async function sdkPayload() {
   const definitions = SDK_DEFINITIONS;
   const files: { path: string; contentBase64: string }[] = [];
-  for (const definition of definitions) {
+  // Native-only libraries ship beside the App SDK, as materialization does.
+  const packages = appMaterializedSdkDefinitions();
+  for (const definition of packages) {
     const prefix = `../../../sdk-internal/${definition.directory}/`;
     const entries = Object.entries(builtFiles).filter(([file]) =>
       file.startsWith(prefix),
     );
-    if (!entries.some(([file]) => /\/dist\/[^/]+\.js$/.test(file)))
+    if (!entries.some(([file]) => /\/dist\/[^/]+\.[jt]sx?$/.test(file)))
       throw new Error('Built SDK artifacts are missing.');
     for (const [file, contents] of entries)
       files.push({

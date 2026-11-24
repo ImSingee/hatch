@@ -73,6 +73,7 @@ function appDetail(frontend: boolean): AppDetail {
     backendMode: null,
     dbName: null,
     dataDbName: null,
+    frontend: frontend ? { runtime: 'web', nshVersion: null } : null,
     currentVersion: 1,
     currentDeploymentId: 'deployment-one',
     compatibility: null,

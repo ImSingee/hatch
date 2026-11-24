@@ -16,7 +16,32 @@ const CONTENT_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.map': 'application/json',
+  '.wasm': 'application/wasm',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.woff': 'font/woff',
 };
+
+/**
+ * The native player page's policy: NSH's web runtime needs WebAssembly
+ * compilation and blob/data images; the App reaches the network only through
+ * the page's same-origin host calls, and nothing else may load or frame it.
+ */
+export const NATIVE_PLAYER_CSP = [
+  "default-src 'none'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "style-src 'self'",
+  "img-src 'self' blob: data:",
+  "font-src 'self' data:",
+  "media-src 'self' blob:",
+  "connect-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+].join('; ');
 
 /**
  * Serve a static file from an app's built `app/` directory for the human-facing
@@ -64,10 +89,16 @@ export async function serveAppAppFile(
     return new Response('Not found', { status: 404 });
   }
   const ext = path.extname(filePath);
-  return new Response(new Uint8Array(result.data), {
-    headers: {
-      'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
-      'cache-control': 'no-cache',
-    },
-  });
+  const native = live.manifest.app?.runtime === 'native';
+  const headers: Record<string, string> = {
+    'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+    'cache-control': 'no-cache',
+  };
+  if (native) {
+    // Every response of a native App's frame carries the policy, so a file
+    // opened directly (an SVG, a page) gets no more than the player does.
+    headers['content-security-policy'] = NATIVE_PLAYER_CSP;
+    headers['x-content-type-options'] = 'nosniff';
+  }
+  return new Response(new Uint8Array(result.data), { headers });
 }

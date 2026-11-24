@@ -158,6 +158,29 @@ export function usePlatformEvent<TType extends PlatformEventType>(
   );
 }
 
+/**
+ * Like {@link usePlatformEvent}, for components that may render outside the
+ * authenticated shell (where there is no event stream): there it does
+ * nothing.
+ */
+export function useOptionalPlatformEvent<TType extends PlatformEventType>(
+  type: TType,
+  listener: (event: PlatformEventFor<TType>) => void,
+) {
+  const context = useContext(PlatformEventsContext);
+  const onEvent = useEventCallback(listener);
+
+  useEffect(
+    () =>
+      context?.subscribe((event) => {
+        if (event.type === type) {
+          onEvent(event as PlatformEventFor<TType>);
+        }
+      }),
+    [context, onEvent, type],
+  );
+}
+
 /** Re-read durable state after the SSE stream connects or reconnects. */
 export function usePlatformResync(listener: ResyncListener) {
   const { subscribeResync } = usePlatformEventsContext();

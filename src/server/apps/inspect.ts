@@ -165,6 +165,11 @@ export type AppDetail = {
   updatedAt: string;
   /** Normalized manifest of the live deployment (URLs, widgets, rpc, etc.). */
   manifest: NormalizedManifest | null;
+  /**
+   * How the live deployment's frontend runs; null without a live frontend.
+   * `nshVersion` is the NSH release a `native` frontend was built with.
+   */
+  frontend: { runtime: 'web' | 'native'; nshVersion: string | null } | null;
   ops: AppRuntimeOps;
   /** Deployment history, newest first (build logs omitted to stay compact). */
   deployments: AgentDeploymentSummary[];
@@ -227,6 +232,12 @@ export async function getAppDetailForAgent(
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
     manifest,
+    frontend: manifest?.app
+      ? {
+          runtime: manifest.app.runtime ?? 'web',
+          nshVersion: manifest.app.nshVersion ?? null,
+        }
+      : null,
     ops: {
       backend: {
         capable: Boolean(caps?.backend),

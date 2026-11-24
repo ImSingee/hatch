@@ -431,51 +431,164 @@ function isPermanentRequestError(error: unknown): boolean {
   );
 }
 
-export function createDataClient<TSchema extends DataSchema>(options: {
+/** One change notification for a watched table. */
+export type DataChangeEvent = {
+  /** The table revision the change produced, when the server reported one. */
+  revision?: number;
+  /** The server could not replay history from the cursor: start over here. */
+  reset: boolean;
+};
+
+/**
+ * How a data client reaches the Data API. Browsers and backends use HTTP;
+ * an App on the native runtime uses the host bridge (`@hatch/app/native`).
+ */
+export type DataTransport = {
+  /** POST `body` to the `query` or `mutate` action and return its JSON. */
+  post<T>(
+    action: 'query' | 'mutate',
+    body: unknown,
+    signal?: AbortSignal,
+  ): Promise<T>;
+  /**
+   * Report changes to `table` after revision `since` until `signal` aborts
+   * or the connection ends (resolve), or fails (reject; a
+   * `DataRequestError` with a 4xx status stops the watch).
+   */
+  changes(
+    table: string,
+    since: number,
+    signal: AbortSignal,
+    onChange: (event: DataChangeEvent) => void,
+  ): Promise<void>;
+};
+
+type HttpDataOptions = {
   baseUrl: string;
   signingSecret?: string;
   /** Defaults to the platform-injected browser constant or backend env value. */
   deploymentId?: string;
-  /** Overrides the framework-cache namespace when one endpoint has partitions. */
-  cacheNamespace?: string;
-}): DataClient<TSchema> {
+};
+
+function httpDataTransport(options: HttpDataOptions): DataTransport {
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
   const deploymentId = options.deploymentId ?? runtimeDeploymentId();
-  const cacheNamespace =
-    options.cacheNamespace ?? JSON.stringify([baseUrl, deploymentId ?? null]);
-
-  const request = async <T>(
-    path: string,
-    body: unknown,
-    signal?: AbortSignal,
-  ): Promise<T> => {
-    const raw = JSON.stringify(body);
-    const response = await fetch(`${baseUrl}/${path}`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'content-type': 'application/json',
-        ...(deploymentId ? { [DATA_DEPLOYMENT_HEADER]: deploymentId } : {}),
+  const deploymentHeaders = (): Record<string, string> =>
+    deploymentId ? { [DATA_DEPLOYMENT_HEADER]: deploymentId } : {};
+  return {
+    async post<T>(
+      action: 'query' | 'mutate',
+      body: unknown,
+      signal?: AbortSignal,
+    ): Promise<T> {
+      const raw = JSON.stringify(body);
+      const response = await fetch(`${baseUrl}/${action}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'content-type': 'application/json',
+          ...deploymentHeaders(),
+          ...(options.signingSecret
+            ? await hmacHeaders(options.signingSecret, raw)
+            : {}),
+        },
+        body: raw,
+        signal,
+      });
+      if (!response.ok) {
+        throw await responseError(response, 'Data request failed');
+      }
+      return (await response.json()) as T;
+    },
+    async changes(table, since, signal, onChange) {
+      const headers = {
+        ...deploymentHeaders(),
         ...(options.signingSecret
-          ? await hmacHeaders(options.signingSecret, raw)
+          ? await hmacHeaders(options.signingSecret, '')
           : {}),
-      },
-      body: raw,
-      signal,
-    });
-    if (!response.ok) {
-      throw await responseError(response, 'Data request failed');
-    }
-    return (await response.json()) as T;
+      };
+      const response = await fetch(
+        `${baseUrl}/events?since=${since}&table=${encodeURIComponent(table)}`,
+        { credentials: 'same-origin', headers, signal },
+      );
+      if (!response.ok) {
+        throw await responseError(response, 'Data stream failed');
+      }
+      if (!response.body) {
+        throw new Error('Data stream returned no response body.');
+      }
+      const reader = response.body
+        .pipeThrough(new TextDecoderStream())
+        .getReader();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        buffer += value;
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+        for (const event of events) {
+          const lines = event.split('\n');
+          if (!lines.some((line) => line.startsWith('event:'))) continue;
+          const id = lines
+            .find((line) => line.startsWith('id:'))
+            ?.slice(3)
+            .trim();
+          const eventType = lines
+            .find((line) => line.startsWith('event:'))
+            ?.slice(6)
+            .trim();
+          const revision = Number(id);
+          onChange({
+            revision:
+              id && Number.isSafeInteger(revision) && revision >= 0
+                ? revision
+                : undefined,
+            reset: eventType === 'reset',
+          });
+        }
+      }
+    },
   };
+}
+
+export function createDataClient<TSchema extends DataSchema>(
+  options: (
+    | HttpDataOptions
+    | {
+        /** Reach the Data API another way (the native host bridge). */
+        transport: DataTransport;
+        baseUrl?: never;
+        signingSecret?: never;
+        deploymentId?: never;
+      }
+  ) & {
+    /** Overrides the framework-cache namespace when one endpoint has partitions. */
+    cacheNamespace?: string;
+  },
+): DataClient<TSchema> {
+  const transport =
+    'transport' in options && options.transport
+      ? options.transport
+      : httpDataTransport(options as HttpDataOptions);
+  const cacheNamespace =
+    options.cacheNamespace ??
+    ('transport' in options && options.transport
+      ? JSON.stringify(['transport'])
+      : JSON.stringify([
+          (options as HttpDataOptions).baseUrl.replace(/\/+$/, ''),
+          (options as HttpDataOptions).deploymentId ??
+            runtimeDeploymentId() ??
+            null,
+        ]));
 
   const rawQuery = <TResult extends DataQueryResult>(
     input: DataQuery,
     signal?: AbortSignal,
-  ) => request<TResult>('query', input, signal);
+  ) => transport.post<TResult>('query', input, signal);
 
   const transaction = (operations: DataMutation[]) =>
-    request<DataMutationResult>('mutate', { operations });
+    transport.post<DataMutationResult>('mutate', { operations });
 
   return {
     cacheNamespace,
@@ -627,70 +740,19 @@ export function createDataClient<TSchema extends DataSchema>(options: {
         }
         while (!abort.signal.aborted) {
           try {
-            const headers = {
-              ...(deploymentId
-                ? { [DATA_DEPLOYMENT_HEADER]: deploymentId }
-                : {}),
-              ...(options.signingSecret
-                ? await hmacHeaders(options.signingSecret, '')
-                : {}),
-            };
-            const response = await fetch(
-              `${baseUrl}/events?since=${revision}&table=${encodeURIComponent(
-                input.table,
-              )}`,
-              {
-                credentials: 'same-origin',
-                headers,
-                signal: abort.signal,
-              },
-            );
-            if (!response.ok) {
-              throw await responseError(response, 'Data stream failed');
-            }
-            if (!response.body) {
-              throw new Error('Data stream returned no response body.');
-            }
-            const reader = response.body
-              .pipeThrough(new TextDecoderStream())
-              .getReader();
-            let buffer = '';
-            for (;;) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += value;
-              const events = buffer.split('\n\n');
-              buffer = events.pop() ?? '';
-              for (const event of events) {
-                if (
-                  !event.split('\n').some((line) => line.startsWith('event:'))
-                ) {
-                  continue;
-                }
-                const id = event
-                  .split('\n')
-                  .find((line) => line.startsWith('id:'))
-                  ?.slice(3)
-                  .trim();
-                const eventType = event
-                  .split('\n')
-                  .find((line) => line.startsWith('event:'))
-                  ?.slice(6)
-                  .trim();
-                const eventRevision = Number(id);
-                if (
-                  id &&
-                  Number.isSafeInteger(eventRevision) &&
-                  eventRevision >= 0
-                ) {
-                  revision =
-                    eventType === 'reset'
-                      ? eventRevision
-                      : Math.max(revision, eventRevision);
+            await transport.changes(
+              input.table,
+              revision,
+              abort.signal,
+              (event) => {
+                if (event.revision !== undefined) {
+                  revision = event.reset
+                    ? event.revision
+                    : Math.max(revision, event.revision);
                 }
                 scheduleRefetch(30);
-              }
-            }
+              },
+            );
             // A clean EOF is still a transport disconnect. Back off before
             // reconnecting so a proxy returning empty streams cannot spin the
             // browser in a tight fetch loop.

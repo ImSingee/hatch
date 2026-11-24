@@ -34,19 +34,43 @@
     "./tasks": {
       "types": "./dist/tasks.d.ts",
       "default": "./dist/tasks.js"
+    },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "default": "./dist/native.js"
+    },
+    "./native/rpc": {
+      "types": "./dist/native-rpc.d.ts",
+      "default": "./dist/native-rpc.js"
+    },
+    "./native/player": {
+      "types": "./dist/native-player.d.ts",
+      "default": "./dist/native-player.js"
     }
   },
   "sideEffects": false,
   "peerDependencies": {
     "zod": "^4.4.3",
     "@tanstack/react-query": "^5.0.0",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "nsh": "0.6.1",
+    "@connectrpc/connect": "^2.0.0",
+    "@bufbuild/protobuf": "^2.0.0"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-query": {
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "nsh": {
+      "optional": true
+    },
+    "@connectrpc/connect": {
+      "optional": true
+    },
+    "@bufbuild/protobuf": {
       "optional": true
     }
   }

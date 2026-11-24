@@ -59,6 +59,7 @@ import {
 } from './tasks/input-schema';
 import { assertDenoPermissionFlags } from '../deno-permissions';
 import { run as runSubprocess } from '../subprocess';
+import { buildNativeFrontend } from './native/build-native';
 
 export type BuildResult = {
   source: SourceManifest;
@@ -305,7 +306,12 @@ type SourceCheckEntry = {
  */
 function sourceCheckEntries(manifest: SourceManifest): SourceCheckEntry[] {
   const entries: SourceCheckEntry[] = [];
-  if (manifest.capabilities.frontend && manifest.app) {
+  // A native frontend is NSH TSX, checked by `nsh check` in its own step.
+  if (
+    manifest.capabilities.frontend &&
+    manifest.app &&
+    manifest.app.runtime !== 'native'
+  ) {
     entries.push({
       path: manifest.app.entry,
       missingMessage: `app entry not found: ${manifest.app.entry}`,
@@ -342,6 +348,15 @@ async function checkAppSource(
   manifest: SourceManifest,
   toolchain: SourceToolchain,
 ): Promise<void> {
+  if (
+    manifest.capabilities.frontend &&
+    manifest.app?.runtime === 'native' &&
+    !(await pathExists(path.join(src, manifest.app.entry)))
+  ) {
+    throw new Error(
+      `Source validation failed: app entry not found: ${manifest.app.entry}`,
+    );
+  }
   const entries = sourceCheckEntries(manifest);
   if (entries.length === 0) return;
 
@@ -809,15 +824,33 @@ export async function buildApp(
     };
 
     const define = browserDefine(id, manifest.name, options.deploymentId);
+    const nativeFrontend =
+      manifest.capabilities.frontend && manifest.app?.runtime === 'native';
     const storageInstall =
-      (manifest.capabilities.frontend && manifest.app) ||
+      (manifest.capabilities.frontend && manifest.app && !nativeFrontend) ||
       (manifest.capabilities.widgets && manifest.widgets.length > 0)
         ? await storageInstallScript(id, esbuildResolve)
         : '';
     let bundledBackendEntry: string | undefined;
+    let nshVersion: string | undefined;
+
+    // 3a) A native frontend: NSH deploy checks, the linked web module, the
+    // player page and the bundle native shells load.
+    if (nativeFrontend && manifest.app) {
+      ({ nshVersion } = await buildNativeFrontend({
+        src,
+        out,
+        app: { id, name: manifest.name, entry: manifest.app.entry },
+        api,
+        dataTable: manifest.capabilities.dataTable,
+        deploymentId: options.deploymentId,
+        esbuildResolve,
+        logs,
+      }));
+    }
 
     // 3) Bundle the frontend SPA -> static app/app.js + index.html.
-    if (manifest.capabilities.frontend && manifest.app) {
+    if (manifest.capabilities.frontend && manifest.app && !nativeFrontend) {
       const entry = path.join(src, manifest.app.entry);
       if (!(await pathExists(entry))) {
         throw new Error(`app entry not found: ${manifest.app.entry}`);
@@ -934,6 +967,9 @@ export async function buildApp(
     }
     await writeAppDocs(out, docs);
     if (docs.length > 0) normalized.docs = docs.map(({ doc }) => doc);
+    if (nshVersion && normalized.app) {
+      normalized.app = { ...normalized.app, nshVersion };
+    }
     await fs.writeFile(
       path.join(out, 'manifest.normalized.json'),
       JSON.stringify(normalized, null, 2),

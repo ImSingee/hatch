@@ -11,6 +11,8 @@
     "postcss.config.ts",
     "drizzle.config.ts"
   ],
+  // NSH TSX fixtures are checked by `nsh check` in the tests that build them.
+  "exclude": ["src/**/test-fixtures/native-*/**"],
 
   "compilerOptions": {
     "target": "ES2022",

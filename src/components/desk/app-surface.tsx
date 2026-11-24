@@ -1,4 +1,5 @@
 import { Loader } from '@mantine/core';
+import { useRouter } from '@tanstack/react-router';
 import {
   type Ref,
   useEffect,
@@ -7,6 +8,14 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  NATIVE_RUNTIME_META,
+  NATIVE_SURFACE_PROTOCOL,
+  parsePlayerMessage,
+  type SurfaceMessage,
+} from '../../../sdk-internal/app/src/native-surface';
+import { useOptionalPlatformEvent } from '~components/system/platform-events';
+import { useAccent } from '~/ui/theme';
 import { appSurfaceSource } from './app-surface-source';
 import classes from './app-surface.module.css';
 
@@ -59,6 +68,24 @@ function replaceInnerRoute(win: Window, route: string) {
   win.location.replace(`${base}#${route}`);
 }
 
+/** Whether the loaded frame is a native App's player page. */
+function isNativePlayer(doc: Document): boolean {
+  return (
+    doc
+      .querySelector(`meta[name="${NATIVE_RUNTIME_META}"]`)
+      ?.getAttribute('content') === 'native'
+  );
+}
+
+/** The open channel to a native App's player, while one is loaded. */
+type NativeChannel = {
+  port: MessagePort;
+  /** The route the App last reported, to skip echoing it back. */
+  route: string;
+  deploymentId: string | null;
+  send: (message: SurfaceMessage) => void;
+};
+
 /**
  * Hosts one running App inside a Desk window. It is the only component that
  * knows how an App is rendered: today a same-origin frame, later an NSH
@@ -66,9 +93,11 @@ function replaceInnerRoute(win: Window, route: string) {
  * by mounting the surface, closes it by unmounting, and otherwise uses
  * `route`, `visible`, the two callbacks and the handle.
  *
- * Apps ship no bridge script, so route and title are still observed on the
- * same-origin frame from in here. Once Apps are served from their own origin
- * that observation becomes a `postMessage` exchange inside this file.
+ * A `web` App ships no bridge script, so its route and title are observed on
+ * the same-origin frame from in here. A `native` App's frame is the NSH
+ * player page, which marks itself with a meta tag; for it, route, title,
+ * theme, visibility and "update available" go over a `postMessage` channel
+ * (`sdk-internal/app/src/native-surface.ts`) instead.
  */
 export function AppSurface({
   ref,
@@ -81,6 +110,9 @@ export function AppSurface({
   const frameRef = useRef<HTMLIFrameElement>(null);
   // The live App window, kept so `navigate` can reach the loaded App.
   const winRef = useRef<Window | null>(null);
+  const nativeRef = useRef<NativeChannel | null>(null);
+  const accent = useAccent();
+  const router = useRouter({ warn: false });
   const [loading, setLoading] = useState(true);
   const [generation, setGeneration] = useState(0);
   const src = appSurfaceSource(app.slug);
@@ -92,12 +124,52 @@ export function AppSurface({
   const reportTitleChange = useEffectEvent((title: string | null) =>
     onTitleChange?.(title),
   );
+  const currentAccent = useEffectEvent(() => accent);
+  const currentVisible = useEffectEvent(() => visible);
+  const openApp = useEffectEvent((slug: string, next: string) => {
+    if (router) {
+      void router.navigate({
+        to: '/app/$appSlug',
+        params: { appSlug: slug },
+        hash: next,
+      });
+    } else {
+      window.location.assign(`/app/${encodeURIComponent(slug)}#${next}`);
+    }
+  });
+
+  // The instance accent and the surface's visibility reach a native App
+  // live; a `web` App reads neither.
+  useEffect(() => {
+    nativeRef.current?.send({ type: 'theme', accent });
+  }, [accent]);
+  useEffect(() => {
+    nativeRef.current?.send({ type: 'visibility', visible });
+  }, [visible]);
+  useOptionalPlatformEvent('app.deployment.activated', (event) => {
+    const channel = nativeRef.current;
+    if (
+      channel?.deploymentId &&
+      event.deploymentRevision !== channel.deploymentId &&
+      winRef.current
+    ) {
+      channel.send({ type: 'update-available' });
+    }
+  });
 
   useImperativeHandle(
     ref,
     () => ({
       reload: () => setGeneration((current) => current + 1),
       navigate: (next) => {
+        const channel = nativeRef.current;
+        if (channel) {
+          if (canonicalRoute(channel.route) !== canonicalRoute(next)) {
+            channel.route = next;
+            channel.send({ type: 'navigate', route: next });
+          }
+          return;
+        }
         const win = winRef.current;
         if (!win) return;
         try {
@@ -170,6 +242,52 @@ export function AppSurface({
       titleObserver = null;
       win = null;
       winRef.current = null;
+      if (nativeRef.current) {
+        nativeRef.current.port.close();
+        nativeRef.current = null;
+      }
+    };
+
+    // A native App: hand the player a private port, then talk only over it.
+    const attachNative = (next: Window) => {
+      const { port1, port2 } = new MessageChannel();
+      const channel: NativeChannel = {
+        port: port1,
+        route: seedRoute(),
+        deploymentId: null,
+        send: (message) => port1.postMessage(message),
+      };
+      nativeRef.current = channel;
+      port1.onmessage = (event) => {
+        const message = parsePlayerMessage(event.data);
+        if (!message || nativeRef.current !== channel) return;
+        switch (message.type) {
+          case 'hello':
+            channel.deploymentId = message.deploymentId;
+            break;
+          case 'route':
+            channel.route = message.route;
+            reportRoute(message.route);
+            break;
+          case 'title':
+            reportTitleChange(message.title);
+            break;
+          case 'open':
+            openApp(message.slug, message.route);
+            break;
+        }
+      };
+      next.postMessage(
+        { protocol: NATIVE_SURFACE_PROTOCOL, type: 'connect' },
+        window.location.origin,
+        [port2],
+      );
+      channel.send({
+        type: 'init',
+        route: channel.route,
+        accent: currentAccent(),
+        visible: currentVisible(),
+      });
     };
 
     const onLoad = () => {
@@ -191,6 +309,10 @@ export function AppSurface({
       try {
         const doc = frame.contentDocument;
         if (!doc) return;
+        if (isNativePlayer(doc)) {
+          attachNative(next);
+          return;
+        }
         // Deep link: seed the freshly loaded App with the host's route once,
         // before listening, so it doesn't immediately echo back out.
         const seed = seedRoute();
