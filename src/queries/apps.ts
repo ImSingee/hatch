@@ -89,11 +89,34 @@ export const normalizedManifestQueryOptions = (id: string) =>
     queryFn: () => getNormalizedManifest({ data: id }),
   });
 
-/** Keyed by the body hash so a redeploy never shows a cached older body. */
+/** A doc body that no longer matches the manifest it was requested for. */
+export class StaleAppDocError extends Error {
+  constructor() {
+    super('This doc changed with a new deployment. Reloading the docs.');
+    this.name = 'StaleAppDocError';
+  }
+}
+
+/**
+ * Keyed by the body hash so a redeploy never shows a cached older body. The
+ * server reads the deployment current at request time, so a body whose hash
+ * differs belongs to a newer deployment: it is never cached under this key;
+ * the manifest is refetched instead, which yields the new key.
+ */
 export const appDocQueryOptions = (id: string, docId: string, sha256: string) =>
   queryOptions({
     queryKey: ['apps', id, 'docs', docId, sha256],
-    queryFn: () => getAppDocFn({ data: { id, docId } }),
+    queryFn: async ({ client }) => {
+      const result = await getAppDocFn({ data: { id, docId } });
+      if (result.doc.sha256 !== sha256) {
+        await client.invalidateQueries({
+          queryKey: normalizedManifestQueryOptions(id).queryKey,
+        });
+        throw new StaleAppDocError();
+      }
+      return result;
+    },
+    retry: (count, error) => !(error instanceof StaleAppDocError) && count < 3,
   });
 
 export const appKvQueryOptions = (id: string) =>

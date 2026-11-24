@@ -8,7 +8,7 @@ import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
-import { runDocs } from './docs';
+import { parseDocsCommand, runDocs } from './docs';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { parsePreferencesCommand, runPreferences } from './preferences';
@@ -76,6 +76,8 @@ try {
   // Reject malformed task arguments locally, before any network request.
   if (!showHelp && name === 'app' && args[offset + 1] === 'task')
     parseTaskCommand(args, offset);
+  if (!showHelp && name === 'app' && args[offset + 1] === 'docs')
+    parseDocsCommand(args, offset);
   if (!showHelp && !['version', '--version'].includes(name))
     await refreshRunEnvironment(process.env, controller.signal);
   if (showHelp) {

@@ -4,8 +4,9 @@ import {
   Code,
   Group,
   Loader,
+  ScrollArea,
+  SegmentedControl,
   Stack,
-  Tabs,
   Text,
   Tooltip,
 } from '@mantine/core';
@@ -85,15 +86,15 @@ export function DocsPanel({ appId, slug }: { appId: string; slug: string }) {
     >
       <GroupCard padded>
         <Stack gap="md">
-          <Tabs value={active.id} onChange={setSelected} variant="pills">
-            <Tabs.List>
-              {docs.map((doc) => (
-                <Tabs.Tab key={doc.id} value={doc.id}>
-                  {doc.title}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs>
+          {/* Scrolls sideways instead of widening the page for long titles. */}
+          <ScrollArea type="auto" scrollbarSize={6} offsetScrollbars="x">
+            <SegmentedControl
+              aria-label="Published docs"
+              value={active.id}
+              onChange={setSelected}
+              data={docs.map((doc) => ({ value: doc.id, label: doc.title }))}
+            />
+          </ScrollArea>
           <Stack gap={4}>
             {active.description ? (
               <Text size="sm" c="dimmed">
