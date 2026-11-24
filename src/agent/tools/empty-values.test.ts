@@ -1,8 +1,9 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { validateToolArguments } from '@earendil-works/pi-ai';
+import { validateToolArguments, type JsonObject } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { text, tool } from './shared';
+import { createWebTools } from './web';
 
 /**
  * The shared `tool()` boundary every Agent tool goes through. A model may
@@ -52,7 +53,7 @@ async function call(definition: AgentTool, args: Record<string, unknown>) {
     type: 'toolCall',
     id: 'call',
     name: definition.name,
-    arguments: prepared,
+    arguments: prepared as JsonObject,
   });
   return definition.execute('call', validated);
 }
@@ -132,8 +133,83 @@ describe('optional tool empty values', () => {
       );
       await expect(
         call(definition, { ...baseline, mode: empty }),
-      ).rejects.toThrow(/Validation failed/);
+      ).rejects.toThrow(/Validation failed|Invalid tool argument mode/);
       expect(received).not.toHaveBeenCalled();
     },
   );
+
+  /** Required data and optional controls of the kinds pi-ai coerces. */
+  function coercionProbe() {
+    return tool({
+      name: 'coercion_probe',
+      label: 'Coercion probe',
+      description: 'Exercises provider coercion at the shared boundary.',
+      parameters: z.object({
+        name: z.string().min(1),
+        version: z.number().int().positive(),
+        clone: z.boolean(),
+      }),
+      execute: async () => text('ok'),
+    });
+  }
+  // The agent loop: the tool's argument boundary, then pi's validation.
+  const prepareAndValidate = (name: string, args: Record<string, unknown>) => {
+    const definition = [
+      coercionProbe(),
+      ...createWebTools({ fetchImpl: vi.fn<typeof fetch>() }),
+    ].find((candidate) => candidate.name === name)!;
+    return validateToolArguments(definition, {
+      type: 'toolCall',
+      id: name,
+      name,
+      arguments: definition.prepareArguments!(args) as JsonObject,
+    });
+  };
+
+  it.each([
+    // Required data: null would become the string "null" or the number 0.
+    ['coercion_probe', { name: null, version: 1, clone: true }],
+    ['coercion_probe', { name: 'Todo', version: null, clone: true }],
+    // Non-numeric strings would become 0 or 1.
+    ['coercion_probe', { name: 'Todo', version: '', clone: true }],
+    ['coercion_probe', { name: 'Todo', version: '   ', clone: true }],
+    ['coercion_probe', { name: 'Todo', version: 'true', clone: true }],
+    // Only "true"/"false" are boolean spellings.
+    ['coercion_probe', { name: 'Todo', version: 1, clone: '0' }],
+    // A blank optional string would become the numeric empty placeholder.
+    ['web_fetch', { url: 'https://example.com', query: '   ' }],
+    // Array items are data: null would become the string "null".
+    ['web_search', { query: 'battery', include_domains: [null] }],
+  ])(
+    'rejects %s arguments pi-ai would coerce into different valid data: %j',
+    (name, args) => {
+      expect(() => prepareAndValidate(name, args)).toThrow(
+        /Invalid tool argument/,
+      );
+    },
+  );
+
+  it('keeps the coercions a model means', () => {
+    expect(
+      prepareAndValidate('coercion_probe', {
+        name: 'Todo',
+        version: '5',
+        clone: false,
+      }),
+    ).toEqual({ name: 'Todo', version: 5, clone: false });
+    expect(
+      prepareAndValidate('coercion_probe', {
+        name: 'Todo',
+        version: 1,
+        clone: 'true',
+      }),
+    ).toEqual({ name: 'Todo', version: 1, clone: true });
+    expect(
+      prepareAndValidate('coercion_probe', {
+        name: 7,
+        version: 1,
+        clone: false,
+      }),
+    ).toEqual({ name: '7', version: 1, clone: false });
+  });
 });

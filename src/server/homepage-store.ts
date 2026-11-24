@@ -6,6 +6,7 @@ import {
 } from '~/homepage';
 import { normalizeEntryHash } from './apps/sidebar';
 import { liveAppManifest, liveAppManifests } from './apps/access';
+import { AppError } from './errors';
 
 export async function listHomepageApps(): Promise<
   { id: string; name: string }[]
@@ -73,8 +74,10 @@ export async function saveHomepage(
       : parsed;
   const { available } = await homepageDestination(homepage);
   if (!available)
-    throw new Error(
+    throw new AppError(
       'This homepage is no longer available. Choose another page.',
+      400,
+      { code: 'homepage.unavailable' },
     );
   await db
     .insert(schema.userPreferences)

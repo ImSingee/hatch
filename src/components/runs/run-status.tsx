@@ -106,3 +106,27 @@ export function RunStatusBullet({
     </ThemeIcon>
   );
 }
+
+/**
+ * Error text the platform itself writes on task runs and steps
+ * (`src/server/apps/tasks/service.ts`). It is stored as English, so known
+ * sentences are shown translated; App and adapter errors stay as written.
+ */
+export function useRunErrorText() {
+  const { t } = useI18n();
+  return (error: string): string => {
+    if (error === 'Canceled') return t('runs.platformError.canceled');
+    if (error === 'Run failed') return t('runs.platformError.runFailed');
+    if (error === 'Platform restarted') {
+      return t('runs.platformError.platformRestarted');
+    }
+    if (error === 'Task run was interrupted because the platform restarted.') {
+      return t('runs.platformError.interrupted');
+    }
+    const timedOut = /^Run timed out after (\d+) minutes?$/.exec(error);
+    if (timedOut) {
+      return t('runs.platformError.timedOut', { count: Number(timedOut[1]) });
+    }
+    return error;
+  };
+}

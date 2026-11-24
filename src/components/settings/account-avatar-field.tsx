@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Session } from '~auth/client';
 import { UserAvatar } from '~components/auth/user-avatar';
+import { useI18n } from '~i18n';
+import { CodedError } from '~lib/error-codes';
 import { userAvatarKey } from '~lib/user-avatar';
 import { usersPanelQueryOptions } from '~queries/users';
 import { clearMyAvatarFn, uploadMyAvatarFn } from '~server/user-avatars';
@@ -15,7 +17,10 @@ function toBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
-    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.onerror = () =>
+      reject(
+        new CodedError('Could not read the file.', 'account.avatarReadFailed'),
+      );
     reader.readAsDataURL(file);
   });
 }
@@ -29,6 +34,7 @@ export function AccountAvatarField({
   /** Reload the session so every place showing the user picks up the change. */
   onChanged: () => Promise<unknown>;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const hasAvatar = Boolean(userAvatarKey(user.id, user.image));
   const refresh = () =>
@@ -41,21 +47,25 @@ export function AccountAvatarField({
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
-      if (file.size > MAX_BYTES) throw new Error('Avatar image exceeds 4 MB.');
+      if (file.size > MAX_BYTES)
+        throw new CodedError(
+          'Avatar image exceeds 4 MB.',
+          'account.avatarTooLarge',
+        );
       return uploadMyAvatarFn({
         data: { imageBase64: await toBase64(file) },
       });
     },
     onSuccess: async () => {
       await refresh();
-      toast.success('Avatar updated');
+      toast.success(t('account.avatar.updated'));
     },
   });
   const remove = useMutation({
     mutationFn: () => clearMyAvatarFn(),
     onSuccess: async () => {
       await refresh();
-      toast.success('Avatar removed');
+      toast.success(t('account.avatar.removed'));
     },
   });
   const busy = upload.isPending || remove.isPending;
@@ -63,7 +73,7 @@ export function AccountAvatarField({
   return (
     <Stack gap={6}>
       <Text size="sm" fw={500}>
-        Avatar
+        {t('account.avatar.label')}
       </Text>
       <Group gap="md" align="center" wrap="nowrap">
         <UserAvatar
@@ -88,7 +98,9 @@ export function AccountAvatarField({
                   loading={upload.isPending}
                   leftSection={<IconPhotoUp size={14} stroke={1.8} />}
                 >
-                  {hasAvatar ? 'Replace image' : 'Upload image'}
+                  {hasAvatar
+                    ? t('account.avatar.replace')
+                    : t('account.avatar.upload')}
                 </Button>
               )}
             </FileButton>
@@ -103,12 +115,12 @@ export function AccountAvatarField({
                 leftSection={<IconTrash size={14} stroke={1.8} />}
                 onClick={() => remove.mutate()}
               >
-                Remove
+                {t('common.remove')}
               </Button>
             ) : null}
           </Group>
           <Text size="xs" c="dimmed">
-            PNG, JPEG or WebP up to 4 MB, cropped to a square.
+            {t('account.avatar.hint')}
           </Text>
         </Stack>
       </Group>

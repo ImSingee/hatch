@@ -1,4 +1,5 @@
 import {
+  ClientOnly,
   HeadContent,
   Scripts,
   createRootRouteWithContext,
@@ -18,7 +19,7 @@ import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import appCss from '~styles.css?url';
 // Starts the UI language (and <html lang>) before any route renders.
-import '~i18n';
+import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
@@ -105,6 +106,7 @@ function AccentSync() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const accent = useAccent();
   return (
     <html lang="en" {...mantineHtmlProps}>
@@ -127,7 +129,16 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           <AccentSync />
           <ModalsProvider>{children}</ModalsProvider>
 
-          <Toaster position="top-center" richColors />
+          {/* Client-only: the shell is prerendered in English, and hydration
+              keeps prerendered attributes, so the translated label would
+              never replace it. */}
+          <ClientOnly>
+            <Toaster
+              position="top-center"
+              richColors
+              containerAriaLabel={t('nav.notifications')}
+            />
+          </ClientOnly>
           {/* A picture, not a control: it stays at the top edge even while
               idle, where the pointer must reach what is underneath. */}
           <NavigationProgress className="desk-route-progress" />

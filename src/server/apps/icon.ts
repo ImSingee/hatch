@@ -48,7 +48,7 @@ export function appIconView(id: string, key: string | null): AppIconView {
 export function encodeAppIcon(
   bytes: Buffer,
 ): Promise<Map<AppIconSize, Buffer>> {
-  return encodeSquareImage(bytes, 'Icon', APP_ICON_SIZES);
+  return encodeSquareImage(bytes, 'Icon', APP_ICON_SIZES, 'app.icon');
 }
 
 async function requireApp(id: string) {
@@ -58,7 +58,7 @@ async function requireApp(id: string) {
         columns: { id: true, icon: true },
       })
     : undefined;
-  if (!app) throw new AppError('App not found.', 404);
+  if (!app) throw new AppError('App not found.', 404, { code: 'app.notFound' });
   return app;
 }
 
@@ -108,7 +108,7 @@ export async function setAppIcon(
   if (previous === undefined) {
     // The App was deleted meanwhile; leave nothing behind.
     await removeIconKeyFiles(app.id, key);
-    throw new AppError('App not found.', 404);
+    throw new AppError('App not found.', 404, { code: 'app.notFound' });
   }
   await removeIconKeyFiles(app.id, previous);
   return appIconView(app.id, key);
@@ -126,7 +126,8 @@ export async function setAppIconFromCandidate(
 export async function clearAppIcon(id: string): Promise<AppIconView> {
   const app = await requireApp(id);
   const previous = await swapIconKey(app.id, null);
-  if (previous === undefined) throw new AppError('App not found.', 404);
+  if (previous === undefined)
+    throw new AppError('App not found.', 404, { code: 'app.notFound' });
   await removeIconKeyFiles(app.id, previous);
   return appIconView(app.id, null);
 }

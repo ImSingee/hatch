@@ -244,13 +244,13 @@ test('restores the waiting indicator between tools after earlier prose', async (
     emit({
       type: 'tool_start',
       id,
-      name: 'read_file',
+      name: 'inspect_file',
       label: `Inspect ${id}`,
       args: {},
     });
     await expect.element(screen.getByText(`Inspect ${id}`)).toBeVisible();
     await expect.element(thinking).not.toBeInTheDocument();
-    emit({ type: 'tool_end', id, name: 'read_file', isError: false });
+    emit({ type: 'tool_end', id, name: 'inspect_file', isError: false });
     await expect.element(thinking).toBeVisible();
     await expect
       .element(screen.getByText('I will inspect the files.'))
@@ -289,7 +289,7 @@ test('waits for every concurrent tool and stops indicating work on failure', asy
   emit({
     type: 'tool_start',
     id: 'tool-1',
-    name: 'read_file',
+    name: 'inspect_file',
     label: 'Read first file',
     args: {},
   });
@@ -297,7 +297,7 @@ test('waits for every concurrent tool and stops indicating work on failure', asy
   emit({
     type: 'tool_end',
     id: 'tool-1',
-    name: 'read_file',
+    name: 'inspect_file',
     isError: false,
     output: 'First file contents',
   });

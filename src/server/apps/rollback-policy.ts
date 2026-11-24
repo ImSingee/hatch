@@ -31,48 +31,39 @@ export function deploymentRequiresDataTable(manifest: unknown): boolean {
   return (capabilities as { dataTable?: unknown }).dataTable === true;
 }
 
-/** Explain the destructive-resource condition that makes rollback unsafe. */
-export function databaseRollbackBlockedReason(
-  dbName: string | null | undefined,
-  manifest: unknown,
-): string | null {
-  return !dbName && deploymentRequiresDatabase(manifest)
-    ? APP_DATABASE_ROLLBACK_BLOCKED_REASON
-    : null;
-}
+/**
+ * Which permanently deleted resource makes a rollback unsafe. The Web UI
+ * translates this; the CLI, RPC and Agent read the English reason.
+ */
+export type RollbackBlockedCode = 'database' | 'dataTable' | 'databases';
 
-/** Explain why a Data Table-dependent deployment cannot be restored. */
-export function dataTableRollbackBlockedReason(
-  dataDbName: string | null | undefined,
-  dataDbPasswordCiphertext: string | null | undefined,
-  manifest: unknown,
-): string | null {
-  return !(dataDbName && dataDbPasswordCiphertext) &&
-    deploymentRequiresDataTable(manifest)
-    ? APP_DATA_TABLE_ROLLBACK_BLOCKED_REASON
-    : null;
-}
+const ROLLBACK_BLOCKED_REASONS: Record<RollbackBlockedCode, string> = {
+  database: APP_DATABASE_ROLLBACK_BLOCKED_REASON,
+  dataTable: APP_DATA_TABLE_ROLLBACK_BLOCKED_REASON,
+  databases: APP_DATABASES_ROLLBACK_BLOCKED_REASON,
+};
 
-/** Combine missing persistent resources into the single rollback wire field. */
-export function deploymentRollbackBlockedReason(
+/** Combine missing persistent resources into the single rollback blocker. */
+export function deploymentRollbackBlockedCode(
   resources: {
     dbName: string | null | undefined;
     dataDbName: string | null | undefined;
     dataDbPasswordCiphertext: string | null | undefined;
   },
   manifest: unknown,
+): RollbackBlockedCode | null {
+  const database = !resources.dbName && deploymentRequiresDatabase(manifest);
+  const dataTable =
+    !(resources.dataDbName && resources.dataDbPasswordCiphertext) &&
+    deploymentRequiresDataTable(manifest);
+  if (database && dataTable) return 'databases';
+  if (database) return 'database';
+  return dataTable ? 'dataTable' : null;
+}
+
+/** The English explanation of a rollback blocker (the wire field). */
+export function rollbackBlockedReason(
+  code: RollbackBlockedCode | null,
 ): string | null {
-  const databaseReason = databaseRollbackBlockedReason(
-    resources.dbName,
-    manifest,
-  );
-  const dataTableReason = dataTableRollbackBlockedReason(
-    resources.dataDbName,
-    resources.dataDbPasswordCiphertext,
-    manifest,
-  );
-  if (databaseReason && dataTableReason) {
-    return APP_DATABASES_ROLLBACK_BLOCKED_REASON;
-  }
-  return databaseReason ?? dataTableReason;
+  return code ? ROLLBACK_BLOCKED_REASONS[code] : null;
 }

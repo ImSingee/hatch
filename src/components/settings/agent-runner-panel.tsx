@@ -13,7 +13,9 @@ import {
 import { Link } from '@tanstack/react-router';
 import { IconPlugOff, IconRefresh } from '@tabler/icons-react';
 import { useState } from 'react';
-import { formatDuration, formatExact, formatRelative } from '~lib/format';
+import type { AgentRunStatus } from '~/db/schema';
+import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
+import { formatDuration, formatExact, formatRelativeTime } from '~lib/format';
 import type {
   ActiveAgentRunInfo,
   AgentRunLeaseState,
@@ -22,27 +24,39 @@ import type {
   ConnectedRunnerInfo,
 } from '~server/agent-runner-status';
 
-const STATE_META: Record<AgentRunnerState, { label: string; color: string }> = {
-  connected: { label: 'Connected', color: 'teal' },
-  offline: { label: 'Offline', color: 'gray' },
-  attention: { label: 'Needs attention', color: 'yellow' },
+const STATE_META: Record<
+  AgentRunnerState,
+  { label: PlainTranslationKey; color: string }
+> = {
+  connected: { label: 'agentRunner.state.connected', color: 'teal' },
+  offline: { label: 'agentRunner.state.offline', color: 'gray' },
+  attention: { label: 'agentRunner.state.attention', color: 'yellow' },
 };
 
 const LEASE_META: Record<
   AgentRunLeaseState,
-  { label: string; color: string; hint?: string }
+  { label: PlainTranslationKey; color: string; hint?: PlainTranslationKey }
 > = {
-  live: { label: 'Live', color: 'teal' },
+  live: { label: 'agentRunner.lease.live', color: 'teal' },
   expired: {
-    label: 'Expired',
+    label: 'agentRunner.lease.expired',
     color: 'red',
-    hint: 'The runner stopped renewing this run — the platform will interrupt it shortly.',
+    hint: 'agentRunner.lease.expiredHint',
   },
   missing: {
-    label: 'Missing',
+    label: 'agentRunner.lease.missing',
     color: 'orange',
-    hint: 'This active run has no lease recorded, which should never happen.',
+    hint: 'agentRunner.lease.missingHint',
   },
+};
+
+const RUN_STATUS_LABELS: Record<AgentRunStatus, PlainTranslationKey> = {
+  running: 'agentRunner.runStatus.running',
+  blocked: 'agentRunner.runStatus.blocked',
+  completed: 'agentRunner.runStatus.completed',
+  failed: 'agentRunner.runStatus.failed',
+  cancelled: 'agentRunner.runStatus.cancelled',
+  interrupted: 'agentRunner.runStatus.interrupted',
 };
 
 export type AgentRunnerPanelProps = {
@@ -59,6 +73,7 @@ export function AgentRunnerPanel({
   error,
   onRefresh,
 }: AgentRunnerPanelProps) {
+  const { t, locale } = useI18n();
   if (isLoading) return <PanelSkeleton />;
   if (!snapshot) return <LoadFailed error={error} onRefresh={onRefresh} />;
   return (
@@ -71,15 +86,17 @@ export function AgentRunnerPanel({
             variant="light"
             color={STATE_META[snapshot.state].color}
           >
-            {STATE_META[snapshot.state].label}
+            {t(STATE_META[snapshot.state].label)}
           </Badge>
           {error ? (
             <Text size="xs" c="red">
-              Refresh failed — showing the last known state.
+              {t('agentRunner.refreshFailed')}
             </Text>
           ) : (
             <Text size="xs" c="dimmed">
-              Updated {formatRelative(snapshot.generatedAt)}
+              {t('agentRunner.updated', {
+                when: formatRelativeTime(snapshot.generatedAt, locale),
+              })}
             </Text>
           )}
         </Group>
@@ -88,21 +105,31 @@ export function AgentRunnerPanel({
 
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="lg">
         <Stat
-          label="Connected runners"
+          label={t('agentRunner.stats.connectedRunners')}
           value={snapshot.summary.connectedRunners}
         />
-        <Stat label="Active runs" value={snapshot.summary.activeRuns} />
-        <Stat label="Blocked runs" value={snapshot.summary.blockedRuns} />
-        <Stat label="Stale leases" value={snapshot.summary.staleLeases} />
+        <Stat
+          label={t('agentRunner.stats.activeRuns')}
+          value={snapshot.summary.activeRuns}
+        />
+        <Stat
+          label={t('agentRunner.stats.blockedRuns')}
+          value={snapshot.summary.blockedRuns}
+        />
+        <Stat
+          label={t('agentRunner.stats.staleLeases')}
+          value={snapshot.summary.staleLeases}
+        />
       </SimpleGrid>
 
       <Stack gap="xs">
         <Group justify="space-between" align="baseline">
-          <Text fw={700}>Runners</Text>
+          <Text fw={700}>{t('agentRunner.runners.title')}</Text>
           <Text size="xs" c="dimmed">
-            Heartbeat every{' '}
-            {formatDuration(snapshot.summary.heartbeatIntervalMs)} · lease TTL{' '}
-            {formatDuration(snapshot.summary.leaseTtlMs)}
+            {t('agentRunner.runners.timing', {
+              heartbeat: formatDuration(snapshot.summary.heartbeatIntervalMs),
+              ttl: formatDuration(snapshot.summary.leaseTtlMs),
+            })}
           </Text>
         </Group>
         {snapshot.runners.length === 0 ? (
@@ -111,9 +138,7 @@ export function AgentRunnerPanel({
             color="gray"
             icon={<IconPlugOff size={18} stroke={1.6} />}
           >
-            No Agent Runner is connected. Start the agent-runner service and it
-            will register itself here within a few seconds; agent chats cannot
-            run until one is online.
+            {t('agentRunner.runners.empty')}
           </Alert>
         ) : (
           <RunnersTable runners={snapshot.runners} />
@@ -121,10 +146,10 @@ export function AgentRunnerPanel({
       </Stack>
 
       <Stack gap="xs">
-        <Text fw={700}>Active runs</Text>
+        <Text fw={700}>{t('agentRunner.stats.activeRuns')}</Text>
         {snapshot.activeRuns.length === 0 ? (
           <Text size="sm" c="dimmed">
-            No agent runs are running or waiting right now.
+            {t('agentRunner.runs.empty')}
           </Text>
         ) : (
           <ActiveRunsTable runs={snapshot.activeRuns} />
@@ -141,6 +166,7 @@ function RefreshButton({
 }) {
   // Local busy state instead of the query's isFetching: the page also polls
   // every 5 seconds and the button must not blink on every background tick.
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   return (
     <Button
@@ -153,7 +179,7 @@ function RefreshButton({
         void Promise.resolve(onRefresh()).finally(() => setBusy(false));
       }}
     >
-      Refresh
+      {t('common.refresh')}
     </Button>
   );
 }
@@ -173,26 +199,28 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 /** Relative timestamp with the exact time in a tooltip. */
 function TimeCell({ value }: { value: string }) {
+  const { locale } = useI18n();
   return (
     <Tooltip label={formatExact(value)} withArrow>
       <Text size="sm" c="dimmed" style={{ cursor: 'default' }}>
-        {formatRelative(value)}
+        {formatRelativeTime(value, locale)}
       </Text>
     </Tooltip>
   );
 }
 
 function RunnersTable({ runners }: { runners: ConnectedRunnerInfo[] }) {
+  const { t } = useI18n();
   return (
     <Table.ScrollContainer minWidth={640}>
       <Table verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Runner ID</Table.Th>
-            <Table.Th>Protocol</Table.Th>
-            <Table.Th>Active runs</Table.Th>
-            <Table.Th>Connected since</Table.Th>
-            <Table.Th>Last seen</Table.Th>
+            <Table.Th>{t('agentRunner.runners.id')}</Table.Th>
+            <Table.Th>{t('agentRunner.runners.protocol')}</Table.Th>
+            <Table.Th>{t('agentRunner.stats.activeRuns')}</Table.Th>
+            <Table.Th>{t('agentRunner.runners.connectedSince')}</Table.Th>
+            <Table.Th>{t('agentRunner.runners.lastSeen')}</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -226,16 +254,17 @@ function RunnersTable({ runners }: { runners: ConnectedRunnerInfo[] }) {
 }
 
 function ActiveRunsTable({ runs }: { runs: ActiveAgentRunInfo[] }) {
+  const { t } = useI18n();
   return (
     <Table.ScrollContainer minWidth={720}>
       <Table verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Chat</Table.Th>
-            <Table.Th>Status</Table.Th>
-            <Table.Th>Runner</Table.Th>
-            <Table.Th>Lease</Table.Th>
-            <Table.Th>Started</Table.Th>
+            <Table.Th>{t('agentRunner.runs.chat')}</Table.Th>
+            <Table.Th>{t('common.status')}</Table.Th>
+            <Table.Th>{t('agentRunner.runs.runner')}</Table.Th>
+            <Table.Th>{t('agentRunner.runs.lease')}</Table.Th>
+            <Table.Th>{t('agentRunner.runs.started')}</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -263,7 +292,7 @@ function ActiveRunsTable({ runs }: { runs: ActiveAgentRunInfo[] }) {
                   variant="light"
                   color={run.status === 'blocked' ? 'yellow' : 'teal'}
                 >
-                  {run.status}
+                  {t(RUN_STATUS_LABELS[run.status])}
                 </Badge>
               </Table.Td>
               <Table.Td>
@@ -284,10 +313,11 @@ function ActiveRunsTable({ runs }: { runs: ActiveAgentRunInfo[] }) {
 }
 
 function RunRunnerCell({ run }: { run: ActiveAgentRunInfo }) {
+  const { t } = useI18n();
   if (!run.runnerId) {
     return (
       <Text size="sm" c="dimmed">
-        dispatching…
+        {t('agentRunner.runs.dispatching')}
       </Text>
     );
   }
@@ -297,12 +327,9 @@ function RunRunnerCell({ run }: { run: ActiveAgentRunInfo }) {
         {run.runnerId}
       </Text>
       {!run.runnerConnected && (
-        <Tooltip
-          label="The runner carrying this run is not connected right now."
-          withArrow
-        >
+        <Tooltip label={t('agentRunner.runs.runnerOfflineHint')} withArrow>
           <Badge size="xs" variant="light" color="gray">
-            offline
+            {t('agentRunner.runs.runnerOffline')}
           </Badge>
         </Tooltip>
       )}
@@ -311,15 +338,16 @@ function RunRunnerCell({ run }: { run: ActiveAgentRunInfo }) {
 }
 
 function LeaseBadge({ lease }: { lease: AgentRunLeaseState }) {
+  const { t } = useI18n();
   const meta = LEASE_META[lease];
   const badge = (
     <Badge size="sm" variant="light" color={meta.color}>
-      {meta.label}
+      {t(meta.label)}
     </Badge>
   );
   if (!meta.hint) return badge;
   return (
-    <Tooltip label={meta.hint} withArrow multiline maw={320}>
+    <Tooltip label={t(meta.hint)} withArrow multiline maw={320}>
       {badge}
     </Tooltip>
   );
@@ -332,14 +360,16 @@ function LoadFailed({
   error: Error | null;
   onRefresh: AgentRunnerPanelProps['onRefresh'];
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   return (
-    <Alert
-      variant="light"
-      color="red"
-      title="Couldn't load Agent Runner status"
-    >
+    <Alert variant="light" color="red" title={t('agentRunner.loadFailed')}>
       <Stack gap="sm" align="flex-start">
-        <Text size="sm">{error?.message ?? 'Unknown error.'}</Text>
+        <Text size="sm">
+          {error
+            ? errorText(error, 'agentRunner.loadFailedBody')
+            : t('agentRunner.unknownError')}
+        </Text>
         <RefreshButton onRefresh={onRefresh} />
       </Stack>
     </Alert>

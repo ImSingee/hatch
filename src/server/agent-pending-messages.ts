@@ -83,7 +83,11 @@ async function lockSession(tx: TX, sessionId: string): Promise<void> {
     .from(schema.agentSessions)
     .where(eq(schema.agentSessions.id, sessionId))
     .for('update');
-  if (!session) throw new AppError('Session not found.', 404);
+  if (!session) {
+    throw new AppError('Session not found.', 404, {
+      code: 'agent.sessionNotFound',
+    });
+  }
 }
 
 /** Lock a message that is still the user's to change. */
@@ -91,9 +95,15 @@ async function lockEditable(tx: TX, sessionId: string, messageId: string) {
   await lockSession(tx, sessionId);
   const rows = await loadPendingRows(tx, sessionId, { forUpdate: true });
   const row = rows.find((candidate) => candidate.id === messageId);
-  if (!row) throw new AppError('Pending message not found.', 404);
+  if (!row) {
+    throw new AppError('Pending message not found.', 404, {
+      code: 'agent.pendingNotFound',
+    });
+  }
   if (effectivePendingStatus(row, row.claimedRunStatus) !== 'pending') {
-    throw new AppError(NOT_EDITABLE, 409);
+    throw new AppError(NOT_EDITABLE, 409, {
+      code: 'agent.pendingNotEditable',
+    });
   }
   return row;
 }
@@ -200,12 +210,15 @@ export async function enqueuePendingMessage(input: {
               .for('update')
           : [];
       if (rows.length !== attachmentIds.length) {
-        throw new AppError('One or more attachments were not found.', 404);
+        throw new AppError('One or more attachments were not found.', 404, {
+          code: 'agent.attachmentsNotFound',
+        });
       }
       if (rows.some((row) => row.attachedAt != null)) {
         throw new AppError(
           'One or more attachments are already attached.',
           409,
+          { code: 'agent.attachmentsAttached' },
         );
       }
       const byId = new Map(rows.map((row) => [row.id, row]));
@@ -284,6 +297,7 @@ export async function updatePendingMessage(input: {
         throw new AppError(
           'An edit can only remove attachments, not add them.',
           400,
+          { code: 'agent.pendingAddAttachments' },
         );
       }
       const kept = current.attachments.filter((attachment) =>
@@ -297,12 +311,17 @@ export async function updatePendingMessage(input: {
         throw new AppError(
           'Message must include text or an attachment. Cancel it instead.',
           400,
+          { code: 'agent.pendingEmpty' },
         );
       }
       if (images.length + kept.length > MAX_MESSAGE_FILES) {
         throw new AppError(
           `Message supports at most ${MAX_MESSAGE_FILES} attachments.`,
           400,
+          {
+            code: 'agent.tooManyAttachments',
+            params: { max: MAX_MESSAGE_FILES },
+          },
         );
       }
       await releaseAttachments(
@@ -422,6 +441,10 @@ export async function getPendingMessages(
     where: { id: sessionId },
     columns: { id: true },
   });
-  if (!session) throw new AppError('Session not found.', 404);
+  if (!session) {
+    throw new AppError('Session not found.', 404, {
+      code: 'agent.sessionNotFound',
+    });
+  }
   return listSessionPendingMessages(sessionId);
 }

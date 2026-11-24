@@ -79,6 +79,10 @@ export class TaskQueueFullError extends AppError {
     super(
       `Task "${taskName}" was not started: the App already has ${TASK_QUEUE_LIMIT} queued runs.`,
       429,
+      {
+        code: 'tasks.queueFull',
+        params: { task: taskName, limit: TASK_QUEUE_LIMIT },
+      },
     );
     this.name = 'TaskQueueFullError';
   }
@@ -115,10 +119,14 @@ async function activeTaskContext(appId: string): Promise<TaskContext> {
   });
   if (!app) throw new AppError(`App "${appId}" not found.`, 404);
   if (app.status === 'archived') {
-    throw new AppError('The App is archived; restore it to run tasks.', 409);
+    throw new AppError('The App is archived; restore it to run tasks.', 409, {
+      code: 'tasks.appArchived',
+    });
   }
   if (!app.currentDeploymentId) {
-    throw new AppError('The App has no active deployment.', 409);
+    throw new AppError('The App has no active deployment.', 409, {
+      code: 'tasks.notDeployed',
+    });
   }
   const deployment = await db.query.deployments.findFirst({
     where: { id: app.currentDeploymentId },
@@ -138,7 +146,9 @@ async function activeTaskContext(appId: string): Promise<TaskContext> {
   }
   const manifest = deployment.manifestNormalized as NormalizedManifest | null;
   if (!app.capabilities?.tasks || !manifest?.tasks || !manifest.rpc) {
-    throw new AppError('The App declares no tasks.', 409);
+    throw new AppError('The App declares no tasks.', 409, {
+      code: 'tasks.noTasks',
+    });
   }
   return {
     appId,
@@ -154,7 +164,10 @@ async function activeTaskContext(appId: string): Promise<TaskContext> {
 function findTask(context: TaskContext, taskName: string): NormalizedTask {
   const task = context.tasks.definitions.find((t) => t.name === taskName);
   if (!task) {
-    throw new AppError(`Task "${taskName}" is not declared by the App.`, 404);
+    throw new AppError(`Task "${taskName}" is not declared by the App.`, 404, {
+      code: 'tasks.taskNotDeclared',
+      params: { task: taskName },
+    });
   }
   return task;
 }

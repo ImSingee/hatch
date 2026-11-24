@@ -8,12 +8,14 @@ import {
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { EmptyState } from '~components/page/page';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import classes from './empty-state.module.css';
 
-const STARTER_IDEAS = [
-  'A daily habit tracker',
-  'A reading list',
-  'A simple budget tracker',
+/** Starter prompts; each label is also the prompt the Agent receives. */
+const STARTER_IDEAS: PlainTranslationKey[] = [
+  'dashboard.idea.habit',
+  'dashboard.idea.reading',
+  'dashboard.idea.budget',
 ];
 
 export type DashboardEmptyStateKind =
@@ -36,11 +38,12 @@ export function DashboardEmptyState({
   state: DashboardEmptyStateKind;
   onAddWidget?: () => void;
 }) {
+  const { t } = useI18n();
   if (state === 'editing')
     return (
       <div className={classes.dropZone}>
-        <EmptyState variant="dashed" title="No widgets on this desk yet">
-          Pick one from Add widgets to place it here.
+        <EmptyState variant="dashed" title={t('dashboard.empty.editingTitle')}>
+          {t('dashboard.empty.editingBody')}
         </EmptyState>
       </div>
     );
@@ -50,7 +53,7 @@ export function DashboardEmptyState({
       <Panel>
         <EmptyState
           icon={<IconLayoutGrid size={26} stroke={1.6} />}
-          title="A clean desk"
+          title={t('dashboard.empty.cleanTitle')}
           actions={
             onAddWidget ? (
               <Button
@@ -58,13 +61,12 @@ export function DashboardEmptyState({
                 leftSection={<IconPlus size={16} stroke={2} />}
                 onClick={onAddWidget}
               >
-                Add widget
+                {t('dashboard.empty.addWidget')}
               </Button>
             ) : null
           }
         >
-          Add a widget from one of your Apps and shape this dashboard around
-          what you check every day.
+          {t('dashboard.empty.cleanBody')}
         </EmptyState>
       </Panel>
     );
@@ -74,29 +76,28 @@ export function DashboardEmptyState({
       <Panel>
         <EmptyState
           icon={<IconStack2 size={26} stroke={1.6} />}
-          title="No widgets to add yet"
+          title={t('dashboard.empty.noWidgetsTitle')}
           actions={
             <>
               <Button component={Link} to="/apps" variant="default">
-                Browse apps
+                {t('dashboard.empty.browseApps')}
               </Button>
               <Button
                 renderRoot={(props) => (
                   <Link
                     to="/agent"
-                    search={{ prompt: 'Add a dashboard widget to ' }}
+                    search={{ prompt: t('dashboard.agentPrompt.addWidget') }}
                     {...props}
                   />
                 )}
                 leftSection={<IconSparkles size={16} stroke={1.8} />}
               >
-                Ask the Agent
+                {t('dashboard.empty.askAgent')}
               </Button>
             </>
           }
         >
-          None of your Apps offers a widget. Ask the Agent to add one to an App
-          you use.
+          {t('dashboard.empty.noWidgetsBody')}
         </EmptyState>
       </Panel>
     );
@@ -106,7 +107,7 @@ export function DashboardEmptyState({
       <EmptyState
         icon={<IconSparkles size={26} stroke={1.6} />}
         tone="accent"
-        title="Welcome to Hatch"
+        title={t('dashboard.empty.welcomeTitle')}
         actions={
           <Button
             component={Link}
@@ -114,27 +115,28 @@ export function DashboardEmptyState({
             size="md"
             leftSection={<IconSparkles size={18} stroke={1.8} />}
           >
-            Build your first app
+            {t('dashboard.empty.buildFirst')}
           </Button>
         }
       >
-        Describe an App in plain language and the Agent builds and deploys it.
-        Your Apps then live in the dock, and their widgets on this desk.
+        {t('dashboard.empty.welcomeBody')}
       </EmptyState>
       <div className={classes.ideas}>
-        <span className={classes.ideasLabel}>Try starting with</span>
+        <span className={classes.ideasLabel}>
+          {t('dashboard.empty.tryStarting')}
+        </span>
         <Group gap="xs" justify="center">
           {STARTER_IDEAS.map((idea) => (
             <Button
               key={idea}
               renderRoot={(props) => (
-                <Link to="/agent" search={{ prompt: idea }} {...props} />
+                <Link to="/agent" search={{ prompt: t(idea) }} {...props} />
               )}
               variant="default"
               size="xs"
               radius="xl"
             >
-              {idea}
+              {t(idea)}
             </Button>
           ))}
         </Group>

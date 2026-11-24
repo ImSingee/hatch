@@ -19,6 +19,7 @@ import { type RefObject, useEffect, useRef, useState } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { EmptyState } from '~components/page/page';
 import { useEventCallback } from '~hooks/use-latest-committed';
+import { useI18n } from '~i18n';
 import type { DashboardLayoutItem } from '~/lib/dashboard-layout';
 import type { GridSize } from '~server/apps/manifest';
 import type { DashboardItem } from '~server/dashboards';
@@ -67,6 +68,7 @@ export function WidgetCard({
   /** Move by whole grid cells, for keyboard users of the drag handle. */
   onMove?: (dx: number, dy: number) => void;
 }) {
+  const { t } = useI18n();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const frameFocused = useFrameFocused(frameRef);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
@@ -276,13 +278,13 @@ export function WidgetCard({
     >
       {editing ? (
         <>
-          <Tooltip label="Remove from dashboard" withArrow>
+          <Tooltip label={t('dashboard.widget.removeTooltip')} withArrow>
             <ActionIcon
               variant="filled"
               color="dark"
               radius="xl"
               size={30}
-              aria-label="Remove widget"
+              aria-label={t('dashboard.widget.remove')}
               className={`widget-no-drag ${classes.remove}`}
               disabled={removeDisabled}
               onClick={onRemove}
@@ -293,7 +295,7 @@ export function WidgetCard({
           <div className={`widget-drag-handle ${classes.editBar}`}>
             <UnstyledButton
               className={classes.grip}
-              aria-label={`Move ${item.name}`}
+              aria-label={t('dashboard.widget.move', { name: item.name })}
               aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown"
               onKeyDown={(event) => {
                 const delta = moveKeys[event.key];
@@ -303,11 +305,11 @@ export function WidgetCard({
               }}
             >
               <IconGripVertical size={15} stroke={2} aria-hidden />
-              Drag
+              {t('dashboard.widget.drag')}
             </UnstyledButton>
             {sizes.length > 1 ? (
               <fieldset
-                aria-label={`${item.name} size`}
+                aria-label={t('dashboard.widget.size', { name: item.name })}
                 className={`widget-no-drag ${classes.sizes}`}
               >
                 {sizes.map((size) => {
@@ -340,18 +342,25 @@ export function WidgetCard({
         <h2 className={classes.title}>{item.name}</h2>
         {effectiveStatus === 'loading' ? (
           <Text component="span" className={classes.meta}>
-            Loading…
+            {t('common.loading')}
           </Text>
         ) : null}
         {!editing ? (
           <div className={`widget-no-drag ${classes.actions}`}>
             {!nativeHost && (refreshSupported || refreshing) ? (
-              <Tooltip label={refreshing ? 'Refreshing' : 'Refresh'} withArrow>
+              <Tooltip
+                label={
+                  refreshing
+                    ? t('dashboard.widget.refreshing')
+                    : t('common.refresh')
+                }
+                withArrow
+              >
                 <ActionIcon
                   variant="subtle"
                   color="gray"
                   size="sm"
-                  aria-label="Refresh widget"
+                  aria-label={t('dashboard.widget.refresh')}
                   aria-busy={refreshing}
                   loading={refreshing}
                   disabled={effectiveStatus !== 'ready'}
@@ -366,7 +375,7 @@ export function WidgetCard({
               <a
                 href={`/app/${encodeURIComponent(item.appSlug)}`}
                 className={classes.appLink}
-                aria-label={`Open ${item.appName}`}
+                aria-label={t('dashboard.widget.open', { app: item.appName })}
               >
                 <span className={classes.appName}>{item.appName}</span>
                 <IconChevronRight size={13} stroke={2.4} aria-hidden />
@@ -376,7 +385,7 @@ export function WidgetCard({
                 to="/app/$appSlug"
                 params={{ appSlug: item.appSlug }}
                 className={classes.appLink}
-                aria-label={`Open ${item.appName}`}
+                aria-label={t('dashboard.widget.open', { app: item.appName })}
               >
                 <span className={classes.appName}>{item.appName}</span>
                 <IconChevronRight size={13} stroke={2.4} aria-hidden />
@@ -396,7 +405,10 @@ export function WidgetCard({
         <iframe
           ref={frameRef}
           // Several Apps can offer a widget of the same name.
-          title={`${item.name} from ${item.appName}`}
+          title={t('dashboard.widget.frameTitle', {
+            name: item.name,
+            app: item.appName,
+          })}
           // allow-scripts + allow-same-origin: scripts run and the widget keeps
           // the same-origin session its Connect client needs, while the
           // omitted tokens still block top-navigation and popups. See
@@ -429,7 +441,7 @@ export function WidgetCard({
               compact
               tone="danger"
               icon={<IconAlertTriangle size={17} stroke={1.8} />}
-              title="This widget didn’t load"
+              title={t('dashboard.widget.errorTitle')}
               actions={
                 editing ? null : (
                   <Button
@@ -440,12 +452,12 @@ export function WidgetCard({
                     className="widget-no-drag"
                     onClick={retry}
                   >
-                    Try again
+                    {t('common.tryAgain')}
                   </Button>
                 )
               }
             >
-              Try again, or redeploy {item.appName} if it keeps failing.
+              {t('dashboard.widget.errorBody', { app: item.appName })}
             </EmptyState>
           </div>
         ) : null}

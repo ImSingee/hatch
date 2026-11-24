@@ -8,18 +8,13 @@ describe('app rollback notifications', () => {
   it('surfaces an authoritative post-rollback schema mismatch as a warning', () => {
     expect(
       rollbackNotification({ version: 3, dataSchemaMismatch: true }),
-    ).toEqual({
-      tone: 'warning',
-      message:
-        'Restored v3. The managed Data Table schema was not rolled back and ' +
-        'may be incompatible with this code version.',
-    });
+    ).toEqual({ tone: 'warning', key: 'deployments.restoredSchemaMismatch' });
   });
 
   it('uses the normal success notification when schemas match', () => {
     expect(
       rollbackNotification({ version: 3, dataSchemaMismatch: false }),
-    ).toEqual({ tone: 'success', message: 'Restored v3' });
+    ).toEqual({ tone: 'success', key: 'deployments.restored' });
   });
 
   it('retains pre-confirmation for a deployment known to have a mismatch', () => {

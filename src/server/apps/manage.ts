@@ -37,8 +37,10 @@ import {
 } from './manifest';
 import { dropAppDatabase, withAppDatabaseLifecycle } from './provision';
 import {
-  deploymentRollbackBlockedReason,
+  type RollbackBlockedCode,
+  deploymentRollbackBlockedCode,
   deploymentRequiresDatabase,
+  rollbackBlockedReason,
 } from './rollback-policy';
 import {
   dropAppDataDatabase,
@@ -62,6 +64,21 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
+function appNotFound(id: string) {
+  return new AppError(`App "${id}" not found.`, 404, {
+    code: 'app.notFoundWithId',
+    params: { id },
+  });
+}
+
+function rollbackBlockedError(version: number, blocked: RollbackBlockedCode) {
+  return new AppError(
+    `Cannot restore v${version}. ${rollbackBlockedReason(blocked)}`,
+    409,
+    { code: `deployment.rollbackBlocked.${blocked}`, params: { version } },
+  );
+}
+
 export type DeploymentSummary = {
   id: string;
   version: number;
@@ -72,6 +89,8 @@ export type DeploymentSummary = {
   isCurrent: boolean;
   canRollback: boolean;
   rollbackBlockedReason: string | null;
+  /** Stable form of `rollbackBlockedReason` for the Web UI to translate. */
+  rollbackBlockedCode: RollbackBlockedCode | null;
   /** Commit on the app's `master` branch this version was built from. */
   sourceCommit: string | null;
   /** Immutable `deploy/v<version>` Git tag for this version. */
@@ -120,8 +139,8 @@ export async function listDeployments(
         d.status === 'deployed' &&
         Boolean(d.sourceTag) &&
         hasArtifact;
-      const rollbackBlockedReason = baseCanRollback
-        ? deploymentRollbackBlockedReason(
+      const rollbackBlockedCode = baseCanRollback
+        ? deploymentRollbackBlockedCode(
             {
               dbName: app?.dbName ?? null,
               dataDbName: app?.dataDbName ?? null,
@@ -142,13 +161,14 @@ export async function listDeployments(
         sourceTag: d.sourceTag,
         hasArtifact,
         hasBuildLog: Boolean(d.buildLog),
-        rollbackBlockedReason,
+        rollbackBlockedReason: rollbackBlockedReason(rollbackBlockedCode),
+        rollbackBlockedCode,
         dataSchemaMismatch:
           (dataActivationPending && !isCurrent) ||
           (Boolean(d.dataSchemaHash || liveDataSchemaHash) &&
             (d.dataSchemaHash ?? null) !== liveDataSchemaHash),
         compatibility: appCompatibility(d.compatibilityVersion),
-        canRollback: baseCanRollback && !rollbackBlockedReason,
+        canRollback: baseCanRollback && !rollbackBlockedCode,
       };
     }),
   );
@@ -190,7 +210,7 @@ async function setAppArchivedInner(
   const app = await db.query.apps.findFirst({
     where: { id },
   });
-  if (!app) throw new Error(`App "${id}" not found.`);
+  if (!app) throw appNotFound(id);
 
   const status: schema.AppStatus = archived
     ? 'archived'
@@ -230,12 +250,18 @@ export async function renameAppSlug(
 ): Promise<{ slug: string }> {
   const slug = rawSlug.trim();
   if (slug.length > APP_SLUG_MAX_LENGTH) {
-    throw new Error(`Slug must be at most ${APP_SLUG_MAX_LENGTH} characters.`);
+    throw new AppError(
+      `Slug must be at most ${APP_SLUG_MAX_LENGTH} characters.`,
+      400,
+      { code: 'app.slug.tooLong', params: { max: APP_SLUG_MAX_LENGTH } },
+    );
   }
   if (!isValidAppSlug(slug)) {
-    throw new Error(
+    throw new AppError(
       'Slug must be kebab-case (lowercase letters, digits, and hyphens, ' +
         'starting with a letter or digit).',
+      400,
+      { code: 'app.slug.invalid' },
     );
   }
 
@@ -243,13 +269,16 @@ export async function renameAppSlug(
     where: { id },
     columns: { id: true, slug: true },
   });
-  if (!app) throw new Error(`App "${id}" not found.`);
+  if (!app) throw appNotFound(id);
   if (app.slug === slug) return { slug };
 
   // Slugs are unique only within the human-facing URL namespace. App ids are
   // addressed independently at every technical boundary.
   if (await appSlugExists(slug, id)) {
-    throw new Error(`Slug "${slug}" is already in use.`);
+    throw new AppError(`Slug "${slug}" is already in use.`, 409, {
+      code: 'app.slug.taken',
+      params: { slug },
+    });
   }
 
   await db.update(schema.apps).set({ slug }).where(eq(schema.apps.id, id));
@@ -285,57 +314,82 @@ async function rollbackAppInner(
   const app = await db.query.apps.findFirst({
     where: { id },
   });
-  if (!app) throw new Error(`App "${id}" not found.`);
+  if (!app) throw appNotFound(id);
 
   const deployment = await db.query.deployments.findFirst({
     where: { id: deploymentId },
   });
   if (!deployment || deployment.appId !== id) {
-    throw new Error('Deployment not found for this app.');
+    throw new AppError('Deployment not found for this app.', 404, {
+      code: 'deployment.notFound',
+    });
   }
   const compatibility = appCompatibility(deployment.compatibilityVersion);
   if (!compatibility.isSupported && !options.allowUnsupportedCompatibility) {
-    throw new AppError(appCompatibilityRollbackMessage(compatibility), 409);
+    throw new AppError(
+      appCompatibilityRollbackMessage(compatibility),
+      409,
+      compatibility.version > compatibility.latestVersion
+        ? {
+            code: 'deployment.rollbackNeedsNewerPlatform',
+            params: {
+              version: compatibility.version,
+              latest: compatibility.latestVersion,
+            },
+          }
+        : { code: 'deployment.rollbackBelowMinimum' },
+    );
   }
   if (deployment.status !== 'deployed') {
-    throw new Error('Only successful deployments can be restored.');
+    throw new AppError('Only successful deployments can be restored.', 409, {
+      code: 'deployment.notSuccessful',
+    });
   }
+  const versionParams = { params: { version: deployment.version } };
 
   const artifact = deploymentArtifactDir(id, deploymentId);
   const legacySnapshot = deploymentBuildDir(id, deploymentId);
   const snapshot = (await pathExists(artifact)) ? artifact : legacySnapshot;
   if (!(await pathExists(snapshot))) {
-    throw new Error(
+    throw new AppError(
       `No artifact exists for v${deployment.version}. ` +
         'Only deployments built with artifact support can be restored.',
+      409,
+      { code: 'deployment.noArtifact', ...versionParams },
     );
   }
   if (!(await buildMatchesDeployment(id, deploymentId, snapshot))) {
-    throw new Error(
+    throw new AppError(
       `The artifact for v${deployment.version} does not match its deployment.`,
+      409,
+      { code: 'deployment.artifactMismatch', ...versionParams },
     );
   }
   if (!deployment.sourceTag) {
-    throw new Error(
+    throw new AppError(
       `Deployment v${deployment.version} has no source tag and cannot ` +
         'restore source. Run the app Git migration first.',
+      409,
+      { code: 'deployment.noSourceTag', ...versionParams },
     );
   }
   const sourceTag = deployment.sourceTag;
   const manifest = deployment.manifestNormalized as NormalizedManifest | null;
   const requiresDatabase = deploymentRequiresDatabase(manifest);
-  const initiallyBlockedReason = deploymentRollbackBlockedReason(app, manifest);
-  if (initiallyBlockedReason) {
-    throw new AppError(
-      `Cannot restore v${deployment.version}. ${initiallyBlockedReason}`,
-      409,
-    );
+  const initiallyBlocked = deploymentRollbackBlockedCode(app, manifest);
+  if (initiallyBlocked) {
+    throw rollbackBlockedError(deployment.version, initiallyBlocked);
   }
   const restoredName = manifest?.name ?? app.name;
   if (!isAppNameWithinMaxLength(restoredName)) {
-    throw new Error(
+    throw new AppError(
       `Deployment v${deployment.version} cannot be restored because its App ` +
         `name exceeds ${APP_NAME_MAX_LENGTH} characters.`,
+      409,
+      {
+        code: 'deployment.nameTooLong',
+        params: { version: deployment.version, max: APP_NAME_MAX_LENGTH },
+      },
     );
   }
   let latestDataSchemaHash = app.dataSchemaHash ?? null;
@@ -374,17 +428,9 @@ async function rollbackAppInner(
           dataDbPasswordCiphertext: true,
         },
       });
-      if (!current) throw new Error(`App "${id}" not found.`);
-      const rollbackBlockedReason = deploymentRollbackBlockedReason(
-        current,
-        manifest,
-      );
-      if (rollbackBlockedReason) {
-        throw new AppError(
-          `Cannot restore v${deployment.version}. ${rollbackBlockedReason}`,
-          409,
-        );
-      }
+      if (!current) throw appNotFound(id);
+      const blocked = deploymentRollbackBlockedCode(current, manifest);
+      if (blocked) throw rollbackBlockedError(deployment.version, blocked);
       previousDeploymentId = current.currentDeploymentId ?? null;
       const live = appBuildDir(id);
       await fs.rm(live, { recursive: true, force: true });

@@ -9,6 +9,7 @@ import { DeskWindow } from '~components/desk/window';
 import { EmptyState } from '~components/page/page';
 import { useInsideWindow } from '~components/page/window-context';
 import { StandaloneWindow } from '~components/page/standalone-window';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 
 /**
  * Router-wide error state. Registering it as the default error component gives
@@ -21,16 +22,15 @@ import { StandaloneWindow } from '~components/page/standalone-window';
  * logs, not for the person using the page, so it is never shown; a request
  * that never reached the server gets its own line because the fix differs.
  */
-export function routeErrorMessage(error: unknown): string {
+export function routeErrorKey(error: unknown): PlainTranslationKey {
   const offline =
     (typeof navigator !== 'undefined' && navigator.onLine === false) ||
     (error instanceof TypeError && /fetch|network/i.test(error.message));
-  return offline
-    ? 'Hatch could not be reached. Check your connection, then try again.'
-    : 'Something went wrong while loading this page. Try again; if it keeps failing, reload Hatch.';
+  return offline ? 'system.routeError.offline' : 'system.routeError.failed';
 }
 
 export function RouteError({ error }: ErrorComponentProps) {
+  const { t } = useI18n();
   const router = useRouter();
   const queryErrorResetBoundary = useQueryErrorResetBoundary();
   const [retrying, setRetrying] = useState(false);
@@ -61,7 +61,7 @@ export function RouteError({ error }: ErrorComponentProps) {
     <EmptyState
       tone="danger"
       icon={<IconAlertTriangle size={26} stroke={1.6} />}
-      title="This page couldn’t load"
+      title={t('system.routeError.heading')}
       actions={
         <Button
           variant="default"
@@ -69,11 +69,11 @@ export function RouteError({ error }: ErrorComponentProps) {
           loading={retrying}
           onClick={retry}
         >
-          Try again
+          {t('common.tryAgain')}
         </Button>
       }
     >
-      {routeErrorMessage(error)}
+      {t(routeErrorKey(error))}
     </EmptyState>
   );
 
@@ -81,12 +81,12 @@ export function RouteError({ error }: ErrorComponentProps) {
   // itself failed to load leaves the bare desk.
   if (insideWindow) return content;
   return insideShell ? (
-    <DeskWindow title="Something went wrong" maxWidth={520}>
+    <DeskWindow title={t('system.routeError.title')} maxWidth={520}>
       {content}
     </DeskWindow>
   ) : (
     <DeskStandalone>
-      <StandaloneWindow title="Something went wrong" width={520}>
+      <StandaloneWindow title={t('system.routeError.title')} width={520}>
         {content}
       </StandaloneWindow>
     </DeskStandalone>

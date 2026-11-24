@@ -217,7 +217,9 @@ async function replayStartedRun(
 /** Another run is active in the session. */
 export class ActiveRunConflictError extends AppError {
   constructor() {
-    super('This chat already has a running Agent turn.', 409);
+    super('This chat already has a running Agent turn.', 409, {
+      code: 'agent.runActive',
+    });
     this.name = 'ActiveRunConflictError';
   }
 }
@@ -233,7 +235,9 @@ export class PendingDeliveryDeferredError extends AppError {
 /** The pending messages a run was asked to deliver changed meanwhile. */
 export class PendingMessagesChangedError extends AppError {
   constructor() {
-    super('The pending message changed. Try again.', 409);
+    super('The pending message changed. Try again.', 409, {
+      code: 'agent.pendingChanged',
+    });
     this.name = 'PendingMessagesChangedError';
   }
 }
@@ -805,14 +809,18 @@ async function resolveRunModelConfig(
     where: { id: providerId, enabled: true },
   });
   if (!provider) {
-    throw new AppError('The selected Agent model is unavailable.', 409);
+    throw new AppError('The selected Agent model is unavailable.', 409, {
+      code: 'agent.modelUnavailable',
+    });
   }
 
   const model = await db.query.agentModels.findFirst({
     where: { providerId, modelId, kind: 'chat', enabled: true },
   });
   if (!model) {
-    throw new AppError('The selected Agent model is unavailable.', 409);
+    throw new AppError('The selected Agent model is unavailable.', 409, {
+      code: 'agent.modelUnavailable',
+    });
   }
 
   return {
@@ -921,7 +929,11 @@ export async function startAgentRun(
   const sessionRow = await db.query.agentSessions.findFirst({
     where: { id: input.sessionId },
   });
-  if (!sessionRow) throw new AppError('Session not found.', 404);
+  if (!sessionRow) {
+    throw new AppError('Session not found.', 404, {
+      code: 'agent.sessionNotFound',
+    });
+  }
 
   // A resend returns the original outcome before any check that the first
   // send itself changed (its run is active, its attachments attached).
@@ -966,7 +978,9 @@ export async function startAgentRun(
       'expectedSessionUpdatedAt' in input &&
       sessionRow.updatedAt.toISOString() !== input.expectedSessionUpdatedAt
     ) {
-      throw new AppError(NO_RETRYABLE_TURN, 409);
+      throw new AppError(NO_RETRYABLE_TURN, 409, {
+        code: 'agent.noRetryableTurn',
+      });
     }
     const initialRetry = await findRetryTarget(
       db,
@@ -977,7 +991,9 @@ export async function startAgentRun(
       !initialRetry ||
       (autoRetryOfRunId !== null && initialRetry.run.id !== autoRetryOfRunId)
     ) {
-      throw new AppError(NO_RETRYABLE_TURN, 409);
+      throw new AppError(NO_RETRYABLE_TURN, 409, {
+        code: 'agent.noRetryableTurn',
+      });
     }
   }
 
@@ -1000,6 +1016,7 @@ export async function startAgentRun(
       throw new AppError(
         'The Agent Runner that owns this chat workspace is unavailable.',
         503,
+        { code: 'agent.workspaceRunnerUnavailable' },
       );
     }
   }
@@ -1007,6 +1024,7 @@ export async function startAgentRun(
     throw new AppError(
       'No Agent Runner is connected. Start the agent-runner service, then retry.',
       503,
+      { code: 'agent.noRunner' },
     );
   }
 
@@ -1032,7 +1050,11 @@ export async function startAgentRun(
         .from(schema.agentSessions)
         .where(eq(schema.agentSessions.id, input.sessionId))
         .for('update');
-      if (!lockedSession) throw new AppError('Session not found.', 404);
+      if (!lockedSession) {
+        throw new AppError('Session not found.', 404, {
+          code: 'agent.sessionNotFound',
+        });
+      }
 
       // A concurrent copy of this send may have committed meanwhile.
       if (receiptKey) {
@@ -1078,7 +1100,9 @@ export async function startAgentRun(
         'expectedSessionUpdatedAt' in input &&
         lockedSession.updatedAt.toISOString() !== input.expectedSessionUpdatedAt
       ) {
-        throw new AppError(NO_RETRYABLE_TURN, 409);
+        throw new AppError(NO_RETRYABLE_TURN, 409, {
+          code: 'agent.noRetryableTurn',
+        });
       }
 
       const sessionMessages = (lockedSession.messages ?? []) as JsonValue[];
@@ -1102,7 +1126,11 @@ export async function startAgentRun(
           input.sessionId,
           sessionMessages,
         );
-        if (!target) throw new AppError(NO_RETRYABLE_TURN, 409);
+        if (!target) {
+          throw new AppError(NO_RETRYABLE_TURN, 409, {
+            code: 'agent.noRetryableTurn',
+          });
+        }
         if (autoRetryOfRunId !== null) {
           userId = target.run.userId;
           // Claim the schedule in the same commit as the replacement run, so
@@ -1118,7 +1146,9 @@ export async function startAgentRun(
             )
             .returning({ id: schema.agentRuns.id });
           if (claimed.length === 0 || target.run.id !== autoRetryOfRunId) {
-            throw new AppError(NO_RETRYABLE_TURN, 409);
+            throw new AppError(NO_RETRYABLE_TURN, 409, {
+              code: 'agent.noRetryableTurn',
+            });
           }
         }
         const retry = target.turn;
@@ -1266,7 +1296,9 @@ export async function startAgentRun(
               .for('update')
           : [];
       if (attachmentRows.length !== attachmentIds.length) {
-        throw new AppError('One or more attachments were not found.', 404);
+        throw new AppError('One or more attachments were not found.', 404, {
+          code: 'agent.attachmentsNotFound',
+        });
       }
       if (
         !isRetry &&
@@ -1277,6 +1309,7 @@ export async function startAgentRun(
         throw new AppError(
           'One or more attachments are already attached.',
           409,
+          { code: 'agent.attachmentsAttached' },
         );
       }
       const attachmentById = new Map(
@@ -1459,6 +1492,7 @@ export async function startAgentRun(
       throw new AppError(
         'The Agent Runner that owns this chat workspace is unavailable.',
         503,
+        { code: 'agent.workspaceRunnerUnavailable' },
       );
     }
     await enqueueRunTask(run.id, async () => {

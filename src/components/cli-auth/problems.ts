@@ -1,4 +1,7 @@
+import type { useI18n } from '~i18n';
 import { DeviceAuthError } from './device-api';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 /** Failures shown inline on the code form; the person can fix and resubmit. */
 export type EntryProblem = 'invalid' | 'rate-limited' | 'network' | 'server';
@@ -21,12 +24,10 @@ export const retryAfterOf = (error: unknown) =>
   error instanceof DeviceAuthError ? error.retryAfter : null;
 
 /** "Try again in about 7 minutes." from the server's remaining wait. */
-export function retryWait(seconds: number | null): string {
-  if (!seconds) return 'Try again later.';
-  if (seconds < 60)
-    return `Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`;
-  const minutes = Math.ceil(seconds / 60);
-  return `Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+export function retryWait(t: Translate, seconds: number | null): string {
+  if (!seconds) return t('cliAuth.retry.later');
+  if (seconds < 60) return t('cliAuth.retry.seconds', { count: seconds });
+  return t('cliAuth.retry.minutes', { count: Math.ceil(seconds / 60) });
 }
 
 export function classifyClaimError(

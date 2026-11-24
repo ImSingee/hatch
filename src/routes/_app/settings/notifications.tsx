@@ -8,6 +8,7 @@ import { GroupsSection } from '~components/notifications/groups-section';
 import { ResponseRoutesSection } from '~components/notifications/response-routes-section';
 import { RoutesSection } from '~components/notifications/routes-section';
 import { SectionHead } from '~components/settings/section-head';
+import { useI18n } from '~i18n';
 import {
   apnsStatusQueryOptions,
   notificationChannelsQueryOptions,
@@ -33,11 +34,12 @@ export const Route = createFileRoute('/_app/settings/notifications')({
 });
 
 function NotificationSettingsRoute() {
+  const { t } = useI18n();
   return (
     <>
       <SectionHead
-        title="Notifications"
-        description="Where notifications from Apps and Channels are delivered. Shared by everyone in this space."
+        title={t('settings.notifications.label')}
+        description={t('notifications.settings.description')}
       />
       <Suspense
         fallback={

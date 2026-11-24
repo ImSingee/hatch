@@ -13,7 +13,7 @@ import {
   updatePendingMessage,
 } from '~server/agent-pending-messages';
 import { authenticateSessionRequest } from '~server/session-http-auth';
-import { errorResponse } from '~server/errors';
+import { AppError, errorResponse } from '~server/errors';
 
 /**
  * Each given field replaces that part of the message; an omitted field stays
@@ -66,7 +66,11 @@ export async function patchAgentPendingMessage({
   try {
     const raw = await readCappedJson(request, MAX_BODY_BYTES);
     if (raw === TOO_LARGE) {
-      return new Response('Payload too large', { status: 413 });
+      return errorResponse(
+        new AppError('Payload too large', 413, {
+          code: 'agent.payloadTooLarge',
+        }),
+      );
     }
     parsed = updateBodySchema.parse(raw);
   } catch {

@@ -12,7 +12,7 @@ import {
 } from '~server/agent-message-body';
 import { authenticateSessionRequest } from '~server/session-http-auth';
 import { startAgentRun } from '~server/agent-runs';
-import { errorResponse } from '~server/errors';
+import { AppError, errorResponse } from '~server/errors';
 
 const startBodySchema = z.preprocess(
   normalizeLegacyUserText,
@@ -57,7 +57,11 @@ export async function postAgentRun({
   try {
     const raw = await readCappedJson(request, MAX_BODY_BYTES);
     if (raw === TOO_LARGE) {
-      return new Response('Payload too large', { status: 413 });
+      return errorResponse(
+        new AppError('Payload too large', 413, {
+          code: 'agent.payloadTooLarge',
+        }),
+      );
     }
     parsed = bodySchema.parse(raw);
   } catch {

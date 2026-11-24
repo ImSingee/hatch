@@ -61,6 +61,10 @@ export class AlreadyRespondedError extends AppError {
     super(
       `This notification was already answered by ${response.respondedBy.name}.`,
       409,
+      {
+        code: 'notifications.alreadyAnswered',
+        params: { name: response.respondedBy.name },
+      },
     );
     this.name = 'AlreadyRespondedError';
     this.response = response;
@@ -168,9 +172,15 @@ export async function respondToNotification(
       .from(schema.notifications)
       .where(eq(schema.notifications.id, notificationId))
       .for('update');
-    if (!notification) throw new AppError('Notification not found.', 404);
+    if (!notification) {
+      throw new AppError('Notification not found.', 404, {
+        code: 'notifications.notificationNotFound',
+      });
+    }
     if (!notification.reply) {
-      throw new AppError('This notification has no reply form.', 400);
+      throw new AppError('This notification has no reply form.', 400, {
+        code: 'notifications.noReplyForm',
+      });
     }
     if (notification.respondedAt) {
       const existing = await tx.query.notificationResponses.findFirst({
@@ -179,7 +189,9 @@ export async function respondToNotification(
       if (existing) throw new AlreadyRespondedError(responseView(existing));
     }
     if (notification.recalledAt) {
-      throw new AppError('This notification was recalled.', 409);
+      throw new AppError('This notification was recalled.', 409, {
+        code: 'notifications.recalled',
+      });
     }
     let normalized: ReplyAnswers;
     try {

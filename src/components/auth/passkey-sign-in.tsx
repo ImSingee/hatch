@@ -3,11 +3,12 @@ import { IconKey } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { authClient } from '~auth/client';
+import { authErrorOf } from '~auth/auth-errors';
 import {
   browserSupportsPasskeys,
   isPasskeyCancellation,
-  passkeyErrorMessage,
 } from '~auth/passkey-browser';
+import { i18n, useI18n, useErrorText } from '~i18n';
 
 export function PasskeySignIn({
   appOrigin,
@@ -19,6 +20,8 @@ export function PasskeySignIn({
   /** The passkey is the view's main action, as on the sign-in page. */
   primary?: boolean;
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const [loading, setLoading] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const pending = useRef(false);
@@ -35,12 +38,11 @@ export function PasskeySignIn({
     setLoading(true);
     try {
       await onSuccess();
-      toast.success('Welcome back');
+      // The shared instance, so a language switch does not restart autofill.
+      toast.success(i18n.t('login.welcomeBack'));
     } catch {
       if (mounted.current) {
-        toast.error(
-          'Signed in, but the next page could not be opened. Click Continue to try again.',
-        );
+        toast.error(i18n.t('auth.passkey.navigationFailed'));
       }
     } finally {
       completing.current = false;
@@ -87,7 +89,7 @@ export function PasskeySignIn({
         if (result.error) {
           if (!isPasskeyCancellation(result.error)) {
             toast.error(
-              passkeyErrorMessage(result.error, 'Passkey sign-in failed.'),
+              errorText(authErrorOf(result.error), 'auth.passkey.signInFailed'),
             );
           }
           return;
@@ -99,7 +101,7 @@ export function PasskeySignIn({
       await completeSignIn();
     } catch {
       if (mounted.current) {
-        toast.error('Passkey sign-in failed. Please try again.');
+        toast.error(t('auth.passkey.signInFailedRetry'));
       }
     } finally {
       pending.current = false;
@@ -118,9 +120,9 @@ export function PasskeySignIn({
         leftSection={<IconKey size={18} stroke={1.7} />}
         onClick={signIn}
       >
-        {authenticated ? 'Continue' : 'Sign in with a passkey'}
+        {authenticated ? t('common.continue') : t('auth.passkey.signIn')}
       </Button>
-      <Divider label="or use your password" labelPosition="center" />
+      <Divider label={t('auth.passkey.orPassword')} labelPosition="center" />
     </Stack>
   );
 }

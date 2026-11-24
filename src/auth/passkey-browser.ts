@@ -28,10 +28,3 @@ export function isPasskeyCancellation(
 ): boolean {
   return Boolean(error?.code && CANCELLATION_CODES.has(error.code));
 }
-
-export function passkeyErrorMessage(
-  error: PasskeyClientError | null | undefined,
-  fallback: string,
-): string {
-  return error?.message?.trim() || fallback;
-}

@@ -6,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useErrorText, useI18n } from '~i18n';
 import { NOTIFICATIONS_KEY } from '~queries/notifications';
 import {
   deleteNotificationFn,
@@ -50,19 +51,25 @@ export function forgetNotification(queryClient: QueryClient, id: string) {
 }
 
 /**
- * Confirm and delete a notification from history. Errors are toasted by the
- * global mutation handler; history refreshes either way. `onDeleted` runs
+ * Confirm and delete a notification from history. Errors are toasted here,
+ * translated by their stable code; history refreshes either way. `onDeleted` runs
  * only while the component that asked is still mounted, so a slow response
  * never acts on a page the user has since left.
  */
 export function useDeleteNotification(
   options: { onDeleted?: (id: string) => void } = {},
 ) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const remove = useMutation({
     mutationFn: (id: string) => deleteNotificationFn({ data: id }),
+    meta: { errorToast: false },
+    onError: (error) => {
+      toast.error(errorText(error, 'notifications.delete.failed'));
+    },
     onSuccess: (_result, id) => {
-      toast.success('Notification deleted', {
+      toast.success(t('notifications.delete.done'), {
         id: notificationDeletedToastId(id),
       });
       forgetNotification(queryClient, id);
@@ -80,25 +87,22 @@ export function useDeleteNotification(
     >,
   ) =>
     modals.openConfirmModal({
-      title: 'Delete this notification?',
+      title: t('notifications.delete.title'),
       centered: true,
       children: (
         <Stack gap="xs">
           <Text size="sm" fw={600} lineClamp={2}>
             {notification.title}
           </Text>
-          <Text size="sm">
-            It is removed from history with its delivery records, for everyone
-            in the workspace. This cannot be undone.
-          </Text>
+          <Text size="sm">{t('notifications.delete.body')}</Text>
           <Text size="sm" c="dimmed">
             {!notification.recalledAt && notification.deliveries.succeeded > 0
-              ? 'Nothing is sent: phones, webhooks and Apps keep the copy they already received, and deliveries that have not happened yet are dropped.'
-              : 'Nothing is sent, and deliveries that have not happened yet are dropped.'}
+              ? t('notifications.delete.delivered')
+              : t('notifications.delete.undelivered')}
           </Text>
         </Stack>
       ),
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () =>
         remove.mutate(notification.id, {

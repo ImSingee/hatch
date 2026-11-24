@@ -1,6 +1,16 @@
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
+/** Translated copy for the placeholder page, in the viewer's language. */
+export type TailscaleAuthorizationCopy = {
+  lang: string;
+  title: string;
+  heading: string;
+  message: string;
+};
+
 /** Reserve a window during the click, before asynchronous enrollment starts. */
-export function openTailscaleAuthorization(): Window | null {
+export function openTailscaleAuthorization(
+  copy: TailscaleAuthorizationCopy,
+): Window | null {
   let popup: Window | null;
   try {
     popup = window.open('about:blank', '_blank', 'popup,width=520,height=680');
@@ -12,8 +22,8 @@ export function openTailscaleAuthorization(): Window | null {
   // opener that can navigate or inspect the Platform window.
   popup.opener = null;
   const doc = popup.document;
-  doc.title = 'Connect Tailscale · Hatch';
-  doc.documentElement.lang = 'en';
+  doc.title = copy.title;
+  doc.documentElement.lang = copy.lang;
   const referrer = doc.createElement('meta');
   referrer.name = 'referrer';
   referrer.content = 'no-referrer';
@@ -24,11 +34,10 @@ export function openTailscaleAuthorization(): Window | null {
   doc.body.style.background = tokens.light.background;
   main.style.cssText = `max-width:28rem;margin:18vh auto;padding:2rem;font:16px/1.6 system-ui,sans-serif;color:${tokens.light.foreground}`;
   const title = doc.createElement('h1');
-  title.textContent = 'Connecting to Tailscale…';
+  title.textContent = copy.heading;
   title.style.cssText = 'font-size:1.5rem;font-weight:800;line-height:1.3';
   const message = doc.createElement('p');
-  message.textContent =
-    'Keep this window open. Authorization will appear here if needed. If this device is already authorized, this window will close automatically.';
+  message.textContent = copy.message;
   main.append(title, message);
   doc.body.replaceChildren(main);
   return popup;

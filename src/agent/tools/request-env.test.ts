@@ -1,4 +1,4 @@
-import { validateToolCall } from '@earendil-works/pi-ai';
+import { validateToolCall, type JsonObject } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createRequestEnvTool,
@@ -127,7 +127,10 @@ describe('request_env tool', () => {
           type: 'toolCall',
           id: 'request',
           name: 'request_env',
-          arguments: { reason: 'Need access.', variables: [variable] },
+          arguments: {
+            reason: 'Need access.',
+            variables: [variable],
+          } as JsonObject,
         }),
       ).toThrow(/Validation failed/);
     }

@@ -17,8 +17,10 @@ import { modals } from '@mantine/modals';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconKey, IconPencil, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
-import { formatRelative } from '~lib/format';
+import { useI18n } from '~i18n';
+import { formatRelativeTime } from '~lib/format';
 import { appKvQueryOptions } from '~queries/apps';
 import type { AppKvEntryView } from '~server/apps';
 import { deleteAppKvFn, setAppKvFn } from '~server/apps';
@@ -29,6 +31,7 @@ import { SectionHeader } from './section-header';
 // typing a new value (overwrite-only).
 function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
   const qc = useQueryClient();
+  const { t } = useI18n();
   const editing = Boolean(entry);
   const [key, setKey] = useState(entry?.key ?? '');
   // A secret entry's value is masked, so start blank and force a fresh value.
@@ -41,7 +44,7 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
     mutationFn: () =>
       setAppKvFn({ data: { id: appId, key: key.trim(), value, secret } }),
     onSuccess: () => {
-      toast.success(editing ? 'Updated key' : 'Added key');
+      toast.success(editing ? t('ops.kv.updated') : t('ops.kv.added'));
       void qc.invalidateQueries(appKvQueryOptions(appId));
       modals.closeAll();
     },
@@ -55,7 +58,7 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
   return (
     <Stack gap="sm">
       <TextInput
-        label="Key"
+        label={t('ops.kv.key')}
         placeholder="api-token"
         value={key}
         onChange={(e) => setKey(e.currentTarget.value)}
@@ -63,11 +66,13 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
         data-autofocus={!editing}
       />
       <Textarea
-        label={editing && entry?.secret ? 'New value' : 'Value'}
+        label={
+          editing && entry?.secret ? t('ops.kv.newValue') : t('ops.kv.value')
+        }
         placeholder={
           editing && entry?.secret
-            ? 'Enter a new value to overwrite (current value is hidden)'
-            : 'value'
+            ? t('ops.kv.secretPlaceholder')
+            : t('ops.kv.valuePlaceholder')
         }
         value={value}
         onChange={(e) => setValue(e.currentTarget.value)}
@@ -77,7 +82,7 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
         data-autofocus={editing}
       />
       <Checkbox
-        label="Secret — encrypt and hide the value here (overwrite-only)"
+        label={t('ops.kv.secretLabel')}
         checked={secret}
         onChange={(e) => setSecret(e.currentTarget.checked)}
       />
@@ -87,7 +92,7 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
           variant="default"
           onClick={() => modals.closeAll()}
         >
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button
           type="button"
@@ -95,7 +100,7 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
           disabled={!canSave}
           onClick={() => save.mutate()}
         >
-          {editing ? 'Save' : 'Add'}
+          {editing ? t('common.save') : t('common.add')}
         </Button>
       </Group>
     </Stack>
@@ -107,12 +112,13 @@ function KvForm({ appId, entry }: { appId: string; entry?: AppKvEntryView }) {
 // human management. Secret values are masked (overwrite-only).
 export function KvSection({ appId }: { appId: string }) {
   const qc = useQueryClient();
+  const { t, locale } = useI18n();
   const query = useQuery(appKvQueryOptions(appId));
   const entries = query.data ?? [];
 
   const remove = useMutation({
     mutationFn: (key: string) => deleteAppKvFn({ data: { id: appId, key } }),
-    onSuccess: () => toast.success('Deleted key'),
+    onSuccess: () => toast.success(t('ops.kv.deleted')),
     onSettled: () => {
       void qc.invalidateQueries(appKvQueryOptions(appId));
     },
@@ -120,23 +126,26 @@ export function KvSection({ appId }: { appId: string }) {
 
   const openEditor = (entry?: AppKvEntryView) =>
     modals.open({
-      title: entry ? `Edit "${entry.key}"` : 'Add KV entry',
+      title: entry
+        ? t('ops.kv.editTitle', { key: entry.key })
+        : t('ops.kv.addTitle'),
       children: <KvForm appId={appId} entry={entry} />,
     });
 
   const confirmDelete = (key: string) =>
     modals.openConfirmModal({
-      title: 'Delete key?',
+      title: t('ops.kv.deleteTitle'),
       children: (
         <Text size="sm">
-          Permanently delete{' '}
-          <Text span fw={700} ff="monospace">
-            {key}
-          </Text>
-          ? This cannot be undone.
+          <Trans
+            t={t}
+            i18nKey="ops.kv.deleteBody"
+            values={{ key }}
+            components={{ name: <Text span fw={700} ff="monospace" /> }}
+          />
         </Text>
       ),
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(key),
     });
@@ -146,7 +155,7 @@ export function KvSection({ appId }: { appId: string }) {
       <Group justify="space-between" wrap="nowrap" align="center">
         <SectionHeader
           icon={<IconKey size={16} stroke={1.8} />}
-          title="Key-value store"
+          title={t('ops.kv.title')}
           meta={
             entries.length > 0 ? (
               <Text size="xs" c="dimmed">
@@ -161,13 +170,11 @@ export function KvSection({ appId }: { appId: string }) {
           leftSection={<IconPlus size={14} />}
           onClick={() => openEditor()}
         >
-          Add key
+          {t('ops.kv.addKey')}
         </Button>
       </Group>
       <Text size="xs" c="dimmed">
-        Small per-app values (tokens, config). Your backend reads/writes them
-        via the signed KV API. New or overwritten secret values are encrypted at
-        rest and hidden here (overwrite-only).
+        {t('ops.kv.description')}
       </Text>
       {query.isLoading ? (
         <Center py="sm">
@@ -175,7 +182,7 @@ export function KvSection({ appId }: { appId: string }) {
         </Center>
       ) : entries.length === 0 ? (
         <Text size="xs" c="dimmed">
-          No keys yet.
+          {t('ops.kv.empty')}
         </Text>
       ) : (
         <Table.ScrollContainer minWidth={640}>
@@ -187,9 +194,9 @@ export function KvSection({ appId }: { appId: string }) {
           >
             <Table.Thead>
               <Table.Tr>
-                <Table.Th w={240}>Key</Table.Th>
-                <Table.Th>Value</Table.Th>
-                <Table.Th w={110}>Updated</Table.Th>
+                <Table.Th w={240}>{t('ops.kv.key')}</Table.Th>
+                <Table.Th>{t('ops.kv.value')}</Table.Th>
+                <Table.Th w={110}>{t('ops.kv.updatedColumn')}</Table.Th>
                 <Table.Th w={76} />
               </Table.Tr>
             </Table.Thead>
@@ -214,7 +221,7 @@ export function KvSection({ appId }: { appId: string }) {
                           color="orange"
                           style={{ flexShrink: 0 }}
                         >
-                          secret
+                          {t('ops.kv.secretBadge')}
                         </Badge>
                       ) : null}
                     </Group>
@@ -232,26 +239,36 @@ export function KvSection({ appId }: { appId: string }) {
                   </Table.Td>
                   <Table.Td>
                     <Text size="xs" c="dimmed" truncate>
-                      {formatRelative(entry.updatedAt)}
+                      {formatRelativeTime(entry.updatedAt, locale)}
                     </Text>
                   </Table.Td>
                   <Table.Td>
                     <Group gap={2} justify="flex-end" wrap="nowrap">
-                      <Tooltip label="Edit" withArrow position="top">
+                      <Tooltip
+                        label={t('common.edit')}
+                        withArrow
+                        position="top"
+                      >
                         <ActionIcon
                           variant="subtle"
                           color="gray"
-                          aria-label={`Edit ${entry.key}`}
+                          aria-label={t('ops.kv.editLabel', { key: entry.key })}
                           onClick={() => openEditor(entry)}
                         >
                           <IconPencil size={15} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Delete" withArrow position="top">
+                      <Tooltip
+                        label={t('common.delete')}
+                        withArrow
+                        position="top"
+                      >
                         <ActionIcon
                           variant="subtle"
                           color="red"
-                          aria-label={`Delete ${entry.key}`}
+                          aria-label={t('ops.kv.deleteLabel', {
+                            key: entry.key,
+                          })}
                           loading={
                             remove.isPending && remove.variables === entry.key
                           }

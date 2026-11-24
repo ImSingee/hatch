@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { GroupCard } from '~components/page/page';
 import { BackendsPanel } from '~components/apps/backends-panel';
 import { SectionHead } from '~components/settings/section-head';
+import { useI18n } from '~i18n';
 import { appBackendsQueryOptions } from '~queries/apps';
 
 export const Route = createFileRoute('/_app/settings/backends')({
@@ -13,11 +14,12 @@ export const Route = createFileRoute('/_app/settings/backends')({
 });
 
 function BackendsRoute() {
+  const { t } = useI18n();
   return (
     <>
       <SectionHead
-        title="Backends"
-        description="Live runtime state of every deployed app backend in the current platform process. Start, stop and restart times reset when the platform restarts."
+        title={t('settings.backends.label')}
+        description={t('settings.backends.description')}
       />
       <Suspense
         fallback={
