@@ -296,5 +296,6 @@
   "taskRun.row.schedule": "定时计划",
   "taskRun.queue.next": "下一个开始",
   "taskRun.queue.ahead_one": "前面还有 {{count}} 个运行",
-  "taskRun.queue.ahead_other": "前面还有 {{count}} 个运行"
+  "taskRun.queue.ahead_other": "前面还有 {{count}} 个运行",
+  "runStatus.succeeded": "成功"
 }

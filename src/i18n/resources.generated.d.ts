@@ -299,4 +299,5 @@ export type TranslationResource = {
   'taskRun.queue.next': 'Next to start';
   'taskRun.queue.ahead_one': '{{count}} run ahead';
   'taskRun.queue.ahead_other': '{{count}} runs ahead';
+  'runStatus.succeeded': 'Succeeded';
 };
