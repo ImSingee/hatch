@@ -55,9 +55,20 @@ describe('server-sent event parsing contract', () => {
     expect(parser).toMatchObject({ events: 3, lastEventId: null, retry: 1500 });
   });
 
-  it('rejects an event larger than the cap instead of buffering it', () => {
-    expect(() => parse(['data: ', 'x'.repeat(64)], 32)).toThrow(
-      expect.objectContaining({ code: 'stream_event_too_large', exitCode: 7 }),
-    );
+  it('rejects an oversized event however the network splits it', () => {
+    const big = `data: ${'x'.repeat(64)}`;
+    for (const chunks of [[`${big}\n\n`], ['data: ', big.slice(6)]])
+      expect(() => parse(chunks, 32)).toThrow(
+        expect.objectContaining({
+          code: 'stream_event_too_large',
+          exitCode: 7,
+        }),
+      );
+  });
+
+  it('advances the resume ID only when an event block completes', () => {
+    const { events, parser } = parse(['id: 1\ndata: a\n\nid: 2\ndata: cut']);
+    expect(events.map((event) => event.id)).toEqual(['1']);
+    expect(parser.lastEventId).toBe('1');
   });
 });

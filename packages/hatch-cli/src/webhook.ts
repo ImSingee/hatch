@@ -394,17 +394,18 @@ async function streamEvents(
   const emit = (record: unknown, during = output) =>
     write(`${JSON.stringify(record)}\n`, during);
   try {
-    armIdle();
     if (options.json)
       await emit({ type: 'open', status: response.status, contentType });
+    armIdle();
     try {
       if (response.body)
         for await (const chunk of response.body) {
-          armIdle();
+          // The idle timer covers only waiting for the App. Suspend it while
+          // stdout applies backpressure, then restart it for the next chunk.
+          clearTimeout(idleTimer);
           const events = parser.push(chunk);
           if (!options.json) await write(chunk, output);
           else for (const event of events) await emit(event);
-          // A slow stdout reader must not count as an idle stream.
           armIdle();
         }
       parser.end();

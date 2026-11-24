@@ -22,6 +22,8 @@ export class SseParser {
   #hasData = false;
   #event = '';
   #blockRetry: number | undefined;
+  /** The id field seen in the block being read; committed on dispatch. */
+  #pendingEventId = '';
   #lastEventId = '';
   #retry: number | null = null;
   #events = 0;
@@ -71,6 +73,7 @@ export class SseParser {
       if (character !== '\r' && character !== '\n') continue;
       const event = this.#line + text.slice(start, index);
       this.#line = '';
+      this.#checkLength(event.length);
       if (character === '\r') {
         if (index + 1 === text.length) this.#skipLineFeed = true;
         else if (text[index + 1] === '\n') index++;
@@ -80,13 +83,22 @@ export class SseParser {
       if (dispatched) events.push(dispatched);
     }
     this.#line += text.slice(start);
-    if (this.#line.length + this.#data.length > this.maxEventLength)
+    this.#checkLength(this.#line.length);
+    return events;
+  }
+
+  /**
+   * Enforce the cap on the buffered data plus one more line, before that line
+   * can complete (and dispatch) an event, so the limit does not depend on
+   * where the network splits chunks.
+   */
+  #checkLength(line: number) {
+    if (this.#data.length + line > this.maxEventLength)
       throw new CliError(
         'stream_event_too_large',
         `An event exceeded ${this.maxEventLength} characters.`,
         7,
       );
-    return events;
   }
 
   #processLine(line: string): SseEvent | undefined {
@@ -101,7 +113,7 @@ export class SseParser {
       this.#data += this.#hasData ? `\n${value}` : value;
       this.#hasData = true;
     } else if (field === 'id') {
-      if (!value.includes('\0')) this.#lastEventId = value;
+      if (!value.includes('\0')) this.#pendingEventId = value;
     } else if (field === 'retry' && /^\d+$/.test(value)) {
       this.#blockRetry = Number(value);
       this.#retry = this.#blockRetry;
@@ -109,6 +121,9 @@ export class SseParser {
   }
 
   #dispatch(): SseEvent | undefined {
+    // The resume ID advances only when a block completes, so an interrupted
+    // block's id never points past an event that was not delivered.
+    this.#lastEventId = this.#pendingEventId;
     const retry = this.#blockRetry;
     const hasData = this.#hasData;
     const result: SseEvent = {

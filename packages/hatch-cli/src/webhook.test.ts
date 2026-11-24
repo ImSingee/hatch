@@ -323,6 +323,25 @@ describe('server-sent event subscriptions', () => {
     });
   });
 
+  it('does not count a backpressured stdout as an idle stream', async () => {
+    stream = (_, response) => {
+      open(response);
+      response.end('id: 1\ndata: a\n\nid: 2\ndata: b\n\n');
+    };
+    // Every write waits for a drain that comes after the idle timeout.
+    const output = vi.spyOn(process.stdout, 'write').mockImplementation(() => {
+      setTimeout(() => process.stdout.emit('drain'), 400);
+      return false;
+    });
+    await sse('--json', '--idle-timeout', '0.2');
+    expect(records(output).at(-1)).toMatchObject({
+      type: 'end',
+      reason: 'closed',
+      lastEventId: '2',
+      events: 2,
+    });
+  });
+
   it('reports interrupted, non-2xx and non-stream responses distinctly', async () => {
     stream = (_, response) => {
       open(response);
