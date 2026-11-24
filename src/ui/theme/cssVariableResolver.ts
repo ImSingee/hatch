@@ -57,6 +57,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--ease-out-quart': tokens.motion.easing,
     '--transition-fast': `${tokens.motion.fast}ms ${tokens.motion.easing}`,
     '--transition-base': `${tokens.motion.base}ms ${tokens.motion.easing}`,
+    '--transition-slow': `${tokens.motion.slow}ms ${tokens.motion.easing}`,
   },
   light: {
     '--mantine-color-body': tokens.light.background,

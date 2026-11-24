@@ -1,4 +1,8 @@
 .shell {
+  /* The menu bar's height, which a maximized window makes room for when the
+     bar slides down over it. */
+  --desk-menu-bar-height: 40px;
+
   display: flex;
   flex-direction: column;
 }
@@ -24,6 +28,10 @@
 
 .menuBar {
   flex: none;
+}
+
+.menuEdge {
+  display: none;
 }
 
 .stage {
@@ -57,6 +65,13 @@
   min-width: 0;
   max-width: 100%;
   padding: 12px 16px 22px;
+}
+
+/* A maximized window fills the screen: no gap around it and, with a mouse,
+   no menu bar until the pointer reaches the top edge (below). The extra
+   attribute outweighs the per-width window padding further down. */
+.shell[data-view='window'][data-maximized] .stage {
+  padding: 0;
 }
 
 /* With a mouse the dock floats over the stage and waits below the bottom
@@ -115,20 +130,81 @@
     transform: translateX(-50%);
   }
 
+  /* The dock rises from below the edge while it fades and grows into
+     place, and sinks back the same way shortly after the pointer leaves. */
   .dockPanel {
     width: fit-content;
     margin-inline: auto;
     pointer-events: auto;
-    transform: translateY(100%);
-    transition: transform var(--transition-base) var(--ease-out-quart) 300ms;
+    opacity: 0;
+    transform: translateY(100%) scale(0.96);
+    transform-origin: 50% 100%;
+    transition:
+      transform var(--transition-slow) 300ms,
+      opacity var(--transition-slow) 300ms;
   }
 
   .dock:hover .dockPanel,
   .dock:has(:focus-visible) .dockPanel,
   .dock:has([aria-expanded='true']) .dockPanel,
   .dock:has([data-expanded]) .dockPanel {
+    opacity: 1;
     transform: none;
     transition-delay: 80ms;
+  }
+
+  /* Maximized: the menu bar waits above the top edge, like the dock below
+     but with no handle. The clip keeps the hidden bar from making the page
+     scrollable when keyboard focus enters it. */
+  .shell[data-maximized] .menuBar {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    z-index: 3;
+    overflow: clip;
+    pointer-events: none;
+  }
+
+  .shell[data-maximized] .menuBar > * {
+    pointer-events: auto;
+    transform: translateY(-100%);
+    transition: transform var(--transition-slow) 300ms;
+  }
+
+  .shell[data-maximized] .menuEdge {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    z-index: 3;
+    display: block;
+    height: 6px;
+  }
+
+  /* The window slides down with the bar, so the bar never covers the
+     window's own buttons; a transform, so nothing inside re-lays out. */
+  .shell[data-maximized] .stage {
+    transition: transform var(--transition-slow) 300ms;
+  }
+
+  .shell[data-maximized]:has(
+      .menuEdge:hover,
+      .menuBar:hover,
+      .menuBar :focus-visible,
+      .menuBar [aria-expanded='true']
+    )
+    :is(.menuBar > *, .stage) {
+    transform: none;
+    transition-delay: 80ms;
+  }
+
+  .shell[data-maximized]:has(
+      .menuEdge:hover,
+      .menuBar:hover,
+      .menuBar :focus-visible,
+      .menuBar [aria-expanded='true']
+    )
+    .stage {
+    transform: translateY(var(--desk-menu-bar-height));
   }
 
   .dock:hover .dockHandle,

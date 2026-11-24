@@ -286,12 +286,9 @@ test('a deep link opens its window, and closing returns to the desk', async () =
   await expect
     .element(screen.getByRole('heading', { name: 'Workflows' }))
     .toBeVisible();
-
-  await screen.getByRole('link', { name: /^Minimise window/ }).click();
-  await vi.waitFor(() => expect(path()).toBe('/dashboard'));
 });
 
-test('close leads to the parent a window names; minimise to the desk', async () => {
+test('close leads to the parent a window names; minimise is not available yet', async () => {
   const { router, screen, path } = await renderDesk('/app/todo/manage');
 
   await screen
@@ -300,8 +297,10 @@ test('close leads to the parent a window names; minimise to the desk', async () 
   await vi.waitFor(() => expect(path()).toBe('/apps'));
 
   await router.navigate({ to: '/app/todo/manage' as never });
-  await screen.getByRole('link', { name: /^Minimise window/ }).click();
-  await vi.waitFor(() => expect(path()).toBe('/dashboard'));
+  await expect
+    .element(screen.getByRole('button', { name: 'Minimise window' }))
+    .toBeDisabled();
+  expect(path()).toBe('/app/todo/manage');
 });
 
 test('Escape closes the window unless a field or a menu owns the key', async () => {
@@ -709,4 +708,44 @@ test('keyboard focus shows a tile its full name and Shift+F10 its actions, and s
     ).toEqual(['Edit', 'Unpin', 'Manage', 'Add an app', 'New with Agent']);
   });
   press('touchend');
+});
+
+test('a maximized window fills the screen, the menu bar waits at the top edge, and the next window opens the same way', async () => {
+  await page.viewport(1280, 800);
+  localStorage.removeItem('hatch.desk.windowMaximized');
+  const { router, screen } = await renderDesk('/settings');
+  const window_ = () => screen.getByRole('region', { name: 'Settings' });
+  await expect.element(window_()).toBeVisible();
+  const menuBar = () =>
+    document.querySelector<HTMLElement>('[class*="menuBar"] > *')!;
+  const menuBarShown = () => menuBar().getBoundingClientRect().bottom > 1;
+
+  await screen.getByRole('button', { name: 'Maximize window' }).click();
+  await expect.element(window_()).toHaveAttribute('data-maximized', 'true');
+  await vi.waitFor(() => {
+    const box = window_().element().getBoundingClientRect();
+    expect(box.top).toBeLessThanOrEqual(1);
+    expect(box.left).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThanOrEqual(window.innerWidth - 1);
+  });
+  // The menu bar waits above the edge, and comes down at the edge.
+  await userEvent.hover(screen.getByRole('heading', { name: 'Settings' }));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(false));
+  const edge = document.querySelector<HTMLElement>('[class*="menuEdge"]')!;
+  await userEvent.hover(page.elementLocator(edge));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(true));
+
+  // The next window opens maximized, and restoring brings the bar back.
+  await router.navigate({ to: '/apps' as never });
+  await expect
+    .element(screen.getByRole('region', { name: 'Apps' }))
+    .toHaveAttribute('data-maximized', 'true');
+  expect(localStorage.getItem('hatch.desk.windowMaximized')).toBe('true');
+  await screen.getByRole('button', { name: 'Restore window' }).click();
+  await expect
+    .element(screen.getByRole('region', { name: 'Apps' }))
+    .not.toHaveAttribute('data-maximized');
+  await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
+  await vi.waitFor(() => expect(menuBarShown()).toBe(true));
+  expect(localStorage.getItem('hatch.desk.windowMaximized')).toBeNull();
 });

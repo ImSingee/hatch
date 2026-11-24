@@ -1153,7 +1153,7 @@ button.stepHeader:hover {
   color: var(--mantine-color-text);
   text-decoration: none;
   background: var(--mantine-color-gray-0);
-  transition: background-color var(--transition-fast) var(--ease-out-quart);
+  transition: background-color var(--transition-fast);
 }
 
 .messageFile:hover {

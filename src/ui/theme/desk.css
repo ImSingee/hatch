@@ -414,3 +414,10 @@ a.mantine-Text-root:not(.mantine-Anchor-root):active {
   color: inherit;
   font-weight: var(--font-weight-heading);
 }
+
+/* The route progress bar is a picture, not a control. It stays at the top
+   edge even while idle, where the pointer must reach what is underneath (the
+   menu bar of a maximized window). */
+.desk-route-progress {
+  pointer-events: none;
+}

@@ -47,11 +47,11 @@ async function renderWindow(frame?: WindowFrame) {
   return screen;
 }
 
-test('a window on the desk keeps its own minimise and close', async () => {
+test('a window on the desk keeps its own close, with minimise shown but disabled', async () => {
   const screen = await renderWindow();
   await expect
-    .element(screen.getByRole('link', { name: /^Minimise window/ }))
-    .toBeVisible();
+    .element(screen.getByRole('button', { name: 'Minimise window' }))
+    .toBeDisabled();
   await expect
     .element(screen.getByRole('link', { name: /^Close window/ }))
     .toBeVisible();

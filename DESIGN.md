@@ -173,9 +173,13 @@ stays flat.
 ## Motion
 
 `motion.easing` is `cubic-bezier(0.25, 1, 0.5, 1)`; `fast` 120 ms for colour
-and border changes, `base` 180 ms for movement and shadow. Exposed as
-`--transition-fast`, `--transition-base` and `--ease-out-quart`. Only things
-that respond to the pointer move. `prefers-reduced-motion: reduce` collapses
+and border changes, `base` 180 ms for movement and shadow, `slow` 260 ms for a
+bar that slides in over the page (the dock, the menu bar of a maximized
+window). Exposed as `--transition-fast`, `--transition-base`,
+`--transition-slow` and `--ease-out-quart`. The three transition variables
+already carry the easing, so a declaration adds only a delay after them
+(`transform var(--transition-slow) 80ms`), never a second easing, which
+would void it. Only things that respond to the pointer move. `prefers-reduced-motion: reduce` collapses
 every transition and animation.
 
 ## Focus
@@ -198,7 +202,7 @@ Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 `--border-input`, `--focus-ring`, `--radius-window`, `--shadow-card`,
 `--shadow-dock`, `--shadow-window`, `--font-weight-body`,
 `--font-weight-strong`, `--font-weight-label`, `--font-weight-heading`,
-`--ease-out-quart`, `--transition-fast`, `--transition-base`.
+`--ease-out-quart`, `--transition-fast`, `--transition-base`, `--transition-slow`.
 
 ## Component specification
 
@@ -300,10 +304,21 @@ The frame a page, a modal or the sign-in form is presented in.
 - A modal is a window without the tile; its title is 18 / 800 and it sits on
   the scrim. Below 560 wide a window fills the stage and loses its radius.
 
-Every page is shown in this frame (`DeskWindow` in `src/components/desk/`):
-minimise leads to the desk, close to the window's parent or the desk, and
-Escape closes it unless a field or a layer above it wants the key. Below 560
-wide the two buttons become one back button at the start of the title bar.
+Every page is shown in this frame (`DeskWindow` in `src/components/desk/`).
+Its buttons, in order:
+
+- **Minimise** is shown but disabled until windows can wait on the desk.
+- **Maximize / Restore** (double-clicking the title bar does the same).
+  Maximized, the window fills the screen edge to edge, with no radius or
+  shadow. With a mouse, the menu bar waits above the top edge and slides down
+  (`slow`, 80 ms delay) when the pointer reaches the top 6 px or keyboard
+  focus enters it; there is no handle. The choice is the shell's and is
+  remembered per browser, so the next window opens the same way.
+- **Close** leads to the window's parent or the desk.
+
+Escape closes the window unless a field or a layer above it wants the key.
+Below 560 wide the buttons become one back button at the start of the title
+bar.
 
 ### Dock tile
 
