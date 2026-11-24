@@ -5,11 +5,19 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
-import { useI18n } from '~i18n';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { setThemeAccentFn } from '~server/theme';
 import { applyAccent, type AccentName } from '~ui/theme';
 import classes from './accent-panel.module.css';
+
+/** Display name of each accent; the stored value stays the token name. */
+const ACCENT_LABELS = {
+  indigo: 'appearance.accent.indigo',
+  teal: 'appearance.accent.teal',
+  clay: 'appearance.accent.clay',
+  violet: 'appearance.accent.violet',
+} as const satisfies Record<AccentName, PlainTranslationKey>;
 
 /** Choose the instance accent; the change shows at once and is then saved. */
 export function AccentPanel() {
@@ -65,7 +73,9 @@ export function AccentPanel() {
                   <IconCheck size={18} stroke={3} aria-hidden />
                 ) : null}
               </span>
-              <span className={classes.name}>{accent.name}</span>
+              <span className={classes.name}>
+                {t(ACCENT_LABELS[accent.name])}
+              </span>
             </label>
           ))}
         </div>
