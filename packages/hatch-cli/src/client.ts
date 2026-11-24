@@ -31,10 +31,6 @@ import {
   CreateAppRequestSchema,
   AppService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
-import {
-  CreateWorkflowRequestSchema,
-  WorkflowService,
-} from '../../hatch-platform-api/gen/hatch/platform/v1/workflow_pb';
 import { AuthService } from '../../hatch-platform-api/gen/hatch/platform/v1/auth_pb';
 import {
   ImageService,
@@ -436,7 +432,6 @@ export type AppTaskRunView = ReturnType<typeof taskRunView>;
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
-  const workflows = createClient(WorkflowService, transport);
   function lifecycle(client: {
     list: (
       request: Record<string, never>,
@@ -647,11 +642,6 @@ export function cliClient(transport: Transport) {
         const result = await pins.listPins(page);
         return {
           appPins: result.appPins.map(appPin),
-          workflows: result.workflows.map((workflow) => ({
-            id: workflow.id,
-            slug: workflow.slug,
-            name: workflow.name,
-          })),
           dashboards: result.dashboards.map((dashboard) => ({
             id: dashboard.id,
             name: dashboard.name,
@@ -708,16 +698,6 @@ export function cliClient(transport: Transport) {
           await pins.reorderDashboards({ dashboardIds: input.dashboardIds })
         ).dashboardIds,
       }),
-      setWorkflowPinned: async (input: {
-        workflow: string;
-        pinned: boolean;
-      }) => {
-        const result = await pins.setWorkflowPinned({
-          workflow: input.workflow,
-          pinned: input.pinned,
-        });
-        return { workflowId: result.id, pinned: result.pinned };
-      },
       setDashboardPinned: async (input: {
         dashboardId: string;
         pinned: boolean;
@@ -973,17 +953,6 @@ export function cliClient(transport: Transport) {
         return { appId: result.appId, association: result.association };
       },
     },
-    workflows: lifecycle({
-      list: workflows.listWorkflows,
-      create: (input) =>
-        workflows.createWorkflow(
-          parseCreate(CreateWorkflowRequestSchema, input),
-        ),
-      get: workflows.getWorkflow,
-      source: workflows.getWorkflowSource,
-      deploy: workflows.deployWorkflow,
-      rollback: workflows.rollbackWorkflow,
-    }),
     auth: {
       status: async (_input: Record<string, never>): Promise<AuthStatus> => {
         const result = await auth.getStatus({});
@@ -1036,8 +1005,8 @@ export function cliClient(transport: Transport) {
       },
     },
     sdk: {
-      get: async (input: { kind: 'app' | 'workflow' }) => {
-        const result = await sdk.getSdk(input);
+      get: async () => {
+        const result = await sdk.getSdk({ kind: 'app' });
         return {
           files: files(result.files),
           ...(result.tooling

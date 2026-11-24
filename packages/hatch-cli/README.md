@@ -1,11 +1,11 @@
 # Hatch CLI
 
-Authentication, App/Workflow source lifecycles and App data operations, over the
+Authentication, App source lifecycles and App data operations, over the
 public Connect RPC contract at `/api/rpc`. Requires Node >=26, Git and pnpm.
 A source that builds with the pnpm toolchain (`pnpm-lock.yaml`) needs pnpm of
 the same major version as the platform's, currently 12. Deno is needed to
 prepare a Deno-toolchain source (`deno.json` + `deno.lock`) and to run or test
-authored App/Workflow code locally. No platform repository checkout,
+authored App code locally. No platform repository checkout,
 current-working-directory dependency, or runtime npm dependencies are needed by
 the CLI executable.
 
@@ -118,9 +118,7 @@ logout confirms `/api/auth/sign-out` before removal; failure retains the config.
 API key logout requires this option; it does not revoke the key. After a crash,
 remove a stale lock only after confirming no live writer owns it.
 
-## App and Workflow lifecycles
-
-The two resource families share semantics; replace `app` with `workflow`:
+## App lifecycle
 
 ```sh
 hatch app list --json
@@ -146,6 +144,8 @@ supplied the same way. Each standalone checkout stores only origin/kind/immutabl
 ID/generation/source and recovery metadata in `.git/hatch-cli.json`, never
 credentials. IDs resolve before slugs on the server. Subsequent operations use
 the canonical immutable ID; generation is checked locally and at deployment.
+A checkout whose metadata names another instance or a kind other than `app`
+is rejected with `workspace_instance_mismatch`.
 
 - **Create:** validate JSON with the public contract, register once, materialize
   the returned template into a new staged Git repository, commit the scaffold,
@@ -162,9 +162,9 @@ the canonical immutable ID; generation is checked locally and at deployment.
   symlink traversal and nested checkouts, and prepares before replacing. On
   preparation failure the old directory remains intact; on swap failure it is
   restored. Recoverable preparation work remains at the reported path.
-- **Adopt:** validate the existing Agent origin bundle path, immutable ID/kind,
-  manifest, current platform generation and source history before adding CLI
-  metadata. Local HEAD must contain platform master; dirty work and origin are
+- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`),
+  immutable ID, manifest, current platform generation and source history before
+  adding CLI metadata. Local HEAD must contain platform master; dirty work and origin are
   preserved. Empty canonical source is ambiguous unless an uncommitted checkout
   belongs to the verified Run's session. Adoption never resets local history.
 - **Update:** require clean source; fetch platform `master` and the platform's
@@ -194,7 +194,7 @@ the canonical immutable ID; generation is checked locally and at deployment.
 ### Plain Git
 
 Source moves over Git smart HTTP at
-`<platform-url>/api/git/{app|workflow}/<id-or-slug>.git`. `master` is the source
+`<platform-url>/api/git/app/<id-or-slug>.git`. `master` is the source
 line: it only fast-forwards and cannot be deleted. Other branches and tags are
 ordinary Git refs, except `deploy/*` tags, which the platform creates for each
 release. Pushing never deploys.
@@ -221,7 +221,7 @@ when the requested host is the logged-in platform. `store` and `erase` do
 nothing. It exists for Git to call.
 
 SDK preparation uses authenticated `hatch.platform.v1.SdkService/GetSdk`: compiled
-`@hatch/app`, legacy `@hatch/data`, or `@hatch/workflow` payloads, import maps,
+`@hatch/app` and legacy `@hatch/data` payloads, import maps,
 the platform-generated TypeScript configuration and the versions of the tools
 the platform builds with, all from the **running platform build**. Install into
 generated `.hatch/` atomically; never commit it.
@@ -234,7 +234,7 @@ message naming the files to remove.
 Authored lockfiles are never rewritten, and dependency lifecycle scripts are
 never run for either toolchain.
 
-- **pnpm toolchain (Apps and Workflows).** Validate `package.json` and
+- **pnpm toolchain.** Validate `package.json` and
   `pnpm-lock.yaml` with the platform's dependency policy, then run the two pnpm
   steps the platform runs at deploy: `pnpm fetch`, then an offline frozen
   install. The registry is fixed to `https://registry.npmjs.org/`; project,
@@ -247,20 +247,18 @@ never run for either toolchain.
   permission model does not cover signals, so an evaluated manifest can still
   signal other processes of the same OS user; prepare source you do not trust
   under a separate user or in a container. Adopt evaluates a `manifest.ts`
-  of either kind the same way, installing first; a `manifest.json` is parsed
+  the same way, installing first; a `manifest.json` is parsed
   without installing anything. A pnpm of another major version fails
   preparation with a message naming the required one.
 - **Deno toolchain.** Apps validate the shared dependency policy and run
   `deno install --no-config --package-json --node-modules-dir=auto --lock=deno.lock --frozen`,
-  then validate the source manifest with permissions denied. Workflow SDK
-  preparation retains `pnpm install --ignore-scripts --lockfile=false`.
+  then validate the source manifest with permissions denied.
 
 A CLI that predates the pnpm toolchain fails App preparation on a
 `pnpm-lock.yaml` source with a missing-`deno.json` message; upgrade the CLI. A
 platform that predates it delivers no toolchain versions, and preparation
 reports that the platform does not provide the pnpm build toolchain. Both
-surface as `app_preparation_failed` or `workflow_preparation_failed` with the
-stage in the message.
+surface as `app_preparation_failed` with the stage in the message.
 
 A failure that says nothing about the source keeps its own code and exit 7,
 during preparation and during adopt alike: `tool_unavailable` when a local tool
@@ -284,8 +282,6 @@ pnpm dlx --package typescript@7 tsc -p .hatch/tsconfig.json
 deno test --no-lock --node-modules-dir=manual --import-map=.hatch/import-map.json
 # Deno toolchain: check with the materialized import map.
 deno check --import-map .hatch/import-map.json manifest.ts app/main.tsx
-# Deno-toolchain Workflow:
-deno check --import-map .hatch/import-map.json manifest.ts workflow.ts
 ```
 
 Workspace commands use a canonical-path hashed sibling directory lock across
@@ -305,7 +301,7 @@ hatch app deploy --directory notes-copy --message 'Reviewed migration' \
   --allow-destructive-data-migration --data-migration-approval-token '<exact-token>' --json
 ```
 
-Both options are required together and forbidden for Workflows. A changed schema
+Both options are required together. A changed schema
 or intervening data schema produces a new approval fingerprint. No automatic
 approval or destructive retry is performed. Definite 4xx rejections clear the
 pending marker; source/data protection is owned by existing platform services.
@@ -377,8 +373,7 @@ renewal are outside this feature.
 
 List/detail and deploy output retain the complete public DTO in both text and
 `--json` modes: compatibility, capabilities, normalized release URLs/triggers,
-runtime/network state, nonsecret data metadata and deployment history. Workflow
-detail also includes input JSON Schema and recent run summaries. Rollback adds
+runtime/network state, nonsecret data metadata and deployment history. Rollback adds
 warnings and source recovery instructions; forward-only data is retained.
 
 ```sh
@@ -489,9 +484,9 @@ HTTP `--timeout` defaults to 60 seconds.
 Run-authenticated App create/clone/update/deploy/rollback associate with the
 verified current Agent session; `app associate` is idempotent. Ordinary sessions
 and keys return `not-applicable` and create no relation. A caller cannot supply
-a session ID. Workflows have no association feature.
+a session ID.
 
-See [the 15-tool comparison](../../../docs/cli-tool-parity.md). Platform and CLI
+See [the 9-tool comparison](../../../docs/cli-tool-parity.md). Platform and CLI
 contracts/SDKs are built and released together; strict DTO validation does not
 promise compatibility with older CLI binaries.
 
@@ -602,7 +597,7 @@ hatch pin add --app my-app --if-absent
 hatch pin update <pin-id> --label 'Inbox' --clear-entry
 hatch pin reorder --pin <pin-id> --pin <pin-id>
 hatch pin remove --pin <pin-id>
-hatch pin add --workflow my-workflow
+hatch pin add --dashboard <dashboard-id>
 hatch pin remove --dashboard <dashboard-id>
 ```
 
@@ -614,23 +609,22 @@ or hides the names under the web dock tiles (hidden by default). Give at least
 one; `--dock-labels` and `--no-dock-labels` together are rejected.
 
 `pin list` prints App pins in navigation order (`id` is the pin id, which
-`update`, `remove --pin` and `reorder --pin` take), pinned Workflows and pinned
-dashboards. Without `--limit` it prints every pin. `--limit` (1–100) pages
-one sequence, App pins first, then Workflows, then dashboards, and prints
+`update`, `remove --pin` and `reorder --pin` take) and pinned dashboards.
+Without `--limit` it prints every pin. `--limit` (1–100) pages one sequence,
+App pins first, then dashboards, and prints
 `nextCursor` while more entries follow; pass it as `--cursor`. An App can
 have several pins: `pin add --app` always adds one and
 `--if-absent` returns the existing pin instead (`created: false`). `--entry`
 is the fragment the pin opens, with or without `#`. `pin update` leaves
 omitted fields unchanged and `--clear-entry` makes the pin open the App root.
 `pin remove --app` deletes every pin of the App and prints `removedPinIds`.
-`--workflow` and `--dashboard` only set the pinned flag. `pin reorder` moves
+`--dashboard` only sets the pinned flag. `pin reorder` moves
 the listed ids to the front in the order given, keeps unlisted ones in their
 relative order after them, and prints the complete new order; `--dashboard`
 orders all dashboards, pinned or not.
 
 Local rejections exit 2 with `invalid_arguments`: an `--accent` the tokens do
-not define, no target or more than one of `--app`, `--workflow`, `--dashboard`
-and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
+not define, no target or more than one of `--app`, `--dashboard` and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
 `--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`, an
 `--entry` longer than 512 characters (the platform also rejects one, never
 shortening it),
@@ -638,7 +632,7 @@ shortening it),
 repeated id in `pin reorder`, a `--limit` outside 1–100, a `--cursor` that
 is not a printed `nextCursor`, a flag the command does not take and a flag
 given without its value (the message names the flag). Platform errors: `NOT_FOUND` (5) for an unknown
-App, Workflow, dashboard or pin id, and `BAD_REQUEST` (2).
+App, dashboard or pin id, and `BAD_REQUEST` (2).
 
 ## Dashboards
 

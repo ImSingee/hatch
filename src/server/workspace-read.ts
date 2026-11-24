@@ -73,15 +73,9 @@ export async function readSidebarItems(): Promise<SidebarItem[]> {
 
 /** Shared navigation projections, called only behind a user-session boundary. */
 export async function readWorkspace() {
-  const [dashboards, pins, workflows] = await Promise.all([
+  const [dashboards, pins] = await Promise.all([
     readDashboards(),
     readSidebarItems(),
-    db.query.workflows.findMany({
-      where: { pinned: true, status: { ne: 'archived' } },
-      // Match listWorkflows and the web sidebar, not the unused sortOrder.
-      orderBy: { updatedAt: 'desc' },
-      columns: { id: true },
-    }),
   ]);
   return {
     dashboards: dashboards.map((dashboard) => ({
@@ -100,6 +94,5 @@ export async function readWorkspace() {
         label: pin.label,
         entryHash: pin.entryHash ?? '',
       })),
-    pinnedWorkflowIds: workflows.map((workflow) => workflow.id),
   };
 }

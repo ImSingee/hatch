@@ -684,7 +684,6 @@ fn on_menu(app: &AppHandle, id: &str) {
         "new-session" | "go-agent" => navigate("/agent"),
         "go-desk" => navigate("/dashboard"),
         "go-apps" => navigate("/apps"),
-        "go-workflows" => navigate("/workflows"),
         "go-notifications" => navigate("/notifications"),
         "search" => page_command(app, json!({ "type": "focus-search" })),
         "toggle-sidebar" => page_command(app, json!({ "type": "toggle-sidebar" })),

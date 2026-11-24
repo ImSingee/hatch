@@ -42,8 +42,6 @@ import {
   recoverCurrentDataSchema,
 } from './data-table/migrate';
 import { appDataDbName, withAppDataCutoverLock } from './data-table/provision';
-import { getWorkflowCallability } from '../workflows/external';
-import { workflowCompatibilityRuntimeMessage } from '~/workflow-compatibility';
 
 export type DeployResult = {
   deploymentId: string;
@@ -246,9 +244,9 @@ async function restoreLiveBuild(
 }
 
 /**
- * Deploy serialization for apps (advisory-lock namespace 1, distinct from
- * workflows). Rollback (manage.ts) shares this lock so its artifact/Git/row
- * mutations can't interleave with a concurrent deploy's.
+ * Deploy serialization for apps (advisory-lock namespace 1). Rollback
+ * (manage.ts) shares this lock so its artifact/Git/row mutations can't
+ * interleave with a concurrent deploy's.
  */
 export { appDeployLock } from './deploy-lock';
 
@@ -563,42 +561,6 @@ async function deployAppInner(
     compatibilityVersion = resolveAppDeployCompatibilityVersion(
       build.source.compatibilityVersion,
     );
-
-    // Validate declared outbound workflow calls before recording the release:
-    // each must reference a top-level workflow that is currently callable
-    // (deployed with its webhook trigger enabled) so the runtime injection
-    // actually works. The secret is injected into a *running* backend's env, so
-    // a declaration needs both the backend capability AND a staged backend
-    // entry — otherwise the build stages no process to receive HATCH_WORKFLOWS
-    // and the calls can never fire.
-    if (
-      build.source.workflows.length > 0 &&
-      (!build.source.capabilities.backend || !build.source.backend)
-    ) {
-      throw new Error(
-        'Workflow calls require a backend: set capabilities.backend and ' +
-          'define backend.entry.',
-      );
-    }
-    if (build.normalized.workflows && build.normalized.workflows.length > 0) {
-      for (const ref of build.normalized.workflows) {
-        const callability = await getWorkflowCallability(ref.workflow);
-        if (callability.state === 'unsupported') {
-          throw new Error(
-            `This app declares a call to workflow "${ref.workflow}" (alias ` +
-              `"${ref.alias}"), but that workflow is not callable. ` +
-              workflowCompatibilityRuntimeMessage(callability.compatibility),
-          );
-        }
-        if (callability.state === 'unavailable') {
-          throw new Error(
-            `This app declares a call to workflow "${ref.workflow}" (alias ` +
-              `"${ref.alias}"), but that workflow is not callable. Deploy the ` +
-              'workflow with its webhook trigger enabled, then redeploy this app.',
-          );
-        }
-      }
-    }
 
     // Validate cron jobs that target an RPC method. The app must stage a backend
     // (capability AND a backend.entry) to receive the call, and the method must

@@ -43,16 +43,6 @@ describe('pin command arguments', () => {
     expect(
       command('pin', 'add', '--app', 'notes', '--if-absent'),
     ).toMatchObject({ kind: 'add-app', ifAbsent: true });
-    expect(command('pin', 'add', '--workflow', 'digest')).toEqual({
-      kind: 'set-workflow',
-      workflow: 'digest',
-      pinned: true,
-    });
-    expect(command('pin', 'remove', '--workflow', 'digest')).toEqual({
-      kind: 'set-workflow',
-      workflow: 'digest',
-      pinned: false,
-    });
     expect(command('pin', 'add', '--dashboard', 'default')).toEqual({
       kind: 'set-dashboard',
       dashboardId: 'default',
@@ -113,11 +103,11 @@ describe('pin command arguments', () => {
       // Exactly one target.
       ['pin', 'add'],
       ['pin', 'add', 'notes'],
-      ['pin', 'add', '--app', 'notes', '--workflow', 'digest'],
+      ['pin', 'add', '--app', 'notes', '--dashboard', 'default'],
       ['pin', 'add', '--app', ''],
       // App-only options on other targets, and --if-absent with fields that
       // an existing pin would silently not receive.
-      ['pin', 'add', '--workflow', 'digest', '--label', 'Digest'],
+      ['pin', 'add', '--dashboard', 'default', '--label', 'Default'],
       ['pin', 'add', '--dashboard', 'default', '--if-absent'],
       ['pin', 'add', '--app', 'notes', '--if-absent', '--label', 'Inbox'],
       ['pin', 'add', '--app', 'notes', '--label', '  '],

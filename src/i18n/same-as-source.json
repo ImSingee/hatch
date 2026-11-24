@@ -1,8 +1,14 @@
 {
   "zh-CN": [
-    "settings.tailscale.label",
-    "settings.agentRunner.label",
+    "api.title",
+    "appManage.section.api",
     "appManage.section.webhook",
-    "appManage.section.api"
+    "dock.label",
+    "library.groupByName",
+    "nav.agent",
+    "runTrigger.app",
+    "runTrigger.webhook",
+    "settings.agentRunner.label",
+    "settings.tailscale.label"
   ]
 }

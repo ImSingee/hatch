@@ -13,7 +13,6 @@ import { toast } from 'sonner';
 import { EmptyState, Section } from '~components/page/page';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
-import { workflowsQueryOptions } from '~queries/workflows';
 import { createDraftSendTracker, uploadDraftFiles } from './draft-send';
 import { Composer, type ComposerSubmit } from './composer';
 import { useLastSelectedModel } from './model-preference';
@@ -61,7 +60,6 @@ export function NewChat({
 }) {
   const qc = useQueryClient();
   const appsQuery = useQuery(appsQueryOptions);
-  const workflowsQuery = useQuery(workflowsQueryOptions);
   const { groups, first, available } = useModelOptions();
   const [model, setModel] = useLastSelectedModel();
   const [creating, setCreating] = useState(false);
@@ -157,9 +155,6 @@ export function NewChat({
               apps={appsQuery.data}
               appsLoading={appsQuery.isLoading}
               appsError={appsQuery.isError}
-              workflows={workflowsQuery.data}
-              workflowsLoading={workflowsQuery.isLoading}
-              workflowsError={workflowsQuery.isError}
               disabled={creating}
               focusOnMount
               placeholder="Describe the app you want to build…"

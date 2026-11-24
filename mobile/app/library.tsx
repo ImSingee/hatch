@@ -15,9 +15,6 @@ export default function Library() {
   ) : kind === 'agent' ? (
     <AgentScreen nested />
   ) : (
-    <ResourcesScreen
-      nested
-      kind={kind === 'workflows' ? 'workflows' : 'apps'}
-    />
+    <ResourcesScreen nested />
   );
 }

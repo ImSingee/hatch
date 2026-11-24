@@ -1,6 +1,5 @@
 /**
- * Isomorphic run shapes shared by Workflow runs and App task runs, so the run
- * list, inspector and form render either one.
+ * Isomorphic App task run shapes shared by the run list, inspector and form.
  */
 
 export type RunStatus =

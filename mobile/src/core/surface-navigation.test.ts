@@ -151,7 +151,7 @@ describe('surface navigation', () => {
     for (const [url, context] of [
       [`${origin}/app/notes/embed/?from=x#/y`, app],
       [`${origin}/app/reading/embed/`, dashboard],
-      [`${origin}/workflow/weekly`, app],
+      [`${origin}/executions`, app],
       ['http://lan.example:8080/x', app],
     ] as const)
       expect(decideNewWindow(url, context)).toEqual({

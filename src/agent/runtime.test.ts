@@ -101,7 +101,6 @@ async function runWithResponses(
 
   return runAgentTurn({
     appUrl: 'https://hatch.example.test',
-    betaFeatures: [],
     priorMessages,
     sessionId,
     userText: composerInput?.userText ?? 'hello',
@@ -382,17 +381,11 @@ describe('runAgentTurn terminal outcomes', () => {
         name: 'Original Name',
         slug: 'original-slug',
       },
-      { type: 'text', text: ' with ' },
-      {
-        type: 'workflow',
-        id: 'workflow-stable',
-        name: 'Original Workflow',
-      },
       { type: 'text', text: ' now.' },
     ];
     const userText =
       'Review @APP{name="Original Name" id="app-stable" slug="original-slug"}' +
-      ' with @WORKFLOW{name="Original Workflow" id="workflow-stable"} now.';
+      ' now.';
     const result = await runWithResponses(
       [
         (context) => {
@@ -1333,7 +1326,6 @@ describe('runAgentTurn steer messages', () => {
     );
     const result = await runAgentTurn({
       appUrl: 'https://hatch.example.test',
-      betaFeatures: [],
       priorMessages: [],
       sessionId,
       userText: 'Build a tracker',

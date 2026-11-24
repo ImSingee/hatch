@@ -29,7 +29,6 @@ export type PinCommand =
   | { kind: 'update'; id: string; label?: string; entryHash?: string }
   | { kind: 'remove-pin'; pinId: string }
   | { kind: 'remove-app'; app: string }
-  | { kind: 'set-workflow'; workflow: string; pinned: boolean }
   | { kind: 'set-dashboard'; dashboardId: string; pinned: boolean }
   | { kind: 'reorder-pins'; pinIds: string[] }
   | { kind: 'reorder-dashboards'; dashboardIds: string[] };
@@ -93,13 +92,12 @@ export function parsePinCommand(
   if (operation === 'add') {
     const { flags } = parse({
       app: { type: 'string' },
-      workflow: { type: 'string' },
       dashboard: { type: 'string' },
       label: { type: 'string' },
       entry: { type: 'string' },
       'if-absent': { type: 'boolean' },
     });
-    const target = oneTarget(flags, ['app', 'workflow', 'dashboard'] as const);
+    const target = oneTarget(flags, ['app', 'dashboard'] as const);
     const pinLabel = label(flags);
     const entryHash = entry(flags);
     const ifAbsent = flags['if-absent'] === true;
@@ -112,14 +110,11 @@ export function parsePinCommand(
       if (appOnly.length)
         throw invalid(`${appOnly.join(', ')} can only be used with --app.`);
       return {
-        command:
-          target.name === 'workflow'
-            ? { kind: 'set-workflow', workflow: target.value, pinned: true }
-            : {
-                kind: 'set-dashboard',
-                dashboardId: target.value,
-                pinned: true,
-              },
+        command: {
+          kind: 'set-dashboard',
+          dashboardId: target.value,
+          pinned: true,
+        },
         flags,
       };
     }
@@ -167,19 +162,12 @@ export function parsePinCommand(
     const { flags } = parse({
       pin: { type: 'string' },
       app: { type: 'string' },
-      workflow: { type: 'string' },
       dashboard: { type: 'string' },
     });
-    const target = oneTarget(flags, [
-      'pin',
-      'app',
-      'workflow',
-      'dashboard',
-    ] as const);
+    const target = oneTarget(flags, ['pin', 'app', 'dashboard'] as const);
     const commands = {
       pin: { kind: 'remove-pin', pinId: target.value },
       app: { kind: 'remove-app', app: target.value },
-      workflow: { kind: 'set-workflow', workflow: target.value, pinned: false },
       dashboard: {
         kind: 'set-dashboard',
         dashboardId: target.value,
@@ -223,8 +211,6 @@ export async function runPin(
   else if (command.kind === 'update') result = await pins.updateAppPin(command);
   else if (command.kind === 'remove-pin' || command.kind === 'remove-app')
     result = await pins.unpinApp(command);
-  else if (command.kind === 'set-workflow')
-    result = await pins.setWorkflowPinned(command);
   else if (command.kind === 'set-dashboard')
     result = await pins.setDashboardPinned(command);
   else if (command.kind === 'reorder-pins')

@@ -345,7 +345,6 @@ function applyOptions(
     const check = validateSchemaInput(
       { type: 'object', properties: { value: out }, required: ['value'] },
       { value },
-      { strict: true },
     );
     if (!check.success) {
       throw new TaskInputSchemaError(

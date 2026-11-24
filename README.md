@@ -38,10 +38,10 @@ wished existed, built for an audience of one: you.
 - **Automations.** Schedule cron jobs that call your app on time, and expose
   webhook endpoints so the outside world — phone shortcuts, other services,
   IoT gadgets — can push data in securely.
-- **Workflows.** For headless recurring tasks, build a workflow instead of an
-  app: trigger it on a schedule, from a webhook, or manually with an
-  auto-generated form, and audit every run step by step — status, duration,
-  and logs included.
+- **Background tasks.** Turn any backend action of an app into a task: run it
+  manually from an auto-generated form, on a schedule, from a webhook, or from
+  the app itself, and audit every run step by step — status, duration, and
+  logs included.
 - **Key-value storage and secrets.** Apps get a built-in key-value store for
   tokens and config. Newly created or overwritten secret values are encrypted
   at rest and stay masked in the UI.
@@ -50,9 +50,9 @@ wished existed, built for an audience of one: you.
   Storage HTTP API or direct browser access. Files survive backend restarts,
   deployments, and rollbacks. Disabling storage retains the files but revokes
   access; deleting the app deletes them.
-- **Your space, arranged your way.** Pin apps, dashboards, and workflows to
-  the sidebar — even multiple shortcuts per app, each deep-linking to a
-  specific screen. Rename apps and their URLs whenever you like.
+- **Your space, arranged your way.** Pin apps and dashboards to the sidebar —
+  even multiple shortcuts per app, each deep-linking to a specific screen.
+  Rename apps and their URLs whenever you like.
 - **Private by design.** Hatch is single-tenant and self-hosted: your data,
   your server, your AI provider keys. App backends run sandboxed with scoped
   database access.
@@ -110,8 +110,8 @@ and recreate the Agent Runner (`docker compose up -d --force-recreate agent`).
 - "Build a habit tracker with a streak widget I can pin to my dashboard."
 - "Track the price of this product every hour and chart the history."
 - "Make a bookmarks app with a webhook so I can save links from my phone."
-- "Create a workflow that pulls my RSS feeds every morning and files new
-  items into my reading app."
+- "Add a task to my reading app that pulls my RSS feeds every morning and
+  files the new items."
 
 ## License
 

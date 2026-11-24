@@ -26,7 +26,6 @@ import {
   type ComposerInputPart,
 } from '~agent/composer-content';
 import type { AppListItem } from '~server/apps';
-import type { WorkflowListItem } from '~server/workflows';
 import { ComposerEditor, type ComposerEditorHandle } from './composer-editor';
 import {
   cancelPendingMessage,
@@ -41,7 +40,6 @@ import classes from './pending-tray.module.css';
 
 type Mentions = {
   apps?: AppListItem[];
-  workflows?: WorkflowListItem[];
 };
 
 const MODE_LABEL = { queue: 'Queued', steer: 'Steer' } as const;
@@ -141,7 +139,6 @@ function PendingEdit({
         <ComposerEditor
           ref={editorRef}
           apps={mentions.apps}
-          workflows={mentions.workflows}
           disabled={saving}
           focusOnMount
           placeholder="Edit message…"
@@ -324,13 +321,11 @@ export function PendingTray({
   sessionId,
   pending,
   apps,
-  workflows,
   onResult,
 }: {
   sessionId: string;
   pending: SessionPendingMessages;
   apps?: AppListItem[];
-  workflows?: WorkflowListItem[];
   onResult: (result: PendingMessagesResult) => void;
 }) {
   const resume = useMutation({
@@ -376,7 +371,7 @@ export function PendingTray({
           key={message.id}
           sessionId={sessionId}
           message={message}
-          mentions={{ apps, workflows }}
+          mentions={{ apps }}
           onResult={onResult}
         />
       ))}

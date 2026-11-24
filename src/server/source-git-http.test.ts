@@ -17,8 +17,10 @@ const root = await mkdtemp(path.join(tmpdir(), 'hatch-git-http-'));
 process.env.HATCH_DATA_DIR = path.join(root, 'data');
 
 const rows = {
-  apps: [{ id: 'app-1', slug: 'demo' }],
-  workflows: [{ id: 'wf-1', slug: 'nightly' }],
+  apps: [
+    { id: 'app-1', slug: 'demo' },
+    { id: 'app-2', slug: 'nightly' },
+  ],
 };
 const associate = vi.fn<
   (sessionId: string, appId: string) => Promise<{ appId: string }>
@@ -32,7 +34,7 @@ vi.mock('~/db', () => {
       ),
   });
   return {
-    db: { query: { apps: table(rows.apps), workflows: table(rows.workflows) } },
+    db: { query: { apps: table(rows.apps) } },
   };
 });
 vi.mock('./agent-runner/run-auth', () => ({
@@ -252,12 +254,12 @@ describe('git smart HTTP', () => {
   });
 
   it('streams packs larger than the client post buffer', async () => {
-    const dir = await clone('workflow/nightly');
+    const dir = await clone('app/nightly');
     const blob = randomBytes(3 * 1024 * 1024);
     const pushed = await commit(dir, 'blob.bin', blob);
     await ok(['push', 'origin', 'master'], dir);
 
-    const copy = await clone('workflow/wf-1');
+    const copy = await clone('app/app-2');
     expect(await ok(['rev-parse', 'HEAD'], copy)).toBe(pushed);
     expect(await ok(['cat-file', '-s', 'HEAD:blob.bin'], copy)).toBe(
       String(blob.length),

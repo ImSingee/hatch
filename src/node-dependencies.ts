@@ -10,11 +10,7 @@
 import { promises as fs } from 'node:fs';
 import { isAlias, isNode, parseAllDocuments, visit } from 'yaml';
 import { isNodeToolchainRejectedRootFile } from './app-managed-path';
-import {
-  PNPM_LOCKFILE,
-  readRootDependencyFile,
-  type SourceKind,
-} from './source-toolchain';
+import { PNPM_LOCKFILE, readRootDependencyFile } from './source-toolchain';
 
 type JsonObject = Record<string, unknown>;
 
@@ -90,17 +86,10 @@ const SNAPSHOT_KEYS = new Set([
   'optional',
 ]);
 
-function skillName(kind: SourceKind): string {
-  return kind === 'app' ? 'building-apps' : 'building-workflows';
-}
-
-function regenerateHelp(kind: SourceKind): string {
-  return (
-    `Load the "${skillName(kind)}" Skill with read_file, run \`pnpm install ` +
-    '--ignore-workspace --ignore-scripts` in the source root, and commit ' +
-    `package.json and ${PNPM_LOCKFILE}.`
-  );
-}
+const REGENERATE_HELP =
+  'Load the "building-apps" Skill with read_file, run `pnpm install ' +
+  '--ignore-workspace --ignore-scripts` in the source root, and commit ' +
+  `package.json and ${PNPM_LOCKFILE}.`;
 
 function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -131,7 +120,7 @@ function assertRegistryPackageName(name: string, where: string): void {
   }
 }
 
-function validatePackageJson(raw: string, kind: SourceKind): void {
+function validatePackageJson(raw: string): void {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -156,7 +145,7 @@ function validatePackageJson(raw: string, kind: SourceKind): void {
       );
     }
     throw new Error(
-      `package.json must not declare ${key}. Hatch ${kind} sources may ` +
+      `package.json must not declare ${key}. Hatch app sources may ` +
         `declare only: ${[...PACKAGE_JSON_KEYS].join(', ')}.`,
     );
   }
@@ -379,7 +368,6 @@ function validateLockfile(raw: string): void {
  */
 export async function validateNodeDependencySource(
   sourceDir: string,
-  kind: SourceKind,
   sourceReader?: NodeDependencySourceReader,
 ): Promise<void> {
   // Names are listed, never probed, so every site rejects the same case
@@ -389,7 +377,7 @@ export async function validateNodeDependencySource(
   );
   if (rejected) {
     throw new Error(
-      `${kind} sources cannot include ${rejected}. Package manager, ` +
+      `app sources cannot include ${rejected}. Package manager, ` +
         'registry and TypeScript configuration is managed by the platform: ' +
         `declare dependencies in package.json and commit ${PNPM_LOCKFILE}.`,
     );
@@ -403,15 +391,14 @@ export async function validateNodeDependencySource(
   ]);
   if (packageSource === null) {
     throw new Error(
-      `Missing package.json for ${kind} dependencies. ${regenerateHelp(kind)}`,
+      `Missing package.json for app dependencies. ${REGENERATE_HELP}`,
     );
   }
   if (lockSource === null) {
     throw new Error(
-      `Missing source-controlled ${PNPM_LOCKFILE} for ${kind}. ` +
-        regenerateHelp(kind),
+      `Missing source-controlled ${PNPM_LOCKFILE} for app. ` + REGENERATE_HELP,
     );
   }
-  validatePackageJson(packageSource, kind);
+  validatePackageJson(packageSource);
   validateLockfile(lockSource);
 }

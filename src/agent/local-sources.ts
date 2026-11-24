@@ -10,9 +10,8 @@
  *
  * Layout under the runner's data dir (HATCH_DATA_DIR):
  *   agents/<sessionId>/work/apps/<slug>/           ← default app worktree
- *   agents/<sessionId>/work/workflows/<slug>/      ← default workflow worktree
  *   agents/<sessionId>/work/attachments/<id>/...   ← downloaded attachments
- *   agents/<sessionId>/bundles/<kind>-<id>.bundle  ← origin bundle (hidden)
+ *   agents/<sessionId>/bundles/app-<id>.bundle     ← origin bundle (hidden)
  */
 import { spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
@@ -35,7 +34,6 @@ import {
   agentHomeDir,
   agentSessionDir,
   agentWorkDir,
-  agentWorkflowWorkDir,
   isSafeEntityId,
 } from './paths';
 import type { SourceBundleResponse } from './protocol';
@@ -57,8 +55,6 @@ import {
 
 export const SOURCE_BRANCH = 'master';
 
-export type SourceKind = 'app' | 'workflow';
-
 export type LocalCheckout = {
   id: string;
   /** Path relative to the chat work root, e.g. "apps/id". */
@@ -78,7 +74,7 @@ export type LocalCheckout = {
 export type CheckoutFromBundleOptions = {
   targetPath?: string;
   force?: boolean;
-  /** Defaults to the legacy create-or-update behavior used by workflows. */
+  /** Defaults to create-or-update. */
   mode?: 'clone' | 'update' | 'upsert';
   materializer?: WorktreeMaterializer;
 };
@@ -238,12 +234,12 @@ async function worktreeOrigin(
   return result.stdout.trim();
 }
 
-function bundleFile(sessionId: string, kind: SourceKind, id: string): string {
-  if (!isSafeEntityId(id)) throw new Error(`Invalid ${kind} id.`);
+function bundleFile(sessionId: string, id: string): string {
+  if (!isSafeEntityId(id)) throw new Error('Invalid app id.');
   const root = path.resolve(agentSessionDir(sessionId), 'bundles');
-  const target = path.resolve(root, `${kind}-${id}.bundle`);
+  const target = path.resolve(root, `app-${id}.bundle`);
   if (!isWorkspacePathInside(root, target) || target === root) {
-    throw new Error(`${kind} bundle path escapes its data root.`);
+    throw new Error('app bundle path escapes its data root.');
   }
   return target;
 }
@@ -263,25 +259,14 @@ async function ensureBundleDirectory(
   setRunnerOwned([directory]);
 }
 
-function defaultWorktreeDir(
-  sessionId: string,
-  kind: SourceKind,
-  id: string,
-): string {
-  return kind === 'app'
-    ? agentAppWorkDir(sessionId, id)
-    : agentWorkflowWorkDir(sessionId, id);
-}
-
 function resolveWorktree(
   sessionId: string,
-  kind: SourceKind,
   id: string,
   requestedPath?: string,
 ): Promise<AgentWorkspacePath> {
   return resolveAgentWorkspacePath(
     sessionId,
-    requestedPath ?? defaultWorktreeDir(sessionId, kind, id),
+    requestedPath ?? agentAppWorkDir(sessionId, id),
   );
 }
 
@@ -291,10 +276,7 @@ async function assertWorkspacePathAllowed(
 ): Promise<void> {
   const target = path.resolve(worktree);
   const root = agentWorkDir(sessionId);
-  const reservedRoots = [
-    path.resolve(root, 'apps'),
-    path.resolve(root, 'workflows'),
-  ];
+  const reservedRoots = [path.resolve(root, 'apps')];
   if (reservedRoots.includes(target)) {
     throw new Error(
       `Workspace namespace cannot be used as a worktree: ${target}`,
@@ -394,7 +376,6 @@ async function assertReplacementContainsNoNestedCheckout(
 
 async function describeCheckout(
   sessionId: string,
-  kind: SourceKind,
   id: string,
   worktree: string,
   remoteCommit: string | null,
@@ -407,7 +388,7 @@ async function describeCheckout(
   ]);
   return {
     id,
-    path: (await resolveWorktree(sessionId, kind, id, worktree)).path,
+    path: (await resolveWorktree(sessionId, id, worktree)).path,
     absolutePath: worktree,
     dirty: status.length > 0,
     headCommit,
@@ -420,7 +401,7 @@ async function describeCheckout(
 
 /**
  * Verify that an existing path is the checkout for this exact entity. The
- * origin URL -- our per-kind bundle path -- distinguishes app/workflow repos,
+ * origin URL -- our per-app bundle path -- distinguishes app repos,
  * entities with different ids, and arbitrary Git repositories at custom paths.
  */
 async function assertOwnedWorktree(
@@ -428,7 +409,6 @@ async function assertOwnedWorktree(
   worktree: string,
   bundle: string,
   id: string,
-  kind: SourceKind,
 ): Promise<void> {
   if (!(await pathExists(path.join(worktree, '.git')))) {
     throw new Error(
@@ -438,7 +418,7 @@ async function assertOwnedWorktree(
   const origin = await worktreeOrigin(sessionId, worktree);
   if (!origin || path.resolve(origin) !== path.resolve(bundle)) {
     throw new Error(
-      `Workspace path is not a checkout of ${kind} "${id}" ` +
+      `Workspace path is not a checkout of app "${id}" ` +
         `(expected origin ${bundle}, found ${origin ?? 'no origin'}).`,
     );
   }
@@ -625,10 +605,9 @@ async function isCurrentOwnedWorktree(
   worktree: string,
   bundle: string,
   source: SourceBundleResponse,
-  kind: SourceKind,
 ): Promise<boolean> {
   try {
-    await assertOwnedWorktree(sessionId, worktree, bundle, source.id, kind);
+    await assertOwnedWorktree(sessionId, worktree, bundle, source.id);
     return true;
   } catch {
     return false;
@@ -636,12 +615,11 @@ async function isCurrentOwnedWorktree(
 }
 
 function checkoutConflictMessage(
-  kind: SourceKind,
   resolved: AgentWorkspacePath,
   source: SourceBundleResponse,
   originRefreshed: boolean,
 ): string {
-  const tool = `checkout_${kind}`;
+  const tool = 'checkout_app';
   const overwrite =
     `retry ${tool} as a fresh checkout at the same path with force: true to ` +
     'permanently ' +
@@ -668,10 +646,9 @@ function checkoutConflictMessage(
 }
 
 function checkoutSynchronizationConflictMessage(
-  kind: SourceKind,
   resolved: AgentWorkspacePath,
 ): string {
-  const tool = `checkout_${kind}`;
+  const tool = 'checkout_app';
   return (
     `Checkout target "${resolved.path}" could not be synchronized because ` +
     'local master has commits ahead of or diverged from platform master. Its ' +
@@ -682,12 +659,9 @@ function checkoutSynchronizationConflictMessage(
   );
 }
 
-function cloneTargetExistsMessage(
-  kind: SourceKind,
-  resolved: AgentWorkspacePath,
-): string {
+function cloneTargetExistsMessage(resolved: AgentWorkspacePath): string {
   return (
-    `Cannot clone ${kind} into "${resolved.path}" because that path already ` +
+    `Cannot clone app into "${resolved.path}" because that path already ` +
     'exists. Update the existing checkout with its exact path, choose a new ' +
     'path, or use force: true to permanently replace that exact target.'
   );
@@ -695,7 +669,6 @@ function cloneTargetExistsMessage(
 
 async function synchronizeExistingCheckout(
   sessionId: string,
-  kind: SourceKind,
   source: SourceBundleResponse,
   resolved: AgentWorkspacePath,
   materializer?: WorktreeMaterializer,
@@ -742,7 +715,7 @@ async function synchronizeExistingCheckout(
       { cwd: worktree, allowFailure: true },
     );
     if (ancestor.exitCode === 1) {
-      throw new Error(checkoutSynchronizationConflictMessage(kind, resolved));
+      throw new Error(checkoutSynchronizationConflictMessage(resolved));
     }
     if (ancestor.exitCode !== 0) {
       const details = (ancestor.stderr || ancestor.stdout).trim();
@@ -780,7 +753,6 @@ async function synchronizeExistingCheckout(
     worktreeBranch(sessionId, worktree),
     describeCheckout(
       sessionId,
-      kind,
       source.id,
       worktree,
       source.masterCommit,
@@ -802,10 +774,9 @@ async function synchronizeExistingCheckout(
   return checkout;
 }
 
-/** Materialize a fresh app/workflow checkout from the platform source bundle. */
+/** Materialize a fresh App checkout from the platform source bundle. */
 export async function checkoutFromBundle(
   sessionId: string,
-  kind: SourceKind,
   source: SourceBundleResponse,
   options: CheckoutFromBundleOptions = {},
 ): Promise<LocalCheckout> {
@@ -819,15 +790,10 @@ export async function checkoutFromBundle(
   if (mode === 'update' && options.force) {
     throw new Error('force cannot be used when updating an existing checkout.');
   }
-  const resolved = await resolveWorktree(
-    sessionId,
-    kind,
-    id,
-    options.targetPath,
-  );
+  const resolved = await resolveWorktree(sessionId, id, options.targetPath);
   const worktree = resolved.absolutePath;
   await assertWorkspacePathAllowed(sessionId, worktree);
-  const bundle = bundleFile(sessionId, kind, id);
+  const bundle = bundleFile(sessionId, id);
   const worktreeExists = await pathEntryExists(worktree);
   const force = options.force ?? false;
   if (!worktreeExists && mode === 'update') {
@@ -837,21 +803,15 @@ export async function checkoutFromBundle(
     );
   }
   if (worktreeExists && mode === 'clone' && !force) {
-    throw new Error(cloneTargetExistsMessage(kind, resolved));
+    throw new Error(cloneTargetExistsMessage(resolved));
   }
   if (worktreeExists && !force) {
     let owned: boolean;
     if (mode === 'update') {
-      await assertOwnedWorktree(sessionId, worktree, bundle, source.id, kind);
+      await assertOwnedWorktree(sessionId, worktree, bundle, source.id);
       owned = true;
     } else {
-      owned = await isCurrentOwnedWorktree(
-        sessionId,
-        worktree,
-        bundle,
-        source,
-        kind,
-      );
+      owned = await isCurrentOwnedWorktree(sessionId, worktree, bundle, source);
     }
     if (owned) {
       await ensureBundleDirectory(sessionId, bundle);
@@ -863,14 +823,13 @@ export async function checkoutFromBundle(
       }
       const synchronized = await synchronizeExistingCheckout(
         sessionId,
-        kind,
         source,
         resolved,
         options.materializer,
       );
       if (synchronized) return synchronized;
     }
-    throw new Error(checkoutConflictMessage(kind, resolved, source, owned));
+    throw new Error(checkoutConflictMessage(resolved, source, owned));
   }
 
   await ensureBundleDirectory(sessionId, bundle);
@@ -907,7 +866,6 @@ export async function checkoutFromBundle(
     setAgentOwned([worktree], sessionId);
     const checkout = await describeCheckout(
       sessionId,
-      kind,
       id,
       worktree,
       source.masterCommit,
@@ -961,11 +919,10 @@ export async function checkoutFromBundle(
  */
 export async function assertWorktreeAvailable(
   sessionId: string,
-  kind: SourceKind,
   id: string,
   targetPath?: string,
 ): Promise<AgentWorkspacePath> {
-  const resolved = await resolveWorktree(sessionId, kind, id, targetPath);
+  const resolved = await resolveWorktree(sessionId, id, targetPath);
   return assertResolvedWorktreeAvailable(sessionId, resolved);
 }
 
@@ -994,26 +951,20 @@ async function assertResolvedWorktreeAvailable(
 }
 
 /**
- * Initialize the worktree for a freshly created app/workflow and write the
+ * Initialize the worktree for a freshly created App and write the
  * platform-rendered scaffold files into it (uncommitted, like before — the
  * agent reviews, edits, and commits).
  */
 export async function initNewWorktree(
   sessionId: string,
-  kind: SourceKind,
   id: string,
   writeFiles: (root: string) => Promise<void>,
   targetPath?: string,
   materializer?: WorktreeMaterializer,
 ): Promise<LocalCheckout> {
-  const resolved = await assertWorktreeAvailable(
-    sessionId,
-    kind,
-    id,
-    targetPath,
-  );
+  const resolved = await assertWorktreeAvailable(sessionId, id, targetPath);
   const worktree = resolved.absolutePath;
-  const bundle = bundleFile(sessionId, kind, id);
+  const bundle = bundleFile(sessionId, id);
   prepareAgentSessionSandbox(sessionId);
   await ensureBundleDirectory(sessionId, bundle);
   // A newly created entity has an empty canonical repo. Its reused id must not
@@ -1037,7 +988,7 @@ export async function initNewWorktree(
   await writeFiles(worktree);
   await materializeWorktree(worktree, materializer);
   setAgentOwned([worktree], sessionId);
-  return describeCheckout(sessionId, kind, id, worktree, null);
+  return describeCheckout(sessionId, id, worktree, null);
 }
 
 /**
@@ -1047,25 +998,24 @@ export async function initNewWorktree(
  */
 export async function bundleWorktreeForDeploy(
   sessionId: string,
-  kind: SourceKind,
   id: string,
   sourcePath: string,
 ): Promise<{ bundleBase64: string; headCommit: string }> {
-  const worktree = (await resolveWorktree(sessionId, kind, id, sourcePath))
+  const worktree = (await resolveWorktree(sessionId, id, sourcePath))
     .absolutePath;
   await assertWorkspacePathAllowed(sessionId, worktree);
-  const bundle = bundleFile(sessionId, kind, id);
+  const bundle = bundleFile(sessionId, id);
   if (!(await pathExists(worktree))) {
     throw new Error(
-      `${kind} "${id}" is not checked out in this chat. Run checkout first.`,
+      `app "${id}" is not checked out in this chat. Run checkout first.`,
     );
   }
-  await assertOwnedWorktree(sessionId, worktree, bundle, id, kind);
+  await assertOwnedWorktree(sessionId, worktree, bundle, id);
 
   const status = await worktreeStatus(sessionId, worktree);
   if (status) {
     throw new Error(
-      `Cannot deploy ${kind} "${id}" because the worktree is dirty.\n` +
+      `Cannot deploy app "${id}" because the worktree is dirty.\n` +
         'Commit or discard these changes first:\n' +
         status,
     );
@@ -1073,7 +1023,7 @@ export async function bundleWorktreeForDeploy(
   const headCommit = await worktreeHead(sessionId, worktree);
   if (!headCommit) {
     throw new Error(
-      `Cannot deploy ${kind} "${id}" because the worktree has no ` +
+      `Cannot deploy app "${id}" because the worktree has no ` +
         'commits yet. Run git add and git commit first.',
     );
   }

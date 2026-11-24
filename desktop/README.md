@@ -5,13 +5,13 @@ desktop layout. macOS only, light only.
 
 ## What is native and what is web
 
-| Native (this folder)                                           | Web (the instance)                                 |
-| -------------------------------------------------------------- | -------------------------------------------------- |
-| Window, traffic lights, window state, Dock reopen              | Every page: desk, Agent, Apps, Workflows, Settings |
-| Application menu and shortcuts (`⌘,` `⌘N` `⌘K` `⌘1`–`⌘5` `⌘[`) | The sidebar (`src/components/desktop-host/`)       |
-| First-run page: instance address, sign-in, errors              | Apps, through the same `AppSurface` as on the web  |
-| Session in the Keychain, browser sign-in, browser handoff      |                                                    |
-| `hatch://` deep links, navigation rules, downloads             |                                                    |
+| Native (this folder)                                           | Web (the instance)                                |
+| -------------------------------------------------------------- | ------------------------------------------------- |
+| Window, traffic lights, window state, Dock reopen              | Every page: desk, Agent, Apps, Settings           |
+| Application menu and shortcuts (`⌘,` `⌘N` `⌘K` `⌘1`–`⌘4` `⌘[`) | The sidebar (`src/components/desktop-host/`)      |
+| First-run page: instance address, sign-in, errors              | Apps, through the same `AppSurface` as on the web |
+| Session in the Keychain, browser sign-in, browser handoff      |                                                   |
+| `hatch://` deep links, navigation rules, downloads             |                                                   |
 
 The web UI draws the sidebar layout (the `Mac-App` artboard) instead of the
 desk's menu bar and dock when the user agent contains `HatchDesktop/<version>`,

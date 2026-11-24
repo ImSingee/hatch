@@ -7,7 +7,7 @@ export function CompatibilityNotice({
   resourceName,
   compatibility,
 }: {
-  resourceName: 'App' | 'Workflow';
+  resourceName: 'App';
   compatibility: DeploymentCompatibility | null;
 }) {
   if (!compatibility || compatibility.isLatest) return null;

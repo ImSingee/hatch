@@ -5,7 +5,6 @@ import { sandboxSpawn, sandboxSwitchesIdentity } from '../agent/shell-sandbox';
 import { subprocessSandboxEnv } from '../server/sandbox-env';
 import { run } from '../server/subprocess';
 import type {
-  SourceKind,
   SourceToolchainContext,
   ToolchainRunner,
 } from '../source-toolchain';
@@ -44,10 +43,7 @@ function evaluationCommand(args: string[]): [string, string[]] {
  * and the output cap. `tsc` runs on the platform's own Node binary, and so
  * does `node`, which evaluates authored code under the sandbox identity.
  */
-function platformToolchainRunner(
-  kind: SourceKind,
-  root: string,
-): ToolchainRunner {
+function platformToolchainRunner(root: string): ToolchainRunner {
   return async ({ tool, args, step, cwd, input, timeoutMs, env }) => {
     const base = subprocessSandboxEnv(env);
     const [command, commandArgs] =
@@ -58,10 +54,10 @@ function platformToolchainRunner(
           : [tool, args];
     return run(command, commandArgs, {
       cwd: cwd ?? root,
-      // App build steps have always seen the platform's node_modules/.bin;
-      // manifest evaluation and Workflow builds never did.
+      // Build steps see the platform's node_modules/.bin; manifest
+      // evaluation never does.
       env:
-        kind === 'app' && step !== 'manifest'
+        step !== 'manifest'
           ? { ...base, PATH: `${BIN_DIR}:${base.PATH ?? ''}` }
           : base,
       input,
@@ -72,15 +68,13 @@ function platformToolchainRunner(
 
 /** Toolchain context for a deploy build of the disposable copy at `root`. */
 export function platformToolchainContext(
-  kind: SourceKind,
   root: string,
   logs: string[],
 ): SourceToolchainContext {
   return {
     root,
-    kind,
     logs,
-    run: platformToolchainRunner(kind, root),
+    run: platformToolchainRunner(root),
     // Set in the image so installs share one store on the cache volume.
     pnpmStoreDir: process.env.HATCH_PNPM_STORE_DIR || undefined,
   };

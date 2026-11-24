@@ -4,7 +4,6 @@ import { APP_NAME_MAX_LENGTH, APP_SLUG_MAX_LENGTH } from '~/app-identity';
 import {
   createAppForSessionRequestSchema,
   createAppRequestSchema,
-  createWorkflowRequestSchema,
   deploySourceRequestSchema,
   isSafeRelativePath,
   parseHubMessage,
@@ -78,26 +77,9 @@ describe('App creation payload', () => {
   });
 });
 
-describe('Workflow creation payload', () => {
-  it('accepts a slug and no longer accepts caller-selected ids', () => {
-    expect(
-      createWorkflowRequestSchema.parse({
-        slug: 'daily-digest',
-        name: 'Daily digest',
-      }),
-    ).toEqual({ slug: 'daily-digest', name: 'Daily digest' });
-    expect(
-      createWorkflowRequestSchema.safeParse({
-        id: 'daily-digest',
-        name: 'Daily digest',
-      }).success,
-    ).toBe(false);
-  });
-});
-
 describe('runner -> platform messages', () => {
-  it('uses protocol v21 for steer messages', () => {
-    expect(PROTOCOL_VERSION).toBe(21);
+  it('uses protocol v22 without Workflow routes or beta features', () => {
+    expect(PROTOCOL_VERSION).toBe(22);
   });
 
   it('parses a steer claim and rejects one without a request id', () => {
@@ -404,22 +386,14 @@ describe('runner -> platform messages', () => {
 });
 
 describe('platform -> runner messages', () => {
-  it('parses the Platform beta features in hub.hello_ack', () => {
-    expect(
-      parseHubMessage({
-        type: 'hub.hello_ack',
-        betaFeatures: ['workflow', 'future-feature'],
-        resumedRunIds: [],
-        staleRunIds: [],
-        staleWorkspaceSessionIds: [],
-      }),
-    ).toEqual({
+  it('parses hub.hello_ack', () => {
+    const ack = {
       type: 'hub.hello_ack',
-      betaFeatures: ['workflow', 'future-feature'],
       resumedRunIds: [],
       staleRunIds: [],
       staleWorkspaceSessionIds: [],
-    });
+    };
+    expect(parseHubMessage(ack)).toEqual(ack);
   });
 
   it('parses hub.ready_ack', () => {
@@ -432,16 +406,17 @@ describe('platform -> runner messages', () => {
     const composerContent = [
       { type: 'text' as const, text: 'Review ' },
       {
-        type: 'workflow' as const,
-        id: 'workflow-digest',
-        name: 'Nightly Digest',
+        type: 'app' as const,
+        id: 'app-digest',
+        name: 'Digest',
+        slug: 'digest',
       },
     ];
     const message = parseHubMessage({
       type: 'run.start',
       runId: 'r1',
       sessionId: 's1',
-      userText: 'Review @WORKFLOW{name="Nightly Digest" id="workflow-digest"}',
+      userText: 'Review @APP{name="Digest" id="app-digest" slug="digest"}',
       composerContent,
       images: [],
       attachments: [],
@@ -608,8 +583,8 @@ describe('platform -> runner messages', () => {
     expect(() =>
       parseHubMessage({
         type: 'workspace.cleanup',
-        scope: 'workflow',
-        id: 'workflow-a',
+        scope: 'unknown',
+        id: 'resource-a',
         generation: '2026-07-12T00:00:00.000Z',
       }),
     ).toThrow(ZodError);

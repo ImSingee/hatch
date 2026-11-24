@@ -11,15 +11,16 @@ import { render } from 'vitest-browser-react';
 
 const fixtures = vi.hoisted(() => ({ status: 'running' }));
 
-vi.mock('~queries/workflows', () => ({
-  allWorkflowRunsQueryOptions: {
+vi.mock('~queries/app-tasks', () => ({
+  recentTaskRunsQueryOptions: {
     queryKey: ['test-runs'],
     queryFn: async () => [
       {
         id: 'run-1',
-        workflowId: 'wf-1',
-        workflowSlug: 'digest',
-        workflowName: 'Morning digest',
+        appId: 'app-1',
+        appSlug: 'digest',
+        appName: 'Morning digest',
+        taskName: 'send',
         status: fixtures.status,
         trigger: 'cron',
         createdAt: new Date().toISOString(),

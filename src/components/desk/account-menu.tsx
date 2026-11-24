@@ -4,7 +4,6 @@ import {
   IconBell,
   IconLayoutDashboard,
   IconLogout,
-  IconRepeat,
   IconSettings,
 } from '@tabler/icons-react';
 import { authClient } from '~auth/client';
@@ -55,12 +54,6 @@ export function AccountMenu() {
           renderRoot={(props) => <Link to="/dashboards" {...props} />}
         >
           {t('nav.dashboards')}
-        </Menu.Item>
-        <Menu.Item
-          leftSection={<IconRepeat size={16} stroke={1.6} />}
-          renderRoot={(props) => <Link to="/workflows" {...props} />}
-        >
-          {t('nav.workflows')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconSettings size={16} stroke={1.6} />}

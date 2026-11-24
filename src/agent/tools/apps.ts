@@ -52,11 +52,6 @@ const DATABASE_DATA_GUIDANCE =
 const DATA_TABLE_DATA_GUIDANCE =
   'Data Tables persist across capability disable/re-enable unless explicitly deleted. Inspect the existing schema and rows with query_app_data_table before initializing or changing data.';
 
-const APP_COMPATIBILITY_COPY = {
-  resourceName: 'App',
-  skillName: 'app-compatibility',
-} as const;
-
 function checkoutLines(id: string, checkout: LocalCheckout): string[] {
   return [
     checkout.replacedExisting
@@ -137,7 +132,7 @@ export function createAppTools(options: {
         const caps =
           a.capabilities.length > 0 ? ` — ${a.capabilities.join(', ')}` : '';
         const compatibility = a.compatibility
-          ? ` · compatibility v${a.compatibility.version}${compatibilityListSummary(a.compatibility, APP_COMPATIBILITY_COPY)}`
+          ? ` · compatibility v${a.compatibility.version}${compatibilityListSummary(a.compatibility)}`
           : '';
         return `- ${a.name} (id: ${a.id}, slug: ${a.slug}) [${a.status}]${version}${compatibility}${caps}`;
       });
@@ -182,10 +177,7 @@ export function createAppTools(options: {
         detail.compatibility
           ? `Compatibility: v${detail.compatibility.version} ` +
             `(latest v${detail.compatibility.latestVersion}, minimum v${detail.compatibility.minimumSupportedVersion})` +
-            compatibilityDetailGuidance(
-              detail.compatibility,
-              APP_COMPATIBILITY_COPY,
-            )
+            compatibilityDetailGuidance(detail.compatibility)
           : null,
         `Backend: ${
           detail.ops.backend.capable
@@ -321,7 +313,7 @@ export function createAppTools(options: {
           );
           let checkout: LocalCheckout;
           try {
-            checkout = await checkoutFromBundle(sessionId, 'app', source, {
+            checkout = await checkoutFromBundle(sessionId, source, {
               targetPath: sourcePath,
               force: params.clone ? (params.force ?? false) : false,
               mode: params.clone ? 'clone' : 'update',
@@ -422,7 +414,6 @@ export function createAppTools(options: {
           const res = await platform.createApp(input, sessionId);
           const checkout = await initNewWorktree(
             sessionId,
-            'app',
             res.id,
             (root) => writeScaffoldFiles(root, res.files),
             targetPath,
@@ -528,7 +519,6 @@ export function createAppTools(options: {
           await platform.associateSessionApp(sessionId, detail.id);
           const { bundleBase64 } = await bundleWorktreeForDeploy(
             sessionId,
-            'app',
             detail.id,
             params.source_path,
           );
@@ -594,7 +584,6 @@ export function createAppTools(options: {
       const res = await platform.rollbackApp(appId, params.version);
       const compatibilityWarning = compatibilityRollbackWarning(
         res.compatibility,
-        APP_COMPATIBILITY_COPY,
       );
       return text(
         `Rolled back "${params.id}" to v${res.version}. ` +

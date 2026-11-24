@@ -12,7 +12,6 @@ const {
   reorderAppPins,
   reorderDashboards,
   setDashboardPinned,
-  setWorkflowPinned,
   unpinApp,
   updateAppPin,
 } = await import('./pins');
@@ -21,7 +20,6 @@ const { subscribePlatformEvents } = await import('./platform-events');
 beforeEach(async () => {
   await db.delete(schema.sidebarItems);
   await db.delete(schema.dashboards);
-  await db.delete(schema.workflows);
   await db.delete(schema.apps);
   await db.insert(schema.apps).values([
     { id: 'app-notes', slug: 'notes', name: 'Notes' },
@@ -142,45 +140,22 @@ describe('App pins', () => {
   });
 });
 
-describe('Workflow and dashboard pins', () => {
-  it('sets the pinned flag by id or slug and lists what is pinned', async () => {
-    await db.insert(schema.workflows).values([
-      { id: 'wf-digest', slug: 'digest', name: 'Digest', pinned: false },
-      {
-        id: 'wf-old',
-        slug: 'old',
-        name: 'Old',
-        pinned: true,
-        status: 'archived',
-      },
-    ]);
+describe('Dashboard pins', () => {
+  it('sets the pinned flag and lists what is pinned', async () => {
     await db.insert(schema.dashboards).values([
       { id: 'd1', name: 'Home', pinned: true, sortOrder: 0 },
       { id: 'd2', name: 'Ops', pinned: false, sortOrder: 1 },
     ]);
-    expect(await setWorkflowPinned('digest', true)).toEqual({
-      id: 'wf-digest',
-      pinned: true,
-    });
     expect(await setDashboardPinned('d2', true)).toEqual({
       id: 'd2',
       pinned: true,
     });
     expect(await reorderDashboards(['d2'])).toEqual(['d2', 'd1']);
     const pins = await listPins();
-    // Archived Workflows are not navigation.
-    expect(pins.workflows).toEqual([
-      { id: 'wf-digest', slug: 'digest', name: 'Digest' },
-    ]);
     expect(pins.dashboards).toEqual([
       { id: 'd2', name: 'Ops' },
       { id: 'd1', name: 'Home' },
     ]);
-    expect((await setWorkflowPinned('wf-digest', false)).pinned).toBe(false);
-    expect((await listPins()).workflows).toEqual([]);
-    await expect(setWorkflowPinned('nope', true)).rejects.toMatchObject({
-      status: 404,
-    });
     await expect(setDashboardPinned('nope', true)).rejects.toMatchObject({
       status: 404,
     });
@@ -189,11 +164,7 @@ describe('Workflow and dashboard pins', () => {
 
 describe('Pin change events', () => {
   it('tells connected clients after every change and stays silent otherwise', async () => {
-    await db.insert(schema.workflows).values({
-      id: 'wf-digest',
-      slug: 'digest',
-      name: 'Digest',
-    });
+    await db.insert(schema.dashboards).values({ id: 'd1', name: 'Home' });
     const events: string[] = [];
     const unsubscribe = subscribePlatformEvents((event) =>
       events.push(event.type),
@@ -203,7 +174,7 @@ describe('Pin change events', () => {
       await pinApp({ app: 'notes', ifAbsent: true });
       await updateAppPin(pin.id, { label: 'Journal' });
       await reorderAppPins([pin.id]);
-      await setWorkflowPinned('digest', true);
+      await setDashboardPinned('d1', true);
       await unpinApp({ pinId: pin.id });
       await unpinApp({ app: 'notes' });
       await expect(unpinApp({ pinId: pin.id })).rejects.toThrow(
