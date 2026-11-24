@@ -1,7 +1,8 @@
 /** Workspace file tools: list, read, write, and exact-string edit. */
 import path from 'node:path';
 import { Type } from '@earendil-works/pi-ai';
-import type { AgentTool, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { ExecutionEnv } from '../execution-env';
 import { isAppManagedPathSegment } from '~/app-managed-path';
 import { isEditFileDetails } from '../edit-file-details';
 import { type FilePathDetails, isFilePathDetails } from '../file-path-details';

@@ -1,4 +1,4 @@
-import type { Skill } from '@earendil-works/pi-agent-core';
+import type { Skill } from './skills';
 import { describe, expect, it } from 'vitest';
 import {
   LATEST_APP_COMPATIBILITY_VERSION,

@@ -1,7 +1,4 @@
-import {
-  InMemorySessionRepo,
-  type AgentMessage,
-} from '@earendil-works/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { createModels, type Api, type Model } from '@earendil-works/pi-ai';
 import {
   fauxAssistantMessage,
@@ -11,19 +8,15 @@ import { describe, expect, it } from 'vitest';
 import {
   compactionSettings,
   compactionTriggerTokens,
-  createSessionCompactor,
-  openTranscriptSession,
+  createTranscriptCompactor,
 } from './auto-compaction';
+import { Transcript } from './transcript';
 
 const user = (text: string): AgentMessage =>
   ({ role: 'user', content: text, timestamp: 1 }) as AgentMessage;
 
-async function newSession(transcript: unknown[]) {
-  const session = await new InMemorySessionRepo().create({ id: 'test' });
-  return {
-    session,
-    transcript: await openTranscriptSession(session, transcript),
-  };
+function newTranscript(items: unknown[]) {
+  return Transcript.load(items);
 }
 
 function setup(model: { contextWindow: number; maxTokens: number }) {
@@ -50,7 +43,7 @@ describe('compaction budget', () => {
   });
 });
 
-describe('openTranscriptSession', () => {
+describe('Transcript.load', () => {
   it('drops a marker that does not point at an earlier message', async () => {
     const messages = [user('one'), fauxAssistantMessage('two'), user('three')];
     const broken = [
@@ -68,7 +61,7 @@ describe('openTranscriptSession', () => {
         firstKeptIndex: 9,
       },
     ];
-    const { session, transcript } = await newSession([
+    const transcript = newTranscript([
       messages[0],
       broken[0],
       messages[1],
@@ -77,16 +70,16 @@ describe('openTranscriptSession', () => {
     ]);
 
     // Neither marker describes a context, so the model sees every message.
-    expect((await session.buildContext()).messages).toEqual(messages);
-    expect(await transcript.serialize()).toEqual(messages);
+    expect(transcript.modelContext()).toEqual(messages);
+    expect(transcript.serialize()).toEqual(messages);
   });
 });
 
-describe('createSessionCompactor', () => {
+describe('createTranscriptCompactor', () => {
   it('gives up instead of looping when the model leaves no input budget', async () => {
     const { models, model } = setup({ contextWindow: 8000, maxTokens: 7999 });
-    const { session } = await newSession([user('hello')]);
-    const compactor = createSessionCompactor({ session, models, model });
+    const transcript = newTranscript([user('hello')]);
+    const compactor = createTranscriptCompactor({ transcript, models, model });
     expect(await compactor.compactAfterOverflow()).toBe(false);
   });
 
@@ -127,7 +120,7 @@ describe('createSessionCompactor', () => {
     ];
     // The earlier compaction kept exactly from this turn's user message, so
     // the next one finds no older history in front of the turn it splits.
-    const { session } = await newSession([
+    const transcript = newTranscript([
       user('old request'),
       fauxAssistantMessage('old answer'),
       user('current request'),
@@ -142,14 +135,14 @@ describe('createSessionCompactor', () => {
       ...toolRound('call-2'),
     ]);
 
-    const compactor = createSessionCompactor({ session, models, model });
+    const compactor = createTranscriptCompactor({ transcript, models, model });
     expect(await compactor.compactAfterOverflow()).toBe(true);
 
     expect(summaryPrompts).toHaveLength(1);
     expect(summaryPrompts[0]).toContain('FIRST-SUMMARY-FACTS');
     expect(summaryPrompts[0]).toContain('current request');
     // The context the next request sends still holds the earlier facts.
-    const context = (await session.buildContext()).messages;
+    const context = transcript.modelContext();
     expect(context.map((message) => message.role)).toEqual([
       'compactionSummary',
       'assistant',
@@ -176,7 +169,7 @@ describe('createSessionCompactor', () => {
     for (let index = 0; index < 8; index++) {
       history.push(user('x'.repeat(40000)), fauxAssistantMessage('ok'));
     }
-    const { session, transcript } = await newSession([
+    const transcript = newTranscript([
       ...history,
       user('read the file'),
       call,
@@ -192,10 +185,10 @@ describe('createSessionCompactor', () => {
       },
     ]);
 
-    const compactor = createSessionCompactor({ session, models, model });
+    const compactor = createTranscriptCompactor({ transcript, models, model });
     expect(await compactor.compactIfOverThreshold()).toBe(true);
 
-    const context = (await session.buildContext()).messages;
+    const context = transcript.modelContext();
     expect(context[0]?.role).toBe('compactionSummary');
     // The tool call and its result stay together in the kept tail.
     expect(context.map((message) => message.role).slice(-2)).toEqual([
@@ -203,7 +196,7 @@ describe('createSessionCompactor', () => {
       'toolResult',
     ]);
     expect(context.length).toBeLessThan(history.length);
-    const stored = await transcript.serialize();
+    const stored = transcript.serialize();
     expect(stored).toHaveLength(history.length + 4);
   });
 });

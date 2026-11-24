@@ -4,7 +4,7 @@
  * Agent Runner process — never import `~server/*` values here.
  */
 import type { CommandCredentials } from '../command-credentials';
-import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type { ExecutionEnv } from '../execution-env';
 import type { PlatformClient } from '../platform-client';
 import { createAppTools } from './apps';
 import { createAttachmentTool } from './attachments';

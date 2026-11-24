@@ -1,9 +1,6 @@
 /** Server-only: Agent context and guardrails; task procedures live in Skills. */
 
-import {
-  formatSkillsForSystemPrompt,
-  type Skill,
-} from '@earendil-works/pi-agent-core';
+import { formatSkillsForSystemPrompt, type Skill } from './skills';
 import {
   LATEST_APP_COMPATIBILITY_VERSION,
   MIN_SUPPORTED_APP_COMPATIBILITY_VERSION,
