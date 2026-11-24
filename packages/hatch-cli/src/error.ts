@@ -61,27 +61,34 @@ export function argumentsError(error: unknown, command: string): CliError {
   );
 }
 
-// Socket errors raised before a connection exists, so no request byte left.
+// Socket errors raised only before a connection exists: no request byte left.
 const NOT_CONNECTED = new Set([
   'ECONNREFUSED',
   'ENOTFOUND',
   'EAI_AGAIN',
+  'EADDRNOTAVAIL',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+// Route errors a connected socket can also report on a later read or write,
+// after the request was sent; they prove nothing was sent only from connect.
+const UNROUTABLE = new Set([
   'EHOSTUNREACH',
   'EHOSTDOWN',
   'ENETUNREACH',
   'ENETDOWN',
-  'EADDRNOTAVAIL',
-  'UND_ERR_CONNECT_TIMEOUT',
 ]);
 
 function neverConnected(error: unknown, depth = 0): boolean {
   if (!error || typeof error !== 'object' || depth > 8) return false;
-  const { code, cause, errors } = error as {
+  const { code, syscall, cause, errors } = error as {
     code?: unknown;
+    syscall?: unknown;
     cause?: unknown;
     errors?: unknown;
   };
   if (typeof code === 'string' && NOT_CONNECTED.has(code)) return true;
+  if (typeof code === 'string' && UNROUTABLE.has(code))
+    return syscall === 'connect';
   // Dual-stack hosts such as localhost reject with one error per address.
   if (Array.isArray(errors) && errors.length > 0)
     return errors.every((item) => neverConnected(item, depth + 1));

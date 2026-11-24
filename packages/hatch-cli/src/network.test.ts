@@ -1,5 +1,6 @@
 import { createServer, type RequestListener, type Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
+import { fetchFailure } from './error';
 import { getStatus, request } from './http';
 
 const token = 'fixture-session-secret';
@@ -55,5 +56,21 @@ describe('platform connection failures', () => {
       expect((error as Error).message).toContain(url);
       expect((error as Error).message).not.toContain(token);
     }
+  });
+
+  it('calls a route error safe to retry only when it failed the connect', () => {
+    const routeError = (syscall: string) =>
+      new TypeError('fetch failed', {
+        cause: Object.assign(new Error('unreachable'), {
+          code: 'EHOSTUNREACH',
+          syscall,
+        }),
+      });
+    const url = 'http://127.0.0.1:1';
+    expect(fetchFailure(url, routeError('connect')).code).toBe('network_error');
+    for (const syscall of ['read', 'write'])
+      expect(fetchFailure(url, routeError(syscall)).code).toBe(
+        'outcome_unknown',
+      );
   });
 });
