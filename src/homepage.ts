@@ -5,7 +5,6 @@ export const HOMEPAGE_PAGES = [
   { value: 'agent', label: 'Agent' },
   { value: 'apps', label: 'Apps' },
   { value: 'dashboards', label: 'Dashboards' },
-  { value: 'workflows', label: 'Workflows' },
   { value: 'executions', label: 'Executions' },
   { value: 'settings', label: 'Settings' },
 ] as const;

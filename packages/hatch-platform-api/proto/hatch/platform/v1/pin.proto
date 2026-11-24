@@ -6,7 +6,7 @@ import "buf/validate/validate.proto";
 
 // Pins are the shortcuts in the platform navigation: App pins (an App can
 // have several, each with its own label and entry point), and the pinned flag
-// of Workflows and dashboards.
+// of dashboards.
 service PinService {
   rpc ListPins(ListPinsRequest) returns (ListPinsResponse);
   rpc PinApp(PinAppRequest) returns (PinAppResponse);
@@ -14,7 +14,6 @@ service PinService {
   rpc UnpinApp(UnpinAppRequest) returns (UnpinAppResponse);
   rpc ReorderAppPins(ReorderAppPinsRequest) returns (ReorderAppPinsResponse);
   rpc ReorderDashboards(ReorderDashboardsRequest) returns (ReorderDashboardsResponse);
-  rpc SetWorkflowPinned(SetWorkflowPinnedRequest) returns (SetWorkflowPinnedResponse);
   rpc SetDashboardPinned(SetDashboardPinnedRequest) returns (SetDashboardPinnedResponse);
 }
 
@@ -31,20 +30,14 @@ message PinnedApp {
   string app_status = 6;
 }
 
-message PinnedWorkflow {
-  string id = 1;
-  string slug = 2;
-  string name = 3;
-}
-
 message PinnedDashboard {
   string id = 1;
   string name = 2;
 }
 
 message ListPinsRequest {
-  // Pages walk one sequence: App pins, then pinned Workflows, then pinned
-  // dashboards, each in the order below. The cursor is the next_cursor of
+  // Pages walk one sequence: App pins, then pinned dashboards, each in the
+  // order below. The cursor is the next_cursor of
   // the previous page.
   optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
   // Entries per page across the three lists; 0 returns every entry.
@@ -54,8 +47,9 @@ message ListPinsRequest {
 message ListPinsResponse {
   // In navigation order.
   repeated PinnedApp app_pins = 1;
-  // Most recently updated first; archived Workflows are left out.
-  repeated PinnedWorkflow workflows = 2;
+  // Removed with Workflows.
+  reserved 2;
+  reserved "workflows";
   // In dashboard order.
   repeated PinnedDashboard dashboards = 3;
   // Set when more entries follow this page.
@@ -169,20 +163,6 @@ message ReorderDashboardsRequest {
 message ReorderDashboardsResponse {
   // Every dashboard id in its new order.
   repeated string dashboard_ids = 1;
-}
-
-message SetWorkflowPinnedRequest {
-  // Workflow id or slug.
-  string workflow = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 200
-  }];
-  bool pinned = 2;
-}
-
-message SetWorkflowPinnedResponse {
-  string id = 1;
-  bool pinned = 2;
 }
 
 message SetDashboardPinnedRequest {

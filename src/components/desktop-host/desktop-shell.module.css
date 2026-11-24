@@ -162,13 +162,6 @@
   font-size: 12px;
 }
 
-/* Workflows keep the desk's clipped tile corner. */
-.workflowTile {
-  display: inline-flex;
-  overflow: hidden;
-  border-radius: 6px 6px 6px 2px;
-}
-
 .account {
   flex: none;
   display: flex;

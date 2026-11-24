@@ -13,7 +13,7 @@ const content: ComposerInputPart[] = [
   { type: 'text', text: 'Review ' },
   { type: 'app', id: 'app-original', name: 'Notes "{draft}"', slug: 'notes' },
   { type: 'text', text: '\n\nthen run ' },
-  { type: 'workflow', id: 'workflow-original', name: 'Digest' },
+  { type: 'app', id: 'app-digest', name: 'Digest', slug: 'digest' },
   { type: 'text', text: ' now.' },
 ];
 

@@ -1,6 +1,5 @@
 import {
   ActionIcon,
-  Anchor,
   Badge,
   Center,
   Code,
@@ -14,14 +13,13 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { IconChevronRight, IconCopy } from '@tabler/icons-react';
 import copy from 'copy-to-clipboard';
 import { toast } from 'sonner';
 import type { ProtoFile, RpcServiceApi } from '~server/apps/manifest';
 import { normalizedManifestQueryOptions } from '~queries/apps';
 import { GroupCard, Section } from '~components/page/page';
-import { workflowsQueryOptions } from '~queries/workflows';
+import { useI18n } from '~i18n';
 
 /** Local-name of a fully-qualified proto type (drops the package prefix). */
 function shortType(fqName: string): string {
@@ -30,6 +28,7 @@ function shortType(fqName: string): string {
 }
 
 function MethodRow({ method }: { method: RpcServiceApi['methods'][number] }) {
+  const { t } = useI18n();
   return (
     <Table.Tr>
       <Table.Td>
@@ -41,7 +40,7 @@ function MethodRow({ method }: { method: RpcServiceApi['methods'][number] }) {
         <Group gap={6} wrap="nowrap" align="center">
           {method.clientStreaming ? (
             <Badge size="xs" variant="light" color="grape">
-              stream
+              {t('api.stream')}
             </Badge>
           ) : null}
           <Tooltip label={method.inputType} withArrow position="top">
@@ -54,7 +53,7 @@ function MethodRow({ method }: { method: RpcServiceApi['methods'][number] }) {
           </Text>
           {method.serverStreaming ? (
             <Badge size="xs" variant="light" color="grape">
-              stream
+              {t('api.stream')}
             </Badge>
           ) : null}
           <Tooltip label={method.outputType} withArrow position="top">
@@ -69,6 +68,7 @@ function MethodRow({ method }: { method: RpcServiceApi['methods'][number] }) {
 }
 
 function ServiceBlock({ service }: { service: RpcServiceApi }) {
+  const { t } = useI18n();
   return (
     <Stack gap={6}>
       <Group gap={8} wrap="nowrap" align="baseline">
@@ -76,13 +76,12 @@ function ServiceBlock({ service }: { service: RpcServiceApi }) {
           {service.name}
         </Text>
         <Text size="xs" c="dimmed">
-          {service.methods.length} method
-          {service.methods.length === 1 ? '' : 's'}
+          {t('api.methods', { count: service.methods.length })}
         </Text>
       </Group>
       {service.methods.length === 0 ? (
         <Text size="xs" c="dimmed">
-          No methods defined.
+          {t('api.noMethods')}
         </Text>
       ) : (
         <Table withTableBorder verticalSpacing={6} highlightOnHover>
@@ -98,6 +97,7 @@ function ServiceBlock({ service }: { service: RpcServiceApi }) {
 }
 
 function ProtoSource({ file }: { file: ProtoFile }) {
+  const { t } = useI18n();
   const [opened, { toggle }] = useDisclosure(false);
   return (
     <Stack gap={4}>
@@ -107,7 +107,11 @@ function ProtoSource({ file }: { file: ProtoFile }) {
           color="gray"
           size="sm"
           onClick={toggle}
-          aria-label={opened ? `Hide ${file.path}` : `Show ${file.path}`}
+          aria-label={
+            opened
+              ? t('api.hideFile', { path: file.path })
+              : t('api.showFile', { path: file.path })
+          }
         >
           <IconChevronRight
             size={15}
@@ -126,15 +130,15 @@ function ProtoSource({ file }: { file: ProtoFile }) {
         >
           {file.path}
         </Text>
-        <Tooltip label="Copy proto" withArrow position="top">
+        <Tooltip label={t('api.copyProto')} withArrow position="top">
           <ActionIcon
             variant="subtle"
             color="gray"
             size="sm"
-            aria-label={`Copy ${file.path}`}
+            aria-label={t('api.copyFile', { path: file.path })}
             onClick={() => {
               copy(file.content);
-              toast.success('Proto copied');
+              toast.success(t('api.protoCopied'));
             }}
           >
             <IconCopy size={14} />
@@ -159,12 +163,12 @@ function ProtoSource({ file }: { file: ProtoFile }) {
  * don't expose an RPC service.
  */
 export function ApiPanel({ appId }: { appId: string }) {
+  const { t } = useI18n();
   const query = useQuery(normalizedManifestQueryOptions(appId));
-  const workflowsQuery = useQuery(workflowsQueryOptions);
 
   if (query.isLoading) {
     return (
-      <Section id="api" title="API">
+      <Section id="api" title={t('api.title')}>
         <GroupCard padded>
           <Center py="lg">
             <Loader size="sm" />
@@ -176,29 +180,24 @@ export function ApiPanel({ appId }: { appId: string }) {
 
   const manifest = query.data;
   const api = manifest?.api;
-  const workflows = manifest?.workflows ?? [];
-  const workflowById = new Map(
-    (workflowsQuery.data ?? []).map((workflow) => [workflow.id, workflow]),
-  );
 
   return (
-    <Section id="api" title="API">
+    <Section id="api" title={t('api.title')}>
       <GroupCard padded>
         {!manifest ? (
           <Text size="sm" c="dimmed">
-            Deploy this app to capture its declared API.
+            {t('api.notDeployed')}
           </Text>
         ) : (
           <Stack gap="lg">
             {!api || api.services.length === 0 ? (
               <Text size="sm" c="dimmed">
-                No RPC services declared in the proto.
+                {t('api.noServices')}
               </Text>
             ) : (
               <>
                 <Text size="sm" c="dimmed">
-                  Connect RPC services this app exposes, captured from its proto
-                  on deploy.
+                  {t('api.servicesIntro')}
                 </Text>
                 {api.services.map((service) => (
                   <ServiceBlock key={service.name} service={service} />
@@ -206,7 +205,7 @@ export function ApiPanel({ appId }: { appId: string }) {
                 {api.protoFiles.length > 0 ? (
                   <Stack gap={6}>
                     <Text fw={700} size="sm">
-                      Proto source
+                      {t('api.protoSource')}
                     </Text>
                     {api.protoFiles.map((file) => (
                       <ProtoSource key={file.path} file={file} />
@@ -215,54 +214,6 @@ export function ApiPanel({ appId }: { appId: string }) {
                 ) : null}
               </>
             )}
-            {workflows.length > 0 ? (
-              <Stack gap={6}>
-                <Text fw={700} size="sm">
-                  Workflow calls
-                </Text>
-                <Text size="xs" c="dimmed">
-                  Top-level workflows this app&apos;s backend can invoke. The
-                  platform injects each call&apos;s URL + secret at runtime.
-                </Text>
-                <Table withTableBorder verticalSpacing={6} highlightOnHover>
-                  <Table.Tbody>
-                    {workflows.map((w) => {
-                      const workflow = workflowById.get(w.workflow);
-                      return (
-                        <Table.Tr key={w.alias}>
-                          <Table.Td>
-                            <Text size="sm" fw={600} ff="monospace">
-                              {w.alias}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            {workflow ? (
-                              <Anchor
-                                size="xs"
-                                ff="monospace"
-                                renderRoot={(props) => (
-                                  <Link
-                                    to="/workflow/$workflowSlug"
-                                    params={{ workflowSlug: workflow.slug }}
-                                    {...props}
-                                  />
-                                )}
-                              >
-                                {w.workflow}
-                              </Anchor>
-                            ) : (
-                              <Text size="xs" ff="monospace">
-                                {w.workflow}
-                              </Text>
-                            )}
-                          </Table.Td>
-                        </Table.Tr>
-                      );
-                    })}
-                  </Table.Tbody>
-                </Table>
-              </Stack>
-            ) : null}
           </Stack>
         )}
       </GroupCard>

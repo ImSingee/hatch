@@ -48,7 +48,7 @@ beforeEach(async () => {
   vi.mocked(hub.listConnectedRunners).mockReturnValue([
     {
       runnerId: RUNNER,
-      protocolVersion: 21,
+      protocolVersion: 22,
       activeRunCount: 0,
       connectedAt: '2026-11-20T00:00:00.000Z',
       lastSeenAt: '2026-11-20T00:00:00.000Z',

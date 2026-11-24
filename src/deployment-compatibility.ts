@@ -1,4 +1,4 @@
-/** Compatibility state shared by immutable App and Workflow deployments. */
+/** Compatibility state of an immutable App deployment. */
 export type DeploymentCompatibility = {
   version: number;
   latestVersion: number;
@@ -8,7 +8,7 @@ export type DeploymentCompatibility = {
 };
 
 export type DeploymentCompatibilityPolicy = {
-  resourceName: 'App' | 'Workflow';
+  resourceName: 'App';
   latestVersion: number;
   minimumSupportedVersion: number;
 };

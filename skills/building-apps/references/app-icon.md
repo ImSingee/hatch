@@ -1,9 +1,7 @@
----
-name: app-icon
-description: Design an App icon with one of the instance's image models, let the user choose among candidates in chat, and set the chosen one. Use when the user asks for an App icon or logo, wants to change or remove one, or right after the first successful deployment of a new App.
----
+# App icons
 
-# Design an App icon
+Design an App icon with one of the instance's image models, let the user
+choose among candidates in chat, and set the chosen one.
 
 Prompt set version: 3.
 
@@ -31,7 +29,7 @@ ask the model for a tile, a frame, rounded corners or a ground shadow.
 An App without an icon shows a monogram. That is a fine result; never block
 other work on an icon.
 
-## Workflow
+## Steps
 
 Uploading a file the user supplies (`hatch app icon set <app> --file <path>`)
 and removing the icon (`hatch app icon clear <app>`) need no image model: run

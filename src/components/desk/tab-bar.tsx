@@ -10,7 +10,7 @@ import classes from './tab-bar.module.css';
 
 /**
  * The dock's stand-in below 560 wide: four destinations instead of the pins.
- * Apps lists every App and Workflow, pinned ones marked.
+ * Apps lists every App, pinned ones marked.
  */
 export function TabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });

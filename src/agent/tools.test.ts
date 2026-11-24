@@ -74,7 +74,6 @@ async function setup(
   }
   const env = new NodeExecutionEnv({ cwd: root });
   const tools = createTools(env, {
-    workflowBetaEnabled: false,
     platform: stubPlatform,
     ...(readOnlyRoot ? { readOnlyRoots: [readOnlyRoot] } : {}),
   });
@@ -692,7 +691,7 @@ describe('agent file tools', () => {
       getTool('edit_file').execute('edit', {
         path: skillPath,
         old_string: 'apps',
-        new_string: 'workflows',
+        new_string: 'tasks',
       }),
     ).rejects.toThrow(/outside the workspace/);
     await expect(

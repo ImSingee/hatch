@@ -36,7 +36,7 @@ pnpm mobile:start
 Enter the instance origin, continue in the system browser, verify the displayed
 code, approve **Hatch Mobile**, and return to the app. This grants full account
 access, matching Hatch's existing single-tenant model. Mobile does not accept
-API keys or Runner/Workflow credentials as a user login.
+API keys or Runner credentials as a user login.
 
 Development-only loopback HTTP (`localhost`, `127.0.0.1`, `[::1]`) is accepted for
 simulator testing. LAN HTTP is intentionally rejected. A physical phone's
@@ -142,8 +142,8 @@ The client uses generated `@hatch/platform-api` descriptors with Connect Web
 unary JSON transport at `/api/rpc`. App list/detail use `AppService/ListApps`
 and `GetApp`; model catalog and session list/create/detail use `AgentService`;
 `AuthService/CreateHandoff({})` issues the ticket and completion URL, and
-`WorkspaceService/GetWorkspace` supplies Dashboards, App pins (pin id, App id and
-slug, label, hash) and pinned Workflow IDs. The browser consumes the ticket with
+`WorkspaceService/GetWorkspace` supplies Dashboards and App pins (pin id, App id
+and slug, label, hash). The browser consumes the ticket with
 form `POST /api/auth/handoffs/consume` and follows its 303 redirect to
 `/api/auth/handoffs/complete`. The deprecated `CreateAppHandoff` is not used. There is no
 mobile API namespace, REST alias or fallback to undocumented Server Functions.
@@ -161,7 +161,7 @@ Existing Agent run, SSE, answer, cancel and attachment transports stay at
 `/api/agent/...`, and device/login/logout remain Better Auth HTTP endpoints.
 Interactive resources require an ordinary user session; API keys and Run JWTs
 cannot acquire conversation or browser sessions. No database migration or
-Platform/Runner, App, or Workflow compatibility-version bump is required.
+Platform/Runner or App compatibility-version bump is required.
 
 Use a backend revision including the Connect migration (#194), the merged
 mobile API work (#189), resource-free session handoffs (#219) and the workspace

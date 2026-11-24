@@ -44,7 +44,6 @@ function Navigation() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="library" options={{ title: '' }} />
         <Stack.Screen name="navigation" options={{ title: '' }} />
-        <Stack.Screen name="workflows/[id]" options={{ title: '' }} />
         <Stack.Screen name="chat/[id]" options={{ title: 'Conversation' }} />
         <Stack.Screen name="apps/[id]" options={{ title: 'App' }} />
         <Stack.Screen name="manage/[id]" options={{ title: '' }} />

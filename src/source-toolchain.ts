@@ -1,5 +1,5 @@
 /**
- * Build toolchain selection for authored App and Workflow source.
+ * Build toolchain selection for authored App source.
  *
  * The toolchain is chosen from committed dependency files before anything is
  * evaluated, and is independent of the runtime a manifest declares. This file
@@ -11,7 +11,6 @@ import path from 'node:path';
 import type { ManifestFile, ManifestReader } from './source-manifest';
 
 export type SourceToolchainName = 'deno' | 'node';
-export type SourceKind = 'app' | 'workflow';
 
 export const PNPM_LOCKFILE = 'pnpm-lock.yaml';
 const DENO_FILES = ['deno.json', 'deno.lock'] as const;
@@ -123,7 +122,6 @@ export type ToolchainRunner = (
 
 export type SourceToolchainContext = {
   root: string;
-  kind: SourceKind;
   run: ToolchainRunner;
   /** Reads authored files; defaults to a no-follow read below the root. */
   read?: ManifestReader;
@@ -154,7 +152,7 @@ export interface SourceToolchain {
   /** Evaluate `data/schema.ts` and return its descriptor as JSON text. */
   describe(): Promise<string>;
   /**
-   * Bundle a backend or Workflow entry (relative to the source root) into the
+   * Bundle a backend entry (relative to the source root) into the
    * single runtime file `outfile`, somewhere below `outputRoot`.
    */
   bundle(options: {

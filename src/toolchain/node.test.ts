@@ -114,7 +114,6 @@ describe('Node toolchain install', { timeout: 120_000 }, () => {
 
     const toolchain = createNodeToolchain({
       root,
-      kind: 'workflow',
       // An empty store forces the package to be downloaded, so a redirected
       // registry cannot go unnoticed.
       pnpmStoreDir: await tempDir(),

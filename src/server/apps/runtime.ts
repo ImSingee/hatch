@@ -90,7 +90,6 @@ import {
   recordBackendStartFailure,
   recordBackendStopped,
 } from './runtime-state';
-import { getWorkflowCallability } from '../workflows/external';
 
 export type BackendArtifact = {
   /** Validated absolute path to the runtime entry inside artifact/backend/. */
@@ -337,29 +336,6 @@ export function resolveBackendArtifact(buildDir: string): BackendArtifact {
     : { entryPath, ...network, ...runtime, ...permissions };
 }
 
-/** Outbound workflow calls the app declared, read from the staged manifest. */
-function readWorkflowRefs(
-  buildDir: string,
-): { alias: string; workflow: string }[] {
-  try {
-    const raw = readFileSync(
-      path.join(buildDir, 'manifest.normalized.json'),
-      'utf8',
-    );
-    const refs = (JSON.parse(raw) as { workflows?: unknown }).workflows;
-    if (!Array.isArray(refs)) return [];
-    return refs.filter(
-      (r): r is { alias: string; workflow: string } =>
-        !!r &&
-        typeof r === 'object' &&
-        typeof (r as { alias?: unknown }).alias === 'string' &&
-        typeof (r as { workflow?: unknown }).workflow === 'string',
-    );
-  } catch {
-    return [];
-  }
-}
-
 /** Prefer immutable deployment bytes; fall back only for legacy artifacts. */
 function runtimeBuildDir(id: string, deploymentId: string): string {
   const artifact = deploymentArtifactDir(id, deploymentId);
@@ -367,45 +343,6 @@ function runtimeBuildDir(id: string, deploymentId: string): string {
   const legacy = deploymentBuildDir(id, deploymentId);
   if (existsSync(legacy)) return legacy;
   return appBuildDir(id);
-}
-
-/**
- * Build the `HATCH_WORKFLOWS` env value: a JSON map of alias →
- * `{ workflow, name, url, secret }` so the backend can invoke each declared
- * workflow through the platform's external workflow API. The secret lives only
- * in this injected env (never in the normalized manifest shipped to the
- * browser). Returns null when the app declares no callable workflows.
- */
-async function buildWorkflowsEnv(
-  buildDir: string,
-): Promise<{ env: string; urls: string[] } | null> {
-  const refs = readWorkflowRefs(buildDir);
-  if (refs.length === 0) return null;
-  const map: Record<
-    string,
-    { workflow: string; name: string; url: string; secret: string }
-  > = {};
-  for (const ref of refs) {
-    const callability = await getWorkflowCallability(ref.workflow);
-    // Skip workflows that became un-callable since deploy (e.g. webhook
-    // disabled). Keep compatibility-blocked targets injected so an attempted
-    // call reaches the Workflow boundary and receives its actionable 503
-    // instead of looking like a missing alias inside the App runtime.
-    if (callability.state === 'unavailable') continue;
-    const callable = callability.workflow;
-    map[ref.alias] = {
-      workflow: callable.id,
-      name: callable.name,
-      url: internalPlatformUrl(callable.path),
-      secret: callable.secret,
-    };
-  }
-  return Object.keys(map).length > 0
-    ? {
-        env: JSON.stringify(map),
-        urls: Object.values(map).map((value) => value.url),
-      }
-    : null;
 }
 
 /**
@@ -1186,10 +1123,6 @@ async function spawnBackendProcess(
         }`,
     );
   }
-  // Resolve invocation config (URL + secret) for each declared workflow call so
-  // the backend can trigger top-level workflows through the external API.
-  const workflowsConfig = await buildWorkflowsEnv(buildDir);
-
   // Per-app HMAC key so the backend can verify platform-originated requests
   // (cron RPC calls) AND sign its own calls into platform APIs (KV). Absent for
   // apps deployed before this column existed; such backends simply can't verify
@@ -1261,7 +1194,6 @@ async function spawnBackendProcess(
       ? [networkDestinationFromUrl(notificationsBaseUrl)]
       : []),
     ...(tasksEnqueueUrl ? [networkDestinationFromUrl(tasksEnqueueUrl)] : []),
-    ...(workflowsConfig?.urls.map(networkDestinationFromUrl) ?? []),
   ];
 
   // Bundles may read only their fixed asset directory and, when enabled, the
@@ -1303,7 +1235,6 @@ async function spawnBackendProcess(
       ...databaseEnv,
       ...backendStorageEnv(storageDir),
       ...backendArtifactEnv(buildDir, backendArtifact),
-      ...(workflowsConfig ? { HATCH_WORKFLOWS: workflowsConfig.env } : {}),
       ...(signingSecret ? { HATCH_SIGNING_SECRET: signingSecret } : {}),
       ...(kvBaseUrl ? { HATCH_KV_URL: kvBaseUrl } : {}),
       ...(dataBaseUrl ? { HATCH_DATA_URL: dataBaseUrl } : {}),

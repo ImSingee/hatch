@@ -7,10 +7,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { build, type BuildFailure } from 'esbuild';
 import { sdkEntryTsconfig } from '../../sdk-internal/definitions';
-import {
-  APP_HATCH_SDK_IMPORTS,
-  WORKFLOW_HATCH_SDK_IMPORTS,
-} from '../agent/hatch-sdk';
+import { APP_HATCH_SDK_IMPORTS } from '../agent/hatch-sdk';
 import { validateNodeDependencySource } from '../node-dependencies';
 import {
   NODE_EVALUATION_CONDITIONS,
@@ -66,8 +63,7 @@ function commandLine(command: Pick<ToolchainCommand, 'tool' | 'args'>): string {
 export function createNodeToolchain(
   context: SourceToolchainContext,
 ): SourceToolchain {
-  const { root, kind, logs } = context;
-  const skill = kind === 'app' ? 'building-apps' : 'building-workflows';
+  const { root, logs } = context;
   const read = context.read ?? ((file) => readManifestFile(root, file));
 
   /** Run a command, log it, and return its result; the caller judges it. */
@@ -123,7 +119,6 @@ export function createNodeToolchain(
     async validateDependencies() {
       await validateNodeDependencySource(
         root,
-        kind,
         context.readDependenciesThroughReader ? read : undefined,
       );
     },
@@ -143,7 +138,7 @@ export function createNodeToolchain(
           if (result.code !== 0) {
             throw new Error(
               `Dependency install failed with the committed ${PNPM_LOCKFILE}. ` +
-                `Load the "${skill}" Skill, run pnpm install locally, commit ` +
+                'Load the "building-apps" Skill, run pnpm install locally, commit ' +
                 'the updated dependency files, and deploy again:\n' +
                 result.output,
             );
@@ -154,7 +149,6 @@ export function createNodeToolchain(
 
     evaluateManifest(parse) {
       return loadSourceManifest(root, {
-        kind,
         parse,
         read,
         steps: {
@@ -207,11 +201,6 @@ export function createNodeToolchain(
         step: 'check',
       });
       if (checked.code !== 0) {
-        if (kind === 'workflow') {
-          throw new Error(
-            `Workflow source validation failed during tsc:\n${checked.output}`,
-          );
-        }
         const contractMessage =
           fetchContract &&
           checked.output.includes(path.posix.basename(FETCH_CONTRACT))
@@ -240,7 +229,6 @@ export function createNodeToolchain(
       try {
         const source = await bundleEvaluationModule({
           root: await fs.realpath(root),
-          kind,
           read,
           contents:
             `import schema from './data/schema.ts';\n` +
@@ -267,7 +255,6 @@ export function createNodeToolchain(
     },
 
     async bundle({ entry, outfile }) {
-      const label = kind === 'app' ? 'Backend' : 'Workflow';
       const canonicalRoot = await fs.realpath(root);
       let metafile;
       try {
@@ -292,14 +279,9 @@ export function createNodeToolchain(
           logLevel: 'silent',
           metafile: true,
           plugins: [
-            hatchSdkPlugin(
-              root,
-              kind === 'app'
-                ? APP_HATCH_SDK_IMPORTS
-                : WORKFLOW_HATCH_SDK_IMPORTS,
-            ),
+            hatchSdkPlugin(root, APP_HATCH_SDK_IMPORTS),
             nodeBuiltinsPlugin(),
-            sourceBoundaryPlugin(canonicalRoot, label, 'source root'),
+            sourceBoundaryPlugin(canonicalRoot, 'Backend', 'source root'),
           ],
         }));
         assertRuntimeBundleImports(metafile);
@@ -316,7 +298,7 @@ export function createNodeToolchain(
           : error instanceof Error
             ? error.message
             : String(error);
-        throw new Error(`${label} bundle failed:\n${detail}`, { cause: error });
+        throw new Error(`Backend bundle failed:\n${detail}`, { cause: error });
       }
       logs?.push(
         `$ esbuild ${entry} --bundle --format=esm --platform=node --conditions=deno`,

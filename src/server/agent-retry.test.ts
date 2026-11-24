@@ -79,12 +79,6 @@ describe('parseRetryableAgentTurn', () => {
         name: 'Original Name',
         slug: 'original-slug',
       },
-      { type: 'text', text: ' with ' },
-      {
-        type: 'workflow',
-        id: 'workflow-stable',
-        name: 'Original Workflow',
-      },
       { type: 'text', text: ' before publishing.' },
     ];
     expect(
@@ -103,7 +97,6 @@ describe('parseRetryableAgentTurn', () => {
       baseMessages: [],
       userText:
         'Review @APP{name="Original Name" id="app-stable" slug="original-slug"}' +
-        ' with @WORKFLOW{name="Original Workflow" id="workflow-stable"}' +
         ' before publishing.',
       composerContent,
       images: [],

@@ -84,13 +84,6 @@ vi.mock('~queries/apps', () => ({
   },
 }));
 
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [],
-  },
-}));
-
 const longPrompt = Array.from(
   { length: 30 },
   (_, index) => `Requirement ${index + 1}: keep the tracker usable offline.`,

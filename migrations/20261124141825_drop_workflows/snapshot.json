@@ -1,0 +1,376 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "f4c7b13a-e729-4699-9f7f-c2abd570c148",
+  "prevIds": ["18946b9a-d678-44d3-8d93-ec5865925295"],
+  "footprints": [
+    {
+      "statementType": "drop_fk",
+      "statementTarget": ["table", "public", "workflow_deployments"],
+      "writes": [
+        "s|fk|public.workflow_deployments.workflow_deployments_workflow_id_workflows_id_fk",
+        "n|fk|public.workflow_deployments.workflow_deployments_workflow_id_workflows_id_fk",
+        "e|fk|public.workflow_deployments.workflow_deployments_workflow_id_workflows_id_fk",
+        "n|con|public.workflow_deployments.workflow_deployments_workflow_id_workflows_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.workflow_deployments",
+        "n|sch|public",
+        "e|col|public.workflow_deployments.workflow_id"
+      ]
+    },
+    {
+      "statementType": "drop_fk",
+      "statementTarget": ["table", "public", "workflow_run_steps"],
+      "writes": [
+        "s|fk|public.workflow_run_steps.workflow_run_steps_run_id_workflow_runs_id_fk",
+        "n|fk|public.workflow_run_steps.workflow_run_steps_run_id_workflow_runs_id_fk",
+        "e|fk|public.workflow_run_steps.workflow_run_steps_run_id_workflow_runs_id_fk",
+        "n|con|public.workflow_run_steps.workflow_run_steps_run_id_workflow_runs_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.workflow_run_steps",
+        "n|sch|public",
+        "e|col|public.workflow_run_steps.run_id"
+      ]
+    },
+    {
+      "statementType": "drop_fk",
+      "statementTarget": ["table", "public", "workflow_runs"],
+      "writes": [
+        "s|fk|public.workflow_runs.workflow_runs_workflow_id_workflows_id_fk",
+        "n|fk|public.workflow_runs.workflow_runs_workflow_id_workflows_id_fk",
+        "e|fk|public.workflow_runs.workflow_runs_workflow_id_workflows_id_fk",
+        "n|con|public.workflow_runs.workflow_runs_workflow_id_workflows_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.workflow_runs",
+        "n|sch|public",
+        "e|col|public.workflow_runs.workflow_id"
+      ]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": ["table", "public", "workflow_deployments"],
+      "writes": [
+        "s|tbl|public.workflow_deployments",
+        "n|tbl|public.workflow_deployments",
+        "e|tbl|public.workflow_deployments",
+        "n|rel|public.workflow_deployments",
+        "n|type|public.workflow_deployments"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": ["table", "public", "workflow_run_steps"],
+      "writes": [
+        "s|tbl|public.workflow_run_steps",
+        "n|tbl|public.workflow_run_steps",
+        "e|tbl|public.workflow_run_steps",
+        "n|rel|public.workflow_run_steps",
+        "n|type|public.workflow_run_steps"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": ["table", "public", "workflow_runs"],
+      "writes": [
+        "s|tbl|public.workflow_runs",
+        "n|tbl|public.workflow_runs",
+        "e|tbl|public.workflow_runs",
+        "n|rel|public.workflow_runs",
+        "n|type|public.workflow_runs"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": ["table", "public", "workflows"],
+      "writes": [
+        "s|tbl|public.workflows",
+        "n|tbl|public.workflows",
+        "e|tbl|public.workflows",
+        "n|rel|public.workflows",
+        "n|type|public.workflows"
+      ],
+      "reads": ["n|sch|public"]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"workflow_deployments\"]"
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"workflow_run_steps\"]"
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"workflow_runs\"]"
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"workflows\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"workflow_id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"version\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"status\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"message\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"manifest_normalized\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"input_schema\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"source_commit\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"source_tag\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"artifact_path\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"build_log\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"created_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"run_id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"seq\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"name\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"status\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"attempt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"output\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"started_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"finished_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_run_steps\",\"created_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"workflow_id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"deployment_id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"version\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"trigger\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"status\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"input\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"output\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"log\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"started_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"finished_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_runs\",\"created_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"name\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"description\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"status\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"manifest\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"input_schema\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"repo_path\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"current_source_commit\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"current_deployment_id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"webhook_secret\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"pinned\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"sort_order\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"created_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"updated_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflows\",\"slug\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"workflow_deployments\",\"compatibility_version\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"workflow_deployments_workflow_version_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"workflow_run_steps_run_seq_attempt_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"workflow_runs_workflow_created_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"workflows_slug_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"workflow_deployments\",\"workflow_deployments_workflow_id_workflows_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"workflow_run_steps\",\"workflow_run_steps_run_id_workflow_runs_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"workflow_runs\",\"workflow_runs_workflow_id_workflows_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"workflow_deployments\",\"workflow_deployments_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"workflow_run_steps\",\"workflow_run_steps_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"workflow_runs\",\"workflow_runs_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"workflows\",\"workflows_pkey\"]"
+    }
+  ]
+}

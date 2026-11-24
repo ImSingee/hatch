@@ -56,7 +56,7 @@ async function source(files: Record<string, unknown>): Promise<string> {
 }
 
 async function validate(files: Record<string, unknown> = {}) {
-  return validateNodeDependencySource(await source(files), 'app');
+  return validateNodeDependencySource(await source(files));
 }
 
 afterEach(async () => {
@@ -117,17 +117,13 @@ describe('validateNodeDependencySource', () => {
       'pnpm-lock.yaml': lockfile(),
     };
     const root = await source({ ...files, '.PNPMFILE.CJS': '' });
-    await expect(
-      validateNodeDependencySource(root, 'workflow'),
-    ).rejects.toThrow('workflow sources cannot include .PNPMFILE.CJS');
+    await expect(validateNodeDependencySource(root)).rejects.toThrow(
+      'app sources cannot include .PNPMFILE.CJS',
+    );
     // The Runner reads contents through an Agent-scoped reader.
     await expect(
-      validateNodeDependencySource(
-        root,
-        'workflow',
-        async (file) => files[file] ?? null,
-      ),
-    ).rejects.toThrow('workflow sources cannot include .PNPMFILE.CJS');
+      validateNodeDependencySource(root, async (file) => files[file] ?? null),
+    ).rejects.toThrow('app sources cannot include .PNPMFILE.CJS');
   });
 
   it('ignores a pnpm-workspace.yaml that pnpm wrote into the root', async () => {

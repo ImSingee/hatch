@@ -27,6 +27,12 @@ requires TS. The latest App contract is v2; v3+ is not available yet.
 In every compatibility version and in both formats, the manifest top level
 rejects undeclared fields. The retired top-level `version` and `userscripts`
 fields remain accepted and ignored until the proposal below removes them.
+A non-empty top-level `workflows` field (outbound Workflow calls) is rejected in
+every compatibility version since Workflows were removed from the platform; an
+empty list is still accepted and ignored. Delete the field and move the work
+into App tasks (`building-apps` references/tasks.md). This
+is a platform removal, not a new compatibility version; already-deployed
+artifacts keep running, but the backend no longer receives `HATCH_WORKFLOWS`.
 
 TypeScript authoring does not introduce a new deployment compatibility version:
 the platform still stores parsed source JSON
@@ -104,7 +110,7 @@ above.
 - `backend.network` will become required. To migrate, add a hostname/IP
   allowlist, `[]`, or `"unrestricted"`, and bind the backend with
   `.listen(port, '127.0.0.1', ...)`. Do not declare the listener or enabled
-  Database, Data Tables, KV, and Workflow endpoints; the platform grants them
+  Database, Data Tables, KV, and task endpoints; the platform grants them
   automatically. A missing declaration will be rejected, and a restricted
   backend bound elsewhere will fail to start.
 

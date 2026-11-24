@@ -1,7 +1,7 @@
 /**
  * Server-only: shared Git-backed source storage engine.
  *
- * Apps and workflows store canonical source identically: a bare repo per
+ * Apps store canonical source the same way: a bare repo per
  * entity, deploy tags owned by the Platform, and temporary deploy checkouts.
  * Clients push and fetch over Git smart HTTP (source-git-http.ts); Agent Tool
  * worktrees on the Runner still exchange source bundles. Pushing source and
@@ -41,7 +41,7 @@ export type PublishedSource = {
 };
 
 export type GitSourceConfig = {
-  /** Noun used in error messages ("app" / "workflow"). */
+  /** Noun used in error messages ("app"). */
   noun: string;
   repoDir: (id: string) => string;
   deployCheckoutDir: (id: string) => string;

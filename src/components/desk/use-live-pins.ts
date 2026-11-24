@@ -5,7 +5,6 @@ import {
 } from '~components/system/platform-events';
 import { dashboardsQueryOptions } from '~queries/dashboards';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
-import { workflowsQueryOptions } from '~queries/workflows';
 
 /**
  * Keep the dock and the dashboard switcher current when pins change somewhere
@@ -17,7 +16,6 @@ export function useLivePins() {
   const refresh = () => {
     for (const { queryKey } of [
       sidebarItemsQueryOptions,
-      workflowsQueryOptions,
       dashboardsQueryOptions,
     ])
       void queryClient.invalidateQueries({ queryKey, exact: true });

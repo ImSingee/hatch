@@ -29,7 +29,6 @@ import {
 } from '~agent/composer-content';
 import { useI18n, type PlainTranslationKey } from '~i18n';
 import type { AppListItem } from '~server/apps';
-import type { WorkflowListItem } from '~server/workflows';
 import { ComposerEditor, type ComposerEditorHandle } from './composer-editor';
 import {
   cancelPendingMessage,
@@ -44,7 +43,6 @@ import classes from './pending-tray.module.css';
 
 type Mentions = {
   apps?: AppListItem[];
-  workflows?: WorkflowListItem[];
 };
 
 const MODE_LABEL: Record<AgentMessageMode, PlainTranslationKey> = {
@@ -163,7 +161,6 @@ function PendingEdit({
         <ComposerEditor
           ref={editorRef}
           apps={mentions.apps}
-          workflows={mentions.workflows}
           disabled={saving}
           focusOnMount
           placeholder={t('agent.pending.editPlaceholder')}
@@ -380,13 +377,11 @@ export function PendingTray({
   sessionId,
   pending,
   apps,
-  workflows,
   onResult,
 }: {
   sessionId: string;
   pending: SessionPendingMessages;
   apps?: AppListItem[];
-  workflows?: WorkflowListItem[];
   onResult: (result: PendingMessagesResult) => void;
 }) {
   const { t } = useI18n();
@@ -430,7 +425,7 @@ export function PendingTray({
           key={message.id}
           sessionId={sessionId}
           message={message}
-          mentions={{ apps, workflows }}
+          mentions={{ apps }}
           onResult={onResult}
         />
       ))}

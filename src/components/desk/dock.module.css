@@ -19,12 +19,6 @@
   min-width: 0;
 }
 
-/* Both groups scroll sideways when their pins outgrow the dock. The Apps
-   group gives way first; Workflows shrink only when they alone overflow. */
-.grow {
-  flex-shrink: 8;
-}
-
 /* The Apps pins scroll; All apps stays at the end, outside the scroller. */
 .groupBody {
   display: flex;
@@ -46,12 +40,6 @@
 
 .row::-webkit-scrollbar {
   display: none;
-}
-
-.divider {
-  flex: none;
-  width: 1px;
-  background: var(--border-hairline);
 }
 
 .slot {
@@ -77,11 +65,6 @@
 .tile {
   display: block;
   transition: transform var(--transition-base);
-}
-
-/* Workflows differ from Apps by shape: one corner is nearly square. */
-.tile[data-shape='workflow'] > * {
-  border-bottom-left-radius: 3px;
 }
 
 .item:hover .tile {

@@ -5,12 +5,11 @@ import { Tag } from './primitives';
 import { Text, type } from './text';
 import { palette as c, radii, shadows } from './theme';
 
-/** Identity of an App or Workflow at the top of its page. */
+/** Identity of an App at the top of its page. */
 export function ResourceHeader({
   name,
   seed,
   iconPath,
-  workflow = false,
   description,
   status,
   pinned = false,
@@ -18,21 +17,13 @@ export function ResourceHeader({
   name: string;
   seed: string;
   iconPath?: string | null;
-  workflow?: boolean;
   description: string;
   status: string;
   pinned?: boolean;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-      <AppTile
-        name={name}
-        seed={seed}
-        iconPath={iconPath}
-        workflow={workflow}
-        size={72}
-        lifted
-      />
+      <AppTile name={name} seed={seed} iconPath={iconPath} size={72} lifted />
       <View style={{ flex: 1, gap: 6 }}>
         <Text
           accessibilityRole="header"

@@ -1,6 +1,7 @@
 import { Badge, Loader, ThemeIcon } from '@mantine/core';
 import { IconCheck, IconClock, IconHandStop, IconX } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import type { RunStatus, RunStepStatus } from '~lib/runs';
 
 /**
@@ -10,30 +11,30 @@ import type { RunStatus, RunStepStatus } from '~lib/runs';
  */
 const RUN_META: Record<
   RunStatus,
-  { label: string; color: string; icon: ReactNode }
+  { label: PlainTranslationKey; color: string; icon: ReactNode }
 > = {
   queued: {
-    label: 'Queued',
+    label: 'runStatus.queued',
     color: 'gray',
     icon: <IconClock size={11} stroke={2.5} />,
   },
   running: {
-    label: 'Running',
+    label: 'runStatus.running',
     color: 'primary',
     icon: <Loader size={9} color="primary" />,
   },
   succeeded: {
-    label: 'Succeeded',
+    label: 'runStatus.succeeded',
     color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   failed: {
-    label: 'Failed',
+    label: 'runStatus.failed',
     color: 'red',
     icon: <IconX size={11} stroke={2.5} />,
   },
   canceled: {
-    label: 'Canceled',
+    label: 'runStatus.canceled',
     color: 'gray',
     icon: <IconHandStop size={11} stroke={2.5} />,
   },
@@ -44,6 +45,7 @@ export function runStatusColor(status: RunStatus): string {
 }
 
 export function RunStatusBadge({ status }: { status: RunStatus }) {
+  const { t } = useI18n();
   const meta = RUN_META[status];
   return (
     <Badge
@@ -56,7 +58,7 @@ export function RunStatusBadge({ status }: { status: RunStatus }) {
         )
       }
     >
-      {meta.label}
+      {t(meta.label)}
     </Badge>
   );
 }

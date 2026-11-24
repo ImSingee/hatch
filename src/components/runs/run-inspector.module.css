@@ -17,7 +17,3 @@
 .error {
   color: var(--mantine-color-red-7);
 }
-
-.capitalize {
-  text-transform: capitalize;
-}

@@ -1,4 +1,4 @@
-export const tabIds = ['dashboard', 'apps', 'agent', 'workflows'] as const;
+export const tabIds = ['dashboard', 'apps', 'agent'] as const;
 export type TabId = (typeof tabIds)[number];
 export type NavigationPreferences = {
   order: TabId[];

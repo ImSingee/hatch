@@ -163,6 +163,17 @@ describe('personal homepage contract', () => {
       } as unknown as HomepageTarget,
     });
     expect(await getHomepageDestination()).toBe('/dashboard');
+    // A page removed from the platform (Workflows) falls back the same way.
+    await db
+      .update(schema.userPreferences)
+      .set({
+        homepage: {
+          kind: 'page',
+          page: 'workflows',
+        } as unknown as HomepageTarget,
+      })
+      .where(eq(schema.userPreferences.userId, 'owner-a'));
+    expect(await getHomepageDestination()).toBe('/dashboard');
   });
 
   it('isolates authenticated accounts, persists upserts, and cascades account deletion', async () => {
@@ -172,8 +183,10 @@ describe('personal homepage contract', () => {
     await updateHomepageSettings({ data: { kind: 'page', page: 'apps' } });
     fixture.userId = 'owner-a';
     expect(await getHomepageDestination()).toBe('/agent');
-    await updateHomepageSettings({ data: { kind: 'page', page: 'workflows' } });
-    expect(await getHomepageDestination()).toBe('/workflows');
+    await updateHomepageSettings({
+      data: { kind: 'page', page: 'executions' },
+    });
+    expect(await getHomepageDestination()).toBe('/executions');
     expect(await db.select().from(schema.userPreferences)).toHaveLength(2);
     const settings = await getHomepageSettings();
     expect(JSON.stringify(settings)).not.toContain('session-token');

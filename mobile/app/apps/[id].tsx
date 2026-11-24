@@ -38,7 +38,7 @@ export default function AppScreen() {
   // the title: the App takes the whole height instead.
   const [verticalBar, setVerticalBar] = useState(false);
   useWebHistoryBack(inPageBack, () => surface.current?.goBack());
-  const linked = useLinkedId('apps', id, slug);
+  const linked = useLinkedId(id, slug);
   const app = useQuery({
     queryKey: [origin, 'app', linked.id],
     queryFn: ({ signal }) => api!.app(linked.id!, signal),

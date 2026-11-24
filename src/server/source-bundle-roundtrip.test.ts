@@ -86,9 +86,6 @@ function agentGit(
   });
 }
 
-const SOURCE_KINDS = ['app', 'workflow'] as const;
-type SourceKind = (typeof SOURCE_KINDS)[number];
-
 type TestSource = {
   id: string;
   masterCommit: string | null;
@@ -149,14 +146,13 @@ async function exportSource(id: string): Promise<TestSource> {
 }
 
 async function publishAgentChange(options: {
-  kind: SourceKind;
   source: TestSource;
   sessionId: string;
   version: number;
   contents: string;
 }): Promise<string> {
-  const { kind, source, sessionId, version, contents } = options;
-  const checkout = await checkoutFromBundle(sessionId, kind, source);
+  const { source, sessionId, version, contents } = options;
+  const checkout = await checkoutFromBundle(sessionId, source);
   await writeFile(path.join(checkout.absolutePath, 'README.md'), contents);
   const commit = await commitAll(
     checkout.absolutePath,
@@ -165,7 +161,6 @@ async function publishAgentChange(options: {
   );
   const deploy = await bundleWorktreeForDeploy(
     sessionId,
-    kind,
     source.id,
     checkout.absolutePath,
   );
@@ -241,7 +236,6 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     );
     const checkout = await checkoutFromBundle(
       sessionId,
-      'app',
       await exportSource(id),
     );
     expect(checkout).toMatchObject({
@@ -272,7 +266,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     // -- Platform -> runner: export master, sync a local checkout. ----------
     const exported = await platform.exportMasterBundle(APP_ID);
     expect(exported).not.toBeNull();
-    const checkout = await checkoutFromBundle(SESSION, 'app', {
+    const checkout = await checkoutFromBundle(SESSION, {
       id: APP_ID,
       masterCommit: seedCommit,
       bundleBase64: exported!.toString('base64'),
@@ -298,7 +292,6 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     // -- Runner -> platform: bundle the worktree, stage it, publish. --------
     const deploy = await bundleWorktreeForDeploy(
       SESSION,
-      'app',
       APP_ID,
       checkout.absolutePath,
     );
@@ -357,10 +350,10 @@ describe('git bundle round-trip (platform <-> runner)', () => {
         const expectedCommit = await seedPlatformSource(id);
         const source = await exportSource(id);
         const sessionId = `${id}-session`;
-        const fresh = await checkoutFromBundle(sessionId, kind, source);
+        const fresh = await checkoutFromBundle(sessionId, source);
         expect(fresh.synchronizedExisting).toBe(false);
 
-        const synchronized = await checkoutFromBundle(sessionId, kind, source);
+        const synchronized = await checkoutFromBundle(sessionId, source);
 
         await expectSynchronizedCheckout(
           synchronized,
@@ -373,15 +366,14 @@ describe('git bundle round-trip (platform <-> runner)', () => {
       }, 15_000);
     }
 
-    for (const kind of SOURCE_KINDS) {
+    for (const kind of ['app'] as const) {
       it(`advances a clean existing ${kind} master that is behind remote`, async () => {
         const id = `sync-behind-${kind}`;
         await seedPlatformSource(id);
         const initialSource = await exportSource(id);
         const sessionId = `${id}-session`;
-        await checkoutFromBundle(sessionId, kind, initialSource);
+        await checkoutFromBundle(sessionId, initialSource);
         const expectedCommit = await publishAgentChange({
-          kind,
           source: initialSource,
           sessionId: `${id}-publisher`,
           version: 2,
@@ -391,7 +383,6 @@ describe('git bundle round-trip (platform <-> runner)', () => {
 
         const synchronized = await checkoutFromBundle(
           sessionId,
-          kind,
           advancedSource,
         );
 
@@ -415,13 +406,13 @@ describe('git bundle round-trip (platform <-> runner)', () => {
           masterCommit: null,
           bundleBase64: null,
         };
-        const empty = await checkoutFromBundle(sessionId, kind, emptySource);
+        const empty = await checkoutFromBundle(sessionId, emptySource);
         expect(empty.headCommit).toBeNull();
         expect(empty.synchronizedExisting).toBe(false);
         const expectedCommit = await seedPlatformSource(id);
         const source = await exportSource(id);
 
-        const synchronized = await checkoutFromBundle(sessionId, kind, source);
+        const synchronized = await checkoutFromBundle(sessionId, source);
 
         await expectSynchronizedCheckout(
           synchronized,
@@ -441,11 +432,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
           await seedPlatformSource(id);
           const initialSource = await exportSource(id);
           const sessionId = `${id}-session`;
-          const local = await checkoutFromBundle(
-            sessionId,
-            kind,
-            initialSource,
-          );
+          const local = await checkoutFromBundle(sessionId, initialSource);
           await writeFile(
             path.join(local.absolutePath, 'local.txt'),
             'local-only\n',
@@ -458,7 +445,6 @@ describe('git bundle round-trip (platform <-> runner)', () => {
           let remoteSource = initialSource;
           if (relation === 'diverged') {
             await publishAgentChange({
-              kind,
               source: initialSource,
               sessionId: `${id}-publisher`,
               version: 2,
@@ -471,7 +457,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
           }
 
           await expect(
-            checkoutFromBundle(sessionId, kind, remoteSource),
+            checkoutFromBundle(sessionId, remoteSource),
           ).rejects.toThrow(
             /local master.*commits.*platform master.*origin\/master.*refreshed/is,
           );
@@ -512,7 +498,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
           await seedPlatformSource(id);
           const source = await exportSource(id);
           const sessionId = `${id}-session`;
-          const local = await checkoutFromBundle(sessionId, kind, source);
+          const local = await checkoutFromBundle(sessionId, source);
           const head = await agentGit(
             sessionId,
             ['rev-parse', 'HEAD'],
@@ -537,9 +523,9 @@ describe('git bundle round-trip (platform <-> runner)', () => {
             );
           }
 
-          await expect(
-            checkoutFromBundle(sessionId, kind, source),
-          ).rejects.toThrow(/already exists.*origin bundle was refreshed/is);
+          await expect(checkoutFromBundle(sessionId, source)).rejects.toThrow(
+            /already exists.*origin bundle was refreshed/is,
+          );
           await expect(
             agentGit(sessionId, ['rev-parse', 'HEAD'], local.absolutePath),
           ).resolves.toBe(head);
@@ -567,7 +553,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     // A second session syncs, commits on top of v2… ------------------------
     const exported = await platform.exportMasterBundle(APP_ID);
     const master = await platform.masterCommit(APP_ID);
-    const stale = await checkoutFromBundle('rt-stale', 'app', {
+    const stale = await checkoutFromBundle('rt-stale', {
       id: APP_ID,
       masterCommit: master,
       bundleBase64: exported!.toString('base64'),
@@ -576,13 +562,12 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     await commitAll(stale.absolutePath, 'stale edit', 'rt-stale');
     const staleBundle = await bundleWorktreeForDeploy(
       'rt-stale',
-      'app',
       APP_ID,
       stale.absolutePath,
     );
 
     // …but master advances first (another deploy wins the race). ------------
-    const winner = await checkoutFromBundle('rt-winner', 'app', {
+    const winner = await checkoutFromBundle('rt-winner', {
       id: APP_ID,
       masterCommit: master,
       bundleBase64: exported!.toString('base64'),
@@ -591,7 +576,6 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     await commitAll(winner.absolutePath, 'winner edit', 'rt-winner');
     const winnerBundle = await bundleWorktreeForDeploy(
       'rt-winner',
-      'app',
       APP_ID,
       winner.absolutePath,
     );
@@ -616,7 +600,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     await seedPlatformSource(id, 'old source\n');
     const source = await exportSource(id);
     const sessionId = `${id}-session`;
-    const oldCheckout = await checkoutFromBundle(sessionId, 'app', source);
+    const oldCheckout = await checkoutFromBundle(sessionId, source);
     await writeFile(
       path.join(oldCheckout.absolutePath, 'README.md'),
       'restored source\n',
@@ -635,7 +619,6 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     });
     const upload = await bundleWorktreeForDeploy(
       sessionId,
-      'app',
       id,
       oldCheckout.absolutePath,
     );
@@ -652,7 +635,7 @@ describe('git bundle round-trip (platform <-> runner)', () => {
     it(`requires force to discard local ${kind} work against an empty remote`, async () => {
       const sessionId = `rt-empty-remote-${kind}`;
       const id = `empty-remote-${kind}`;
-      const fresh = await initNewWorktree(sessionId, kind, id, () =>
+      const fresh = await initNewWorktree(sessionId, id, () =>
         Promise.resolve(),
       );
       await writeFile(path.join(fresh.absolutePath, 'a.txt'), 'work\n');
@@ -667,19 +650,16 @@ describe('git bundle round-trip (platform <-> runner)', () => {
         bundleBase64: null,
       };
 
-      await expect(
-        checkoutFromBundle(sessionId, kind, emptySource),
-      ).rejects.toThrow(/already exists.*platform master is currently empty/);
+      await expect(checkoutFromBundle(sessionId, emptySource)).rejects.toThrow(
+        /already exists.*platform master is currently empty/,
+      );
       await expect(
         agentGit(sessionId, ['rev-parse', 'HEAD'], fresh.absolutePath),
       ).resolves.toBe(localCommit);
 
-      const replacement = await checkoutFromBundle(
-        sessionId,
-        kind,
-        emptySource,
-        { force: true },
-      );
+      const replacement = await checkoutFromBundle(sessionId, emptySource, {
+        force: true,
+      });
       expect(replacement.replacedExisting).toBe(true);
       expect(replacement.synchronizedExisting).toBe(false);
       expect(replacement.headCommit).toBeNull();
@@ -713,14 +693,13 @@ describe('git bundle round-trip (platform <-> runner)', () => {
       APP_ID,
     );
     await expect(
-      bundleWorktreeForDeploy(SESSION, 'app', APP_ID, sourcePath),
+      bundleWorktreeForDeploy(SESSION, APP_ID, sourcePath),
     ).rejects.toThrow(/dirty/);
     await rm(path.join(sourcePath, 'x'));
 
     await expect(
       bundleWorktreeForDeploy(
         SESSION,
-        'app',
         'never-checked-out',
         path.join(
           root,

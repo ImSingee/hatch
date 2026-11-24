@@ -90,13 +90,6 @@ vi.mock('~queries/apps', () => ({
   },
 }));
 
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [],
-  },
-}));
-
 const WORK_HEADER = /^(Working|Worked|Failed|Stopped|Ended early)\b/;
 
 function iso(ms: number): string {

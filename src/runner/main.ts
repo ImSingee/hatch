@@ -5,7 +5,7 @@
  * platform. It opens ONE outbound WebSocket to the platform's internal
  * server (never the other way around), announces itself with `runner.hello`,
  * and then executes dispatched runs, streaming events back and calling the
- * internal REST API for app/workflow operations.
+ * internal REST API for App operations.
  *
  * Environment:
  *   HATCH_PLATFORM_URL  platform internal base URL (default http://127.0.0.1:3701)
@@ -51,7 +51,6 @@ let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let offlineAbortTimer: ReturnType<typeof setTimeout> | undefined;
 let shuttingDown = false;
 let pendingResumedRunIds: string[] = [];
-let betaFeatures: readonly string[] = Object.freeze([]);
 
 function send(message: RunnerMessage): boolean {
   if (!ws || ws.readyState !== WebSocket.OPEN || !helloAcked) return false;
@@ -84,7 +83,6 @@ const executor = new RunnerExecutor({
       isConnected: () => helloAcked && ws?.readyState === WebSocket.OPEN,
     }),
   tavilyApiKey: config.tavilyApiKey,
-  getBetaFeatures: () => betaFeatures,
   platform,
   send,
 });
@@ -125,7 +123,6 @@ function handleHubMessage(message: HubMessage): void {
     case 'hub.hello_ack': {
       const socket = ws;
       if (!socket) return;
-      betaFeatures = Object.freeze([...message.betaFeatures]);
       pendingResumedRunIds = message.resumedRunIds;
       for (const runId of message.staleRunIds) {
         executor.abortStale(runId);

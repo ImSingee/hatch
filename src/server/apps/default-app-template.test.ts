@@ -12,7 +12,7 @@ async function loadDefaultManifest() {
     .replaceAll('__APP_ID__', JSON.stringify('demo'))
     .replaceAll('__APP_NAME__', JSON.stringify('Demo'))
     .replaceAll('__APP_DESCRIPTION__', JSON.stringify('Demo app'));
-  const source = await evaluateTemplateManifest(rendered, 'app');
+  const source = await evaluateTemplateManifest(rendered);
   return { source, manifest: parseSourceManifest(source) };
 }
 

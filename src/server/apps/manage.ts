@@ -262,8 +262,7 @@ export async function renameAppSlug(
  * normalized manifest from the current deployment, so URLs follow automatically.
  * Serialized with deploys via the shared per-app lock so a rollback and a
  * deploy can't interleave their artifact/Git/row mutations and leave the DB
- * pointing at one version while the live dir/`master` points at another
- * (mirrors rollbackWorkflow).
+ * pointing at one version while the live dir/`master` points at another.
  */
 export function rollbackApp(
   id: string,

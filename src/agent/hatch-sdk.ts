@@ -39,7 +39,6 @@ import {
   LEGACY_DATA_SDK,
   SDK_DENO_TYPES,
   SDK_DENO_TYPES_LICENSE,
-  WORKFLOW_SDK,
   sdkImports,
   sdkToolchainFiles,
   type SdkDefinition,
@@ -49,14 +48,9 @@ export const HATCH_SDK_IMPORT_MAP = '.hatch/import-map.json';
 export const HATCH_BUF_GEN_CONFIG = '.hatch/buf.gen.yaml';
 
 export const APP_HATCH_SDK_IMPORTS = sdkImports([APP_SDK, LEGACY_DATA_SDK]);
-export const WORKFLOW_HATCH_SDK_IMPORTS = sdkImports([WORKFLOW_SDK]);
 
 export function appHatchDataPackageDir(root: string): string {
   return path.join(root, '.hatch', 'sdk', '@hatch', 'data');
-}
-
-export function workflowHatchPackageDir(root: string): string {
-  return path.join(root, '.hatch', 'sdk', '@hatch', 'workflow');
 }
 
 export function hatchImportMapPath(root: string): string {
@@ -120,17 +114,8 @@ const APP_HATCH_SDK_GENERATION: HatchSdkGeneration = {
   extraFiles: {
     'buf.gen.yaml': PLATFORM_APP_BUF_GEN_YAML,
     [APP_TASK_OPTIONS_PROTO_FILE]: APP_TASK_OPTIONS_PROTO,
-    ...sdkToolchainFiles('app'),
+    ...sdkToolchainFiles(),
   },
-  copiedFiles: TOOLCHAIN_COPIED_FILES,
-};
-
-const WORKFLOW_HATCH_SDK_GENERATION: HatchSdkGeneration = {
-  label: '@hatch/workflow',
-  sourceRootLabel: 'Workflow source root',
-  imports: WORKFLOW_HATCH_SDK_IMPORTS,
-  packages: [sdkPackage(WORKFLOW_SDK)],
-  extraFiles: sdkToolchainFiles('workflow'),
   copiedFiles: TOOLCHAIN_COPIED_FILES,
 };
 
@@ -672,10 +657,6 @@ export function materializeAppHatchSdk(root: string): Promise<void> {
   return materializeHatchSdk(root, APP_HATCH_SDK_GENERATION);
 }
 
-export function materializeWorkflowHatchSdk(root: string): Promise<void> {
-  return materializeHatchSdk(root, WORKFLOW_HATCH_SDK_GENERATION);
-}
-
 const COMMON_HATCH_SDK_EXCLUDES = [
   '/.hatch/',
   '/.hatch-install-*/',
@@ -688,9 +669,4 @@ const COMMON_HATCH_SDK_EXCLUDES = [
 export const appHatchSdkMaterializer = {
   gitExcludePatterns: [...COMMON_HATCH_SDK_EXCLUDES, '/gen/'],
   materialize: materializeAppHatchSdk,
-} satisfies WorktreeMaterializer;
-
-export const workflowHatchSdkMaterializer = {
-  gitExcludePatterns: COMMON_HATCH_SDK_EXCLUDES,
-  materialize: materializeWorkflowHatchSdk,
 } satisfies WorktreeMaterializer;

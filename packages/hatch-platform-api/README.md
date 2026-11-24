@@ -19,9 +19,9 @@ validation to call RPCs. Field numbers and presence are public contracts.
 See [Platform API](../../docs/platform-api.md) for routing, authentication,
 validation, errors and release policy. No OpenAPI endpoint is provided.
 
-Proto files are organized by domain: `app.proto`, `workflow.proto`, `auth.proto`
-and `sdk.proto` include each service and its request/response messages. Shared
-App/Workflow resource and release messages live in `lifecycle.proto`; shared file
+Proto files are organized by domain: `app.proto`, `auth.proto` and `sdk.proto`
+include each service and its request/response messages. App resource and
+release messages live in `lifecycle.proto`; shared file
 payloads and business errors live in `file.proto` and `error.proto`. Dependencies
 point from domain files to these shared definitions. The package entry point
 re-exports all generated descriptors.

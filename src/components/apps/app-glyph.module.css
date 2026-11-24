@@ -66,8 +66,3 @@ img.glyph {
   display: block;
   object-fit: cover;
 }
-
-/* A Workflow tile squares off its bottom-left corner. */
-.glyph[data-shape='workflow'] {
-  border-end-start-radius: calc(var(--glyph-radius) / 4);
-}

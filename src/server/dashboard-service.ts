@@ -38,8 +38,8 @@ import { readDashboards, type Dashboard } from './workspace-read';
 export type { Dashboard } from './workspace-read';
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
-// Existing namespaces elsewhere: appDeployLock=1 (apps/deploy.ts),
-// workflowDeployLock=2 (workflows/deploy.ts), APP_KV_LOCK_NS=3
+// Existing namespaces elsewhere: appDeployLock=1 (apps/deploy.ts), 2 (retired
+// with Workflows; do not reuse), APP_KV_LOCK_NS=3
 // (apps/kv.ts), SIDEBAR_PIN_LOCK_NS=4 (pins.ts), PLATFORM_CONFIG_LOCK_NS=7
 // (platform-config.ts).
 const DASHBOARDS_LOCK_NS = 5;

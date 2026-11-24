@@ -7,9 +7,9 @@ function record(value: JsonValue | undefined) {
 }
 
 /**
- * The blocks a stored message shows. A user message that mentions an App or
- * Workflow keeps its text in `composerContent`, while its photos stay in
- * `content`; both are shown.
+ * The blocks a stored message shows. A user message that mentions an App
+ * keeps its text in `composerContent`, while its photos stay in `content`;
+ * both are shown.
  */
 export function messageBlocks(message: Record<string, JsonValue>) {
   const content = Array.isArray(message.content)
