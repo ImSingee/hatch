@@ -30,12 +30,17 @@ const startsWith = (path: readonly string[], prefix: readonly string[]) =>
 const isCommand = (path: readonly string[]) =>
   commandDefinitions.some((d) => d.path.join(' ') === path.join(' '));
 
-/** Whether the words before the first flag name exactly a command group. */
+/**
+ * Whether the words name exactly a command group, such as `hatch auth`, which
+ * lists the group's commands. Only `--json` may follow; any other word is left
+ * to the unknown command check.
+ */
 export function namesGroup(words: readonly string[]) {
   const end = words.findIndex((word) => word.startsWith('-'));
   const path = end === -1 ? words : words.slice(0, end);
   return (
     path.length > 0 &&
+    words.slice(path.length).every((word) => word === '--json') &&
     !isCommand(path) &&
     commandDefinitions.some((d) => startsWith(d.path, path))
   );

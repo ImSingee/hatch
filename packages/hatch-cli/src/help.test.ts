@@ -53,5 +53,6 @@ describe('hierarchical help', () => {
     expect(namesGroup(['app', 'kv', '--json'])).toBe(true);
     expect(namesGroup(['auth', 'status'])).toBe(false);
     expect(namesGroup(['auth', 'foo'])).toBe(false);
+    expect(namesGroup(['auth', '--json', 'typo'])).toBe(false);
   });
 });
