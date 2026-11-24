@@ -42,6 +42,10 @@ one. `model list` shows every provider model (chat and image) and
 `model set-kind` moves one between the two kinds, as the Web Category field
 does; the other chat model settings stay Web-only. See [App icons](app-icons.md).
 
+The Web UI language (Settings → Appearance → Language) is a display preference
+of one browser, kept in its local storage and never sent to the server. It is
+browser-bound, has no platform state, and therefore has no CLI command.
+
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
 pushes, then calls the Deploy RPC with the commit to release (`--commit`

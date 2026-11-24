@@ -24,6 +24,7 @@ import { authClient } from '~auth/client';
 import { useSignOut } from '~auth/use-sign-out';
 import { UserAvatar } from '~components/auth/user-avatar';
 import { DeskWindow } from '~components/desk/window';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { WindowBody } from '~components/page/page';
 import { Rail, RailIdentity, WindowSplit } from '~components/page/split';
 import { userAvatarSrc } from '~lib/user-avatar';
@@ -36,88 +37,88 @@ const icon = (Icon: typeof IconBell) => <Icon size={15} stroke={2} />;
 
 type SettingsItem = {
   to: LinkProps['to'];
-  label: string;
+  label: PlainTranslationKey;
   icon: ReactNode;
   color: string;
-  keywords: string;
+  keywords: PlainTranslationKey;
 };
 
-const GROUPS: { label: string; items: SettingsItem[] }[] = [
+const GROUPS: { label: PlainTranslationKey; items: SettingsItem[] }[] = [
   {
-    label: 'Personal',
+    label: 'settings.group.personal',
     items: [
       {
         to: '/settings/account',
-        label: 'Account',
+        label: 'settings.account.label',
         icon: icon(IconUserCircle),
         color: 'primary',
-        keywords: 'profile password passkeys api keys sessions homepage',
+        keywords: 'settings.account.keywords',
       },
       {
         to: '/settings/appearance',
-        label: 'Appearance',
+        label: 'settings.appearance.label',
         icon: icon(IconPalette),
         color: 'violet',
-        keywords: 'accent colour color theme',
+        keywords: 'settings.appearance.keywords',
       },
     ],
   },
   {
-    label: 'Space',
+    label: 'settings.group.space',
     items: [
       {
         to: '/settings/providers',
-        label: 'AI Providers',
+        label: 'settings.providers.label',
         icon: icon(IconServer2),
         color: 'orange',
-        keywords: 'models image model keys',
+        keywords: 'settings.providers.keywords',
       },
       {
         to: '/settings/users',
-        label: 'Users',
+        label: 'settings.users.label',
         icon: icon(IconUsers),
         color: 'pink',
-        keywords: 'sign-up members',
+        keywords: 'settings.users.keywords',
       },
       {
         to: '/settings/notifications',
-        label: 'Notifications',
+        label: 'settings.notifications.label',
         icon: icon(IconBell),
         color: 'amber',
-        keywords: 'destinations groups routes channels webhook',
+        keywords: 'settings.notifications.keywords',
       },
       {
         to: '/settings/tailscale',
-        label: 'Tailscale',
+        label: 'settings.tailscale.label',
         icon: icon(IconNetwork),
         color: 'dark',
-        keywords: 'tailnet private network',
+        keywords: 'settings.tailscale.keywords',
       },
     ],
   },
   {
-    label: 'Status',
+    label: 'settings.group.status',
     items: [
       {
         to: '/settings/backends',
-        label: 'Backends',
+        label: 'settings.backends.label',
         icon: icon(IconServerBolt),
         color: 'blue',
-        keywords: 'app backend runtime',
+        keywords: 'settings.backends.keywords',
       },
       {
         to: '/settings/agent-runner',
-        label: 'Agent Runner',
+        label: 'settings.agentRunner.label',
         icon: icon(IconRobot),
         color: 'green',
-        keywords: 'runners runs',
+        keywords: 'settings.agentRunner.keywords',
       },
       {
         to: '/settings/about',
-        label: 'About',
+        label: 'settings.about.label',
         icon: icon(IconInfoCircle),
         color: 'gray',
-        keywords: 'version revision build',
+        keywords: 'settings.about.keywords',
       },
     ],
   },
@@ -127,7 +128,9 @@ function SettingsLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data } = authClient.useSession();
   const { signOut, leaving } = useSignOut();
-  const name = data?.user.name || data?.user.email || 'Account';
+  const { t } = useI18n();
+  const name =
+    data?.user.name || data?.user.email || t('settings.accountFallback');
   const current = GROUPS.flatMap((group) => group.items).find(
     (item) =>
       pathname === item.to || pathname.startsWith(`${String(item.to)}/`),
@@ -136,7 +139,11 @@ function SettingsLayout() {
   return (
     <DeskWindow
       fill
-      title={current ? `Settings · ${current.label}` : 'Settings'}
+      title={
+        current
+          ? t('settings.titleWithSection', { section: t(current.label) })
+          : t('settings.title')
+      }
       tile={
         <ThemeIcon size={22} radius="xs" color="gray.7">
           <IconSettings size={13} stroke={2.4} />
@@ -146,8 +153,8 @@ function SettingsLayout() {
       <WindowSplit
         rail={
           <Rail
-            label="Settings sections"
-            searchLabel="Search settings"
+            label={t('settings.sections')}
+            searchLabel={t('settings.search')}
             identity={
               <RailIdentity
                 tile={
@@ -167,13 +174,13 @@ function SettingsLayout() {
               />
             }
             groups={GROUPS.map((group) => ({
-              label: group.label,
+              label: t(group.label),
               items: group.items.map((item) => ({
                 key: String(item.to),
-                label: item.label,
+                label: t(item.label),
                 icon: item.icon,
                 color: item.color,
-                keywords: item.keywords,
+                keywords: t(item.keywords),
                 link: { to: item.to },
                 current: item === current,
               })),
@@ -186,7 +193,7 @@ function SettingsLayout() {
                 loading={leaving}
                 onClick={signOut}
               >
-                Sign out
+                {t('common.signOut')}
               </Button>
             }
           />
