@@ -989,6 +989,11 @@ export const notifications = snakeCase.table(
       () => agentSessions.id,
       { onDelete: 'set null' },
     ),
+    /**
+     * A Run sent it (directly or as a Channel), so every answer goes back to
+     * its chat. A chat a route opened gets answers only while a route picks it.
+     */
+    agentAsked: boolean('agent_asked').notNull().default(false),
     sourceName: text().notNull(),
     kind: text().notNull(),
     kindName: text().notNull(),
@@ -1105,7 +1110,7 @@ export const notificationReadCursors = snakeCase.table(
   () => [
     check(
       'notification_read_cursors_reader_check',
-      sql`("notification_read_cursors"."reader" = 'agent' and "notification_read_cursors"."user_id" is null) or "notification_read_cursors"."reader" = 'user:' || "notification_read_cursors"."user_id"`,
+      sql`("notification_read_cursors"."reader" = 'agent' and "notification_read_cursors"."user_id" is null) or ("notification_read_cursors"."user_id" is not null and "notification_read_cursors"."reader" = 'user:' || "notification_read_cursors"."user_id")`,
     ),
   ],
 );

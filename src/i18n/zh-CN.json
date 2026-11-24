@@ -1335,6 +1335,8 @@
   "error.notifications.responseRouteNotFound": "找不到该回复路由。",
   "error.notifications.replyRoundChanged": "打开后问题已经变了，请回答当前的问题。",
   "error.notifications.agentChatNotFound": "找不到该 Agent 对话。",
+  "error.notifications.agentChatModelUnavailable": "该对话的 AI 模型不可用。请先在对话中选择模型，再把回答发给它。",
+  "error.notifications.agentNoModel": "请先添加带有模型的 AI 服务商，再把回答发给 Agent。",
   "error.notifications.retryNotFailed": "只有失败的投递可以重试。",
   "error.notifications.retryDestinationRemoved": "这次投递的目的地已被移除。",
   "error.notifications.devicePushOff": "此设备已关闭推送，请在 Hatch App 中重新开启。",

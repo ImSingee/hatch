@@ -1047,6 +1047,17 @@ describe('timeline order', () => {
   it('moves a notification to the end when its source edits it, but not when someone answers or it is recalled', async () => {
     const first = await sendForm();
     const second = await sendForm();
+    // Known activity times a minute apart, both before the edit below, so the
+    // order never rests on two pushes landing in the same millisecond.
+    for (const [id, minutesAgo] of [
+      [first, 2],
+      [second, 1],
+    ] as const) {
+      await db
+        .update(schema.notifications)
+        .set({ activityAt: new Date(Date.now() - minutesAgo * 60_000) })
+        .where(eq(schema.notifications.id, id));
+    }
     const idsOf = async () =>
       (await activityIds()).items.map((item) => item.id);
     expect(await idsOf()).toEqual([second, first]);
@@ -1225,6 +1236,7 @@ describe('new questions on the same notification', () => {
 
   it('refuses an answer to a question an edit has since replaced, on the web and from the push', async () => {
     const id = await sendForm();
+    const firstShown = (await service.getNotification(id)).revision;
     // Same field and option ids, a different question.
     const renamed = structuredClone(APPROVE_FORM);
     renamed.fields[0]!.label = 'Roll back the deploy?';
@@ -1255,8 +1267,25 @@ describe('new questions on the same notification', () => {
     expect((await service.getNotification(id)).response).toBeNull();
 
     await runAll();
+    // A tap on the first question arriving after the phone got the second:
+    // it names the revision its notification showed.
+    const late = await handleDeviceResponse(
+      deviceRequest({
+        notificationId: id,
+        answers: { decision: 'approve' },
+        revision: firstShown,
+      }),
+    );
+    expect(late.status).toBe(409);
+    expect(await late.json()).toMatchObject({
+      error: { code: 'QUESTION_CHANGED' },
+    });
     const current = await handleDeviceResponse(
-      deviceRequest({ notificationId: id, answers: { decision: 'reject' } }),
+      deviceRequest({
+        notificationId: id,
+        answers: { decision: 'reject' },
+        revision: (await service.getNotification(id)).revision,
+      }),
     );
     expect(current.status).toBe(200);
     expect((await service.getNotification(id)).response).toMatchObject({

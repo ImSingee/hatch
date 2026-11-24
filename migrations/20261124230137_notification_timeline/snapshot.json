@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "1e776e8e-b0ac-4b26-9739-cb6ccd9fad97",
+  "id": "88227220-77a8-4b90-ab33-8cdfc1cd6fe3",
   "prevIds": ["f4c7b13a-e729-4699-9f7f-c2abd570c148"],
   "footprints": [
     {
@@ -163,6 +163,16 @@
         "s|col|public.notifications.agent_session_id",
         "n|col|public.notifications.agent_session_id",
         "e|col|public.notifications.agent_session_id"
+      ],
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "notifications", "agent_asked"],
+      "writes": [
+        "s|col|public.notifications.agent_asked",
+        "n|col|public.notifications.agent_asked",
+        "e|col|public.notifications.agent_asked"
       ],
       "reads": ["n|tbl|public.notifications", "n|sch|public"]
     },
@@ -795,6 +805,22 @@
       "row": {
         "schema": "public",
         "table": "notifications",
+        "name": "agent_asked",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notifications",
         "name": "card",
         "type": "jsonb",
         "typeSchema": null,
@@ -960,7 +986,7 @@
         "schema": "public",
         "table": "notification_read_cursors",
         "name": "notification_read_cursors_reader_check",
-        "value": "(\"notification_read_cursors\".\"reader\" = 'agent' and \"notification_read_cursors\".\"user_id\" is null) or \"notification_read_cursors\".\"reader\" = 'user:' || \"notification_read_cursors\".\"user_id\"",
+        "value": "(\"notification_read_cursors\".\"reader\" = 'agent' and \"notification_read_cursors\".\"user_id\" is null) or (\"notification_read_cursors\".\"user_id\" is not null and \"notification_read_cursors\".\"reader\" = 'user:' || \"notification_read_cursors\".\"user_id\")",
         "entityType": "checks"
       }
     },

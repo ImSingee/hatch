@@ -172,9 +172,14 @@ export async function updateNotification(
   sender: NotificationSender,
   update: NotificationUpdate,
 ): Promise<LifecycleResult> {
-  const now = new Date();
   const outcome = await db.transaction(async (tx) => {
     const current = await lockOwnNotification(tx, sender, update.id);
+    // Taken under the lock and always after the version it replaces: an edit
+    // that waited for the lock must not land behind the one that held it,
+    // where a read position may already have passed it.
+    const now = new Date(
+      Math.max(Date.now(), current.activityAt.getTime() + 1),
+    );
     if (current.recalledAt) {
       throw new NotificationLifecycleError(
         'A recalled notification cannot be edited',

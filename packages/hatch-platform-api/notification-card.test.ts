@@ -37,6 +37,11 @@ describe('notification cards', () => {
       { block: { type: 'chart', label: 'x' } },
       { status: { label: 'Done', tone: 'purple' } },
       { status: { label: 'Done' }, color: 'red' },
+      // A progress block needs its percent, even over RPC where an omitted
+      // number would otherwise read as 0.
+      { block: { type: 'progress', label: 'Checks' } },
+      // The limit counts the label as sent, as the Protobuf rule does.
+      { status: { label: ' ' + 'x'.repeat(24) } },
     ];
     for (const card of invalid) expect(parse(card).success).toBe(false);
   });

@@ -329,8 +329,9 @@ version (its title, body, `data`, card and form, from
 
 An answer names the round it was given on: the web and the phone app send
 the round they show (`RespondToNotification.round`, `hatch notification
-respond --round`), and an answer from the push answers the version that phone
-last received. When an edit has asked a new question since, the answer is
+respond --round`, required there), and an answer from the push sends the
+revision its notification showed (an app build without that answers the
+version that phone last received). When an edit has asked a new question since, the answer is
 refused (`409`, code `notifications.replyRoundChanged`; `QUESTION_CHANGED`
 from the push), even when the new form keeps the old field and option ids.
 Answers that no longer fit the current form are rejected (`400`).
@@ -346,10 +347,13 @@ Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or
 a `text` field the trimmed text. Unanswered optional fields are left out.
 `respondToNotification` (`responses.ts`) runs in one transaction:
 
-1. It locks the notification. A notification without a form answers `400`, a
-   recalled one `409`, and one already answered `409` with the existing answer
-   (`ALREADY_RESPONDED`). Concurrent answers serialize on the row lock, and
-   `notification_responses` has the notification id as primary key.
+1. It locks the notification. An answer to a form an edit has since replaced
+   or removed answers `409` (`notifications.replyRoundChanged`), a
+   notification without a form `400`, a recalled one `409`, and a round
+   already answered `409` with the existing answer (`ALREADY_RESPONDED`).
+   Concurrent answers serialize on the row lock, and `notification_responses`
+   has `(notification_id, round)` as primary key: a second answer to the same
+   round is refused, while a later round takes its own.
 2. It stores the answer with the user, a name snapshot, where it was given
    (`via`: `push`, `mobile`, `web`, `cli`) and, from a push, the device. It
    sets `responded_at` and increments the revision, recording the new value
@@ -394,6 +398,7 @@ route selects it.
     "id": "…",
     "reply": { "fields": ["…"], "submitLabel": "Submit" },
     "response": {
+      "round": 1,
       "answers": { "decision": "approve" },
       "respondedBy": { "userId": "…", "name": "Ada" },
       "via": "push",
@@ -406,8 +411,10 @@ route selects it.
 `notification.data` passes through unchanged, so the sender can correlate the
 answer with its own records. The envelope's top-level `revision` is the revision the answer
 created (`response_revision`), on every attempt, even if the notification is
-edited or recalled before the answer is delivered; `notification` itself shows
-the current state. No other event carries that revision: notification, edit
+edited or recalled before the answer is delivered. `notification` itself shows
+the current state of the answered round: an answer still being delivered when
+an edit asks a new question goes out with its own round's last version
+(title, body, `data`, card and `reply`), never with the new round's. No other event carries that revision: notification, edit
 and recall events use the content revision (`contentRevision`), which skips
 the answer's, so `(notification.id, revision)` stays unique per event. The
 dispatcher alternates which queue claims first, so a backlog of notification
@@ -787,6 +794,8 @@ The timeline additions are additive too. `notification.card` and
 edit asked a new question: the source itself with an SDK that has `reply` on
 `updateNotification`, or a member through `hatch notification update --reply`.
 Receivers that keyed answers by notification id should key them by
-`(notification.id, response.round)`; older receivers see the later answer as
-the latest one. `activity_at`, read positions and revisions are platform
+`(notification.id, response.round)`. Until then, a receiver that overwrites by
+notification id shows the later answer as the latest one, but one that ignores
+a notification id after its first answer drops every later round: update such
+receivers before a source starts asking new questions. `activity_at`, read positions and revisions are platform
 data and never reach Apps.

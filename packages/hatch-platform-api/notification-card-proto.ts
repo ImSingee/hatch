@@ -101,7 +101,8 @@ export function cardFromMessage(
     card.block = {
       type: 'progress',
       label: block.value.label,
-      percent: block.value.percent,
+      // The platform always sends it.
+      percent: block.value.percent ?? 0,
       ...(block.value.value ? { value: block.value.value } : {}),
     };
   } else if (block.case === 'stats') {

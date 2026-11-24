@@ -4,7 +4,7 @@ CREATE TABLE "notification_read_cursors" (
 	"activity_at" timestamp(3) with time zone NOT NULL,
 	"notification_id" text DEFAULT '' NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "notification_read_cursors_reader_check" CHECK (("notification_read_cursors"."reader" = 'agent' and "notification_read_cursors"."user_id" is null) or "notification_read_cursors"."reader" = 'user:' || "notification_read_cursors"."user_id")
+	CONSTRAINT "notification_read_cursors_reader_check" CHECK (("notification_read_cursors"."reader" = 'agent' and "notification_read_cursors"."user_id" is null) or ("notification_read_cursors"."user_id" is not null and "notification_read_cursors"."reader" = 'user:' || "notification_read_cursors"."user_id"))
 );
 --> statement-breakpoint
 CREATE TABLE "notification_revisions" (
@@ -33,6 +33,7 @@ ALTER TABLE "notification_responses" ADD COLUMN "revision" integer;--> statement
 -- Each existing answer is round 1 and created the notification's response revision.
 UPDATE "notification_responses" SET "revision" = "notifications"."response_revision" FROM "notifications" WHERE "notifications"."id" = "notification_responses"."notification_id";--> statement-breakpoint
 ALTER TABLE "notifications" ADD COLUMN "agent_session_id" text;--> statement-breakpoint
+ALTER TABLE "notifications" ADD COLUMN "agent_asked" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "notifications" ADD COLUMN "card" jsonb;--> statement-breakpoint
 ALTER TABLE "notifications" ADD COLUMN "activity_at" timestamp(3) with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
 -- Existing notifications last moved when they were pushed or last edited. Kept

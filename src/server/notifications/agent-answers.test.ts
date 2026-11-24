@@ -126,6 +126,7 @@ describe('answers handed to the Agent', () => {
       channelId: null,
       sourceName: 'Hatch Agent',
       agentSessionId: 'session-asked',
+      agentAsked: true,
     });
     await answer(id);
     await deliverAnswers();
@@ -141,6 +142,36 @@ describe('answers handed to the Agent', () => {
     expect(JSON.stringify(call.message.content)).toContain('field 1: option 1');
   });
 
+  it('go back to the chat of a Run that sent as a Channel', async () => {
+    await db.insert(schema.agentSessions).values({
+      id: 'session-asked',
+      providerId: 'provider-1',
+      modelId: 'model-chat',
+    });
+    const { id } = await service.sendNotification({
+      to: { type: 'channel', id: channelId },
+      sender: {
+        type: 'platform',
+        name: 'Hatch Agent',
+        agentSessionId: 'session-asked',
+      },
+      body: { kind: 'pr', title: 'PR #261 CI failed', reply: FORM },
+    });
+    const [row] = await db
+      .select()
+      .from(schema.notifications)
+      .where(eq(schema.notifications.id, id));
+    expect(row).toMatchObject({
+      sourceType: 'channel',
+      agentSessionId: 'session-asked',
+      agentAsked: true,
+    });
+    await answer(id);
+    await deliverAnswers();
+    expect(enqueued).toHaveBeenCalledTimes(1);
+    expect(enqueued.mock.calls[0]![0].sessionId).toBe('session-asked');
+  });
+
   it('never come back when the Agent answered itself', async () => {
     await db.insert(schema.agentSessions).values({ id: 'session-asked' });
     const id = await notification({
@@ -148,6 +179,7 @@ describe('answers handed to the Agent', () => {
       channelId: null,
       sourceName: 'Hatch Agent',
       agentSessionId: 'session-asked',
+      agentAsked: true,
     });
     await answer(id, null);
     await deliverAnswers();

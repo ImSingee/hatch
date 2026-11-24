@@ -685,11 +685,11 @@ export async function retryDelivery(deliveryId: string): Promise<void> {
   const delivery =
     (await db.query.notificationDeliveries.findFirst({
       where: { id: deliveryId },
-      columns: { status: true, destinationId: true },
+      columns: { status: true, destinationId: true, destinationType: true },
     })) ??
     (await db.query.notificationResponseDeliveries.findFirst({
       where: { id: deliveryId },
-      columns: { status: true, destinationId: true },
+      columns: { status: true, destinationId: true, destinationType: true },
     }));
   if (!delivery) notFound('Delivery');
   if (delivery.status !== 'failed') {
@@ -697,7 +697,8 @@ export async function retryDelivery(deliveryId: string): Promise<void> {
       code: 'notifications.retryNotFailed',
     });
   }
-  if (!delivery.destinationId) {
+  // An Agent chat is no destination: it has none to lose.
+  if (!delivery.destinationId && delivery.destinationType !== 'agent') {
     throw new AppError('The destination of this delivery was removed.', 409, {
       code: 'notifications.retryDestinationRemoved',
     });
@@ -1531,14 +1532,32 @@ async function responseRouteValues(
           })
         : null;
       if (sessionId && !session) notFound('Agent chat');
-      // Answers would only be logged and dropped without a model to run.
-      if (
-        !(session?.providerId && session.modelId) &&
-        !(await getAgentModelCatalog()).defaultModel
-      ) {
+      // Answers would fail every delivery without a model that can run: the
+      // chat's own model when it has one (as delivery uses it), else the
+      // first configured one.
+      const catalog = await getAgentModelCatalog();
+      const runnable =
+        session?.providerId && session.modelId
+          ? catalog.providers.some(
+              (provider) =>
+                provider.id === session.providerId &&
+                provider.models.some(
+                  (model) => model.modelId === session.modelId,
+                ),
+            )
+          : catalog.defaultModel !== null;
+      if (!runnable) {
         throw new AppError(
-          'Add an AI provider with a model before sending answers to the Agent.',
+          session?.providerId && session.modelId
+            ? "The chat's AI model is unavailable. Pick a model in the chat before sending answers to it."
+            : 'Add an AI provider with a model before sending answers to the Agent.',
           409,
+          {
+            code:
+              session?.providerId && session.modelId
+                ? 'notifications.agentChatModelUnavailable'
+                : 'notifications.agentNoModel',
+          },
         );
       }
     }
@@ -1911,7 +1930,11 @@ export async function sendNotification(input: {
     if (!channel.enabled) {
       throw new AppError('Enable the channel before sending to it.', 409);
     }
-    const result = await ingestChannelPush(channel, body);
+    const result = await ingestChannelPush(
+      channel,
+      body,
+      sender.type === 'platform' ? sender.agentSessionId : undefined,
+    );
     if (!result.ok) throw new AppError(`${result.message}.`, 400);
     return {
       id: result.id,

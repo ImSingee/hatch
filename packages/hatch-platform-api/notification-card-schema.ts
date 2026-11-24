@@ -28,7 +28,9 @@ const emptyToUndefined = <T extends z.ZodType>(schema: T) =>
     schema.optional(),
   );
 
-const text = (max: number) => z.string().trim().min(1).max(max);
+// The limit counts the text as sent, like the Protobuf rules, so both accept
+// the same values; surrounding spaces are then dropped.
+const text = (max: number) => z.string().max(max).trim().min(1);
 
 const statusSchema = z
   .object({

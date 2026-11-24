@@ -480,9 +480,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'respond'],
     usage:
-      'notification respond <notification-id> (--answer <field-id>=<value>... | --answers <json> | --answers-file <path|->) [--round <n>]',
+      'notification respond <notification-id> --round <n> (--answer <field-id>=<value>... | --answers <json> | --answers-file <path|->)',
     description:
-      'Answer a notification reply form as the signed-in user; one answer per round of the form, final once sent. Repeat --answer for each option of a multiple field. --round names the round you read (reply round in get); if an edit has asked a new question since, the answer is refused as a conflict instead of answering the new one. Sends the answer to matching response routes.',
+      'Answer a notification reply form as the signed-in user; one answer per round of the form, final once sent. Repeat --answer for each option of a multiple field. --round (required) is the round you read (reply round in get); if an edit has asked a new question since, the answer is refused as a conflict instead of answering the new one. Sends the answer to matching response routes.',
   },
   {
     path: ['notification', 'unread'],

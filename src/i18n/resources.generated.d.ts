@@ -1337,6 +1337,8 @@ export type TranslationResource = {
   'error.notifications.responseRouteNotFound': 'Response route not found.';
   'error.notifications.replyRoundChanged': 'The question changed since you opened it. Answer the current one.';
   'error.notifications.agentChatNotFound': 'Agent chat not found.';
+  'error.notifications.agentChatModelUnavailable': "The chat's AI model is unavailable. Pick a model in the chat before sending answers to it.";
+  'error.notifications.agentNoModel': 'Add an AI provider with a model before sending answers to the Agent.';
   'error.notifications.retryNotFailed': 'Only failed deliveries can be retried.';
   'error.notifications.retryDestinationRemoved': 'The destination of this delivery was removed.';
   'error.notifications.devicePushOff': 'Push was turned off on this device; turn it back on in the Hatch app.';

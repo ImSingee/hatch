@@ -248,11 +248,8 @@ export async function respondToNotification(
         code: 'notifications.notificationNotFound',
       });
     }
-    if (!notification.reply) {
-      throw new AppError('This notification has no reply form.', 400, {
-        code: 'notifications.noReplyForm',
-      });
-    }
+    // A form shown before the sender changed or removed it is a conflict,
+    // checked before whether there is a form to answer at all.
     const shownRound =
       shown === undefined
         ? notification.replyRound
@@ -265,6 +262,11 @@ export async function respondToNotification(
         409,
         { code: 'notifications.replyRoundChanged' },
       );
+    }
+    if (!notification.reply) {
+      throw new AppError('This notification has no reply form.', 400, {
+        code: 'notifications.noReplyForm',
+      });
     }
     const currentRound = notification.replyRound;
     if (notification.respondedAt) {
@@ -491,13 +493,21 @@ export async function respondFromDevice(args: {
   if (received.length === 0) {
     throw new AppError('Notification not found.', 404);
   }
-  // The push carries no round: the action answers the form of the version
-  // this phone last received, so a new question still on its way refuses it.
+  // The action answers the version its notification showed: the revision
+  // the phone sends with it. Older apps send none; theirs is the version this
+  // phone last received. The delivery record only proves eligibility above.
+  const shown = (parsed as { revision?: unknown }).revision;
+  if (
+    shown !== undefined &&
+    !(typeof shown === 'number' && Number.isInteger(shown) && shown > 0)
+  ) {
+    throw new AppError('revision must be a positive integer.', 400);
+  }
   return respondToNotification(
     notificationId,
     (parsed as { answers?: unknown }).answers,
     { userId: device.userId, via: 'push', destinationId: device.id },
-    { revision: received[0]!.revision! },
+    { revision: shown ?? received[0]!.revision! },
   );
 }
 

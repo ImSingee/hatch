@@ -123,7 +123,7 @@ export type AgentAnswerTarget = {
  * own answers (a Run has no user) never come back to it.
  */
 export function agentAnswerTargets(
-  notification: Pick<NotificationRow, 'sourceType' | 'agentSessionId'>,
+  notification: Pick<NotificationRow, 'agentAsked' | 'agentSessionId'>,
   respondedByUserId: string | null,
   routes: AgentResponseRoute[],
 ): AgentAnswerTarget[] {
@@ -142,9 +142,7 @@ export function agentAnswerTargets(
     }
     return entry;
   };
-  if (notification.sourceType === 'platform' && notification.agentSessionId) {
-    target(null);
-  }
+  if (notification.agentAsked && notification.agentSessionId) target(null);
   for (const route of routes) {
     const entry = target(route.agentSessionId);
     if (route.agentInstructions?.trim()) {

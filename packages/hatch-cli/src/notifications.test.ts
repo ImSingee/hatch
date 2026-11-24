@@ -708,9 +708,12 @@ describe('notification reply commands', () => {
     expect(() =>
       parse('respond', 'n', '--answer', 'a=b', '--answers', '{}'),
     ).toThrow(/either --answer or --answers/);
-    expect(() => parse('respond', 'n', '--answer', 'novalue')).toThrow(
-      /must be <field-id>=<value>/,
+    expect(() => parse('respond', 'n', '--answer', 'a=b')).toThrow(
+      /Supply --round <n>/,
     );
+    expect(() =>
+      parse('respond', 'n', '--round', '1', '--answer', 'novalue'),
+    ).toThrow(/must be <field-id>=<value>/);
     for (const round of ['0', '1.5', 'two']) {
       expect(() =>
         parse('respond', 'n', '--answer', 'a=b', '--round', round),
@@ -720,7 +723,7 @@ describe('notification reply commands', () => {
     await expect(
       executeNotificationCall(
         transport,
-        parse('respond', 'n', '--answers', '{"a":1}'),
+        parse('respond', 'n', '--round', '1', '--answers', '{"a":1}'),
       ),
     ).rejects.toThrow(/answer "a" must be a string or a list/);
     expect(received.respondToNotification).toBeUndefined();

@@ -89,8 +89,7 @@ message NotificationDeliveryCounts {
 
 message NotificationSummary {
   string id = 1;
-  //  // device | webhook | app, or agent for an answer queued in an Agent chat
-  // (which has no destination_id) | channel | platform | user
+  // app | channel | platform | user
   string source_type = 2;
   optional string source_id = 3;
   string source_name = 4;
@@ -525,7 +524,8 @@ message NotificationCardProgress {
     min_len: 1
     max_len: 40
   }];
-  double percent = 2 [(buf.validate.field).double = {
+  // Required; 0 is a valid value.
+  optional double percent = 2 [(buf.validate.field).double = {
     gte: 0
     lte: 100
   }];

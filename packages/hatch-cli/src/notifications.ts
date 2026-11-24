@@ -897,8 +897,10 @@ const specs: Record<string, Spec> = {
       round: { type: 'string' },
     },
     build: ([notificationId], values) => {
+      // Required: an answer without the round read could land on a newer
+      // question that reuses the same field and option ids.
       const roundFlag = str(values, 'round');
-      const round = roundFlag === undefined ? 0 : Number(roundFlag);
+      const round = Number(roundFlag);
       if (
         roundFlag !== undefined &&
         (!Number.isInteger(round) || round < 1 || round > 2 ** 31 - 1)
@@ -913,6 +915,10 @@ const specs: Record<string, Spec> = {
       if (!shorthand && !loader)
         invalid(
           'Supply --answer <field-id>=<value>... or --answers <json> / --answers-file <path|->.',
+        );
+      if (roundFlag === undefined)
+        invalid(
+          'Supply --round <n>, the reply round get printed for the form you answer.',
         );
       const flag = values.answers !== undefined ? 'answers' : 'answers-file';
       const pairs = shorthand ? parseAnswerFlags(shorthand) : undefined;

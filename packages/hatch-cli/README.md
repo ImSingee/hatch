@@ -767,7 +767,7 @@ signed-in user with `respond`; repeat `--answer` for each option of a
 ```sh
 hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.4?' \
   --reply '{"fields":[{"id":"decision","type":"buttons","label":"Approve?","options":[{"id":"approve","label":"Approve"},{"id":"reject","label":"Reject"}]}]}'
-hatch notification respond <notification-id> --answer decision=approve --json
+hatch notification respond <notification-id> --round 1 --answer decision=approve --json
 hatch notification list --reply-state awaiting
 hatch notification list --order activity
 hatch notification update <notification-id> --card '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}'

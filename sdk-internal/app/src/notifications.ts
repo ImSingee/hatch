@@ -249,7 +249,11 @@ export async function notify(
  * a `url` opens it on tap (as when pushing), clearing it turns that off, and
  * replacing it keeps the current setting. `reply` asks a new question: a
  * form replaces the current one and `null` removes it, either way starting
- * the next round, which takes its own answer (`response.round`).
+ * the next round, which takes its own answer (`response.round`). Forms are
+ * compared by content: sending the same form again (even with a new title or
+ * `data`) starts no round, and once the round is answered such a `data`
+ * change fails with 409. To ask the same question again about something new,
+ * change the form too (for example its field label or `submitLabel`).
  */
 export type NotificationUpdateInput = {
   /** Only change content, without another alert. Defaults to false. */
