@@ -112,7 +112,11 @@ export function createCronScheduler<J>(cfg: CronSchedulerConfig<J>) {
   }
 
   async function loadAll(): Promise<void> {
+    const generation = state().generation ?? 0;
     const owners = await cfg.loadJobs();
+    // A reload started while this load ran; its own load installs the
+    // current schedule, so these jobs are stale.
+    if ((state().generation ?? 0) !== generation) return;
     for (const { ownerId, jobs } of owners) {
       jobs.forEach((job, index) => scheduleOne(ownerId, job, index));
     }

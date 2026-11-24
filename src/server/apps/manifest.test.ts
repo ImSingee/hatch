@@ -611,3 +611,93 @@ describe('notifications manifest', () => {
     ).toThrow(/at least one kind or destination/);
   });
 });
+
+describe('tasks manifest', () => {
+  const task = { name: 'digest', method: 'RunDigest' };
+  const manifest = (overrides: Record<string, unknown> = {}) => ({
+    id: 'demo',
+    name: 'Demo',
+    capabilities: { backend: true, tasks: true },
+    backend: { entry: 'backend/main.ts' },
+    rpc: { proto: 'proto/service.proto', service: 'app.v1.Svc' },
+    tasks: { definitions: [task] },
+    ...overrides,
+  });
+
+  it('defaults the App cap and normalizes each task', () => {
+    const parsed = parseSourceManifest(
+      manifest({
+        tasks: {
+          definitions: [
+            {
+              ...task,
+              concurrency: 1,
+              cron: [{ name: 'daily', schedule: '0 9 * * *', input: { a: 1 } }],
+              webhook: true,
+            },
+          ],
+        },
+      }),
+    );
+    expect(parsed.tasks?.concurrency).toBe(4);
+    expect(normalizeManifest(parsed).tasks).toEqual({
+      concurrency: 4,
+      definitions: [
+        {
+          name: 'digest',
+          method: 'RunDigest',
+          concurrency: 1,
+          cron: [{ name: 'daily', schedule: '0 9 * * *', input: { a: 1 } }],
+          webhook: true,
+          inputSchema: {},
+          inputType: '',
+        },
+      ],
+    });
+  });
+
+  it.each([
+    [
+      'without a backend and rpc',
+      { capabilities: { tasks: true }, backend: undefined, rpc: undefined },
+      /requires capabilities.backend/,
+    ],
+    [
+      'on a long-running backend',
+      { backendMode: 'long-running' },
+      /serverless/,
+    ],
+    [
+      'declared without the capability',
+      { capabilities: { backend: true } },
+      /capabilities.tasks is false/,
+    ],
+    [
+      'with a duplicate name',
+      { tasks: { definitions: [task, task] } },
+      /duplicate task name/,
+    ],
+    [
+      'named runs',
+      { tasks: { definitions: [{ ...task, name: 'runs' }] } },
+      /reserved/,
+    ],
+    [
+      'above the concurrency bound',
+      { tasks: { concurrency: 33, definitions: [task] } },
+      /32/,
+    ],
+    [
+      'with a task cap above the App cap',
+      { tasks: { concurrency: 2, definitions: [{ ...task, concurrency: 3 }] } },
+      /exceeds tasks.concurrency/,
+    ],
+    [
+      'with an undeclared task field',
+      { tasks: { definitions: [{ ...task, input: {} }] } },
+      /input/,
+    ],
+  ])('rejects tasks %s', (_label, overrides, message) => {
+    expect(() => parseSourceManifest(manifest(overrides))).toThrow(message);
+  });
+});

@@ -263,6 +263,18 @@ gains the optional `icon_path` for Apps with an icon. Image bytes are fetched
 over plain authenticated HTTP, not RPC. See [App icons](app-icons.md).
 `TOO_MANY_REQUESTS` (logical status 429) is a new public error code.
 
+### App tasks
+
+`AppService` adds `ListAppTasks`, `RunAppTask`, `ListAppTaskRuns`,
+`GetAppTaskRun` and `CancelAppTaskRun`. All accept every credential type; a
+run started with a Run JWT records the platform Agent as its actor.
+`RunAppTask` takes the input as a `google.protobuf.Struct` and returns
+`status: "failed"` instead of an error when the platform rejects the input,
+so the rejection stays in the run history. A full queue (100 queued runs per
+App) answers `TOO_MANY_REQUESTS`. `ListAppTaskRuns` pages newest first with
+`limit` (1-200) and `next_cursor`. See [App tasks](../skills/building-apps/references/tasks.md)
+and `hatch app task` in the [CLI README](../packages/hatch-cli/README.md).
+
 ## Errors and recovery
 
 Errors use the standard Connect envelope and canonical codes. Protovalidate

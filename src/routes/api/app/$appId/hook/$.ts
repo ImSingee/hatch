@@ -9,12 +9,7 @@ import {
   BackendDeploymentChangedError,
   proxyAppRequest,
 } from '~server/apps/runtime';
-import { secretsMatch } from '~server/secrets';
-import { authenticateCredential } from '~server/auth/credentials';
-import {
-  isTrustedSessionOrigin,
-  sessionOriginError,
-} from '~server/session-http-auth';
+import { authenticateAppWebhook } from '~server/apps/webhook-auth';
 
 /**
  * Plain HTTP webhook ingress. Platform mode accepts native platform credentials
@@ -93,43 +88,14 @@ export async function handle(
   }
 
   // Explicit native credentials take precedence and must never fall back to
-  // Cookie or a shared secret. Secret header presence wins over the query even
-  // when empty. Only remove ?secret= when it actually authenticated the call.
-  let stripSecretParam = false;
-  const headers = request.headers;
-  if (headers.has('x-api-key') || headers.has('authorization')) {
-    try {
-      await authenticateCredential(request);
-    } catch {
-      return new Response('Unauthorized', { status: 401 });
-    }
-  } else if (headers.has('x-hatch-secret') || url.searchParams.has('secret')) {
-    const provided =
-      headers.get('x-hatch-secret') ?? url.searchParams.get('secret');
-    if (!app.webhookSecret || !secretsMatch(provided, app.webhookSecret))
-      return new Response('Forbidden', { status: 403 });
-    stripSecretParam = !headers.has('x-hatch-secret');
-  } else {
-    // Cookie authentication is ambient authority, including for GET webhooks
-    // that may mutate. Require positive same-origin browser evidence, not just
-    // absence of a hostile Origin. Native clients use explicit credentials.
-    const originError = sessionOriginError(request);
-    if (originError) return originError;
-    const origin = headers.get('origin');
-    if (
-      !(origin !== null && isTrustedSessionOrigin(origin)) &&
-      !(
-        headers.get('sec-fetch-site') === 'same-origin' &&
-        isTrustedSessionOrigin(url.origin)
-      )
-    )
-      return new Response('Forbidden', { status: 403 });
-    try {
-      await authenticateCredential(request);
-    } catch {
-      return new Response('Unauthorized', { status: 401 });
-    }
-  }
+  // Cookie or a shared secret. Only remove ?secret= when it actually
+  // authenticated the call.
+  const authenticated = await authenticateAppWebhook(
+    request,
+    app.webhookSecret,
+  );
+  if (!authenticated.ok) return authenticated.response;
+  const { stripSecretParam } = authenticated;
   if (!compatibility?.isSupported) {
     return new Response(appCompatibilityRuntimeMessage(compatibility), {
       status: 503,

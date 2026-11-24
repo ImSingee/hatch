@@ -2,6 +2,7 @@ import { Button, Group, Table, Text, ThemeIcon } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { IconTimeline } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 import { DeskWindow } from '~components/desk/window';
 import {
   EmptyState,
@@ -10,32 +11,99 @@ import {
   WindowBody,
 } from '~components/page/page';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { RunStatusBadge } from '~components/workflows/run-status';
+import { RunStatusBadge } from '~components/runs/run-status';
 import { formatDuration, formatRelative } from '~lib/format';
+import { isActiveRun, type RunListItem } from '~lib/runs';
+import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
 import { allWorkflowRunsQueryOptions } from '~queries/workflows';
+import { listRecentTaskRunsFn } from '~server/app-tasks';
 import { listAllWorkflowRuns } from '~server/workflows';
 
 export const Route = createFileRoute('/_app/executions')({
-  loader: () => listAllWorkflowRuns(),
+  loader: async () => {
+    const [workflowRuns, taskRuns] = await Promise.all([
+      listAllWorkflowRuns(),
+      listRecentTaskRunsFn(),
+    ]);
+    return { workflowRuns, taskRuns };
+  },
   component: ExecutionsPage,
 });
+
+/** One row of the merged history, with where it links to. */
+type ExecutionRow = RunListItem & {
+  sourceKind: 'workflow' | 'task';
+  sourceId: string;
+  sourceName: string;
+  /** Task name, for App task runs. */
+  detail: string | null;
+  link: (
+    props: Record<string, unknown>,
+    onClick: (event: { stopPropagation(): void }) => void,
+  ) => ReactNode;
+  open: () => void;
+};
+
+/** Fast refresh while a run is in flight; slow idle poll picks up new ones. */
+const pollActive = (runs: { status: RunListItem['status'] }[] | undefined) =>
+  (runs ?? []).some((run) => isActiveRun(run.status)) ? 1500 : 15_000;
 
 function ExecutionsPage() {
   const initial = Route.useLoaderData();
   const navigate = useNavigate();
-  const query = useQuery({
+  const workflowQuery = useQuery({
     ...allWorkflowRunsQueryOptions,
-    initialData: initial,
-    // Live-refresh while any execution is still in flight.
-    refetchInterval: (q) => {
-      const runs = q.state.data ?? [];
-      return runs.some((r) => r.status === 'queued' || r.status === 'running')
-        ? 1500
-        : false;
-    },
+    initialData: initial.workflowRuns,
+    refetchInterval: (q) => pollActive(q.state.data),
+  });
+  const taskQuery = useQuery({
+    ...recentTaskRunsQueryOptions,
+    initialData: initial.taskRuns,
+    refetchInterval: (q) => pollActive(q.state.data),
   });
 
-  const runs = query.data ?? [];
+  const rows: ExecutionRow[] = [
+    ...(workflowQuery.data ?? []).map((run): ExecutionRow => ({
+      ...run,
+      sourceKind: 'workflow',
+      sourceId: run.workflowId,
+      sourceName: run.workflowName,
+      detail: null,
+      link: (props, onClick) => (
+        <Link
+          {...props}
+          to="/workflow/$workflowSlug/execution/$runId"
+          params={{ workflowSlug: run.workflowSlug, runId: run.id }}
+          onClick={onClick}
+        />
+      ),
+      open: () =>
+        void navigate({
+          to: '/workflow/$workflowSlug/execution/$runId',
+          params: { workflowSlug: run.workflowSlug, runId: run.id },
+        }),
+    })),
+    ...(taskQuery.data ?? []).map((run): ExecutionRow => ({
+      ...run,
+      sourceKind: 'task',
+      sourceId: run.appId,
+      sourceName: run.appName,
+      detail: run.taskName,
+      link: (props, onClick) => (
+        <Link
+          {...props}
+          to="/app/$appSlug/tasks/runs/$runId"
+          params={{ appSlug: run.appSlug, runId: run.id }}
+          onClick={onClick}
+        />
+      ),
+      open: () =>
+        void navigate({
+          to: '/app/$appSlug/tasks/runs/$runId',
+          params: { appSlug: run.appSlug, runId: run.id },
+        }),
+    })),
+  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <DeskWindow
@@ -50,26 +118,29 @@ function ExecutionsPage() {
     >
       <WindowBody>
         <Toolbar
-          lead={`Run history across every workflow · ${runs.length} execution${runs.length === 1 ? '' : 's'}`}
+          lead={`Run history across Workflows and App tasks · ${rows.length} execution${rows.length === 1 ? '' : 's'}`}
         >
           <Button component={Link} to="/workflows" variant="default">
             Workflows
           </Button>
+          <Button component={Link} to="/apps" variant="default">
+            Apps
+          </Button>
         </Toolbar>
-        {runs.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState
             tone="accent"
             icon={<IconTimeline size={26} stroke={1.6} />}
             title="No executions yet"
           >
-            Trigger a workflow manually, on a schedule, or via webhook and every
-            run will show up here.
+            Run a Workflow or an App task manually, on a schedule, or via
+            webhook and every run will show up here.
           </EmptyState>
         ) : (
           <TableCard>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Workflow</Table.Th>
+                <Table.Th>Source</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Trigger</Table.Th>
                 <Table.Th>Steps</Table.Th>
@@ -78,19 +149,11 @@ function ExecutionsPage() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {runs.map((run) => (
+              {rows.map((run) => (
                 <Table.Tr
-                  key={run.id}
+                  key={`${run.sourceKind}-${run.id}`}
                   style={{ cursor: 'pointer' }}
-                  onClick={() =>
-                    navigate({
-                      to: '/workflow/$workflowSlug/execution/$runId',
-                      params: {
-                        workflowSlug: run.workflowSlug,
-                        runId: run.id,
-                      },
-                    })
-                  }
+                  onClick={run.open}
                 >
                   <Table.Td>
                     {/* Real link (not just the row onClick) so open-in-new-tab
@@ -105,28 +168,27 @@ function ExecutionsPage() {
                         color: 'inherit',
                         textDecoration: 'none',
                       }}
-                      renderRoot={(props) => (
-                        <Link
-                          {...props}
-                          to="/workflow/$workflowSlug/execution/$runId"
-                          params={{
-                            workflowSlug: run.workflowSlug,
-                            runId: run.id,
-                          }}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      )}
+                      renderRoot={(props) =>
+                        run.link(props, (event) => event.stopPropagation())
+                      }
                     >
                       <AppGlyph
-                        icon={false}
-                        shape="workflow"
-                        name={run.workflowName}
-                        seed={run.workflowId}
+                        icon={run.sourceKind === 'task'}
+                        shape={
+                          run.sourceKind === 'workflow' ? 'workflow' : 'app'
+                        }
+                        name={run.sourceName}
+                        seed={run.sourceId}
                         size="sm"
                       />
                       <Text size="sm" fw={600} truncate>
-                        {run.workflowName}
+                        {run.sourceName}
                       </Text>
+                      {run.detail ? (
+                        <Text size="xs" c="dimmed" truncate>
+                          {run.detail}
+                        </Text>
+                      ) : null}
                     </Group>
                   </Table.Td>
                   <Table.Td>

@@ -30,7 +30,9 @@ import { KvSection } from './kv-section';
 import { NotificationsSection } from './notifications-section';
 import { RetainedDataTableSection } from './retained-data-table-section';
 import { SectionHeader } from './section-header';
+import { TasksSection } from './tasks-section';
 import { WebhookSection } from './webhook-section';
+import { appTasksQueryOptions } from '~queries/app-tasks';
 
 /** One runtime metadata row, matching the Overview `Field` layout. */
 function RuntimeFact({
@@ -159,16 +161,23 @@ function PersistentStorageSection() {
 export function OperationsPanel({
   appId,
   appName,
+  appSlug,
   runtimeSupported = true,
 }: {
   appId: string;
   appName: string;
+  /** Links into the App's Tasks pages; without it the section is hidden. */
+  appSlug?: string;
   /** Whether controls that invoke App code may run. */
   runtimeSupported?: boolean;
 }) {
   const query = useQuery(appOpsQueryOptions(appId));
   const manifestQuery = useQuery(normalizedManifestQueryOptions(appId));
   const notifications = manifestQuery.data?.notifications;
+  const { data: tasks } = useQuery({
+    ...appTasksQueryOptions(appId),
+    enabled: Boolean(manifestQuery.data?.tasks),
+  });
   const queryClient = useQueryClient();
 
   const deleteDatabase = async (dbName: string, confirmation: string) => {
@@ -219,7 +228,8 @@ export function OperationsPanel({
     ops.webhook.enabled ||
     ops.kv.enabled ||
     dataTableVisible ||
-    Boolean(notifications);
+    Boolean(notifications) ||
+    Boolean(tasks);
 
   return (
     <Section id="operations" title="Operations">
@@ -278,6 +288,11 @@ export function OperationsPanel({
                 cron={ops.cron}
                 runtimeSupported={runtimeSupported}
               />
+            </GroupCard>
+          ) : null}
+          {tasks && appSlug ? (
+            <GroupCard padded id="tasks">
+              <TasksSection appSlug={appSlug} tasks={tasks} />
             </GroupCard>
           ) : null}
           {ops.webhook.enabled ? (

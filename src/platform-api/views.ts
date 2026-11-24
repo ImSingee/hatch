@@ -72,6 +72,7 @@ export const appManifestViewSchema = z.object({
     kv: z.boolean(),
     dataTable: z.boolean(),
     notifications: z.boolean().optional(),
+    tasks: z.boolean().optional(),
   }),
   backendMode: mode,
   backend: z
@@ -106,6 +107,30 @@ export const appManifestViewSchema = z.object({
     .optional(),
   kv: url.optional(),
   dataTable: url.optional(),
+  tasks: z
+    .object({
+      concurrency: z.number().int(),
+      definitions: z.array(
+        z.object({
+          name: str,
+          method: str,
+          title: str.optional(),
+          description: str.optional(),
+          concurrency: z.number().int().optional(),
+          cron: z.array(
+            z.object({
+              name: str,
+              schedule: str,
+              input: z.record(str, z.unknown()),
+            }),
+          ),
+          webhook: z.boolean(),
+          inputType: str,
+          inputSchema: z.record(str, z.unknown()),
+        }),
+      ),
+    })
+    .optional(),
   notifications: z
     .object({
       url: str,

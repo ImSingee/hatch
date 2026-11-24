@@ -146,6 +146,44 @@ const definitions: readonly CliCommandDefinition[] = [
       'Start a fresh instance and retire the previous one, which finishes its in-flight requests beside the new instance. --force kills the previous instance instead and fails its in-flight requests.',
   },
   {
+    path: ['app', 'task', 'list'],
+    usage: 'app task list <id-or-slug> [--json]',
+    description:
+      'List the tasks of the active deployment: runnable backend RPC methods, each run in its own backend instance. Each task prints its name, method, input type and generated input JSON Schema, schedules with fixed input and next run time, webhook path (when enabled), queued/running counts, own concurrency cap and latest run. The App prints its concurrency cap and totals; available is false when it cannot run tasks (not deployed, archived or none declared). The webhook path accepts native credentials or the App webhook secret, which only task rotate-webhook-secret prints.',
+  },
+  {
+    path: ['app', 'task', 'rotate-webhook-secret'],
+    usage: 'app task rotate-webhook-secret <id-or-slug> [--json]',
+    description:
+      "Replace the App's shared webhook secret, which the App webhook and every task webhook accept (x-hatch-secret or ?secret=), and print the new secret once. Side effect: callers using the previous secret are rejected from now on. Refused with CONFLICT when the App has neither the App webhook nor a task webhook enabled.",
+  },
+  {
+    path: ['app', 'task', 'run'],
+    usage:
+      'app task run <id-or-slug> <task> [--input <json-object> | --file <path|->] [--wait] [--timeout <seconds>] [--json]',
+    description:
+      'Queue one run of a task with a JSON object input (default {}); the platform fills declared defaults and validates it against the task input first. Invalid input is recorded as a failed run and printed with status failed. Prints runId and status. --wait polls until the run ends (progress on stderr), prints the run, and exits 6 with task_run_failed or task_run_canceled unless it succeeded; with --wait --timeout defaults to 600 seconds and expiring exits 7 with the runId. Side effect: runs App code. Refused with TOO_MANY_REQUESTS when 100 runs are already queued.',
+  },
+  {
+    path: ['app', 'task', 'runs'],
+    usage:
+      'app task runs <id-or-slug> [--task <name>] [--status <queued|running|succeeded|failed|canceled>] [--limit <1-200>] [--cursor <run-id>] [--json]',
+    description:
+      'List task runs newest first, 50 per page by default; pass the printed nextCursor as --cursor for the next page (null on the last). Each run carries id, task, trigger (manual, cron, webhook or app), cron name, status, version, error, timestamps, duration and step count.',
+  },
+  {
+    path: ['app', 'task', 'get-run'],
+    usage: 'app task get-run <id-or-slug> <run-id> [--json]',
+    description:
+      'Show one run: summary, actor, deployment, input, output, log, queue position while queued, and every step attempt with its status, output, error and timing.',
+  },
+  {
+    path: ['app', 'task', 'cancel'],
+    usage: 'app task cancel <id-or-slug> <run-id> [--json]',
+    description:
+      'Cancel a queued or running run; a running run has its instance killed and its open steps marked failed. Prints canceled=false with the final status when the run had already finished. Idempotent.',
+  },
+  {
     path: ['app', 'kv', 'list'],
     usage:
       'app kv list <app-id> [--cursor <key>] [--limit <count>] [--reveal-secrets]',
@@ -594,6 +632,7 @@ export const commandGroups: Readonly<Record<string, string>> = {
   app: 'Create, sync, deploy and operate Apps.',
   'app invoke': 'Call a deployed App backend or webhook.',
   'app backend': 'Inspect and control App backend processes.',
+  'app task': 'List, run and inspect App tasks and their runs.',
   'app kv': 'Read and write App key-value data.',
   'app data-table': 'Inspect and change App data tables.',
   'app db': 'Query App databases.',

@@ -1,15 +1,8 @@
-import { Anchor, Center, Loader, Table, Text } from '@mantine/core';
+import { Anchor } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { formatDuration, formatRelative } from '~lib/format';
+import { RunTable } from '~components/runs/run-table';
 import { workflowRunsQueryOptions } from '~queries/workflows';
-import {
-  EmptyLine,
-  GroupCard,
-  Section,
-  TableCard,
-} from '~components/page/page';
-import { RunStatusBadge } from './run-status';
 
 export function WorkflowRunList({
   workflowId,
@@ -41,9 +34,12 @@ export function WorkflowRunList({
   const runs = limit ? allRuns.slice(0, limit) : allRuns;
 
   return (
-    <Section
+    <RunTable
       title={limit ? 'Recent executions' : 'Executions'}
-      meta={allRuns.length > 0 ? String(allRuns.length) : undefined}
+      runs={runs}
+      total={allRuns.length}
+      loading={query.isLoading}
+      emptyText="No executions yet. Trigger this workflow to see its history here."
       aside={
         limit && allRuns.length > 0 ? (
           <Anchor
@@ -61,81 +57,25 @@ export function WorkflowRunList({
           </Anchor>
         ) : undefined
       }
-    >
-      {query.isLoading ? (
-        <GroupCard>
-          <Center py="lg">
-            <Loader size="sm" />
-          </Center>
-        </GroupCard>
-      ) : runs.length === 0 ? (
-        <GroupCard>
-          <EmptyLine>
-            No executions yet. Trigger this workflow to see its history here.
-          </EmptyLine>
-        </GroupCard>
-      ) : (
-        <TableCard>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Trigger</Table.Th>
-              <Table.Th>Steps</Table.Th>
-              <Table.Th>Duration</Table.Th>
-              <Table.Th>Started</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {runs.map((run) => (
-              <Table.Tr
-                key={run.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() =>
-                  navigate({
-                    to: '/workflow/$workflowSlug/execution/$runId',
-                    params: { workflowSlug, runId: run.id },
-                  })
-                }
-              >
-                <Table.Td>
-                  {/* Real link (not just the row onClick) so open-in-new-tab
-                      and keyboard navigation work. stopPropagation keeps a
-                      modified click from ALSO firing the row's onClick and
-                      navigating the current tab. */}
-                  <Link
-                    to="/workflow/$workflowSlug/execution/$runId"
-                    params={{ workflowSlug, runId: run.id }}
-                    style={{ textDecoration: 'none' }}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <RunStatusBadge status={run.status} />
-                  </Link>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed" tt="capitalize">
-                    {run.trigger}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">
-                    {run.stepCount}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">
-                    {formatDuration(run.durationMs)}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">
-                    {formatRelative(run.startedAt ?? run.createdAt)}
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </TableCard>
+      renderLink={(run, children) => (
+        // Real link (not just the row onClick) so open-in-new-tab and
+        // keyboard navigation work. stopPropagation keeps a modified click
+        // from ALSO firing the row's onClick and navigating the current tab.
+        <Link
+          to="/workflow/$workflowSlug/execution/$runId"
+          params={{ workflowSlug, runId: run.id }}
+          style={{ textDecoration: 'none' }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </Link>
       )}
-    </Section>
+      onOpen={(run) =>
+        void navigate({
+          to: '/workflow/$workflowSlug/execution/$runId',
+          params: { workflowSlug, runId: run.id },
+        })
+      }
+    />
   );
 }

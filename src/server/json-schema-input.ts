@@ -1,15 +1,62 @@
 /**
- * Server-only: validate a workflow's trigger input against the JSON Schema that
- * was captured (from the workflow's zod schema) at deploy time.
+ * Server-only: validate run input against a JSON Schema captured at deploy
+ * time, shared by Workflow runs and App task runs.
  *
- * The workflow bundle re-validates with the *real* zod schema at run time, so
- * this platform-side check is a fast, structural gate rather than the source of
- * truth. It deliberately errs toward acceptance: constraints it can't faithfully
- * represent (formats, patterns) are skipped instead of risking a false reject.
- * Per the design, the gate is built by turning the stored JSON Schema back into
- * a zod schema ("zod from json schema") and parsing the input with it.
+ * The gate is built by turning the stored JSON Schema back into a zod schema
+ * ("zod from json schema") and parsing the input with it.
+ *
+ * - Workflows (default, lenient): the bundle re-validates with the *real* zod
+ *   schema at run time, so this is a fast structural gate that errs toward
+ *   acceptance. Constraints it can't faithfully represent (patterns) are
+ *   skipped and unknown keys are stripped or kept.
+ * - App tasks (`strict`): the platform is the only validator before the
+ *   Connect request, whose JSON decoder rejects unknown fields. Patterns are
+ *   enforced and unknown keys are rejected with the field named.
  */
+import vm from 'node:vm';
 import { z } from 'zod';
+
+/**
+ * Patterns are App-authored and run against request-supplied strings, so a
+ * backtracking-prone pattern must not stall the platform process. Matching
+ * runs in a vm context, whose timeout interrupts a runaway match, and all
+ * matches of one validation share a single time budget: an input with many
+ * values cannot multiply it.
+ */
+const PATTERN_BUDGET_MS = 200;
+const patternContext = vm.createContext({ pattern: /^/, value: '' });
+const patternTest = new vm.Script('pattern.test(value)');
+
+/** Time left for pattern matching in one validation. */
+type PatternBudget = { remainingMs: number };
+
+function matchPattern(
+  pattern: RegExp,
+  value: string,
+  budget: PatternBudget,
+): boolean | 'timeout' {
+  if (budget.remainingMs <= 0) return 'timeout';
+  patternContext.pattern = pattern;
+  patternContext.value = value;
+  const started = performance.now();
+  try {
+    return patternTest.runInContext(patternContext, {
+      timeout: Math.max(1, Math.ceil(budget.remainingMs)),
+    }) as boolean;
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
+      budget.remainingMs = 0;
+      return 'timeout';
+    }
+    throw error;
+  } finally {
+    budget.remainingMs -= performance.now() - started;
+    patternContext.value = '';
+  }
+}
+
+/** RFC 3339, as protobuf JSON requires for `google.protobuf.Timestamp`. */
+const dateTime = z.iso.datetime({ offset: true });
 
 type JsonSchema = Record<string, unknown>;
 
@@ -23,18 +70,28 @@ function typeOf(schema: JsonSchema): string | string[] | undefined {
   return schema.type as string | string[] | undefined;
 }
 
-/** Build a lenient zod schema from a (zod-produced) JSON Schema node. */
-export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
+export type SchemaInputOptions = {
+  /** Enforce `pattern` and reject undeclared object keys. */
+  strict?: boolean;
+  /** Shared pattern time budget; one per validation (set internally). */
+  patternBudget?: PatternBudget;
+};
+
+/** Build a zod schema from a JSON Schema node. */
+export function jsonSchemaToZod(
+  input: unknown,
+  options: SchemaInputOptions = {},
+): z.ZodTypeAny {
   const schema = asSchema(input);
   if (!schema) return z.any();
 
   // Unions first — zod emits these for `.or()`, nullable, and enums of objects.
   const union = (schema.anyOf ?? schema.oneOf) as unknown[] | undefined;
   if (Array.isArray(union) && union.length > 0) {
-    const options = union.map((u) => jsonSchemaToZod(u));
-    return options.length === 1
-      ? options[0]
-      : z.union(options as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
+    const members = union.map((u) => jsonSchemaToZod(u, options));
+    return members.length === 1
+      ? members[0]
+      : z.union(members as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }
 
   if ('const' in schema) {
@@ -51,10 +108,12 @@ export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
   const type = typeOf(schema);
   if (Array.isArray(type)) {
     // e.g. ["string", "null"] -> string | null
-    const options = type.map((t) => jsonSchemaToZod({ ...schema, type: t }));
-    return options.length === 1
-      ? options[0]
-      : z.union(options as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
+    const members = type.map((t) =>
+      jsonSchemaToZod({ ...schema, type: t }, options),
+    );
+    return members.length === 1
+      ? members[0]
+      : z.union(members as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }
 
   switch (type) {
@@ -62,7 +121,37 @@ export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
       let s = z.string();
       if (typeof schema.minLength === 'number') s = s.min(schema.minLength);
       if (typeof schema.maxLength === 'number') s = s.max(schema.maxLength);
-      return s;
+      if (!options.strict) return s;
+      const pattern =
+        typeof schema.pattern === 'string' ? schema.pattern : undefined;
+      const regex = pattern === undefined ? null : new RegExp(pattern);
+      const format = schema.format === 'date-time';
+      if (!regex && !format) return s;
+      return s.superRefine((value, ctx) => {
+        if (format && !dateTime.safeParse(value).success) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Must be an RFC 3339 date-time',
+          });
+        }
+        if (!regex) return;
+        const matched = matchPattern(
+          regex,
+          value,
+          options.patternBudget ?? { remainingMs: PATTERN_BUDGET_MS },
+        );
+        if (matched === 'timeout') {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Checking the pattern ${pattern} took too long`,
+          });
+        } else if (!matched) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Must match the pattern ${pattern}`,
+          });
+        }
+      });
     }
     case 'integer':
     case 'number': {
@@ -78,18 +167,21 @@ export function jsonSchemaToZod(input: unknown): z.ZodTypeAny {
       return z.null();
     case 'array': {
       const items = asSchema(schema.items);
-      return z.array(items ? jsonSchemaToZod(items) : z.any());
+      return z.array(items ? jsonSchemaToZod(items, options) : z.any());
     }
     case 'object':
-      return objectToZod(schema);
+      return objectToZod(schema, options);
     default:
       // No declared type but has object-ish keys -> treat as object.
-      if (schema.properties) return objectToZod(schema);
+      if (schema.properties) return objectToZod(schema, options);
       return z.any();
   }
 }
 
-function objectToZod(schema: JsonSchema): z.ZodTypeAny {
+function objectToZod(
+  schema: JsonSchema,
+  options: SchemaInputOptions,
+): z.ZodTypeAny {
   const props = asSchema(schema.properties) ?? {};
   const required = new Set(
     Array.isArray(schema.required) ? (schema.required as string[]) : [],
@@ -97,7 +189,7 @@ function objectToZod(schema: JsonSchema): z.ZodTypeAny {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const [key, raw] of Object.entries(props)) {
     const child = asSchema(raw) ?? {};
-    let field = jsonSchemaToZod(child);
+    let field = jsonSchemaToZod(child, options);
     if ('default' in child) {
       field = field.default(child.default as never);
     } else if (!required.has(key)) {
@@ -106,6 +198,9 @@ function objectToZod(schema: JsonSchema): z.ZodTypeAny {
     shape[key] = field;
   }
   const obj = z.object(shape);
+  if (options.strict && schema.additionalProperties === false) {
+    return obj.strict();
+  }
   // Mirror additionalProperties: false (the default for zod-produced schemas)
   // by stripping unknown keys rather than rejecting, to stay lenient.
   return schema.additionalProperties === false ? obj.strip() : obj.loose();
@@ -155,12 +250,12 @@ function coerceScalar(schema: JsonSchema, value: string): unknown {
 }
 
 /**
- * Coerce a flat query-string record toward the workflow's input schema so GET
- * webhooks (whose params are always strings) can satisfy numeric/boolean fields.
- * Unknown fields and unrepresentable types pass through untouched; the real zod
- * schema inside the bundle remains the source of truth.
+ * Coerce a flat query-string record toward an input schema so GET webhooks
+ * (whose params are always strings) can satisfy numeric/boolean fields.
+ * Unknown fields and unrepresentable types pass through untouched for the
+ * validator to judge.
  */
-export function coerceWorkflowQueryInput(
+export function coerceSchemaQueryInput(
   jsonSchema: unknown,
   raw: Record<string, string>,
 ): Record<string, unknown> {
@@ -175,20 +270,24 @@ export function coerceWorkflowQueryInput(
   return out;
 }
 
-export type WorkflowValidationResult =
+export type SchemaValidationResult =
   | { success: true; data: unknown }
   | { success: false; message: string };
 
 /** Validate raw trigger input against a stored JSON Schema. */
-export function validateWorkflowInput(
+export function validateSchemaInput(
   jsonSchema: unknown,
   rawInput: unknown,
-): WorkflowValidationResult {
+  options: SchemaInputOptions = {},
+): SchemaValidationResult {
   if (!asSchema(jsonSchema)) {
     // No schema captured (e.g. a workflow with no declared input) — accept.
     return { success: true, data: rawInput ?? {} };
   }
-  const zodSchema = jsonSchemaToZod(jsonSchema);
+  const zodSchema = jsonSchemaToZod(jsonSchema, {
+    ...options,
+    patternBudget: { remainingMs: PATTERN_BUDGET_MS },
+  });
   const parsed = zodSchema.safeParse(rawInput ?? {});
   if (parsed.success) {
     return { success: true, data: parsed.data };

@@ -11,6 +11,10 @@ cat request.json | hatch app invoke backend <id-or-slug> app.v1.TodoService/Crea
 hatch --profile staging app invoke backend <id-or-slug> app.v1.TodoService/ListTodos --json
 ```
 
+To run a method as a recorded task (its own instance, input validation,
+steps and run history) when the App declares it under `tasks`, use
+`hatch app task run <id-or-slug> <task>` instead.
+
 Without `--file`, the request is `{}`. Files and stdin must contain valid JSON,
 up to 1 MiB. Input bytes are preserved, including whitespace, Unicode and
 meaningful `null`, `false`, zero, arrays and empty values when the App message

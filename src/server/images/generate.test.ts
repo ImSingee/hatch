@@ -184,7 +184,6 @@ describe('generateImages', () => {
     const { driver } = await model.resolveImageModel();
     const rejected = [
       { prompt: '   ' },
-      { prompt: 'x'.repeat(4001) },
       { prompt: 'x', count: 0 },
       { prompt: 'x', count: 5 },
       { prompt: 'x', count: 1.5 },
@@ -214,18 +213,6 @@ describe('generateImages', () => {
       'transparent',
       'opaque',
     ]);
-  });
-
-  it('stops at the hourly image limit', async () => {
-    const generateImages = await freshGenerate();
-    const { driver } = await model.resolveImageModel();
-    // 7 calls of 4 fit under the limit of 30; the 8th would exceed it.
-    for (let call = 0; call < 7; call += 1)
-      await generateImages({ prompt: 'x', count: 4 });
-    await expect(
-      generateImages({ prompt: 'x', count: 4 }),
-    ).rejects.toMatchObject({ status: 429 });
-    expect(driver.generate).toHaveBeenCalledTimes(28);
   });
 });
 

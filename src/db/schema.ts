@@ -16,6 +16,7 @@ import {
 import { monotonicFactory } from 'ulid';
 import { session, user } from './auth-schema';
 import type { HomepageTarget } from '../homepage';
+import type { RunStatus, RunStepStatus } from '../lib/runs';
 import type {
   ReplyAnswers,
   ReplyForm,
@@ -81,6 +82,8 @@ export type AppCapabilities = {
   dataTable?: boolean;
   /** Declares notification kinds and/or accepts routed notifications. */
   notifications?: boolean;
+  /** Declares runnable backend RPC methods (tasks) with run history. */
+  tasks?: boolean;
 };
 
 export type AppStatus =
@@ -94,6 +97,14 @@ export type DeploymentStatus = 'building' | 'deployed' | 'failed';
 
 /** How an app cron job run was triggered. */
 export type AppCronTrigger = 'scheduled' | 'manual';
+
+/** How an App task run was started (`app` = enqueued by the App backend). */
+export type AppTaskTrigger = 'manual' | 'cron' | 'webhook' | 'app';
+
+/** Lifecycle of an App task run; the same states a Workflow run has. */
+export type AppTaskRunStatus = RunStatus;
+
+export type AppTaskRunStepStatus = RunStepStatus;
 
 /** ================== workflow domain types ================== */
 
@@ -109,14 +120,9 @@ export type WorkflowDeploymentStatus = 'building' | 'deployed' | 'failed';
 /** How a workflow run was started. */
 export type WorkflowTrigger = 'manual' | 'cron' | 'webhook';
 
-export type WorkflowRunStatus =
-  | 'queued'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'canceled';
+export type WorkflowRunStatus = RunStatus;
 
-export type WorkflowRunStepStatus = 'running' | 'succeeded' | 'failed';
+export type WorkflowRunStepStatus = RunStepStatus;
 
 /** Wire API the platform speaks to a provider with (mirrors pi-ai `model.api`). */
 export type ProviderApiType =
@@ -280,6 +286,82 @@ export const deployments = snakeCase.table(
     // Version is allocated as max(version)+1 per app; enforce it at the DB so
     // overlapping deploys can't record the same version / force-move one tag.
     uniqueIndex('deployments_app_version_idx').on(table.appId, table.version),
+  ],
+);
+
+/** ================== app task runs ================== */
+
+/**
+ * One run of an App task: a backend RPC method the manifest declares as
+ * runnable. Each run executes in its own backend instance, so the row also
+ * records which deployment served it. Mirrors `workflow_runs`.
+ */
+export const appTaskRuns = snakeCase.table(
+  'app_task_runs',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    appId: text()
+      .notNull()
+      .references(() => apps.id, { onDelete: 'cascade' }),
+    /** Task name as declared in the manifest. */
+    taskName: text('task_name').notNull(),
+    /** Deployment whose instance served the run; set when it starts. */
+    deploymentId: ulid('deployment_id'),
+    version: integer(),
+    trigger: text().$type<AppTaskTrigger>().notNull(),
+    /** Cron job name for scheduled runs. */
+    cronName: text('cron_name'),
+    /** Who started a manual run: a user id, or `agent` for an Agent Run. */
+    actor: text(),
+    status: text().$type<AppTaskRunStatus>().notNull().default('queued'),
+    /** Validated input (with declared defaults applied). */
+    input: jsonb().$type<JsonValue>(),
+    /** Connect JSON response of the method on success. */
+    output: jsonb().$type<JsonValue>(),
+    error: text(),
+    /** Instance stdout/stderr that was not part of the step event stream. */
+    log: text(),
+    startedAt: timestamp('started_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt,
+  },
+  (table) => [
+    index('app_task_runs_app_created_idx').on(table.appId, table.createdAt),
+    index('app_task_runs_app_task_created_idx').on(
+      table.appId,
+      table.taskName,
+      table.createdAt,
+    ),
+    // The dispatcher and boot recovery scan only unfinished runs.
+    index('app_task_runs_active_idx')
+      .on(table.status, table.createdAt)
+      .where(sql`${table.status} in ('queued', 'running')`),
+  ],
+);
+
+export const appTaskRunSteps = snakeCase.table(
+  'app_task_run_steps',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    runId: ulid('run_id')
+      .notNull()
+      .references(() => appTaskRuns.id, { onDelete: 'cascade' }),
+    seq: integer().notNull(),
+    name: text().notNull(),
+    status: text().$type<AppTaskRunStepStatus>().notNull(),
+    attempt: integer().notNull().default(1),
+    output: jsonb().$type<JsonValue>(),
+    error: text(),
+    startedAt: timestamp('started_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt,
+  },
+  (table) => [
+    uniqueIndex('app_task_run_steps_run_seq_attempt_idx').on(
+      table.runId,
+      table.seq,
+      table.attempt,
+    ),
   ],
 );
 

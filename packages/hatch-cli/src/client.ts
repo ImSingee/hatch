@@ -23,6 +23,10 @@ import {
 import { createConnectTransport } from '@connectrpc/connect-web';
 import {
   type AppBackend,
+  type AppTask,
+  type AppTaskRun,
+  type AppTaskRunStep,
+  type AppTaskRunSummary,
   CreateAppRequestSchema,
   AppService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
@@ -68,7 +72,7 @@ import {
 import { type File } from '../../hatch-platform-api/gen/hatch/platform/v1/file_pb';
 import type { AuthStatus } from '../../hatch-platform-api/auth';
 import type { Profile } from './config';
-import { CliError } from './error';
+import { CliError, fetchFailure } from './error';
 
 export function credentialHeaders(credential: Profile): Record<string, string> {
   return credential.apiKey
@@ -327,6 +331,87 @@ function backendView(value: AppBackend | undefined) {
   };
 }
 export type AppBackendView = ReturnType<typeof backendView>;
+
+const jsonOf = (value: Parameters<typeof toJson<typeof ValueSchema>>[1]) =>
+  toJson(ValueSchema, value);
+
+/** Public task DTOs: absent facts are explicit nulls, durations numbers. */
+function taskView(task: AppTask) {
+  return {
+    name: task.name,
+    method: task.method,
+    title: task.title ?? null,
+    description: task.description ?? null,
+    concurrency: task.concurrency ?? null,
+    inputType: task.inputType,
+    inputSchema: task.inputSchema ?? {},
+    cron: task.cron.map((job) => ({
+      name: job.name,
+      schedule: job.schedule,
+      input: job.input ? jsonOf(job.input) : {},
+      nextRun: job.nextRun ?? null,
+    })),
+    webhook: task.webhook,
+    webhookPath: task.webhookPath ?? null,
+    queued: task.queued,
+    running: task.running,
+    latestRun: task.latestRun
+      ? {
+          id: task.latestRun.id,
+          status: task.latestRun.status,
+          createdAt: task.latestRun.createdAt,
+        }
+      : null,
+  };
+}
+export type AppTaskView = ReturnType<typeof taskView>;
+
+function taskRunSummaryView(run: AppTaskRunSummary) {
+  return {
+    id: run.id,
+    task: run.task,
+    trigger: run.trigger,
+    cronName: run.cronName ?? null,
+    status: run.status,
+    version: run.version ?? null,
+    error: run.error ?? null,
+    createdAt: run.createdAt,
+    startedAt: run.startedAt ?? null,
+    finishedAt: run.finishedAt ?? null,
+    durationMs: run.durationMs === undefined ? null : Number(run.durationMs),
+    stepCount: run.stepCount,
+  };
+}
+export type AppTaskRunSummaryView = ReturnType<typeof taskRunSummaryView>;
+
+function taskRunStepView(step: AppTaskRunStep) {
+  return {
+    seq: step.seq,
+    name: step.name,
+    status: step.status,
+    attempt: step.attempt,
+    output: step.output ? jsonOf(step.output) : null,
+    error: step.error ?? null,
+    startedAt: step.startedAt ?? null,
+    finishedAt: step.finishedAt ?? null,
+    durationMs: step.durationMs === undefined ? null : Number(step.durationMs),
+  };
+}
+
+function taskRunView(value: AppTaskRun | undefined) {
+  const run = required(value);
+  return {
+    ...taskRunSummaryView(required(run.summary)),
+    actor: run.actor ?? null,
+    deploymentId: run.deploymentId ?? null,
+    input: run.input ? jsonOf(run.input) : null,
+    output: run.output ? jsonOf(run.output) : null,
+    log: run.log ?? null,
+    queuePosition: run.queuePosition ?? null,
+    steps: run.steps.map(taskRunStepView),
+  };
+}
+export type AppTaskRunView = ReturnType<typeof taskRunView>;
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
@@ -748,6 +833,46 @@ export function cliClient(transport: Transport) {
             ).backend,
           ),
       },
+      task: {
+        list: async (input: { id: string }) => {
+          const result = await apps.listAppTasks(input);
+          return {
+            appId: result.appId,
+            available: result.available,
+            concurrency: result.concurrency,
+            queued: result.queued,
+            running: result.running,
+            tasks: result.tasks.map(taskView),
+          };
+        },
+        run: async (input: { id: string; task: string; input: JsonObject }) => {
+          const result = await apps.runAppTask(input);
+          return { runId: result.runId, status: result.status };
+        },
+        runs: async (input: {
+          id: string;
+          task?: string;
+          status?: string;
+          limit?: number;
+          cursor?: string;
+        }) => {
+          const result = await apps.listAppTaskRuns(input);
+          return {
+            runs: result.runs.map(taskRunSummaryView),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        get: async (input: { id: string; runId: string }) =>
+          taskRunView((await apps.getAppTaskRun(input)).run),
+        cancel: async (input: { id: string; runId: string }) => {
+          const result = await apps.cancelAppTaskRun(input);
+          return { canceled: result.canceled, status: result.status };
+        },
+        rotateWebhookSecret: async (input: { id: string }) => {
+          const result = await apps.rotateAppWebhookSecret(input);
+          return { appId: result.appId, secret: result.secret };
+        },
+      },
       kv: async (input: {
         params: { id: string };
         body: QueryAppKvRequest;
@@ -924,7 +1049,13 @@ export function platformTransport(
           contextValues,
         );
       } catch (error) {
-        const safe = publicError(error);
+        // Connect reports a rejected fetch as Unknown with the TypeError.
+        const safe =
+          error instanceof ConnectError &&
+          error.code === Code.Unknown &&
+          error.cause instanceof TypeError
+            ? fetchFailure(credential.url, error.cause)
+            : publicError(error);
         let message = safe.message;
         for (const value of [credential.token, credential.apiKey])
           if (value) message = message.replaceAll(value, '[redacted]');

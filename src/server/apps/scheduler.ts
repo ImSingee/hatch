@@ -14,6 +14,7 @@ import {
 import type { CronJob, NormalizedManifest } from './manifest';
 import { nextRun, parseCron } from './cron-expr';
 import { BackendDeploymentChangedError, callAppBackend } from './runtime';
+import { ensureTaskScheduler, reloadTaskScheduler } from './tasks/scheduler';
 
 async function log(
   appId: string,
@@ -280,14 +281,21 @@ const scheduler = createCronScheduler<CronJob>({
   },
 });
 
-/** Start the scheduler once (idempotent). Safe to call from any server entry. */
+/**
+ * Start the App schedulers once (idempotent): RPC cron jobs and task
+ * schedules. Safe to call from any server entry.
+ */
 export function ensureScheduler(): void {
   scheduler.ensure();
+  ensureTaskScheduler();
 }
 
-/** Reload all schedules (call after a deploy/rollback/delete). */
+/**
+ * Reload every App schedule, RPC cron jobs and task schedules alike (call
+ * after a deploy, rollback, archive, restore or delete).
+ */
 export async function reloadScheduler(): Promise<void> {
-  await scheduler.reload();
+  await Promise.all([scheduler.reload(), reloadTaskScheduler()]);
 }
 
 /** Manually trigger a single cron job now. */
