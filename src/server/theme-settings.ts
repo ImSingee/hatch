@@ -7,7 +7,10 @@ import {
   type AccentName,
 } from '~/ui/theme/accents';
 import { AppError } from '~server/errors';
-import { getPlatformConfig, setPlatformConfig } from '~server/platform-config';
+import {
+  getPlatformConfig,
+  updatePlatformConfig,
+} from '~server/platform-config';
 import { publishPlatformEvent } from '~server/platform-events';
 
 export type ThemeState = {
@@ -50,12 +53,12 @@ export async function updateTheme(change: {
       `Unknown accent. Use one of: ${ACCENT_NAMES.join(', ')}.`,
       400,
     );
-  const current = await getPlatformConfig('ui.theme');
-  const next = {
+  // Fields left out keep their latest stored value, even when another change
+  // to the theme lands at the same moment.
+  const next = await updatePlatformConfig('ui.theme', (current) => ({
     accent: (change.accent as AccentName | undefined) ?? current.accent,
     dockLabels: change.dockLabels ?? current.dockLabels,
-  };
-  await setPlatformConfig('ui.theme', next);
+  }));
   publishPlatformEvent({ type: 'theme.updated', accent: next.accent });
   return themeState(next);
 }

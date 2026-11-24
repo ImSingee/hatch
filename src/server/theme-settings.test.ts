@@ -102,4 +102,18 @@ describe('instance theme', () => {
       unsubscribe();
     }
   });
+
+  it('keeps both of two theme changes made at the same moment', async () => {
+    const other = Object.keys(tokens.accents).find(
+      (name) => name !== tokens.defaultAccent,
+    )!;
+    await Promise.all([
+      updateTheme({ accent: other }),
+      updateTheme({ dockLabels: true }),
+    ]);
+    expect(await getThemeState()).toMatchObject({
+      accent: other,
+      dockLabels: true,
+    });
+  });
 });

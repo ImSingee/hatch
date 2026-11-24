@@ -14,7 +14,7 @@
  * reachable from `src/auth/server.ts`, which the Better Auth CLI loads
  * directly and cannot resolve the `~` path alias for.
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
 import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
@@ -107,10 +107,18 @@ export type PlatformConfigValue<K extends PlatformConfigKey> = z.infer<
 export async function getPlatformConfig<K extends PlatformConfigKey>(
   key: K,
 ): Promise<PlatformConfigValue<K>> {
-  const entry: ConfigEntry<unknown> = REGISTRY[key];
   const row = await db.query.platformConfig.findFirst({
     where: { key },
   });
+  return readStored(key, row);
+}
+
+/** A stored row as its typed value, with the key's fallbacks applied. */
+function readStored<K extends PlatformConfigKey>(
+  key: K,
+  row: { value: unknown } | undefined,
+): PlatformConfigValue<K> {
+  const entry: ConfigEntry<unknown> = REGISTRY[key];
   if (!row) return entry.fallback as PlatformConfigValue<K>;
 
   const parsed = entry.schema.safeParse(row.value);
@@ -132,6 +140,41 @@ export async function clearPlatformConfig(
   await db
     .delete(schema.platformConfig)
     .where(eq(schema.platformConfig.key, key));
+}
+
+// Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
+// Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
+// (apps/kv.ts), 4 (pins.ts), 5 (dashboard-service.ts), 6 (apps/provision.ts).
+const PLATFORM_CONFIG_LOCK_NS = 7;
+
+/**
+ * Change part of a setting. `change` receives the current value (fallbacks
+ * applied) and returns the whole new one. The read and the write hold a
+ * per-key lock, so two partial changes made at once never undo each other.
+ */
+export async function updatePlatformConfig<K extends PlatformConfigKey>(
+  key: K,
+  change: (current: PlatformConfigValue<K>) => PlatformConfigValue<K>,
+): Promise<PlatformConfigValue<K>> {
+  const entry = REGISTRY[key];
+  return db.transaction(async (tx) => {
+    // A lock on the key, not on its row: the first write has no row to lock.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(${PLATFORM_CONFIG_LOCK_NS}, hashtext(${key}))`,
+    );
+    const row = await tx.query.platformConfig.findFirst({ where: { key } });
+    const validated = entry.schema.parse(
+      change(readStored(key, row)),
+    ) as JsonValue;
+    await tx
+      .insert(schema.platformConfig)
+      .values({ key, value: validated })
+      .onConflictDoUpdate({
+        target: schema.platformConfig.key,
+        set: { value: validated, updatedAt: new Date() },
+      });
+    return validated as PlatformConfigValue<K>;
+  });
 }
 
 /**
