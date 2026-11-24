@@ -203,16 +203,36 @@ export function NotificationTimeline() {
     return () => document.removeEventListener('visibilitychange', readNewest);
   }, [readNewest]);
 
+  // Set while a jump waits for the first unread notification to render.
+  const pendingJump = useRef(false);
+  useLayoutEffect(() => {
+    if (!pendingJump.current || !unreadRef.current) return;
+    pendingJump.current = false;
+    unreadRef.current.scrollIntoView({ block: 'start' });
+  }, [rows]);
+
   const jumpToUnread = async () => {
     atEnd.current = false;
     setJumped(true);
-    // The first unread notification may be on an older page.
-    for (let page = 0; !unreadRef.current && page < JUMP_PAGES; page += 1) {
-      const result = await query.fetchNextPage();
-      if (!result.hasNextPage) break;
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (unreadRef.current) {
+      unreadRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      return;
     }
-    unreadRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    // The first unread notification is on an older page: load until it is
+    // in, then the effect above scrolls once its divider has rendered.
+    pendingJump.current = true;
+    const loaded = (data: typeof query.data) =>
+      data?.pages.some((page) =>
+        page.items.some((item) => item.id === firstUnreadId),
+      ) ?? false;
+    let result = await query.fetchNextPage();
+    for (
+      let page = 1;
+      !loaded(result.data) && result.hasNextPage && page < JUMP_PAGES;
+      page += 1
+    ) {
+      result = await query.fetchNextPage();
+    }
   };
 
   const onScroll = () => {

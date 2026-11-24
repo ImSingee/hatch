@@ -753,3 +753,14 @@ manifest schema is strict, so Platform and Runner must ship the same build.
 The `user` source type is an additive envelope value: App destinations built
 against the earlier `app | channel | platform` set receive it as a plain
 string, so no compatibility version change is needed either.
+
+The timeline additions are additive too. `notification.card` and
+`notification.response.round` are new envelope fields, which
+`verifyNotificationRequest` ignores (it checks only `type`). A second
+`hatch.notification.responded` for the same notification arrives only after an
+edit asked a new question: the source itself with an SDK that has `reply` on
+`updateNotification`, or a member through `hatch notification update --reply`.
+Receivers that keyed answers by notification id should key them by
+`(notification.id, response.round)`; older receivers see the later answer as
+the latest one. `activity_at`, read positions and revisions are platform
+data and never reach Apps.

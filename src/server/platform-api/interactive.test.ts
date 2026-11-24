@@ -1925,6 +1925,83 @@ describe('notification center authority', () => {
       ((await agentDetail.json()) as { notification: { summary: unknown } })
         .notification.summary,
     ).toMatchObject({ sourceType: 'platform', sourceName: 'Hatch Agent' });
+    // A Run's send keeps its chat, so answers come back to the Agent there.
+    expect(
+      await db.query.notifications.findFirst({
+        where: { id: agentFirst.notificationId },
+        columns: { agentSessionId: true },
+      }),
+    ).toEqual({ agentSessionId: runSession });
+
+    // A Run reads and moves the platform Agent's own read position.
+    const runUnread = await call(
+      'NotificationService/GetNotificationReadState',
+      {
+        headers: run,
+        body: {},
+      },
+    );
+    expect(runUnread.status).toBe(200);
+    const runRead = await call('NotificationService/MarkNotificationsRead', {
+      headers: run,
+      body: { latest: true },
+    });
+    expect(runRead.status).toBe(200);
+    expect(
+      ((await runRead.json()) as { state: { unreadCount?: number } }).state
+        .unreadCount,
+    ).toBeUndefined();
+    const userUnread = await call(
+      'NotificationService/GetNotificationReadState',
+      { headers: apiKey, body: {} },
+    );
+    expect(
+      ((await userUnread.json()) as { state: { unreadCount?: number } }).state
+        .unreadCount,
+    ).toBeGreaterThan(0);
+
+    // A Run asks a new question, adds a card and reads earlier versions.
+    const channelNotification = (
+      (await runChannelSend.json()) as { notificationId: string }
+    ).notificationId;
+    const runAsk = await call('NotificationService/UpdateNotification', {
+      headers: run,
+      body: {
+        id: channelNotification,
+        reply: {
+          fields: [
+            {
+              id: 'merge',
+              type: 'buttons',
+              label: 'Merge?',
+              options: [
+                { id: 'merge', label: 'Merge' },
+                { id: 'hold', label: 'Hold' },
+              ],
+            },
+          ],
+        },
+        card: { status: { label: 'CI passed', tone: 'success' } },
+      },
+    });
+    expect(runAsk.status).toBe(200);
+    const runVersions = await call(
+      'NotificationService/ListNotificationRevisions',
+      { headers: run, body: { id: channelNotification } },
+    );
+    expect(
+      ((await runVersions.json()) as { revisions: unknown[] }).revisions,
+    ).toHaveLength(1);
+    // Answers can only go to the Agent once a model can run them.
+    const runAgentRoute = await call(
+      'NotificationService/CreateResponseRoute',
+      {
+        headers: run,
+        body: { sourceType: 'any', agent: true },
+      },
+    );
+    expect(runAgentRoute.status).toBe(409);
+
     const runRecall = await call('NotificationService/RecallNotification', {
       headers: run,
       body: { id: agentFirst.notificationId },

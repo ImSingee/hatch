@@ -140,6 +140,32 @@ export default function NotificationsScreen() {
   const atEnd = useRef(true);
   const listTop = useRef(0);
   const unreadTop = useRef<number | null>(null);
+  // The latest scroll position and content height, to hold the view still
+  // while older pages arrive above it.
+  const offset = useRef(0);
+  const contentHeight = useRef(0);
+  const restore = useRef<{ pages: number; height: number; y: number }>(null);
+  // Set while a jump waits for the first unread notification to load.
+  const pendingJump = useRef(false);
+
+  const scrollToUnread = () => {
+    if (unreadTop.current === null) return false;
+    scroll.current?.scrollTo({
+      y: Math.max(0, listTop.current + unreadTop.current - 16),
+      animated: true,
+    });
+    return true;
+  };
+
+  const loadEarlier = () => {
+    atEnd.current = false;
+    restore.current = {
+      pages: pages?.length ?? 0,
+      height: contentHeight.current,
+      y: offset.current,
+    };
+    return query.fetchNextPage();
+  };
 
   const markRead = useMutation({
     mutationFn: (notificationId: string) =>
@@ -159,6 +185,7 @@ export default function NotificationsScreen() {
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    offset.current = contentOffset.y;
     const bottom = contentOffset.y + layoutMeasurement.height;
     atEnd.current = bottom >= contentSize.height - AT_END;
     if (
@@ -173,14 +200,23 @@ export default function NotificationsScreen() {
     }
   };
 
-  const jumpToUnread = () => {
+  const jumpToUnread = async () => {
     setJumped(true);
     atEnd.current = false;
-    if (unreadTop.current !== null) {
-      scroll.current?.scrollTo({
-        y: Math.max(0, listTop.current + unreadTop.current - 16),
-        animated: true,
-      });
+    if (scrollToUnread()) return;
+    // The first unread notification is on an older page: load until it is.
+    pendingJump.current = true;
+    let result = await loadEarlier();
+    for (
+      let page = 1;
+      !result.data?.pages.some((p) =>
+        p.items.some((item) => item.id === firstUnreadId),
+      ) &&
+      result.hasNextPage &&
+      page < 20;
+      page += 1
+    ) {
+      result = await loadEarlier();
     }
   };
 
@@ -195,10 +231,20 @@ export default function NotificationsScreen() {
       scrollRef={scroll}
       onScroll={onScroll}
       scrollEventThrottle={64}
-      // Keep the view still when older pages arrive above it.
-      maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
-      onContentSizeChange={() => {
-        if (atEnd.current) scroll.current?.scrollToEnd({ animated: false });
+      onContentSizeChange={(_width, height) => {
+        const previous = contentHeight.current;
+        contentHeight.current = height;
+        const pending = restore.current;
+        if (pending && (pages?.length ?? 0) > pending.pages) {
+          // Older notifications arrived above: keep the same ones in view.
+          restore.current = null;
+          scroll.current?.scrollTo({
+            y: pending.y + (height - pending.height),
+            animated: false,
+          });
+        } else if (atEnd.current && height !== previous) {
+          scroll.current?.scrollToEnd({ animated: false });
+        }
       }}
       refreshControl={
         <RefreshControl
@@ -212,7 +258,7 @@ export default function NotificationsScreen() {
           <View style={styles.jumpWrap} pointerEvents="box-none">
             <Pressable
               accessibilityRole="button"
-              onPress={jumpToUnread}
+              onPress={() => void jumpToUnread()}
               style={({ pressed }) => [
                 styles.jump,
                 pressed && { backgroundColor: c.hover },
@@ -266,10 +312,7 @@ export default function NotificationsScreen() {
             fullWidth
             label={query.isFetchingNextPage ? 'Loading…' : 'Load earlier'}
             busy={query.isFetchingNextPage}
-            onPress={() => {
-              atEnd.current = false;
-              void query.fetchNextPage();
-            }}
+            onPress={() => void loadEarlier()}
           />
         ) : null}
         {rows.map((row) => {
@@ -289,6 +332,11 @@ export default function NotificationsScreen() {
                   style={styles.divider}
                   onLayout={(event) => {
                     unreadTop.current = event.nativeEvent.layout.y;
+                    if (pendingJump.current) {
+                      pendingJump.current = false;
+                      // After the restore, which keeps older pages above.
+                      requestAnimationFrame(() => scrollToUnread());
+                    }
                   }}
                 >
                   <View
