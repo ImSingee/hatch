@@ -6,6 +6,7 @@ import { useAccent } from '../src/ui/accent';
 import { palette as c } from '../src/ui/theme';
 import { SessionProvider, useSession } from '../src/state/session';
 import { useDeepLinkLifecycle } from '../src/state/deep-links';
+import { useUnreadBadge } from '../src/state/notification-read-state';
 import { usePushLifecycle } from '../src/state/push';
 import { Busy } from '../src/ui/primitives';
 import {
@@ -18,6 +19,7 @@ function Navigation() {
   const navigation = useNavigationPreferences();
   usePushLifecycle();
   useDeepLinkLifecycle();
+  useUnreadBadge();
   if (!ready || !navigation.ready) return <Busy label="Opening Hatch…" />;
   return (
     <Stack

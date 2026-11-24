@@ -710,6 +710,12 @@ existed when the position shipped start with everything read; a new user starts
 from when they joined. `GetNotificationReadState` and `MarkNotificationsRead`
 expose it (`hatch notification unread`, `hatch notification mark-read`).
 
+The phone app's Notifications screen is the same timeline (shared layout in
+`packages/hatch-platform-api/notification-timeline.ts`): activity order, cards,
+the unread divider and jump, and reading at the end moves the same read
+position. Answering opens the notification's page, and the app icon's badge
+shows the unread count.
+
 `/notifications/log` is
 the delivery log (filters, deliveries, answer deliveries), and
 `/notifications/log/<id>` opens one notification there.

@@ -1,7 +1,19 @@
-import type { NotificationSummaryView } from '~server/notifications';
+/**
+ * The notification timeline's layout, shared by the web and the phone app:
+ * day dividers, quiet groups, recalled lines, the unread divider and the
+ * markers notifications leave when their source moves them. Pure, with no
+ * dependencies.
+ */
 
-/** A notification as the timeline shows it, oldest first. */
-export type TimelineItem = NotificationSummaryView;
+/** What the layout needs of a notification, oldest first. */
+export type TimelineEntry = {
+  id: string;
+  sourceName: string;
+  priority: number;
+  activityAt: string;
+  recalledAt: string | null;
+  reply: unknown;
+};
 
 /**
  * Left behind where a notification was when its source updated it while the
@@ -17,17 +29,17 @@ export type MovedMarker = {
   afterId: string | null;
 };
 
-export type TimelineRow =
+export type TimelineRow<TItem extends TimelineEntry = TimelineEntry> =
   | { kind: 'day'; key: string; date: string }
-  | { kind: 'item'; key: string; item: TimelineItem }
-  | { kind: 'quiet'; key: string; items: TimelineItem[] }
-  | { kind: 'recalled'; key: string; item: TimelineItem }
+  | { kind: 'item'; key: string; item: TItem }
+  | { kind: 'quiet'; key: string; items: TItem[] }
+  | { kind: 'recalled'; key: string; item: TItem }
   | { kind: 'moved'; key: string; sourceNames: string[] }
   /** Before the first notification that was unread when the page opened. */
   | { kind: 'unread'; key: 'unread' };
 
 /** Low priority notifications that ask nothing share one collapsed row. */
-function isQuiet(item: TimelineItem) {
+function isQuiet(item: TimelineEntry) {
   return item.priority < 0 && !item.reply && !item.recalledAt;
 }
 
@@ -43,18 +55,18 @@ function dayOf(iso: string) {
  * used to follow the moved one, under that notification's day divider, so it
  * stays in the day it was in.
  */
-export function buildTimelineRows(
-  items: TimelineItem[],
+export function buildTimelineRows<TItem extends TimelineEntry>(
+  items: TItem[],
   moved: MovedMarker[],
   firstUnreadId: string | null = null,
-): TimelineRow[] {
+): TimelineRow<TItem>[] {
   const markersAfter = new Map<string | null, MovedMarker[]>();
   for (const marker of moved) {
     const list = markersAfter.get(marker.afterId) ?? [];
     list.push(marker);
     markersAfter.set(marker.afterId, list);
   }
-  const rows: TimelineRow[] = [];
+  const rows: TimelineRow<TItem>[] = [];
   let day: string | null = null;
   // Markers wait for the next notification, so they land after its divider.
   let pending: MovedMarker[] = markersAfter.get(null) ?? [];
@@ -103,8 +115,8 @@ export function buildTimelineRows(
  * one, leaves a marker where it was. Markers whose anchor is gone are dropped.
  */
 export function nextMovedMarkers(
-  before: TimelineItem[],
-  after: TimelineItem[],
+  before: TimelineEntry[],
+  after: TimelineEntry[],
   markers: MovedMarker[],
 ): MovedMarker[] {
   const previous = new Map(before.map((item, index) => [item.id, index]));

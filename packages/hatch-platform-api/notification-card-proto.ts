@@ -7,7 +7,11 @@ import {
   NotificationCardSchema,
   type NotificationCard as NotificationCardMessage,
 } from './gen/hatch/platform/v1/notification_pb.js';
-import type { NotificationCard } from './notification-card';
+import {
+  NOTIFICATION_CARD_TONES,
+  type NotificationCard,
+  type NotificationCardTone,
+} from './notification-card';
 
 /**
  * A card message as plain input for the card schema, leaving unset parts
@@ -76,4 +80,45 @@ export function cardToMessage(card: NotificationCard): NotificationCardMessage {
               },
             },
   });
+}
+
+/** A card message as a stored card, for readers; null without content. */
+export function cardFromMessage(
+  message: NotificationCardMessage,
+): NotificationCard | null {
+  const card: NotificationCard = {};
+  if (message.status?.label) {
+    const tone = message.status.tone as NotificationCardTone;
+    card.status = {
+      label: message.status.label,
+      tone: (NOTIFICATION_CARD_TONES as readonly string[]).includes(tone)
+        ? tone
+        : 'neutral',
+    };
+  }
+  const block = message.block;
+  if (block.case === 'progress') {
+    card.block = {
+      type: 'progress',
+      label: block.value.label,
+      percent: block.value.percent,
+      ...(block.value.value ? { value: block.value.value } : {}),
+    };
+  } else if (block.case === 'stats') {
+    card.block = {
+      type: 'stats',
+      items: block.value.items.map((item) => ({
+        value: item.value,
+        label: item.label,
+      })),
+    };
+  } else if (block.case === 'quote') {
+    card.block = {
+      type: 'quote',
+      author: block.value.author,
+      text: block.value.text,
+      ...(block.value.location ? { location: block.value.location } : {}),
+    };
+  }
+  return card.status || card.block ? card : null;
 }

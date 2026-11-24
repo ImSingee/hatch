@@ -9,13 +9,18 @@ import {
   type AgentSessionSummary,
   type GetModelCatalogResponse,
   type NotificationDetail as RpcNotificationDetail,
+  type NotificationReadState as RpcNotificationReadState,
+  type NotificationResponse as RpcNotificationResponse,
   type NotificationSummary as RpcNotificationSummary,
 } from '@hatch/platform-api';
+import { cardFromMessage } from '../../../packages/hatch-platform-api/notification-card-proto';
 import { MobileError } from './security';
 import type {
   AppSummary,
   AgentModelCatalog,
+  NotificationAnswer,
   NotificationDetail,
+  NotificationReadState,
   NotificationSummary,
   RunStatus,
   SessionDetail,
@@ -184,6 +189,7 @@ export function notificationSummaryProjection(
   return {
     id: value.id,
     sourceType: value.sourceType,
+    sourceId: value.sourceId ?? null,
     sourceName: value.sourceName,
     kind: value.kind,
     kindName: value.kindName,
@@ -196,7 +202,23 @@ export function notificationSummaryProjection(
     editedAt: value.editedAt ?? null,
     recalledAt: value.recalledAt ?? null,
     reply: value.reply ? replyFromMessage(value.reply) : null,
+    replyRound: value.replyRound || 1,
     respondedAt: value.respondedAt ?? null,
+    response: value.response ? answerProjection(value.response) : null,
+    // Instances from before the timeline have no activity time.
+    activityAt: value.activityAt || value.createdAt,
+    card: value.card ? cardFromMessage(value.card) : null,
+  };
+}
+
+function answerProjection(value: RpcNotificationResponse): NotificationAnswer {
+  return {
+    round: value.round || 1,
+    respondedByUserId: value.respondedByUserId ?? null,
+    answers: answersFromMessages(value.answers),
+    respondedByName: value.respondedByName,
+    via: value.via,
+    respondedAt: value.respondedAt,
   };
 }
 export function notificationDetailProjection(
@@ -219,13 +241,16 @@ export function notificationDetailProjection(
       result: delivery.result ?? null,
       completedAt: delivery.completedAt ?? null,
     })),
-    response: value.response
-      ? {
-          answers: answersFromMessages(value.response.answers),
-          respondedByName: value.response.respondedByName,
-          via: value.response.via,
-          respondedAt: value.response.respondedAt,
-        }
-      : null,
+    response: value.response ? answerProjection(value.response) : null,
+  };
+}
+
+export function readStateProjection(
+  value: RpcNotificationReadState | undefined,
+): NotificationReadState {
+  return {
+    readThroughId: value?.readThroughId ?? null,
+    unreadCount: value?.unreadCount ?? 0,
+    firstUnreadId: value?.firstUnreadId ?? null,
   };
 }

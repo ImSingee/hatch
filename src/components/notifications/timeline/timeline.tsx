@@ -46,8 +46,11 @@ import {
   buildTimelineRows,
   nextMovedMarkers,
   type MovedMarker,
-  type TimelineItem,
-} from './timeline-rows';
+} from '../../../../packages/hatch-platform-api/notification-timeline';
+import type { NotificationSummaryView } from '~server/notifications';
+
+/** A notification as the timeline shows it, oldest first. */
+type TimelineItem = NotificationSummaryView;
 import classes from './timeline.module.css';
 
 /** How close to the end, in px, still counts as reading the newest. */

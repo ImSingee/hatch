@@ -1,40 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildTimelineRows,
-  nextMovedMarkers,
-  type TimelineItem,
-} from './timeline-rows';
+import { buildTimelineRows, nextMovedMarkers } from './notification-timeline';
 
-function item(
-  id: string,
-  activityAt: string,
-  extra: Partial<TimelineItem> = {},
-): TimelineItem {
+type Item = {
+  id: string;
+  sourceName: string;
+  priority: number;
+  activityAt: string;
+  recalledAt: string | null;
+  reply: unknown;
+};
+
+function item(id: string, activityAt: string, extra: Partial<Item> = {}): Item {
   return {
     id,
-    sourceType: 'channel',
-    sourceId: 'c1',
     sourceName: 'GitHub',
-    kind: 'pr',
-    kindName: 'Pull request',
-    title: `Title ${id}`,
-    body: null,
-    url: null,
-    autoOpenUrl: false,
     priority: 0,
-    occurredAt: activityAt,
-    createdAt: activityAt,
     activityAt,
-    revision: 1,
-    editedAt: null,
     recalledAt: null,
     reply: null,
-    card: null,
-    replyRound: 1,
-    respondedAt: null,
-    response: null,
-    status: 'delivered',
-    deliveries: { pending: 0, succeeded: 1, failed: 0, canceled: 0 },
     ...extra,
   };
 }
@@ -61,7 +44,7 @@ describe('timeline rows', () => {
         // A quiet notification that asks something stays a card.
         item('e', '2026-11-25T09:00:00', {
           priority: -1,
-          reply: { fields: [], submitLabel: 'Submit' },
+          reply: { fields: [] },
         }),
       ],
       [],

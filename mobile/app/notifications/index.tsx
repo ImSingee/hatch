@@ -1,29 +1,103 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Link, Stack, router, useIsFocused } from 'expo-router';
-import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type ScrollView,
+} from 'react-native';
+import {
+  buildTimelineRows,
+  nextMovedMarkers,
+  type MovedMarker,
+} from '../../../packages/hatch-platform-api/notification-timeline';
+import type { NotificationSummary } from '../../src/core/types';
+import {
+  readStateKey,
+  useNotificationReadState,
+} from '../../src/state/notification-read-state';
 import { useSession } from '../../src/state/session';
 import { useDeleteNotification } from '../../src/state/use-delete-notification';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
 import { Button } from '../../src/ui/button';
-import { Reflow } from '../../src/ui/columns';
+import { Glyph } from '../../src/ui/glyph';
 import { glyphs } from '../../src/ui/glyph.types';
-import { Busy, EmptyState, Notice, errorText } from '../../src/ui/primitives';
+import { CardBlock, CardStatus } from '../../src/ui/notification-card';
+import { notificationTime } from '../../src/ui/notification-status';
 import {
-  NotificationChangeTag,
-  NotificationPriorityTag,
-  NotificationReplyTag,
-  NotificationStatusTag,
-  notificationTime,
-} from '../../src/ui/notification-status';
-import { Group } from '../../src/ui/rows';
+  Busy,
+  EmptyState,
+  Notice,
+  Tag,
+  errorText,
+} from '../../src/ui/primitives';
 import { ScrollScreen } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
 import { useAccent } from '../../src/ui/accent';
-import { palette as c } from '../../src/ui/theme';
+import { palette as c, pill, radii, tileFor } from '../../src/ui/theme';
 
+/** How close to the end, in points, still counts as reading the newest. */
+const AT_END = 80;
+/** How long the newest must stay in view before it counts as read, in ms. */
+const READ_AFTER = 600;
+
+const VIA: Record<string, string> = {
+  web: 'on the web',
+  mobile: 'in the app',
+  push: 'from the notification',
+  cli: 'from the CLI',
+};
+
+/** Where notifications were before their source moved them, while open. */
+function useMovedMarkers(items: NotificationSummary[]): MovedMarker[] {
+  const [tracked, setTracked] = useState({
+    items,
+    markers: [] as MovedMarker[],
+  });
+  if (tracked.items !== items) {
+    const markers =
+      tracked.items.length === 0
+        ? []
+        : nextMovedMarkers(tracked.items, items, tracked.markers);
+    setTracked({ items, markers });
+    return markers;
+  }
+  return tracked.markers;
+}
+
+function dayLabel(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  });
+}
+
+/**
+ * Every notification as one stream, oldest at the top, the same as on the
+ * web: it opens at the newest and follows new ones while you are at the end.
+ * What was unread when it opened is marked, with a jump back to it, and
+ * reaching the end marks everything read here and on the web.
+ */
 export default function NotificationsScreen() {
   const { api, origin } = useSession();
   const accent = useAccent();
+  const queryClient = useQueryClient();
+  const focused = useIsFocused();
   const query = useInfiniteQuery({
     queryKey: [origin, 'notifications'],
     queryFn: ({ pageParam, signal }) =>
@@ -32,22 +106,125 @@ export default function NotificationsScreen() {
     getNextPageParam: (page) => page.nextCursor,
     enabled: Boolean(api),
   });
-  const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
+  const readState = useNotificationReadState();
+  const pull = usePullToRefresh(focused, () =>
+    Promise.all([query.refetch(), readState.refetch()]),
+  );
   const { confirmDelete } = useDeleteNotification();
-  const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const pages = query.data?.pages;
+  const items = useMemo(
+    () => (pages ?? []).flatMap((page) => page.items).reverse(),
+    [pages],
+  );
+  const moved = useMovedMarkers(items);
+
+  const [opened, setOpened] = useState<{
+    firstUnreadId: string | null;
+    count: number;
+  } | null>(null);
+  if (opened === null && readState.data) {
+    setOpened({
+      firstUnreadId: readState.data.firstUnreadId,
+      count: readState.data.unreadCount,
+    });
+  }
+  const [jumped, setJumped] = useState(false);
+  const firstUnreadId = opened?.firstUnreadId ?? null;
+  const rows = useMemo(
+    () => buildTimelineRows(items, moved, firstUnreadId),
+    [items, moved, firstUnreadId],
+  );
+  const [openQuiet, setOpenQuiet] = useState<Record<string, boolean>>({});
+
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  const atEnd = useRef(true);
+  const listTop = useRef(0);
+  const unreadTop = useRef<number | null>(null);
+
+  const markRead = useMutation({
+    mutationFn: (notificationId: string) =>
+      api!.markNotificationsRead(notificationId),
+    onSuccess: (state) => queryClient.setQueryData(readStateKey(origin), state),
+  });
+  const { mutate: mark, isPending: marking } = markRead;
+  const newestId = items.at(-1)?.id;
+  const unread = readState.data?.unreadCount ?? 0;
+  useEffect(() => {
+    if (!focused || !newestId || unread === 0 || marking) return;
+    const timer = setTimeout(() => {
+      if (atEnd.current) mark(newestId);
+    }, READ_AFTER);
+    return () => clearTimeout(timer);
+  }, [focused, newestId, unread, marking, mark]);
+
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    const bottom = contentOffset.y + layoutMeasurement.height;
+    atEnd.current = bottom >= contentSize.height - AT_END;
+    if (
+      !jumped &&
+      unreadTop.current !== null &&
+      contentOffset.y <= listTop.current + unreadTop.current
+    ) {
+      setJumped(true);
+    }
+    if (atEnd.current && newestId && unread > 0 && !marking) {
+      mark(newestId);
+    }
+  };
+
+  const jumpToUnread = () => {
+    setJumped(true);
+    atEnd.current = false;
+    if (unreadTop.current !== null) {
+      scroll.current?.scrollTo({
+        y: Math.max(0, listTop.current + unreadTop.current - 16),
+        animated: true,
+      });
+    }
+  };
+
   const host = origin?.replace(/^https?:\/\//, '') ?? '';
+  const showJump = Boolean(opened && opened.count > 0 && !jumped);
   return (
     <ScrollScreen
       readable
       nested
       eyebrow={host}
       title="Notifications"
+      scrollRef={scroll}
+      onScroll={onScroll}
+      scrollEventThrottle={64}
+      // Keep the view still when older pages arrive above it.
+      maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+      onContentSizeChange={() => {
+        if (atEnd.current) scroll.current?.scrollToEnd({ animated: false });
+      }}
       refreshControl={
         <RefreshControl
           refreshing={pull.refreshing}
           onRefresh={pull.onRefresh}
           tintColor={accent.fill}
         />
+      }
+      overlay={
+        showJump ? (
+          <View style={styles.jumpWrap} pointerEvents="box-none">
+            <Pressable
+              accessibilityRole="button"
+              onPress={jumpToUnread}
+              style={({ pressed }) => [
+                styles.jump,
+                pressed && { backgroundColor: c.hover },
+              ]}
+            >
+              <Glyph name="up" size={13} color={accent.fill} />
+              <Text style={[type.small, { color: c.ink }]}>
+                {opened!.count} unread · Jump to where you left off
+              </Text>
+            </Pressable>
+          </View>
+        ) : null
       }
     >
       {/* A native bar item so iPhone Duo can move it to the vertical bar. */}
@@ -59,7 +236,12 @@ export default function NotificationsScreen() {
           Notification settings
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <View style={{ paddingHorizontal: 16, gap: 14 }}>
+      <View
+        style={styles.column}
+        onLayout={(event) => {
+          listTop.current = event.nativeEvent.layout.y;
+        }}
+      >
         {query.error ? (
           <Notice
             tone="danger"
@@ -75,104 +257,310 @@ export default function NotificationsScreen() {
           <EmptyState
             glyph="bell"
             title="No notifications yet"
-            detail="Apps and channels on this instance send notifications here. Routing is set up in Hatch on the web."
-          />
-        ) : null}
-        {items.length > 0 ? (
-          <Reflow
-            items={items}
-            render={(column) => (
-              <Group>
-                {column.map((item) => (
-                  // Touch and hold for the native context menu.
-                  <Link
-                    key={item.id}
-                    href={`/notifications/${item.id}`}
-                    asChild
-                  >
-                    <Link.Trigger>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`${item.title}, from ${item.sourceName}`}
-                        accessibilityHint="Touch and hold for more actions"
-                      >
-                        {/* Link's Slot cannot merge a style function, so the
-                            pressed look lives on an inner view. */}
-                        {({ pressed }) => (
-                          <View
-                            style={[
-                              styles.row,
-                              pressed && { backgroundColor: c.hover },
-                            ]}
-                          >
-                            <View style={styles.header}>
-                              <Text
-                                style={[type.caption, styles.grow]}
-                                numberOfLines={1}
-                              >
-                                {item.sourceName} · {item.kindName}
-                              </Text>
-                              <Text style={type.caption}>
-                                {notificationTime(item.occurredAt)}
-                              </Text>
-                            </View>
-                            <Text style={type.heading}>{item.title}</Text>
-                            {item.body ? (
-                              <Text style={type.small} numberOfLines={3}>
-                                {item.body}
-                              </Text>
-                            ) : null}
-                            <View style={styles.tags}>
-                              <NotificationStatusTag status={item.status} />
-                              <NotificationPriorityTag
-                                priority={item.priority}
-                              />
-                              <NotificationChangeTag
-                                editedAt={item.editedAt}
-                                recalledAt={item.recalledAt}
-                              />
-                              <NotificationReplyTag
-                                hasReply={item.reply !== null}
-                                respondedAt={item.respondedAt}
-                                recalledAt={item.recalledAt}
-                              />
-                            </View>
-                          </View>
-                        )}
-                      </Pressable>
-                    </Link.Trigger>
-                    <Link.Menu>
-                      <Link.MenuAction
-                        icon="trash"
-                        destructive
-                        onPress={() => confirmDelete(item)}
-                      >
-                        Delete
-                      </Link.MenuAction>
-                    </Link.Menu>
-                  </Link>
-                ))}
-              </Group>
-            )}
+            detail="What your Apps, Channels and the Agent send shows up here and on the web. Routing is set up in Hatch on the web."
           />
         ) : null}
         {query.hasNextPage ? (
           <Button
             variant="secondary"
             fullWidth
-            label={query.isFetchingNextPage ? 'Loading…' : 'Load older'}
+            label={query.isFetchingNextPage ? 'Loading…' : 'Load earlier'}
             busy={query.isFetchingNextPage}
-            onPress={() => void query.fetchNextPage()}
+            onPress={() => {
+              atEnd.current = false;
+              void query.fetchNextPage();
+            }}
           />
         ) : null}
+        {rows.map((row) => {
+          switch (row.kind) {
+            case 'day':
+              return (
+                <View key={row.key} style={styles.divider}>
+                  <View style={styles.rule} />
+                  <Text style={type.caption}>{dayLabel(row.date)}</Text>
+                  <View style={styles.rule} />
+                </View>
+              );
+            case 'unread':
+              return (
+                <View
+                  key={row.key}
+                  style={styles.divider}
+                  onLayout={(event) => {
+                    unreadTop.current = event.nativeEvent.layout.y;
+                  }}
+                >
+                  <View
+                    style={[styles.rule, { backgroundColor: accent.fill }]}
+                  />
+                  <Text style={[type.caption, { color: accent.ink }]}>
+                    {opened?.count ?? 0} unread below
+                  </Text>
+                  <View
+                    style={[styles.rule, { backgroundColor: accent.fill }]}
+                  />
+                </View>
+              );
+            case 'moved':
+              return (
+                <View key={row.key} style={styles.moved}>
+                  <Glyph name="down" size={12} color={c.inkSoft} />
+                  <Text style={type.caption}>
+                    {row.sourceNames.length === 1
+                      ? `${row.sourceNames[0]} has an update, moved below`
+                      : `${row.sourceNames.length} notifications have updates, moved below`}
+                  </Text>
+                </View>
+              );
+            case 'recalled':
+              return (
+                <Text key={row.key} style={[type.small, styles.recalled]}>
+                  {row.item.sourceName} recalled “{row.item.title}”
+                </Text>
+              );
+            case 'quiet': {
+              const open = Boolean(openQuiet[row.key]);
+              return (
+                <View key={row.key} style={styles.quiet}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    onPress={() =>
+                      setOpenQuiet((current) => ({
+                        ...current,
+                        [row.key]: !open,
+                      }))
+                    }
+                    style={({ pressed }) => [
+                      styles.quietToggle,
+                      pressed && { backgroundColor: c.hover },
+                    ]}
+                  >
+                    <Glyph name="bell" size={14} color={c.inkSoft} />
+                    <Text style={[type.small, { flex: 1, color: c.ink }]}>
+                      {row.items.length} quiet{' '}
+                      {row.items.length === 1
+                        ? 'notification'
+                        : 'notifications'}
+                    </Text>
+                    <Text style={type.caption}>
+                      {notificationTime(row.items.at(-1)!.activityAt)}
+                    </Text>
+                  </Pressable>
+                  {open
+                    ? row.items.map((item) => (
+                        <View key={item.id} style={styles.quietLine}>
+                          <Text style={[type.caption, { color: c.ink }]}>
+                            {item.sourceName}
+                          </Text>
+                          <Text style={[type.small, { flex: 1 }]}>
+                            {item.title}
+                          </Text>
+                        </View>
+                      ))
+                    : null}
+                </View>
+              );
+            }
+            case 'item':
+              return (
+                <TimelineEntry
+                  key={row.key}
+                  item={row.item}
+                  onDelete={() => confirmDelete(row.item)}
+                />
+              );
+          }
+        })}
       </View>
     </ScrollScreen>
   );
 }
 
+/** One notification: a bubble for a person's message, else a card. */
+function TimelineEntry({
+  item,
+  onDelete,
+}: {
+  item: NotificationSummary;
+  onDelete: () => void;
+}) {
+  const accent = useAccent();
+  const bubble = item.sourceType === 'user' && !item.reply && !item.url;
+  const awaiting = Boolean(item.reply && !item.response && !item.recalledAt);
+  return (
+    <View style={styles.entry}>
+      <View
+        style={[
+          styles.tile,
+          {
+            backgroundColor: tileFor(item.sourceId ?? item.sourceName),
+            borderRadius: item.sourceType === 'user' ? pill : radii.sm,
+          },
+        ]}
+      >
+        <Text style={styles.tileText}>
+          {Array.from(item.sourceName.trim())[0]?.toUpperCase() ?? '?'}
+        </Text>
+      </View>
+      <View style={styles.main}>
+        <View style={styles.meta}>
+          <Text style={[type.caption, { color: c.ink }]} numberOfLines={1}>
+            {item.sourceName}
+          </Text>
+          <Text style={type.caption}>{notificationTime(item.activityAt)}</Text>
+        </View>
+        {/* Touch and hold for the native context menu. */}
+        <Link href={`/notifications/${item.id}`} asChild>
+          <Link.Trigger>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title}, from ${item.sourceName}`}
+              accessibilityHint={
+                awaiting
+                  ? 'Opens the question to answer'
+                  : 'Touch and hold for more actions'
+              }
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    bubble ? styles.bubble : styles.card,
+                    pressed && { opacity: 0.85 },
+                  ]}
+                >
+                  {item.card ? <CardStatus card={item.card} /> : null}
+                  <Text style={bubble ? type.body : type.heading}>
+                    {item.title}
+                  </Text>
+                  {item.body ? (
+                    <Text style={type.small} numberOfLines={4}>
+                      {item.body}
+                    </Text>
+                  ) : null}
+                  {item.card ? <CardBlock card={item.card} /> : null}
+                  {awaiting ? (
+                    <Tag label="Answer" tone="accent" glyph="question" />
+                  ) : item.response ? (
+                    <Text style={type.caption}>
+                      ✓ {item.response.respondedByName} answered{' '}
+                      {VIA[item.response.via] ?? ''}
+                    </Text>
+                  ) : null}
+                  {item.editedAt ? (
+                    <Text style={[type.caption, { color: accent.ink }]}>
+                      Updated · see earlier versions on the web
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+            </Pressable>
+          </Link.Trigger>
+          <Link.Menu>
+            <Link.MenuAction icon="trash" destructive onPress={onDelete}>
+              Delete
+            </Link.MenuAction>
+          </Link.Menu>
+        </Link>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  row: { paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
-  header: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  grow: { flex: 1 },
-  tags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  column: { paddingHorizontal: 16, gap: 16 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rule: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: c.hairline,
+  },
+  moved: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: pill,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: c.input,
+  },
+  recalled: { paddingLeft: 38 },
+  quiet: {
+    borderRadius: radii.lg,
+    backgroundColor: c.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.hairline,
+    overflow: 'hidden',
+  },
+  quietToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 14,
+  },
+  quietLine: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: c.hairline,
+  },
+  entry: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  tile: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  tileText: { color: c.onFill, fontSize: 13, fontWeight: '800' },
+  main: { flex: 1, minWidth: 0, gap: 5 },
+  meta: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  card: {
+    gap: 10,
+    padding: 14,
+    borderRadius: radii.lg,
+    backgroundColor: c.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.hairline,
+  },
+  bubble: {
+    alignSelf: 'flex-start',
+    gap: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
+    borderBottomLeftRadius: radii.xs,
+    backgroundColor: c.muted,
+  },
+  jumpWrap: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  jump: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: pill,
+    backgroundColor: c.card,
+    shadowColor: c.ink,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
 });
