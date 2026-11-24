@@ -170,8 +170,8 @@ mod tests {
         );
         assert_eq!(path("hatch:agent").as_deref(), Some("/agent"));
         assert_eq!(
-            path("HATCH:///workflow/nightly/").as_deref(),
-            Some("/workflow/nightly")
+            path("HATCH:///app/nightly/").as_deref(),
+            Some("/app/nightly")
         );
         assert_eq!(path("hatch://").as_deref(), Some("/"));
         assert_eq!(

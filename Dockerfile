@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# --- Deno binary (runs App backends and Workflows; builds Deno-toolchain
-# sources) ---------------------------------------------------------------
+# --- Deno binary (runs App backends; builds Deno-toolchain sources) -------
 FROM denoland/deno:bin-2.9.8 AS deno
 
 # Private in-panel Tailscale node (userspace, no TUN or privileged container).
@@ -14,7 +13,7 @@ RUN CGO_ENABLED=0 go build -trimpath -o /hatch-tailscale .
 
 # --- Base image with pnpm ----------------------------------------------------
 # pnpm installs the platform itself and, at deploy time, the dependencies of
-# pnpm-lockfile Apps and Workflows. The version matches `packageManager`.
+# pnpm-lockfile Apps. The version matches `packageManager`.
 FROM node:26-slim AS base
 WORKDIR /app
 RUN npm install --global pnpm@12.22.0
@@ -56,7 +55,7 @@ ENV DENO_DIR=/cache/deno
 ENV HATCH_PNPM_STORE_DIR=/cache/pnpm-store
 
 # Runtime tools used by the platform and Agent Runner. git backs canonical
-# app/workflow repos and local worktrees; the remaining tools are available to
+# App repos and local worktrees; the remaining tools are available to
 # model-controlled commands and deployment scripts.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -106,8 +105,6 @@ COPY --from=build /app/sdk-internal/app/package.json ./sdk-internal/app/package.
 COPY --from=build /app/sdk-internal/app/dist ./sdk-internal/app/dist
 COPY --from=build /app/sdk-internal/data/package.json ./sdk-internal/data/package.json
 COPY --from=build /app/sdk-internal/data/dist ./sdk-internal/data/dist
-COPY --from=build /app/sdk-internal/workflow/package.json ./sdk-internal/workflow/package.json
-COPY --from=build /app/sdk-internal/workflow/dist ./sdk-internal/workflow/dist
 
 # Runtime data lives in /app/workspace; dependency/tool caches live in /cache.
 RUN mkdir -p /app/workspace /cache/deno /cache/pnpm-store

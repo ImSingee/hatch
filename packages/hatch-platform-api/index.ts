@@ -1,5 +1,4 @@
 export * from './gen/hatch/platform/v1/app_pb.js';
-export * from './gen/hatch/platform/v1/workflow_pb.js';
 export * from './gen/hatch/platform/v1/auth_pb.js';
 export * from './gen/hatch/platform/v1/sdk_pb.js';
 export * from './gen/hatch/platform/v1/lifecycle_pb.js';

@@ -21,10 +21,9 @@ import {
   withWorkspaceLock,
   workspace,
 } from './workspace';
-import type { Kind, Workspace } from './workspace';
+import type { Workspace } from './workspace';
 import { readInput } from './input';
 import { isValidAppSlug } from '../../hatch-manifest/src/app-schema.js';
-import { isValidWorkflowSlug } from '../../hatch-manifest/src/workflow-schema.js';
 import { adopt } from './adopt';
 import { refreshRunEnvironment } from './run-credential';
 
@@ -33,7 +32,6 @@ export async function runLifecycle(
   offset: number,
   signal: AbortSignal,
 ) {
-  const kind = args[offset] as Kind;
   const operation = args[offset + 1];
   if (!operation)
     throw new CliError(
@@ -165,7 +163,7 @@ export async function runLifecycle(
       ? resolve(String(values.config))
       : undefined;
   const client = platformClient(credential, timeout, signal);
-  const api = kind === 'app' ? client.apps : client.workflows;
+  const api = client.apps;
   const workdir = resolve(String(values.workdir ?? '.'));
   const directory = resolve(workdir, String(values.directory ?? '.'));
   const output = (value: unknown) =>
@@ -173,11 +171,6 @@ export async function runLifecycle(
       `${JSON.stringify(value, null, values.json ? undefined : 2)}\n`,
     );
   if (operation === 'associate') {
-    if (kind !== 'app')
-      throw new CliError(
-        'invalid_arguments',
-        'Only Apps have session association.',
-      );
     output(
       await client.apps.associate({ params: { id: positional[0] }, body: {} }),
     );
@@ -189,7 +182,6 @@ export async function runLifecycle(
     await withWorkspaceLock(directory, async (root) => {
       const metadata = await adopt(
         root,
-        kind,
         positional[0],
         credential,
         client,
@@ -249,8 +241,10 @@ export async function runLifecycle(
             signal,
           )
         : null;
-    const isValidSlug = kind === 'app' ? isValidAppSlug : isValidWorkflowSlug;
-    if (input && (typeof input.slug !== 'string' || !isValidSlug(input.slug)))
+    if (
+      input &&
+      (typeof input.slug !== 'string' || !isValidAppSlug(input.slug))
+    )
       throw new CliError(
         'invalid_input',
         'Create input requires a slug of at most 64 characters using lowercase ' +
@@ -287,14 +281,9 @@ export async function runLifecycle(
         let metadata: Workspace;
         if (operation === 'create') {
           // The platform validates this request against the Protobuf contract.
-          const created =
-            kind === 'app'
-              ? await client.apps.create(
-                  input as Parameters<typeof client.apps.create>[0],
-                )
-              : await client.workflows.create(
-                  input as Parameters<typeof client.workflows.create>[0],
-                );
+          const created = await client.apps.create(
+            input as Parameters<typeof client.apps.create>[0],
+          );
           await writeFile(
             join(stage, '.git', 'hatch-create.json'),
             JSON.stringify(created),
@@ -316,7 +305,7 @@ export async function runLifecycle(
           const row = await api.get({ id: created.id });
           metadata = {
             version: 1,
-            kind,
+            kind: 'app',
             url: credential.url,
             id: created.id,
             generation: row.createdAt,
@@ -326,7 +315,6 @@ export async function runLifecycle(
           const commit = await fetchRemote(
             stage,
             credential,
-            kind,
             detail!.id,
             transferTimeout,
             signal,
@@ -343,7 +331,7 @@ export async function runLifecycle(
             await git(stage, signal, ['checkout', '-B', 'master', commit]);
           metadata = {
             version: 1,
-            kind,
+            kind: 'app',
             url: credential.url,
             id: detail!.id,
             generation: detail!.createdAt,
@@ -353,20 +341,16 @@ export async function runLifecycle(
         await configureOrigin(
           stage,
           credential,
-          kind,
           metadata.id,
           signal,
           helperConfig,
         );
         await saveWorkspace(stage, metadata);
         // Tool checkout associates the App even if source preparation fails.
-        const association =
-          kind === 'app'
-            ? await client.apps.associate({
-                params: { id: metadata.id },
-                body: {},
-              })
-            : undefined;
+        const association = await client.apps.associate({
+          params: { id: metadata.id },
+          body: {},
+        });
         // Prepare before touching an existing directory. A failed fresh/empty
         // checkout is retained at its requested path for source repair.
         if (!replaced) {
@@ -374,7 +358,7 @@ export async function runLifecycle(
           await rename(stage, root);
           recovery = root;
         }
-        await installSdk(recovery, kind, credential, timeout, signal);
+        await installSdk(recovery, credential, timeout, signal);
         if (replaced) {
           await assertReplacementSafe(root, workdir);
           const backup = `${stage}-previous`;
@@ -401,7 +385,7 @@ export async function runLifecycle(
             slug: input?.slug ?? detail?.slug,
             replacedExisting: replaced,
             dependenciesInstalled: true,
-            ...(association ? { association: association.association } : {}),
+            association: association.association,
           }),
         );
       } catch (error) {
@@ -424,7 +408,7 @@ export async function runLifecycle(
     return;
   }
   await withWorkspaceLock(directory, async (root) => {
-    const metadata = await workspace(root, kind, credential);
+    const metadata = await workspace(root, credential);
     const detail = await api.get({ id: metadata.id });
     if (detail.id !== metadata.id || detail.createdAt !== metadata.generation)
       throw new CliError(
@@ -432,16 +416,8 @@ export async function runLifecycle(
         'Resource was deleted/recreated. Clone into a new directory; local work was retained.',
         6,
       );
-    if (kind === 'app')
-      await client.apps.associate({ params: { id: metadata.id }, body: {} });
-    await configureOrigin(
-      root,
-      credential,
-      kind,
-      metadata.id,
-      signal,
-      helperConfig,
-    );
+    await client.apps.associate({ params: { id: metadata.id }, body: {} });
+    await configureOrigin(root, credential, metadata.id, signal, helperConfig);
     // A plain push or a deploy of an already pushed commit never reads the
     // working tree, so uncommitted work does not block it.
     if (operation === 'update' || (operation === 'deploy' && !values.commit))
@@ -458,7 +434,6 @@ export async function runLifecycle(
       const remote = await fetchRemote(
         root,
         credential,
-        kind,
         metadata.id,
         transferTimeout,
         signal,
@@ -472,7 +447,7 @@ export async function runLifecycle(
           6,
         );
       if (!remote && metadata.masterCommit === null) {
-        await installSdk(root, kind, credential, timeout, signal);
+        await installSdk(root, credential, timeout, signal);
         output(
           await checkoutView(root, metadata, signal, {
             state: 'draft-prepared',
@@ -520,7 +495,7 @@ export async function runLifecycle(
       if (!head) await git(root, signal, ['merge', '--ff-only', remote]);
       metadata.masterCommit = remote;
       await saveWorkspace(root, metadata);
-      await installSdk(root, kind, credential, timeout, signal);
+      await installSdk(root, credential, timeout, signal);
       output(
         await checkoutView(root, metadata, signal, {
           state:
@@ -534,7 +509,6 @@ export async function runLifecycle(
       const state = await pushHead(
         root,
         credential,
-        kind,
         metadata.id,
         timeout,
         signal,
@@ -600,10 +574,7 @@ export async function runLifecycle(
       );
     const approved = values['allow-destructive-data-migration'] === true;
     const approval = values['data-migration-approval-token'];
-    if (
-      approved !== (typeof approval === 'string' && !!approval) ||
-      (kind === 'workflow' && approved)
-    )
+    if (approved !== (typeof approval === 'string' && !!approval))
       throw new CliError(
         'invalid_approval',
         'App destructive approval requires both --allow-destructive-data-migration and the exact --data-migration-approval-token.',
@@ -634,9 +605,7 @@ export async function runLifecycle(
     };
     await saveWorkspace(root, metadata);
     try {
-      const result = await (
-        kind === 'app' ? releaseClient.apps : releaseClient.workflows
-      ).deploy({
+      const result = await releaseClient.apps.deploy({
         params: { id: metadata.id },
         body: {
           message: String(values.message ?? 'Deploy from Hatch CLI'),

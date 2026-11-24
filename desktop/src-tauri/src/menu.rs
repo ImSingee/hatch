@@ -96,8 +96,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &item("go-desk", "Desk", Some("CmdOrCtrl+1"))?,
             &item("go-agent", "Agent", Some("CmdOrCtrl+2"))?,
             &item("go-apps", "All Apps", Some("CmdOrCtrl+3"))?,
-            &item("go-workflows", "Workflows", Some("CmdOrCtrl+4"))?,
-            &item("go-notifications", "Notifications", Some("CmdOrCtrl+5"))?,
+            &item("go-notifications", "Notifications", Some("CmdOrCtrl+4"))?,
         ],
     )?;
     let window = Submenu::with_items(

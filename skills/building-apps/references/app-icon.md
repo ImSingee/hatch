@@ -29,7 +29,7 @@ ask the model for a tile, a frame, rounded corners or a ground shadow.
 An App without an icon shows a monogram. That is a fine result; never block
 other work on an icon.
 
-## Workflow
+## Steps
 
 Uploading a file the user supplies (`hatch app icon set <app> --file <path>`)
 and removing the icon (`hatch app icon clear <app>`) need no image model: run

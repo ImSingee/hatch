@@ -49,77 +49,8 @@ describe('validateDenoDependencySource', () => {
   it('rejects a legacy deno.json-only app and names the correct Skill', async () => {
     const dir = await source({ 'deno.json': { imports: {} } });
 
-    await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+    await expect(validateDenoDependencySource(dir)).rejects.toThrow(
       /Legacy deno\.json-only app.*building-apps.*read_file.*package\.json.*deno\.lock/s,
-    );
-  });
-
-  it('rejects a legacy deno.json-only workflow and names the correct Skill', async () => {
-    const dir = await source({ 'deno.json': { imports: {} } });
-
-    await expect(validateDenoDependencySource(dir, 'workflow')).rejects.toThrow(
-      /Legacy deno\.json-only workflow.*building-workflows.*read_file.*package\.json.*deno\.lock/s,
-    );
-  });
-
-  it('preserves exact reviewed lifecycle packages for Workflows', async () => {
-    const dir = await source({
-      'package.json': { dependencies: { '@scope/pkg': '^1.2.0' } },
-      'deno.json': {
-        allowScripts: ['npm:@scope/pkg@1.2.3'],
-      },
-      'deno.lock': {
-        version: '5',
-        npm: { '@scope/pkg@1.2.3_peer@4.0.0': { integrity: 'test' } },
-      },
-    });
-
-    await expect(
-      validateDenoDependencySource(dir, 'workflow'),
-    ).resolves.toEqual({
-      lifecycleScripts: ['npm:@scope/pkg@1.2.3'],
-    });
-  });
-
-  it('does not apply the fixed standalone App contract to Workflows', async () => {
-    const dir = await source({
-      'package.json': {
-        workspaces: ['../shared'],
-        dependencies: { shared: 'file:../shared' },
-      },
-      'deno.json': { workspace: ['../shared'], allowScripts: [] },
-      'deno.lock': { version: '5', npm: {} },
-    });
-
-    await expect(
-      validateDenoDependencySource(dir, 'workflow'),
-    ).resolves.toEqual({ lifecycleScripts: [] });
-  });
-
-  it.each([true, ['npm:pkg@^1.2.3']])(
-    'rejects broad allowScripts policy %j',
-    async (allowScripts) => {
-      const dir = await source({
-        'package.json': {},
-        'deno.json': { allowScripts },
-        'deno.lock': { version: '5', npm: { 'pkg@1.2.3': {} } },
-      });
-
-      await expect(
-        validateDenoDependencySource(dir, 'workflow'),
-      ).rejects.toThrow(/allowScripts|Unsafe allowScripts/);
-    },
-  );
-
-  it('rejects an exact lifecycle package absent from the lock', async () => {
-    const dir = await source({
-      'package.json': {},
-      'deno.json': { allowScripts: ['npm:pkg@1.2.3'] },
-      'deno.lock': { version: '5', npm: {} },
-    });
-
-    await expect(validateDenoDependencySource(dir, 'workflow')).rejects.toThrow(
-      /not present.*deno\.lock/s,
     );
   });
 
@@ -132,7 +63,7 @@ describe('validateDenoDependencySource', () => {
       'deno.lock': { version: '5', npm: {} },
     });
 
-    await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+    await expect(validateDenoDependencySource(dir)).rejects.toThrow(
       /provided by Hatch.*must not be declared.*regenerate deno\.lock/s,
     );
   });
@@ -148,44 +79,8 @@ describe('validateDenoDependencySource', () => {
       },
     });
 
-    await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+    await expect(validateDenoDependencySource(dir)).rejects.toThrow(
       /stale platform-managed Hatch SDK entry.*deno install/s,
-    );
-  });
-
-  it.each([
-    [
-      'package.json dependency',
-      { dependencies: { '@hatch/workflow': '1.0.0' } },
-      { allowScripts: [] },
-    ],
-    [
-      'deno.json import',
-      {},
-      {
-        imports: { '@hatch/workflow': './hatch/workflow.ts' },
-        allowScripts: [],
-      },
-    ],
-    [
-      'deno.json scoped import',
-      {},
-      {
-        scopes: {
-          './': { '@hatch/workflow': './hatch/workflow.ts' },
-        },
-        allowScripts: [],
-      },
-    ],
-  ])('rejects a source-owned Workflow SDK %s', async (_label, pkg, deno) => {
-    const dir = await source({
-      'package.json': pkg,
-      'deno.json': deno,
-      'deno.lock': { version: '5', npm: {} },
-    });
-
-    await expect(validateDenoDependencySource(dir, 'workflow')).rejects.toThrow(
-      /@hatch\/workflow.*provided by Hatch.*must not/s,
     );
   });
 
@@ -199,7 +94,7 @@ describe('validateDenoDependencySource', () => {
         [file]: 'registry=http://127.0.0.1:12345/',
       });
 
-      await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+      await expect(validateDenoDependencySource(dir)).rejects.toThrow(
         /cannot include \.npmrc|cannot include \.NPMRC/i,
       );
     },
@@ -215,7 +110,7 @@ describe('validateDenoDependencySource', () => {
         [file]: '{}',
       });
 
-      await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+      await expect(validateDenoDependencySource(dir)).rejects.toThrow(
         new RegExp(`cannot include ${file.replace('.', '\\.')}`, 'i'),
       );
     },
@@ -230,7 +125,7 @@ describe('validateDenoDependencySource', () => {
         'deno.lock': { version: '5', npm: {} },
       });
 
-      await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+      await expect(validateDenoDependencySource(dir)).rejects.toThrow(
         /package\.json must declare "type": "module"/,
       );
     },
@@ -245,7 +140,7 @@ describe('validateDenoDependencySource', () => {
         'deno.lock': { version: '5', npm: {} },
       });
 
-      await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+      await expect(validateDenoDependencySource(dir)).rejects.toThrow(
         new RegExp(`deno\\.json must not declare ${key}`),
       );
     },
@@ -267,7 +162,7 @@ describe('validateDenoDependencySource', () => {
         'deno.lock': { version: '5', npm: {} },
       });
 
-      await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+      await expect(validateDenoDependencySource(dir)).rejects.toThrow(
         new RegExp(`compilerOptions\\.${key}`),
       );
     },
@@ -280,9 +175,7 @@ describe('validateDenoDependencySource', () => {
       'deno.lock': { version: '5', npm: {} },
     });
 
-    await expect(validateDenoDependencySource(dir, 'app')).resolves.toEqual({
-      lifecycleScripts: [],
-    });
+    await expect(validateDenoDependencySource(dir)).resolves.toBeUndefined();
   });
 
   it('rejects every non-empty App lifecycle approval before lock inspection', async () => {
@@ -292,7 +185,7 @@ describe('validateDenoDependencySource', () => {
       'deno.lock': { version: '5', npm: { 'pkg@1.2.3': {} } },
     });
 
-    await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+    await expect(validateDenoDependencySource(dir)).rejects.toThrow(
       /allowScripts must be absent or an empty array/,
     );
   });
@@ -306,7 +199,7 @@ describe('validateDenoDependencySource', () => {
         'deno.lock': { version: '5', npm: {} },
       });
 
-      await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+      await expect(validateDenoDependencySource(dir)).rejects.toThrow(
         /must deploy as standalone trees.*registry version/s,
       );
     },
@@ -322,7 +215,7 @@ describe('validateDenoDependencySource', () => {
       'deno.lock': { version: '5', npm: {} },
     });
 
-    await expect(validateDenoDependencySource(dir, 'app')).rejects.toThrow(
+    await expect(validateDenoDependencySource(dir)).rejects.toThrow(
       /must be standalone.*workspace members/s,
     );
   });

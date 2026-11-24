@@ -15,14 +15,11 @@ The response contains:
   labels and destinations. Each entry carries `appId`, `appSlug`, `label`, and
   `entryHash`. The hash has no leading `#`; an empty value opens the App root.
   Use the slug for `/app/:appSlug` and retain the entry hash when navigating.
-- `pinnedWorkflowIds`: non-archived pinned Workflows, ordered by `updatedAt`
-  descending, matching the current web sidebar.
-
-Archived Apps and Workflows are excluded. Dashboard and App-pin projections share
-read functions with the web UI. On an empty instance, both web and native reuse
-the existing idempotent `default` / `My Dashboard` initialization. Rejected
-requests do not initialize it. This is a single-tenant shared workspace, not
-per-user resource ownership.
+  Archived Apps are excluded. Dashboard and App-pin projections share
+  read functions with the web UI. On an empty instance, both web and native reuse
+  the existing idempotent `default` / `My Dashboard` initialization. Rejected
+  requests do not initialize it. This is a single-tenant shared workspace, not
+  per-user resource ownership.
 
 ## Native app structure
 
@@ -30,16 +27,15 @@ The native app (`mobile/`) follows Desk, the visual system in `DESIGN.md`, and
 reads every colour, radius, font, weight and shadow from
 `packages/hatch-design-tokens/tokens.json`. It uses the workspace like this:
 
-| Screen                 | Data                                                              | Shows                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Home (`dashboard` tab) | `GetWorkspace`, `ListApps`, `ListWorkflows`, the dashboard canvas | One dashboard's widgets in a sheet, page dots to switch dashboard, then the pinned Apps and Workflows grid |
-| Widgets                | the dashboard canvas                                              | The same dashboard at full height; opened from Home with "All widgets"                                     |
-| Apps                   | `ListApps`, `ListWorkflows`                                       | Every App, then every Workflow, as tiles, searchable, by name or by latest change                          |
-| Workflows              | `ListWorkflows`                                                   | Workflows alone; hidden from the tab bar by default                                                        |
-| App page               | `GetApp`, `GetWorkspace`                                          | Icon, name, status, Open, and a link to the web management page                                            |
-| App                    | the App's `/app/:slug/embed/` page                                | The App itself, in an authenticated WebView                                                                |
-| Agent                  | the `AgentService` session RPCs                                   | Conversations; beside the open one when the width allows                                                   |
-| Me (`more` tab)        | local preferences                                                 | Every section, notifications, Tabs & start page, the instance                                              |
+| Screen                 | Data                                             | Shows                                                                                        |
+| ---------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Home (`dashboard` tab) | `GetWorkspace`, `ListApps`, the dashboard canvas | One dashboard's widgets in a sheet, page dots to switch dashboard, then the pinned Apps grid |
+| Widgets                | the dashboard canvas                             | The same dashboard at full height; opened from Home with "All widgets"                       |
+| Apps                   | `ListApps`                                       | Every App as a tile, searchable, by name or by latest change                                 |
+| App page               | `GetApp`, `GetWorkspace`                         | Icon, name, status, Open, and a link to the web management page                              |
+| App                    | the App's `/app/:slug/embed/` page               | The App itself, in an authenticated WebView                                                  |
+| Agent                  | the `AgentService` session RPCs                  | Conversations; beside the open one when the width allows                                     |
+| Me (`more` tab)        | local preferences                                | Every section, notifications, Tabs & start page, the instance                                |
 
 The tab bar is the system one. By default it holds Home, Apps, Agent and Me;
 which sections sit in it, their order and the start page are the user's choice
@@ -49,7 +45,7 @@ is Home, `more` is Me), so saved orders and `hatch://` links keep working.
 Home pages by dashboard, not by widget: widgets are web content rendered by the
 dashboard canvas, one WebView per dashboard. The pinned grid uses `appPins` as
 described above: one tile per pin, keyed by pin `id`, opening the App at the
-pin's `entryHash`. Apps shows every App and Workflow in the same kind of grid.
+pin's `entryHash`. Apps shows every App in the same kind of grid.
 A tile on Home or in Apps opens the App directly. An App without a successful
 deployment (the summary's `currentVersion` is null: never deployed, or a first
 deployment still building or failed) has nothing to open, so its tile in Apps
@@ -68,8 +64,8 @@ sit on the vertical bar and the App takes the full height. The app reads this
 from UIKit's `verticalBarEdge` trait (iOS 27.1 SDK and later).
 
 The app runs natively on iPad. Wide screens (iPad, an unfolded Duo) get the
-same two-column layouts; pages that stay one column (sign-in, an App or
-Workflow page, settings, notifications) keep their content to a reading width
+same two-column layouts; pages that stay one column (sign-in, an App page,
+settings, notifications) keep their content to a reading width
 and centre it.
 
 The dashboard canvas is shown in a transparent WebView, so the ground shapes
@@ -89,7 +85,7 @@ its alpha applied twice, so on Android the widget panels are drawn opaque white
 `ListApps` and `GetApp` return `iconPath` for an App with a stored icon. Append
 `&size=64`, `128` or `256` and request it from the instance with the session in
 an `Authorization: Bearer` header; never put the credential in the address. An
-App without `iconPath`, a Workflow, or an icon that fails to load shows the
+App without `iconPath` or an icon that fails to load shows the
 monogram: the first character of the name on a `tiles` colour chosen by the
 same hash of the id as the web `AppGlyph`, so an App has one tint everywhere.
 Icons are kept in memory only.
@@ -97,7 +93,7 @@ Icons are kept in memory only.
 ### Pins
 
 The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
-(`ifAbsent`), `UnpinApp` (by pin id) and `SetWorkflowPinned`. An "Add" tile
+(`ifAbsent`) and `UnpinApp` (by pin id). An "Add" tile
 after each grid opens a picker of what is not pinned yet; a tile's
 touch-and-hold menu unpins it at once, since pinning again undoes it. Pins are shared by every client, so a change
 re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not

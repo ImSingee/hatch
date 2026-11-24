@@ -35,6 +35,7 @@ import {
 import copy from 'copy-to-clipboard';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import { apiKeyOptions } from '~auth/api-key-options';
 import type {
@@ -42,6 +43,7 @@ import type {
   CreatedApiKey,
   CreateApiKeyInput,
 } from '~queries/api-keys';
+import { type Locale, useI18n } from '~i18n';
 import { formatRelative } from '~lib/format';
 import {
   apiKeysQueryOptions,
@@ -52,33 +54,34 @@ import classes from './api-keys-panel.module.css';
 
 const DAY_SECONDS = 86_400;
 const EXPIRING_SOON_DAYS = 7;
-const DATE_FORMAT = 'MMM D, YYYY';
+/** The date picker's own field format: language-independent. */
+const PICKER_DATE_FORMAT = 'YYYY-MM-DD';
 
-const EXPIRATION_OPTIONS = [
-  { value: '7', label: '7 days' },
-  { value: '30', label: '30 days' },
-  { value: '90', label: '90 days' },
-  { value: '365', label: '1 year' },
-  { value: 'custom', label: 'Custom date' },
-  { value: 'never', label: 'No expiration' },
-];
+const EXPIRATION_VALUES = ['7', '30', '90', '365', 'custom', 'never'] as const;
 const DEFAULT_EXPIRATION = '30';
-const CALENDAR_ARIA_LABELS = {
-  monthLevelControl: 'Choose month',
-  yearLevelControl: 'Choose year',
-  nextMonth: 'Next month',
-  previousMonth: 'Previous month',
-  nextYear: 'Next year',
-  previousYear: 'Previous year',
-  nextDecade: 'Next decade',
-  previousDecade: 'Previous decade',
-};
+
+type Translate = ReturnType<typeof useI18n>['t'];
+
+function expirationLabel(value: string, t: Translate): string {
+  if (value === 'custom') return t('apiKeys.expiration.custom');
+  if (value === 'never') return t('apiKeys.expiration.never');
+  if (value === '365') return t('apiKeys.expiration.oneYear');
+  return t('apiKeys.expiration.days', { count: Number(value) });
+}
+
+/** A date as the reader's language writes it, e.g. "Nov 30, 2026". */
+function formatDate(value: string | Date, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(
+    dayjs(value).toDate(),
+  );
+}
 const REVOKE_MUTATION_KEY = ['auth', 'api-keys', 'revoke'];
 
 /** Which dismissal gestures the create dialog accepts in each step. */
 type CreatePhase = 'editing' | 'creating' | 'created';
 
 export function ApiKeysPanel() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const keys = useQuery(apiKeysQueryOptions);
   const [createOpened, setCreateOpened] = useState(false);
@@ -94,7 +97,7 @@ export function ApiKeysPanel() {
       queryClient.setQueryData(apiKeysQueryOptions.queryKey, (current) =>
         current?.filter((key) => key.id !== id),
       );
-      toast.success('API key revoked');
+      toast.success(t('apiKeys.revoked'));
     },
     // Failures are toasted by the global mutation handler; refetch so a key
     // already revoked elsewhere disappears instead of lingering.
@@ -122,20 +125,25 @@ export function ApiKeysPanel() {
 
   const confirmRevoke = (key: ApiKey) =>
     modals.openConfirmModal({
-      title: `Revoke ${key.name}?`,
+      title: t('apiKeys.revokeTitle', { name: key.name }),
       centered: true,
       children: (
         <Stack gap="xs">
           <Text size="sm">
-            Anything using <Code>{maskedIdentifier(key)}</Code> — like the Hatch
-            CLI or a script — loses access immediately.
+            <Trans
+              t={t}
+              i18nKey="apiKeys.revokeImpact"
+              values={{ key: maskedIdentifier(key) }}
+              components={{ code: <Code /> }}
+            />
           </Text>
-          <Text size="sm">
-            The key is deleted permanently and can’t be restored.
-          </Text>
+          <Text size="sm">{t('apiKeys.revokePermanent')}</Text>
         </Stack>
       ),
-      labels: { confirm: 'Revoke key', cancel: 'Cancel' },
+      labels: {
+        confirm: t('apiKeys.revokeConfirm'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => revoke.mutate(key.id),
     });
@@ -148,10 +156,9 @@ export function ApiKeysPanel() {
         className={classes.header}
       >
         <Stack gap={2} style={{ flex: '1 1 220px' }}>
-          <Text fw={700}>API keys</Text>
+          <Text fw={700}>{t('apiKeys.title')}</Text>
           <Text size="sm" c="dimmed">
-            Let the Hatch CLI and your scripts build and manage Apps and
-            Workflows on your behalf.
+            {t('apiKeys.description')}
           </Text>
         </Stack>
         <Button
@@ -160,7 +167,7 @@ export function ApiKeysPanel() {
           onClick={openCreate}
           className={classes.addButton}
         >
-          Create API key
+          {t('apiKeys.create')}
         </Button>
       </Group>
 
@@ -169,7 +176,7 @@ export function ApiKeysPanel() {
       ) : keys.isError ? (
         <Alert
           icon={<IconAlertCircle size={18} />}
-          title="API keys could not be loaded"
+          title={t('apiKeys.loadFailed')}
           color="red"
         >
           <Stack gap="xs" align="flex-start">
@@ -182,12 +189,12 @@ export function ApiKeysPanel() {
               loading={keys.isFetching}
               onClick={() => void keys.refetch()}
             >
-              Try again
+              {t('common.tryAgain')}
             </Button>
           </Stack>
         </Alert>
       ) : keys.data.length > 0 ? (
-        <ul className={classes.list} aria-label="API keys">
+        <ul className={classes.list} aria-label={t('apiKeys.title')}>
           {keys.data.map((key) => (
             <ApiKeyRow
               key={key.id}
@@ -204,10 +211,10 @@ export function ApiKeysPanel() {
           </ThemeIcon>
           <Stack gap={2} align="center">
             <Text size="sm" fw={700}>
-              No API keys yet
+              {t('apiKeys.empty')}
             </Text>
             <Text size="sm" c="dimmed" ta="center">
-              Create one to use the Hatch CLI or automate deployments.
+              {t('apiKeys.emptyBody')}
             </Text>
           </Stack>
         </div>
@@ -216,14 +223,18 @@ export function ApiKeysPanel() {
       <Modal
         opened={createOpened}
         onClose={closeCreate}
-        title={createPhase === 'created' ? 'Copy your API key' : 'New API key'}
+        title={
+          createPhase === 'created'
+            ? t('apiKeys.copyTitle')
+            : t('apiKeys.newTitle')
+        }
         centered
         // A revealed key is shown only once, so only deliberate actions may
         // dismiss it; nothing can dismiss the dialog mid-request.
         closeOnEscape={createPhase === 'editing'}
         closeOnClickOutside={createPhase === 'editing'}
         closeButtonProps={{
-          'aria-label': 'Close',
+          'aria-label': t('common.close'),
           disabled: createPhase === 'creating',
         }}
       >
@@ -249,7 +260,8 @@ function ApiKeyRow({
   revoking: boolean;
   onRevoke: () => void;
 }) {
-  const expiry = expiryStatus(apiKey.expiresAt);
+  const { t, locale } = useI18n();
+  const expiry = expiryStatus(apiKey.expiresAt, t, locale);
 
   return (
     <li className={classes.row}>
@@ -286,23 +298,29 @@ function ApiKeyRow({
           <Code className={classes.identifier}>{maskedIdentifier(apiKey)}</Code>
           <div className={classes.metaClip}>
             <Text size="xs" c="dimmed" className={classes.meta}>
-              <span>Created {dayjs(apiKey.createdAt).format(DATE_FORMAT)}</span>
+              <span>
+                {t('apiKeys.created', {
+                  date: formatDate(apiKey.createdAt, locale),
+                })}
+              </span>
               <span>{expiry.label}</span>
               <span>
                 {apiKey.lastRequest
-                  ? `Last used ${formatRelative(apiKey.lastRequest)}`
-                  : 'Never used'}
+                  ? t('apiKeys.lastUsed', {
+                      when: formatRelative(apiKey.lastRequest),
+                    })
+                  : t('apiKeys.neverUsed')}
               </span>
             </Text>
           </div>
         </Stack>
       </Group>
 
-      <Tooltip label="Revoke">
+      <Tooltip label={t('apiKeys.revoke')}>
         <ActionIcon
           variant="subtle"
           color="red"
-          aria-label={`Revoke ${apiKey.name}`}
+          aria-label={t('apiKeys.revokeName', { name: apiKey.name })}
           loading={revoking}
           onClick={onRevoke}
           className={classes.revoke}
@@ -323,6 +341,7 @@ function CreateApiKeyFlow({
   onCancel: () => void;
   onDone: () => void;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [expiration, setExpiration] = useState(DEFAULT_EXPIRATION);
@@ -356,9 +375,9 @@ function CreateApiKeyFlow({
   if (created) return <RevealedApiKey created={created} onDone={onDone} />;
 
   const trimmedName = name.trim();
-  const nameError = trimmedName ? null : 'Enter a name for this key';
+  const nameError = trimmedName ? null : t('apiKeys.nameRequired');
   const dateError =
-    expiration === 'custom' && !customDate ? 'Choose an expiration date' : null;
+    expiration === 'custom' && !customDate ? t('apiKeys.dateRequired') : null;
   const today = dayjs();
 
   const submit = (event: FormEvent) => {
@@ -379,13 +398,12 @@ function CreateApiKeyFlow({
     <form onSubmit={submit} noValidate>
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          The key can build, deploy, and manage every App and Workflow through
-          the CLI. It can’t manage users, credentials, or other API keys.
+          {t('apiKeys.scope')}
         </Text>
         <TextInput
-          label="Name"
-          placeholder="Laptop CLI"
-          description="Helps you recognize where this key is used."
+          label={t('apiKeys.nameLabel')}
+          placeholder={t('apiKeys.namePlaceholder')}
+          description={t('apiKeys.nameDescription')}
           value={name}
           onChange={(event) => setName(event.currentTarget.value)}
           maxLength={apiKeyOptions.maximumNameLength}
@@ -397,8 +415,11 @@ function CreateApiKeyFlow({
         />
         <Stack gap={6}>
           <Select
-            label="Expiration"
-            data={EXPIRATION_OPTIONS}
+            label={t('apiKeys.expirationLabel')}
+            data={EXPIRATION_VALUES.map((value) => ({
+              value,
+              label: expirationLabel(value, t),
+            }))}
             value={expiration}
             onChange={(value) => value && setExpiration(value)}
             allowDeselect={false}
@@ -407,16 +428,25 @@ function CreateApiKeyFlow({
           />
           {expiration === 'custom' && (
             <DatePickerInput
-              label="Expiration date"
-              placeholder="Pick a date"
+              label={t('apiKeys.expirationDate')}
+              placeholder={t('apiKeys.pickDate')}
               value={customDate}
               onChange={setCustomDate}
-              minDate={today.add(1, 'day').format('YYYY-MM-DD')}
+              minDate={today.add(1, 'day').format(PICKER_DATE_FORMAT)}
               maxDate={today
                 .add(apiKeyOptions.keyExpiration.maxExpiresIn - 1, 'day')
-                .format('YYYY-MM-DD')}
-              valueFormat={DATE_FORMAT}
-              ariaLabels={CALENDAR_ARIA_LABELS}
+                .format(PICKER_DATE_FORMAT)}
+              valueFormat={PICKER_DATE_FORMAT}
+              ariaLabels={{
+                monthLevelControl: t('apiKeys.calendar.month'),
+                yearLevelControl: t('apiKeys.calendar.year'),
+                nextMonth: t('apiKeys.calendar.nextMonth'),
+                previousMonth: t('apiKeys.calendar.previousMonth'),
+                nextYear: t('apiKeys.calendar.nextYear'),
+                previousYear: t('apiKeys.calendar.previousYear'),
+                nextDecade: t('apiKeys.calendar.nextDecade'),
+                previousDecade: t('apiKeys.calendar.previousDecade'),
+              }}
               error={showErrors ? dateError : null}
               readOnly={create.isPending}
             />
@@ -428,14 +458,11 @@ function CreateApiKeyFlow({
           <Alert
             color="red"
             icon={<IconAlertCircle size={18} />}
-            title="Creation could not be confirmed"
+            title={t('apiKeys.createUnconfirmed')}
           >
             <Stack gap="xs">
               <Text size="sm">{create.error.message}</Text>
-              <Text size="sm">
-                Close this dialog and check your key list before trying again.
-                Revoke any key whose full value you did not receive.
-              </Text>
+              <Text size="sm">{t('apiKeys.createUnconfirmedBody')}</Text>
             </Stack>
           </Alert>
         )}
@@ -447,10 +474,10 @@ function CreateApiKeyFlow({
             disabled={create.isPending}
             onClick={onCancel}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="submit" loading={create.isPending}>
-            Create key
+            {t('apiKeys.createKey')}
           </Button>
         </Group>
       </Stack>
@@ -465,11 +492,12 @@ function ExpirationHint({
   expiration: string;
   customDate: string | null;
 }) {
+  const { t, locale } = useI18n();
   if (expiration === 'never') {
     return (
       <Text size="xs" c="amber.8" className={classes.hint}>
         <IconAlertTriangle size={14} stroke={1.8} aria-hidden />
-        This key stays valid until you revoke it.
+        {t('apiKeys.neverExpiresWarning')}
       </Text>
     );
   }
@@ -477,13 +505,18 @@ function ExpirationHint({
     if (!customDate) return null;
     return (
       <Text size="xs" c="dimmed">
-        Expires at the end of {dayjs(customDate).format(DATE_FORMAT)}.
+        {t('apiKeys.expiresEndOf', { date: formatDate(customDate, locale) })}
       </Text>
     );
   }
   return (
     <Text size="xs" c="dimmed">
-      Expires on {dayjs().add(Number(expiration), 'day').format(DATE_FORMAT)}.
+      {t('apiKeys.expiresOn', {
+        date: formatDate(
+          dayjs().add(Number(expiration), 'day').toDate(),
+          locale,
+        ),
+      })}
     </Text>
   );
 }
@@ -495,6 +528,7 @@ function RevealedApiKey({
   created: CreatedApiKey;
   onDone: () => void;
 }) {
+  const { t, locale } = useI18n();
   const copyButtonRef = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -504,9 +538,9 @@ function RevealedApiKey({
   const copyKey = async () => {
     if (await copy(created.key).catch(() => false)) {
       setCopied(true);
-      toast.success('API key copied');
+      toast.success(t('apiKeys.copied'));
     } else {
-      toast.error('Could not copy the key. Select it and copy it manually.');
+      toast.error(t('apiKeys.copyFailed'));
     }
   };
 
@@ -515,15 +549,14 @@ function RevealedApiKey({
       <Alert
         color="yellow"
         icon={<IconAlertTriangle size={18} />}
-        title="This is the only time the key is shown"
+        title={t('apiKeys.onlyOnce')}
       >
-        Copy it somewhere safe now. After you close this dialog you won’t be
-        able to view it again — revoke it and create a new one if it’s lost.
+        {t('apiKeys.onlyOnceBody')}
       </Alert>
 
       <Stack gap={6}>
         <Textarea
-          label={`API key for ${created.name}`}
+          label={t('apiKeys.keyFor', { name: created.name })}
           value={created.key}
           readOnly
           autosize
@@ -534,16 +567,22 @@ function RevealedApiKey({
           classNames={{ input: classes.secretInput }}
         />
         <Text size="xs" c="dimmed">
-          Send it in the <Code>x-api-key</Code> header.{' '}
+          <Trans
+            t={t}
+            i18nKey="apiKeys.headerHint"
+            components={{ code: <Code /> }}
+          />{' '}
           {created.expiresAt
-            ? `Expires ${dayjs(created.expiresAt).format(DATE_FORMAT)}.`
-            : 'Never expires.'}
+            ? t('apiKeys.expires', {
+                date: formatDate(created.expiresAt, locale),
+              })
+            : t('apiKeys.neverExpires')}
         </Text>
       </Stack>
 
       <Group justify="flex-end" gap="sm" className={classes.footer}>
         <Button type="button" variant="default" onClick={onDone}>
-          Done
+          {t('common.done')}
         </Button>
         <Button
           type="button"
@@ -558,7 +597,7 @@ function RevealedApiKey({
           }
           onClick={copyKey}
         >
-          {copied ? 'Copied' : 'Copy key'}
+          {copied ? t('apiKeys.copiedButton') : t('apiKeys.copyKey')}
         </Button>
       </Group>
     </Stack>
@@ -566,8 +605,9 @@ function RevealedApiKey({
 }
 
 function ApiKeysSkeleton() {
+  const { t } = useI18n();
   return (
-    <Stack gap="xs" aria-label="Loading API keys" aria-busy>
+    <Stack gap="xs" aria-label={t('apiKeys.loading')} aria-busy>
       {[0, 1].map((key) => (
         <Group key={key} gap="sm" wrap="nowrap" py="xs">
           <Skeleton height={34} width={34} radius="md" />
@@ -589,27 +629,34 @@ function maskedIdentifier(key: ApiKey): string {
   return `${start}…`;
 }
 
-function expiryStatus(expiresAt: ApiKey['expiresAt']): {
+function expiryStatus(
+  expiresAt: ApiKey['expiresAt'],
+  t: Translate,
+  locale: Locale,
+): {
   label: string;
   badge: string | null;
   expired: boolean;
 } {
   if (!expiresAt) {
-    return { label: 'No expiration', badge: null, expired: false };
+    return { label: t('apiKeys.expiryNone'), badge: null, expired: false };
   }
   const at = dayjs(expiresAt);
   const now = dayjs();
+  const date = formatDate(at.toDate(), locale);
   if (!at.isAfter(now)) {
     return {
-      label: `Expired ${at.format(DATE_FORMAT)}`,
-      badge: 'Expired',
+      label: t('apiKeys.expiredOn', { date }),
+      badge: t('apiKeys.expiredBadge'),
       expired: true,
     };
   }
   return {
-    label: `Expires ${at.format(DATE_FORMAT)}`,
+    label: t('apiKeys.expiresDate', { date }),
     badge:
-      at.diff(now, 'day', true) <= EXPIRING_SOON_DAYS ? 'Expires soon' : null,
+      at.diff(now, 'day', true) <= EXPIRING_SOON_DAYS
+        ? t('apiKeys.expiresSoon')
+        : null,
     expired: false,
   };
 }

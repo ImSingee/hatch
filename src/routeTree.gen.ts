@@ -39,7 +39,6 @@ import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/sett
 import { Route as AppSettingsProvidersRouteImport } from './routes/_app/settings/providers'
 import { Route as AppSettingsTailscaleRouteImport } from './routes/_app/settings/tailscale'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings/users'
-import { Route as AppWorkflowsIndexRouteImport } from './routes/_app/workflows/index'
 import { Route as ApiAgentRunsRouteImport } from './routes/api/agent/runs'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiGitSplatRouteImport } from './routes/api/git/$'
@@ -49,8 +48,6 @@ import { Route as ApiRpcSplatRouteImport } from './routes/api/rpc/$'
 import { Route as MobileDashboardDashboardIdRouteImport } from './routes/mobile/dashboard/$dashboardId'
 import { Route as AppAppAppSlugIndexRouteImport } from './routes/_app/app/$appSlug/index'
 import { Route as AppAppAppSlugManageRouteImport } from './routes/_app/app/$appSlug/manage'
-import { Route as AppWorkflowWorkflowSlugIndexRouteImport } from './routes/_app/workflow/$workflowSlug/index'
-import { Route as AppWorkflowWorkflowSlugManageRouteImport } from './routes/_app/workflow/$workflowSlug/manage'
 import { Route as ApiAgentAttachmentsAttachmentIdRouteImport } from './routes/api/agent/attachments/$attachmentId'
 import { Route as ApiAppAppIdDownloadRouteImport } from './routes/api/app/$appId/download'
 import { Route as ApiAppAppIdIconRouteImport } from './routes/api/app/$appId/icon'
@@ -60,13 +57,9 @@ import { Route as ApiAuthHandoffsConsumeRouteImport } from './routes/api/auth/ha
 import { Route as ApiImagesCandidatesCandidateIdRouteImport } from './routes/api/images/candidates/$candidateId'
 import { Route as ApiNotificationsChannelChannelIdRouteImport } from './routes/api/notifications/channel/$channelId'
 import { Route as ApiUsersUserIdAvatarRouteImport } from './routes/api/users/$userId/avatar'
-import { Route as ApiWorkflowWorkflowIdDownloadRouteImport } from './routes/api/workflow/$workflowId/download'
-import { Route as ApiWorkflowWorkflowIdRunRouteImport } from './routes/api/workflow/$workflowId/run'
 import { Route as AppAppSlugEmbedSplatRouteImport } from './routes/app/$appSlug/embed/$'
 import { Route as AppAppAppSlugTasksIndexRouteImport } from './routes/_app/app/$appSlug/tasks/index'
 import { Route as AppAppAppSlugTasksTaskNameRouteImport } from './routes/_app/app/$appSlug/tasks/$taskName'
-import { Route as AppWorkflowWorkflowSlugExecutionRunIdRouteImport } from './routes/_app/workflow/$workflowSlug/execution/$runId'
-import { Route as AppWorkflowWorkflowSlugExecutionsIndexRouteImport } from './routes/_app/workflow/$workflowSlug/executions/index'
 import { Route as ApiAgentRunsRunIdAnswerRouteImport } from './routes/api/agent/runs/$runId/answer'
 import { Route as ApiAgentRunsRunIdCancelRouteImport } from './routes/api/agent/runs/$runId/cancel'
 import { Route as ApiAgentRunsRunIdEnvRouteImport } from './routes/api/agent/runs/$runId/env'
@@ -241,11 +234,6 @@ const AppSettingsUsersRoute = AppSettingsUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppSettingsRoute,
 } as any)
-const AppWorkflowsIndexRoute = AppWorkflowsIndexRouteImport.update({
-  id: '/workflows/',
-  path: '/workflows/',
-  getParentRoute: () => AppRoute,
-} as any)
 const ApiAgentRunsRoute = ApiAgentRunsRouteImport.update({
   id: '/api/agent/runs',
   path: '/api/agent/runs',
@@ -293,18 +281,6 @@ const AppAppAppSlugManageRoute = AppAppAppSlugManageRouteImport.update({
   path: '/app/$appSlug/manage',
   getParentRoute: () => AppRoute,
 } as any)
-const AppWorkflowWorkflowSlugIndexRoute =
-  AppWorkflowWorkflowSlugIndexRouteImport.update({
-    id: '/workflow/$workflowSlug/',
-    path: '/workflow/$workflowSlug/',
-    getParentRoute: () => AppRoute,
-  } as any)
-const AppWorkflowWorkflowSlugManageRoute =
-  AppWorkflowWorkflowSlugManageRouteImport.update({
-    id: '/workflow/$workflowSlug/manage',
-    path: '/workflow/$workflowSlug/manage',
-    getParentRoute: () => AppRoute,
-  } as any)
 const ApiAgentAttachmentsAttachmentIdRoute =
   ApiAgentAttachmentsAttachmentIdRouteImport.update({
     id: '/api/agent/attachments/$attachmentId',
@@ -354,18 +330,6 @@ const ApiUsersUserIdAvatarRoute = ApiUsersUserIdAvatarRouteImport.update({
   path: '/api/users/$userId/avatar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiWorkflowWorkflowIdDownloadRoute =
-  ApiWorkflowWorkflowIdDownloadRouteImport.update({
-    id: '/api/workflow/$workflowId/download',
-    path: '/api/workflow/$workflowId/download',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiWorkflowWorkflowIdRunRoute =
-  ApiWorkflowWorkflowIdRunRouteImport.update({
-    id: '/api/workflow/$workflowId/run',
-    path: '/api/workflow/$workflowId/run',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AppAppSlugEmbedSplatRoute = AppAppSlugEmbedSplatRouteImport.update({
   id: '/app/$appSlug/embed/$',
   path: '/app/$appSlug/embed/$',
@@ -380,18 +344,6 @@ const AppAppAppSlugTasksTaskNameRoute =
   AppAppAppSlugTasksTaskNameRouteImport.update({
     id: '/app/$appSlug/tasks/$taskName',
     path: '/app/$appSlug/tasks/$taskName',
-    getParentRoute: () => AppRoute,
-  } as any)
-const AppWorkflowWorkflowSlugExecutionRunIdRoute =
-  AppWorkflowWorkflowSlugExecutionRunIdRouteImport.update({
-    id: '/workflow/$workflowSlug/execution/$runId',
-    path: '/workflow/$workflowSlug/execution/$runId',
-    getParentRoute: () => AppRoute,
-  } as any)
-const AppWorkflowWorkflowSlugExecutionsIndexRoute =
-  AppWorkflowWorkflowSlugExecutionsIndexRouteImport.update({
-    id: '/workflow/$workflowSlug/executions/',
-    path: '/workflow/$workflowSlug/executions/',
     getParentRoute: () => AppRoute,
   } as any)
 const ApiAgentRunsRunIdAnswerRoute = ApiAgentRunsRunIdAnswerRouteImport.update({
@@ -554,9 +506,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof AppDashboardIndexRoute
   '/notifications/': typeof AppNotificationsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
-  '/workflows/': typeof AppWorkflowsIndexRoute
   '/app/$appSlug/manage': typeof AppAppAppSlugManageRoute
-  '/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
   '/api/app/$appId/icon': typeof ApiAppAppIdIconRoute
@@ -566,13 +516,9 @@ export interface FileRoutesByFullPath {
   '/api/images/candidates/$candidateId': typeof ApiImagesCandidatesCandidateIdRoute
   '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
   '/api/users/$userId/avatar': typeof ApiUsersUserIdAvatarRoute
-  '/api/workflow/$workflowId/download': typeof ApiWorkflowWorkflowIdDownloadRoute
-  '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug/': typeof AppAppAppSlugIndexRoute
-  '/workflow/$workflowSlug/': typeof AppWorkflowWorkflowSlugIndexRoute
   '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
-  '/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   '/api/agent/runs/$runId/answer': typeof ApiAgentRunsRunIdAnswerRoute
   '/api/agent/runs/$runId/cancel': typeof ApiAgentRunsRunIdCancelRoute
   '/api/agent/runs/$runId/env': typeof ApiAgentRunsRunIdEnvRoute
@@ -589,7 +535,6 @@ export interface FileRoutesByFullPath {
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/app/$appSlug/tasks/': typeof AppAppAppSlugTasksIndexRoute
-  '/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/app/$appSlug/tasks/runs/$runId': typeof AppAppAppSlugTasksRunsRunIdRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
   '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
@@ -632,9 +577,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardIndexRoute
   '/notifications': typeof AppNotificationsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
-  '/workflows': typeof AppWorkflowsIndexRoute
   '/app/$appSlug/manage': typeof AppAppAppSlugManageRoute
-  '/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
   '/api/app/$appId/icon': typeof ApiAppAppIdIconRoute
@@ -644,13 +587,9 @@ export interface FileRoutesByTo {
   '/api/images/candidates/$candidateId': typeof ApiImagesCandidatesCandidateIdRoute
   '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
   '/api/users/$userId/avatar': typeof ApiUsersUserIdAvatarRoute
-  '/api/workflow/$workflowId/download': typeof ApiWorkflowWorkflowIdDownloadRoute
-  '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/app/$appSlug': typeof AppAppAppSlugIndexRoute
-  '/workflow/$workflowSlug': typeof AppWorkflowWorkflowSlugIndexRoute
   '/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
-  '/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   '/api/agent/runs/$runId/answer': typeof ApiAgentRunsRunIdAnswerRoute
   '/api/agent/runs/$runId/cancel': typeof ApiAgentRunsRunIdCancelRoute
   '/api/agent/runs/$runId/env': typeof ApiAgentRunsRunIdEnvRoute
@@ -667,7 +606,6 @@ export interface FileRoutesByTo {
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/app/$appSlug/tasks': typeof AppAppAppSlugTasksIndexRoute
-  '/workflow/$workflowSlug/executions': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/app/$appSlug/tasks/runs/$runId': typeof AppAppAppSlugTasksRunsRunIdRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
   '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
@@ -715,9 +653,7 @@ export interface FileRoutesById {
   '/_app/dashboard/': typeof AppDashboardIndexRoute
   '/_app/notifications/': typeof AppNotificationsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
-  '/_app/workflows/': typeof AppWorkflowsIndexRoute
   '/_app/app/$appSlug/manage': typeof AppAppAppSlugManageRoute
-  '/_app/workflow/$workflowSlug/manage': typeof AppWorkflowWorkflowSlugManageRoute
   '/api/agent/attachments/$attachmentId': typeof ApiAgentAttachmentsAttachmentIdRoute
   '/api/app/$appId/download': typeof ApiAppAppIdDownloadRoute
   '/api/app/$appId/icon': typeof ApiAppAppIdIconRoute
@@ -727,13 +663,9 @@ export interface FileRoutesById {
   '/api/images/candidates/$candidateId': typeof ApiImagesCandidatesCandidateIdRoute
   '/api/notifications/channel/$channelId': typeof ApiNotificationsChannelChannelIdRouteWithChildren
   '/api/users/$userId/avatar': typeof ApiUsersUserIdAvatarRoute
-  '/api/workflow/$workflowId/download': typeof ApiWorkflowWorkflowIdDownloadRoute
-  '/api/workflow/$workflowId/run': typeof ApiWorkflowWorkflowIdRunRoute
   '/app/$appSlug/embed/$': typeof AppAppSlugEmbedSplatRoute
   '/_app/app/$appSlug/': typeof AppAppAppSlugIndexRoute
-  '/_app/workflow/$workflowSlug/': typeof AppWorkflowWorkflowSlugIndexRoute
   '/_app/app/$appSlug/tasks/$taskName': typeof AppAppAppSlugTasksTaskNameRoute
-  '/_app/workflow/$workflowSlug/execution/$runId': typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   '/api/agent/runs/$runId/answer': typeof ApiAgentRunsRunIdAnswerRoute
   '/api/agent/runs/$runId/cancel': typeof ApiAgentRunsRunIdCancelRoute
   '/api/agent/runs/$runId/env': typeof ApiAgentRunsRunIdEnvRoute
@@ -750,7 +682,6 @@ export interface FileRoutesById {
   '/api/app/$appId/widget/$widgetId': typeof ApiAppAppIdWidgetWidgetIdRoute
   '/api/notifications/channel/$channelId/$action': typeof ApiNotificationsChannelChannelIdActionRoute
   '/_app/app/$appSlug/tasks/': typeof AppAppAppSlugTasksIndexRoute
-  '/_app/workflow/$workflowSlug/executions/': typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   '/_app/app/$appSlug/tasks/runs/$runId': typeof AppAppAppSlugTasksRunsRunIdRoute
   '/api/agent/sessions/$sessionId/attachments/$attachmentId': typeof ApiAgentSessionsSessionIdAttachmentsAttachmentIdRoute
   '/api/agent/sessions/$sessionId/pending/$messageId': typeof ApiAgentSessionsSessionIdPendingMessageIdRouteWithChildren
@@ -798,9 +729,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/notifications/'
     | '/settings/'
-    | '/workflows/'
     | '/app/$appSlug/manage'
-    | '/workflow/$workflowSlug/manage'
     | '/api/agent/attachments/$attachmentId'
     | '/api/app/$appId/download'
     | '/api/app/$appId/icon'
@@ -810,13 +739,9 @@ export interface FileRouteTypes {
     | '/api/images/candidates/$candidateId'
     | '/api/notifications/channel/$channelId'
     | '/api/users/$userId/avatar'
-    | '/api/workflow/$workflowId/download'
-    | '/api/workflow/$workflowId/run'
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug/'
-    | '/workflow/$workflowSlug/'
     | '/app/$appSlug/tasks/$taskName'
-    | '/workflow/$workflowSlug/execution/$runId'
     | '/api/agent/runs/$runId/answer'
     | '/api/agent/runs/$runId/cancel'
     | '/api/agent/runs/$runId/env'
@@ -833,7 +758,6 @@ export interface FileRouteTypes {
     | '/api/app/$appId/widget/$widgetId'
     | '/api/notifications/channel/$channelId/$action'
     | '/app/$appSlug/tasks/'
-    | '/workflow/$workflowSlug/executions/'
     | '/app/$appSlug/tasks/runs/$runId'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
     | '/api/agent/sessions/$sessionId/pending/$messageId'
@@ -876,9 +800,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/notifications'
     | '/settings'
-    | '/workflows'
     | '/app/$appSlug/manage'
-    | '/workflow/$workflowSlug/manage'
     | '/api/agent/attachments/$attachmentId'
     | '/api/app/$appId/download'
     | '/api/app/$appId/icon'
@@ -888,13 +810,9 @@ export interface FileRouteTypes {
     | '/api/images/candidates/$candidateId'
     | '/api/notifications/channel/$channelId'
     | '/api/users/$userId/avatar'
-    | '/api/workflow/$workflowId/download'
-    | '/api/workflow/$workflowId/run'
     | '/app/$appSlug/embed/$'
     | '/app/$appSlug'
-    | '/workflow/$workflowSlug'
     | '/app/$appSlug/tasks/$taskName'
-    | '/workflow/$workflowSlug/execution/$runId'
     | '/api/agent/runs/$runId/answer'
     | '/api/agent/runs/$runId/cancel'
     | '/api/agent/runs/$runId/env'
@@ -911,7 +829,6 @@ export interface FileRouteTypes {
     | '/api/app/$appId/widget/$widgetId'
     | '/api/notifications/channel/$channelId/$action'
     | '/app/$appSlug/tasks'
-    | '/workflow/$workflowSlug/executions'
     | '/app/$appSlug/tasks/runs/$runId'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
     | '/api/agent/sessions/$sessionId/pending/$messageId'
@@ -958,9 +875,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard/'
     | '/_app/notifications/'
     | '/_app/settings/'
-    | '/_app/workflows/'
     | '/_app/app/$appSlug/manage'
-    | '/_app/workflow/$workflowSlug/manage'
     | '/api/agent/attachments/$attachmentId'
     | '/api/app/$appId/download'
     | '/api/app/$appId/icon'
@@ -970,13 +885,9 @@ export interface FileRouteTypes {
     | '/api/images/candidates/$candidateId'
     | '/api/notifications/channel/$channelId'
     | '/api/users/$userId/avatar'
-    | '/api/workflow/$workflowId/download'
-    | '/api/workflow/$workflowId/run'
     | '/app/$appSlug/embed/$'
     | '/_app/app/$appSlug/'
-    | '/_app/workflow/$workflowSlug/'
     | '/_app/app/$appSlug/tasks/$taskName'
-    | '/_app/workflow/$workflowSlug/execution/$runId'
     | '/api/agent/runs/$runId/answer'
     | '/api/agent/runs/$runId/cancel'
     | '/api/agent/runs/$runId/env'
@@ -993,7 +904,6 @@ export interface FileRouteTypes {
     | '/api/app/$appId/widget/$widgetId'
     | '/api/notifications/channel/$channelId/$action'
     | '/_app/app/$appSlug/tasks/'
-    | '/_app/workflow/$workflowSlug/executions/'
     | '/_app/app/$appSlug/tasks/runs/$runId'
     | '/api/agent/sessions/$sessionId/attachments/$attachmentId'
     | '/api/agent/sessions/$sessionId/pending/$messageId'
@@ -1028,8 +938,6 @@ export interface RootRouteChildren {
   ApiImagesCandidatesCandidateIdRoute: typeof ApiImagesCandidatesCandidateIdRoute
   ApiNotificationsChannelChannelIdRoute: typeof ApiNotificationsChannelChannelIdRouteWithChildren
   ApiUsersUserIdAvatarRoute: typeof ApiUsersUserIdAvatarRoute
-  ApiWorkflowWorkflowIdDownloadRoute: typeof ApiWorkflowWorkflowIdDownloadRoute
-  ApiWorkflowWorkflowIdRunRoute: typeof ApiWorkflowWorkflowIdRunRoute
   AppAppSlugEmbedSplatRoute: typeof AppAppSlugEmbedSplatRoute
   ApiAgentSessionsSessionIdAutoRetryRoute: typeof ApiAgentSessionsSessionIdAutoRetryRoute
   ApiAgentSessionsSessionIdPendingRoute: typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
@@ -1256,13 +1164,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsUsersRouteImport
       parentRoute: typeof AppSettingsRoute
     }
-    '/_app/workflows/': {
-      id: '/_app/workflows/'
-      path: '/workflows'
-      fullPath: '/workflows/'
-      preLoaderRoute: typeof AppWorkflowsIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/api/agent/runs': {
       id: '/api/agent/runs'
       path: '/api/agent/runs'
@@ -1324,20 +1225,6 @@ declare module '@tanstack/react-router' {
       path: '/app/$appSlug/manage'
       fullPath: '/app/$appSlug/manage'
       preLoaderRoute: typeof AppAppAppSlugManageRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/workflow/$workflowSlug/': {
-      id: '/_app/workflow/$workflowSlug/'
-      path: '/workflow/$workflowSlug'
-      fullPath: '/workflow/$workflowSlug/'
-      preLoaderRoute: typeof AppWorkflowWorkflowSlugIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/workflow/$workflowSlug/manage': {
-      id: '/_app/workflow/$workflowSlug/manage'
-      path: '/workflow/$workflowSlug/manage'
-      fullPath: '/workflow/$workflowSlug/manage'
-      preLoaderRoute: typeof AppWorkflowWorkflowSlugManageRouteImport
       parentRoute: typeof AppRoute
     }
     '/api/agent/attachments/$attachmentId': {
@@ -1403,20 +1290,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUsersUserIdAvatarRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/workflow/$workflowId/download': {
-      id: '/api/workflow/$workflowId/download'
-      path: '/api/workflow/$workflowId/download'
-      fullPath: '/api/workflow/$workflowId/download'
-      preLoaderRoute: typeof ApiWorkflowWorkflowIdDownloadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/workflow/$workflowId/run': {
-      id: '/api/workflow/$workflowId/run'
-      path: '/api/workflow/$workflowId/run'
-      fullPath: '/api/workflow/$workflowId/run'
-      preLoaderRoute: typeof ApiWorkflowWorkflowIdRunRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/app/$appSlug/embed/$': {
       id: '/app/$appSlug/embed/$'
       path: '/app/$appSlug/embed/$'
@@ -1436,20 +1309,6 @@ declare module '@tanstack/react-router' {
       path: '/app/$appSlug/tasks/$taskName'
       fullPath: '/app/$appSlug/tasks/$taskName'
       preLoaderRoute: typeof AppAppAppSlugTasksTaskNameRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/workflow/$workflowSlug/execution/$runId': {
-      id: '/_app/workflow/$workflowSlug/execution/$runId'
-      path: '/workflow/$workflowSlug/execution/$runId'
-      fullPath: '/workflow/$workflowSlug/execution/$runId'
-      preLoaderRoute: typeof AppWorkflowWorkflowSlugExecutionRunIdRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/workflow/$workflowSlug/executions/': {
-      id: '/_app/workflow/$workflowSlug/executions/'
-      path: '/workflow/$workflowSlug/executions'
-      fullPath: '/workflow/$workflowSlug/executions/'
-      preLoaderRoute: typeof AppWorkflowWorkflowSlugExecutionsIndexRouteImport
       parentRoute: typeof AppRoute
     }
     '/api/agent/runs/$runId/answer': {
@@ -1675,15 +1534,10 @@ interface AppRouteChildren {
   AppDashboardDashboardIdRoute: typeof AppDashboardDashboardIdRoute
   AppAppsIndexRoute: typeof AppAppsIndexRoute
   AppDashboardIndexRoute: typeof AppDashboardIndexRoute
-  AppWorkflowsIndexRoute: typeof AppWorkflowsIndexRoute
   AppAppAppSlugManageRoute: typeof AppAppAppSlugManageRoute
-  AppWorkflowWorkflowSlugManageRoute: typeof AppWorkflowWorkflowSlugManageRoute
   AppAppAppSlugIndexRoute: typeof AppAppAppSlugIndexRoute
-  AppWorkflowWorkflowSlugIndexRoute: typeof AppWorkflowWorkflowSlugIndexRoute
   AppAppAppSlugTasksTaskNameRoute: typeof AppAppAppSlugTasksTaskNameRoute
-  AppWorkflowWorkflowSlugExecutionRunIdRoute: typeof AppWorkflowWorkflowSlugExecutionRunIdRoute
   AppAppAppSlugTasksIndexRoute: typeof AppAppAppSlugTasksIndexRoute
-  AppWorkflowWorkflowSlugExecutionsIndexRoute: typeof AppWorkflowWorkflowSlugExecutionsIndexRoute
   AppAppAppSlugTasksRunsRunIdRoute: typeof AppAppAppSlugTasksRunsRunIdRoute
   AppAppAppSlugTasksRunsIndexRoute: typeof AppAppAppSlugTasksRunsIndexRoute
 }
@@ -1697,17 +1551,10 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardDashboardIdRoute: AppDashboardDashboardIdRoute,
   AppAppsIndexRoute: AppAppsIndexRoute,
   AppDashboardIndexRoute: AppDashboardIndexRoute,
-  AppWorkflowsIndexRoute: AppWorkflowsIndexRoute,
   AppAppAppSlugManageRoute: AppAppAppSlugManageRoute,
-  AppWorkflowWorkflowSlugManageRoute: AppWorkflowWorkflowSlugManageRoute,
   AppAppAppSlugIndexRoute: AppAppAppSlugIndexRoute,
-  AppWorkflowWorkflowSlugIndexRoute: AppWorkflowWorkflowSlugIndexRoute,
   AppAppAppSlugTasksTaskNameRoute: AppAppAppSlugTasksTaskNameRoute,
-  AppWorkflowWorkflowSlugExecutionRunIdRoute:
-    AppWorkflowWorkflowSlugExecutionRunIdRoute,
   AppAppAppSlugTasksIndexRoute: AppAppAppSlugTasksIndexRoute,
-  AppWorkflowWorkflowSlugExecutionsIndexRoute:
-    AppWorkflowWorkflowSlugExecutionsIndexRoute,
   AppAppAppSlugTasksRunsRunIdRoute: AppAppAppSlugTasksRunsRunIdRoute,
   AppAppAppSlugTasksRunsIndexRoute: AppAppAppSlugTasksRunsIndexRoute,
 }
@@ -1820,8 +1667,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNotificationsChannelChannelIdRoute:
     ApiNotificationsChannelChannelIdRouteWithChildren,
   ApiUsersUserIdAvatarRoute: ApiUsersUserIdAvatarRoute,
-  ApiWorkflowWorkflowIdDownloadRoute: ApiWorkflowWorkflowIdDownloadRoute,
-  ApiWorkflowWorkflowIdRunRoute: ApiWorkflowWorkflowIdRunRoute,
   AppAppSlugEmbedSplatRoute: AppAppSlugEmbedSplatRoute,
   ApiAgentSessionsSessionIdAutoRetryRoute:
     ApiAgentSessionsSessionIdAutoRetryRoute,

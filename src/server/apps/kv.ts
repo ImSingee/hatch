@@ -24,7 +24,7 @@ export const KV_VALUE_MAX_BYTES = 64 * 1024;
 export const KV_MAX_ENTRIES = 1000;
 /**
  * Advisory-lock namespace for per-app KV writes (distinct from the deploy locks:
- * 1 = app deploy, 2 = workflow deploy). Serializes a single app's KV writes so
+ * 1 = app deploy; 2 is retired). Serializes a single app's KV writes so
  * the entry-cap check + insert are atomic.
  */
 const APP_KV_LOCK_NS = 3;

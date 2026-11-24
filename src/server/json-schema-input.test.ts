@@ -4,7 +4,7 @@ import {
   validateSchemaInput,
 } from './json-schema-input';
 
-/** A JSON Schema like the one zod's toJSONSchema emits for a workflow input. */
+/** A JSON Schema like the one generated for an App task input. */
 const schema = {
   type: 'object',
   properties: {
@@ -69,9 +69,20 @@ describe('validateSchemaInput', () => {
     ).toBe(false);
   });
 
-  it('strips unknown keys when additionalProperties is false', () => {
-    const res = validateSchemaInput(schema, { name: 'x', extra: 'nope' });
-    expect(res).toEqual({ success: true, data: { name: 'x', count: 1 } });
+  it('rejects unknown keys when additionalProperties is false', () => {
+    expect(validateSchemaInput(schema, { name: 'x', extra: 'nope' })).toEqual({
+      success: false,
+      message: expect.stringMatching(/extra/),
+    });
+  });
+
+  it('enforces string patterns', () => {
+    const patterned = {
+      type: 'object',
+      properties: { repo: { type: 'string', pattern: '^[a-z]+/[a-z]+$' } },
+    };
+    expect(validateSchemaInput(patterned, { repo: 'a/b' }).success).toBe(true);
+    expect(validateSchemaInput(patterned, { repo: 'ab' }).success).toBe(false);
   });
 
   it('keeps unknown keys when additionalProperties is not false', () => {
@@ -138,11 +149,7 @@ describe('coerceSchemaQueryInput', () => {
       properties: { s: { type: 'string', pattern: '^(a+)+$' } },
     };
     const started = Date.now();
-    const result = validateSchemaInput(
-      schema,
-      { s: `${'a'.repeat(40)}b` },
-      { strict: true },
-    );
+    const result = validateSchemaInput(schema, { s: `${'a'.repeat(40)}b` });
     expect(Date.now() - started).toBeLessThan(2000);
     expect(result).toMatchObject({
       success: false,
@@ -150,27 +157,22 @@ describe('coerceSchemaQueryInput', () => {
         /s: Checking the pattern .* took too long/,
       ),
     });
-    expect(
-      validateSchemaInput(schema, { s: 'aaa' }, { strict: true }).success,
-    ).toBe(true);
+    expect(validateSchemaInput(schema, { s: 'aaa' }).success).toBe(true);
   });
 
-  it('requires RFC 3339 date-times in strict mode only', () => {
+  it('requires RFC 3339 date-times', () => {
     const schema = {
       type: 'object',
       properties: { at: { type: 'string', format: 'date-time' } },
     };
+    expect(validateSchemaInput(schema, { at: 'tomorrow' })).toMatchObject({
+      success: false,
+      message: expect.stringMatching(/at:/),
+    });
     expect(
-      validateSchemaInput(schema, { at: 'tomorrow' }, { strict: true }),
-    ).toMatchObject({ success: false, message: expect.stringMatching(/at:/) });
-    expect(
-      validateSchemaInput(
-        schema,
-        { at: '2026-11-24T10:00:20.021+08:00' },
-        { strict: true },
-      ).success,
+      validateSchemaInput(schema, { at: '2026-11-24T10:00:20.021+08:00' })
+        .success,
     ).toBe(true);
-    expect(validateSchemaInput(schema, { at: 'tomorrow' }).success).toBe(true);
   });
 
   it('shares one pattern time budget across every value of an input', () => {
@@ -184,33 +186,27 @@ describe('coerceSchemaQueryInput', () => {
       },
     };
     const started = Date.now();
-    const result = validateSchemaInput(
-      schema,
-      { items: Array.from({ length: 200 }, () => `${'a'.repeat(40)}b`) },
-      { strict: true },
-    );
+    const result = validateSchemaInput(schema, {
+      items: Array.from({ length: 200 }, () => `${'a'.repeat(40)}b`),
+    });
     // 200 runaway values would take 200 timeouts if each had its own.
     expect(Date.now() - started).toBeLessThan(2000);
     expect(result.success).toBe(false);
   });
 
-  it('refuses an oversized strict input and bounds the failure message', () => {
+  it('refuses an oversized input and bounds the failure message', () => {
     const schema = {
       type: 'object',
       properties: { n: { type: 'array', items: { type: 'integer' } } },
     };
     expect(
-      validateSchemaInput(
-        schema,
-        { n: Array.from({ length: 500_000 }, () => 'x') },
-        { strict: true },
-      ),
+      validateSchemaInput(schema, {
+        n: Array.from({ length: 500_000 }, () => 'x'),
+      }),
     ).toEqual({ success: false, message: 'Input has more than 10000 values.' });
-    const result = validateSchemaInput(
-      schema,
-      { n: Array.from({ length: 5000 }, () => 'x') },
-      { strict: true },
-    );
+    const result = validateSchemaInput(schema, {
+      n: Array.from({ length: 5000 }, () => 'x'),
+    });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.message.length).toBeLessThanOrEqual(4000);

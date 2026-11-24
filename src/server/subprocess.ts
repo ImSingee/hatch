@@ -1,5 +1,5 @@
 /**
- * Server-only: bounded subprocess runner shared by the app/workflow builders.
+ * Server-only: bounded subprocess runner used by the App builder.
  *
  * Build steps run tools over untrusted, author-controlled sources (buf, deno
  * install/bundle/check), so every invocation is bounded: a hard timeout stops a

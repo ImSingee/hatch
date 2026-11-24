@@ -13,7 +13,6 @@ const ENV_KEYS = [
   'HATCH_RUNNER_CLI_URL',
   'HATCH_RUN_TOKEN_TTL_SECONDS',
   'HATCH_RUNNER_ID',
-  'HATCH_BETA',
   'HATCH_ALLOW_UNSANDBOXED',
   'HATCH_APP_IDLE_TIMEOUT_SECONDS',
   'HATCH_APP_DRAIN_TIMEOUT_SECONDS',
@@ -47,23 +46,6 @@ describe('getPlatformEnv', () => {
     expect(result.secret).toBe(result.betterAuthSecret);
     expect(result.secret.length).toBeGreaterThanOrEqual(32);
     expect(result.agentRunnerToken).toBe('hatch-spa-shell-prerender');
-    expect(result.betaFeatures).toEqual([]);
-    expect(Object.isFrozen(result.betaFeatures)).toBe(true);
-  });
-
-  it('parses and freezes the Platform-owned beta feature set', async () => {
-    vi.stubEnv('SECRET', 'platform-secret');
-    vi.stubEnv('HATCH_BETA', ' workflow, future-feature,workflow, ,WORKFLOW ');
-    const { getPlatformEnv } = await import('./env');
-
-    const result = getPlatformEnv();
-
-    expect(result.betaFeatures).toEqual([
-      'workflow',
-      'future-feature',
-      'WORKFLOW',
-    ]);
-    expect(Object.isFrozen(result.betaFeatures)).toBe(true);
   });
 
   it.each([undefined, '   '])(

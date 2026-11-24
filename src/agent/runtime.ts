@@ -19,7 +19,6 @@ import type {
   Model,
   Models,
 } from '@earendil-works/pi-ai';
-import { hasBetaFeature, WORKFLOW_BETA_FEATURE } from '~/beta-features';
 import type { JsonValue } from '~/db/schema';
 import {
   createTranscriptCompactor,
@@ -296,7 +295,6 @@ function failureMessage(
 export type RunAgentTurnOptions = {
   commandCredentials?: CommandCredentials;
   appUrl: string;
-  betaFeatures: readonly string[];
   tavilyApiKey?: string | null;
   priorMessages: AgentMessage[];
   sessionId: string;
@@ -324,10 +322,6 @@ export async function runAgentTurn(
 ): Promise<RunAgentTurnResult> {
   const { priorMessages, sessionId, userText, signal, emit, models, picked } =
     opts;
-  const workflowBetaEnabled = hasBetaFeature(
-    opts.betaFeatures,
-    WORKFLOW_BETA_FEATURE,
-  );
 
   prepareAgentSessionSandbox(sessionId);
 
@@ -345,10 +339,9 @@ export async function runAgentTurn(
   // the transcript derives the (possibly compacted) model context from it.
   const transcript = Transcript.load(priorMessages);
 
-  const skills = await loadAgentSkills(env, { workflowBetaEnabled });
+  const skills = await loadAgentSkills(env);
   const tools = createTools(env, {
     commandCredentials: opts.commandCredentials,
-    workflowBetaEnabled,
     platform: opts.platform,
     ...(opts.tavilyApiKey ? { tavilyApiKey: opts.tavilyApiKey } : {}),
     ...(opts.ask ? { ask: opts.ask } : {}),
@@ -375,11 +368,7 @@ export async function runAgentTurn(
   }
 
   const thinkingLevel = picked.model.reasoning ? 'medium' : 'off';
-  const systemPrompt = buildSystemPrompt(
-    opts.appUrl,
-    { workflowBetaEnabled },
-    skills,
-  );
+  const systemPrompt = buildSystemPrompt(opts.appUrl, skills);
   const compactor = createTranscriptCompactor({
     transcript,
     models,

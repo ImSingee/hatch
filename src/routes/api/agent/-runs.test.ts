@@ -92,26 +92,19 @@ describe('POST /api/agent/runs', () => {
     });
   });
 
-  it('accepts ordered Workflow references in a modern request', async () => {
-    const content = [
-      { type: 'text', text: 'Review ' },
-      {
-        type: 'workflow',
-        id: 'workflow-digest',
-        name: 'Nightly Digest',
-      },
-      { type: 'text', text: ' before running it.' },
-    ];
+  it('rejects a reference to a removed Workflow', async () => {
     const response = await postAgentRun({
-      request: runRequest({ ...baseBody, content }),
+      request: runRequest({
+        ...baseBody,
+        content: [
+          { type: 'text', text: 'Review ' },
+          { type: 'workflow', id: 'workflow-digest', name: 'Nightly Digest' },
+        ],
+      }),
     });
 
-    expect(response.status).toBe(200);
-    expect(mocks.startAgentRun).toHaveBeenCalledWith({
-      ...baseBody,
-      userId: 'user-1',
-      content,
-    });
+    expect(response.status).toBe(400);
+    expect(mocks.startAgentRun).not.toHaveBeenCalled();
   });
 
   it('rejects requests that mix userText with content', async () => {

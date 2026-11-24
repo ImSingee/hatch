@@ -59,8 +59,8 @@ function StepItem({ step }: { step: RunStepView }) {
 
 /**
  * The body of a run inspector: step timeline, error and log beside the
- * summary, output and input. Shared by Workflow and App task runs; extra
- * summary rows come first (e.g. the task a run belongs to).
+ * summary, output and input of an App task run; extra summary rows come
+ * first (e.g. the task a run belongs to).
  */
 export function RunInspector({
   run,

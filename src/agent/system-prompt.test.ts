@@ -4,15 +4,9 @@ import {
   LATEST_APP_COMPATIBILITY_VERSION,
   MIN_SUPPORTED_APP_COMPATIBILITY_VERSION,
 } from '~/app-compatibility';
-import {
-  LATEST_WORKFLOW_COMPATIBILITY_VERSION,
-  MIN_SUPPORTED_WORKFLOW_COMPATIBILITY_VERSION,
-} from '~/workflow-compatibility';
 import { buildSystemPrompt } from './system-prompt';
 
 const appUrl = 'https://hatch.example.com';
-const workflowDisabled = { workflowBetaEnabled: false };
-const workflowEnabled = { workflowBetaEnabled: true };
 
 const visibleSkill: Skill = {
   name: 'building-apps',
@@ -23,7 +17,7 @@ const visibleSkill: Skill = {
 
 describe('Agent system prompt skills', () => {
   it('keeps third-party credentials out of ask and command text', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
+    const prompt = buildSystemPrompt(appUrl);
 
     expect(prompt).toContain('use `request_env`');
     expect(prompt).toContain('never request credentials with `ask`');
@@ -33,22 +27,16 @@ describe('Agent system prompt skills', () => {
     expect(prompt).toContain('not deployed');
   });
 
-  it.each([workflowDisabled, workflowEnabled])(
-    'requires building Skills before platform tools or source edits (%j)',
-    (options) => {
-      const prompt = buildSystemPrompt(appUrl, options);
+  it('requires the building Skill before platform tools or source edits', () => {
+    const prompt = buildSystemPrompt(appUrl);
 
-      expect(prompt).toMatch(/read the full.*`read_file` before calling/i);
-      expect(prompt).toMatch(/platform tools or editing/i);
-      expect(prompt).toContain('`building-apps`');
-      expect(prompt.includes('`building-workflows`')).toBe(
-        options.workflowBetaEnabled,
-      );
-    },
-  );
+    expect(prompt).toMatch(/read the full.*`read_file` before calling/i);
+    expect(prompt).toMatch(/platform tools or editing/i);
+    expect(prompt).toContain('`building-apps`');
+  });
 
   it('identifies the current APP_URL', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
+    const prompt = buildSystemPrompt(appUrl);
 
     expect(prompt).toContain(
       '# Environment\n- The platform URL is `https://hatch.example.com`.',
@@ -56,55 +44,22 @@ describe('Agent system prompt skills', () => {
   });
 
   it('identifies the current App compatibility range', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
+    const prompt = buildSystemPrompt(appUrl);
 
     expect(prompt).toContain(
       `minimum supported v${MIN_SUPPORTED_APP_COMPATIBILITY_VERSION};\n  latest v${LATEST_APP_COMPATIBILITY_VERSION}`,
     );
   });
 
-  it('does not advertise temporarily disabled Workflow capabilities', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
+  it('points background work at App tasks and never at removed Workflows', () => {
+    const prompt = buildSystemPrompt(appUrl);
 
-    expect(prompt).toContain(
-      'Workflow capabilities are temporarily unavailable',
-    );
-    expect(prompt).toContain(
-      'do not add new\n  top-level Workflow calls to Apps',
-    );
-    for (const capability of [
-      'create_workflow',
-      'checkout_workflow',
-      'deploy_workflow',
-      'building-workflows',
-      'importing-workflows',
-      'workflow-compatibility',
-      'workflows/<slug>',
-    ]) {
-      expect(prompt).not.toContain(capability);
-    }
-  });
-
-  it('advertises Workflow capabilities when the beta feature is enabled', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowEnabled);
-
-    expect(prompt).toContain('Hatch has two kinds of buildable things');
-    expect(prompt).toContain('building-workflows');
-    expect(prompt).toContain(
-      `minimum supported v${MIN_SUPPORTED_WORKFLOW_COMPATIBILITY_VERSION};\n  latest v${LATEST_WORKFLOW_COMPATIBILITY_VERSION}`,
-    );
-    expect(prompt).toContain('@WORKFLOW{name="..." id="..."}');
-    expect(prompt).toContain('Use its stable id with Workflow tools');
-    expect(prompt).toMatch(
-      /does not itself require\s+modifying, deploying, triggering/,
-    );
-    expect(prompt).not.toContain(
-      'Workflow capabilities are temporarily unavailable',
-    );
+    expect(prompt).toContain('references/tasks.md');
+    expect(prompt).not.toMatch(/workflow/i);
   });
 
   it('treats an inline App marker as context without implied intent', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
+    const prompt = buildSystemPrompt(appUrl);
 
     expect(prompt).toContain('@APP{name="..." id="..." slug="..."}');
     expect(prompt).toContain('Use its stable id with App tools');
@@ -112,14 +67,8 @@ describe('Agent system prompt skills', () => {
     expect(prompt).toMatch(/does not by itself require modifying,\s+deploying/);
   });
 
-  it('does not advertise Workflow markers while the beta is disabled', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
-
-    expect(prompt).not.toContain('@WORKFLOW{');
-  });
-
   it('describes safe web search and fetch usage', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled);
+    const prompt = buildSystemPrompt(appUrl);
 
     expect(prompt).toContain('`web_search` to find sources');
     expect(prompt).toContain('`web_fetch` to read a known URL');
@@ -129,7 +78,7 @@ describe('Agent system prompt skills', () => {
   });
 
   it('lists visible skill metadata without eagerly including its body', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled, [visibleSkill]);
+    const prompt = buildSystemPrompt(appUrl, [visibleSkill]);
 
     expect(prompt).toContain('<available_skills>');
     expect(prompt).toContain('<name>building-apps</name>');
@@ -139,40 +88,21 @@ describe('Agent system prompt skills', () => {
   });
 
   it('requires App import and build Skills before opening source archives', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled, [
+    const prompt = buildSystemPrompt(appUrl, [
       visibleSkill,
-      {
-        ...visibleSkill,
-        name: 'building-workflows',
-        filePath: '/opt/hatch/skills/building-workflows/SKILL.md',
-      },
       {
         ...visibleSkill,
         name: 'importing-apps',
         filePath: '/opt/hatch/skills/importing-apps/SKILL.md',
       },
-      {
-        ...visibleSkill,
-        name: 'importing-workflows',
-        filePath: '/opt/hatch/skills/importing-workflows/SKILL.md',
-      },
     ]);
 
     expect(prompt).toMatch(/importing-apps.*building-apps/s);
     expect(prompt).toMatch(/before downloading or extracting the attachment/i);
-    expect(prompt).not.toContain('building-workflows');
-    expect(prompt).not.toContain('importing-workflows');
-  });
-
-  it('requires Workflow import and build Skills before opening source archives', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowEnabled);
-
-    expect(prompt).toMatch(/importing-workflows.*building-workflows/s);
-    expect(prompt).toMatch(/before downloading or extracting the attachment/i);
   });
 
   it('hides skills disabled for model invocation', () => {
-    const prompt = buildSystemPrompt(appUrl, workflowDisabled, [
+    const prompt = buildSystemPrompt(appUrl, [
       { ...visibleSkill, disableModelInvocation: true },
     ]);
 
@@ -181,8 +111,6 @@ describe('Agent system prompt skills', () => {
   });
 
   it('does not render an empty skill section', () => {
-    expect(buildSystemPrompt(appUrl, workflowDisabled)).not.toContain(
-      '<available_skills>',
-    );
+    expect(buildSystemPrompt(appUrl)).not.toContain('<available_skills>');
   });
 });

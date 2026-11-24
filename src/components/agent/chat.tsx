@@ -22,7 +22,6 @@ import { composerDisplayText, hasComposerText } from '~agent/composer-content';
 import { nextUserTurn } from '~agent/user-turns';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionQueryOptions, sessionsQueryOptions } from '~queries/agent';
-import { workflowsQueryOptions } from '~queries/workflows';
 import {
   createDraftSendTracker,
   uploadDraftFiles,
@@ -104,7 +103,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
   const qc = useQueryClient();
   const sessionQuery = useQuery(sessionQueryOptions(sessionId));
   const appsQuery = useQuery(appsQueryOptions);
-  const workflowsQuery = useQuery(workflowsQueryOptions);
   const { groups, first, available } = useModelOptions();
 
   const [model, setModel] = useState<string | null>(null);
@@ -176,7 +174,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
 
   const revalidateResources = useCallback(() => {
     void qc.invalidateQueries({ queryKey: appsQueryOptions.queryKey });
-    void qc.invalidateQueries({ queryKey: workflowsQueryOptions.queryKey });
   }, [qc]);
 
   const stream = useAgentStream({
@@ -842,7 +839,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 )}
                 toolResults={toolResults}
                 apps={appsQuery.data}
-                workflows={workflowsQuery.data}
                 {...retryControls(turn.userTurn)}
                 work={workFrame(
                   runKey,
@@ -858,7 +854,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 message={{ role: 'assistant', content: blocks }}
                 toolResults={toolResults}
                 apps={appsQuery.data}
-                workflows={workflowsQuery.data}
                 work={workFrame(
                   segmentWorkKey(runKey, index),
                   'completed',
@@ -883,7 +878,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
     [
       answeredTurns,
       appsQuery.data,
-      workflowsQuery.data,
       liveUserTurn,
       onUserMessageToggle,
       retryControls,
@@ -1210,7 +1204,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 sessionId={sessionId}
                 pending={session.pending}
                 apps={appsQuery.data}
-                workflows={workflowsQuery.data}
                 onResult={applyPendingResult}
               />
             ) : null}
@@ -1220,9 +1213,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
               apps={appsQuery.data}
               appsLoading={appsQuery.isLoading}
               appsError={appsQuery.isError}
-              workflows={workflowsQuery.data}
-              workflowsLoading={workflowsQuery.isLoading}
-              workflowsError={workflowsQuery.isError}
               busy={busy}
               onStop={stop}
               disabled={!effectiveModel}

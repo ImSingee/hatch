@@ -19,23 +19,6 @@ const fixtures = vi.hoisted(() => ({
   pinCalls: [] as unknown[],
 }));
 
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => [
-      {
-        id: 'wf-1',
-        slug: 'morning-digest',
-        name: 'Morning Digest',
-        description: null,
-        status: 'deployed',
-        pinned: false,
-        createdAt: '2026-11-20T08:00:00.000Z',
-        updatedAt: '2026-11-20T08:00:00.000Z',
-      },
-    ],
-  },
-}));
 vi.mock('~queries/sidebar', () => ({
   sidebarItemsQueryOptions: {
     queryKey: ['test-pins'],
@@ -51,7 +34,6 @@ vi.mock('~server/sidebar', () => ({
       fixtures.pins = [{ id: 'pin-1', appId: input.data.appId }];
   },
 }));
-vi.mock('~server/workflows', () => ({ setWorkflowPinFn: async () => {} }));
 vi.mock('~components/apps/use-app-icon', () => ({
   appIconUrl: () => '',
   useAppIconKey: () => null,
@@ -89,8 +71,6 @@ async function renderLibrary() {
       }),
       page('/app/$appSlug'),
       page('/app/$appSlug/manage'),
-      page('/workflow/$workflowSlug'),
-      page('/workflow/$workflowSlug/manage'),
       page('/agent'),
     ]),
     history: createMemoryHistory({ initialEntries: ['/apps'] }),
@@ -117,13 +97,10 @@ beforeEach(() => {
   fixtures.pinCalls = [];
 });
 
-test('a click opens an App or Workflow straight away, with no detail panel', async () => {
+test('a click opens an App straight away, with no detail panel', async () => {
   const { screen, path } = await renderLibrary();
   const budget = screen.getByRole('link', { name: /Budget Buddy/ });
   await expect.element(budget).toHaveAttribute('href', '/app/budget-buddy');
-  await expect
-    .element(screen.getByRole('link', { name: /Morning Digest/ }))
-    .toHaveAttribute('href', '/workflow/morning-digest');
   expect(screen.container.querySelector('aside')).toBeNull();
 
   await budget.click();

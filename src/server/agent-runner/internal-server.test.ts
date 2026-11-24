@@ -32,7 +32,7 @@ afterAll(async () => {
 });
 
 describe('internal server authentication', () => {
-  it.each(['/internal/api/apps', '/internal/api/workflows'])(
+  it.each(['/internal/api/apps', '/internal/api/agent-sessions'])(
     'does not expose %s anonymously',
     async (pathname) => {
       const response = await fetch(`${origin}${pathname}`);

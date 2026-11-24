@@ -1,5 +1,5 @@
 /**
- * Server-only: shared deploy serialization used by app and workflow releases.
+ * Server-only: deploy serialization used by App releases.
  *
  * Deploys (and rollbacks, which share the lock) are serialized at two levels:
  *

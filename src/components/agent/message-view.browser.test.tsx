@@ -15,7 +15,6 @@ import { AskForm } from './ask-form';
 import type { AppListItem } from '~server/apps';
 import type { EditFileDetails } from '~agent/edit-file-details';
 import type { AskAnswer } from '~agent/events';
-import type { WorkflowListItem } from '~server/workflows';
 import type { ChatMessage, ToolResultMessage, ToolCallBlock } from './types';
 import { pairToolResults } from './types';
 
@@ -25,7 +24,6 @@ type RenderOptions = {
   retrying?: boolean;
   retryDisabled?: boolean;
   apps?: AppListItem[];
-  workflows?: WorkflowListItem[];
   toolResults?: Map<string, ToolResultMessage>;
 };
 
@@ -40,7 +38,6 @@ function renderMessage(message: ChatMessage, options: RenderOptions = {}) {
           <MessageView
             message={message}
             apps={options.apps}
-            workflows={options.workflows}
             toolResults={options.toolResults}
             onRetry={options.onRetry}
             retrying={options.retrying}
@@ -60,24 +57,8 @@ function renderMessage(message: ChatMessage, options: RenderOptions = {}) {
     path: '/app/$appSlug/manage',
     component: () => null,
   });
-  const workflowRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workflow/$workflowSlug',
-    component: () => null,
-  });
-  const workflowManageRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workflow/$workflowSlug/manage',
-    component: () => null,
-  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([
-      indexRoute,
-      appRoute,
-      manageRoute,
-      workflowRoute,
-      workflowManageRoute,
-    ]),
+    routeTree: rootRoute.addChildren([indexRoute, appRoute, manageRoute]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   });
   return render(<RouterProvider router={router as never} />);
@@ -364,47 +345,6 @@ function deployResult(toolCallId: string, isError = false): ToolResultMessage {
     role: 'toolResult',
     toolCallId,
     toolName: 'deploy_app',
-    content: [{ type: 'text', text: isError ? 'Build failed' : 'Deployed' }],
-    isError,
-  };
-}
-
-function workflowFixture(
-  id: string,
-  slug: string,
-  name: string,
-  overrides: Partial<WorkflowListItem> = {},
-): WorkflowListItem {
-  return {
-    id,
-    slug,
-    name,
-    description: null,
-    status: 'deployed',
-    pinned: false,
-    createdAt: '2026-09-03T00:00:00.000Z',
-    updatedAt: '2026-09-03T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-function deployWorkflowCall(id: string, workflowId: string): ToolCallBlock {
-  return {
-    type: 'toolCall',
-    id,
-    name: 'deploy_workflow',
-    arguments: { id: workflowId },
-  };
-}
-
-function deployWorkflowResult(
-  toolCallId: string,
-  isError = false,
-): ToolResultMessage {
-  return {
-    role: 'toolResult',
-    toolCallId,
-    toolName: 'deploy_workflow',
     content: [{ type: 'text', text: isError ? 'Build failed' : 'Deployed' }],
     isError,
   };
@@ -762,7 +702,7 @@ test('renders a persisted file attachment with a download link', async () => {
 test('renders resource snapshots as @ mentions instead of internal model text', async () => {
   const internal =
     'Review @APP{name="Original Name" id="app-stable" slug="original-slug"}' +
-    ' with @WORKFLOW{name="Original Workflow" id="workflow-stable"} now.';
+    ' with @APP{name="Second App" id="app-second" slug="second"} now.';
   const screen = await renderMessage({
     role: 'user',
     content: [{ type: 'text', text: internal }],
@@ -776,18 +716,19 @@ test('renders resource snapshots as @ mentions instead of internal model text', 
       },
       { type: 'text', text: ' with ' },
       {
-        type: 'workflow',
-        id: 'workflow-stable',
-        name: 'Original Workflow',
+        type: 'app',
+        id: 'app-second',
+        name: 'Second App',
+        slug: 'second',
       },
       { type: 'text', text: ' now.' },
     ],
   });
 
   await expect.element(screen.getByText('@Original Name')).toBeVisible();
-  await expect.element(screen.getByText('@Original Workflow')).toBeVisible();
+  await expect.element(screen.getByText('@Second App')).toBeVisible();
   expect(screen.getByTestId('message-shell').element().textContent).toBe(
-    'Review @Original Name with @Original Workflow now.',
+    'Review @Original Name with @Second App now.',
   );
   expect(document.body.textContent).not.toContain(internal);
 });
@@ -2096,7 +2037,7 @@ test('keeps unknown, empty, and malformed requests inspectable', async () => {
     previous: null,
     nested: { list: [[], {}], text: 'line 1\nline 2' },
   };
-  const arrayRoot = ['wf-1', { force: true }];
+  const arrayRoot = ['app-1', { force: true }];
   const stringRoot = '{"id":"app-1"';
   const screen = await renderMessage(
     {
@@ -2113,7 +2054,7 @@ test('keeps unknown, empty, and malformed requests inspectable', async () => {
         {
           type: 'toolCall',
           id: 'array-root',
-          name: 'get_workflow',
+          name: 'checkout_app',
           arguments: arrayRoot,
         },
         {
@@ -2125,7 +2066,7 @@ test('keeps unknown, empty, and malformed requests inspectable', async () => {
         {
           type: 'toolCall',
           id: 'legacy',
-          name: 'deploy_workflow',
+          name: 'create_app',
           arguments: undefined,
         },
       ],
@@ -2169,9 +2110,9 @@ test('keeps unknown, empty, and malformed requests inspectable', async () => {
   const expected = [
     [/List apps/, '{}'],
     [/Get app/, 'null'],
-    [/Get workflow/, JSON.stringify(arrayRoot, null, 2)],
+    [/Clone or update app/, JSON.stringify(arrayRoot, null, 2)],
     [/Rollback app/, JSON.stringify(stringRoot)],
-    [/Deploy workflow/, '(request arguments unavailable)'],
+    [/Create app/, '(request arguments unavailable)'],
   ] as const;
   for (const [name, request] of expected) {
     const details = await expandStep(screen.getByRole('button', { name }));
@@ -2332,121 +2273,6 @@ test('groups successful deploys, resolves aliases, and uses state-aware actions'
 
   const shell = screen.getByTestId('message-shell').element();
   expect(shell.scrollWidth).toBeLessThanOrEqual(shell.clientWidth);
-});
-
-test('shows successful Workflow deploys separately with state-aware actions', async () => {
-  const calls = [
-    deployCall('deploy-app', 'app-todo'),
-    deployWorkflowCall('workflow-by-id', 'workflow-automation'),
-    deployWorkflowCall('workflow-again', 'workflow-automation'),
-    deployWorkflowCall('workflow-archived', 'workflow-archived'),
-    deployWorkflowCall('workflow-failed', 'workflow-failed'),
-    deployWorkflowCall('workflow-deleted', 'workflow-deleted'),
-    deployWorkflowCall('workflow-incomplete', 'workflow-incomplete'),
-  ];
-  const toolResults = new Map<string, ToolResultMessage>([
-    ['deploy-app', deployResult('deploy-app')],
-    ['workflow-by-id', deployWorkflowResult('workflow-by-id')],
-    ['workflow-again', deployWorkflowResult('workflow-again')],
-    ['workflow-archived', deployWorkflowResult('workflow-archived')],
-    ['workflow-failed', deployWorkflowResult('workflow-failed', true)],
-    ['workflow-deleted', deployWorkflowResult('workflow-deleted')],
-  ]);
-  const screen = await renderMessage(
-    { role: 'assistant', content: calls },
-    {
-      width: 300,
-      apps: [appFixture('app-todo', 'todo', 'Todo')],
-      workflows: [
-        workflowFixture(
-          'workflow-automation',
-          'daily-automation',
-          'Daily Automation',
-        ),
-        workflowFixture(
-          'workflow-archived',
-          'archived-automation',
-          'Archived Automation',
-          { status: 'archived' },
-        ),
-      ],
-      toolResults,
-    },
-  );
-
-  await expect
-    .element(screen.getByRole('region', { name: 'Deployed app' }))
-    .toBeVisible();
-  const group = screen.getByRole('region', { name: 'Deployed workflows' });
-  await expect.element(group.getByText('Deployed workflows · 3')).toBeVisible();
-  expect(
-    group.getByText('Daily Automation', { exact: true }).all(),
-  ).toHaveLength(1);
-  await expect.element(group.getByText('Archived Automation')).toBeVisible();
-  await expect.element(group.getByText('workflow-deleted')).toBeVisible();
-  await expect.element(group.getByText('Unavailable')).toBeVisible();
-  const open = group.getByRole('link', { name: 'Open' });
-  await expect
-    .element(open)
-    .toHaveAttribute('href', '/workflow/daily-automation');
-  const manage = group.getByRole('link', { name: 'Manage' });
-  await expect
-    .element(manage)
-    .toHaveAttribute('href', '/workflow/archived-automation/manage');
-
-  await group
-    .getByRole('button', { name: 'More actions for Daily Automation' })
-    .click();
-  const manageMenu = screen.getByRole('menuitem', {
-    name: 'Manage workflow',
-  });
-  await expect
-    .element(manageMenu)
-    .toHaveAttribute('href', '/workflow/daily-automation/manage');
-
-  const shell = screen.getByTestId('message-shell').element();
-  expect(shell.scrollWidth).toBeLessThanOrEqual(shell.clientWidth);
-});
-
-test('keeps historical Workflow deployment cards bound to IDs after slug reuse', async () => {
-  const calls = [
-    deployWorkflowCall('renamed-legacy-workflow', 'daily'),
-    deployWorkflowCall('deleted-legacy-workflow', 'weekly'),
-  ];
-  const screen = await renderMessage(
-    { role: 'assistant', content: calls },
-    {
-      workflows: [
-        workflowFixture('new-daily-id', 'daily', 'Replacement Daily'),
-        workflowFixture('new-weekly-id', 'weekly', 'Replacement Weekly'),
-        workflowFixture('daily', 'renamed-daily', 'Original Daily'),
-      ],
-      toolResults: new Map(
-        calls.map((call) => [call.id, deployWorkflowResult(call.id)]),
-      ),
-    },
-  );
-
-  const group = screen.getByRole('region', { name: 'Deployed workflows' });
-  await expect.element(group).toBeVisible();
-  expect(group.getByText('Replacement Daily').query()).toBeNull();
-  expect(group.getByText('Replacement Weekly').query()).toBeNull();
-  await expect.element(group.getByText('Original Daily')).toBeVisible();
-  await expect
-    .element(group.getByText('weekly', { exact: true }))
-    .toBeVisible();
-  await expect.element(group.getByText('Unavailable')).toBeVisible();
-  expect(group.getByRole('link').all()).toHaveLength(1);
-  await expect
-    .element(group.getByRole('link', { name: 'Open' }))
-    .toHaveAttribute('href', '/workflow/renamed-daily');
-
-  await group
-    .getByRole('button', { name: 'More actions for Original Daily' })
-    .click();
-  await expect
-    .element(screen.getByRole('menuitem', { name: 'Manage workflow' }))
-    .toHaveAttribute('href', '/workflow/renamed-daily/manage');
 });
 
 test('shows an ended-early notice for a reply that stopped without a clean end', async () => {

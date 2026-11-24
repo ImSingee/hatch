@@ -143,7 +143,6 @@ describe('createApp', () => {
 
       const manifest = await evaluateTemplateManifest(
         renderedFile(result.files, 'manifest.ts'),
-        'app',
       );
       expect(manifest).toMatchObject({
         id: result.id,

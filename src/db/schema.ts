@@ -101,28 +101,10 @@ export type AppCronTrigger = 'scheduled' | 'manual';
 /** How an App task run was started (`app` = enqueued by the App backend). */
 export type AppTaskTrigger = 'manual' | 'cron' | 'webhook' | 'app';
 
-/** Lifecycle of an App task run; the same states a Workflow run has. */
+/** Lifecycle of an App task run. */
 export type AppTaskRunStatus = RunStatus;
 
 export type AppTaskRunStepStatus = RunStepStatus;
-
-/** ================== workflow domain types ================== */
-
-export type WorkflowStatus =
-  | 'draft'
-  | 'building'
-  | 'deployed'
-  | 'failed'
-  | 'archived';
-
-export type WorkflowDeploymentStatus = 'building' | 'deployed' | 'failed';
-
-/** How a workflow run was started. */
-export type WorkflowTrigger = 'manual' | 'cron' | 'webhook';
-
-export type WorkflowRunStatus = RunStatus;
-
-export type WorkflowRunStepStatus = RunStepStatus;
 
 /** Wire API the platform speaks to a provider with (mirrors pi-ai `model.api`). */
 export type ProviderApiType =
@@ -294,7 +276,7 @@ export const deployments = snakeCase.table(
 /**
  * One run of an App task: a backend RPC method the manifest declares as
  * runnable. Each run executes in its own backend instance, so the row also
- * records which deployment served it. Mirrors `workflow_runs`.
+ * records which deployment served it.
  */
 export const appTaskRuns = snakeCase.table(
   'app_task_runs',
@@ -372,7 +354,7 @@ export const appTaskRunSteps = snakeCase.table(
  * now" triggers). One row per attempt, written by the scheduler after the call
  * completes, so the app's manage page can show a trigger history. Distinct from
  * `logs` (a free-text backend/agent log stream) — this is structured run data
- * (status, duration, trigger) mirroring `workflow_runs`.
+ * (status, duration, trigger).
  */
 export const appCronRuns = snakeCase.table(
   'app_cron_runs',
@@ -440,156 +422,6 @@ export const appKv = snakeCase.table(
         or
         ("app_kv"."secret" and (("app_kv"."value" is not null) <> ("app_kv"."value_ciphertext" is not null)))
       )`,
-    ),
-  ],
-);
-
-/** ================== workflows ================== */
-
-/**
- * A workflow is a first-class, code-defined task the Agent authors. Unlike apps
- * it has no custom UI/API — the platform provides a fixed UI to trigger it
- * (manually, on a cron, or via webhook) and to audit its runs.
- *
- * `id` is an immutable internal key (a ULID for workflows created after the
- * id/slug split; legacy workflows keep their original kebab id). It keys the
- * Git repo, artifacts, runs, webhooks, manifests, and every foreign key.
- *
- * `slug` is the mutable, unique, human-facing URL segment used in
- * `/workflow/<slug>`. Renaming it does not rebuild or move technical state.
- */
-export const workflows = snakeCase.table(
-  'workflows',
-  {
-    id: text().primaryKey(),
-    /** Mutable, unique URL slug for `/workflow/<slug>`. */
-    slug: text().notNull(),
-    name: text().notNull(),
-    description: text(),
-    status: text().$type<WorkflowStatus>().notNull().default('draft'),
-    /** Latest parsed source manifest (JSON from authored TS or JSON). */
-    manifest: jsonb().$type<JsonObject>(),
-    /**
-     * JSON Schema (draft 2020-12) of the workflow input, derived from the
-     * workflow's zod schema at deploy time and validated against before each run.
-     */
-    inputSchema: jsonb().$type<JsonObject>(),
-    /** Git bare repository path for this workflow's source. */
-    repoPath: text(),
-    /** Current commit of the authoritative master branch. */
-    currentSourceCommit: text(),
-    currentDeploymentId: ulid(),
-    /** Shared secret for verifying inbound webhook calls (webhook trigger). */
-    webhookSecret: text(),
-    /** Whether this workflow is pinned to the sidebar for quick access. */
-    pinned: boolean().notNull().default(true),
-    sortOrder: integer().notNull().default(0),
-    createdAt,
-    updatedAt,
-  },
-  (table) => [uniqueIndex('workflows_slug_idx').on(table.slug)],
-);
-
-export const workflowDeployments = snakeCase.table(
-  'workflow_deployments',
-  {
-    id: ulid().$defaultFn(genUlid).primaryKey(),
-    workflowId: text()
-      .notNull()
-      .references(() => workflows.id, { onDelete: 'cascade' }),
-    version: integer().notNull().default(1),
-    /** Compatibility contract explicitly selected by the source manifest. */
-    compatibilityVersion: integer().notNull(),
-    status: text()
-      .$type<WorkflowDeploymentStatus>()
-      .notNull()
-      .default('building'),
-    /** Release note for this deployment (required for new deploys). */
-    message: text(),
-    /** Normalized manifest produced by the builder (deployed webhook URL etc). */
-    manifestNormalized: jsonb().$type<JsonObject>(),
-    /** JSON Schema of the workflow input captured at build time. */
-    inputSchema: jsonb().$type<JsonObject>(),
-    /** Commit deployed from the workflow's master branch. */
-    sourceCommit: text(),
-    /** Immutable deploy/v<version> Git tag for this deployment. */
-    sourceTag: text(),
-    /** Versioned filesystem artifact (the bundled single-file program). */
-    artifactPath: text(),
-    buildLog: text(),
-    error: text(),
-    createdAt,
-  },
-  (table) => [
-    // Same per-workflow version allocation as apps; enforce uniqueness at the DB.
-    uniqueIndex('workflow_deployments_workflow_version_idx').on(
-      table.workflowId,
-      table.version,
-    ),
-  ],
-);
-
-/** ================== workflow runs ================== */
-
-export const workflowRuns = snakeCase.table(
-  'workflow_runs',
-  {
-    id: ulid().$defaultFn(genUlid).primaryKey(),
-    workflowId: text()
-      .notNull()
-      .references(() => workflows.id, { onDelete: 'cascade' }),
-    /** Deployment (version) this run executed. */
-    deploymentId: ulid('deployment_id'),
-    version: integer(),
-    trigger: text().$type<WorkflowTrigger>().notNull(),
-    status: text().$type<WorkflowRunStatus>().notNull().default('queued'),
-    /** Validated input the run was started with. */
-    input: jsonb().$type<JsonValue>(),
-    /** Value returned by the workflow's run() on success. */
-    output: jsonb().$type<JsonValue>(),
-    error: text(),
-    /** Captured stdout/stderr that wasn't part of the structured event stream. */
-    log: text(),
-    startedAt: timestamp('started_at'),
-    finishedAt: timestamp('finished_at'),
-    createdAt,
-  },
-  (table) => [
-    // Run listings are always "newest first for one workflow" (plus the global
-    // executions view sorted by createdAt); index the per-workflow access path
-    // like app_cron_runs does.
-    index('workflow_runs_workflow_created_idx').on(
-      table.workflowId,
-      table.createdAt,
-    ),
-  ],
-);
-
-export const workflowRunSteps = snakeCase.table(
-  'workflow_run_steps',
-  {
-    id: ulid().$defaultFn(genUlid).primaryKey(),
-    runId: ulid('run_id')
-      .notNull()
-      .references(() => workflowRuns.id, { onDelete: 'cascade' }),
-    seq: integer().notNull(),
-    name: text().notNull(),
-    status: text().$type<WorkflowRunStepStatus>().notNull().default('running'),
-    attempt: integer().notNull().default(1),
-    output: jsonb().$type<JsonValue>(),
-    error: text(),
-    startedAt: timestamp('started_at'),
-    finishedAt: timestamp('finished_at'),
-    createdAt,
-  },
-  (table) => [
-    // Keyed on attempt too so each retry of a step persists as its own row
-    // (the run inspector renders every attempt); collapsing on (runId, seq)
-    // would overwrite a failed attempt's error/timing with the next try.
-    uniqueIndex('workflow_run_steps_run_seq_attempt_idx').on(
-      table.runId,
-      table.seq,
-      table.attempt,
     ),
   ],
 );
@@ -1014,8 +846,7 @@ export type LogSource =
   | 'deploy'
   | 'backend'
   | 'webhook'
-  | 'cron'
-  | 'workflow';
+  | 'cron';
 
 export const logs = snakeCase.table('logs', {
   id: ulid().$defaultFn(genUlid).primaryKey(),

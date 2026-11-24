@@ -14,7 +14,7 @@ export const tabDetails = {
     glyph: 'apps',
     icon: glyphs.apps,
     androidIcon: 'apps',
-    detail: 'Every App and Workflow',
+    detail: 'Every App',
   },
   agent: {
     label: 'Agent',
@@ -22,13 +22,6 @@ export const tabDetails = {
     icon: glyphs.agent,
     androidIcon: 'auto_awesome',
     detail: 'Conversations with your Agent',
-  },
-  workflows: {
-    label: 'Workflows',
-    glyph: 'workflows',
-    icon: glyphs.workflows,
-    androidIcon: 'account_tree',
-    detail: 'Every automation',
   },
 } as const;
 

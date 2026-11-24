@@ -42,13 +42,12 @@ function AppLayout() {
   // "current App" of its own.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const route = useRouterState({ select: (s) => s.location.hash });
-  const { dashboardId, appSlug, workflowSlug } = useParams({ strict: false });
+  const { dashboardId, appSlug } = useParams({ strict: false });
 
   const openItems = useMemo<DockOpenItem[]>(() => {
     if (appSlug) return [{ kind: 'app', slug: appSlug, route }];
-    if (workflowSlug) return [{ kind: 'workflow', slug: workflowSlug }];
     return [];
-  }, [appSlug, workflowSlug, route]);
+  }, [appSlug, route]);
 
   return (
     <PlatformEventsProvider>

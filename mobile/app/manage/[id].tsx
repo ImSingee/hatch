@@ -30,7 +30,7 @@ export default function ManageAppScreen() {
   const { api, origin } = useSession();
   const accent = useAccent();
   const [problem, setProblem] = useState<string | null>(null);
-  const linked = useLinkedId('apps', id, slug);
+  const linked = useLinkedId(id, slug);
   const query = useQuery({
     queryKey: [origin, 'app', linked.id],
     queryFn: ({ signal }) => api!.app(linked.id!, signal),

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { APP_NAME_MAX_LENGTH, APP_SLUG_MAX_LENGTH } from '~/app-identity';
 import {
-  appWorkflowRefSchema,
   isValidAppSlug,
   type NormalizedManifest,
   normalizeManifest,
@@ -11,22 +10,27 @@ import {
   sourceManifestSchema,
 } from './manifest';
 
-describe('App Workflow references', () => {
-  it('accepts generated and legacy Workflow ids', () => {
-    expect(
-      appWorkflowRefSchema.parse({
-        workflow: '01k43s9az5t2qpy7ejf0hm6vwc',
-      }),
-    ).toEqual({ workflow: '01k43s9az5t2qpy7ejf0hm6vwc' });
-    expect(appWorkflowRefSchema.parse({ workflow: 'legacy-kebab-id' })).toEqual(
-      { workflow: 'legacy-kebab-id' },
+describe('Removed Workflow calls', () => {
+  const manifest = (workflows: unknown) => ({
+    id: 'demo',
+    name: 'Demo',
+    capabilities: {},
+    workflows,
+  });
+
+  it('rejects a manifest that still declares Workflow calls', () => {
+    expect(() =>
+      parseSourceManifest(
+        manifest([{ workflow: 'nightly-digest', alias: 'digest' }]),
+      ),
+    ).toThrow(/workflows is no longer supported.*App tasks/s);
+    expect(() => parseSourceManifest(manifest({}))).toThrow(
+      /workflows is no longer supported/,
     );
   });
 
-  it('rejects unsafe Workflow ids', () => {
-    expect(() =>
-      appWorkflowRefSchema.parse({ workflow: '../daily-digest' }),
-    ).toThrow(/Workflow id/);
+  it('keeps accepting the empty list materialized source JSON carries', () => {
+    expect(() => parseSourceManifest(manifest([]))).not.toThrow();
   });
 });
 

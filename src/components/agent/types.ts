@@ -158,12 +158,6 @@ export const TOOL_LABELS: Record<string, string> = {
   query_app_db: 'Query app DB',
   query_app_data_table: 'Query app Data Table',
   query_app_kv: 'Query app KV',
-  list_workflows: 'List workflows',
-  get_workflow: 'Get workflow',
-  checkout_workflow: 'Checkout workflow',
-  create_workflow: 'Create workflow',
-  deploy_workflow: 'Deploy workflow',
-  rollback_workflow: 'Rollback workflow',
   web_search: 'Web search',
   web_fetch: 'Fetch web page',
   ask: 'Ask the user',
@@ -424,24 +418,6 @@ export function toolInputDetails(
   return undefined;
 }
 
-/** Resource ids that an assistant turn successfully deployed, in call order. */
-function successfullyDeployedIds(
-  blocks: AssistantBlock[],
-  toolResults: ReadonlyMap<string, ToolResultMessage> | undefined,
-  toolName: 'deploy_app' | 'deploy_workflow',
-): string[] {
-  const ids = new Set<string>();
-  for (const block of blocks) {
-    if (block.type === 'toolCall' && block.name === toolName) {
-      const result = toolResults?.get(block.id);
-      if (!result || result.isError) continue;
-      const id = toolArgumentsRecord(block.arguments)?.id;
-      if (typeof id === 'string') ids.add(id);
-    }
-  }
-  return [...ids];
-}
-
 /**
  * App ids that an assistant turn successfully deployed, in call order.
  *
@@ -453,13 +429,14 @@ export function successfullyDeployedAppIds(
   blocks: AssistantBlock[],
   toolResults: ReadonlyMap<string, ToolResultMessage> | undefined,
 ): string[] {
-  return successfullyDeployedIds(blocks, toolResults, 'deploy_app');
-}
-
-/** Workflow ids that an assistant turn successfully deployed, in call order. */
-export function successfullyDeployedWorkflowIds(
-  blocks: AssistantBlock[],
-  toolResults: ReadonlyMap<string, ToolResultMessage> | undefined,
-): string[] {
-  return successfullyDeployedIds(blocks, toolResults, 'deploy_workflow');
+  const ids = new Set<string>();
+  for (const block of blocks) {
+    if (block.type === 'toolCall' && block.name === 'deploy_app') {
+      const result = toolResults?.get(block.id);
+      if (!result || result.isError) continue;
+      const id = toolArgumentsRecord(block.arguments)?.id;
+      if (typeof id === 'string') ids.add(id);
+    }
+  }
+  return [...ids];
 }

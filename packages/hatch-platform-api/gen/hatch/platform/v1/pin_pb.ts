@@ -21,7 +21,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_pin: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9waW4ucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIoQBCglQaW5uZWRBcHASCgoCaWQYASABKAkSDgoGYXBwX2lkGAIgASgJEhAKCGFwcF9zbHVnGAMgASgJEg0KBWxhYmVsGAQgASgJEhcKCmVudHJ5X2hhc2gYBSABKAlIAIgBARISCgphcHBfc3RhdHVzGAYgASgJQg0KC19lbnRyeV9oYXNoIjgKDlBpbm5lZFdvcmtmbG93EgoKAmlkGAEgASgJEgwKBHNsdWcYAiABKAkSDAoEbmFtZRgDIAEoCSIrCg9QaW5uZWREYXNoYm9hcmQSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCSJeCg9MaXN0UGluc1JlcXVlc3QSKAoGY3Vyc29yGAEgASgJQhO6SBByDjIMXlswLTldezEsOX0kSACIAQESFgoFbGltaXQYAiABKA1CB7pIBCoCGGRCCQoHX2N1cnNvciLaAQoQTGlzdFBpbnNSZXNwb25zZRIuCghhcHBfcGlucxgBIAMoCzIcLmhhdGNoLnBsYXRmb3JtLnYxLlBpbm5lZEFwcBI0Cgl3b3JrZmxvd3MYAiADKAsyIS5oYXRjaC5wbGF0Zm9ybS52MS5QaW5uZWRXb3JrZmxvdxI2CgpkYXNoYm9hcmRzGAMgAygLMiIuaGF0Y2gucGxhdGZvcm0udjEuUGlubmVkRGFzaGJvYXJkEhgKC25leHRfY3Vyc29yGAQgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIpkBCg1QaW5BcHBSZXF1ZXN0EhcKA2FwcBgBIAEoCUIKukgHcgUQARjIARIeCgVsYWJlbBgCIAEoCUIKukgHcgUQARj0A0gAiAEBEiMKCmVudHJ5X2hhc2gYAyABKAlCCrpIB3IFEAEYgBBIAYgBARIRCglpZl9hYnNlbnQYBCABKAhCCAoGX2xhYmVsQg0KC19lbnRyeV9oYXNoIkwKDlBpbkFwcFJlc3BvbnNlEikKA3BpbhgBIAEoCzIcLmhhdGNoLnBsYXRmb3JtLnYxLlBpbm5lZEFwcBIPCgdjcmVhdGVkGAIgASgIIokBChNVcGRhdGVBcHBQaW5SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGMgBEh4KBWxhYmVsGAIgASgJQgq6SAdyBRABGPQDSACIAQESIQoKZW50cnlfaGFzaBgDIAEoCUIIukgFcgMYgBBIAYgBAUIICgZfbGFiZWxCDQoLX2VudHJ5X2hhc2giQQoUVXBkYXRlQXBwUGluUmVzcG9uc2USKQoDcGluGAEgASgLMhwuaGF0Y2gucGxhdGZvcm0udjEuUGlubmVkQXBwIlsKD1VucGluQXBwUmVxdWVzdBIcCgZwaW5faWQYASABKAlCCrpIB3IFEAEYyAFIABIZCgNhcHAYAiABKAlCCrpIB3IFEAEYyAFIAEIPCgZ0YXJnZXQSBbpIAggBIisKEFVucGluQXBwUmVzcG9uc2USFwoPcmVtb3ZlZF9waW5faWRzGAEgAygJIkAKFVJlb3JkZXJBcHBQaW5zUmVxdWVzdBInCgdwaW5faWRzGAEgAygJQha6SBOSARAIARDoBxgBIgdyBRABGMgBIkgKFlJlb3JkZXJBcHBQaW5zUmVzcG9uc2USLgoIYXBwX3BpbnMYASADKAsyHC5oYXRjaC5wbGF0Zm9ybS52MS5QaW5uZWRBcHAiSQoYUmVvcmRlckRhc2hib2FyZHNSZXF1ZXN0Ei0KDWRhc2hib2FyZF9pZHMYASADKAlCFrpIE5IBEAgBEOgHGAEiB3IFEAEYyAEiMgoZUmVvcmRlckRhc2hib2FyZHNSZXNwb25zZRIVCg1kYXNoYm9hcmRfaWRzGAEgAygJIkgKGFNldFdvcmtmbG93UGlubmVkUmVxdWVzdBIcCgh3b3JrZmxvdxgBIAEoCUIKukgHcgUQARjIARIOCgZwaW5uZWQYAiABKAgiNwoZU2V0V29ya2Zsb3dQaW5uZWRSZXNwb25zZRIKCgJpZBgBIAEoCRIOCgZwaW5uZWQYAiABKAgiTQoZU2V0RGFzaGJvYXJkUGlubmVkUmVxdWVzdBIgCgxkYXNoYm9hcmRfaWQYASABKAlCCrpIB3IFEAEYyAESDgoGcGlubmVkGAIgASgIIjgKGlNldERhc2hib2FyZFBpbm5lZFJlc3BvbnNlEgoKAmlkGAEgASgJEg4KBnBpbm5lZBgCIAEoCDKgBgoKUGluU2VydmljZRJTCghMaXN0UGlucxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RQaW5zUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RQaW5zUmVzcG9uc2USTQoGUGluQXBwEiAuaGF0Y2gucGxhdGZvcm0udjEuUGluQXBwUmVxdWVzdBohLmhhdGNoLnBsYXRmb3JtLnYxLlBpbkFwcFJlc3BvbnNlEl8KDFVwZGF0ZUFwcFBpbhImLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFwcFBpblJlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVBcHBQaW5SZXNwb25zZRJTCghVbnBpbkFwcBIiLmhhdGNoLnBsYXRmb3JtLnYxLlVucGluQXBwUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLlVucGluQXBwUmVzcG9uc2USZQoOUmVvcmRlckFwcFBpbnMSKC5oYXRjaC5wbGF0Zm9ybS52MS5SZW9yZGVyQXBwUGluc1JlcXVlc3QaKS5oYXRjaC5wbGF0Zm9ybS52MS5SZW9yZGVyQXBwUGluc1Jlc3BvbnNlEm4KEVJlb3JkZXJEYXNoYm9hcmRzEisuaGF0Y2gucGxhdGZvcm0udjEuUmVvcmRlckRhc2hib2FyZHNSZXF1ZXN0GiwuaGF0Y2gucGxhdGZvcm0udjEuUmVvcmRlckRhc2hib2FyZHNSZXNwb25zZRJuChFTZXRXb3JrZmxvd1Bpbm5lZBIrLmhhdGNoLnBsYXRmb3JtLnYxLlNldFdvcmtmbG93UGlubmVkUmVxdWVzdBosLmhhdGNoLnBsYXRmb3JtLnYxLlNldFdvcmtmbG93UGlubmVkUmVzcG9uc2UScQoSU2V0RGFzaGJvYXJkUGlubmVkEiwuaGF0Y2gucGxhdGZvcm0udjEuU2V0RGFzaGJvYXJkUGlubmVkUmVxdWVzdBotLmhhdGNoLnBsYXRmb3JtLnYxLlNldERhc2hib2FyZFBpbm5lZFJlc3BvbnNlYgZwcm90bzM',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9waW4ucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIoQBCglQaW5uZWRBcHASCgoCaWQYASABKAkSDgoGYXBwX2lkGAIgASgJEhAKCGFwcF9zbHVnGAMgASgJEg0KBWxhYmVsGAQgASgJEhcKCmVudHJ5X2hhc2gYBSABKAlIAIgBARISCgphcHBfc3RhdHVzGAYgASgJQg0KC19lbnRyeV9oYXNoIisKD1Bpbm5lZERhc2hib2FyZBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJIl4KD0xpc3RQaW5zUmVxdWVzdBIoCgZjdXJzb3IYASABKAlCE7pIEHIOMgxeWzAtOV17MSw5fSRIAIgBARIWCgVsaW1pdBgCIAEoDUIHukgEKgIYZEIJCgdfY3Vyc29yIrUBChBMaXN0UGluc1Jlc3BvbnNlEi4KCGFwcF9waW5zGAEgAygLMhwuaGF0Y2gucGxhdGZvcm0udjEuUGlubmVkQXBwEjYKCmRhc2hib2FyZHMYAyADKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5QaW5uZWREYXNoYm9hcmQSGAoLbmV4dF9jdXJzb3IYBCABKAlIAIgBAUIOCgxfbmV4dF9jdXJzb3JKBAgCEANSCXdvcmtmbG93cyKZAQoNUGluQXBwUmVxdWVzdBIXCgNhcHAYASABKAlCCrpIB3IFEAEYyAESHgoFbGFiZWwYAiABKAlCCrpIB3IFEAEY9ANIAIgBARIjCgplbnRyeV9oYXNoGAMgASgJQgq6SAdyBRABGIAQSAGIAQESEQoJaWZfYWJzZW50GAQgASgIQggKBl9sYWJlbEINCgtfZW50cnlfaGFzaCJMCg5QaW5BcHBSZXNwb25zZRIpCgNwaW4YASABKAsyHC5oYXRjaC5wbGF0Zm9ybS52MS5QaW5uZWRBcHASDwoHY3JlYXRlZBgCIAEoCCKJAQoTVXBkYXRlQXBwUGluUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARjIARIeCgVsYWJlbBgCIAEoCUIKukgHcgUQARj0A0gAiAEBEiEKCmVudHJ5X2hhc2gYAyABKAlCCLpIBXIDGIAQSAGIAQFCCAoGX2xhYmVsQg0KC19lbnRyeV9oYXNoIkEKFFVwZGF0ZUFwcFBpblJlc3BvbnNlEikKA3BpbhgBIAEoCzIcLmhhdGNoLnBsYXRmb3JtLnYxLlBpbm5lZEFwcCJbCg9VbnBpbkFwcFJlcXVlc3QSHAoGcGluX2lkGAEgASgJQgq6SAdyBRABGMgBSAASGQoDYXBwGAIgASgJQgq6SAdyBRABGMgBSABCDwoGdGFyZ2V0EgW6SAIIASIrChBVbnBpbkFwcFJlc3BvbnNlEhcKD3JlbW92ZWRfcGluX2lkcxgBIAMoCSJAChVSZW9yZGVyQXBwUGluc1JlcXVlc3QSJwoHcGluX2lkcxgBIAMoCUIWukgTkgEQCAEQ6AcYASIHcgUQARjIASJIChZSZW9yZGVyQXBwUGluc1Jlc3BvbnNlEi4KCGFwcF9waW5zGAEgAygLMhwuaGF0Y2gucGxhdGZvcm0udjEuUGlubmVkQXBwIkkKGFJlb3JkZXJEYXNoYm9hcmRzUmVxdWVzdBItCg1kYXNoYm9hcmRfaWRzGAEgAygJQha6SBOSARAIARDoBxgBIgdyBRABGMgBIjIKGVJlb3JkZXJEYXNoYm9hcmRzUmVzcG9uc2USFQoNZGFzaGJvYXJkX2lkcxgBIAMoCSJNChlTZXREYXNoYm9hcmRQaW5uZWRSZXF1ZXN0EiAKDGRhc2hib2FyZF9pZBgBIAEoCUIKukgHcgUQARjIARIOCgZwaW5uZWQYAiABKAgiOAoaU2V0RGFzaGJvYXJkUGlubmVkUmVzcG9uc2USCgoCaWQYASABKAkSDgoGcGlubmVkGAIgASgIMrAFCgpQaW5TZXJ2aWNlElMKCExpc3RQaW5zEiIuaGF0Y2gucGxhdGZvcm0udjEuTGlzdFBpbnNSZXF1ZXN0GiMuaGF0Y2gucGxhdGZvcm0udjEuTGlzdFBpbnNSZXNwb25zZRJNCgZQaW5BcHASIC5oYXRjaC5wbGF0Zm9ybS52MS5QaW5BcHBSZXF1ZXN0GiEuaGF0Y2gucGxhdGZvcm0udjEuUGluQXBwUmVzcG9uc2USXwoMVXBkYXRlQXBwUGluEiYuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlQXBwUGluUmVxdWVzdBonLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFwcFBpblJlc3BvbnNlElMKCFVucGluQXBwEiIuaGF0Y2gucGxhdGZvcm0udjEuVW5waW5BcHBSZXF1ZXN0GiMuaGF0Y2gucGxhdGZvcm0udjEuVW5waW5BcHBSZXNwb25zZRJlCg5SZW9yZGVyQXBwUGlucxIoLmhhdGNoLnBsYXRmb3JtLnYxLlJlb3JkZXJBcHBQaW5zUmVxdWVzdBopLmhhdGNoLnBsYXRmb3JtLnYxLlJlb3JkZXJBcHBQaW5zUmVzcG9uc2USbgoRUmVvcmRlckRhc2hib2FyZHMSKy5oYXRjaC5wbGF0Zm9ybS52MS5SZW9yZGVyRGFzaGJvYXJkc1JlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5SZW9yZGVyRGFzaGJvYXJkc1Jlc3BvbnNlEnEKElNldERhc2hib2FyZFBpbm5lZBIsLmhhdGNoLnBsYXRmb3JtLnYxLlNldERhc2hib2FyZFBpbm5lZFJlcXVlc3QaLS5oYXRjaC5wbGF0Zm9ybS52MS5TZXREYXNoYm9hcmRQaW5uZWRSZXNwb25zZWIGcHJvdG8z',
     [file_buf_validate_validate],
   );
 
@@ -76,34 +76,6 @@ export const PinnedAppSchema: GenMessage<PinnedApp> =
   messageDesc(file_hatch_platform_v1_pin, 0);
 
 /**
- * @generated from message hatch.platform.v1.PinnedWorkflow
- */
-export type PinnedWorkflow = Message<'hatch.platform.v1.PinnedWorkflow'> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: string slug = 2;
-   */
-  slug: string;
-
-  /**
-   * @generated from field: string name = 3;
-   */
-  name: string;
-};
-
-/**
- * Describes the message hatch.platform.v1.PinnedWorkflow.
- * Use `create(PinnedWorkflowSchema)` to create a new message.
- */
-export const PinnedWorkflowSchema: GenMessage<PinnedWorkflow> =
-  /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 1);
-
-/**
  * @generated from message hatch.platform.v1.PinnedDashboard
  */
 export type PinnedDashboard = Message<'hatch.platform.v1.PinnedDashboard'> & {
@@ -124,15 +96,15 @@ export type PinnedDashboard = Message<'hatch.platform.v1.PinnedDashboard'> & {
  */
 export const PinnedDashboardSchema: GenMessage<PinnedDashboard> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 2);
+  messageDesc(file_hatch_platform_v1_pin, 1);
 
 /**
  * @generated from message hatch.platform.v1.ListPinsRequest
  */
 export type ListPinsRequest = Message<'hatch.platform.v1.ListPinsRequest'> & {
   /**
-   * Pages walk one sequence: App pins, then pinned Workflows, then pinned
-   * dashboards, each in the order below. The cursor is the next_cursor of
+   * Pages walk one sequence: App pins, then pinned dashboards, each in the
+   * order below. The cursor is the next_cursor of
    * the previous page.
    *
    * @generated from field: optional string cursor = 1;
@@ -153,7 +125,7 @@ export type ListPinsRequest = Message<'hatch.platform.v1.ListPinsRequest'> & {
  */
 export const ListPinsRequestSchema: GenMessage<ListPinsRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 3);
+  messageDesc(file_hatch_platform_v1_pin, 2);
 
 /**
  * @generated from message hatch.platform.v1.ListPinsResponse
@@ -165,13 +137,6 @@ export type ListPinsResponse = Message<'hatch.platform.v1.ListPinsResponse'> & {
    * @generated from field: repeated hatch.platform.v1.PinnedApp app_pins = 1;
    */
   appPins: PinnedApp[];
-
-  /**
-   * Most recently updated first; archived Workflows are left out.
-   *
-   * @generated from field: repeated hatch.platform.v1.PinnedWorkflow workflows = 2;
-   */
-  workflows: PinnedWorkflow[];
 
   /**
    * In dashboard order.
@@ -194,7 +159,7 @@ export type ListPinsResponse = Message<'hatch.platform.v1.ListPinsResponse'> & {
  */
 export const ListPinsResponseSchema: GenMessage<ListPinsResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 4);
+  messageDesc(file_hatch_platform_v1_pin, 3);
 
 /**
  * @generated from message hatch.platform.v1.PinAppRequest
@@ -236,7 +201,7 @@ export type PinAppRequest = Message<'hatch.platform.v1.PinAppRequest'> & {
  */
 export const PinAppRequestSchema: GenMessage<PinAppRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 5);
+  messageDesc(file_hatch_platform_v1_pin, 4);
 
 /**
  * @generated from message hatch.platform.v1.PinAppResponse
@@ -261,7 +226,7 @@ export type PinAppResponse = Message<'hatch.platform.v1.PinAppResponse'> & {
  */
 export const PinAppResponseSchema: GenMessage<PinAppResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 6);
+  messageDesc(file_hatch_platform_v1_pin, 5);
 
 /**
  * @generated from message hatch.platform.v1.UpdateAppPinRequest
@@ -295,7 +260,7 @@ export type UpdateAppPinRequest =
  */
 export const UpdateAppPinRequestSchema: GenMessage<UpdateAppPinRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 7);
+  messageDesc(file_hatch_platform_v1_pin, 6);
 
 /**
  * @generated from message hatch.platform.v1.UpdateAppPinResponse
@@ -314,7 +279,7 @@ export type UpdateAppPinResponse =
  */
 export const UpdateAppPinResponseSchema: GenMessage<UpdateAppPinResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 8);
+  messageDesc(file_hatch_platform_v1_pin, 7);
 
 /**
  * @generated from message hatch.platform.v1.UnpinAppRequest
@@ -351,7 +316,7 @@ export type UnpinAppRequest = Message<'hatch.platform.v1.UnpinAppRequest'> & {
  */
 export const UnpinAppRequestSchema: GenMessage<UnpinAppRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 9);
+  messageDesc(file_hatch_platform_v1_pin, 8);
 
 /**
  * @generated from message hatch.platform.v1.UnpinAppResponse
@@ -371,7 +336,7 @@ export type UnpinAppResponse = Message<'hatch.platform.v1.UnpinAppResponse'> & {
  */
 export const UnpinAppResponseSchema: GenMessage<UnpinAppResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 10);
+  messageDesc(file_hatch_platform_v1_pin, 9);
 
 /**
  * @generated from message hatch.platform.v1.ReorderAppPinsRequest
@@ -393,7 +358,7 @@ export type ReorderAppPinsRequest =
  */
 export const ReorderAppPinsRequestSchema: GenMessage<ReorderAppPinsRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 11);
+  messageDesc(file_hatch_platform_v1_pin, 10);
 
 /**
  * @generated from message hatch.platform.v1.ReorderAppPinsResponse
@@ -414,7 +379,7 @@ export type ReorderAppPinsResponse =
  */
 export const ReorderAppPinsResponseSchema: GenMessage<ReorderAppPinsResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 12);
+  messageDesc(file_hatch_platform_v1_pin, 11);
 
 /**
  * @generated from message hatch.platform.v1.ReorderDashboardsRequest
@@ -436,7 +401,7 @@ export type ReorderDashboardsRequest =
  */
 export const ReorderDashboardsRequestSchema: GenMessage<ReorderDashboardsRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 13);
+  messageDesc(file_hatch_platform_v1_pin, 12);
 
 /**
  * @generated from message hatch.platform.v1.ReorderDashboardsResponse
@@ -457,57 +422,7 @@ export type ReorderDashboardsResponse =
  */
 export const ReorderDashboardsResponseSchema: GenMessage<ReorderDashboardsResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 14);
-
-/**
- * @generated from message hatch.platform.v1.SetWorkflowPinnedRequest
- */
-export type SetWorkflowPinnedRequest =
-  Message<'hatch.platform.v1.SetWorkflowPinnedRequest'> & {
-    /**
-     * Workflow id or slug.
-     *
-     * @generated from field: string workflow = 1;
-     */
-    workflow: string;
-
-    /**
-     * @generated from field: bool pinned = 2;
-     */
-    pinned: boolean;
-  };
-
-/**
- * Describes the message hatch.platform.v1.SetWorkflowPinnedRequest.
- * Use `create(SetWorkflowPinnedRequestSchema)` to create a new message.
- */
-export const SetWorkflowPinnedRequestSchema: GenMessage<SetWorkflowPinnedRequest> =
-  /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 15);
-
-/**
- * @generated from message hatch.platform.v1.SetWorkflowPinnedResponse
- */
-export type SetWorkflowPinnedResponse =
-  Message<'hatch.platform.v1.SetWorkflowPinnedResponse'> & {
-    /**
-     * @generated from field: string id = 1;
-     */
-    id: string;
-
-    /**
-     * @generated from field: bool pinned = 2;
-     */
-    pinned: boolean;
-  };
-
-/**
- * Describes the message hatch.platform.v1.SetWorkflowPinnedResponse.
- * Use `create(SetWorkflowPinnedResponseSchema)` to create a new message.
- */
-export const SetWorkflowPinnedResponseSchema: GenMessage<SetWorkflowPinnedResponse> =
-  /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 16);
+  messageDesc(file_hatch_platform_v1_pin, 13);
 
 /**
  * @generated from message hatch.platform.v1.SetDashboardPinnedRequest
@@ -531,7 +446,7 @@ export type SetDashboardPinnedRequest =
  */
 export const SetDashboardPinnedRequestSchema: GenMessage<SetDashboardPinnedRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 17);
+  messageDesc(file_hatch_platform_v1_pin, 14);
 
 /**
  * @generated from message hatch.platform.v1.SetDashboardPinnedResponse
@@ -555,12 +470,12 @@ export type SetDashboardPinnedResponse =
  */
 export const SetDashboardPinnedResponseSchema: GenMessage<SetDashboardPinnedResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_pin, 18);
+  messageDesc(file_hatch_platform_v1_pin, 15);
 
 /**
  * Pins are the shortcuts in the platform navigation: App pins (an App can
  * have several, each with its own label and entry point), and the pinned flag
- * of Workflows and dashboards.
+ * of dashboards.
  *
  * @generated from service hatch.platform.v1.PinService
  */
@@ -612,14 +527,6 @@ export const PinService: GenService<{
     methodKind: 'unary';
     input: typeof ReorderDashboardsRequestSchema;
     output: typeof ReorderDashboardsResponseSchema;
-  };
-  /**
-   * @generated from rpc hatch.platform.v1.PinService.SetWorkflowPinned
-   */
-  setWorkflowPinned: {
-    methodKind: 'unary';
-    input: typeof SetWorkflowPinnedRequestSchema;
-    output: typeof SetWorkflowPinnedResponseSchema;
   };
   /**
    * @generated from rpc hatch.platform.v1.PinService.SetDashboardPinned

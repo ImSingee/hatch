@@ -20,7 +20,7 @@ import { SectionHeader } from './section-header';
 
 // Recent cron-trigger history (scheduled fires + manual "Run now"), newest
 // first. Distinct from the backend log stream: structured per-run rows with
-// trigger, status, and duration. Mirrors the workflow Executions table.
+// trigger, status, and duration.
 function CronHistory({ appId }: { appId: string }) {
   const query = useQuery(cronRunsQueryOptions(appId));
   const runs = query.data ?? [];

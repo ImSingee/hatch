@@ -67,12 +67,6 @@ function openTarget(
         params: { id: target.slug, slug: target.slug },
       });
       return;
-    case 'workflow':
-      router.push({
-        pathname: '/workflows/[id]',
-        params: { id: target.slug, slug: target.slug },
-      });
-      return;
     case 'notifications':
       router.push('/notifications');
       return;
@@ -83,19 +77,14 @@ function openTarget(
       });
       return;
     case 'phone':
-      if (target.page === 'pin-app' || target.page === 'pin-workflow') {
-        router.push({
-          pathname: '/pin',
-          params: { kind: target.page === 'pin-app' ? 'apps' : 'workflows' },
-        });
-        return;
-      }
       router.push(
         target.page === 'tabs'
           ? '/navigation'
           : target.page === 'instance'
             ? '/settings'
-            : '/notifications/settings',
+            : target.page === 'pin-app'
+              ? '/pin'
+              : '/notifications/settings',
       );
       return;
     case 'web': {

@@ -25,13 +25,6 @@ type Pin = {
 
 const fixtures = vi.hoisted(() => ({
   pins: [] as Pin[],
-  workflows: [] as {
-    id: string;
-    slug: string;
-    name: string;
-    pinned: boolean;
-    status?: string;
-  }[],
   runnerState: 'connected' as string,
   dockLabels: false,
   apps: [] as {
@@ -76,21 +69,12 @@ vi.mock('~queries/theme', () => ({
     }),
   },
 }));
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['test-workflows'],
-    queryFn: async () => fixtures.workflows,
-  },
-}));
 vi.mock('~server/sidebar', () => ({
   addSidebarItem: async () => undefined,
   removeSidebarItem: async () => undefined,
   reorderSidebarItems: async () => undefined,
   setSidebarPin: async () => undefined,
   updateSidebarItem: async () => undefined,
-}));
-vi.mock('~server/workflows', () => ({
-  setWorkflowPinFn: async () => undefined,
 }));
 vi.mock('~auth/client', () => ({
   authClient: {
@@ -117,20 +101,14 @@ async function renderDesk(initialEntry: string) {
   // Mirrors `src/routes/_app.tsx`: view and dock markers come from the URL.
   function Shell() {
     const route = useRouterState({ select: (s) => s.location.hash });
-    const { dashboardId, appSlug, workflowSlug } = useParams({
+    const { dashboardId, appSlug } = useParams({
       strict: false,
     }) as Record<string, string | undefined>;
     return (
       <DeskShell
         view={dashboardId ? 'home' : 'window'}
         tabDestination={false}
-        openItems={
-          appSlug
-            ? [{ kind: 'app', slug: appSlug, route }]
-            : workflowSlug
-              ? [{ kind: 'workflow', slug: workflowSlug }]
-              : []
-        }
+        openItems={appSlug ? [{ kind: 'app', slug: appSlug, route }] : []}
       >
         <Outlet />
       </DeskShell>
@@ -174,9 +152,6 @@ async function renderDesk(initialEntry: string) {
       page('/apps', 'Apps'),
       page('/app/$appSlug', 'Running app'),
       page('/app/$appSlug/manage', 'Manage app', '/apps'),
-      page('/workflow/$workflowSlug', 'Workflow'),
-      page('/workflow/$workflowSlug/manage', 'Manage workflow'),
-      page('/workflows', 'Workflows'),
       page('/notifications', 'Notifications'),
       page('/dashboards', 'Dashboards'),
       page('/settings', 'Settings'),
@@ -224,7 +199,6 @@ function dockShown() {
 
 beforeEach(() => {
   fixtures.pins = [];
-  fixtures.workflows = [];
   fixtures.apps = [];
   fixtures.runnerState = 'connected';
   fixtures.dockLabels = false;
@@ -253,7 +227,6 @@ test('every destination of the shell is reachable from the menu bar', async () =
 
   for (const [item, target] of [
     ['Dashboards', '/dashboards'],
-    ['Workflows', '/workflows'],
     ['Settings', '/settings'],
   ]) {
     await screen.getByRole('button', { name: 'Account menu' }).click();
@@ -268,14 +241,14 @@ test('every destination of the shell is reachable from the menu bar', async () =
 });
 
 test('a deep link opens its window, and closing returns to the desk', async () => {
-  const { router, screen, path } = await renderDesk('/workflows');
+  const { router, screen, path } = await renderDesk('/dashboards');
 
   await expect
-    .element(screen.getByRole('heading', { name: 'Workflows' }))
+    .element(screen.getByRole('heading', { name: 'Dashboards' }))
     .toBeVisible();
   // Opening a window moves keyboard focus into it.
   expect(document.activeElement).toBe(
-    screen.getByRole('region', { name: 'Workflows' }).element(),
+    screen.getByRole('region', { name: 'Dashboards' }).element(),
   );
 
   await screen.getByRole('link', { name: /^Close window/ }).click();
@@ -284,7 +257,7 @@ test('a deep link opens its window, and closing returns to the desk', async () =
   // The window is still one step back in history.
   router.history.back();
   await expect
-    .element(screen.getByRole('heading', { name: 'Workflows' }))
+    .element(screen.getByRole('heading', { name: 'Dashboards' }))
     .toBeVisible();
 });
 
@@ -349,26 +322,16 @@ test('the dock lists pins and marks the one whose window is open', async () => {
       entryHash: null,
     },
   ];
-  fixtures.workflows = [
-    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
-    { id: 'wf-2', slug: 'unpinned', name: 'Not pinned', pinned: false },
-  ];
 
   const { router, screen } = await renderDesk('/app/todo#settings');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
   const home = dock.getByRole('link', { name: 'Todo home' });
   const settings = dock.getByRole('link', { name: 'Todo settings' });
   const notes = dock.getByRole('link', { name: 'Notes' });
-  const digest = dock.getByRole('link', { name: 'Daily digest' });
 
   await expect.element(home).toHaveAttribute('href', '/app/todo');
   await expect.element(settings).toHaveAttribute('href', '/app/todo#settings');
-  await expect
-    .element(digest)
-    .toHaveAttribute('href', '/workflow/daily-digest');
-  await expect
-    .element(dock.getByRole('link', { name: 'Not pinned' }))
-    .not.toBeInTheDocument();
+  await expect.element(notes).toHaveAttribute('href', '/app/notes');
 
   // An App pinned twice marks only the pin whose entry point is open.
   await expect.element(settings).toHaveAttribute('data-open', 'true');
@@ -380,9 +343,10 @@ test('the dock lists pins and marks the one whose window is open', async () => {
   await expect.element(home).toHaveAttribute('data-open', 'true');
   await expect.element(settings).not.toHaveAttribute('data-open');
 
+  // An App pinned once is marked wherever that App is open.
   await revealDock();
-  await digest.click();
-  await expect.element(digest).toHaveAttribute('data-open', 'true');
+  await notes.click();
+  await expect.element(notes).toHaveAttribute('data-open', 'true');
   await expect.element(home).not.toHaveAttribute('data-open');
 
   // A pin's own actions are in the dock's right-click menu.
@@ -403,14 +367,6 @@ test('the menu bar warns only while the runner is offline, and ⌘K searches', a
       capabilities: { frontend: true },
     },
   ];
-  fixtures.workflows = [
-    {
-      id: 'wf-1',
-      slug: 'morning-digest',
-      name: 'Morning Digest',
-      pinned: false,
-    },
-  ];
   const { screen, path } = await renderDesk('/dashboard/home');
 
   // A connected runner needs no attention.
@@ -420,19 +376,18 @@ test('the menu bar warns only while the runner is offline, and ⌘K searches', a
 
   await userEvent.keyboard('{Control>}k{/Control}');
   const search = screen.getByRole('textbox', {
-    name: 'Search apps, workflows and pages',
+    name: 'Search apps and pages',
   });
   await expect.element(search).toBeVisible();
-  await userEvent.type(search, 'morning');
-  await screen.getByRole('button', { name: 'Morning Digest' }).click();
-  await vi.waitFor(() => expect(path()).toBe('/workflow/morning-digest'));
-
-  await screen
-    .getByRole('button', { name: 'Search apps, workflows and pages' })
-    .click();
-  await userEvent.fill(search, 'water');
+  await userEvent.type(search, 'water');
   await screen.getByRole('button', { name: 'Water Log' }).click();
   await vi.waitFor(() => expect(path()).toBe('/app/water-log'));
+
+  // The menu bar's search button opens the same palette, which finds places.
+  await screen.getByRole('button', { name: 'Search apps and pages' }).click();
+  await userEvent.fill(search, 'dashb');
+  await screen.getByRole('button', { name: 'Dashboards' }).click();
+  await vi.waitFor(() => expect(path()).toBe('/dashboards'));
 });
 
 test('a pin removed elsewhere turns its open edit dialog into a notice', async () => {
@@ -476,13 +431,14 @@ test('an offline runner shows a warning that leads to its status', async () => {
     .toHaveAttribute('href', '/settings/agent-runner');
 });
 
-test('many pinned workflows scroll inside the dock instead of overflowing it', async () => {
+test('many pinned apps scroll inside the dock instead of overflowing it', async () => {
   await page.viewport(600, 800);
-  fixtures.workflows = Array.from({ length: 10 }, (_, index) => ({
-    id: `wf-${index}`,
-    slug: `digest-${index}`,
-    name: `Digest ${index}`,
-    pinned: true,
+  fixtures.pins = Array.from({ length: 10 }, (_, index) => ({
+    id: `pin-${index}`,
+    appId: `app-${index}`,
+    appSlug: `digest-${index}`,
+    label: `Digest ${index}`,
+    entryHash: null,
   }));
   const { screen } = await renderDesk('/apps');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
@@ -493,7 +449,7 @@ test('many pinned workflows scroll inside the dock instead of overflowing it', a
   await vi.waitFor(() => {
     const dockBox = dock.element().getBoundingClientRect();
     const row = last.element().closest<HTMLElement>('[class*="row"]')!;
-    // The Workflows group stays inside the dock, and its row scrolls.
+    // The pins stay inside the dock, and their row scrolls.
     expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(
       dockBox.right + 1,
     );
@@ -511,8 +467,15 @@ test('the dock waits below the edge, rises at it, and stays while its menu is op
       entryHash: null,
     },
   ];
-  fixtures.workflows = [
-    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
+  fixtures.apps = [
+    {
+      id: 'app-9',
+      slug: 'daily-digest',
+      name: 'Daily digest',
+      description: null,
+      status: 'deployed',
+      capabilities: { frontend: true },
+    },
   ];
   const { screen } = await renderDesk('/apps');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
@@ -530,8 +493,8 @@ test('the dock waits below the edge, rises at it, and stays while its menu is op
   // Adding lives in the right-click menu, which keeps the dock up while the
   // pointer is in it.
   await dock.getByRole('link', { name: 'Notes' }).click({ button: 'right' });
-  const addWorkflow = screen.getByRole('menuitem', { name: 'Add a workflow' });
-  await addWorkflow.hover();
+  const addApp = screen.getByRole('menuitem', { name: 'Add an app' });
+  await addApp.hover();
   await expect
     .element(screen.getByRole('menuitem', { name: 'Daily digest' }))
     .toBeVisible();
@@ -547,10 +510,7 @@ test('the dock waits below the edge, rises at it, and stays while its menu is op
   await vi.waitFor(() => expect(dockShown()).toBe(false));
 });
 
-test('an empty dock shows only its add tile; pins end the Apps group with All apps', async () => {
-  fixtures.workflows = [
-    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: false },
-  ];
+test('an empty dock shows only its add tile; pins end with All apps', async () => {
   const { screen, queryClient } = await renderDesk('/apps');
   const dock = screen.getByRole('navigation', { name: 'Dock' });
 
@@ -558,18 +518,6 @@ test('an empty dock shows only its add tile; pins end the Apps group with All ap
     .element(dock.getByRole('button', { name: 'Add app' }))
     .toBeInTheDocument();
   expect(dock.getByRole('link').elements()).toEqual([]);
-
-  // A pinned Workflow alone brings All apps back beside the add tile.
-  fixtures.workflows = [
-    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
-  ];
-  await queryClient.invalidateQueries();
-  await expect
-    .element(dock.getByRole('link', { name: 'All apps' }))
-    .toHaveAttribute('href', '/apps');
-  await expect
-    .element(dock.getByRole('button', { name: 'Add app' }))
-    .toBeInTheDocument();
 
   fixtures.pins = [
     {
@@ -580,24 +528,17 @@ test('an empty dock shows only its add tile; pins end the Apps group with All ap
       entryHash: null,
     },
   ];
-  fixtures.workflows = [
-    { id: 'wf-1', slug: 'daily-digest', name: 'Daily digest', pinned: true },
-  ];
   await queryClient.invalidateQueries();
   await expect
-    .element(dock.getByRole('link', { name: 'Daily digest' }))
-    .toBeInTheDocument();
+    .element(dock.getByRole('link', { name: 'All apps' }))
+    .toHaveAttribute('href', '/apps');
   await expect
     .element(dock.getByRole('button', { name: 'Add app' }))
-    .not.toBeInTheDocument();
-  await expect
-    .element(dock.getByRole('button', { name: /Pin a workflow/ }))
     .not.toBeInTheDocument();
   const links = dock.getByRole('link').elements();
   expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
     'Notes',
     'All apps',
-    'Daily digest',
   ]);
 });
 
