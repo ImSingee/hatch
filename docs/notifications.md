@@ -330,8 +330,9 @@ version (its title, body, `data`, card and form, from
 An answer names the round it was given on: the web and the phone app send
 the round they show (`RespondToNotification.round`, `hatch notification
 respond --round`, required there), and an answer from the push sends the
-revision its notification showed (an app build without that answers the
-version that phone last received). When an edit has asked a new question since, the answer is
+revision its notification showed (an app build without that answers only
+the first question: after a new one its push answers are refused and the
+person answers in the app). When an edit has asked a new question since, the answer is
 refused (`409`, code `notifications.replyRoundChanged`; `QUESTION_CHANGED`
 from the push), even when the new form keeps the old field and option ids.
 Answers that no longer fit the current form are rejected (`400`).

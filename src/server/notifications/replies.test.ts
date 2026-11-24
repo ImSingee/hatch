@@ -1314,6 +1314,11 @@ describe('new questions on the same notification', () => {
     expect(await late.json()).toMatchObject({
       error: { code: 'QUESTION_CHANGED' },
     });
+    // An app build that sends no revision answers only the first question.
+    const unbound = await handleDeviceResponse(
+      deviceRequest({ notificationId: id, answers: { decision: 'approve' } }),
+    );
+    expect(unbound.status).toBe(409);
     const current = await handleDeviceResponse(
       deviceRequest({
         notificationId: id,

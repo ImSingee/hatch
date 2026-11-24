@@ -19,6 +19,7 @@ import {
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
 import { Button } from '../../src/ui/button';
 import { glyphs } from '../../src/ui/glyph.types';
+import { CardBlock, CardStatus } from '../../src/ui/notification-card';
 import {
   Busy,
   Card,
@@ -174,6 +175,16 @@ export default function NotificationScreen() {
             The sender edited this notification on{' '}
             {notificationTime(data.editedAt)}.
           </Text>
+        ) : null}
+        {data.card ? (
+          <Card>
+            <View style={{ gap: 12, alignItems: 'flex-start' }}>
+              <CardStatus card={data.card} />
+              <View style={{ alignSelf: 'stretch' }}>
+                <CardBlock card={data.card} />
+              </View>
+            </View>
+          </Card>
         ) : null}
         {data.body ? (
           <Card>

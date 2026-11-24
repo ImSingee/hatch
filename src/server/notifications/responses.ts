@@ -501,8 +501,11 @@ export async function respondFromDevice(args: {
     throw new AppError('Notification not found.', 404);
   }
   // The action answers the version its notification showed: the revision
-  // the phone sends with it. Older apps send none; theirs is the version this
-  // phone last received. The delivery record only proves eligibility above.
+  // the phone sends with it. App builds from before reply rounds send none,
+  // and the delivery record cannot tell which version they showed (it moves
+  // on when a newer push arrives), so theirs answer only the first question:
+  // after a new one they are refused, and the person answers in the app.
+  // The delivery record only proves eligibility above.
   const shown = (parsed as { revision?: unknown }).revision;
   if (
     shown !== undefined &&
@@ -514,7 +517,7 @@ export async function respondFromDevice(args: {
     notificationId,
     (parsed as { answers?: unknown }).answers,
     { userId: device.userId, via: 'push', destinationId: device.id },
-    { revision: shown ?? received[0]!.revision! },
+    shown === undefined ? { round: 1 } : { revision: shown },
   );
 }
 

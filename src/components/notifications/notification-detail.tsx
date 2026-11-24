@@ -40,6 +40,7 @@ import {
   notificationPriorityLabelKey,
   useNotificationKindName,
 } from './status';
+import { CardBlock, CardStatus } from './notification-card-view';
 import { ReplySection } from './reply-section';
 
 const SOURCE_TYPE_LABEL: Record<
@@ -155,6 +156,16 @@ export function NotificationDetail({ id }: { id: string }) {
             </Group>
           ) : null}
         </Stack>
+        {data.card ? (
+          <Stack gap="sm" mt="lg" align="flex-start">
+            {data.card.status ? <CardStatus card={data.card} /> : null}
+            {data.card.block ? (
+              <Box w="100%">
+                <CardBlock card={data.card} />
+              </Box>
+            ) : null}
+          </Stack>
+        ) : null}
         {data.body ? (
           <Text size="sm" mt="lg" style={{ whiteSpace: 'pre-wrap' }}>
             {data.body}
