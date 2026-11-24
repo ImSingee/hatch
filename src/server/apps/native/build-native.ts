@@ -17,6 +17,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
 import { BUILD_WORK_DIR, REPO_ROOT } from '~agent/paths';
+import { withSandboxOwnership } from '~agent/shell-sandbox';
 import {
   APP_SDK,
   NATIVE_APP_SDK_DEFINITIONS,
@@ -440,17 +441,20 @@ export async function buildNativeFrontend(
     );
     await fs.chmod(work, 0o755);
     await fs.chmod(smokeHost, 0o644);
-    // `nsh test` writes its step harness to `<entry dir>/.nsh/test/`. The
-    // build copy belongs to the platform and the check runs as the sandbox
-    // identity, so give it exactly that one fresh, writable directory.
-    const testDir = path.join(src, entryDir, '.nsh', 'test');
-    await fs.rm(testDir, { recursive: true, force: true });
-    await fs.mkdir(testDir, { recursive: true });
-    await fs.chmod(testDir, 0o777);
-    await nshRun(
-      'Start-up check (nsh test)',
-      ['test', app.entry, '--web-host', smokeHost],
-      { sandboxed: true, timeoutMs: SMOKE_TIMEOUT_MS },
+    // `nsh test` writes its step harness to `<entry dir>/.nsh/test/`; start
+    // from a fresh one.
+    await fs.rm(path.join(src, entryDir, '.nsh', 'test'), {
+      recursive: true,
+      force: true,
+    });
+    // The check runs as the sandbox identity, which owns the private build
+    // copy only while it runs.
+    await withSandboxOwnership([src], () =>
+      nshRun(
+        'Start-up check (nsh test)',
+        ['test', app.entry, '--web-host', smokeHost],
+        { sandboxed: true, timeoutMs: SMOKE_TIMEOUT_MS },
+      ),
     );
 
     // 5) The linked web module and its engine.
