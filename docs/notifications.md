@@ -52,11 +52,12 @@ An answer reaches the Agent as a message in an Agent chat, queued like a
 message a person sends (it starts a run when the chat is idle) and sent as the
 person who answered (`src/server/notifications/agent-answers.ts`). The message
 holds only what Hatch or a member wrote: who answered, the notification id,
-round and source type, each answer by field id and option ids (both limited
-to `[a-z0-9_.-]`) or the typed text as a quoted string, and the routes'
-instructions. The title, body and labels come from the sender (for a Channel,
-anyone holding its token), so they never enter the turn; the Agent reads them
-with `hatch notification get` / `revisions`, as tool output.
+round and source type, each answer by position in the form (`field 2: option
+1`) or the typed text as a quoted string, and the routes' instructions.
+Everything the sender chose, including field and option ids (any text can
+spell out an instruction), stays out of the turn (for a Channel, anyone holding
+its token is the sender); the Agent reads it with `hatch notification get` /
+`revisions`, as tool output, to tell what the positions mean.
 
 - A notification the Agent sent with its Run credential keeps that chat
   (`notifications.agent_session_id`); answers go back there.
