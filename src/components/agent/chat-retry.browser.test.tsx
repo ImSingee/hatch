@@ -87,6 +87,7 @@ const fixtures = vi.hoisted(() => ({
       models: [
         {
           id: 'model-row-1',
+          kind: 'chat',
           modelId: 'model:with-colon',
           name: 'Original model',
           reasoning: true,
@@ -107,6 +108,7 @@ const fixtures = vi.hoisted(() => ({
       models: [
         {
           id: 'model-row-2',
+          kind: 'chat',
           modelId: 'model-latest',
           name: 'Latest model',
           reasoning: false,
