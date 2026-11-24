@@ -18,50 +18,56 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, type ReactNode } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import { DESK_HOME } from './paths';
 import classes from './menu-bar.module.css';
 
 const PLACES: {
   id: string;
-  label: string;
+  label: PlainTranslationKey;
   icon: ReactNode;
   link: LinkProps;
 }[] = [
   {
     id: 'desk',
-    label: 'Desk',
+    label: 'nav.desk',
     icon: <IconLayoutGrid />,
     link: { to: DESK_HOME },
   },
   {
     id: 'agent',
-    label: 'Agent',
+    label: 'nav.agent',
     icon: <IconSparkles />,
     link: { to: '/agent' },
   },
-  { id: 'apps', label: 'All apps', icon: <IconApps />, link: { to: '/apps' } },
+  {
+    id: 'apps',
+    label: 'nav.allApps',
+    icon: <IconApps />,
+    link: { to: '/apps' },
+  },
   {
     id: 'executions',
-    label: 'Executions',
+    label: 'nav.executions',
     icon: <IconActivity />,
     link: { to: '/executions' },
   },
   {
     id: 'dashboards',
-    label: 'Dashboards',
+    label: 'nav.dashboards',
     icon: <IconLayoutDashboard />,
     link: { to: '/dashboards' },
   },
   {
     id: 'notifications',
-    label: 'Notifications',
+    label: 'nav.notifications',
     icon: <IconBell />,
     link: { to: '/notifications' },
   },
   {
     id: 'settings',
-    label: 'Settings',
+    label: 'nav.settings',
     icon: <IconSettings />,
     link: { to: '/settings' },
   },
@@ -78,11 +84,12 @@ const placeIcon = (icon: ReactNode) => (
  * opened from the menu bar or with ⌘K / Ctrl+K anywhere in the shell.
  */
 export function CommandPalette() {
+  const { t } = useI18n();
   return (
     <>
       <UnstyledButton
         className={`${classes.item} ${classes.search}`}
-        aria-label="Search apps and pages"
+        aria-label={t('palette.search')}
         aria-keyshortcuts="Meta+K Control+K"
         onClick={() => spotlight.open()}
       >
@@ -102,22 +109,23 @@ export function CommandPalette() {
  * `spotlight.open()`.
  */
 export function SearchPalette() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const apps = useQuery(appsQueryOptions);
 
   const actions = useMemo<SpotlightActionGroupData[]>(
     () => [
       {
-        group: 'Go to',
+        group: t('palette.goTo'),
         actions: PLACES.map((place) => ({
           id: `place-${place.id}`,
-          label: place.label,
+          label: t(place.label),
           leftSection: placeIcon(place.icon),
           onClick: () => void navigate(place.link),
         })),
       },
       {
-        group: 'Apps',
+        group: t('palette.apps'),
         actions: (apps.data ?? [])
           .filter((app) => app.status !== 'archived')
           .map((app) => ({
@@ -138,7 +146,7 @@ export function SearchPalette() {
           })),
       },
     ],
-    [apps.data, navigate],
+    [apps.data, navigate, t],
   );
 
   return (
@@ -149,14 +157,14 @@ export function SearchPalette() {
       // from search boxes and the Agent composer too.
       tagsToIgnore={[]}
       triggerOnContentEditable
-      nothingFound="Nothing matches. Try an App or page name."
+      nothingFound={t('palette.nothingFound')}
       highlightQuery
       scrollable
       maxHeight={420}
       searchProps={{
         leftSection: <IconSearch size={18} stroke={1.8} />,
-        placeholder: 'Search apps and pages',
-        'aria-label': 'Search apps and pages',
+        placeholder: t('palette.search'),
+        'aria-label': t('palette.search'),
       }}
     />
   );

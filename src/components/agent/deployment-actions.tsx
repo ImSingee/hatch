@@ -11,6 +11,7 @@ import { Link } from '@tanstack/react-router';
 import { IconDots, IconExternalLink, IconSettings } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { useI18n } from '~i18n';
 import type { AppListItem } from '~server/apps';
 import classes from './chat.module.css';
 
@@ -51,26 +52,25 @@ function resolveDeployedResources<T extends DeploymentResource>(
 }
 
 function DeploymentActions({
-  singularLabel,
-  pluralLabel,
+  label,
+  title,
   items,
 }: {
-  singularLabel: string;
-  pluralLabel: string;
+  /** Accessible name of the section. */
+  label: string;
+  /** Visible heading, which may add the count. */
+  title: string;
   items: DeploymentActionItem[];
 }) {
   if (items.length === 0) return null;
-  const plural = items.length > 1;
 
   return (
     <Box
       component="section"
       className={classes.deploymentActions}
-      aria-label={plural ? pluralLabel : singularLabel}
+      aria-label={label}
     >
-      <Text className={classes.deploymentActionsTitle}>
-        {plural ? `${pluralLabel} · ${items.length}` : singularLabel}
-      </Text>
+      <Text className={classes.deploymentActionsTitle}>{title}</Text>
       <Box className={classes.deploymentActionRows}>
         {items.map((item) => (
           <Group
@@ -95,10 +95,11 @@ function DeploymentActions({
   );
 }
 
-function unavailableAction() {
+function UnavailableAction() {
+  const { t } = useI18n();
   return (
     <Text size="xs" c="dimmed" className={classes.unavailableResource}>
-      Unavailable
+      {t('deployment.unavailable')}
     </Text>
   );
 }
@@ -110,6 +111,7 @@ export function AppDeploymentActions({
   ids: string[];
   apps: AppListItem[] | undefined;
 }) {
+  const { t } = useI18n();
   if (!apps) return null;
   const deployedApps = resolveDeployedResources(ids, (reference) =>
     apps.find((app) => app.id === reference || app.slug === reference),
@@ -117,8 +119,16 @@ export function AppDeploymentActions({
 
   return (
     <DeploymentActions
-      singularLabel="Deployed app"
-      pluralLabel="Deployed apps"
+      label={
+        deployedApps.length > 1
+          ? t('deployment.deployedApps')
+          : t('deployment.deployedApp')
+      }
+      title={
+        deployedApps.length > 1
+          ? t('deployment.deployedAppsCount', { count: deployedApps.length })
+          : t('deployment.deployedApp')
+      }
       items={deployedApps.map(({ reference, resource: app }) => {
         const name = app?.name ?? reference;
         const canOpen =
@@ -127,7 +137,7 @@ export function AppDeploymentActions({
           key: app?.id ?? reference,
           name,
           seed: app?.id ?? reference,
-          subtitle: app ? app.slug : 'No longer available',
+          subtitle: app ? app.slug : t('deployment.noLongerAvailable'),
           action: app ? (
             <Group
               gap={4}
@@ -148,7 +158,7 @@ export function AppDeploymentActions({
                     />
                   )}
                 >
-                  Open
+                  {t('common.open')}
                 </Button>
               ) : (
                 <Button
@@ -163,18 +173,21 @@ export function AppDeploymentActions({
                     />
                   )}
                 >
-                  Manage
+                  {t('common.manage')}
                 </Button>
               )}
               {canOpen ? (
                 <Menu position="bottom-end" withinPortal>
                   <Menu.Target>
-                    <Tooltip label={`Manage ${name}`} withArrow>
+                    <Tooltip
+                      label={t('deployment.manageName', { name })}
+                      withArrow
+                    >
                       <ActionIcon
                         variant="subtle"
                         color="gray"
                         size="sm"
-                        aria-label={`More actions for ${name}`}
+                        aria-label={t('deployment.moreActions', { name })}
                       >
                         <IconDots size={16} stroke={1.8} />
                       </ActionIcon>
@@ -191,14 +204,14 @@ export function AppDeploymentActions({
                         />
                       )}
                     >
-                      Manage app
+                      {t('deployment.manageApp')}
                     </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>
               ) : null}
             </Group>
           ) : (
-            unavailableAction()
+            <UnavailableAction />
           ),
         };
       })}

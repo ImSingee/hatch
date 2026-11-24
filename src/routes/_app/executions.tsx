@@ -11,6 +11,7 @@ import {
 } from '~components/page/page';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { RunStatusBadge } from '~components/runs/run-status';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { formatDuration, formatRelative } from '~lib/format';
 import { isActiveRun, type RunListItem } from '~lib/runs';
 import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
@@ -21,11 +22,19 @@ export const Route = createFileRoute('/_app/executions')({
   component: ExecutionsPage,
 });
 
+const TRIGGER_LABEL: Record<string, PlainTranslationKey> = {
+  manual: 'runTrigger.manual',
+  cron: 'runTrigger.cron',
+  webhook: 'runTrigger.webhook',
+  app: 'runTrigger.app',
+};
+
 /** Fast refresh while a run is in flight; slow idle poll picks up new ones. */
 const pollActive = (runs: { status: RunListItem['status'] }[] | undefined) =>
   (runs ?? []).some((run) => isActiveRun(run.status)) ? 1500 : 15_000;
 
 function ExecutionsPage() {
+  const { t } = useI18n();
   const initial = Route.useLoaderData();
   const navigate = useNavigate();
   const taskQuery = useQuery({
@@ -39,41 +48,38 @@ function ExecutionsPage() {
   return (
     <DeskWindow
       fill
-      title="Executions"
+      title={t('nav.executions')}
       tile={
         <ThemeIcon size={22} radius="xs" color="dark">
           <IconTimeline size={13} stroke={2.4} />
         </ThemeIcon>
       }
-      closeTo={{ link: { to: '/apps' }, label: 'All apps' }}
+      closeTo={{ link: { to: '/apps' }, label: t('nav.allApps') }}
     >
       <WindowBody>
-        <Toolbar
-          lead={`Run history across App tasks · ${rows.length} execution${rows.length === 1 ? '' : 's'}`}
-        >
+        <Toolbar lead={t('executions.lead', { count: rows.length })}>
           <Button component={Link} to="/apps" variant="default">
-            Apps
+            {t('executions.apps')}
           </Button>
         </Toolbar>
         {rows.length === 0 ? (
           <EmptyState
             tone="accent"
             icon={<IconTimeline size={26} stroke={1.6} />}
-            title="No executions yet"
+            title={t('executions.emptyTitle')}
           >
-            Run an App task manually, on a schedule, or via webhook and every
-            run will show up here.
+            {t('executions.emptyBody')}
           </EmptyState>
         ) : (
           <TableCard>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Source</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Trigger</Table.Th>
-                <Table.Th>Steps</Table.Th>
-                <Table.Th>Duration</Table.Th>
-                <Table.Th>Started</Table.Th>
+                <Table.Th>{t('executions.column.source')}</Table.Th>
+                <Table.Th>{t('executions.column.status')}</Table.Th>
+                <Table.Th>{t('executions.column.trigger')}</Table.Th>
+                <Table.Th>{t('executions.column.steps')}</Table.Th>
+                <Table.Th>{t('executions.column.duration')}</Table.Th>
+                <Table.Th>{t('executions.column.started')}</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -123,8 +129,10 @@ function ExecutionsPage() {
                     <RunStatusBadge status={run.status} />
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm" c="dimmed" tt="capitalize">
-                      {run.trigger}
+                    <Text size="sm" c="dimmed">
+                      {TRIGGER_LABEL[run.trigger]
+                        ? t(TRIGGER_LABEL[run.trigger])
+                        : run.trigger}
                     </Text>
                   </Table.Td>
                   <Table.Td>

@@ -26,6 +26,7 @@ import {
 } from '~agent/composer-content';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { useEventCallback } from '~hooks/use-latest-committed';
+import { useI18n } from '~i18n';
 import type { AppListItem } from '~server/apps';
 import {
   composerDocumentFromParts,
@@ -111,6 +112,7 @@ const ResourceMentionMenu = forwardRef<
   },
   reference,
 ) {
+  const { t } = useI18n();
   const hasQuery = query.trim().length > 0;
   const navigationLength = items.length;
   const selectionKey = JSON.stringify([query, items.map((item) => item.id)]);
@@ -180,13 +182,13 @@ const ResourceMentionMenu = forwardRef<
   }));
 
   const status = source.loading
-    ? 'Loading Apps…'
+    ? t('mention.loading')
     : source.error
-      ? 'Could not load Apps'
+      ? t('mention.loadFailed')
       : null;
   let emptyMessage: string | null = null;
   if (items.length === 0 && !status) {
-    emptyMessage = hasQuery ? 'No matching Apps' : 'No Apps yet';
+    emptyMessage = hasQuery ? t('mention.noMatches') : t('mention.empty');
   }
 
   return (
@@ -197,7 +199,7 @@ const ResourceMentionMenu = forwardRef<
       p={4}
       className={classes.mentionMenu}
       role="listbox"
-      aria-label="Apps"
+      aria-label={t('mention.label')}
     >
       {items.length > 0 ? (
         <div className={classes.mentionMenuItems}>

@@ -26,6 +26,7 @@ import {
 } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
+import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import {
   addSidebarItem,
@@ -83,6 +84,7 @@ function dockKeyOf(target: EventTarget | null) {
  * and a dock with no pins at all shows nothing else.
  */
 export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -115,7 +117,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     mutationFn: (appId: string) =>
       setSidebarPin({ data: { appId, pinned: true } }),
     onSuccess: () => {
-      toast.success('Pinned to the dock');
+      toast.success(t('dock.pinned'));
     },
     onSettled: () => void invalidatePins(),
   });
@@ -140,7 +142,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const remove = useMutation({
     mutationFn: (id: string) => removeSidebarItem({ data: { id } }),
     onSuccess: () => {
-      toast.success('Unpinned');
+      toast.success(t('dock.unpinned'));
     },
     onSettled: () => void invalidatePins(),
   });
@@ -156,9 +158,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     // The server names the stale pin by id, which means nothing here.
     meta: { errorToast: false },
     onError: () => {
-      toast.error(
-        'The dock changed while you were moving that pin. It now shows the current order; try again.',
-      );
+      toast.error(t('dock.reorderConflict'));
     },
     onSettled: () => void invalidatePins(),
   });
@@ -175,7 +175,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const hasPins = Boolean(pins?.length);
 
   const goCreate = () => {
-    toast.info('Tell the Agent what App to build');
+    toast.info(t('dock.createHint'));
     void navigate({ to: '/agent' });
   };
 
@@ -192,13 +192,13 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
           })
         }
       >
-        Edit
+        {t('common.edit')}
       </Menu.Item>
       <Menu.Item
         leftSection={<IconPinnedOff size={15} stroke={1.7} />}
         onClick={() => remove.mutate(item.id)}
       >
-        Unpin
+        {t('dock.unpin')}
       </Menu.Item>
       <Menu.Item
         leftSection={<IconSettings size={15} stroke={1.7} />}
@@ -210,7 +210,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
           />
         )}
       >
-        Manage
+        {t('common.manage')}
       </Menu.Item>
     </>
   );
@@ -219,7 +219,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
     <>
       {unpinnedApps.length > 0 ? (
         <>
-          <Menu.Label>Pin a deployed app</Menu.Label>
+          <Menu.Label>{t('dock.pinDeployed')}</Menu.Label>
           {unpinnedApps.map((s) => (
             <Menu.Item
               key={s.id}
@@ -236,7 +236,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
       ) : null}
       {pinnedApps.length > 0 ? (
         <>
-          <Menu.Label>Add another shortcut</Menu.Label>
+          <Menu.Label>{t('dock.addShortcut')}</Menu.Label>
           {pinnedApps.map((s) => (
             <Menu.Item
               key={s.id}
@@ -252,7 +252,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         </>
       ) : null}
       {openable.length === 0 ? (
-        <Menu.Item disabled>No deployed apps yet</Menu.Item>
+        <Menu.Item disabled>{t('dock.noDeployedApps')}</Menu.Item>
       ) : null}
     </>
   );
@@ -271,7 +271,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
       <Menu.Sub>
         <Menu.Sub.Target>
           <Menu.Sub.Item leftSection={<IconAppWindow size={15} stroke={1.7} />}>
-            Add an app
+            {t('dock.addAnApp')}
           </Menu.Sub.Item>
         </Menu.Sub.Target>
         <Menu.Sub.Dropdown miw={220}>{appPicker}</Menu.Sub.Dropdown>
@@ -280,7 +280,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         leftSection={<IconSparkles size={15} stroke={1.7} />}
         onClick={goCreate}
       >
-        New with Agent
+        {t('dock.newWithAgent')}
       </Menu.Item>
     </>
   );
@@ -303,7 +303,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
         <Menu.ContextMenu>
           {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Only keeps a right-click from moving focus, notes which tile a long press is on, and opens the menu from Shift+F10; the dock's tiles stay the interactive elements. */}
           <nav
-            aria-label="Dock"
+            aria-label={t('dock.label')}
             className={classes.dock}
             data-labels={labels ? 'shown' : 'hidden'}
             onMouseDown={(event) => {
@@ -348,14 +348,17 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                     />
                   ) : null}
                   {pins && pins.length === 0 ? (
-                    <DockAddButton label="Add app" hintHidden={menuOpen}>
+                    <DockAddButton
+                      label={t('dock.addApp')}
+                      hintHidden={menuOpen}
+                    >
                       {appPicker}
                     </DockAddButton>
                   ) : null}
                 </div>
                 {hasPins ? (
                   <DockItem
-                    label="All apps"
+                    label={t('nav.allApps')}
                     open={pathname === '/apps'}
                     glyph={<AllAppsGlyph />}
                     renderLink={(props) => <Link to="/apps" {...props} />}
@@ -399,9 +402,15 @@ function EditPinDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   // Keyed by pin so each opening starts from that pin's values.
   return (
-    <Modal opened={target !== null} onClose={onClose} title="Edit pin" centered>
+    <Modal
+      opened={target !== null}
+      onClose={onClose}
+      title={t('dock.editPin')}
+      centered
+    >
       {target ? (
         <EditPinForm
           key={target.id}
@@ -426,6 +435,7 @@ function EditPinForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [label, setLabel] = useState(target.label);
   const [hash, setHash] = useState(target.entryHash);
   // Whether the pin has been seen in the live pins since the dialog opened:
@@ -442,7 +452,7 @@ function EditPinForm({
     mutationFn: (input: { id: string; label: string; entryHash: string }) =>
       updateSidebarItem({ data: input }),
     onSuccess: () => {
-      toast.success('Pin updated');
+      toast.success(t('dock.pinUpdated'));
     },
     // Close on failure too: the pin being edited may be gone.
     onSettled: () => {
@@ -460,13 +470,10 @@ function EditPinForm({
   if (gone) {
     return (
       <Stack gap="sm">
-        <Text size="sm">
-          This pin was removed from the dock elsewhere, so there is nothing left
-          to edit.
-        </Text>
+        <Text size="sm">{t('dock.pinGone')}</Text>
         <Group justify="flex-end">
           <Button type="button" onClick={onClose}>
-            Close
+            {t('common.close')}
           </Button>
         </Group>
       </Stack>
@@ -477,7 +484,7 @@ function EditPinForm({
     <Stack gap="sm">
       <TextInput
         data-autofocus
-        label="Name"
+        label={t('dock.pinName')}
         value={label}
         onChange={(e) => setLabel(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -489,8 +496,8 @@ function EditPinForm({
       />
       <AppRouteAutocomplete
         routes={manifest?.app?.routes ?? []}
-        label="Entry point"
-        description="Open the app at a specific page. Leave blank for the app home."
+        label={t('dock.entryPoint')}
+        description={t('dock.entryPointDescription')}
         placeholder="/settings"
         value={hash}
         onChange={setHash}
@@ -502,7 +509,7 @@ function EditPinForm({
           disabled={!label.trim()}
           onClick={submit}
         >
-          Save
+          {t('common.save')}
         </Button>
       </Group>
     </Stack>

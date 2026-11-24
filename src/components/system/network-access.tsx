@@ -1,5 +1,6 @@
 import { Code, Group, Stack, Text } from '@mantine/core';
 import type { NetworkAccessView } from '~/network-policy';
+import { useI18n } from '~i18n';
 
 export function NetworkAccessDetails({
   access,
@@ -8,22 +9,23 @@ export function NetworkAccessDetails({
   access: NetworkAccessView | null;
   appPlatformChannels?: boolean;
 }) {
+  const { t } = useI18n();
   if (!access) {
     return (
       <Text size="sm" c="dimmed">
-        Not deployed
+        {t('permissions.notDeployed')}
       </Text>
     );
   }
 
   const summary =
     access.mode === 'blocked'
-      ? 'No external destinations'
+      ? t('network.blocked')
       : access.mode === 'restricted'
-        ? 'Declared destinations only'
+        ? t('network.restricted')
         : access.legacy
-          ? 'Unrestricted (not declared)'
-          : 'Unrestricted';
+          ? t('network.unrestrictedLegacy')
+          : t('network.unrestricted');
 
   return (
     <Stack gap={5} style={{ minWidth: 0 }}>
@@ -36,10 +38,9 @@ export function NetworkAccessDetails({
         </Group>
       ) : null}
       <Text size="xs" c="dimmed">
-        Covers HTTP, HTTPS, TCP, UDP, DNS, and network listeners through Deno.
         {appPlatformChannels
-          ? ' The platform listener and enabled Database, Data Tables, and KV channels remain available.'
-          : ''}
+          ? `${t('network.coverage')} ${t('network.platformChannels')}`
+          : t('network.coverage')}
       </Text>
     </Stack>
   );

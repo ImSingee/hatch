@@ -6,7 +6,6 @@ import {
   IconPlugConnected,
   IconSparkles,
 } from '@tabler/icons-react';
-import dayjs from 'dayjs';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -23,6 +22,7 @@ import {
 } from '~components/agent/model-value';
 import { createEmptyAgentSession } from '~components/agent/new-chat-api';
 import { startAgentRunRequest } from '~components/agent/use-agent-stream';
+import { useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import classes from './quick-agent-chat.module.css';
@@ -33,6 +33,7 @@ import classes from './quick-agent-chat.module.css';
  * opens it there, so the conversation continues in the Agent.
  */
 export function QuickAgentChat() {
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const sessions = useQuery(sessionsQueryOptions);
@@ -78,7 +79,7 @@ export function QuickAgentChat() {
       return true;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Could not start the chat.',
+        error instanceof Error ? error.message : t('quickChat.startFailed'),
       );
       setStarting(false);
       return false;
@@ -92,7 +93,7 @@ export function QuickAgentChat() {
           <IconSparkles size={14} stroke={2} />
         </span>
         <h2 id="quick-chat-title" className={classes.title}>
-          Agent quick chat
+          {t('quickChat.title')}
         </h2>
         <ActionIcon
           component={Link}
@@ -101,7 +102,7 @@ export function QuickAgentChat() {
           color="gray"
           size={30}
           radius="md"
-          aria-label="Open the Agent in a window"
+          aria-label={t('quickChat.openWindow')}
         >
           <IconArrowUpRight size={15} stroke={2} />
         </ActionIcon>
@@ -110,10 +111,10 @@ export function QuickAgentChat() {
       <nav aria-labelledby="quick-chat-recent" className={classes.recent}>
         <div className={classes.recentHead}>
           <span id="quick-chat-recent" className={classes.label}>
-            Recent sessions
+            {t('quickChat.recent')}
           </span>
           <Anchor component={Link} to="/agent" size="xs" fw={700}>
-            All sessions ›
+            {t('quickChat.allSessions')}
           </Anchor>
         </div>
         {sessions.isPending ? (
@@ -122,7 +123,7 @@ export function QuickAgentChat() {
           ))
         ) : recent.length === 0 ? (
           <Text size="sm" c="dimmed" px="sm" py={6}>
-            No sessions yet.
+            {t('quickChat.noSessions')}
           </Text>
         ) : (
           recent.map((session) => (
@@ -132,8 +133,16 @@ export function QuickAgentChat() {
               params={{ threadId: session.id }}
               className={classes.session}
             >
-              <strong>{session.title || 'New chat'}</strong>
-              <span>{dayjs(session.updatedAt).format('MMM D, HH:mm')}</span>
+              <strong>{session.title || t('quickChat.newChat')}</strong>
+              <span>
+                {new Intl.DateTimeFormat(locale, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hourCycle: 'h23',
+                }).format(new Date(session.updatedAt))}
+              </span>
             </Link>
           ))
         )}
@@ -143,10 +152,9 @@ export function QuickAgentChat() {
         <span className={classes.promptTile} aria-hidden>
           <IconSparkles size={28} stroke={1.6} />
         </span>
-        <h3 className={classes.promptTitle}>What do you want to make?</h3>
+        <h3 className={classes.promptTitle}>{t('quickChat.promptTitle')}</h3>
         <Text size="sm" c="dimmed" fw={600} maw={300}>
-          Describe it in a sentence and the Agent builds it as an App, without
-          leaving the desk.
+          {t('quickChat.promptBody')}
         </Text>
       </div>
 
@@ -155,7 +163,7 @@ export function QuickAgentChat() {
           <div className={classes.guard}>
             <IconPlugConnected size={18} stroke={1.8} aria-hidden />
             <Text size="sm" fw={700}>
-              Connect an AI provider to start
+              {t('quickChat.connectProvider')}
             </Text>
             <Button
               component={Link}
@@ -163,7 +171,7 @@ export function QuickAgentChat() {
               size="compact-sm"
               variant="default"
             >
-              Go to Settings
+              {t('quickChat.goToSettings')}
             </Button>
           </div>
         ) : (
@@ -173,7 +181,7 @@ export function QuickAgentChat() {
             appsLoading={apps.isLoading}
             appsError={apps.isError}
             disabled={starting}
-            placeholder="Describe the app you want…"
+            placeholder={t('quickChat.placeholder')}
             modelControl={
               <ModelPicker
                 groups={groups}

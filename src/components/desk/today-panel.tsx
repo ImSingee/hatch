@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { IconCalendarEvent, IconRoute } from '@tabler/icons-react';
 import dayjs from 'dayjs';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import type { RunStatus } from '~lib/runs';
 import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
 import classes from './today-panel.module.css';
@@ -10,12 +11,12 @@ import classes from './today-panel.module.css';
 const ACTIVE_POLL_MS = 5_000;
 const IDLE_POLL_MS = 60_000;
 
-const STATUS_LABEL: Record<RunStatus, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  succeeded: 'Done',
-  failed: 'Failed',
-  canceled: 'Canceled',
+const STATUS_LABEL: Record<RunStatus, PlainTranslationKey> = {
+  queued: 'runStatus.queued',
+  running: 'runStatus.running',
+  succeeded: 'runStatus.done',
+  failed: 'runStatus.failed',
+  canceled: 'runStatus.canceled',
 };
 
 /**
@@ -24,6 +25,7 @@ const STATUS_LABEL: Record<RunStatus, string> = {
  * today's App task runs.
  */
 export function TodayPanel() {
+  const { t, locale } = useI18n();
   // No platform event announces run progress, so poll while the desk is
   // visible: quickly while a run is in flight, slowly otherwise so newly
   // scheduled runs still appear. Paused when the tab is hidden.
@@ -47,16 +49,20 @@ export function TodayPanel() {
           <IconCalendarEvent size={15} stroke={2} />
         </span>
         <h2 id="today-panel-title" className={classes.title}>
-          Today
+          {t('today.title')}
         </h2>
         {runs.data ? (
           <span className={classes.meta}>
-            {today.length} {today.length === 1 ? 'run' : 'runs'}
+            {t('today.runs', { count: today.length })}
           </span>
         ) : null}
       </header>
       <Text size="sm" fw={700} c="dimmed">
-        {dayjs().format('dddd, MMMM D')}
+        {new Intl.DateTimeFormat(locale, {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+        }).format(dayjs().toDate())}
       </Text>
       {runs.isPending ? (
         <div className={classes.list} aria-hidden>
@@ -67,7 +73,7 @@ export function TodayPanel() {
       ) : runs.isError ? (
         <div className={classes.empty} role="alert">
           <Text size="sm" fw={700}>
-            Today’s runs could not be loaded
+            {t('today.loadFailed')}
           </Text>
           <Button
             type="button"
@@ -75,14 +81,14 @@ export function TodayPanel() {
             variant="default"
             onClick={() => void runs.refetch()}
           >
-            Try again
+            {t('common.tryAgain')}
           </Button>
         </div>
       ) : today.length === 0 ? (
         <div className={classes.empty}>
           <IconRoute size={28} stroke={1.6} aria-hidden />
           <Text size="sm" fw={700} c="dimmed">
-            Nothing has run today
+            {t('today.empty')}
           </Text>
         </div>
       ) : (
@@ -101,7 +107,7 @@ export function TodayPanel() {
                   {dayjs(run.createdAt).format('HH:mm')}
                 </span>
                 <span className={classes.status} data-status={run.status}>
-                  {STATUS_LABEL[run.status]}
+                  {t(STATUS_LABEL[run.status])}
                 </span>
               </Link>
             </li>
@@ -110,10 +116,10 @@ export function TodayPanel() {
       )}
       <div className={classes.footer}>
         <Button component={Link} to="/apps" variant="default" size="sm">
-          All apps
+          {t('nav.allApps')}
         </Button>
         <Link to="/executions" className={classes.more}>
-          Executions ›
+          {t('today.executionsLink')}
         </Link>
       </div>
     </article>

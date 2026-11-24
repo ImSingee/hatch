@@ -23,6 +23,7 @@ import {
 } from '~components/page/page';
 import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
 import { StatusBadge } from '~components/system/status-badge';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { formatRelative } from '~lib/format';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import type { AppListItem } from '~server/apps';
@@ -42,9 +43,9 @@ type Entry = {
 
 type Grouping = 'name' | 'recent';
 
-const GROUPINGS: { value: Grouping; label: string }[] = [
-  { value: 'name', label: 'A–Z' },
-  { value: 'recent', label: 'Recent' },
+const GROUPINGS: { value: Grouping; label: PlainTranslationKey }[] = [
+  { value: 'name', label: 'library.groupByName' },
+  { value: 'recent', label: 'library.groupByRecent' },
 ];
 
 const keyOf = (entry: Entry) => entry.id;
@@ -55,14 +56,14 @@ const byName = (a: Entry, b: Entry) =>
 const byRecent = (a: Entry, b: Entry) =>
   dayjs(b.updatedAt).valueOf() - dayjs(a.updatedAt).valueOf();
 
-function recentBucket(updatedAt: string): string {
+function recentBucket(updatedAt: string): PlainTranslationKey {
   const days = dayjs()
     .startOf('day')
     .diff(dayjs(updatedAt).startOf('day'), 'day');
-  if (days <= 0) return 'Today';
-  if (days < 7) return 'This week';
-  if (days < 31) return 'This month';
-  return 'Earlier';
+  if (days <= 0) return 'library.recent.today';
+  if (days < 7) return 'library.recent.thisWeek';
+  if (days < 31) return 'library.recent.thisMonth';
+  return 'library.recent.earlier';
 }
 
 function letterOf(name: string): string {
@@ -70,26 +71,27 @@ function letterOf(name: string): string {
   return /\p{L}/u.test(first) ? first : '#';
 }
 
-function groupEntries(
-  entries: Entry[],
-  grouping: Grouping,
-): { title: string; items: Entry[] }[] {
+/** A group of tiles: a letter for A–Z, a translated period for Recent. */
+type EntryGroup = {
+  id: string;
+  title: { letter: string } | { key: PlainTranslationKey };
+  items: Entry[];
+};
+
+function groupEntries(entries: Entry[], grouping: Grouping): EntryGroup[] {
   const sorted = [...entries].sort(grouping === 'name' ? byName : byRecent);
-  const groups: { title: string; items: Entry[] }[] = [];
+  const groups: EntryGroup[] = [];
   for (const entry of sorted) {
-    const title =
+    const title: EntryGroup['title'] =
       grouping === 'name'
-        ? letterOf(entry.name)
-        : recentBucket(entry.updatedAt);
+        ? { letter: letterOf(entry.name) }
+        : { key: recentBucket(entry.updatedAt) };
+    const id = 'letter' in title ? title.letter : title.key;
     const last = groups.at(-1);
-    if (last?.title === title) last.items.push(entry);
-    else groups.push({ title, items: [entry] });
+    if (last && last.id === id) last.items.push(entry);
+    else groups.push({ id, title, items: [entry] });
   }
   return groups;
-}
-
-function plural(count: number, noun: string) {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 /** Which tile a right-click or long press landed on. */
@@ -106,6 +108,7 @@ function entryKeyOf(target: EventTarget | null) {
  * right-click menu, also opened by a long press or Shift+F10.
  */
 export function AppLibrary({ apps }: { apps: AppListItem[] }) {
+  const { t } = useI18n();
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const [query, setQuery] = useState('');
   const [grouping, setGrouping] = useState<Grouping>('name');
@@ -142,19 +145,18 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
         <EmptyState
           tone="accent"
           icon={<IconStack2 size={26} stroke={1.6} />}
-          title="No apps yet"
+          title={t('library.emptyTitle')}
           actions={
             <Button
               component={Link}
               to="/agent"
               leftSection={<IconPlus size={16} stroke={2} />}
             >
-              Build your first app
+              {t('library.buildFirst')}
             </Button>
           }
         >
-          Open the Agent and describe what you want — a tracker, a CRM, a
-          dashboard — and it will scaffold, build, and deploy it here.
+          {t('library.emptyBody')}
         </EmptyState>
       </WindowBody>
     );
@@ -162,11 +164,18 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
 
   return (
     <WindowBody>
-      <Toolbar lead={plural(apps.length, 'app')}>
-        <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
+      <Toolbar lead={t('library.count', { count: apps.length })}>
+        <ToolbarSearch
+          label={t('library.search')}
+          value={query}
+          onChange={setQuery}
+        />
         <SegmentedControl
-          aria-label="Group by"
-          data={GROUPINGS}
+          aria-label={t('library.groupBy')}
+          data={GROUPINGS.map((option) => ({
+            value: option.value,
+            label: t(option.label),
+          }))}
           value={grouping}
           onChange={(value) => setGrouping(value as Grouping)}
         />
@@ -176,21 +185,21 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
           size="md"
           leftSection={<IconPlus size={16} stroke={2} />}
         >
-          New app
+          {t('library.newApp')}
         </Button>
       </Toolbar>
 
       {matching.length === 0 ? (
         <EmptyState
           icon={<IconSearchOff size={26} stroke={1.6} />}
-          title="Nothing matches"
+          title={t('library.noMatchTitle')}
           actions={
             <Button variant="default" onClick={() => setQuery('')}>
-              Clear search
+              {t('library.clearSearch')}
             </Button>
           }
         >
-          No app matches “{query.trim()}”.
+          {t('library.noMatchBody', { query: query.trim() })}
         </EmptyState>
       ) : (
         <Menu
@@ -208,26 +217,32 @@ export function AppLibrary({ apps }: { apps: AppListItem[] }) {
               onTouchStart={(event) => noteTarget(event.target)}
               onKeyDown={openContextMenuFromKeyboard}
             >
-              {groups.map((group) => (
-                <section key={group.title} aria-label={group.title}>
-                  <h3 className={classes.groupHead}>
-                    {group.title}
-                    <span className={classes.groupCount}>
-                      {group.items.length}
-                    </span>
-                    <span className={classes.groupRule} aria-hidden />
-                  </h3>
-                  <div className={classes.grid}>
-                    {group.items.map((entry) => (
-                      <EntryTile
-                        key={keyOf(entry)}
-                        entry={entry}
-                        cardHidden={menuOpen}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              {groups.map((group) => {
+                const title =
+                  'letter' in group.title
+                    ? group.title.letter
+                    : t(group.title.key);
+                return (
+                  <section key={group.id} aria-label={title}>
+                    <h3 className={classes.groupHead}>
+                      {title}
+                      <span className={classes.groupCount}>
+                        {group.items.length}
+                      </span>
+                      <span className={classes.groupRule} aria-hidden />
+                    </h3>
+                    <div className={classes.grid}>
+                      {group.items.map((entry) => (
+                        <EntryTile
+                          key={keyOf(entry)}
+                          entry={entry}
+                          cardHidden={menuOpen}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           </Menu.ContextMenu>
           <Menu.Dropdown>
@@ -268,6 +283,7 @@ function EntryTile({
   entry: Entry;
   cardHidden: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <HoverCard
       openDelay={500}
@@ -286,7 +302,7 @@ function EntryTile({
             <AppGlyph size="xl" name={entry.name} seed={entry.id} />
             {entry.pinned ? (
               <span className={classes.pinned}>
-                <IconPinFilled size={9} aria-label="Pinned" />
+                <IconPinFilled size={9} aria-label={t('library.pinned')} />
               </span>
             ) : null}
           </span>
@@ -302,18 +318,20 @@ function EntryTile({
           <div className={classes.cardTitle}>
             <span className={classes.cardName}>{entry.name}</span>
             <span className={classes.cardMeta}>
-              App · Updated {formatRelative(entry.updatedAt)}
+              {t('library.cardMeta', {
+                when: formatRelative(entry.updatedAt),
+              })}
             </span>
           </div>
         </div>
         <div className={classes.cardBadges}>
           <StatusBadge status={entry.status} />
           {entry.pinned ? (
-            <span className={classes.cardFact}>In the dock</span>
+            <span className={classes.cardFact}>{t('library.inDock')}</span>
           ) : null}
         </div>
         <p className={classes.cardText}>
-          {entry.description || 'No description yet.'}
+          {entry.description || t('library.noDescription')}
         </p>
       </HoverCard.Dropdown>
     </HoverCard>
@@ -322,12 +340,13 @@ function EntryTile({
 
 /** What the right-click menu offers for one App. */
 function EntryMenu({ entry }: { entry: Entry }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const pin = useMutation({
     mutationFn: (pinned: boolean) =>
       setSidebarPin({ data: { appId: entry.id, pinned } }),
     onSuccess: (_result, pinned) => {
-      toast.success(pinned ? 'Pinned to the dock' : 'Removed from the dock');
+      toast.success(pinned ? t('dock.pinned') : t('library.removedFromDock'));
     },
     onSettled: () =>
       queryClient.invalidateQueries({
@@ -346,13 +365,13 @@ function EntryMenu({ entry }: { entry: Entry }) {
         leftSection={<IconAppWindow size={15} stroke={1.7} />}
         renderRoot={(props) => <EntryLink entry={entry} {...props} />}
       >
-        Open
+        {t('common.open')}
       </Menu.Item>
       <Menu.Item
         leftSection={<IconSettings size={15} stroke={1.7} />}
         renderRoot={(props) => <EntryLink entry={entry} manage {...props} />}
       >
-        Manage
+        {t('common.manage')}
       </Menu.Item>
       <Menu.Divider />
       <Menu.Item
@@ -366,14 +385,14 @@ function EntryMenu({ entry }: { entry: Entry }) {
         disabled={pin.isPending}
         onClick={() => pin.mutate(!entry.pinned)}
       >
-        {entry.pinned ? 'Remove from dock' : 'Pin to dock'}
+        {entry.pinned ? t('library.removeFromDock') : t('library.pinToDock')}
       </Menu.Item>
       <Menu.Divider />
       <Menu.Item
         leftSection={<IconSparkles size={15} stroke={1.7} />}
         renderRoot={(props) => <Link to="/agent" {...props} />}
       >
-        Continue with the Agent
+        {t('library.continueWithAgent')}
       </Menu.Item>
     </>
   );

@@ -1,15 +1,17 @@
 import { Alert, Code, Stack, Text } from '@mantine/core';
 import type { ExtraPermissionsView } from '~/extra-permissions';
+import { useI18n } from '~i18n';
 
 export function ExtraPermissionsDetails({
   access,
 }: {
   access: ExtraPermissionsView | null;
 }) {
+  const { t } = useI18n();
   if (!access || access.flags.length === 0) {
     return (
       <Text size="sm" c="dimmed">
-        {access ? 'None declared' : 'Not deployed'}
+        {access ? t('permissions.noneDeclared') : t('permissions.notDeployed')}
       </Text>
     );
   }
@@ -29,13 +31,11 @@ export function ExtraPermissionsDetails({
           color="orange"
           title={
             <Text size="sm" fw={700} c="orange.8">
-              Host access
+              {t('permissions.hostAccess')}
             </Text>
           }
         >
-          These permissions grant host access as the platform OS user. App
-          processes share that user and can access platform credentials and
-          other Apps’ data.
+          {t('permissions.hostAccessBody')}
         </Alert>
       ) : null}
     </Stack>
