@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
+import sharp from 'sharp';
 
 const out = path.resolve(process.argv[2] ?? 'gallery-shots');
 const base = process.argv[3] ?? 'http://127.0.0.1:8791/';
@@ -252,22 +253,85 @@ async function targets(page: Page): Promise<string[]> {
   return found;
 }
 
-async function patterns(page: Page, prefix: string): Promise<void> {
-  await section(page, 'Patterns');
-  for (const [entry, name] of [
-    ['Dashboard', 'dashboard'],
-    ['Records', 'records'],
-    ['New plant', 'form'],
-    ['Settings', 'settings'],
-  ] as const) {
-    await page.getByRole('button', { name: new RegExp(`^${entry}`) }).click();
-    await shot(page, `${prefix}-pattern-${name}`);
+/** Waits until the heading of a page pushed on a stack stops moving: the
+ * push transition has ended. */
+async function settle(page: Page, heading: string): Promise<void> {
+  const target = page
+    .getByRole('heading', { name: heading, exact: true })
+    .first();
+  await target.waitFor();
+  let last = '';
+  for (let poll = 0; poll < 30; poll += 1) {
+    const box = await target.boundingBox();
+    const now = JSON.stringify(box);
+    if (now === last) return;
+    last = now;
+    await page.waitForTimeout(100);
+  }
+  problems.push(`page "${heading}" kept moving after 3 s`);
+}
+
+/** The window surface (`surface-window`) every page is drawn on. */
+const WINDOW = { r: 250, g: 249, b: 246 };
+
+/**
+ * A settled page must cover its whole pane: the first columns of the pane
+ * show only the page's own surface, never the page beneath it.
+ */
+async function coversPane(
+  page: Page,
+  layout: Layout,
+  label: string,
+): Promise<void> {
+  const left = layout.width >= 720 ? 241 : 0;
+  const top = 60;
+  const height = layout.height - top - (layout.touch ? 90 : 20);
+  const png = await page.screenshot({
+    clip: { x: left, y: top, width: 3, height },
+  });
+  const { data, info } = await sharp(png)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  for (let index = 0; index < data.length; index += info.channels) {
+    const [r, g, b] = [data[index], data[index + 1], data[index + 2]];
+    if (
+      Math.abs(r - WINDOW.r) + Math.abs(g - WINDOW.g) + Math.abs(b - WINDOW.b) >
+      6
+    ) {
+      const pixel = index / info.channels;
+      problems.push(
+        `${label}: the pane's left edge shows rgb(${r}, ${g}, ${b}) at (${left + (pixel % info.width)}, ${top + Math.floor(pixel / info.width)}), not the page surface`,
+      );
+      return;
+    }
+  }
+}
+
+/** Pushes each page of the stacks, checks it settles over the whole pane,
+ * and goes back. */
+async function patterns(
+  page: Page,
+  prefix: string,
+  layout: Layout,
+): Promise<void> {
+  const push = async (opener: RegExp, heading: string, name: string) => {
+    await page.getByRole('button', { name: opener }).click();
+    await settle(page, heading);
+    await shot(page, `${prefix}-${name}`);
+    await coversPane(page, layout, `${prefix}-${name}`);
     await page
       .getByRole('button', { name: 'Back', exact: true })
       .first()
       .click();
-    await page.waitForTimeout(250);
-  }
+    await page.waitForTimeout(400);
+  };
+  await section(page, 'Navigation');
+  await push(/^Open North bed$/, 'North bed', 'stack-bed');
+  await section(page, 'Patterns');
+  await push(/^Dashboard/, 'This season', 'pattern-dashboard');
+  await push(/^Records/, 'Plants', 'pattern-records');
+  await push(/^New plant/, 'New plant', 'pattern-form');
+  await push(/^Settings/, 'Settings', 'pattern-settings');
 }
 
 /** What has the keyboard focus: its role and accessible name, and whether it
@@ -398,8 +462,10 @@ async function main(): Promise<void> {
             order.join('\n'),
           );
         }
+        // Pages first: the toasts the popups step shows would otherwise
+        // shade the pane edge that patterns() samples.
+        await patterns(page, prefix, layout);
         await popups(page, prefix, layout);
-        await patterns(page, prefix);
         if (layout.name === 'desktop-1280' && accent === 'indigo') {
           await liveAccent(page, prefix, 'teal');
         }

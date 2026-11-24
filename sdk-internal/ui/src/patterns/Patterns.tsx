@@ -34,7 +34,8 @@ export type ListDetailPageProps<T> = {
   /** The selected item's id, when the App controls it. */
   selectedKey?: string | null;
   onSelect?: (key: string | null) => void;
-  /** A search field above the list. Filtering is the App's. */
+  /** A search field above the list, labelled by its placeholder (default
+   * "Search <title>"). Filtering is the App's. */
   search?: {
     value: string;
     onChange: (value: string) => void;
@@ -67,11 +68,14 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
       {props.search ? (
         <TextField
           label={`Search ${props.title.toLowerCase()}`}
+          labelHidden
           kind="search"
           icon={IconSearch}
           value={props.search.value}
           onChange={props.search.onChange}
-          placeholder={props.search.placeholder ?? 'Search'}
+          placeholder={
+            props.search.placeholder ?? `Search ${props.title.toLowerCase()}`
+          }
         />
       ) : null}
       {!props.loading && props.items.length === 0 && props.empty ? (

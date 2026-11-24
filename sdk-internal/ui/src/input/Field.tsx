@@ -51,30 +51,36 @@ export function Field(
   props: Omit<FieldProps, 'name' | 'disabled'> & {
     /** The control. */
     children?: JSX.Element;
+    /** Leaves the label to screen readers (the control names itself with
+     * it): only for a search field whose icon and placeholder say what it
+     * is for. */
+    labelHidden?: boolean;
   },
 ): JSX.Element {
   return (
     <View class="self-stretch gap-1.5">
-      <View class="gap-0.5">
-        <View class="flex-row gap-1">
-          <Text class="text-body font-label text-field-label">
-            {props.label}
-          </Text>
-          {props.required ? (
-            <Text
-              class="text-body font-label text-danger-strong"
-              importantForAccessibility="no"
-            >
-              *
+      {props.labelHidden ? null : (
+        <View class="gap-0.5">
+          <View class="flex-row gap-1">
+            <Text class="text-body font-label text-field-label">
+              {props.label}
+            </Text>
+            {props.required ? (
+              <Text
+                class="text-body font-label text-danger-strong"
+                importantForAccessibility="no"
+              >
+                *
+              </Text>
+            ) : null}
+          </View>
+          {props.description ? (
+            <Text class="text-caption text-muted-foreground text-pretty">
+              {props.description}
             </Text>
           ) : null}
         </View>
-        {props.description ? (
-          <Text class="text-caption text-muted-foreground text-pretty">
-            {props.description}
-          </Text>
-        ) : null}
-      </View>
+      )}
       {props.children}
       {props.error ? (
         <View class="flex-row items-start gap-1.5" role="alert">

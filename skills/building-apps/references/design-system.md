@@ -97,7 +97,10 @@ a pattern page or a `NavStack`.
   `onSubmit`'s promise runs. Throw an `Error` from `onSubmit` to show its
   message above the fields.
 - Every field has a visible `label`. Use `description` for what to enter and
-  `placeholder` only for an example. Errors say what to do: "Enter a date
+  `placeholder` only for an example. The one exception is a search field at
+  the top of a list: `kind="search"` with `labelHidden`, whose magnifier and
+  placeholder ("Search plants") say what it does; its `label` still names it
+  for screen readers. `ListDetailPage`'s `search` is such a field. Errors say what to do: "Enter a date
   after the start date", not "Invalid".
 - Pick the control by the data: `TextField` (with `kind` for email, URL,
   password, phone, search), `TextArea`, `NumberField`, `Select` for one of
@@ -313,22 +316,23 @@ A square button with an icon only.
 
 A one-line text field with its label.
 
-| Prop               | Type                      | Description                                                                                                           |
-| ------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `label` (required) | `string`                  | The label above the control, in sentence case. Screen readers read it as the control's name.                          |
-| `description`      | `string`                  | One sentence under the label: what to enter, or what it is for.                                                       |
-| `error`            | `string`                  | An error under the control. Inside a `Form`, the form's errors for the field's `name` show here as well.              |
-| `required`         | `boolean`                 | Marks the field as required; a `Form` refuses to submit while it is empty.                                            |
-| `disabled`         | `boolean`                 | Turns it off: it shows dimmed and takes no input.                                                                     |
-| `name`             | `string`                  | The key of the value in its `Form`: the form keeps the value, restores it from the draft and passes it to `onSubmit`. |
-| `value`            | `string`                  | The text, when the App controls it.                                                                                   |
-| `onChange`         | `(value: string) => void` | Called with the new value as the user changes it.                                                                     |
-| `onSubmit`         | `(value: string) => void` | Return was pressed.                                                                                                   |
-| `placeholder`      | `string`                  | An example of what to enter, never the only instruction.                                                              |
-| `kind`             | `TextFieldKind`           | Its emphasis.                                                                                                         |
-| `icon`             | `IconData`                | An icon at the start of the well.                                                                                     |
-| `maxLength`        | `number`                  | The most characters it takes.                                                                                         |
-| `readOnly`         | `boolean`                 | Shows the value for reading and copying, not editing.                                                                 |
+| Prop               | Type                      | Description                                                                                                                                                                   |
+| ------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label` (required) | `string`                  | The label above the control, in sentence case. Screen readers read it as the control's name.                                                                                  |
+| `description`      | `string`                  | One sentence under the label: what to enter, or what it is for.                                                                                                               |
+| `error`            | `string`                  | An error under the control. Inside a `Form`, the form's errors for the field's `name` show here as well.                                                                      |
+| `required`         | `boolean`                 | Marks the field as required; a `Form` refuses to submit while it is empty.                                                                                                    |
+| `disabled`         | `boolean`                 | Turns it off: it shows dimmed and takes no input.                                                                                                                             |
+| `name`             | `string`                  | The key of the value in its `Form`: the form keeps the value, restores it from the draft and passes it to `onSubmit`.                                                         |
+| `value`            | `string`                  | The text, when the App controls it.                                                                                                                                           |
+| `onChange`         | `(value: string) => void` | Called with the new value as the user changes it.                                                                                                                             |
+| `onSubmit`         | `(value: string) => void` | Return was pressed.                                                                                                                                                           |
+| `placeholder`      | `string`                  | An example of what to enter, never the only instruction.                                                                                                                      |
+| `kind`             | `TextFieldKind`           | Its emphasis.                                                                                                                                                                 |
+| `icon`             | `IconData`                | An icon at the start of the well.                                                                                                                                             |
+| `maxLength`        | `number`                  | The most characters it takes.                                                                                                                                                 |
+| `readOnly`         | `boolean`                 | Shows the value for reading and copying, not editing.                                                                                                                         |
+| `labelHidden`      | `boolean`                 | Shows no label above the field; screen readers still read it. Only for `kind="search"` at the top of a list, where the magnifier and the placeholder say what the field does. |
 
 #### TextArea
 
@@ -508,13 +512,14 @@ A form: keeps its named fields' values, saves them as a draft while the user typ
 
 A form control's label, description and error around the control.
 
-| Prop               | Type          | Description                                                                                              |
-| ------------------ | ------------- | -------------------------------------------------------------------------------------------------------- |
-| `label` (required) | `string`      | The label above the control, in sentence case. Screen readers read it as the control's name.             |
-| `description`      | `string`      | One sentence under the label: what to enter, or what it is for.                                          |
-| `error`            | `string`      | An error under the control. Inside a `Form`, the form's errors for the field's `name` show here as well. |
-| `required`         | `boolean`     | Marks the field as required; a `Form` refuses to submit while it is empty.                               |
-| `children`         | `JSX.Element` | The control.                                                                                             |
+| Prop               | Type          | Description                                                                                                                                   |
+| ------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label` (required) | `string`      | The label above the control, in sentence case. Screen readers read it as the control's name.                                                  |
+| `description`      | `string`      | One sentence under the label: what to enter, or what it is for.                                                                               |
+| `error`            | `string`      | An error under the control. Inside a `Form`, the form's errors for the field's `name` show here as well.                                      |
+| `required`         | `boolean`     | Marks the field as required; a `Form` refuses to submit while it is empty.                                                                    |
+| `children`         | `JSX.Element` | The control.                                                                                                                                  |
+| `labelHidden`      | `boolean`     | Leaves the label to screen readers (the control names itself with it): only for a search field whose icon and placeholder say what it is for. |
 
 ### Display
 
@@ -748,21 +753,21 @@ Actions behind a button: a popup on desktops, a sheet on phones. Use it for seco
 
 A list of records and the detail of the chosen one: side by side in a wide pane, one after the other with a back button in a narrow one.
 
-| Prop                      | Type                                                                         | Description                                               |
-| ------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `title` (required)        | `string`                                                                     | The title, in sentence case.                              |
-| `description`             | `string`                                                                     | One sentence under the title or label.                    |
-| `actions`                 | `JSX.Element`                                                                | Buttons at the end of the title row, such as Add.         |
-| `items` (required)        | `readonly T[]`                                                               | The items.                                                |
-| `getKey` (required)       | `(item: T) => string`                                                        | A stable id of an item.                                   |
-| `renderItem` (required)   | `(item: T) => Omit<ListItemProps, 'onPress' \| 'selected'>`                  | How an item reads in the list.                            |
-| `detailTitle` (required)  | `(item: T) => string`                                                        | The title of the detail of an item.                       |
-| `renderDetail` (required) | `(item: T) => JSX.Element`                                                   | The detail of the selected item: the content of its page. |
-| `selectedKey`             | `string \| null`                                                             | The selected item's id, when the App controls it.         |
-| `onSelect`                | `(key: string \| null) => void`                                              |                                                           |
-| `search`                  | `{ value: string; onChange: (value: string) => void; placeholder?: string }` | A search field above the list. Filtering is the App's.    |
-| `empty`                   | `EmptyStateProps`                                                            | What shows when there are no items.                       |
-| `loading`                 | `boolean`                                                                    |                                                           |
+| Prop                      | Type                                                                         | Description                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `title` (required)        | `string`                                                                     | The title, in sentence case.                                                                                   |
+| `description`             | `string`                                                                     | One sentence under the title or label.                                                                         |
+| `actions`                 | `JSX.Element`                                                                | Buttons at the end of the title row, such as Add.                                                              |
+| `items` (required)        | `readonly T[]`                                                               | The items.                                                                                                     |
+| `getKey` (required)       | `(item: T) => string`                                                        | A stable id of an item.                                                                                        |
+| `renderItem` (required)   | `(item: T) => Omit<ListItemProps, 'onPress' \| 'selected'>`                  | How an item reads in the list.                                                                                 |
+| `detailTitle` (required)  | `(item: T) => string`                                                        | The title of the detail of an item.                                                                            |
+| `renderDetail` (required) | `(item: T) => JSX.Element`                                                   | The detail of the selected item: the content of its page.                                                      |
+| `selectedKey`             | `string \| null`                                                             | The selected item's id, when the App controls it.                                                              |
+| `onSelect`                | `(key: string \| null) => void`                                              |                                                                                                                |
+| `search`                  | `{ value: string; onChange: (value: string) => void; placeholder?: string }` | A search field above the list, labelled by its placeholder (default "Search <title>"). Filtering is the App's. |
+| `empty`                   | `EmptyStateProps`                                                            | What shows when there are no items.                                                                            |
+| `loading`                 | `boolean`                                                                    |                                                                                                                |
 
 #### FormPage
 

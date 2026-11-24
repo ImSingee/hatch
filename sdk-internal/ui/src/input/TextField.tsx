@@ -89,6 +89,10 @@ export type TextFieldProps = FieldProps & {
   icon?: IconData;
   maxLength?: number;
   readOnly?: boolean;
+  /** Shows no label above the field; screen readers still read it. Only
+   * for `kind="search"` at the top of a list, where the magnifier and the
+   * placeholder say what the field does. */
+  labelHidden?: boolean;
 };
 
 /** A one-line text field with its label. */
@@ -105,6 +109,7 @@ export function TextField(props: TextFieldProps): JSX.Element {
       description={props.description}
       error={error()}
       required={props.required}
+      labelHidden={props.labelHidden}
     >
       <View
         class={`${WELL} ${WELL_HEIGHT} ${wellState(error() !== undefined, disabled())}`}
