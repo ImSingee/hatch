@@ -102,4 +102,20 @@ describe('Better Auth configuration', () => {
     mocks.trustedOrigin.mockReturnValue(null);
     await expect(options.trustedOrigins()).resolves.toEqual([]);
   });
+
+  it('refuses a client-chosen user.image on sign-up and profile updates', async () => {
+    await import('./server');
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      hooks: { before: (context: unknown) => Promise<unknown> };
+    };
+    const call = (path: string, body: Record<string, unknown>) =>
+      options.hooks.before({ path, body, headers: new Headers() });
+
+    for (const path of ['/sign-up/email', '/update-user'])
+      for (const image of ['https://example.com/a.png', '', null])
+        await expect(call(path, { name: 'A', image })).rejects.toMatchObject({
+          body: { code: 'USER_IMAGE_READ_ONLY' },
+        });
+    await expect(call('/update-user', { name: 'A' })).resolves.toBeUndefined();
+  });
 });

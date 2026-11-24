@@ -64,6 +64,8 @@ and 88 px), both on the Desk ground and on white.
 - Input is never stored or served as-is. Accepted: PNG, JPEG or WebP by
   signature, at most 4 MB, sides 64 to 4096 px. It is decoded, cropped to a
   centred square and re-encoded as PNG without metadata. SVG is rejected.
+  Validation, encoding and per-key files are shared with user avatars in
+  `src/server/images/square-image.ts`.
 - `GET /api/app/<id>/icon?v=<key>&size=64|128|256` accepts any platform
   credential (session, API key, Run). A URL naming the current key is
   `immutable`; any other must revalidate. The stored image is square; clients
