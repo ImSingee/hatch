@@ -126,7 +126,7 @@ export type ProviderApiType =
 
 /**
  * What a provider model does. Chat models run the Agent; image models
- * generate images. Fixed when the model is created.
+ * generate images. Changing it moves the model between the two.
  */
 export type AgentModelKind = 'chat' | 'image';
 

@@ -14,7 +14,7 @@ const {
   resolveImageModel,
   updateImageModel,
 } = await import('./model');
-const { assertApiTypeKeepsModels, createProviderModel } =
+const { assertApiTypeKeepsModels, createProviderModel, updateProviderModel } =
   await import('~server/provider-models');
 const { getAgentModelCatalog } = await import('~server/agent-model-catalog');
 
@@ -153,6 +153,29 @@ describe('image models', () => {
     expect(
       (await updateImageModel({ id: image.id, description: '' })).description,
     ).toBe('');
+  });
+
+  it('moves a model between chat and image when its kind changes', async () => {
+    const chat = await createProviderModel({
+      providerId: FIRST,
+      kind: 'chat',
+      modelId: 'gpt-image-1',
+    });
+    await updateProviderModel({ id: chat.id, kind: 'image' });
+    expect((await resolveImageModel()).id).toBe(chat.id);
+    expect((await getAgentModelCatalog()).providers).toEqual([]);
+
+    await updateProviderModel({ id: chat.id, kind: 'chat' });
+    await expect(resolveImageModel()).rejects.toMatchObject({ status: 409 });
+
+    const claude = await createProviderModel({
+      providerId: CLAUDE,
+      kind: 'chat',
+      modelId: 'claude-model',
+    });
+    await expect(
+      updateProviderModel({ id: claude.id, kind: 'image' }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it('rejects image models a provider could not run', async () => {

@@ -7,7 +7,6 @@ import {
   Menu,
   Modal,
   NumberInput,
-  SegmentedControl,
   Select,
   Stack,
   Switch,
@@ -30,7 +29,6 @@ import {
 import {
   IconDotsVertical,
   IconPencil,
-  IconPhoto,
   IconPlus,
   IconRobot,
   IconTrash,
@@ -260,7 +258,7 @@ function ModelFormModal({
             }
           : { ...values, name };
       if (model) {
-        await updateModel({ data: { id: model.id, ...fields } });
+        await updateModel({ data: { id: model.id, kind, ...fields } });
         return;
       }
       await createModel({
@@ -284,32 +282,26 @@ function ModelFormModal({
     >
       <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
         <Stack gap="sm">
-          {editing ? null : (
-            <Stack gap={4}>
-              <Text size="sm" fw={500}>
-                Category
-              </Text>
-              <SegmentedControl
-                fullWidth
-                data={[
-                  { value: 'chat', label: MODEL_KIND_LABELS.chat },
-                  {
-                    value: 'image',
-                    label: MODEL_KIND_LABELS.image,
-                    disabled: !canMakeImages,
-                  },
-                ]}
-                {...form.getInputProps('kind')}
-              />
-              <Text size="xs" c="dimmed">
-                {image
-                  ? 'Generates images, such as app icons. Can’t be changed later.'
-                  : canMakeImages
-                    ? 'Runs the Agent. Can’t be changed later.'
-                    : 'Runs the Agent. This API type can’t generate images.'}
-              </Text>
-            </Stack>
-          )}
+          <Select
+            label="Category"
+            description={
+              canMakeImages
+                ? image
+                  ? 'Generates images, such as app icons'
+                  : 'Runs the Agent'
+                : 'This API type can’t generate images'
+            }
+            allowDeselect={false}
+            data={[
+              { value: 'chat', label: MODEL_KIND_LABELS.chat },
+              {
+                value: 'image',
+                label: MODEL_KIND_LABELS.image,
+                disabled: !canMakeImages,
+              },
+            ]}
+            {...form.getInputProps('kind')}
+          />
           {image ? (
             <Autocomplete
               label="Model ID"
@@ -525,15 +517,6 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                   <Text size="sm" fw={600} className={classes.modelName}>
                     {m.name}
                   </Text>
-                  {m.kind === 'image' ? (
-                    <Badge
-                      variant="light"
-                      size="sm"
-                      leftSection={<IconPhoto size={12} stroke={1.8} />}
-                    >
-                      {MODEL_KIND_LABELS.image}
-                    </Badge>
-                  ) : null}
                   <Text
                     size="xs"
                     c="dimmed"

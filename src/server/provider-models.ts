@@ -26,6 +26,7 @@ export type CreateProviderModelInput = {
 
 export type UpdateProviderModelInput = {
   id: string;
+  kind?: AgentModelKind;
   modelId?: string;
   name?: string;
   description?: string;
@@ -86,22 +87,37 @@ export async function createProviderModel(
 }
 
 /**
- * Change a model's fields. Its kind never changes: sessions and callers that
- * picked it rely on what it does. `kind`, when given, must match the stored
- * one, so an image-model command can never edit a chat model.
+ * Change a model's fields, including its kind. A model turned into an image
+ * model must suit its provider; one turned away from chat simply stops being
+ * offered to the Agent. `onlyKind`, when given, must match the stored kind,
+ * so an image-model command can never edit a chat model.
  */
 export async function updateProviderModel(
   input: UpdateProviderModelInput,
-  kind?: AgentModelKind,
+  onlyKind?: AgentModelKind,
 ): Promise<ModelRow> {
   const current = await db.query.agentModels.findFirst({
     where: { id: input.id },
   });
-  if (!current || (kind && current.kind !== kind))
+  if (!current || (onlyKind && current.kind !== onlyKind))
     throw new AppError('Model not found.', 404);
+  const kind = input.kind ?? current.kind;
+  if (kind === 'image' && kind !== current.kind) {
+    const provider = await db.query.agentProviders.findFirst({
+      where: { id: current.providerId },
+      columns: { apiType: true },
+    });
+    if (!provider || !canGenerateImages(provider.apiType))
+      throw new AppError('This provider cannot generate images.', 400);
+  }
   const patch: Partial<typeof schema.agentModels.$inferInsert> = {};
+  if (kind !== current.kind) {
+    patch.kind = kind;
+    // The stored id must also suit the new kind.
+    checkModelId(kind, input.modelId ?? current.modelId);
+  }
   if (input.modelId !== undefined)
-    patch.modelId = checkModelId(current.kind, input.modelId);
+    patch.modelId = checkModelId(kind, input.modelId);
   if (input.name !== undefined)
     patch.name = input.name.trim() || patch.modelId || current.modelId;
   if (input.description !== undefined)

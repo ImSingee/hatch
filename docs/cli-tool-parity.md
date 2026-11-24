@@ -42,7 +42,8 @@ Not covered by the CLI: providers and their chat models (create, edit, API
 keys) remain Web-only. Image models are the provider models of kind `image`;
 the CLI covers every field the Web form sets for them (model id, name,
 description) but only on providers that already exist, and cannot create
-one. See [App icons](app-icons.md).
+one. Switching a model between chat and image in the Web form stays Web-only
+with the chat models it touches. See [App icons](app-icons.md).
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`

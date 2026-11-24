@@ -196,6 +196,7 @@ export const createModel = createServerFn({ method: 'POST' })
 
 const updateModelSchema = z.object({
   id: z.string().min(1),
+  kind: z.enum(['chat', 'image']).optional(),
   modelId: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
   description: descriptionSchema.optional(),

@@ -6,18 +6,18 @@ designs icons in chat; people can also upload a file.
 ## How an icon is made
 
 1. **Image models.** An image model is a provider model (`agent_models`) of
-   kind `image`, chosen when the model is created under Settings → AI
-   Providers or with `hatch image-model add`; the kind never changes, so
-   chat and image models stay apart (the Agent model picker, catalog and run
-   start only accept `chat`). Only providers whose API has an image driver
-   (OpenAI Responses or Completions) can hold one, and such a provider cannot
-   switch to an API type without one while it does. The instance may have
-   several, each with an optional description of what it is good at. Each
-   generation names one by id (`--model`); without one it uses the default,
-   the first usable model in provider and model order. The API key stays on
-   the provider. Migration `20261124092607_agent_model_kind` turned the old
-   single `image.model` setting into an image model of its provider and
-   deleted the setting.
+   kind `image`. The kind is chosen in the model form under Settings → AI
+   Providers, where it can also be changed later, or the model is added with
+   `hatch image-model add`. The Agent model picker, catalog and run start only
+   accept `chat` models. Only providers whose API has an image driver (OpenAI
+   Responses or Completions) can hold one, and such a provider cannot switch
+   to an API type without one while it does. The instance may have several,
+   each with an optional description of what it is good at. Each generation
+   names one by id (`--model`); without one it uses the default, the first
+   usable model in provider and model order. The API key stays on the
+   provider. Migration `20261124092607_agent_model_kind` deletes the retired
+   single `image.model` setting without converting it: an instance that used
+   it adds its image model again.
 2. **Skill.** `skills/app-icon/SKILL.md` holds the versioned prompt set: how to
    pick three distinct subjects, the tile palette and the fixed style
    template. The Agent sends only a short subject phrase derived from the
