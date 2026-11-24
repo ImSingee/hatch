@@ -112,9 +112,14 @@ same deploy with
 
 If deploy ends in `outcome_unknown`, a network error, or a timeout, do not
 deploy again blindly. Run `hatch app deploy --directory <path> --reconcile
---json`: `source-matches-pending` means the release went through. Otherwise
-check `hatch app get` deployment history, and only after confirming the
-previous request ended retry with `--retry-after-confirming <pending-commit>`.
+--json`. Neither result proves anything: `source-matches-pending` only means
+the released commit equals the pending one, and `outcome-unresolved` means it
+does not. In both cases inspect the deployment history in
+`hatch app get <id> --json`, and do not report success until it shows a
+release of the pending commit made by this request. The checkout stays
+blocked for further deploys until you confirm the earlier request has
+finished. Then `--retry-after-confirming <pending-commit>` clears the marker
+and deploys that commit again.
 
 ## Source contract
 
