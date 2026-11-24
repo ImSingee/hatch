@@ -21,43 +21,63 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_image: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ch1oYXRjaC9wbGF0Zm9ybS92MS9pbWFnZS5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiYgoSU2VsZWN0ZWRJbWFnZU1vZGVsEhMKC3Byb3ZpZGVyX2lkGAEgASgJEhUKDXByb3ZpZGVyX25hbWUYAiABKAkSEAoIbW9kZWxfaWQYAyABKAkSDgoGdXNhYmxlGAQgASgIIlQKDUltYWdlUHJvdmlkZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdlbmFibGVkGAMgASgIEhgKEHN1Z2dlc3RlZF9tb2RlbHMYBCADKAkikQEKD0ltYWdlTW9kZWxTdGF0ZRI8CghzZWxlY3RlZBgBIAEoCzIlLmhhdGNoLnBsYXRmb3JtLnYxLlNlbGVjdGVkSW1hZ2VNb2RlbEgAiAEBEjMKCXByb3ZpZGVycxgCIAMoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLkltYWdlUHJvdmlkZXJCCwoJX3NlbGVjdGVkIhYKFEdldEltYWdlTW9kZWxSZXF1ZXN0IkoKFUdldEltYWdlTW9kZWxSZXNwb25zZRIxCgVzdGF0ZRgBIAEoCzIiLmhhdGNoLnBsYXRmb3JtLnYxLkltYWdlTW9kZWxTdGF0ZSJ1ChRTZXRJbWFnZU1vZGVsUmVxdWVzdBIfCgtwcm92aWRlcl9pZBgBIAEoCUIKukgHcgUQARi/ARI8Cghtb2RlbF9pZBgCIAEoCUIqukgnciUQARiAATIeXltBLVphLXowLTldW0EtWmEtejAtOS5fOi8tXSokIkoKFVNldEltYWdlTW9kZWxSZXNwb25zZRIxCgVzdGF0ZRgBIAEoCzIiLmhhdGNoLnBsYXRmb3JtLnYxLkltYWdlTW9kZWxTdGF0ZSIYChZDbGVhckltYWdlTW9kZWxSZXF1ZXN0IkwKF0NsZWFySW1hZ2VNb2RlbFJlc3BvbnNlEjEKBXN0YXRlGAEgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuSW1hZ2VNb2RlbFN0YXRlItoBChVHZW5lcmF0ZUltYWdlc1JlcXVlc3QSGgoGcHJvbXB0GAEgASgJQgq6SAdyBRABGKAfEh0KBWNvdW50GAIgASgNQgm6SAYqBBgEKAFIAIgBARIuCgdxdWFsaXR5GAMgASgJQhi6SBVyE1IDbG93UgZtZWRpdW1SBGhpZ2hIAYgBARIxCgpnbHlwaF90aWxlGAQgASgJQhi6SBVyEzIRXiNbMC05YS1mQS1GXXs2fSRIAogBAUIICgZfY291bnRCCgoIX3F1YWxpdHlCDQoLX2dseXBoX3RpbGUiKgoOSW1hZ2VDYW5kaWRhdGUSCgoCaWQYASABKAkSDAoEcGF0aBgCIAEoCSJhChZHZW5lcmF0ZUltYWdlc1Jlc3BvbnNlEhAKCG1vZGVsX2lkGAEgASgJEjUKCmNhbmRpZGF0ZXMYAiADKAsyIS5oYXRjaC5wbGF0Zm9ybS52MS5JbWFnZUNhbmRpZGF0ZTKnAwoMSW1hZ2VTZXJ2aWNlEmIKDUdldEltYWdlTW9kZWwSJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRJbWFnZU1vZGVsUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldEltYWdlTW9kZWxSZXNwb25zZRJiCg1TZXRJbWFnZU1vZGVsEicuaGF0Y2gucGxhdGZvcm0udjEuU2V0SW1hZ2VNb2RlbFJlcXVlc3QaKC5oYXRjaC5wbGF0Zm9ybS52MS5TZXRJbWFnZU1vZGVsUmVzcG9uc2USaAoPQ2xlYXJJbWFnZU1vZGVsEikuaGF0Y2gucGxhdGZvcm0udjEuQ2xlYXJJbWFnZU1vZGVsUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkNsZWFySW1hZ2VNb2RlbFJlc3BvbnNlEmUKDkdlbmVyYXRlSW1hZ2VzEiguaGF0Y2gucGxhdGZvcm0udjEuR2VuZXJhdGVJbWFnZXNSZXF1ZXN0GikuaGF0Y2gucGxhdGZvcm0udjEuR2VuZXJhdGVJbWFnZXNSZXNwb25zZWIGcHJvdG8z',
+    'Ch1oYXRjaC9wbGF0Zm9ybS92MS9pbWFnZS5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiiQEKCkltYWdlTW9kZWwSCgoCaWQYASABKAkSEwoLcHJvdmlkZXJfaWQYAiABKAkSFQoNcHJvdmlkZXJfbmFtZRgDIAEoCRIQCghtb2RlbF9pZBgEIAEoCRIMCgRuYW1lGAUgASgJEhMKC2Rlc2NyaXB0aW9uGAYgASgJEg4KBnVzYWJsZRgHIAEoCCJUCg1JbWFnZVByb3ZpZGVyEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHZW5hYmxlZBgDIAEoCBIYChBzdWdnZXN0ZWRfbW9kZWxzGAQgAygJIhgKFkxpc3RJbWFnZU1vZGVsc1JlcXVlc3QisQEKF0xpc3RJbWFnZU1vZGVsc1Jlc3BvbnNlEi0KBm1vZGVscxgBIAMoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkltYWdlTW9kZWwSHQoQZGVmYXVsdF9tb2RlbF9pZBgCIAEoCUgAiAEBEjMKCXByb3ZpZGVycxgDIAMoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLkltYWdlUHJvdmlkZXJCEwoRX2RlZmF1bHRfbW9kZWxfaWQi1AEKF0NyZWF0ZUltYWdlTW9kZWxSZXF1ZXN0Eh8KC3Byb3ZpZGVyX2lkGAEgASgJQgq6SAdyBRABGL8BEjwKCG1vZGVsX2lkGAIgASgJQiq6SCdyJRABGIABMh5eW0EtWmEtejAtOV1bQS1aYS16MC05Ll86Ly1dKiQSHQoEbmFtZRgDIAEoCUIKukgHcgUQARjIAUgAiAEBEiIKC2Rlc2NyaXB0aW9uGAQgASgJQgi6SAVyAxjIAUgBiAEBQgcKBV9uYW1lQg4KDF9kZXNjcmlwdGlvbiJIChhDcmVhdGVJbWFnZU1vZGVsUmVzcG9uc2USLAoFbW9kZWwYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5JbWFnZU1vZGVsIt0BChdVcGRhdGVJbWFnZU1vZGVsUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARJBCghtb2RlbF9pZBgCIAEoCUIqukgnciUQARiAATIeXltBLVphLXowLTldW0EtWmEtejAtOS5fOi8tXSokSACIAQESHQoEbmFtZRgDIAEoCUIKukgHcgUQARjIAUgBiAEBEiIKC2Rlc2NyaXB0aW9uGAQgASgJQgi6SAVyAxjIAUgCiAEBQgsKCV9tb2RlbF9pZEIHCgVfbmFtZUIOCgxfZGVzY3JpcHRpb24iSAoYVXBkYXRlSW1hZ2VNb2RlbFJlc3BvbnNlEiwKBW1vZGVsGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuSW1hZ2VNb2RlbCIxChdEZWxldGVJbWFnZU1vZGVsUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASIaChhEZWxldGVJbWFnZU1vZGVsUmVzcG9uc2UilgIKFUdlbmVyYXRlSW1hZ2VzUmVxdWVzdBIaCgZwcm9tcHQYASABKAlCCrpIB3IFEAEYoB8SHQoFY291bnQYAiABKA1CCbpIBioEGAQoAUgAiAEBEi4KB3F1YWxpdHkYAyABKAlCGLpIFXITUgNsb3dSBm1lZGl1bVIEaGlnaEgBiAEBEjEKCmdseXBoX3RpbGUYBCABKAlCGLpIFXITMhFeI1swLTlhLWZBLUZdezZ9JEgCiAEBEicKDmltYWdlX21vZGVsX2lkGAUgASgJQgq6SAdyBRABGL8BSAOIAQFCCAoGX2NvdW50QgoKCF9xdWFsaXR5Qg0KC19nbHlwaF90aWxlQhEKD19pbWFnZV9tb2RlbF9pZCIqCg5JbWFnZUNhbmRpZGF0ZRIKCgJpZBgBIAEoCRIMCgRwYXRoGAIgASgJInkKFkdlbmVyYXRlSW1hZ2VzUmVzcG9uc2USEAoIbW9kZWxfaWQYASABKAkSNQoKY2FuZGlkYXRlcxgCIAMoCzIhLmhhdGNoLnBsYXRmb3JtLnYxLkltYWdlQ2FuZGlkYXRlEhYKDmltYWdlX21vZGVsX2lkGAMgASgJMqYECgxJbWFnZVNlcnZpY2USaAoPTGlzdEltYWdlTW9kZWxzEikuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEltYWdlTW9kZWxzUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RJbWFnZU1vZGVsc1Jlc3BvbnNlEmsKEENyZWF0ZUltYWdlTW9kZWwSKi5oYXRjaC5wbGF0Zm9ybS52MS5DcmVhdGVJbWFnZU1vZGVsUmVxdWVzdBorLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUltYWdlTW9kZWxSZXNwb25zZRJrChBVcGRhdGVJbWFnZU1vZGVsEiouaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlSW1hZ2VNb2RlbFJlcXVlc3QaKy5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVJbWFnZU1vZGVsUmVzcG9uc2USawoQRGVsZXRlSW1hZ2VNb2RlbBIqLmhhdGNoLnBsYXRmb3JtLnYxLkRlbGV0ZUltYWdlTW9kZWxSZXF1ZXN0GisuaGF0Y2gucGxhdGZvcm0udjEuRGVsZXRlSW1hZ2VNb2RlbFJlc3BvbnNlEmUKDkdlbmVyYXRlSW1hZ2VzEiguaGF0Y2gucGxhdGZvcm0udjEuR2VuZXJhdGVJbWFnZXNSZXF1ZXN0GikuaGF0Y2gucGxhdGZvcm0udjEuR2VuZXJhdGVJbWFnZXNSZXNwb25zZWIGcHJvdG8z',
     [file_buf_validate_validate],
   );
 
 /**
- * @generated from message hatch.platform.v1.SelectedImageModel
+ * @generated from message hatch.platform.v1.ImageModel
  */
-export type SelectedImageModel =
-  Message<'hatch.platform.v1.SelectedImageModel'> & {
-    /**
-     * @generated from field: string provider_id = 1;
-     */
-    providerId: string;
+export type ImageModel = Message<'hatch.platform.v1.ImageModel'> & {
+  /**
+   * Image model id, taken by GenerateImages and the update calls.
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
 
-    /**
-     * @generated from field: string provider_name = 2;
-     */
-    providerName: string;
+  /**
+   * @generated from field: string provider_id = 2;
+   */
+  providerId: string;
 
-    /**
-     * @generated from field: string model_id = 3;
-     */
-    modelId: string;
+  /**
+   * @generated from field: string provider_name = 3;
+   */
+  providerName: string;
 
-    /**
-     * False while the provider is disabled or has no API key.
-     *
-     * @generated from field: bool usable = 4;
-     */
-    usable: boolean;
-  };
+  /**
+   * Model id sent to the provider.
+   *
+   * @generated from field: string model_id = 4;
+   */
+  modelId: string;
+
+  /**
+   * @generated from field: string name = 5;
+   */
+  name: string;
+
+  /**
+   * What the model is good at; may be empty.
+   *
+   * @generated from field: string description = 6;
+   */
+  description: string;
+
+  /**
+   * False while its provider is disabled or has no API key.
+   *
+   * @generated from field: bool usable = 7;
+   */
+  usable: boolean;
+};
 
 /**
- * Describes the message hatch.platform.v1.SelectedImageModel.
- * Use `create(SelectedImageModelSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.ImageModel.
+ * Use `create(ImageModelSchema)` to create a new message.
  */
-export const SelectedImageModelSchema: GenMessage<SelectedImageModel> =
+export const ImageModelSchema: GenMessage<ImageModel> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 0);
 
@@ -83,7 +103,7 @@ export type ImageProvider = Message<'hatch.platform.v1.ImageProvider'> & {
   enabled: boolean;
 
   /**
-   * Suggestions only: any model id the provider accepts may be selected.
+   * Suggestions only: any model id the provider accepts may be used.
    *
    * @generated from field: repeated string suggested_models = 4;
    */
@@ -99,68 +119,58 @@ export const ImageProviderSchema: GenMessage<ImageProvider> =
   messageDesc(file_hatch_platform_v1_image, 1);
 
 /**
- * @generated from message hatch.platform.v1.ImageModelState
+ * @generated from message hatch.platform.v1.ListImageModelsRequest
  */
-export type ImageModelState = Message<'hatch.platform.v1.ImageModelState'> & {
-  /**
-   * Unset when no model is chosen or its provider no longer exists.
-   *
-   * @generated from field: optional hatch.platform.v1.SelectedImageModel selected = 1;
-   */
-  selected?: SelectedImageModel | undefined;
-
-  /**
-   * @generated from field: repeated hatch.platform.v1.ImageProvider providers = 2;
-   */
-  providers: ImageProvider[];
-};
+export type ListImageModelsRequest =
+  Message<'hatch.platform.v1.ListImageModelsRequest'> & {};
 
 /**
- * Describes the message hatch.platform.v1.ImageModelState.
- * Use `create(ImageModelStateSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.ListImageModelsRequest.
+ * Use `create(ListImageModelsRequestSchema)` to create a new message.
  */
-export const ImageModelStateSchema: GenMessage<ImageModelState> =
+export const ListImageModelsRequestSchema: GenMessage<ListImageModelsRequest> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 2);
 
 /**
- * @generated from message hatch.platform.v1.GetImageModelRequest
+ * @generated from message hatch.platform.v1.ListImageModelsResponse
  */
-export type GetImageModelRequest =
-  Message<'hatch.platform.v1.GetImageModelRequest'> & {};
+export type ListImageModelsResponse =
+  Message<'hatch.platform.v1.ListImageModelsResponse'> & {
+    /**
+     * Provider order, then each provider's model order.
+     *
+     * @generated from field: repeated hatch.platform.v1.ImageModel models = 1;
+     */
+    models: ImageModel[];
+
+    /**
+     * The model GenerateImages uses without image_model_id: the first usable
+     * one. Unset when none is usable.
+     *
+     * @generated from field: optional string default_model_id = 2;
+     */
+    defaultModelId?: string | undefined;
+
+    /**
+     * @generated from field: repeated hatch.platform.v1.ImageProvider providers = 3;
+     */
+    providers: ImageProvider[];
+  };
 
 /**
- * Describes the message hatch.platform.v1.GetImageModelRequest.
- * Use `create(GetImageModelRequestSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.ListImageModelsResponse.
+ * Use `create(ListImageModelsResponseSchema)` to create a new message.
  */
-export const GetImageModelRequestSchema: GenMessage<GetImageModelRequest> =
+export const ListImageModelsResponseSchema: GenMessage<ListImageModelsResponse> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 3);
 
 /**
- * @generated from message hatch.platform.v1.GetImageModelResponse
+ * @generated from message hatch.platform.v1.CreateImageModelRequest
  */
-export type GetImageModelResponse =
-  Message<'hatch.platform.v1.GetImageModelResponse'> & {
-    /**
-     * @generated from field: hatch.platform.v1.ImageModelState state = 1;
-     */
-    state?: ImageModelState | undefined;
-  };
-
-/**
- * Describes the message hatch.platform.v1.GetImageModelResponse.
- * Use `create(GetImageModelResponseSchema)` to create a new message.
- */
-export const GetImageModelResponseSchema: GenMessage<GetImageModelResponse> =
-  /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_image, 4);
-
-/**
- * @generated from message hatch.platform.v1.SetImageModelRequest
- */
-export type SetImageModelRequest =
-  Message<'hatch.platform.v1.SetImageModelRequest'> & {
+export type CreateImageModelRequest =
+  Message<'hatch.platform.v1.CreateImageModelRequest'> & {
     /**
      * @generated from field: string provider_id = 1;
      */
@@ -170,67 +180,134 @@ export type SetImageModelRequest =
      * @generated from field: string model_id = 2;
      */
     modelId: string;
+
+    /**
+     * Defaults to model_id.
+     *
+     * @generated from field: optional string name = 3;
+     */
+    name?: string | undefined;
+
+    /**
+     * @generated from field: optional string description = 4;
+     */
+    description?: string | undefined;
   };
 
 /**
- * Describes the message hatch.platform.v1.SetImageModelRequest.
- * Use `create(SetImageModelRequestSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.CreateImageModelRequest.
+ * Use `create(CreateImageModelRequestSchema)` to create a new message.
  */
-export const SetImageModelRequestSchema: GenMessage<SetImageModelRequest> =
+export const CreateImageModelRequestSchema: GenMessage<CreateImageModelRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_image, 4);
+
+/**
+ * @generated from message hatch.platform.v1.CreateImageModelResponse
+ */
+export type CreateImageModelResponse =
+  Message<'hatch.platform.v1.CreateImageModelResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.ImageModel model = 1;
+     */
+    model?: ImageModel | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.CreateImageModelResponse.
+ * Use `create(CreateImageModelResponseSchema)` to create a new message.
+ */
+export const CreateImageModelResponseSchema: GenMessage<CreateImageModelResponse> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 5);
 
 /**
- * @generated from message hatch.platform.v1.SetImageModelResponse
+ * Unset fields stay unchanged; an empty description clears it.
+ *
+ * @generated from message hatch.platform.v1.UpdateImageModelRequest
  */
-export type SetImageModelResponse =
-  Message<'hatch.platform.v1.SetImageModelResponse'> & {
+export type UpdateImageModelRequest =
+  Message<'hatch.platform.v1.UpdateImageModelRequest'> & {
     /**
-     * @generated from field: hatch.platform.v1.ImageModelState state = 1;
+     * @generated from field: string id = 1;
      */
-    state?: ImageModelState | undefined;
+    id: string;
+
+    /**
+     * @generated from field: optional string model_id = 2;
+     */
+    modelId?: string | undefined;
+
+    /**
+     * @generated from field: optional string name = 3;
+     */
+    name?: string | undefined;
+
+    /**
+     * @generated from field: optional string description = 4;
+     */
+    description?: string | undefined;
   };
 
 /**
- * Describes the message hatch.platform.v1.SetImageModelResponse.
- * Use `create(SetImageModelResponseSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.UpdateImageModelRequest.
+ * Use `create(UpdateImageModelRequestSchema)` to create a new message.
  */
-export const SetImageModelResponseSchema: GenMessage<SetImageModelResponse> =
+export const UpdateImageModelRequestSchema: GenMessage<UpdateImageModelRequest> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 6);
 
 /**
- * @generated from message hatch.platform.v1.ClearImageModelRequest
+ * @generated from message hatch.platform.v1.UpdateImageModelResponse
  */
-export type ClearImageModelRequest =
-  Message<'hatch.platform.v1.ClearImageModelRequest'> & {};
+export type UpdateImageModelResponse =
+  Message<'hatch.platform.v1.UpdateImageModelResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.ImageModel model = 1;
+     */
+    model?: ImageModel | undefined;
+  };
 
 /**
- * Describes the message hatch.platform.v1.ClearImageModelRequest.
- * Use `create(ClearImageModelRequestSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.UpdateImageModelResponse.
+ * Use `create(UpdateImageModelResponseSchema)` to create a new message.
  */
-export const ClearImageModelRequestSchema: GenMessage<ClearImageModelRequest> =
+export const UpdateImageModelResponseSchema: GenMessage<UpdateImageModelResponse> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 7);
 
 /**
- * @generated from message hatch.platform.v1.ClearImageModelResponse
+ * @generated from message hatch.platform.v1.DeleteImageModelRequest
  */
-export type ClearImageModelResponse =
-  Message<'hatch.platform.v1.ClearImageModelResponse'> & {
+export type DeleteImageModelRequest =
+  Message<'hatch.platform.v1.DeleteImageModelRequest'> & {
     /**
-     * @generated from field: hatch.platform.v1.ImageModelState state = 1;
+     * @generated from field: string id = 1;
      */
-    state?: ImageModelState | undefined;
+    id: string;
   };
 
 /**
- * Describes the message hatch.platform.v1.ClearImageModelResponse.
- * Use `create(ClearImageModelResponseSchema)` to create a new message.
+ * Describes the message hatch.platform.v1.DeleteImageModelRequest.
+ * Use `create(DeleteImageModelRequestSchema)` to create a new message.
  */
-export const ClearImageModelResponseSchema: GenMessage<ClearImageModelResponse> =
+export const DeleteImageModelRequestSchema: GenMessage<DeleteImageModelRequest> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_image, 8);
+
+/**
+ * @generated from message hatch.platform.v1.DeleteImageModelResponse
+ */
+export type DeleteImageModelResponse =
+  Message<'hatch.platform.v1.DeleteImageModelResponse'> & {};
+
+/**
+ * Describes the message hatch.platform.v1.DeleteImageModelResponse.
+ * Use `create(DeleteImageModelResponseSchema)` to create a new message.
+ */
+export const DeleteImageModelResponseSchema: GenMessage<DeleteImageModelResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_image, 9);
 
 /**
  * @generated from message hatch.platform.v1.GenerateImagesRequest
@@ -263,6 +340,13 @@ export type GenerateImagesRequest =
      * @generated from field: optional string glyph_tile = 4;
      */
     glyphTile?: string | undefined;
+
+    /**
+     * Image model id from ListImageModels; the default model when unset.
+     *
+     * @generated from field: optional string image_model_id = 5;
+     */
+    imageModelId?: string | undefined;
   };
 
 /**
@@ -271,7 +355,7 @@ export type GenerateImagesRequest =
  */
 export const GenerateImagesRequestSchema: GenMessage<GenerateImagesRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_image, 9);
+  messageDesc(file_hatch_platform_v1_image, 10);
 
 /**
  * A generated image kept for one day so the user can choose one.
@@ -298,7 +382,7 @@ export type ImageCandidate = Message<'hatch.platform.v1.ImageCandidate'> & {
  */
 export const ImageCandidateSchema: GenMessage<ImageCandidate> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_image, 10);
+  messageDesc(file_hatch_platform_v1_image, 11);
 
 /**
  * @generated from message hatch.platform.v1.GenerateImagesResponse
@@ -306,6 +390,8 @@ export const ImageCandidateSchema: GenMessage<ImageCandidate> =
 export type GenerateImagesResponse =
   Message<'hatch.platform.v1.GenerateImagesResponse'> & {
     /**
+     * Model id sent to the provider.
+     *
      * @generated from field: string model_id = 1;
      */
     modelId: string;
@@ -314,6 +400,13 @@ export type GenerateImagesResponse =
      * @generated from field: repeated hatch.platform.v1.ImageCandidate candidates = 2;
      */
     candidates: ImageCandidate[];
+
+    /**
+     * The image model that generated the candidates.
+     *
+     * @generated from field: string image_model_id = 3;
+     */
+    imageModelId: string;
   };
 
 /**
@@ -322,37 +415,47 @@ export type GenerateImagesResponse =
  */
 export const GenerateImagesResponseSchema: GenMessage<GenerateImagesResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_image, 11);
+  messageDesc(file_hatch_platform_v1_image, 12);
 
 /**
- * Image generation with the instance's single selected image model.
+ * Image models and image generation. An image model is a provider model of
+ * kind "image"; the instance may have several and a caller picks one per
+ * generation.
  *
  * @generated from service hatch.platform.v1.ImageService
  */
 export const ImageService: GenService<{
   /**
-   * @generated from rpc hatch.platform.v1.ImageService.GetImageModel
+   * @generated from rpc hatch.platform.v1.ImageService.ListImageModels
    */
-  getImageModel: {
+  listImageModels: {
     methodKind: 'unary';
-    input: typeof GetImageModelRequestSchema;
-    output: typeof GetImageModelResponseSchema;
+    input: typeof ListImageModelsRequestSchema;
+    output: typeof ListImageModelsResponseSchema;
   };
   /**
-   * @generated from rpc hatch.platform.v1.ImageService.SetImageModel
+   * @generated from rpc hatch.platform.v1.ImageService.CreateImageModel
    */
-  setImageModel: {
+  createImageModel: {
     methodKind: 'unary';
-    input: typeof SetImageModelRequestSchema;
-    output: typeof SetImageModelResponseSchema;
+    input: typeof CreateImageModelRequestSchema;
+    output: typeof CreateImageModelResponseSchema;
   };
   /**
-   * @generated from rpc hatch.platform.v1.ImageService.ClearImageModel
+   * @generated from rpc hatch.platform.v1.ImageService.UpdateImageModel
    */
-  clearImageModel: {
+  updateImageModel: {
     methodKind: 'unary';
-    input: typeof ClearImageModelRequestSchema;
-    output: typeof ClearImageModelResponseSchema;
+    input: typeof UpdateImageModelRequestSchema;
+    output: typeof UpdateImageModelResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.ImageService.DeleteImageModel
+   */
+  deleteImageModel: {
+    methodKind: 'unary';
+    input: typeof DeleteImageModelRequestSchema;
+    output: typeof DeleteImageModelResponseSchema;
   };
   /**
    * @generated from rpc hatch.platform.v1.ImageService.GenerateImages

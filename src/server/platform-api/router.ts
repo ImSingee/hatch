@@ -94,10 +94,10 @@ import {
 } from '~server/apps/icon';
 import { generateImages } from '~server/images/generate';
 import {
-  clearImageModel,
-  getImageModelState,
-  setImageModel,
-  type ImageModelState,
+  createImageModel,
+  deleteImageModel,
+  listImageModels,
+  updateImageModel,
 } from '~server/images/model';
 
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
@@ -236,9 +236,6 @@ const iconMessage = (icon: AppIconView) => ({
     path: icon.path ?? undefined,
     sizes: icon.sizes,
   },
-});
-const imageModelMessage = (state: ImageModelState) => ({
-  state: { ...state, selected: state.selected ?? undefined },
 });
 const pinMessage = (pin: SidebarItem) => ({
   id: pin.id,
@@ -769,10 +766,30 @@ export function registerPlatformApi(
     }),
   });
   router.service(ImageService, {
-    getImageModel: async () => imageModelMessage(await getImageModelState()),
-    setImageModel: async (input) =>
-      imageModelMessage(await setImageModel(input)),
-    clearImageModel: async () => imageModelMessage(await clearImageModel()),
+    listImageModels: async () => {
+      const list = await listImageModels();
+      return { ...list, defaultModelId: list.defaultModelId ?? undefined };
+    },
+    createImageModel: async (input) => ({
+      model: await createImageModel({
+        providerId: input.providerId,
+        modelId: input.modelId,
+        name: input.name,
+        description: input.description,
+      }),
+    }),
+    updateImageModel: async (input) => ({
+      model: await updateImageModel({
+        id: input.id,
+        modelId: input.modelId,
+        name: input.name,
+        description: input.description,
+      }),
+    }),
+    deleteImageModel: async (input) => {
+      await deleteImageModel(input.id);
+      return {};
+    },
     generateImages: async (input, context) => {
       const result = await generateImages(
         {
@@ -780,10 +797,15 @@ export function registerPlatformApi(
           count: input.count,
           quality: input.quality as 'low' | 'medium' | 'high' | undefined,
           glyphTile: input.glyphTile,
+          imageModelId: input.imageModelId,
         },
         context.signal,
       );
-      return { modelId: result.model, candidates: result.images };
+      return {
+        imageModelId: result.imageModelId,
+        modelId: result.model,
+        candidates: result.images,
+      };
     },
   });
   router.service(ThemeService, {

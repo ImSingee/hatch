@@ -31,7 +31,7 @@ interface.
 | Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
-| Image model      | image-model get / set / clear                                                                       | ImageService/GetImageModel, SetImageModel, ClearImageModel; selection only, provider keys never exposed          |
+| Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed  |
 | Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional glyph-on-tile composition, hourly cap           |
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
@@ -39,8 +39,10 @@ interface.
 | Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
 
 Not covered by the CLI: providers and their chat models (create, edit, API
-keys) remain Web-only as before this change. `image-model set` selects among
-existing providers and cannot create one. See [App icons](app-icons.md).
+keys) remain Web-only. Image models are the provider models of kind `image`;
+the CLI covers every field the Web form sets for them (model id, name,
+description) but only on providers that already exist, and cannot create
+one. See [App icons](app-icons.md).
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`

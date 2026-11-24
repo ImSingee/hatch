@@ -1,4 +1,4 @@
-/** Image model, image generation and App icon commands. */
+/** Image models, image generation and App icon commands. */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { addAbortSignal } from 'node:stream';
@@ -12,6 +12,8 @@ export const MAX_ICON_FILE_BYTES = 4 * 1024 * 1024;
 export const MAX_PROMPT_LENGTH = 4000;
 const CANDIDATE_ID_RE = /^[a-f0-9]{32}$/;
 const MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+export const MAX_MODEL_NAME_LENGTH = 200;
+export const MAX_MODEL_DESCRIPTION_LENGTH = 200;
 const QUALITIES = ['low', 'medium', 'high'] as const;
 
 type Flags = Record<string, string | boolean | undefined>;
@@ -19,11 +21,26 @@ type OptionSpec = Record<string, { type: 'string' | 'boolean' }>;
 const invalid = (message: string) => new CliError('invalid_arguments', message);
 
 export type ImageCommand =
-  | { kind: 'model-get' }
-  | { kind: 'model-set'; providerId: string; modelId: string }
-  | { kind: 'model-clear' }
+  | { kind: 'model-list' }
+  | {
+      kind: 'model-add';
+      providerId: string;
+      modelId: string;
+      name?: string;
+      description?: string;
+    }
+  | {
+      kind: 'model-update';
+      id: string;
+      modelId?: string;
+      name?: string;
+      /** Empty string clears it. */
+      description?: string;
+    }
+  | { kind: 'model-remove'; id: string }
   | {
       kind: 'generate';
+      imageModelId?: string;
       prompt?: string;
       promptFile?: string;
       count: number;
@@ -49,6 +66,7 @@ function parse(
   depth: number,
   options: OptionSpec,
   positionals: number,
+  positionalLabel = 'App id or slug',
 ) {
   let parsed;
   try {
@@ -63,7 +81,7 @@ function parse(
   if (parsed.positionals.length !== positionals)
     throw invalid(
       positionals
-        ? 'Supply exactly one App id or slug.'
+        ? `Supply exactly one ${positionalLabel}.`
         : 'This command takes no positional arguments.',
     );
   return { flags: parsed.values as Flags, positionals: parsed.positionals };
@@ -77,6 +95,34 @@ function text(flags: Flags, name: string): string | undefined {
   return value;
 }
 
+function modelFields(flags: Flags) {
+  const modelId = text(flags, 'model-id');
+  if (modelId !== undefined && !MODEL_ID_RE.test(modelId))
+    throw invalid('--model-id is not a valid model id.');
+  const name = text(flags, 'name')?.trim();
+  if (
+    name !== undefined &&
+    (!name || promptLength(name) > MAX_MODEL_NAME_LENGTH)
+  )
+    throw invalid(`--name must be 1 to ${MAX_MODEL_NAME_LENGTH} characters.`);
+  const description = text(flags, 'description')?.trim();
+  if (description === '') throw invalid('--description must not be blank.');
+  if (
+    description !== undefined &&
+    promptLength(description) > MAX_MODEL_DESCRIPTION_LENGTH
+  )
+    throw invalid(
+      `--description must be at most ${MAX_MODEL_DESCRIPTION_LENGTH} characters.`,
+    );
+  return { modelId, name, description };
+}
+
+const MODEL_FIELD_OPTIONS: OptionSpec = {
+  'model-id': { type: 'string' },
+  name: { type: 'string' },
+  description: { type: 'string' },
+};
+
 /** Unicode code points, the unit the public API limits prompts in. */
 function promptLength(prompt: string): number {
   return Array.from(prompt).length;
@@ -89,27 +135,77 @@ export function parseImageCommand(
 ): { command: ImageCommand; flags: Flags } {
   const [name, operation, action] = args.slice(offset);
   if (name === 'image-model') {
-    if (operation === 'get' || operation === 'clear') {
+    if (operation === 'list') {
       const { flags } = parse(args, offset, 2, {}, 0);
-      return { command: { kind: `model-${operation}` }, flags };
+      return { command: { kind: 'model-list' }, flags };
     }
-    if (operation === 'set') {
+    if (operation === 'add') {
       const { flags } = parse(
         args,
         offset,
         2,
-        { provider: { type: 'string' }, model: { type: 'string' } },
+        { provider: { type: 'string' }, ...MODEL_FIELD_OPTIONS },
         0,
       );
       const providerId = text(flags, 'provider');
-      const modelId = text(flags, 'model');
-      if (!providerId || !modelId)
-        throw invalid('Supply both --provider <id> and --model <model-id>.');
-      if (!MODEL_ID_RE.test(modelId))
-        throw invalid('--model is not a valid model id.');
-      return { command: { kind: 'model-set', providerId, modelId }, flags };
+      const fields = modelFields(flags);
+      if (!providerId || !fields.modelId)
+        throw invalid('Supply both --provider <id> and --model-id <model-id>.');
+      return {
+        command: {
+          kind: 'model-add',
+          providerId,
+          modelId: fields.modelId,
+          name: fields.name,
+          description: fields.description,
+        },
+        flags,
+      };
     }
-    throw invalid('Use hatch image-model get, set or clear.');
+    if (operation === 'update') {
+      const { flags, positionals } = parse(
+        args,
+        offset,
+        2,
+        { ...MODEL_FIELD_OPTIONS, 'clear-description': { type: 'boolean' } },
+        1,
+        'image model id',
+      );
+      const fields = modelFields(flags);
+      if (flags['clear-description'] && fields.description !== undefined)
+        throw invalid('Use either --description or --clear-description.');
+      const description = flags['clear-description'] ? '' : fields.description;
+      if (
+        fields.modelId === undefined &&
+        fields.name === undefined &&
+        description === undefined
+      )
+        throw invalid(
+          'Supply at least one of --model-id, --name, --description and --clear-description.',
+        );
+      return {
+        command: {
+          kind: 'model-update',
+          id: positionals[0],
+          modelId: fields.modelId,
+          name: fields.name,
+          description,
+        },
+        flags,
+      };
+    }
+    if (operation === 'remove') {
+      const { flags, positionals } = parse(
+        args,
+        offset,
+        2,
+        {},
+        1,
+        'image model id',
+      );
+      return { command: { kind: 'model-remove', id: positionals[0] }, flags };
+    }
+    throw invalid('Use hatch image-model list, add, update or remove.');
   }
   if (name === 'image') {
     if (operation !== 'generate') throw invalid('Use hatch image generate.');
@@ -124,6 +220,7 @@ export function parseImageCommand(
         quality: { type: 'string' },
         'glyph-tile': { type: 'string' },
         'output-dir': { type: 'string' },
+        model: { type: 'string' },
       },
       0,
     );
@@ -144,11 +241,15 @@ export function parseImageCommand(
     )
       throw invalid('--quality must be low, medium or high.');
     const glyphTile = text(flags, 'glyph-tile');
+    const imageModelId = text(flags, 'model');
+    if (imageModelId !== undefined && imageModelId.length > 191)
+      throw invalid('--model is not a valid image model id.');
     if (glyphTile !== undefined && !/^#[0-9a-fA-F]{6}$/.test(glyphTile))
       throw invalid('--glyph-tile must be a #RRGGBB colour.');
     return {
       command: {
         kind: 'generate',
+        imageModelId,
         prompt,
         promptFile,
         count,
@@ -277,14 +378,23 @@ export async function runImage(
   const client = platformClient(credential, timeoutMs, signal);
 
   let result: unknown;
-  if (command.kind === 'model-get') result = await client.images.model();
-  else if (command.kind === 'model-clear')
-    result = await client.images.clearModel();
-  else if (command.kind === 'model-set')
-    result = await client.images.setModel({
+  if (command.kind === 'model-list') result = await client.images.models();
+  else if (command.kind === 'model-add')
+    result = await client.images.createModel({
       providerId: command.providerId,
       modelId: command.modelId,
+      name: command.name,
+      description: command.description,
     });
+  else if (command.kind === 'model-update')
+    result = await client.images.updateModel({
+      id: command.id,
+      modelId: command.modelId,
+      name: command.name,
+      description: command.description,
+    });
+  else if (command.kind === 'model-remove')
+    result = await client.images.deleteModel({ id: command.id });
   else if (command.kind === 'icon-get')
     result = await client.apps.icon.get({ id: command.id });
   else if (command.kind === 'icon-clear')
@@ -331,6 +441,7 @@ export async function runImage(
       count: command.count,
       quality: command.quality,
       glyphTile: command.glyphTile,
+      imageModelId: command.imageModelId,
     });
     const candidates: { id: string; path: string; file?: string }[] = [];
     const unsaved: string[] = [];
@@ -357,7 +468,11 @@ export async function runImage(
         unsaved.push(candidate.id);
       }
     }
-    result = { modelId: generated.modelId, candidates };
+    result = {
+      imageModelId: generated.imageModelId,
+      modelId: generated.modelId,
+      candidates,
+    };
     // The images exist and were paid for: report every candidate so the
     // caller can use them by id instead of generating again.
     if (unsaved.length)

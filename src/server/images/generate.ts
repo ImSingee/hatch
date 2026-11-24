@@ -1,4 +1,4 @@
-/** Server-only: bounded image generation with the instance's image model. */
+/** Server-only: bounded image generation with one of the image models. */
 import sharp from 'sharp';
 import { AppError } from '~server/errors';
 import { candidatePath, saveCandidate } from './candidates';
@@ -29,6 +29,8 @@ export type GenerateImagesInput = {
   prompt: string;
   count?: number;
   quality?: ImageQuality;
+  /** Image model id; the default image model when omitted. */
+  imageModelId?: string;
   /**
    * When set, each result must be a white glyph on black and is composed
    * onto a solid tile of this `#RRGGBB` colour.
@@ -37,6 +39,8 @@ export type GenerateImagesInput = {
 };
 
 export type GeneratedImages = {
+  /** The image model used and the model id sent to its provider. */
+  imageModelId: string;
   model: string;
   images: { id: string; path: string }[];
 };
@@ -59,7 +63,9 @@ export async function generateImages(
   if (glyphTile !== undefined && !isTileColor(glyphTile))
     throw new AppError('Tile background must be a #RRGGBB colour.', 400);
 
-  const { driver, provider, modelId } = await resolveImageModel();
+  const { id, driver, provider, modelId } = await resolveImageModel(
+    input.imageModelId,
+  );
   reserve(count, Date.now());
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const results = await Promise.allSettled(
@@ -91,5 +97,5 @@ export async function generateImages(
       ? failure.reason
       : new AppError('Image generation failed.', 503);
   }
-  return { model: modelId, images };
+  return { imageModelId: id, model: modelId, images };
 }

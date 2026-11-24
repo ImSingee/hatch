@@ -216,28 +216,37 @@ const definitions: readonly CliCommandDefinition[] = [
       'Delete the App icon so the App shows its monogram again. Succeeds when there is none.',
   },
   {
-    path: ['image-model', 'get'],
-    usage: 'image-model get',
+    path: ['image-model', 'list'],
+    usage: 'image-model list',
     description:
-      'Show the selected image model (null when none) and every provider that can generate images with suggested model ids. Never prints API keys.',
+      'List every image model with its id, provider, provider model id, name, description and whether it is usable; defaultModelId is the one image generate uses without --model (the first usable model). Also lists the providers that can hold image models, with suggested model ids. Never prints API keys.',
   },
   {
-    path: ['image-model', 'set'],
-    usage: 'image-model set --provider <provider-id> --model <model-id>',
+    path: ['image-model', 'add'],
+    usage:
+      'image-model add --provider <provider-id> --model-id <model-id> [--name <text>] [--description <text>]',
     description:
-      'Select the instance image model, replacing the previous choice. The provider must be one listed by image-model get; its existing API key is used.',
+      'Add an image model to a provider listed by image-model list; its existing API key is used. --name defaults to the model id. --description (at most 200 characters) says what the model is good at, so callers can pick between models. Prints the new image model with its id.',
   },
   {
-    path: ['image-model', 'clear'],
-    usage: 'image-model clear',
-    description: 'Unselect the image model; image generate then fails.',
+    path: ['image-model', 'update'],
+    usage:
+      'image-model update <image-model-id> [--model-id <model-id>] [--name <text>] [--description <text> | --clear-description]',
+    description:
+      'Change an image model; omitted fields stay unchanged. Its provider cannot change.',
+  },
+  {
+    path: ['image-model', 'remove'],
+    usage: 'image-model remove <image-model-id>',
+    description:
+      'Delete an image model. When it was the default, the next usable model becomes the default.',
   },
   {
     path: ['image', 'generate'],
     usage:
-      'image generate (--prompt <text> | --prompt-file <path|->) [--count <1-4>] [--quality low|medium|high] [--glyph-tile <#RRGGBB>] [--output-dir <path>]',
+      'image generate (--prompt <text> | --prompt-file <path|->) [--model <image-model-id>] [--count <1-4>] [--quality low|medium|high] [--glyph-tile <#RRGGBB>] [--output-dir <path>]',
     description:
-      'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. --count runs the same prompt that many times, so results are close variations; write a separate prompt per design to compare different ideas. Prints each candidate id and authenticated path; candidates expire after one day. --glyph-tile expects a white glyph on black and lays it on a solid 512px tile of that colour. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
+      'Generate 1024px square images; costs provider credit, limited to 30 images per hour. --model picks an image model from image-model list (choose by its description); without it the default model is used. --count runs the same prompt that many times, so results are close variations; write a separate prompt per design to compare different ideas. Prints the image model used and each candidate id and authenticated path; candidates expire after one day. --glyph-tile expects a white glyph on black and lays it on a solid 512px tile of that colour. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
   },
   {
     path: ['theme', 'get'],

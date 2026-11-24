@@ -124,6 +124,12 @@ export type ProviderApiType =
   | 'openai-completions'
   | 'anthropic-messages';
 
+/**
+ * What a provider model does. Chat models run the Agent; image models
+ * generate images. Fixed when the model is created.
+ */
+export type AgentModelKind = 'chat' | 'image';
+
 export type AgentRunStatus =
   | 'running'
   | 'blocked'
@@ -532,6 +538,9 @@ export const agentModels = snakeCase.table('agent_models', {
   /** Model id sent to the provider (e.g. "gpt-5.5"). */
   modelId: text().notNull(),
   name: text().notNull(),
+  kind: text().$type<AgentModelKind>().notNull().default('chat'),
+  /** What the model is good at, so the Agent can pick between models. */
+  description: text().notNull().default(''),
   reasoning: boolean().notNull().default(false),
   contextWindow: integer().notNull().default(128000),
   maxTokens: integer().notNull().default(8192),
