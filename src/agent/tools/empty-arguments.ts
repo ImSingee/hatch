@@ -154,9 +154,17 @@ export function normalizeEmptyOptionalFields(
     path: string,
   ): unknown {
     if (Array.isArray(value) && shape.items) {
-      return value.map((item, index) =>
-        normalize(item, shape.items as ObjectSchema, `${path}.${index}`),
-      );
+      const itemShape = shape.items as ObjectSchema;
+      return value.map((item, index) => {
+        const itemPath = `${path}.${index}`;
+        // Array items are data, never omitted placeholders: check them like
+        // required fields.
+        const hazard = coercionHazard(item, itemShape, false);
+        if (hazard) {
+          throw new Error(`Invalid tool argument ${itemPath}: ${hazard}.`);
+        }
+        return normalize(item, itemShape, itemPath);
+      });
     }
     if (!value || typeof value !== 'object' || !shape.properties) return value;
     const result: Record<string, unknown> = { ...value };

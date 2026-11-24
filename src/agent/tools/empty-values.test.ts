@@ -355,6 +355,8 @@ describe('optional tool empty values', () => {
     ['checkout_app', { id: 'sample-app', clone: '0' }],
     // A blank optional string would become the numeric empty placeholder.
     ['web_fetch', { url: 'https://example.com', query: '   ' }],
+    // Array items are data: null would become the string "null".
+    ['web_search', { query: 'battery', include_domains: [null] }],
   ])(
     'rejects %s arguments pi-ai would coerce into different valid data: %j',
     (name, args) => {
