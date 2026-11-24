@@ -175,4 +175,16 @@ message Req { Inner inner = 1 [(hatch.app.v1.field) = { default: "{}" }]; }
     const registry = compile(body);
     expect(() => taskInputSchema(registry, 'app.v1.Req')).toThrow(message);
   });
+
+  it('rejects a well-known type as the request but keeps it usable as a field', () => {
+    const registry = compile(
+      'message Req { google.protobuf.Timestamp at = 1; }',
+    );
+    expect(() =>
+      taskInputSchema(registry, 'google.protobuf.Timestamp'),
+    ).toThrow(/not a message of the App/);
+    expect(taskInputSchema(registry, 'app.v1.Req')).toMatchObject({
+      properties: { at: { type: 'string', format: 'date-time' } },
+    });
+  });
 });

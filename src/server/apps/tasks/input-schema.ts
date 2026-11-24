@@ -383,6 +383,14 @@ export function taskInputSchema(
       `request message ${inputType} is not in the compiled proto.`,
     );
   }
+  // The run input is a JSON object everywhere (form, RPC, CLI, webhook), so
+  // the request must be an App message; well-known types stay usable as
+  // fields.
+  if (message.typeName.startsWith('google.protobuf.')) {
+    throw new TaskInputSchemaError(
+      `the request type ${message.typeName} is not a message of the App; wrap it in a request message with a field of that type.`,
+    );
+  }
   // Built only from strings, numbers, booleans, arrays and plain objects.
   return messageSchema(message, {
     options: platformOptions(registry),
