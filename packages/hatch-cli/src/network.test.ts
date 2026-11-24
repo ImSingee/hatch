@@ -20,9 +20,15 @@ async function close() {
 
 function calls(url: string) {
   const signal = new AbortController().signal;
+  // Start each call only when awaited, so none rejects unobserved.
   return [
-    getStatus({ url, token }, 5000, signal),
-    request(url, '/api/auth/device/code', { body: {}, timeout: 5000, signal }),
+    () => getStatus({ url, token }, 5000, signal),
+    () =>
+      request(url, '/api/auth/device/code', {
+        body: {},
+        timeout: 5000,
+        signal,
+      }),
   ];
 }
 
@@ -34,7 +40,7 @@ describe('platform connection failures', () => {
     const url = await listen(() => {});
     await close();
     for (const call of calls(url))
-      await expect(call).rejects.toMatchObject({
+      await expect(call()).rejects.toMatchObject({
         code: 'network_error',
         exitCode: 7,
         message: `Cannot connect to the platform at ${url}. Check that it is running and that the URL is correct.`,
@@ -44,7 +50,7 @@ describe('platform connection failures', () => {
   it('keeps an unknown outcome once the request may have reached it', async () => {
     const url = await listen((incoming) => incoming.socket.destroy());
     for (const call of calls(url)) {
-      const error = await call.catch((caught: unknown) => caught);
+      const error = await call().catch((caught: unknown) => caught);
       expect(error).toMatchObject({ code: 'outcome_unknown', exitCode: 7 });
       expect((error as Error).message).toContain(url);
       expect((error as Error).message).not.toContain(token);
