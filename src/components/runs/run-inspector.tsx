@@ -15,11 +15,17 @@ import {
   type RunDetailView,
   type RunStepView,
 } from '~lib/runs';
-import { RunStatusBadge, RunStatusBullet, RunTriggerLabel } from './run-status';
+import {
+  RunStatusBadge,
+  RunStatusBullet,
+  RunTriggerLabel,
+  useRunErrorText,
+} from './run-status';
 import classes from './run-inspector.module.css';
 
 function StepItem({ step }: { step: RunStepView }) {
   const { t } = useI18n();
+  const runErrorText = useRunErrorText();
   return (
     <Timeline.Item
       lineVariant={step.status === 'failed' ? 'dashed' : 'solid'}
@@ -47,7 +53,7 @@ function StepItem({ step }: { step: RunStepView }) {
             color: 'var(--mantine-color-red-7)',
           }}
         >
-          {step.error}
+          {runErrorText(step.error)}
         </Code>
       ) : null}
       {step.output != null && step.output !== '' ? (
@@ -72,6 +78,7 @@ export function RunInspector({
   summaryRows?: ReactNode;
 }) {
   const { t } = useI18n();
+  const runErrorText = useRunErrorText();
   const active = isActiveRun(run.status);
   return (
     <Columns>
@@ -79,7 +86,7 @@ export function RunInspector({
         {run.error ? (
           <Section title={t('runs.inspector.error')}>
             <Code block className={classes.error}>
-              {run.error}
+              {runErrorText(run.error)}
             </Code>
           </Section>
         ) : null}

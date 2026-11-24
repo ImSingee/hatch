@@ -31,6 +31,7 @@ import {
   REPLY_STATE_OPTIONS,
   NotificationStatusBadge,
   SourceTypeIcon,
+  useNotificationKindName,
 } from './status';
 import { useDeleteNotification } from './use-delete-notification';
 import classes from './notifications-window.module.css';
@@ -58,6 +59,7 @@ export function NotificationHistory({
   selected?: string;
 }) {
   const { t, locale } = useI18n();
+  const kindName = useNotificationKindName();
   const [source, setSource] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [status, setStatus] = useState<NotificationStatus | null>(null);
@@ -259,7 +261,7 @@ export function NotificationHistory({
                     <span className={classes.meta}>
                       <SourceTypeIcon type={item.sourceType} size={14} />
                       <span className={classes.metaText}>
-                        {item.sourceName} · {item.kindName}
+                        {item.sourceName} · {kindName(item)}
                         {item.body ? ` · ${item.body}` : ''}
                       </span>
                     </span>

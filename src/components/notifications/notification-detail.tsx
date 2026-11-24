@@ -38,6 +38,7 @@ import {
   NotificationRevisionBadge,
   NotificationStatusBadge,
   notificationPriorityLabelKey,
+  useNotificationKindName,
 } from './status';
 import { ReplySection } from './reply-section';
 
@@ -52,6 +53,7 @@ const SOURCE_TYPE_LABEL: Record<
 
 export function NotificationDetail({ id }: { id: string }) {
   const { t } = useI18n();
+  const kindName = useNotificationKindName();
   const { data } = useSuspenseQuery(notificationDetailQueryOptions(id));
   const priorityKey = notificationPriorityLabelKey(data.priority);
 
@@ -96,7 +98,7 @@ export function NotificationDetail({ id }: { id: string }) {
           />
           <Field
             label={t('notifications.kind')}
-            value={`${data.kindName} (${data.kind})`}
+            value={`${kindName(data)} (${data.kind})`}
           />
           <Field
             label={t('notifications.detail.priority')}

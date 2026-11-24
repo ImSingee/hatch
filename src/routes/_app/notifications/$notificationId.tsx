@@ -14,6 +14,7 @@ import {
 import { usePlatformEvent } from '~components/system/platform-events';
 import { useI18n } from '~i18n';
 import { notificationDetailQueryOptions } from '~queries/notifications';
+import { useNotificationKindName } from '~components/notifications/status';
 
 export const Route = createFileRoute('/_app/notifications/$notificationId')({
   loader: async ({ context, params }) => {
@@ -33,6 +34,7 @@ export const Route = createFileRoute('/_app/notifications/$notificationId')({
 
 function NotificationDetailPage() {
   const { t } = useI18n();
+  const kindName = useNotificationKindName();
   const loaded = Route.useLoaderData();
   const { notificationId } = Route.useParams();
   const navigate = useNavigate();
@@ -66,7 +68,7 @@ function NotificationDetailPage() {
           <h2>{notification.title}</h2>
           <span className={classes.detailMeta}>
             {t('notifications.detail.kindFromSource', {
-              kind: notification.kindName,
+              kind: kindName(notification),
               source: notification.sourceName,
             })}
           </span>

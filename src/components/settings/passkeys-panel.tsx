@@ -31,6 +31,7 @@ import {
   isPasskeyCancellation,
   type PasskeyClientError,
 } from '~auth/passkey-browser';
+import { authErrorOf } from '~auth/auth-errors';
 import { type PlainTranslationKey, translateError, useI18n } from '~i18n';
 import classes from './passkeys-panel.module.css';
 
@@ -62,16 +63,7 @@ export function PasskeysPanel({ appOrigin }: { appOrigin: string }) {
   const passkeyError = (
     error: PasskeyClientError,
     fallback: PlainTranslationKey,
-  ) =>
-    translateError(
-      t,
-      locale,
-      {
-        code: error.code ? `passkeys.${error.code}` : undefined,
-        message: error.message?.trim(),
-      },
-      fallback,
-    );
+  ) => translateError(t, locale, authErrorOf(error), fallback);
 
   const addPasskey = async () => {
     setAdding(true);

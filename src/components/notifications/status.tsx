@@ -347,3 +347,19 @@ export function SourceTypeIcon({
   if (type === 'user') return <IconUser size={size} stroke={1.6} />;
   return <IconSparkles size={size} stroke={1.6} />;
 }
+
+/**
+ * Kind name for display. The platform's own kinds (test sends and
+ * user-addressed messages) are stored with English names, so they are
+ * translated; App and channel kinds are the sender's own names.
+ */
+export function useNotificationKindName() {
+  const { t } = useI18n();
+  return (item: { kind: string; kindName: string; sourceType: string }) => {
+    if (item.sourceType === 'platform' || item.sourceType === 'user') {
+      if (item.kind === 'test') return t('notifications.kind.test');
+      if (item.kind === 'message') return t('notifications.kind.message');
+    }
+    return item.kindName;
+  };
+}

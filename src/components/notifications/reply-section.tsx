@@ -23,7 +23,7 @@ import {
   type ReplyField,
   type ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
-import { useI18n, type PlainTranslationKey } from '~i18n';
+import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
 import { formatExact, formatRelativeTime } from '~lib/format';
 import {
   respondToNotificationFn,
@@ -51,7 +51,8 @@ type AnswerProblem =
   | { type: 'tooLong'; max: number }
   | { type: 'selectExactly'; count: number }
   | { type: 'selectRange'; min: number; max: number }
-  | { type: 'invalid' };
+  /** `message`: the validator's own reason, shown as-is in English. */
+  | { type: 'invalid'; message?: string };
 
 function answerProblem(
   reply: ReplyForm,
@@ -178,7 +179,7 @@ function ReplyFormView({
   notificationId: string;
   reply: ReplyForm;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [answers, setAnswers] = useState<ReplyAnswers>({});
   const [error, setError] = useState<{
     field: string | null;
@@ -205,7 +206,12 @@ function ReplyFormView({
           max: problem.max,
         });
       case 'invalid':
-        return t('notifications.reply.error.invalid');
+        return translateError(
+          t,
+          locale,
+          { message: problem.message },
+          'notifications.reply.error.invalid',
+        );
     }
   };
   // One required buttons field answers with a single click, like on the phone.
@@ -221,10 +227,14 @@ function ReplyFormView({
     } catch (caught) {
       if (!(caught instanceof ReplyAnswerError)) throw caught;
       // Shown under its field, so the reason alone reads best.
-      setError({
-        field: caught.field,
-        problem: answerProblem(reply, caught.field, input),
-      });
+      const problem = answerProblem(reply, caught.field, input);
+      if (problem.type === 'invalid') {
+        const reason = caught.field
+          ? caught.message.slice(`answers.${caught.field}: `.length)
+          : caught.message;
+        problem.message = `${reason[0]?.toUpperCase() ?? ''}${reason.slice(1)}.`;
+      }
+      setError({ field: caught.field, problem });
     }
   };
 

@@ -130,9 +130,12 @@ export function DeploymentHistory({ appId }: { appId: string }) {
                 <Link
                   to="/agent"
                   search={{
-                    prompt: requiresNewerPlatform
-                      ? `Restore App ${appId} to v${deployment.version}. Its compatibility is newer than this platform, so keep its runtime disabled until the platform is updated.`
-                      : `Restore App ${appId} to v${deployment.version}, then update and redeploy it for the latest platform compatibility.`,
+                    prompt: t(
+                      requiresNewerPlatform
+                        ? 'deployments.agentRestore.promptNewerPlatform'
+                        : 'deployments.agentRestore.promptUpdate',
+                      { appId, version: deployment.version },
+                    ),
                   }}
                   {...props}
                 />
