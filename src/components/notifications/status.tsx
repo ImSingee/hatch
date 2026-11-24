@@ -20,6 +20,7 @@ import {
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import type { NotificationSourceType } from '~/db/schema';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import type { NotificationStatus } from '~server/notifications';
 
 type DeliveryStatus =
@@ -31,35 +32,36 @@ type DeliveryStatus =
 
 const NOTIFICATION_META: Record<
   NotificationStatus,
-  { label: string; color: string; icon: ReactNode }
+  { label: PlainTranslationKey; color: string; icon: ReactNode }
 > = {
   unrouted: {
-    label: 'Not routed',
+    label: 'notifications.status.unrouted',
     color: 'gray',
     icon: <IconMinus size={11} stroke={2.5} />,
   },
   pending: {
-    label: 'Delivering',
+    label: 'notifications.status.pending',
     color: 'gray',
     icon: <IconClock size={11} stroke={2.5} />,
   },
   delivered: {
-    label: 'Delivered',
+    label: 'notifications.status.delivered',
     color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   partial: {
-    label: 'Partly failed',
+    label: 'notifications.status.partial',
     color: 'yellow',
     icon: <IconX size={11} stroke={2.5} />,
   },
   failed: {
-    label: 'Failed',
+    label: 'notifications.status.failed',
     color: 'red',
     icon: <IconX size={11} stroke={2.5} />,
   },
 };
 
+/** Status filter options; `label` is translated at render. */
 export const NOTIFICATION_STATUS_OPTIONS = (
   Object.keys(NOTIFICATION_META) as NotificationStatus[]
 ).map((value) => ({ value, label: NOTIFICATION_META[value].label }));
@@ -69,6 +71,7 @@ export function NotificationStatusBadge({
 }: {
   status: NotificationStatus;
 }) {
+  const { t } = useI18n();
   const meta = NOTIFICATION_META[status];
   return (
     <Badge
@@ -77,43 +80,44 @@ export function NotificationStatusBadge({
       radius="sm"
       leftSection={<span style={{ display: 'inline-flex' }}>{meta.icon}</span>}
     >
-      {meta.label}
+      {t(meta.label)}
     </Badge>
   );
 }
 
 const DELIVERY_META: Record<
   DeliveryStatus,
-  { label: string; color: string; icon: ReactNode }
+  { label: PlainTranslationKey; color: string; icon: ReactNode }
 > = {
   pending: {
-    label: 'Waiting',
+    label: 'notifications.delivery.pending',
     color: 'gray',
     icon: <IconClock size={11} stroke={2.5} />,
   },
   in_progress: {
-    label: 'Sending',
+    label: 'notifications.delivery.inProgress',
     color: 'primary',
     icon: <Loader size={9} color="primary" />,
   },
   succeeded: {
-    label: 'Delivered',
+    label: 'notifications.delivery.succeeded',
     color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   failed: {
-    label: 'Failed',
+    label: 'notifications.delivery.failed',
     color: 'red',
     icon: <IconX size={11} stroke={2.5} />,
   },
   canceled: {
-    label: 'Not sent',
+    label: 'notifications.delivery.canceled',
     color: 'gray',
     icon: <IconMinus size={11} stroke={2.5} />,
   },
 };
 
 export function DeliveryStatusBadge({ status }: { status: DeliveryStatus }) {
+  const { t } = useI18n();
   const meta = DELIVERY_META[status];
   return (
     <Badge
@@ -122,7 +126,7 @@ export function DeliveryStatusBadge({ status }: { status: DeliveryStatus }) {
       radius="sm"
       leftSection={<span style={{ display: 'inline-flex' }}>{meta.icon}</span>}
     >
-      {meta.label}
+      {t(meta.label)}
     </Badge>
   );
 }
@@ -135,6 +139,7 @@ export function NotificationRevisionBadge({
   editedAt: string | null;
   recalledAt: string | null;
 }) {
+  const { t } = useI18n();
   if (recalledAt) {
     return (
       <Badge
@@ -147,7 +152,7 @@ export function NotificationRevisionBadge({
           </span>
         }
       >
-        Recalled
+        {t('notifications.badge.recalled')}
       </Badge>
     );
   }
@@ -163,7 +168,7 @@ export function NotificationRevisionBadge({
           </span>
         }
       >
-        Edited
+        {t('notifications.badge.edited')}
       </Badge>
     );
   }
@@ -180,6 +185,7 @@ export function NotificationReplyBadge({
   respondedAt: string | null;
   recalledAt: string | null;
 }) {
+  const { t } = useI18n();
   if (!hasReply) return null;
   if (respondedAt) {
     return (
@@ -193,7 +199,7 @@ export function NotificationReplyBadge({
           </span>
         }
       >
-        Answered
+        {t('notifications.badge.answered')}
       </Badge>
     );
   }
@@ -209,73 +215,78 @@ export function NotificationReplyBadge({
         </span>
       }
     >
-      Awaiting answer
+      {t('notifications.badge.awaiting')}
     </Badge>
   );
 }
 
-export const REPLY_STATE_OPTIONS = [
-  { value: 'awaiting', label: 'Awaiting answer' },
-  { value: 'answered', label: 'Answered' },
+/** Reply state filter options; `label` is translated at render. */
+export const REPLY_STATE_OPTIONS: {
+  value: string;
+  label: PlainTranslationKey;
+}[] = [
+  { value: 'awaiting', label: 'notifications.badge.awaiting' },
+  { value: 'answered', label: 'notifications.badge.answered' },
 ];
 
 const PRIORITY_META: Record<
   number,
   {
-    label: string;
-    effect: string | null;
+    label: PlainTranslationKey;
+    /** Label with the priority number and its effect on phones. */
+    full: PlainTranslationKey;
     color: string;
     icon: ReactNode;
-    description: string;
+    description: PlainTranslationKey;
   }
 > = {
   [-2]: {
-    label: 'Lowest',
-    effect: 'history only, not pushed to phones',
+    label: 'notifications.priority.lowest',
+    full: 'notifications.priority.lowest.full',
     color: 'gray',
     icon: <IconChevronsDown size={11} stroke={2.5} />,
-    description:
-      'Priority -2: kept in history and sent to webhooks and Apps, never pushed to phones.',
+    description: 'notifications.priority.lowest.description',
   },
   [-1]: {
-    label: 'Low',
-    effect: 'quiet on phones',
+    label: 'notifications.priority.low',
+    full: 'notifications.priority.low.full',
     color: 'gray',
     icon: <IconArrowDown size={11} stroke={2.5} />,
-    description:
-      'Priority -1: arrives on phones quietly, with no sound and no banner.',
+    description: 'notifications.priority.low.description',
   },
   0: {
-    label: 'Normal',
-    effect: null,
+    label: 'notifications.priority.normal',
+    full: 'notifications.priority.normal.full',
     color: 'gray',
     icon: null,
-    description: 'Priority 0: a regular notification.',
+    description: 'notifications.priority.normal.description',
   },
   1: {
-    label: 'High',
-    effect: 'time-sensitive on phones',
+    label: 'notifications.priority.high',
+    full: 'notifications.priority.high.full',
     color: 'primary',
     icon: <IconArrowUp size={11} stroke={2.5} />,
-    description:
-      'Priority 1: time-sensitive on phones, shown during Focus and Do Not Disturb.',
+    description: 'notifications.priority.high.description',
   },
 };
 
-/** For example "High (1) · time-sensitive on phones". */
-export function notificationPriorityLabel(priority: number): string {
-  const meta = PRIORITY_META[priority];
-  if (!meta) return String(priority);
-  const label = `${meta.label} (${priority})`;
-  return meta.effect ? `${label} · ${meta.effect}` : label;
+/**
+ * Key for, for example, "High (1) · time-sensitive on phones"; null for a
+ * priority without a name, which shows as its number.
+ */
+export function notificationPriorityLabelKey(
+  priority: number,
+): PlainTranslationKey | null {
+  return PRIORITY_META[priority]?.full ?? null;
 }
 
 /** Non-normal priorities, next to the delivery status. */
 export function NotificationPriorityBadge({ priority }: { priority: number }) {
+  const { t } = useI18n();
   const meta = PRIORITY_META[priority];
   if (!meta || priority === 0) return null;
   return (
-    <Tooltip label={meta.description} withArrow multiline maw={280}>
+    <Tooltip label={t(meta.description)} withArrow multiline maw={280}>
       <Badge
         color={meta.color}
         variant="outline"
@@ -284,7 +295,7 @@ export function NotificationPriorityBadge({ priority }: { priority: number }) {
           <span style={{ display: 'inline-flex' }}>{meta.icon}</span>
         }
       >
-        {meta.label}
+        {t(meta.label)}
       </Badge>
     </Tooltip>
   );
@@ -292,10 +303,24 @@ export function NotificationPriorityBadge({ priority }: { priority: number }) {
 
 type DestinationType = 'device' | 'webhook' | 'app';
 
-export const DESTINATION_TYPE_LABEL: Record<DestinationType, string> = {
-  device: 'Device',
-  webhook: 'Webhook',
-  app: 'App',
+/** Destination type names; translated at render. */
+export const DESTINATION_TYPE_LABEL: Record<
+  DestinationType,
+  PlainTranslationKey
+> = {
+  device: 'notifications.destinationType.device',
+  webhook: 'notifications.destinationType.webhook',
+  app: 'notifications.destinationType.app',
+};
+
+/** Plural destination type names, for option group headings. */
+export const DESTINATION_TYPE_PLURAL: Record<
+  DestinationType,
+  PlainTranslationKey
+> = {
+  device: 'notifications.destinationType.devices',
+  webhook: 'notifications.destinationType.webhooks',
+  app: 'notifications.destinationType.apps',
 };
 
 export function DestinationTypeIcon({
@@ -321,4 +346,20 @@ export function SourceTypeIcon({
   if (type === 'channel') return <IconBroadcast size={size} stroke={1.6} />;
   if (type === 'user') return <IconUser size={size} stroke={1.6} />;
   return <IconSparkles size={size} stroke={1.6} />;
+}
+
+/**
+ * Kind name for display. The platform's own kinds (test sends and
+ * user-addressed messages) are stored with English names, so they are
+ * translated; App and channel kinds are the sender's own names.
+ */
+export function useNotificationKindName() {
+  const { t } = useI18n();
+  return (item: { kind: string; kindName: string; sourceType: string }) => {
+    if (item.sourceType === 'platform' || item.sourceType === 'user') {
+      if (item.kind === 'test') return t('notifications.kind.test');
+      if (item.kind === 'message') return t('notifications.kind.message');
+    }
+    return item.kindName;
+  };
 }

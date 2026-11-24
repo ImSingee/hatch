@@ -2,6 +2,7 @@ import { Center, Loader } from '@mantine/core';
 import { useMutation } from '@tanstack/react-query';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useI18n } from '~i18n';
 import { CodeEntry } from './code-entry';
 import {
   claimDeviceRequest,
@@ -81,6 +82,7 @@ function DeviceApprovalFlow({
   onSwitchAccount,
   releaseClaim,
 }: DeviceApprovalProps) {
+  const { t } = useI18n();
   const [code, setCode] = useState(() => normalizeUserCode(initialCode));
   const [stage, setStage] = useState<Stage>(() =>
     code.length === USER_CODE_LENGTH
@@ -210,7 +212,7 @@ function DeviceApprovalFlow({
       <Fragment key={transitions}>
         {stage.kind === 'opening' ? (
           <Center py="xl">
-            <Loader aria-label="Opening request" />
+            <Loader aria-label={t('cliAuth.opening')} />
           </Center>
         ) : stage.kind === 'entry' ? (
           <CodeEntry
@@ -226,7 +228,7 @@ function DeviceApprovalFlow({
             account={account}
             onSwitchAccount={() => {
               onSwitchAccount(code).catch(() => {
-                toast.error('Couldn’t sign out. Try again.');
+                toast.error(t('cliAuth.signOutFailed'));
               });
             }}
             focus={transitions > 0 || !code}

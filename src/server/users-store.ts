@@ -28,6 +28,7 @@ export async function removePlatformUser(
     throw new AppError(
       'You cannot delete the account you are signed in with.',
       400,
+      { code: 'users.selfDelete' },
     );
   }
   await db.transaction(async (tx) => {
@@ -41,10 +42,12 @@ export async function removePlatformUser(
       .from(schema.user)
       .for('update');
     if (!users.some((u) => u.id === userId)) {
-      throw new AppError('User not found.', 404);
+      throw new AppError('User not found.', 404, { code: 'users.notFound' });
     }
     if (users.length <= 1) {
-      throw new AppError('The last user cannot be deleted.', 400);
+      throw new AppError('The last user cannot be deleted.', 400, {
+        code: 'users.lastUser',
+      });
     }
     await tx.delete(schema.user).where(eq(schema.user.id, userId));
   });

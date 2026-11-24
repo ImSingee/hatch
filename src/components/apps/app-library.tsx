@@ -24,7 +24,7 @@ import {
 import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
 import { StatusBadge } from '~components/system/status-badge';
 import { type PlainTranslationKey, useI18n } from '~i18n';
-import { formatRelative } from '~lib/format';
+import { formatRelativeTime } from '~lib/format';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import type { AppListItem } from '~server/apps';
 import { setSidebarPin } from '~server/sidebar';
@@ -283,7 +283,7 @@ function EntryTile({
   entry: Entry;
   cardHidden: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return (
     <HoverCard
       openDelay={500}
@@ -308,7 +308,7 @@ function EntryTile({
           </span>
           <span className={classes.tileName}>{entry.name}</span>
           <span className={classes.tileMeta}>
-            {formatRelative(entry.updatedAt)}
+            {formatRelativeTime(entry.updatedAt, locale)}
           </span>
         </EntryLink>
       </HoverCard.Target>
@@ -319,7 +319,7 @@ function EntryTile({
             <span className={classes.cardName}>{entry.name}</span>
             <span className={classes.cardMeta}>
               {t('library.cardMeta', {
-                when: formatRelative(entry.updatedAt),
+                when: formatRelativeTime(entry.updatedAt, locale),
               })}
             </span>
           </div>

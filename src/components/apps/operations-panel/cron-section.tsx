@@ -12,16 +12,23 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconClock, IconHistory, IconPlayerPlay } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { formatDuration, formatExact, formatRelative } from '~lib/format';
+import { useI18n, type PlainTranslationKey } from '~i18n';
+import { formatDuration, formatExact, formatRelativeTime } from '~lib/format';
 import { appOpsQueryOptions, cronRunsQueryOptions } from '~queries/apps';
 import type { AppOps } from '~server/apps';
 import { runCronJobFn } from '~server/apps';
 import { SectionHeader } from './section-header';
 
+const CRON_TRIGGER_LABELS: Record<string, PlainTranslationKey> = {
+  scheduled: 'ops.cron.trigger.scheduled',
+  manual: 'ops.cron.trigger.manual',
+};
+
 // Recent cron-trigger history (scheduled fires + manual "Run now"), newest
 // first. Distinct from the backend log stream: structured per-run rows with
 // trigger, status, and duration.
 function CronHistory({ appId }: { appId: string }) {
+  const { t, locale } = useI18n();
   const query = useQuery(cronRunsQueryOptions(appId));
   const runs = query.data ?? [];
 
@@ -30,7 +37,7 @@ function CronHistory({ appId }: { appId: string }) {
       <Group gap={8} wrap="nowrap">
         <IconHistory size={16} stroke={1.8} />
         <Text fw={700} size="sm">
-          Trigger history
+          {t('ops.cron.history')}
         </Text>
         {runs.length > 0 ? (
           <Text size="xs" c="dimmed">
@@ -44,17 +51,17 @@ function CronHistory({ appId }: { appId: string }) {
         </Center>
       ) : runs.length === 0 ? (
         <Text size="xs" c="dimmed">
-          No runs yet. Scheduled fires and manual runs will appear here.
+          {t('ops.cron.historyEmpty')}
         </Text>
       ) : (
         <Table withTableBorder verticalSpacing={6} highlightOnHover>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Job</Table.Th>
-              <Table.Th w={110}>Trigger</Table.Th>
-              <Table.Th w={90}>Status</Table.Th>
-              <Table.Th w={80}>Duration</Table.Th>
-              <Table.Th w={120}>When</Table.Th>
+              <Table.Th>{t('ops.cron.column.job')}</Table.Th>
+              <Table.Th w={110}>{t('executions.column.trigger')}</Table.Th>
+              <Table.Th w={90}>{t('executions.column.status')}</Table.Th>
+              <Table.Th w={80}>{t('executions.column.duration')}</Table.Th>
+              <Table.Th w={120}>{t('ops.cron.column.when')}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -67,7 +74,9 @@ function CronHistory({ appId }: { appId: string }) {
                 </Table.Td>
                 <Table.Td>
                   <Badge size="xs" variant="default">
-                    {run.trigger}
+                    {CRON_TRIGGER_LABELS[run.trigger]
+                      ? t(CRON_TRIGGER_LABELS[run.trigger])
+                      : run.trigger}
                   </Badge>
                 </Table.Td>
                 <Table.Td>
@@ -76,7 +85,9 @@ function CronHistory({ appId }: { appId: string }) {
                     variant="light"
                     color={run.ok ? 'teal' : 'red'}
                   >
-                    {run.ok ? 'ok' : 'fail'}
+                    {run.ok
+                      ? t('ops.cron.result.ok')
+                      : t('ops.cron.result.fail')}
                     {run.status != null ? ` ${run.status}` : ''}
                   </Badge>
                 </Table.Td>
@@ -92,7 +103,7 @@ function CronHistory({ appId }: { appId: string }) {
                     position="left"
                   >
                     <Text size="xs" c="dimmed">
-                      {formatRelative(run.createdAt)}
+                      {formatRelativeTime(run.createdAt, locale)}
                     </Text>
                   </Tooltip>
                 </Table.Td>
@@ -116,14 +127,15 @@ export function CronSection({
   runtimeSupported?: boolean;
 }) {
   const qc = useQueryClient();
+  const { t, locale } = useI18n();
 
   const runCron = useMutation({
     mutationFn: (name: string) => runCronJobFn({ data: { id: appId, name } }),
     onSuccess: (res, name) => {
       if (res.status >= 200 && res.status < 300) {
-        toast.success(`Ran "${name}" (${res.status})`);
+        toast.success(t('ops.cron.toast.ran', { name, status: res.status }));
       } else {
-        toast.error(`"${name}" returned ${res.status}`);
+        toast.error(t('ops.cron.toast.returned', { name, status: res.status }));
       }
     },
     // A manual run records a history row on BOTH paths: success returns an HTTP
@@ -140,11 +152,11 @@ export function CronSection({
     <Stack gap={6}>
       <SectionHeader
         icon={<IconClock size={16} stroke={1.8} />}
-        title="Scheduled jobs"
+        title={t('ops.cron.title')}
       />
       {cron.jobs.length === 0 ? (
         <Text size="xs" c="dimmed">
-          No cron jobs declared in the manifest.
+          {t('ops.cron.empty')}
         </Text>
       ) : (
         <Table withTableBorder verticalSpacing={6} highlightOnHover>
@@ -174,12 +186,16 @@ export function CronSection({
                       color={job.method ? 'blue' : 'gray'}
                       style={{ flex: 'none' }}
                     >
-                      {job.method ? 'rpc' : 'path'}
+                      {job.method
+                        ? t('ops.cron.target.rpc')
+                        : t('ops.cron.target.path')}
                     </Badge>
                     <Text size="xs" c="dimmed" ff="monospace" truncate>
                       {job.method ?? job.path}
                       {job.nextRun
-                        ? ` · next ${formatRelative(job.nextRun)}`
+                        ? ` · ${t('ops.cron.next', {
+                            when: formatRelativeTime(job.nextRun, locale),
+                          })}`
                         : ''}
                     </Text>
                   </Group>
@@ -195,7 +211,7 @@ export function CronSection({
                     disabled={!runtimeSupported}
                     onClick={() => runCron.mutate(job.name)}
                   >
-                    Run now
+                    {t('ops.cron.runNow')}
                   </Button>
                 </Table.Td>
               </Table.Tr>

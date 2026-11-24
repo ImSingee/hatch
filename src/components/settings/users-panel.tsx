@@ -16,9 +16,9 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query';
 import { IconTrash } from '@tabler/icons-react';
-import dayjs from 'dayjs';
 import { toast } from 'sonner';
 import { UserAvatar } from '~components/auth/user-avatar';
+import { useI18n } from '~i18n';
 import { usersPanelQueryOptions } from '~queries/users';
 import {
   deleteUser,
@@ -27,6 +27,7 @@ import {
 } from '~server/users';
 
 export function UsersPanel() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data } = useSuspenseQuery(usersPanelQueryOptions);
 
@@ -37,7 +38,11 @@ export function UsersPanel() {
       await qc.invalidateQueries({
         queryKey: usersPanelQueryOptions.queryKey,
       });
-      toast.success(allowSignup ? 'Sign-up enabled' : 'Sign-up disabled');
+      toast.success(
+        allowSignup
+          ? t('settings.users.signupEnabled')
+          : t('settings.users.signupDisabled'),
+      );
     },
   });
 
@@ -48,20 +53,20 @@ export function UsersPanel() {
     // us, so refetch it.
     onSettled: () =>
       qc.invalidateQueries({ queryKey: usersPanelQueryOptions.queryKey }),
-    onSuccess: () => toast.success('User deleted'),
+    onSuccess: () => toast.success(t('settings.users.deleted')),
   });
 
   const confirmDelete = (user: PlatformUser) =>
     modals.openConfirmModal({
-      title: `Delete ${user.name || user.email}?`,
+      title: t('settings.users.confirmTitle', {
+        name: user.name || user.email,
+      }),
       centered: true,
-      children: (
-        <Text size="sm">
-          This permanently removes the account and signs it out everywhere.
-          Apps, dashboards, and other platform data are shared and stay intact.
-        </Text>
-      ),
-      labels: { confirm: 'Delete user', cancel: 'Cancel' },
+      children: <Text size="sm">{t('settings.users.confirmBody')}</Text>,
+      labels: {
+        confirm: t('settings.users.delete'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => removeUser.mutate(user.id),
     });
@@ -70,10 +75,9 @@ export function UsersPanel() {
     <Stack gap="md">
       <Group justify="space-between" gap="md" py="xs" wrap="nowrap">
         <Stack gap={2}>
-          <Text fw={700}>Allow sign-up</Text>
+          <Text fw={700}>{t('settings.users.allowSignup')}</Text>
           <Text size="sm" c="dimmed">
-            Let anyone who can reach this space create an account. Every account
-            gets full access, so keep this off unless you are inviting someone.
+            {t('settings.users.allowSignupDescription')}
           </Text>
         </Stack>
         <Switch
@@ -89,7 +93,7 @@ export function UsersPanel() {
           }
           disabled={toggleSignup.isPending}
           onChange={(event) => toggleSignup.mutate(event.currentTarget.checked)}
-          aria-label="Allow sign-up"
+          aria-label={t('settings.users.allowSignup')}
         />
       </Group>
 
@@ -98,9 +102,9 @@ export function UsersPanel() {
       <Table verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>User</Table.Th>
-            <Table.Th>Joined</Table.Th>
-            <Table.Th w={48} aria-label="Actions" />
+            <Table.Th>{t('settings.users.columnUser')}</Table.Th>
+            <Table.Th>{t('settings.users.columnJoined')}</Table.Th>
+            <Table.Th w={48} aria-label={t('common.actions')} />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -132,6 +136,7 @@ function UserRow({
   deleting: boolean;
   onDelete: () => void;
 }) {
+  const { t, locale } = useI18n();
   return (
     <Table.Tr>
       <Table.Td>
@@ -149,12 +154,12 @@ function UserRow({
               </Text>
               {isCurrent && (
                 <Badge size="xs" variant="light">
-                  You
+                  {t('settings.users.you')}
                 </Badge>
               )}
               {user.emailVerified && (
                 <Badge size="xs" variant="light" color="teal">
-                  Verified
+                  {t('settings.users.verified')}
                 </Badge>
               )}
             </Group>
@@ -166,7 +171,9 @@ function UserRow({
       </Table.Td>
       <Table.Td>
         <Text size="sm" c="dimmed">
-          {dayjs(user.createdAt).format('MMM D, YYYY')}
+          {new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(
+            new Date(user.createdAt),
+          )}
         </Text>
       </Table.Td>
       <Table.Td>
@@ -175,18 +182,18 @@ function UserRow({
             variant="subtle"
             color="gray"
             disabled
-            aria-label="You cannot delete the account you are signed in with"
+            aria-label={t('settings.users.cannotDeleteSelf')}
           >
             <IconTrash size={16} stroke={1.6} />
           </ActionIcon>
         ) : (
-          <Tooltip label="Delete user" withArrow>
+          <Tooltip label={t('settings.users.delete')} withArrow>
             <ActionIcon
               variant="subtle"
               color="red"
               loading={deleting}
               onClick={onDelete}
-              aria-label={`Delete ${user.email}`}
+              aria-label={t('settings.users.deleteName', { email: user.email })}
             >
               <IconTrash size={16} stroke={1.6} />
             </ActionIcon>

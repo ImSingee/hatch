@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { composerDisplayText, hasComposerText } from '~agent/composer-content';
 import { nextUserTurn } from '~agent/user-turns';
 import { authClient } from '~auth/client';
-import { useI18n } from '~i18n';
+import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
 import type { AgentMessageMode } from '~/db/schema';
 import { agentPreferencesQueryOptions } from '~queries/agent-preferences';
 import { appsQueryOptions } from '~queries/apps';
@@ -74,6 +74,7 @@ import {
   type WorkTiming,
 } from './work-process';
 import classes from './chat.module.css';
+import { displaySessionTitle } from './session-title';
 
 /**
  * Collapse choices are kept per run and phase: a reply reopened after it
@@ -104,7 +105,12 @@ function runTiming(startedAt: string, completedAt: string | null): WorkTiming {
 }
 
 export function Chat({ sessionId }: { sessionId: string }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const errorText = useCallback(
+    (error: unknown, fallback: PlainTranslationKey) =>
+      translateError(t, locale, error, fallback),
+    [locale, t],
+  );
   const qc = useQueryClient();
   const sessionQuery = useQuery(sessionQueryOptions(sessionId));
   const appsQuery = useQuery(appsQueryOptions);
@@ -466,15 +472,11 @@ export function Chat({ sessionId }: { sessionId: string }) {
         );
         return true;
       } catch (error) {
-        toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : t('agent.chat.sendFailed'),
-        );
+        toast.error(errorText(error, 'agent.chat.sendFailed'));
         return false;
       }
     },
-    [applyPendingResult, sessionId, switchedMode, t],
+    [applyPendingResult, errorText, sessionId, switchedMode],
   );
 
   const send = useCallback(
@@ -513,9 +515,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
       try {
         attachments = await uploadDraftFiles(sessionId, files, draft);
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : t('agent.chat.uploadFailed'),
-        );
+        toast.error(errorText(error, 'agent.chat.uploadFailed'));
         return false;
       }
 
@@ -594,6 +594,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
     [
       busy,
       draftSends,
+      errorText,
       messages,
       qc,
       revalidateSession,
@@ -601,7 +602,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
       sendRun,
       sendWhileBusy,
       sessionId,
-      t,
     ],
   );
 
@@ -1179,7 +1179,11 @@ export function Chat({ sessionId }: { sessionId: string }) {
           {envAnnouncement}
         </Text>
         <SessionHeader
-          title={session?.title ?? t('agent.chat.untitled')}
+          title={
+            session
+              ? displaySessionTitle(session.title, t)
+              : t('agent.chat.untitled')
+          }
           model={sessionModelName}
           runnerId={session?.runnerId ?? null}
           apps={sessionApps}

@@ -456,7 +456,7 @@ async function requireKvApp(id: string): Promise<void> {
     columns: { status: true, capabilities: true },
   });
   if (!app || app.status === 'archived' || !app.capabilities?.kv) {
-    throw new Error('App not found');
+    throw new AppError('App not found', 404, { code: 'ops.appNotFound' });
   }
 }
 
@@ -526,10 +526,12 @@ async function requireDataTableApp(id: string): Promise<void> {
     !app.currentDeploymentId ||
     !app.capabilities?.dataTable
   ) {
-    throw new Error('App not found');
+    throw new AppError('App not found', 404, { code: 'ops.appNotFound' });
   }
   if (app.dataActivationId) {
-    throw new AppError('Data Table deployment is being finalized.', 503);
+    throw new AppError('Data Table deployment is being finalized.', 503, {
+      code: 'ops.dataTable.finalizing',
+    });
   }
 }
 

@@ -1,6 +1,8 @@
 import { Anchor, Badge, Group, Stack, Text } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
 import { IconBell } from '@tabler/icons-react';
+import { Trans } from 'react-i18next';
+import { useI18n } from '~i18n';
 import type { NormalizedManifest } from '~server/apps/manifest';
 import { SectionHeader } from './section-header';
 
@@ -10,16 +12,18 @@ export function NotificationsSection({
 }: {
   notifications: NonNullable<NormalizedManifest['notifications']>;
 }) {
+  const { t } = useI18n();
+  const count = notifications.kinds.length;
   return (
     <Stack gap={6}>
       <SectionHeader
         icon={<IconBell size={16} stroke={1.8} />}
-        title="Notifications"
+        title={t('ops.notifications.title')}
         meta={
           <Text size="xs" c="dimmed">
-            {notifications.kinds.length} kind
-            {notifications.kinds.length === 1 ? '' : 's'}
-            {notifications.destination ? ' · accepts notifications' : ''}
+            {notifications.destination
+              ? t('ops.notifications.kindsAccepting', { count })
+              : t('ops.notifications.kinds', { count })}
           </Text>
         }
       />
@@ -39,14 +43,19 @@ export function NotificationsSection({
         </Group>
       ) : null}
       <Text size="xs" c="dimmed">
-        {notifications.destination
-          ? 'This App can be chosen as a destination; routed notifications reach its backend at /__notification. '
-          : ''}
-        Choose where these notifications go in{' '}
-        <Anchor component={Link} to="/settings/notifications" size="xs">
-          Settings → Notifications
-        </Anchor>
-        .
+        <Trans
+          t={t}
+          i18nKey={
+            notifications.destination
+              ? 'ops.notifications.routeDestination'
+              : 'ops.notifications.route'
+          }
+          components={{
+            link: (
+              <Anchor component={Link} to="/settings/notifications" size="xs" />
+            ),
+          }}
+        />
       </Text>
     </Stack>
   );

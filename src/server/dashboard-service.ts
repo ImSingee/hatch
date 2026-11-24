@@ -59,22 +59,32 @@ const dashboardsChanged = (dashboardId?: string) =>
 
 async function dashboard(id: string): Promise<Dashboard> {
   const found = (await readDashboards()).find((item) => item.id === id);
-  if (!found) throw new AppError('Dashboard not found.', 404);
+  if (!found)
+    throw new AppError('Dashboard not found.', 404, {
+      code: 'dashboard.notFound',
+    });
   return found;
 }
 
 function dashboardName(name: string): string {
   const trimmed = name.trim();
-  if (!trimmed) throw new AppError('Dashboard name cannot be empty.', 400);
+  if (!trimmed)
+    throw new AppError('Dashboard name cannot be empty.', 400, {
+      code: 'dashboard.nameEmpty',
+    });
   if (Array.from(trimmed).length > MAX_DASHBOARD_NAME_LENGTH)
-    throw new AppError('Dashboard name is too long.', 400);
+    throw new AppError('Dashboard name is too long.', 400, {
+      code: 'dashboard.nameTooLong',
+    });
   return trimmed;
 }
 
 function dashboardDescription(description: string): string | null {
   const trimmed = description.trim();
   if (Array.from(trimmed).length > MAX_DASHBOARD_DESCRIPTION_LENGTH)
-    throw new AppError('Dashboard description is too long.', 400);
+    throw new AppError('Dashboard description is too long.', 400, {
+      code: 'dashboard.descriptionTooLong',
+    });
   return trimmed || null;
 }
 
@@ -120,7 +130,9 @@ export async function updateDashboard(
     changes.description === undefined &&
     changes.autoRefreshSeconds === undefined
   )
-    throw new AppError('Nothing to change.', 400);
+    throw new AppError('Nothing to change.', 400, {
+      code: 'dashboard.nothingToChange',
+    });
   const updated = await db
     .update(schema.dashboards)
     .set({
@@ -136,7 +148,10 @@ export async function updateDashboard(
     })
     .where(eq(schema.dashboards.id, id))
     .returning({ id: schema.dashboards.id });
-  if (!updated.length) throw new AppError('Dashboard not found.', 404);
+  if (!updated.length)
+    throw new AppError('Dashboard not found.', 404, {
+      code: 'dashboard.notFound',
+    });
   dashboardsChanged(id);
   return dashboard(id);
 }
@@ -153,9 +168,13 @@ export async function deleteDashboard(id: string): Promise<void> {
       .select({ id: schema.dashboards.id })
       .from(schema.dashboards);
     if (!rows.some((row) => row.id === id))
-      throw new AppError('Dashboard not found.', 404);
+      throw new AppError('Dashboard not found.', 404, {
+        code: 'dashboard.notFound',
+      });
     if (rows.length <= 1)
-      throw new AppError('You must keep at least one dashboard.', 409);
+      throw new AppError('You must keep at least one dashboard.', 409, {
+        code: 'dashboard.lastDashboard',
+      });
     await tx.delete(schema.dashboards).where(eq(schema.dashboards.id, id));
   });
   dashboardsChanged(id);
@@ -219,7 +238,10 @@ async function readDashboardData(
       asc(schema.dashboardWidgets.createdAt),
       asc(schema.dashboardWidgetLayouts.breakpoint),
     );
-  if (rows.length === 0) throw new AppError('Dashboard not found.', 404);
+  if (rows.length === 0)
+    throw new AppError('Dashboard not found.', 404, {
+      code: 'dashboard.notFound',
+    });
 
   const placements: Array<{
     id: string;
@@ -415,7 +437,10 @@ async function commitDraft(
     })
     .from(schema.dashboards)
     .where(eq(schema.dashboards.id, data.dashboardId));
-  if (!current) throw new AppError('Dashboard not found.', 404);
+  if (!current)
+    throw new AppError('Dashboard not found.', 404, {
+      code: 'dashboard.notFound',
+    });
   if (current.editorRevision !== data.expectedRevision) {
     return { status: 'conflict' };
   }
@@ -441,7 +466,9 @@ async function commitDraft(
       (candidate) => candidate.id === draftWidget.widgetId,
     );
     if (!manifest || !appSlug || !widget) {
-      throw new AppError('A dashboard widget is no longer available.', 409);
+      throw new AppError('A dashboard widget is no longer available.', 409, {
+        code: 'dashboard.widgetUnavailable',
+      });
     }
     widgetInfo.set(draftWidget.id, {
       appId: draftWidget.appId,
@@ -640,7 +667,9 @@ async function editDashboard(
       layouts: next.layouts,
     });
     if (result.status !== 'saved')
-      throw new AppError('Dashboard changed while it was being edited.', 409);
+      throw new AppError('Dashboard changed while it was being edited.', 409, {
+        code: 'dashboard.changedWhileEditing',
+      });
     return result.data;
   });
   dashboardsChanged(dashboardId);
@@ -734,7 +763,10 @@ export async function addDashboardWidget(
         where: { slug: input.app },
         columns: { id: true },
       }));
-    if (!app) throw new AppError('App not found.', 404);
+    if (!app)
+      throw new AppError('App not found.', 404, {
+        code: 'dashboard.appNotFound',
+      });
     const widget = (await listAvailableWidgets(tx)).find(
       (candidate) =>
         candidate.appId === app.id && candidate.widgetId === input.widgetId,
@@ -743,6 +775,7 @@ export async function addDashboardWidget(
       throw new AppError(
         'Widget not found: the App is not deployed or has no widget with this id.',
         404,
+        { code: 'dashboard.widgetUnknown' },
       );
     key = dashboardWidgetKey(widget);
     const placed = current.widgets.find(
@@ -752,6 +785,10 @@ export async function addDashboardWidget(
       throw new AppError(
         `This widget is already on the dashboard (placement ${placed.id}).`,
         409,
+        {
+          code: 'dashboard.widgetAlreadyPlaced',
+          params: { placementId: placed.id },
+        },
       );
 
     const id = `draft:${crypto.randomUUID()}`;
@@ -815,13 +852,17 @@ export async function setDashboardWidgetLayout(
     position.w === undefined &&
     position.h === undefined
   )
-    throw new AppError('Nothing to change.', 400);
+    throw new AppError('Nothing to change.', 400, {
+      code: 'dashboard.nothingToChange',
+    });
   return editDashboard(dashboardId, async (current) => {
     const widget = current.widgets.find((item) => item.id === placementId);
     const layout = current.layouts[position.breakpoint];
     const item = layout.find((candidate) => candidate.id === placementId);
     if (!widget || !item)
-      throw new AppError('Widget not found on this dashboard.', 404);
+      throw new AppError('Widget not found on this dashboard.', 404, {
+        code: 'dashboard.widgetNotPlaced',
+      });
     const geometry = checkedGeometry(widget, position.breakpoint, {
       x: position.x ?? item.x,
       y: position.y ?? item.y,
@@ -859,7 +900,9 @@ export async function removeDashboardWidget(
         ),
       );
     if (!placement)
-      throw new AppError('Widget not found on this dashboard.', 404);
+      throw new AppError('Widget not found on this dashboard.', 404, {
+        code: 'dashboard.widgetNotPlaced',
+      });
     const keep = (item: { id: string }) => item.id !== placementId;
     return {
       widgets: draftWidgets(current).filter(keep),

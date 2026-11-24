@@ -15,14 +15,21 @@ import { IconServerBolt, IconSettings } from '@tabler/icons-react';
 import { AppGlyph } from '~components/apps/app-glyph';
 import {
   BackendControls,
+  BackendLastExit,
   BackendStatus,
   BackendTime,
-  backendLastExitLabel,
 } from '~components/apps/backend-controls';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { appBackendsQueryOptions } from '~queries/apps';
 import type { AppBackendView } from '~server/apps';
 
+const MODE_LABELS: Record<AppBackendView['mode'], PlainTranslationKey> = {
+  serverless: 'backends.mode.serverless',
+  'long-running': 'backends.mode.longRunning',
+};
+
 export function BackendsPanel() {
+  const { t } = useI18n();
   const { data: backends } = useSuspenseQuery(appBackendsQueryOptions);
 
   if (backends.length === 0) {
@@ -32,14 +39,13 @@ export function BackendsPanel() {
           <IconServerBolt size={26} stroke={1.5} />
         </ThemeIcon>
         <Text fw={700} mt="xs">
-          No app backends
+          {t('backends.empty.title')}
         </Text>
         <Text size="sm" c="dimmed" ta="center" maw={440}>
-          No deployed app declares a backend right now. Deploy an app with the
-          backend capability and it will show up here.
+          {t('backends.empty.body')}
         </Text>
         <Button component={Link} to="/apps" mt="md" variant="default">
-          Back to Apps
+          {t('backends.empty.backToApps')}
         </Button>
       </Stack>
     );
@@ -50,14 +56,14 @@ export function BackendsPanel() {
       <Table verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>App</Table.Th>
-            <Table.Th>Status</Table.Th>
-            <Table.Th>Mode</Table.Th>
-            <Table.Th>PID / Port</Table.Th>
-            <Table.Th>Started</Table.Th>
-            <Table.Th>Last stopped</Table.Th>
-            <Table.Th>Last exit</Table.Th>
-            <Table.Th w={150} aria-label="Actions" />
+            <Table.Th>{t('backends.column.app')}</Table.Th>
+            <Table.Th>{t('common.status')}</Table.Th>
+            <Table.Th>{t('backends.column.mode')}</Table.Th>
+            <Table.Th>{t('backends.column.pidPort')}</Table.Th>
+            <Table.Th>{t('backends.column.started')}</Table.Th>
+            <Table.Th>{t('backends.column.lastStopped')}</Table.Th>
+            <Table.Th>{t('backends.column.lastExit')}</Table.Th>
+            <Table.Th w={150} aria-label={t('common.actions')} />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -71,6 +77,7 @@ export function BackendsPanel() {
 }
 
 function BackendRow({ backend }: { backend: AppBackendView }) {
+  const { t } = useI18n();
   const { runtime } = backend;
   const running = runtime.state === 'running';
 
@@ -109,7 +116,7 @@ function BackendRow({ backend }: { backend: AppBackendView }) {
           variant="light"
           color={backend.mode === 'long-running' ? 'primary' : 'gray'}
         >
-          {backend.mode}
+          {t(MODE_LABELS[backend.mode])}
         </Badge>
       </Table.Td>
       <Table.Td>
@@ -130,9 +137,7 @@ function BackendRow({ backend }: { backend: AppBackendView }) {
         <BackendTime value={runtime.stoppedAt} />
       </Table.Td>
       <Table.Td>
-        <Text size="sm" c="dimmed" ff="monospace">
-          {backendLastExitLabel(runtime)}
-        </Text>
+        <BackendLastExit runtime={runtime} />
       </Table.Td>
       <Table.Td>
         <Group gap={4} wrap="nowrap" justify="flex-end">
@@ -142,7 +147,7 @@ function BackendRow({ backend }: { backend: AppBackendView }) {
             name={backend.name}
             runtimeSupported={backend.compatibility?.isSupported ?? false}
           />
-          <Tooltip label="Manage app" withArrow>
+          <Tooltip label={t('backends.manageApp')} withArrow>
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -153,7 +158,7 @@ function BackendRow({ backend }: { backend: AppBackendView }) {
                   {...props}
                 />
               )}
-              aria-label={`Manage ${backend.name}`}
+              aria-label={t('backends.manageNamed', { name: backend.name })}
             >
               <IconSettings size={16} stroke={1.8} />
             </ActionIcon>

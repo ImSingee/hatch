@@ -1,23 +1,11 @@
-/**
- * Shared display formatting helpers. Importing this module also registers the
- * dayjs relativeTime plugin, so callers never need their own `dayjs.extend`.
- */
+/** Shared display formatting helpers. */
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
 
 type DateInput = string | number | Date | null | undefined;
 
-/** "3 minutes ago"-style relative timestamp. */
-export function formatRelative(date: DateInput): string {
-  return dayjs(date).fromNow();
-}
-
 /**
  * Relative timestamp in the viewer's language ("3 minutes ago", "3 分钟前").
- * Unit thresholds follow dayjs `fromNow()` so values match the English-only
- * `formatRelative`.
+ * Unit thresholds follow dayjs `fromNow()`.
  */
 export function formatRelativeTime(
   date: DateInput,

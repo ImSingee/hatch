@@ -8,7 +8,7 @@ import {
   readLocale,
   type Locale,
 } from './locale';
-import { resources } from './resources';
+import { resources, type PlainTranslationKey } from './resources';
 
 export { LANGUAGE_NAMES, LOCALES, isLocale, type Locale } from './locale';
 export type { PlainTranslationKey, TranslationKey } from './resources';
@@ -59,4 +59,68 @@ export function useI18n() {
     ? instance.resolvedLanguage
     : SOURCE_LOCALE;
   return { t, locale };
+}
+
+type Translate = ReturnType<typeof useI18n>['t'];
+
+/**
+ * Display text for a caught error. An error with a stable `code` whose
+ * `error.<code>` key exists is translated (with its `params`). Otherwise the
+ * source language keeps showing the error's own English message, and other
+ * languages show the translated `fallback`, so no untranslated server
+ * sentence reaches them.
+ */
+export function translateError(
+  t: Translate,
+  locale: Locale,
+  error: unknown,
+  fallback: PlainTranslationKey,
+): string {
+  const details =
+    error && typeof error === 'object'
+      ? (error as {
+          code?: unknown;
+          params?: unknown;
+          message?: unknown;
+        })
+      : {};
+  if (typeof details.code === 'string' && details.code) {
+    const key = `error.${details.code}`;
+    if (i18n.exists(key)) {
+      const params =
+        details.params && typeof details.params === 'object'
+          ? details.params
+          : {};
+      // Codes come from the server at runtime, so the key is checked with
+      // `exists` instead of the compile-time key types.
+      const translate = i18n.t as unknown as (
+        key: string,
+        options: object,
+      ) => string;
+      return translate(key, params);
+    }
+  }
+  if (
+    locale === SOURCE_LOCALE &&
+    typeof details.message === 'string' &&
+    details.message
+  ) {
+    return details.message;
+  }
+  return t(fallback);
+}
+
+/**
+ * `translateError` outside React (the global mutation toast), using the
+ * language active when it is called.
+ */
+export function errorText(error: unknown, fallback: PlainTranslationKey) {
+  return translateError(i18n.t, currentLocale(), error, fallback);
+}
+
+/** `translateError` bound to the active language. */
+export function useErrorText() {
+  const { t, locale } = useI18n();
+  return (error: unknown, fallback: PlainTranslationKey) =>
+    translateError(t, locale, error, fallback);
 }

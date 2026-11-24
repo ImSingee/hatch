@@ -2,6 +2,7 @@ import { Button } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
 import { IconExternalLink } from '@tabler/icons-react';
 import { Fragment, type ReactNode } from 'react';
+import { useI18n } from '~i18n';
 import type { AppListItem } from '~server/apps';
 import classes from './chat.module.css';
 
@@ -24,13 +25,14 @@ export function SessionHeader({
   /** The Apps this chat edited, in name order. */
   apps: readonly AppListItem[];
 }) {
+  const { t } = useI18n();
   const facts: ReactNode[] = [];
   if (model) facts.push(model);
   if (runnerId) facts.push(runnerId);
   if (apps.length)
     facts.push(
       <>
-        {apps.length === 1 ? 'App ' : 'Apps '}
+        {`${t('agent.header.apps', { count: apps.length })} `}
         {apps.map((app, index) => (
           <Fragment key={app.id}>
             {index ? ', ' : null}
@@ -79,7 +81,7 @@ export function SessionHeader({
             />
           )}
         >
-          Open {only.name}
+          {t('agent.header.openApp', { name: only.name })}
         </Button>
       ) : null}
     </div>

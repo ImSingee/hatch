@@ -7,6 +7,7 @@ import {
   ProviderFormModal,
   ProvidersPanel,
 } from '~components/settings/providers-panel';
+import { useI18n } from '~i18n';
 import { providersQueryOptions } from '~queries/agent';
 
 export const Route = createFileRoute('/_app/settings/providers')({
@@ -16,19 +17,20 @@ export const Route = createFileRoute('/_app/settings/providers')({
 });
 
 function ProvidersRoute() {
+  const { t } = useI18n();
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <>
       <SectionHead
-        title="AI Providers"
-        description="Connect model providers and add their chat and image models."
+        title={t('settings.providers.label')}
+        description={t('settings.providers.description')}
         action={
           <Button
             leftSection={<IconPlus size={16} stroke={1.8} />}
             onClick={() => setCreateOpen(true)}
           >
-            Add provider
+            {t('providers.addProvider')}
           </Button>
         }
       />

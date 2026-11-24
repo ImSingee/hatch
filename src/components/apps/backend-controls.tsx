@@ -15,7 +15,8 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { StatusDot } from '~components/apps/operations-panel/section-header';
-import { formatExact, formatRelative } from '~lib/format';
+import { type PlainTranslationKey, useI18n } from '~i18n';
+import { formatExact, formatRelativeTime } from '~lib/format';
 import { appBackendsQueryOptions, appOpsQueryOptions } from '~queries/apps';
 import {
   restartAppBackendFn,
@@ -24,23 +25,31 @@ import {
   type AppBackendRuntime,
 } from '~server/apps';
 
-export function backendStatusLabel(runtime: AppBackendRuntime): string {
-  if (runtime.state === 'running') return 'Running';
-  if (runtime.state === 'starting') return 'Starting';
+function backendStatusLabel(runtime: AppBackendRuntime): PlainTranslationKey {
+  if (runtime.state === 'running') return 'backends.status.running';
+  if (runtime.state === 'starting') return 'backends.status.starting';
   // Stopped but still marked keep-alive: it crashed and the platform has an
   // automatic restart pending (backoff timer).
-  if (runtime.keepAlive) return 'Restarting';
-  return 'Stopped';
+  if (runtime.keepAlive) return 'backends.status.restarting';
+  return 'backends.status.stopped';
 }
 
-export function backendLastExitLabel(runtime: AppBackendRuntime): string {
-  if (runtime.lastExitSignal) return runtime.lastExitSignal;
-  if (runtime.lastExitCode != null) return `code ${runtime.lastExitCode}`;
-  return '—';
+/** The signal or exit code the backend last stopped with, or a dash. */
+export function BackendLastExit({ runtime }: { runtime: AppBackendRuntime }) {
+  const { t } = useI18n();
+  return (
+    <Text size="sm" c="dimmed" ff="monospace">
+      {runtime.lastExitSignal ??
+        (runtime.lastExitCode != null
+          ? t('backends.lastExitCode', { code: runtime.lastExitCode })
+          : '—')}
+    </Text>
+  );
 }
 
 /** Relative timestamp with the exact time in a tooltip, or a dash. */
 export function BackendTime({ value }: { value: string | null }) {
+  const { locale } = useI18n();
   if (!value) {
     return (
       <Text size="sm" c="dimmed">
@@ -51,7 +60,7 @@ export function BackendTime({ value }: { value: string | null }) {
   return (
     <Tooltip label={formatExact(value)} withArrow>
       <Text size="sm" c="dimmed" style={{ cursor: 'default' }}>
-        {formatRelative(value)}
+        {formatRelativeTime(value, locale)}
       </Text>
     </Tooltip>
   );
@@ -71,15 +80,16 @@ export function BackendStatus({
   size?: 'xs' | 'sm';
   dimmed?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <Group gap={6} wrap="nowrap">
       <StatusDot active={runtime.state === 'running'} />
       <Text size={size} c={dimmed ? 'dimmed' : undefined}>
-        {backendStatusLabel(runtime)}
+        {t(backendStatusLabel(runtime))}
       </Text>
       {runtime.restartCount > 0 && (
         <Tooltip
-          label={`Auto-restarted ${runtime.restartCount} time${runtime.restartCount === 1 ? '' : 's'} since the platform started`}
+          label={t('backends.autoRestarted', { count: runtime.restartCount })}
           withArrow
         >
           <Badge size="xs" variant="light" color="yellow">
@@ -89,13 +99,15 @@ export function BackendStatus({
       )}
       {runtime.drainingInstances > 0 && (
         <Tooltip
-          label={`${runtime.drainingInstances} previous instance${runtime.drainingInstances === 1 ? ' is' : 's are'} finishing in-flight requests and will exit on ${runtime.drainingInstances === 1 ? 'its' : 'their'} own`}
+          label={t('backends.drainingHint', {
+            count: runtime.drainingInstances,
+          })}
           withArrow
           multiline
           maw={360}
         >
           <Badge size="xs" variant="light" color="gray">
-            {runtime.drainingInstances} draining
+            {t('backends.draining', { count: runtime.drainingInstances })}
           </Badge>
         </Tooltip>
       )}
@@ -118,19 +130,20 @@ export function BackendStatus({
 export function BackendControls({
   appId,
   runtime,
-  name = 'backend',
+  name,
   size = 'md',
   runtimeSupported = true,
 }: {
   appId: string;
   runtime: AppBackendRuntime;
-  /** Accessible target name for the action labels; defaults to "backend". */
+  /** App name for the action labels; without it they name "backend". */
   name?: string;
   /** Icon button size; "sm" fits inline in a section header. */
   size?: 'sm' | 'md';
   /** Unsupported deployments may be stopped, but cannot start or restart. */
   runtimeSupported?: boolean;
 }) {
+  const { t } = useI18n();
   const iconSize = size === 'sm' ? 14 : 16;
   const qc = useQueryClient();
   const settled = () =>
@@ -142,19 +155,21 @@ export function BackendControls({
   const start = useMutation({
     mutationFn: () => startAppBackendFn({ data: appId }),
     onSettled: settled,
-    onSuccess: () => toast.success('Backend started'),
+    onSuccess: () => toast.success(t('backends.toast.started')),
   });
   const stop = useMutation({
     mutationFn: (force: boolean) =>
       stopAppBackendFn({ data: { id: appId, force } }),
     onSettled: settled,
     onSuccess: (_result, force) =>
-      toast.success(force ? 'Backend force-stopped' : 'Backend stopped'),
+      toast.success(
+        t(force ? 'backends.toast.forceStopped' : 'backends.toast.stopped'),
+      ),
   });
   const restart = useMutation({
     mutationFn: () => restartAppBackendFn({ data: appId }),
     onSettled: settled,
-    onSuccess: () => toast.success('Backend restarted'),
+    onSuccess: () => toast.success(t('backends.toast.restarted')),
   });
 
   const pending = start.isPending || stop.isPending || restart.isPending;
@@ -169,11 +184,11 @@ export function BackendControls({
   return (
     <Group gap={4} wrap="nowrap">
       <Tooltip
-        label={
+        label={t(
           runtimeSupported
-            ? 'Start'
-            : 'Resolve this App deployment compatibility before starting its backend'
-        }
+            ? 'backends.action.start'
+            : 'backends.action.startUnsupported',
+        )}
         withArrow
       >
         <ActionIcon
@@ -188,19 +203,23 @@ export function BackendControls({
             runtime.state === 'starting'
           }
           onClick={() => start.mutate()}
-          aria-label={`Start ${name}`}
+          aria-label={
+            name
+              ? t('backends.action.startNamed', { name })
+              : t('backends.action.startBackend')
+          }
         >
           <IconPlayerPlay size={iconSize} stroke={1.8} />
         </ActionIcon>
       </Tooltip>
       <Tooltip
-        label={
+        label={t(
           forceStop
-            ? 'Force stop (ends in-flight requests)'
+            ? 'backends.action.forceStopHint'
             : !running && stoppable
-              ? 'Stop (cancels auto-restart)'
-              : 'Stop'
-        }
+              ? 'backends.action.stopCancelsRestart'
+              : 'backends.action.stop',
+        )}
         withArrow
       >
         <ActionIcon
@@ -210,17 +229,25 @@ export function BackendControls({
           loading={stop.isPending}
           disabled={pending || (!stoppable && !forceStop)}
           onClick={() => stop.mutate(forceStop)}
-          aria-label={`${forceStop ? 'Force stop' : 'Stop'} ${name}`}
+          aria-label={
+            forceStop
+              ? name
+                ? t('backends.action.forceStopNamed', { name })
+                : t('backends.action.forceStopBackend')
+              : name
+                ? t('backends.action.stopNamed', { name })
+                : t('backends.action.stopBackend')
+          }
         >
           <IconPlayerStop size={iconSize} stroke={1.8} />
         </ActionIcon>
       </Tooltip>
       <Tooltip
-        label={
+        label={t(
           runtimeSupported
-            ? 'Restart'
-            : 'Resolve this App deployment compatibility before restarting its backend'
-        }
+            ? 'backends.action.restart'
+            : 'backends.action.restartUnsupported',
+        )}
         withArrow
       >
         <ActionIcon
@@ -230,7 +257,11 @@ export function BackendControls({
           loading={restart.isPending}
           disabled={!runtimeSupported || pending}
           onClick={() => restart.mutate()}
-          aria-label={`Restart ${name}`}
+          aria-label={
+            name
+              ? t('backends.action.restartNamed', { name })
+              : t('backends.action.restartBackend')
+          }
         >
           <IconRefresh size={iconSize} stroke={1.8} />
         </ActionIcon>

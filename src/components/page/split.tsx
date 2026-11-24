@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useI18n } from '~i18n';
 import classes from './split.module.css';
 
 export type RailItem = {
@@ -108,6 +109,7 @@ export function Rail({
   searchLabel?: string;
   footer?: ReactNode;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
   const visible = groups
@@ -150,7 +152,9 @@ export function Rail({
       ) : null}
       <nav ref={nav} aria-label={label} className={classes.nav}>
         {visible.length === 0 ? (
-          <p className={classes.none}>Nothing matches “{query.trim()}”.</p>
+          <p className={classes.none}>
+            {t('page.rail.noMatch', { query: query.trim() })}
+          </p>
         ) : null}
         {visible.map((group) => (
           <Fragment key={group.label ?? group.items[0].key}>

@@ -21,6 +21,7 @@ import {
   WindowBody,
 } from '~components/page/page';
 import { openTextPromptModal } from '~components/system/text-prompt-modal';
+import { useI18n } from '~i18n';
 import { dashboardsQueryOptions } from '~queries/dashboards';
 import {
   createDashboard,
@@ -39,6 +40,7 @@ export const Route = createFileRoute('/_app/dashboards')({
 });
 
 function DashboardsManagePage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: dashboards } = useQuery(dashboardsQueryOptions);
@@ -49,14 +51,16 @@ function DashboardsManagePage() {
     });
 
   const create = useMutation({
-    mutationFn: () => createDashboard({ data: { name: 'New dashboard' } }),
+    // A new dashboard is named in the language of whoever creates it.
+    mutationFn: () =>
+      createDashboard({ data: { name: t('dashboards.defaultName') } }),
     onSuccess: (d) => {
       queryClient.setQueryData<Dashboard[]>(
         dashboardsQueryOptions.queryKey,
         (old) => (old ? [...old, d] : [d]),
       );
       void invalidate();
-      toast.success('Dashboard created');
+      toast.success(t('dashboard.toast.created'));
     },
   });
 
@@ -65,14 +69,14 @@ function DashboardsManagePage() {
       renameDashboard({ data: input }),
     onSuccess: () => {
       void invalidate();
-      toast.success('Dashboard renamed');
+      toast.success(t('dashboard.toast.renamed'));
     },
   });
 
   const openRename = (d: Dashboard) =>
     openTextPromptModal({
-      title: 'Rename dashboard',
-      label: 'Name',
+      title: t('dashboard.rename.title'),
+      label: t('common.name'),
       initialValue: d.name,
       onSubmit: (name) => rename.mutateAsync({ id: d.id, name }),
     });
@@ -117,7 +121,7 @@ function DashboardsManagePage() {
     mutationFn: (id: string) => deleteDashboard({ data: id }),
     onSuccess: () => {
       void invalidate();
-      toast.success('Dashboard deleted');
+      toast.success(t('dashboard.toast.deleted'));
     },
   });
 
@@ -133,9 +137,7 @@ function DashboardsManagePage() {
     // The server names the stale dashboard by id, which means nothing here.
     meta: { errorToast: false },
     onError: () => {
-      toast.error(
-        'The dashboards changed while you were moving one. The list now shows the current order; try again.',
-      );
+      toast.error(t('dashboards.reorderConflict'));
     },
     onSettled: () => void invalidate(),
   });
@@ -144,29 +146,27 @@ function DashboardsManagePage() {
 
   const confirmDelete = (d: Dashboard) =>
     modals.openConfirmModal({
-      title: 'Delete dashboard',
+      title: t('dashboard.delete.title'),
       children: (
-        <Text size="sm">
-          Delete “{d.name}” and all of its widgets? This can’t be undone.
-        </Text>
+        <Text size="sm">{t('dashboards.deleteBody', { name: d.name })}</Text>
       ),
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(d.id),
     });
 
   return (
-    <DeskWindow title="Dashboards" maxWidth={880}>
+    <DeskWindow title={t('dashboards.title')} maxWidth={880}>
       <WindowBody size={760}>
         <PageHeading
-          description="Create, organize, and pin the dashboards you use most."
+          description={t('dashboards.description')}
           actions={
             <Button
               leftSection={<IconPlus size={16} stroke={1.8} />}
               loading={create.isPending}
               onClick={() => create.mutate()}
             >
-              New dashboard
+              {t('dashboard.new')}
             </Button>
           }
         />
@@ -195,7 +195,11 @@ function DashboardsManagePage() {
                   trailing={
                     <>
                       <Tooltip
-                        label={d.pinned ? 'Pinned' : 'Not pinned'}
+                        label={
+                          d.pinned
+                            ? t('dashboards.pinned')
+                            : t('dashboards.notPinned')
+                        }
                         withArrow
                       >
                         <Switch
@@ -207,26 +211,26 @@ function DashboardsManagePage() {
                               pinned: e.currentTarget.checked,
                             })
                           }
-                          aria-label="Pin"
+                          aria-label={t('dashboards.pin')}
                         />
                       </Tooltip>
-                      <Tooltip label="Rename" withArrow>
+                      <Tooltip label={t('common.rename')} withArrow>
                         <ActionIcon
                           variant="subtle"
                           color="gray"
                           onClick={() => openRename(d)}
-                          aria-label="Rename dashboard"
+                          aria-label={t('dashboard.rename.title')}
                         >
                           <IconPencil size={17} stroke={1.7} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Delete" withArrow>
+                      <Tooltip label={t('common.delete')} withArrow>
                         <ActionIcon
                           variant="subtle"
                           color="red"
                           disabled={list.length <= 1}
                           onClick={() => confirmDelete(d)}
-                          aria-label="Delete dashboard"
+                          aria-label={t('dashboard.delete.title')}
                         >
                           <IconTrash size={17} stroke={1.7} />
                         </ActionIcon>
@@ -242,7 +246,7 @@ function DashboardsManagePage() {
                           })
                         }
                       >
-                        Open
+                        {t('common.open')}
                       </Button>
                     </>
                   }

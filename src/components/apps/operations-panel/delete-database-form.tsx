@@ -9,6 +9,8 @@ import {
 import { modals } from '@mantine/modals';
 import { useMutation } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { Trans } from 'react-i18next';
+import { useErrorText, useI18n } from '~i18n';
 
 export function DeleteDatabaseForm({
   appName,
@@ -21,11 +23,15 @@ export function DeleteDatabaseForm({
   modalId: string;
   onDelete: (confirmation: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const [confirmation, setConfirmation] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const remove = useMutation({
     mutationFn: () => onDelete(confirmation),
     onSuccess: () => modals.close(modalId),
+    // The failure is shown inline below.
+    meta: { errorToast: false },
   });
   const confirmed = confirmation === appName;
 
@@ -38,44 +44,56 @@ export function DeleteDatabaseForm({
     >
       <Stack gap="sm">
         <Text size="sm">
-          {managed
-            ? 'This permanently deletes all managed Data Table data for '
-            : 'This permanently deletes the database for '}
-          <Text span fw={700} style={{ overflowWrap: 'anywhere' }}>
-            {appName}
-          </Text>
-          {managed
-            ? ', including every managed table, row, and migration record.'
-            : ' and all data stored in it.'}{' '}
-          This cannot be undone.
+          <Trans
+            t={t}
+            i18nKey={
+              managed
+                ? 'ops.deleteForm.dataBody'
+                : 'ops.deleteForm.databaseBody'
+            }
+            values={{ app: appName }}
+            components={{
+              app: <Text span fw={700} style={{ overflowWrap: 'anywhere' }} />,
+            }}
+          />
         </Text>
         <Text size="sm" c="dimmed">
           {managed
-            ? 'To use Data Tables again, deploy a new release with the capability enabled. The platform will create an empty database and apply its schema.'
-            : 'To use a database again, deploy a version with the database capability enabled.'}
+            ? t('ops.deleteForm.dataAgain')
+            : t('ops.deleteForm.databaseAgain')}
         </Text>
         <Stack gap={4}>
           <Group gap={4}>
-            <Text size="sm">Type</Text>
-            <UnstyledButton
-              type="button"
-              aria-label={`Fill app name ${appName}`}
-              fz="sm"
-              fw={700}
-              disabled={remove.isPending}
-              style={{ overflowWrap: 'anywhere', textDecoration: 'underline' }}
-              onClick={() => {
-                setConfirmation(appName);
-                input.current?.focus();
+            <Trans
+              t={t}
+              i18nKey="ops.deleteForm.typeToConfirm"
+              values={{ app: appName }}
+              components={{
+                before: <Text size="sm" />,
+                name: (
+                  <UnstyledButton
+                    type="button"
+                    aria-label={t('ops.deleteForm.fillName', { app: appName })}
+                    fz="sm"
+                    fw={700}
+                    disabled={remove.isPending}
+                    style={{
+                      overflowWrap: 'anywhere',
+                      textDecoration: 'underline',
+                    }}
+                    onClick={() => {
+                      setConfirmation(appName);
+                      input.current?.focus();
+                    }}
+                  />
+                ),
+                after: <Text size="sm" />,
               }}
-            >
-              {appName}
-            </UnstyledButton>
-            <Text size="sm">to confirm</Text>
+            />
           </Group>
           <TextInput
             ref={input}
-            aria-label={`Type ${appName} to confirm`}
+            aria-label={t('ops.deleteForm.inputLabel', { app: appName })}
             value={confirmation}
             onChange={(event) => setConfirmation(event.currentTarget.value)}
             disabled={remove.isPending}
@@ -85,9 +103,7 @@ export function DeleteDatabaseForm({
         </Stack>
         {remove.isError ? (
           <Text size="sm" c="red" role="alert">
-            {remove.error instanceof Error
-              ? remove.error.message
-              : 'Failed to delete the database.'}
+            {errorText(remove.error, 'ops.deleteForm.failed')}
           </Text>
         ) : null}
         <Group justify="flex-end" gap="sm">
@@ -97,7 +113,7 @@ export function DeleteDatabaseForm({
             disabled={remove.isPending}
             onClick={() => modals.close(modalId)}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             type="submit"
@@ -105,7 +121,9 @@ export function DeleteDatabaseForm({
             loading={remove.isPending}
             disabled={!confirmed}
           >
-            {managed ? 'Delete Data Table data' : 'Delete database'}
+            {managed
+              ? t('ops.deleteForm.deleteData')
+              : t('ops.database.delete')}
           </Button>
         </Group>
       </Stack>

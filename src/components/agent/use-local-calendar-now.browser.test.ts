@@ -12,13 +12,13 @@ test('refreshes local date groups at midnight', async () => {
   const hook = await renderHook(() => useLocalCalendarNow());
 
   try {
-    expect(groupSessionsByDate([session], hook.result.current)[0]?.label).toBe(
-      'Today',
-    );
+    expect(
+      groupSessionsByDate([session], hook.result.current)[0]?.label,
+    ).toEqual({ kind: 'today' });
     await hook.act(() => vi.advanceTimersByTimeAsync(200));
-    expect(groupSessionsByDate([session], hook.result.current)[0]?.label).toBe(
-      'Yesterday',
-    );
+    expect(
+      groupSessionsByDate([session], hook.result.current)[0]?.label,
+    ).toEqual({ kind: 'yesterday' });
   } finally {
     await hook.unmount();
     vi.useRealTimers();

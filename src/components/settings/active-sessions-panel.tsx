@@ -16,7 +16,9 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
+import { useI18n } from '~i18n';
 import {
   accountSessionsQueryOptions,
   signOutSession,
@@ -32,6 +34,7 @@ import {
 const REVOKE_KEY = ['auth', 'account-sessions', 'revoke'];
 
 export function ActiveSessionsPanel() {
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const sessions = useQuery(accountSessionsQueryOptions);
 
@@ -47,7 +50,7 @@ export function ActiveSessionsPanel() {
         accountSessionsQueryOptions.queryKey,
         (current) => current?.filter((session) => session.id !== sessionId),
       );
-      toast.success('Device signed out');
+      toast.success(t('account.sessions.signedOut'));
       // Stay pending until the list is refetched, so the controls cannot act
       // on a stale list.
       return queryClient.invalidateQueries({
@@ -69,18 +72,21 @@ export function ActiveSessionsPanel() {
     }) > 0;
 
   const confirmRevoke = (session: AccountSession) => {
-    const { label } = describeUserAgent(session.userAgent);
+    const { label } = describeUserAgent(session.userAgent, t);
     modals.openConfirmModal({
-      title: `Sign out ${label}?`,
+      title: t('account.sessions.confirmTitle', { device: label }),
       centered: true,
       children: (
         <Text size="sm">
-          The session last active {formatSessionTime(session.updatedAt)} ends
-          immediately and must sign in again. Other sessions on the same device
-          are not affected.
+          {t('account.sessions.confirmBody', {
+            when: formatSessionTime(session.updatedAt, locale, t),
+          })}
         </Text>
       ),
-      labels: { confirm: 'Sign out session', cancel: 'Cancel' },
+      labels: {
+        confirm: t('account.sessions.confirm'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => {
         if (!isRevoking(session.id)) revoke.mutate(session.id);
@@ -99,11 +105,9 @@ export function ActiveSessionsPanel() {
   return (
     <Stack gap="md">
       <Stack gap={2}>
-        <Text fw={700}>Active sessions</Text>
+        <Text fw={700}>{t('account.sessions.title')}</Text>
         <Text size="sm" c="dimmed">
-          Every session signed in to your account right now. Each browser or CLI
-          sign-in is listed separately, so one device can appear more than once.
-          Sign out any you don’t recognize.
+          {t('account.sessions.description')}
         </Text>
       </Stack>
 
@@ -112,11 +116,11 @@ export function ActiveSessionsPanel() {
       ) : sessions.isLoadingError ? (
         <Alert
           icon={<IconAlertCircle size={18} />}
-          title="Active sessions could not be loaded"
+          title={t('account.sessions.loadFailed')}
           color="red"
         >
           <Stack gap="xs" align="flex-start">
-            <Text size="sm">Check your connection and try again.</Text>
+            <Text size="sm">{t('account.sessions.loadFailedBody')}</Text>
             <Button
               type="button"
               size="xs"
@@ -125,12 +129,12 @@ export function ActiveSessionsPanel() {
               loading={sessions.isFetching}
               onClick={() => void sessions.refetch()}
             >
-              Try again
+              {t('common.tryAgain')}
             </Button>
           </Stack>
         </Alert>
       ) : ordered.length > 0 ? (
-        <ul className={classes.list} aria-label="Active sessions">
+        <ul className={classes.list} aria-label={t('account.sessions.title')}>
           {ordered.map((session) => (
             <ActiveSessionRow
               key={session.id}
@@ -142,7 +146,7 @@ export function ActiveSessionsPanel() {
         </ul>
       ) : (
         <Text size="sm" c="dimmed" className={classes.empty}>
-          No active sessions.
+          {t('account.sessions.empty')}
         </Text>
       )}
     </Stack>
@@ -158,9 +162,10 @@ function ActiveSessionRow({
   revoking: boolean;
   onRevoke: () => void;
 }) {
-  const device = describeUserAgent(session.userAgent);
+  const { t, locale } = useI18n();
+  const device = describeUserAgent(session.userAgent, t);
   const DeviceIcon = DEVICE_ICONS[device.kind];
-  const lastActive = formatSessionTime(session.updatedAt);
+  const lastActive = formatSessionTime(session.updatedAt, locale, t);
 
   return (
     <li className={classes.row}>
@@ -190,12 +195,17 @@ function ActiveSessionRow({
             </Text>
             {session.isCurrent && (
               <Badge size="sm" variant="light" className={classes.badge}>
-                Current session
+                {t('account.sessions.current')}
               </Badge>
             )}
           </Group>
           <Text size="xs" c="dimmed">
-            Last active <time dateTime={session.updatedAt}>{lastActive}</time>
+            <Trans
+              t={t}
+              i18nKey="account.sessions.lastActive"
+              values={{ when: lastActive }}
+              components={{ time: <time dateTime={session.updatedAt} /> }}
+            />
           </Text>
         </Stack>
       </Group>
@@ -206,12 +216,15 @@ function ActiveSessionRow({
           size="xs"
           variant="subtle"
           color="red"
-          aria-label={`Sign out ${device.label}, last active ${lastActive}`}
+          aria-label={t('account.sessions.signOutName', {
+            device: device.label,
+            when: lastActive,
+          })}
           loading={revoking}
           onClick={onRevoke}
           className={classes.action}
         >
-          Sign out
+          {t('account.sessions.signOut')}
         </Button>
       )}
     </li>
@@ -219,8 +232,9 @@ function ActiveSessionRow({
 }
 
 function ActiveSessionsSkeleton() {
+  const { t } = useI18n();
   return (
-    <Stack gap="xs" aria-label="Loading active sessions" aria-busy>
+    <Stack gap="xs" aria-label={t('account.sessions.loading')} aria-busy>
       {[0, 1].map((key) => (
         <Group key={key} gap="sm" wrap="nowrap" py="xs">
           <Skeleton height={34} width={34} radius="md" />

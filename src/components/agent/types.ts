@@ -7,6 +7,9 @@ import {
   composerDisplayText,
   type AgentComposerContentPart,
 } from '~agent/composer-content';
+import type { PlainTranslationKey, useI18n } from '~i18n';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 export type TextBlock = { type: 'text'; text: string };
 export type ThinkingBlock = { type: 'thinking'; thinking: string };
@@ -137,38 +140,40 @@ export function partsToImages(content: string | ContentPart[]): string[] {
 }
 
 /**
- * Fallback labels for persisted tool calls (historical messages carry no
- * label). Live runs send the authoritative label on the `tool_start` event, so
- * this map only needs to cover tools that may appear in saved transcripts; keep
- * it in rough sync with the server tool definitions.
+ * Translated labels for the platform's tools, by tool name. Historical
+ * messages carry no label and live runs send the server's English one, so a
+ * known tool is always named from the catalog; keep it in rough sync with the
+ * server tool definitions.
  */
-export const TOOL_LABELS: Record<string, string> = {
-  list_files: 'List files',
-  read_file: 'Read file',
-  edit_file: 'Edit file',
-  write_file: 'Write file',
-  run_command: 'Run command',
-  download_attachment: 'Download attachment',
-  list_apps: 'List apps',
-  get_app: 'Get app',
-  checkout_app: 'Clone or update app',
-  create_app: 'Create app',
-  deploy_app: 'Deploy app',
-  rollback_app: 'Rollback app',
-  query_app_db: 'Query app DB',
-  query_app_data_table: 'Query app Data Table',
-  query_app_kv: 'Query app KV',
-  web_search: 'Web search',
-  web_fetch: 'Fetch web page',
-  ask: 'Ask the user',
+const TOOL_LABELS: Record<string, PlainTranslationKey> = {
+  list_files: 'agent.tool.list_files',
+  read_file: 'agent.tool.read_file',
+  edit_file: 'agent.tool.edit_file',
+  write_file: 'agent.tool.write_file',
+  run_command: 'agent.tool.run_command',
+  download_attachment: 'agent.tool.download_attachment',
+  list_apps: 'agent.tool.list_apps',
+  get_app: 'agent.tool.get_app',
+  checkout_app: 'agent.tool.checkout_app',
+  create_app: 'agent.tool.create_app',
+  deploy_app: 'agent.tool.deploy_app',
+  rollback_app: 'agent.tool.rollback_app',
+  query_app_db: 'agent.tool.query_app_db',
+  query_app_data_table: 'agent.tool.query_app_data_table',
+  query_app_kv: 'agent.tool.query_app_kv',
+  web_search: 'agent.tool.web_search',
+  web_fetch: 'agent.tool.web_fetch',
+  ask: 'agent.tool.ask',
+  request_env: 'agent.tool.request_env',
 };
 
 /**
- * Prefer the label the server sent with the event; fall back to the static map
- * for persisted calls, then to the raw tool name.
+ * Name a known tool from the catalog; otherwise prefer the label the server
+ * sent with the event, then the raw tool name.
  */
-export function toolLabel(name: string, label?: string): string {
-  return label ?? TOOL_LABELS[name] ?? name;
+export function toolLabel(t: Translate, name: string, label?: string): string {
+  const key = Object.hasOwn(TOOL_LABELS, name) ? TOOL_LABELS[name] : undefined;
+  return key ? t(key) : (label ?? name);
 }
 
 /**
@@ -178,6 +183,7 @@ export function toolLabel(name: string, label?: string): string {
  * legacy/malformed-input fallback.
  */
 export function toolDisplayLabel(
+  t: Translate,
   name: string,
   value: unknown,
   label?: string,
@@ -189,7 +195,7 @@ export function toolDisplayLabel(
       if (oneLine) return oneLine;
     }
   }
-  return toolLabel(name, label);
+  return toolLabel(t, name, label);
 }
 
 export type ToolDetail = {
@@ -307,44 +313,101 @@ export function toolRequestJson(
   }
 }
 
-export type ToolInputDetail = {
-  label: string;
-  value: string;
-  emptyText?: string;
+/** A tool input field: its label and what an empty value shows. */
+type ToolInputField = {
+  label: PlainTranslationKey;
+  emptyText: PlainTranslationKey;
 };
+
+const INPUT = {
+  filePath: {
+    label: 'agent.tool.input.filePath',
+    emptyText: 'agent.tool.input.filePathEmpty',
+  },
+  fileContents: {
+    label: 'agent.tool.input.fileContents',
+    emptyText: 'agent.tool.input.fileContentsEmpty',
+  },
+  questions: {
+    label: 'agent.tool.input.questions',
+    emptyText: 'agent.tool.input.questionsEmpty',
+  },
+  command: {
+    label: 'agent.tool.input.command',
+    emptyText: 'agent.tool.input.commandEmpty',
+  },
+  query: {
+    label: 'agent.tool.input.query',
+    emptyText: 'agent.tool.input.queryEmpty',
+  },
+  maxResults: {
+    label: 'agent.tool.input.maxResults',
+    emptyText: 'agent.tool.input.maxResultsEmpty',
+  },
+  searchDepth: {
+    label: 'agent.tool.input.searchDepth',
+    emptyText: 'agent.tool.input.searchDepthEmpty',
+  },
+  topic: {
+    label: 'agent.tool.input.topic',
+    emptyText: 'agent.tool.input.topicEmpty',
+  },
+  timeRange: {
+    label: 'agent.tool.input.timeRange',
+    emptyText: 'agent.tool.input.timeRangeEmpty',
+  },
+  includeDomains: {
+    label: 'agent.tool.input.includeDomains',
+    emptyText: 'agent.tool.input.includeDomainsEmpty',
+  },
+  excludeDomains: {
+    label: 'agent.tool.input.excludeDomains',
+    emptyText: 'agent.tool.input.excludeDomainsEmpty',
+  },
+  url: {
+    label: 'agent.tool.input.url',
+    emptyText: 'agent.tool.input.urlEmpty',
+  },
+  extractDepth: {
+    label: 'agent.tool.input.extractDepth',
+    emptyText: 'agent.tool.input.extractDepthEmpty',
+  },
+} satisfies Record<string, ToolInputField>;
+
+/** The file path field, which the step view fills from resolved results. */
+export const FILE_PATH_INPUT: ToolInputField = INPUT.filePath;
+
+/** An input value under its field's catalog label (translated at render). */
+export type ToolInputDetail = ToolInputField & { value: string };
 
 function appendSerializableInput(
   details: ToolInputDetail[],
-  label: string,
+  field: ToolInputField,
   value: unknown,
 ): void {
   if (typeof value === 'string') {
-    details.push({ label, value });
+    details.push({ ...field, value });
     return;
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
-    details.push({ label, value: String(value) });
+    details.push({ ...field, value: String(value) });
     return;
   }
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
-    details.push({ label, value: JSON.stringify(value) });
+    details.push({ ...field, value: JSON.stringify(value) });
   }
 }
 
 /** Complete inputs that need an inspectable form beyond the compact summary. */
 export function toolInputDetails(
+  t: Translate,
   name: string,
   value: unknown,
 ): ToolInputDetail[] | undefined {
   if (name === 'list_files') {
     const path = listFilesPathArgument(value);
     if (path === undefined) return undefined;
-    return [
-      {
-        label: 'File path',
-        value: path,
-      },
-    ];
+    return [{ ...INPUT.filePath, value: path }];
   }
   const args = toolArgumentsRecord(value);
   if (!args) return undefined;
@@ -364,54 +427,58 @@ export function toolInputDetails(
         [
           `${index + 1}. ${question.prompt}`,
           ...(question.allowMultiple === true
-            ? ['Select multiple options.']
+            ? [t('agent.tool.input.selectMultiple')]
             : []),
           ...options,
         ].join('\n'),
       ];
     });
     return questions.length > 0
-      ? [{ label: 'Questions', value: questions.join('\n\n') }]
+      ? [{ ...INPUT.questions, value: questions.join('\n\n') }]
       : undefined;
   }
   if (name === 'run_command' && typeof args.command === 'string') {
-    return [{ label: 'Command', value: args.command }];
+    return [{ ...INPUT.command, value: args.command }];
   }
   if (
     (name === 'read_file' || name === 'edit_file') &&
     typeof args.path === 'string'
   ) {
-    return [{ label: 'File path', value: args.path }];
+    return [{ ...INPUT.filePath, value: args.path }];
   }
   if (name === 'web_search') {
     const details: ToolInputDetail[] = [];
-    appendSerializableInput(details, 'Query', args.query);
-    appendSerializableInput(details, 'Maximum results', args.max_results);
-    appendSerializableInput(details, 'Search depth', args.search_depth);
-    appendSerializableInput(details, 'Topic', args.topic);
-    appendSerializableInput(details, 'Time range', args.time_range);
-    appendSerializableInput(details, 'Include domains', args.include_domains);
-    appendSerializableInput(details, 'Exclude domains', args.exclude_domains);
+    appendSerializableInput(details, INPUT.query, args.query);
+    appendSerializableInput(details, INPUT.maxResults, args.max_results);
+    appendSerializableInput(details, INPUT.searchDepth, args.search_depth);
+    appendSerializableInput(details, INPUT.topic, args.topic);
+    appendSerializableInput(details, INPUT.timeRange, args.time_range);
+    appendSerializableInput(
+      details,
+      INPUT.includeDomains,
+      args.include_domains,
+    );
+    appendSerializableInput(
+      details,
+      INPUT.excludeDomains,
+      args.exclude_domains,
+    );
     return details.length > 0 ? details : undefined;
   }
   if (name === 'web_fetch') {
     const details: ToolInputDetail[] = [];
-    appendSerializableInput(details, 'URL', args.url);
-    appendSerializableInput(details, 'Query', args.query);
-    appendSerializableInput(details, 'Extract depth', args.extract_depth);
+    appendSerializableInput(details, INPUT.url, args.url);
+    appendSerializableInput(details, INPUT.query, args.query);
+    appendSerializableInput(details, INPUT.extractDepth, args.extract_depth);
     return details.length > 0 ? details : undefined;
   }
   if (name === 'write_file') {
     const details: ToolInputDetail[] = [];
     if (typeof args.path === 'string') {
-      details.push({ label: 'File path', value: args.path });
+      details.push({ ...INPUT.filePath, value: args.path });
     }
     if (typeof args.content === 'string') {
-      details.push({
-        label: 'File contents',
-        value: args.content,
-        emptyText: '(empty file)',
-      });
+      details.push({ ...INPUT.fileContents, value: args.content });
     }
     return details.length > 0 ? details : undefined;
   }
