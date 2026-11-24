@@ -119,6 +119,7 @@ export default defineConfig({
             'packages/hatch-cli/src/**/*.{test,spec}.ts',
             'packages/hatch-platform-api/*.test.ts',
             'mobile/src/core/**/*.test.ts',
+            'sdk-internal/ui/test/**/*.test.ts',
           ],
           exclude: ['src/**/*.browser.{test,spec}.{ts,tsx}'],
         },

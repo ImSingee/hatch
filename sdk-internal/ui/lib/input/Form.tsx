@@ -27,7 +27,7 @@ export type FormProps = {
   /** Runs when the form is submitted and every required field has a value.
    * A promise keeps submit buttons busy; a rejection shows its message above
    * the fields. The draft is deleted once it resolves. */
-  onSubmit: (values: FormValues) => void | Promise<void>;
+  onSubmit: (values: FormValues) => unknown;
   /** Values the fields start with, by `name`. */
   initialValues?: FormValues;
   /** Extra checks on submit: an error message by field `name`, or nothing. */

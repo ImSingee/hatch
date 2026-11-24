@@ -168,8 +168,11 @@ export type FormPageProps = {
   description?: string;
   /** The form's id, which names its draft (see `Form`). */
   formId: string;
-  onSubmit: (values: FormValues) => void | Promise<void>;
+  /** Runs on submit with the fields' values, as `Form`'s `onSubmit`. */
+  onSubmit: (values: FormValues) => unknown;
+  /** Values the fields start with, by `name`. */
   initialValues?: FormValues;
+  /** Extra checks on submit: an error message by field `name`, or nothing. */
   validate?: (values: FormValues) => Record<string, string> | undefined;
   /** The submit button's label: a verb for the result, "Add plant". */
   submitLabel: string;

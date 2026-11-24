@@ -103,8 +103,10 @@ function show(options: ToastOptions): string {
 export const Toast = {
   /** Shows a toast; returns its id. */
   show,
+  /** Shows a success toast. */
   success: (title: string, description?: string): string =>
     show({ title, description, tone: 'success' }),
+  /** Shows a toast for a failure. */
   error: (title: string, description?: string): string =>
     show({ title, description, tone: 'danger' }),
   /** Removes a toast before its time is up. */
