@@ -123,17 +123,23 @@ function AppView() {
     });
   };
 
-  // The browser tab shows whichever page the user is on inside the App, and
-  // gets the platform's title back when the App closes.
-  useEffect(() => {
-    const hostTitle = document.title;
-    return () => {
-      document.title = hostTitle;
-    };
-  }, [appSlug]);
-  const mirrorTitle = (title: string | null) => {
-    if (title && title !== document.title) document.title = title;
-  };
+  // The browser tab shows whichever page the user is on inside the App, or
+  // the App's name until that page reports a title. Kept per App, so a switch
+  // to another App does not show the previous one's page.
+  const [embeddedTitle, setEmbeddedTitle] = useState<{
+    appSlug: string;
+    title: string | null;
+  } | null>(null);
+  // The surface reports on every change to the App's head, often with the
+  // same title, so keep the current state when nothing changed.
+  const mirrorTitle = (title: string | null) =>
+    setEmbeddedTitle((current) =>
+      current?.appSlug === appSlug && current.title === title
+        ? current
+        : { appSlug, title },
+    );
+  const pageTitle =
+    (embeddedTitle?.appSlug === appSlug && embeddedTitle.title) || app.name;
 
   // Push each host navigation into the already-loaded App. The surface seeds
   // fresh loads itself (and app switches mount a new surface); this covers
@@ -198,6 +204,7 @@ function AppView() {
     <DeskWindow
       fill
       title={app.name}
+      documentTitle={pageTitle}
       tile={<AppGlyph name={app.name} seed={app.id} size="sm" />}
       toolbar={
         <>

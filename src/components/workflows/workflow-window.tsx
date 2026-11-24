@@ -37,6 +37,12 @@ import classes from './workflow-window.module.css';
 
 export type WorkflowPage = 'run' | 'executions' | 'manage';
 
+const PAGE_NAMES: Record<WorkflowPage, string> = {
+  run: 'Run',
+  executions: 'Executions',
+  manage: 'Manage',
+};
+
 const TO_WORKFLOWS: WindowTarget = {
   link: { to: '/workflows' },
   label: 'Workflows',
@@ -60,6 +66,11 @@ export function WorkflowWindow({
     <DeskWindow
       fill
       title={workflow.name}
+      documentTitle={
+        page === 'run'
+          ? workflow.name
+          : `${workflow.name} · ${PAGE_NAMES[page]}`
+      }
       tile={
         <AppGlyph
           icon={false}
@@ -135,21 +146,21 @@ export function WorkflowWindow({
           tabs={[
             {
               key: 'run',
-              label: 'Run',
+              label: PAGE_NAMES.run,
               icon: <IconPlayerPlay size={16} stroke={1.8} />,
               link: { to: '/workflow/$workflowSlug', params },
               current: page === 'run',
             },
             {
               key: 'executions',
-              label: 'Executions',
+              label: PAGE_NAMES.executions,
               icon: <IconTimeline size={16} stroke={1.8} />,
               link: { to: '/workflow/$workflowSlug/executions', params },
               current: page === 'executions',
             },
             {
               key: 'manage',
-              label: 'Manage',
+              label: PAGE_NAMES.manage,
               icon: <IconSettings size={16} stroke={1.8} />,
               link: { to: '/workflow/$workflowSlug/manage', params },
               current: page === 'manage',

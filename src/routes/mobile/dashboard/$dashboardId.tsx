@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@mantine/hooks';
 import { createFileRoute, redirect, useLocation } from '@tanstack/react-router';
 import { MobileDashboardCanvas } from '~components/dashboard/mobile-dashboard-canvas';
 import { hasActiveSession } from '~server/auth';
@@ -17,6 +18,8 @@ function MobileDashboard() {
   const peek = useLocation({ select: (location) => location.hash === 'peek' });
   // The native app draws the ground behind this page; see native-host.ts.
   useNativeHostDocument();
+  // The native app shows its own title; this names the page for the web view.
+  useDocumentTitle('Dashboard');
   return (
     <MobileDashboardCanvas
       key={dashboardId}

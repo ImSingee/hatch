@@ -1,6 +1,6 @@
 import { routeErrorMessage } from '~components/system/route-error';
 import { Button, Skeleton, Text } from '@mantine/core';
-import { useMediaQuery } from '@mantine/hooks';
+import { useDocumentTitle, useMediaQuery } from '@mantine/hooks';
 import {
   useMutation,
   useQueryClient,
@@ -122,6 +122,8 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
   const { data: available } = useSuspenseQuery(availableWidgetsQueryOptions);
   const { data: apps } = useSuspenseQuery(appsQueryOptions);
   const current = dashboards.find((dashboard) => dashboard.id === dashboardId);
+  // The heading greets the user; the tab names the dashboard.
+  useDocumentTitle(current?.name ?? 'Dashboard');
   const [editing, setEditing] = useState(false);
   const [previewBreakpoint, setPreviewBreakpoint] =
     useState<DashboardBreakpoint>('desktop');

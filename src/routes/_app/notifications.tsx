@@ -1,4 +1,5 @@
 import { Button, ThemeIcon } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import {
   Link,
   Outlet,
@@ -12,6 +13,7 @@ import classes from '~components/notifications/notifications-window.module.css';
 import { InsideWindowProvider } from '~components/page/window-context';
 import { useLiveNotifications } from '~components/notifications/use-live-notifications';
 import {
+  notificationDetailQueryOptions,
   notificationHistoryQueryOptions,
   notificationSourcesQueryOptions,
 } from '~queries/notifications';
@@ -35,10 +37,17 @@ export const Route = createFileRoute('/_app/notifications')({
 function NotificationsLayout() {
   useLiveNotifications();
   const { notificationId } = useParams({ strict: false });
+  // The tab names the open notification, from the cache its page reads.
+  const { data: openTitle } = useQuery({
+    ...notificationDetailQueryOptions(notificationId ?? ''),
+    enabled: Boolean(notificationId),
+    select: (notification) => notification.title,
+  });
   return (
     <DeskWindow
       fill
       title="Notifications"
+      documentTitle={(notificationId && openTitle) || 'Notifications'}
       tile={
         <ThemeIcon size={22} radius="xs" color="amber">
           <IconBell size={13} stroke={2.4} />

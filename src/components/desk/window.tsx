@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@mantine/hooks';
 import { Link, type LinkProps, useRouter } from '@tanstack/react-router';
 import {
   IconAppWindow,
@@ -30,6 +31,12 @@ const DESK: WindowTarget = { link: { to: DESK_HOME }, label: 'the desk' };
 
 export type DeskWindowProps = {
   title: string;
+  /**
+   * The browser tab's title while this window is open. Defaults to `title`;
+   * set it when the title bar does not name the page, or when the page's name
+   * comes from what the window shows (an open chat, the App's own page).
+   */
+  documentTitle?: string;
   /** A 22 px tile shown before the title. Defaults to a neutral window tile. */
   tile?: ReactNode;
   /** Shown after the title, for a status chip. */
@@ -84,6 +91,7 @@ function isEditing(target: EventTarget | null) {
  */
 export function DeskWindow({
   title,
+  documentTitle,
   tile,
   badge,
   toolbar,
@@ -93,6 +101,7 @@ export function DeskWindow({
   children,
 }: DeskWindowProps) {
   const titleId = useId();
+  useDocumentTitle(documentTitle || title);
   const frame = useRef<HTMLElement>(null);
   const hosted = useWindowFrame() === 'host';
   const maximizable = useWindowMaximize();
