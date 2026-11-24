@@ -126,7 +126,11 @@ export async function nativeModuleGraph(options: {
       loader: ASSET_LOADERS,
       logLevel: 'silent',
       plugins: [plugin, sourceBoundaryPlugin(canonicalRoot, 'Native frontend')],
-      tsconfigRaw: { compilerOptions: { jsx: 'preserve' } },
+      // Keep every value import, used or not, so each one is resolved and
+      // checked (TypeScript would otherwise drop unused ones as types).
+      tsconfigRaw: {
+        compilerOptions: { jsx: 'preserve', verbatimModuleSyntax: true },
+      },
     });
   } catch (error) {
     const failure = error as esbuild.BuildFailure;

@@ -44,6 +44,29 @@ function defaultCounterTemplateFixture(): Plugin {
   };
 }
 
+const NATIVE_PLAYER_FIXTURE = `<!doctype html>
+<meta name="hatch-app-runtime" content="native">
+<title>Native player</title>
+<script>
+  window.received = [];
+  addEventListener('message', (event) => {
+    if (event.data?.protocol !== 'hatch.app-surface/1' || !event.ports[0]) return;
+    const port = event.ports[0];
+    window.surfacePort = port;
+    port.onmessage = (message) => {
+      window.received.push(message.data);
+      if (message.data.type === 'init') {
+        port.postMessage({ type: 'hello', appId: 'native-app', deploymentId: 'd1' });
+        port.postMessage({ type: 'title', title: 'Native home' });
+        port.postMessage({ type: 'route', route: message.data.route });
+      }
+      if (message.data.type === 'navigate') {
+        port.postMessage({ type: 'route', route: message.data.route });
+      }
+    };
+  });
+</script>`;
+
 // App views embed `/app/<slug>/embed/`. Serve a blank same-origin document
 // there so the iframe never boots the Browser Mode runner page instead.
 function appEmbedFixture(): Plugin {
@@ -53,6 +76,12 @@ function appEmbedFixture(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (!/^\/app\/[^/]+\/embed\//.test(req.url ?? '')) return next();
         res.setHeader('Content-Type', 'text/html');
+        // `native-*` slugs get a stand-in for the native player page: it
+        // records what the surface sends and answers like the player.
+        if (/^\/app\/native-[^/]+\/embed\//.test(req.url ?? '')) {
+          res.end(NATIVE_PLAYER_FIXTURE);
+          return;
+        }
         res.end('<!doctype html><title>Embedded app</title>');
       });
     },

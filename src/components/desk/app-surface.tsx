@@ -14,7 +14,7 @@ import {
   parsePlayerMessage,
   type SurfaceMessage,
 } from '../../../sdk-internal/app/src/native-surface';
-import { useOptionalPlatformEvent } from '~components/system/platform-events';
+import { useOptionalPlatformEvent } from '~components/system/platform-events-context';
 import { useAccent } from '~/ui/theme';
 import { appSurfaceSource } from './app-surface-source';
 import classes from './app-surface.module.css';

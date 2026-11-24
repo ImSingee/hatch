@@ -1,25 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { themeQueryOptions } from '~queries/theme';
-import { useEventCallback } from '~hooks/use-latest-committed';
 import type { PlatformEvent } from '~server/platform-events';
+import {
+  PlatformEventsContext,
+  type PlatformEventListener,
+  type PlatformEventsContextValue,
+  type ResyncListener,
+} from './platform-events-context';
 
-type PlatformEventType = PlatformEvent['type'];
-type PlatformEventFor<TType extends PlatformEventType> = Extract<
-  PlatformEvent,
-  { type: TType }
->;
-type PlatformEventListener = (event: PlatformEvent) => void;
-type ResyncListener = () => void;
-
-type PlatformEventsContextValue = {
-  subscribe: (listener: PlatformEventListener) => () => void;
-  subscribeResync: (listener: ResyncListener) => () => void;
-};
-
-const PlatformEventsContext = createContext<PlatformEventsContextValue | null>(
-  null,
-);
+export {
+  useOptionalPlatformEvent,
+  usePlatformEvent,
+  usePlatformResync,
+} from './platform-events-context';
 
 function stringField(value: object, key: string): string | null {
   const field = (value as Record<string, unknown>)[key];
@@ -127,64 +121,4 @@ export function PlatformEventsProvider({
       {children}
     </PlatformEventsContext.Provider>
   );
-}
-
-function usePlatformEventsContext() {
-  const context = useContext(PlatformEventsContext);
-  if (!context) {
-    throw new Error(
-      'Platform event hooks must be used within PlatformEventsProvider.',
-    );
-  }
-  return context;
-}
-
-/** Subscribe to one domain event type without re-rendering unrelated consumers. */
-export function usePlatformEvent<TType extends PlatformEventType>(
-  type: TType,
-  listener: (event: PlatformEventFor<TType>) => void,
-) {
-  const { subscribe } = usePlatformEventsContext();
-  const onEvent = useEventCallback(listener);
-
-  useEffect(
-    () =>
-      subscribe((event) => {
-        if (event.type === type) {
-          onEvent(event as PlatformEventFor<TType>);
-        }
-      }),
-    [onEvent, subscribe, type],
-  );
-}
-
-/**
- * Like {@link usePlatformEvent}, for components that may render outside the
- * authenticated shell (where there is no event stream): there it does
- * nothing.
- */
-export function useOptionalPlatformEvent<TType extends PlatformEventType>(
-  type: TType,
-  listener: (event: PlatformEventFor<TType>) => void,
-) {
-  const context = useContext(PlatformEventsContext);
-  const onEvent = useEventCallback(listener);
-
-  useEffect(
-    () =>
-      context?.subscribe((event) => {
-        if (event.type === type) {
-          onEvent(event as PlatformEventFor<TType>);
-        }
-      }),
-    [context, onEvent, type],
-  );
-}
-
-/** Re-read durable state after the SSE stream connects or reconnects. */
-export function usePlatformResync(listener: ResyncListener) {
-  const { subscribeResync } = usePlatformEventsContext();
-  const onResync = useEventCallback(listener);
-
-  useEffect(() => subscribeResync(onResync), [onResync, subscribeResync]);
 }

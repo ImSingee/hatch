@@ -2,6 +2,7 @@ import { MantineProvider } from '@mantine/core';
 import { createRef } from 'react';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { applyAccent } from '~/ui/theme';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
 
 // Browser Mode serves a blank same-origin document titled "Embedded app" at
@@ -76,4 +77,61 @@ test('reload loads the App again', async () => {
     expect(onTitleChange).toHaveBeenLastCalledWith('Embedded app');
   });
   expect(appWindow().location.hash).toBe('#/settings');
+});
+
+test('runs a native App over the player channel instead of reading its frame', async () => {
+  const handle = createRef<AppSurfaceHandle>();
+  const onRouteChange = vi.fn<(route: string) => void>();
+  const onTitleChange = vi.fn<(title: string | null) => void>();
+  const surface = (visible: boolean) => (
+    <MantineProvider>
+      <AppSurface
+        ref={handle}
+        app={{ slug: 'native-notes', name: 'Notes' }}
+        route="/inbox"
+        visible={visible}
+        onRouteChange={onRouteChange}
+        onTitleChange={onTitleChange}
+      />
+    </MantineProvider>
+  );
+  const screen = await render(surface(true));
+  const player = () =>
+    screen.container.querySelector('iframe')!.contentWindow! as Window & {
+      received: unknown[];
+    };
+
+  // The player starts the App where the host asked, in the host's accent,
+  // and its route and title come back over the channel.
+  await vi.waitFor(() => {
+    expect(onTitleChange).toHaveBeenLastCalledWith('Native home');
+    expect(onRouteChange).toHaveBeenLastCalledWith('/inbox');
+  });
+  expect(player().received[0]).toEqual({
+    type: 'init',
+    route: '/inbox',
+    accent: 'indigo',
+    visible: true,
+  });
+  // The page's own title and fragment are the player's, not the App's.
+  expect(onTitleChange).not.toHaveBeenCalledWith('Native player');
+  expect(player().location.hash).toBe('');
+
+  handle.current!.navigate('/settings');
+  await vi.waitFor(() =>
+    expect(onRouteChange).toHaveBeenLastCalledWith('/settings'),
+  );
+
+  applyAccent('teal');
+  await screen.rerender(surface(false));
+  await vi.waitFor(() =>
+    expect(player().received).toEqual(
+      expect.arrayContaining([
+        { type: 'navigate', route: '/settings' },
+        { type: 'theme', accent: 'teal' },
+        { type: 'visibility', visible: false },
+      ]),
+    ),
+  );
+  applyAccent('indigo');
 });
