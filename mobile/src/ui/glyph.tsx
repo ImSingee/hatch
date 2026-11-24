@@ -45,6 +45,8 @@ const symbols: Record<GlyphName, AndroidSymbol> = {
   trash: 'delete',
   edit: 'edit',
   pause: 'pause',
+  info: 'info',
+  pinSlash: 'keep_off',
 };
 
 // Decorative symbol in a square box; the surrounding control owns its

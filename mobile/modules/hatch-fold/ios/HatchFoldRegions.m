@@ -18,3 +18,32 @@ NSArray<NSValue *> *HatchFoldDivisionFrames(UIView *view) {
 #endif
   return @[];
 }
+
+NSInteger HatchVerticalBarEdge(UIView *view) {
+// The vertical bar arrived in the iOS 27.1 SDK, with reserved regions.
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+  if (@available(iOS 27.1, *)) {
+    switch (view.traitCollection.verticalBarEdge) {
+      case UIVerticalBarEdgeLeading:
+        return 1;
+      case UIVerticalBarEdgeTrailing:
+        return 2;
+      default:
+        return 0;
+    }
+  }
+#endif
+  return 0;
+}
+
+void HatchObserveVerticalBarEdge(UIView *view, void (^handler)(void)) {
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+  if (@available(iOS 27.1, *)) {
+    [view registerForTraitChanges:UITraitCollection.systemTraitsAffectingVerticalBarEdge
+                      withHandler:^(__kindof id<UITraitEnvironment> _environment,
+                                    UITraitCollection *_previous) {
+                        handler();
+                      }];
+  }
+#endif
+}

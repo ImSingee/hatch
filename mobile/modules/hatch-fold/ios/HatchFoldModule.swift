@@ -11,9 +11,14 @@ import UIKit
 /// scene's geometry changes (fold, unfold, rotation), the view moves to a
 /// window or resizes, it reads them again for a short while, until layout has
 /// settled, and reports only changes.
+///
+/// It also reports the edge where the system places the vertical bar (the
+/// navigation, tab and status bars of an iPhone Duo), from the view's traits.
 final class HatchFoldView: ExpoView {
   let onFoldChange = EventDispatcher()
+  let onVerticalBarChange = EventDispatcher()
   private var reported: [[String: Double]]?
+  private var reportedEdge: Int?
   private var geometry: NSKeyValueObservation?
   private var timer: Timer?
   private var watchUntil: CFTimeInterval = 0
@@ -22,6 +27,9 @@ final class HatchFoldView: ExpoView {
     super.init(appContext: appContext)
     isUserInteractionEnabled = false
     backgroundColor = .clear
+    HatchObserveVerticalBarEdge(self) { [weak self] in
+      self?.reportVerticalBar()
+    }
   }
 
   deinit {
@@ -47,6 +55,7 @@ final class HatchFoldView: ExpoView {
       return
     }
     report()
+    reportVerticalBar()
     watch(for: 1.5)
   }
 
@@ -67,6 +76,16 @@ final class HatchFoldView: ExpoView {
     }
     RunLoop.main.add(timer, forMode: .common)
     self.timer = timer
+  }
+
+  private func reportVerticalBar() {
+    guard window != nil else { return }
+    let edge = HatchVerticalBarEdge(self)
+    if reportedEdge == edge { return }
+    reportedEdge = edge
+    onVerticalBarChange([
+      "edge": edge == 1 ? "leading" : edge == 2 ? "trailing" : "none"
+    ])
   }
 
   private func report() {
@@ -98,7 +117,7 @@ public final class HatchFoldModule: Module {
   public func definition() -> ModuleDefinition {
     Name("HatchFold")
     View(HatchFoldView.self) {
-      Events("onFoldChange")
+      Events("onFoldChange", "onVerticalBarChange")
     }
   }
 }

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
-import { Alert, RefreshControl, View } from 'react-native';
+import { RefreshControl, View } from 'react-native';
 import type { AppSummary } from '../core';
 import { useNavigationPreferences } from '../state/navigation';
 import { openSection } from '../state/open-section';
@@ -15,6 +15,7 @@ import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
 import { AppTile, ShortcutTile, useShortcutGrid } from '../ui/rows';
 import { ScopeTabs } from '../ui/scope-tabs';
 import { ScrollScreen, SectionLabel } from '../ui/screen';
+import { TileMenu } from '../ui/tile-menu';
 
 type Order = 'name' | 'recent';
 type Kind = 'apps' | 'workflows';
@@ -95,11 +96,38 @@ export function ResourcesScreen({
             pathname: '/apps/[id]',
             params: { id: item.id, slug: item.slug, label: item.name },
           });
-  const askDetails = (item: AppSummary) =>
-    Alert.alert(item.name, undefined, [
-      { text: 'App details', onPress: () => details(item) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const tileOf = (
+    item: AppSummary,
+    of: Kind,
+    width: number,
+    onLongPress?: () => void,
+  ) => (
+    <ShortcutTile
+      width={width}
+      label={item.name}
+      accessibilityLabel={
+        of === 'apps'
+          ? item.status === 'draft'
+            ? `${item.name}, not deployed yet`
+            : item.name
+          : `${item.name}, workflow`
+      }
+      accessibilityHint={
+        of === 'apps' ? 'Touch and hold for App details' : undefined
+      }
+      onPress={() => open(item, of)}
+      onLongPress={onLongPress}
+    >
+      <AppTile
+        name={item.name}
+        seed={item.id}
+        iconPath={item.iconPath}
+        workflow={of === 'workflows'}
+        size={tile.tile}
+        lifted
+      />
+    </ShortcutTile>
+  );
   const noun = kind === 'apps' ? 'Apps' : 'Workflows';
   return (
     <ScrollScreen
@@ -182,37 +210,23 @@ export function ResourcesScreen({
                     gap={tile.gap}
                     render={(item, tileWidth) => (
                       <View style={{ width: tileWidth, paddingBottom: 12 }}>
-                        <ShortcutTile
-                          width={tileWidth}
-                          label={item.name}
-                          accessibilityLabel={
-                            section.kind === 'apps'
-                              ? item.status === 'draft'
-                                ? `${item.name}, not deployed yet`
-                                : item.name
-                              : `${item.name}, workflow`
-                          }
-                          accessibilityHint={
-                            section.kind === 'apps'
-                              ? 'Touch and hold for App details'
-                              : undefined
-                          }
-                          onPress={() => open(item, section.kind)}
-                          onLongPress={
-                            section.kind === 'apps'
-                              ? () => askDetails(item)
-                              : undefined
-                          }
-                        >
-                          <AppTile
-                            name={item.name}
-                            seed={item.id}
-                            iconPath={item.iconPath}
-                            workflow={section.kind === 'workflows'}
-                            size={tile.tile}
-                            lifted
-                          />
-                        </ShortcutTile>
+                        {section.kind === 'apps' ? (
+                          <TileMenu
+                            actions={[
+                              {
+                                label: 'App details',
+                                glyph: 'info',
+                                onPress: () => details(item),
+                              },
+                            ]}
+                          >
+                            {(onLongPress) =>
+                              tileOf(item, 'apps', tileWidth, onLongPress)
+                            }
+                          </TileMenu>
+                        ) : (
+                          tileOf(item, 'workflows', tileWidth)
+                        )}
                       </View>
                     )}
                   />

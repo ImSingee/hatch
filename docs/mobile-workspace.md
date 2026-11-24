@@ -52,11 +52,18 @@ described above: one tile per pin, keyed by pin `id`, opening the App at the
 pin's `entryHash`. Apps shows every App and Workflow in the same kind of grid.
 A tile on Home or in Apps opens the App directly; an App never deployed
 (`draft`) has nothing to open, so its tile in Apps opens the App page.
-Touching and holding an App tile in Apps offers the App page.
+Touching and holding an App tile opens a menu with the App page ("App
+details"); on Home it also offers to unpin. On iOS this is the system context
+menu, on Android a menu anchored to the tile.
 
 With room for two columns (an unfolded iPhone Duo, landscape), Home puts the
 widgets in the leading column and the pins in the trailing one, and Agent shows
 the list beside the conversation. Columns split on the fold when there is one.
+
+On an iPhone Duo, folded or open, the system moves navigation bar items to a
+vertical bar on the side. An open App then shows no top bar: back and reload
+sit on the vertical bar and the App takes the full height. The app reads this
+from UIKit's `verticalBarEdge` trait (iOS 27.1 SDK and later).
 
 The app runs natively on iPad. Wide screens (iPad, an unfolded Duo) get the
 same two-column layouts; pages that stay one column (sign-in, an App or
@@ -89,8 +96,8 @@ Icons are kept in memory only.
 
 The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
 (`ifAbsent`), `UnpinApp` (by pin id) and `SetWorkflowPinned`. An "Add" tile
-after each grid opens a picker of what is not pinned yet; touching and holding
-a tile offers to unpin it. Pins are shared by every client, so a change
+after each grid opens a picker of what is not pinned yet; a tile's
+touch-and-hold menu unpins it at once, since pinning again undoes it. Pins are shared by every client, so a change
 re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
 offered on the phone yet (`ReorderAppPins` exists).
 

@@ -38,6 +38,8 @@ export const glyphs = {
   trash: 'trash',
   edit: 'pencil',
   pause: 'pause.fill',
+  info: 'info.circle',
+  pinSlash: 'pin.slash',
 } as const;
 
 export type GlyphName = keyof typeof glyphs;

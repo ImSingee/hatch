@@ -1,13 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSession } from '../state/session';
 import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
@@ -23,6 +17,7 @@ import {
   pageScrollProps,
 } from '../ui/screen';
 import { Text, type } from '../ui/text';
+import { TileMenu } from '../ui/tile-menu';
 import {
   DashboardNotices,
   DashboardPager,
@@ -100,18 +95,13 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
         : api!.setWorkflowPinned(target.workflowId, false, lifetime()),
     onSettled: changed,
   });
-  const askUnpin = (
-    name: string,
-    target: { pinId: string } | { workflowId: string },
-  ) =>
-    Alert.alert(`Unpin ${name}?`, 'It stays in Apps and can be pinned again.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Unpin',
-        style: 'destructive',
-        onPress: () => unpin.mutate(target),
-      },
-    ]);
+  // Unpinning is undone by pinning again, so the menu item acts at once.
+  const unpinAction = (target: { pinId: string } | { workflowId: string }) => ({
+    label: 'Unpin from Home',
+    glyph: 'pinSlash' as const,
+    destructive: true,
+    onPress: () => unpin.mutate(target),
+  });
   const pending = pinned.isPending;
   const failure = pinned.error ?? unpin.error;
   // Dated by the last read of the workspace, so the greeting follows the
@@ -241,38 +231,55 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
               const app = appById.get(pin.appId);
               return (
                 <View style={{ width: tileWidth, paddingBottom: 12 }}>
-                  <ShortcutTile
-                    width={tileWidth}
-                    label={pin.label}
-                    accessibilityLabel={[
-                      pin.label,
-                      app && app.name !== pin.label ? app.name : null,
-                      pin.entryHash ? `opens at ${pin.entryHash}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                    accessibilityHint="Touch and hold to unpin"
-                    onLongPress={() => askUnpin(pin.label, { pinId: pin.id })}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/apps/[id]',
-                        params: {
-                          id: pin.appId,
-                          slug: pin.appSlug,
-                          entryHash: pin.entryHash,
-                          label: pin.label,
-                        },
-                      })
-                    }
+                  <TileMenu
+                    actions={[
+                      {
+                        label: 'App details',
+                        glyph: 'info',
+                        onPress: () =>
+                          router.push({
+                            pathname: '/manage/[id]',
+                            params: { id: pin.appId, slug: pin.appSlug },
+                          }),
+                      },
+                      unpinAction({ pinId: pin.id }),
+                    ]}
                   >
-                    <AppTile
-                      name={app?.name ?? pin.label}
-                      seed={pin.appId}
-                      iconPath={app?.iconPath}
-                      size={tile.tile}
-                      lifted
-                    />
-                  </ShortcutTile>
+                    {(onLongPress) => (
+                      <ShortcutTile
+                        width={tileWidth}
+                        label={pin.label}
+                        accessibilityLabel={[
+                          pin.label,
+                          app && app.name !== pin.label ? app.name : null,
+                          pin.entryHash ? `opens at ${pin.entryHash}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(', ')}
+                        accessibilityHint="Touch and hold for App details or to unpin"
+                        onLongPress={onLongPress}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/apps/[id]',
+                            params: {
+                              id: pin.appId,
+                              slug: pin.appSlug,
+                              entryHash: pin.entryHash,
+                              label: pin.label,
+                            },
+                          })
+                        }
+                      >
+                        <AppTile
+                          name={app?.name ?? pin.label}
+                          seed={pin.appId}
+                          iconPath={app?.iconPath}
+                          size={tile.tile}
+                          lifted
+                        />
+                      </ShortcutTile>
+                    )}
+                  </TileMenu>
                 </View>
               );
             }}
@@ -286,29 +293,31 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
             render={({ item }, tileWidth) => (
               <View style={{ width: tileWidth, paddingBottom: 12 }}>
                 {item ? (
-                  <ShortcutTile
-                    width={tileWidth}
-                    label={item.name}
-                    accessibilityLabel={`${item.name}, workflow`}
-                    accessibilityHint="Touch and hold to unpin"
-                    onLongPress={() =>
-                      askUnpin(item.name, { workflowId: item.id })
-                    }
-                    onPress={() =>
-                      router.push({
-                        pathname: '/workflows/[id]',
-                        params: { id: item.id },
-                      })
-                    }
-                  >
-                    <AppTile
-                      name={item.name}
-                      seed={item.id}
-                      size={tile.tile}
-                      workflow
-                      lifted
-                    />
-                  </ShortcutTile>
+                  <TileMenu actions={[unpinAction({ workflowId: item.id })]}>
+                    {(onLongPress) => (
+                      <ShortcutTile
+                        width={tileWidth}
+                        label={item.name}
+                        accessibilityLabel={`${item.name}, workflow`}
+                        accessibilityHint="Touch and hold to unpin"
+                        onLongPress={onLongPress}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/workflows/[id]',
+                            params: { id: item.id },
+                          })
+                        }
+                      >
+                        <AppTile
+                          name={item.name}
+                          seed={item.id}
+                          size={tile.tile}
+                          workflow
+                          lifted
+                        />
+                      </ShortcutTile>
+                    )}
+                  </TileMenu>
                 ) : (
                   <ShortcutTile
                     muted
