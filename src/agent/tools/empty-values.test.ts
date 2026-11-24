@@ -1,7 +1,8 @@
-import { validateToolArguments } from '@earendil-works/pi-ai';
+import { validateToolArguments, type JsonObject } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlatformClient } from '../platform-client';
 import { createAppTools } from './apps';
+import { createWebTools } from './web';
 
 describe('optional tool empty values', () => {
   it.each([null, '', [], {}, 0])(
@@ -121,7 +122,7 @@ describe('optional tool empty values', () => {
             type: 'toolCall',
             id: 'schema',
             name: tool.name,
-            arguments: filled,
+            arguments: filled as unknown as JsonObject,
           }),
         ).not.toThrow();
         const prepared = tool.prepareArguments!(filled) as Record<
@@ -134,7 +135,7 @@ describe('optional tool empty values', () => {
             type: 'toolCall',
             id: 'filled',
             name: tool.name,
-            arguments: prepared,
+            arguments: prepared as JsonObject,
           }),
         );
         expect(calls.mock.lastCall).toEqual(omittedCall);
@@ -169,7 +170,7 @@ describe('optional tool empty values', () => {
         type: 'toolCall',
         id: 'valid',
         name: data.name,
-        arguments: data.prepareArguments!(args) as Record<string, unknown>,
+        arguments: data.prepareArguments!(args) as JsonObject,
       }),
     );
     expect(queryAppDataTable.mock.lastCall?.[1]).toEqual({
@@ -326,4 +327,52 @@ describe('optional tool empty values', () => {
       expect(queryAppDataTable).not.toHaveBeenCalled();
     },
   );
+
+  const coercionTools = () => [
+    ...createAppTools({ platform: {} as PlatformClient }),
+    ...createWebTools({ fetchImpl: vi.fn<typeof fetch>() }),
+  ];
+  // The agent loop: the tool's argument boundary, then pi's validation.
+  const prepareAndValidate = (name: string, args: Record<string, unknown>) => {
+    const tool = coercionTools().find((t) => t.name === name)!;
+    return validateToolArguments(tool, {
+      type: 'toolCall',
+      id: name,
+      name,
+      arguments: tool.prepareArguments!(args) as JsonObject,
+    });
+  };
+
+  it.each([
+    // Required data: null would become the string "null" or the number 0.
+    ['create_app', { slug: null, name: 'Todo' }],
+    ['rollback_app', { id: 'sample-app', version: null }],
+    // Non-numeric strings would become 0 or 1.
+    ['rollback_app', { id: 'sample-app', version: '' }],
+    ['rollback_app', { id: 'sample-app', version: '   ' }],
+    ['rollback_app', { id: 'sample-app', version: 'true' }],
+    // Only "true"/"false" are boolean spellings.
+    ['checkout_app', { id: 'sample-app', clone: '0' }],
+    // A blank optional string would become the numeric empty placeholder.
+    ['web_fetch', { url: 'https://example.com', query: '   ' }],
+  ])(
+    'rejects %s arguments pi-ai would coerce into different valid data: %j',
+    (name, args) => {
+      expect(() => prepareAndValidate(name, args)).toThrow(
+        /Invalid tool argument/,
+      );
+    },
+  );
+
+  it('keeps the coercions a model means', () => {
+    expect(
+      prepareAndValidate('rollback_app', { id: 'sample-app', version: '5' }),
+    ).toEqual({ id: 'sample-app', version: 5 });
+    expect(
+      prepareAndValidate('checkout_app', { id: 'sample-app', clone: 'true' }),
+    ).toEqual({ id: 'sample-app', clone: true });
+    expect(prepareAndValidate('create_app', { slug: 'todo', name: 7 })).toEqual(
+      { slug: 'todo', name: '7' },
+    );
+  });
 });
