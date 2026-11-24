@@ -1,6 +1,7 @@
 import { Text } from '@mantine/core';
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
+import { useI18n } from '~i18n';
 import { Brand } from './brand';
 import { DeskGround } from './desk-ground';
 import bar from './menu-bar.module.css';
@@ -19,6 +20,7 @@ export function DeskStandalone({
   /** `start` keeps a tall or growing column anchored below the bar. */
   align?: 'center' | 'start';
 }) {
+  const { locale } = useI18n();
   return (
     <DeskGround className={classes.root}>
       <header
@@ -31,7 +33,11 @@ export function DeskStandalone({
           <Brand size="xs" />
         </span>
         <Text component="span" className={classes.date}>
-          {dayjs().format('ddd, MMM D')}
+          {new Intl.DateTimeFormat(locale, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          }).format(dayjs().toDate())}
         </Text>
       </header>
       <div className={classes.scroll}>

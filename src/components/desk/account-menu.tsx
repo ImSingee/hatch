@@ -17,7 +17,7 @@ export function AccountMenu() {
   const { t } = useI18n();
   const { signOut, leaving } = useSignOut();
   const { data } = authClient.useSession();
-  const email = data?.user.email ?? 'account';
+  const email = data?.user.email ?? t('nav.accountFallbackEmail');
   const name = data?.user.name || email;
 
   return (

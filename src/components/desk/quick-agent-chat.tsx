@@ -22,7 +22,7 @@ import {
 } from '~components/agent/model-value';
 import { createEmptyAgentSession } from '~components/agent/new-chat-api';
 import { startAgentRunRequest } from '~components/agent/use-agent-stream';
-import { useI18n } from '~i18n';
+import { translateError, useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import classes from './quick-agent-chat.module.css';
@@ -78,9 +78,7 @@ export function QuickAgentChat() {
       await navigate({ to: '/agent/$threadId', params: { threadId: id } });
       return true;
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t('quickChat.startFailed'),
-      );
+      toast.error(translateError(t, locale, error, 'quickChat.startFailed'));
       setStarting(false);
       return false;
     }

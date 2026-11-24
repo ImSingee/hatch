@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { useI18n } from '~i18n';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
 import classes from './menu-bar.module.css';
 
@@ -9,6 +10,7 @@ import classes from './menu-bar.module.css';
  * Runner status page, which explains the state in full.
  */
 export function RunnerStatus() {
+  const { t } = useI18n();
   const { data } = useQuery({
     ...agentRunnerStatusQueryOptions,
     // The status page polls every few seconds; the warning only needs to
@@ -20,10 +22,10 @@ export function RunnerStatus() {
     <Link
       to="/settings/agent-runner"
       className={`${classes.item} ${classes.runner}`}
-      aria-label="Runner offline. Open Agent Runner status"
+      aria-label={t('nav.runnerOfflineLink')}
     >
       <span className={classes.runnerDot} aria-hidden />
-      <span className={classes.runnerLabel}>Runner offline</span>
+      <span className={classes.runnerLabel}>{t('desktop.runnerOffline')}</span>
     </Link>
   );
 }

@@ -5,6 +5,7 @@ import {
   IconSparkles,
   IconUser,
 } from '@tabler/icons-react';
+import { useI18n } from '~i18n';
 import { DESK_HOME } from './paths';
 import classes from './tab-bar.module.css';
 
@@ -13,12 +14,13 @@ import classes from './tab-bar.module.css';
  * Apps lists every App, pinned ones marked.
  */
 export function TabBar() {
+  const { t } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const current = (to: string) =>
     pathname === to || pathname.startsWith(`${to}/`) ? 'page' : undefined;
 
   return (
-    <nav aria-label="Tabs" className={classes.bar}>
+    <nav aria-label={t('nav.tabs')} className={classes.bar}>
       <Link
         to={DESK_HOME}
         className={classes.tab}
@@ -27,15 +29,15 @@ export function TabBar() {
         <span className={classes.icon}>
           <IconHome size={22} stroke={2} aria-hidden />
         </span>
-        Desk
+        {t('nav.desk')}
       </Link>
       <Link to="/apps" className={classes.tab} aria-current={current('/apps')}>
         <span className={classes.icon}>
           <IconLayoutGrid size={22} stroke={2} aria-hidden />
         </span>
-        Apps
+        {t('nav.apps')}
       </Link>
-      <Link to="/agent" className={classes.tab} aria-label="Agent">
+      <Link to="/agent" className={classes.tab} aria-label={t('nav.agent')}>
         <span className={classes.agent}>
           <IconSparkles size={24} stroke={2} aria-hidden />
         </span>
@@ -48,7 +50,7 @@ export function TabBar() {
         <span className={classes.icon}>
           <IconUser size={22} stroke={2} aria-hidden />
         </span>
-        Me
+        {t('nav.me')}
       </Link>
     </nav>
   );
