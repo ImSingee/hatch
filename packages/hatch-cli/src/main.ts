@@ -1,6 +1,7 @@
 import manifest from '../package.json' with { type: 'json' };
 import { buildInfo } from '../../../src/build-info';
 import { commandDefinitions, globalOptions } from './commands';
+import { helpFor, helpText, namesGroup, resolveHelpScope } from './help';
 import { runAuth } from './auth';
 import { runLifecycle } from './lifecycle';
 import { runGitCredential } from './git-credential';
@@ -50,9 +51,14 @@ try {
   const offset = commandOffset();
   const name = args[offset];
   const operation = args[offset + 1];
-  const help = !name || name === 'help' || args.includes('--help');
+  // A bare group such as `hatch auth` lists its commands, like --help.
+  const showHelp =
+    !name ||
+    name === 'help' ||
+    args.includes('--help') ||
+    namesGroup(args.slice(offset));
   if (
-    !help &&
+    !showHelp &&
     !['version', '--version'].includes(name) &&
     !commandDefinitions.some((definition) =>
       definition.path.every((part, index) => args[offset + index] === part),
@@ -62,44 +68,23 @@ try {
   // Every online command accepts Run credentials; only help and version are
   // offline.
   // Reject bad arguments before a Run credential refresh can mask them.
-  if (!help && name === 'preferences') parsePreferencesCommand(args, offset);
-  if (!help && !['version', '--version'].includes(name))
+  if (!showHelp && name === 'preferences')
+    parsePreferencesCommand(args, offset);
+  if (!showHelp && !['version', '--version'].includes(name))
     await refreshRunEnvironment(process.env, controller.signal);
-  if (help) {
-    const scope =
-      name === 'help'
-        ? args.slice(offset + 1).filter((part) => !part.startsWith('--'))
-        : name && name !== '--help'
-          ? [
-              name,
-              ...(operation && !operation.startsWith('--') ? [operation] : []),
-              ...([
-                'invoke',
-                'backend',
-                'icon',
-                'kv',
-                'data-table',
-                'db',
-                'destination',
-                'webhook',
-                'group',
-                'route',
-                'channel',
-              ].includes(operation) &&
-              args[offset + 2] &&
-              !args[offset + 2].startsWith('--')
-                ? [args[offset + 2]]
-                : []),
-            ]
-          : [];
-    const commands = commandDefinitions.filter((definition) =>
-      scope.every((part, index) => definition.path[index] === part),
-    );
-    if (!commands.length)
-      throw new CliError('unknown_command', 'Unknown command. Use hatch help.');
+  if (showHelp) {
+    const words = args.slice(offset + (name === 'help' ? 1 : 0));
+    const help = helpFor(name === '--help' ? [] : resolveHelpScope(words));
     output(
-      { name: 'hatch', version: manifest.version, commands, globalOptions },
-      `Hatch CLI ${manifest.version}\n\n${commands.map((definition) => `${definition.usage}\n  ${definition.description}`).join('\n')}\n\nGlobals: ${globalOptions.join(', ')}`,
+      {
+        name: 'hatch',
+        version: manifest.version,
+        scope: help.scope,
+        commands: help.commands,
+        groups: help.groups,
+        globalOptions,
+      },
+      helpText(manifest.version, help),
     );
   } else if (name === 'version' || name === '--version') {
     if (args.some((arg) => !['version', '--version', '--json'].includes(arg)))
@@ -144,11 +129,7 @@ try {
   else if (name === 'preferences')
     await runPreferences(args, offset, controller.signal);
   else
-    throw new CliError(
-      'unknown_command',
-      'Unknown command. Use hatch help.',
-      2,
-    );
+    throw new CliError('unknown_command', 'Unknown command. Use hatch help.');
 } catch (error) {
   const known = publicError(error);
   const secrets = [
