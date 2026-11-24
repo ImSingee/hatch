@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { NodeExecutionEnv } from './node-execution-env';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EditFileDetails } from './edit-file-details';
 import type { PlatformClient } from './platform-client';

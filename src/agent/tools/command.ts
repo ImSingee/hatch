@@ -1,6 +1,7 @@
 /** The run_command shell tool with bounded, throttled live output. */
 import { Type } from '@earendil-works/pi-ai';
-import type { AgentTool, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { ExecutionEnv } from '../execution-env';
 import type {
   CommandCredentials,
   CommandCredentialEnvironment,
