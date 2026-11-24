@@ -27,12 +27,21 @@ describe('Agent system prompt skills', () => {
     expect(prompt).toContain('not deployed');
   });
 
-  it('requires the building Skill before platform tools or source edits', () => {
+  it('requires the building Skill before CLI lifecycle commands or source edits', () => {
     const prompt = buildSystemPrompt(appUrl);
 
-    expect(prompt).toMatch(/read the full.*`read_file` before calling/i);
-    expect(prompt).toMatch(/platform tools or editing/i);
+    expect(prompt).toMatch(/read the full.*`read_file` before running/i);
+    expect(prompt).toMatch(/release commands .* or editing/i);
     expect(prompt).toContain('`building-apps`');
+  });
+
+  it('directs platform operations to the preauthenticated CLI', () => {
+    const prompt = buildSystemPrompt(appUrl);
+
+    expect(prompt).toContain('`hatch` CLI through `run_command`');
+    expect(prompt).toMatch(/never log in, create keys, or pass credentials/);
+    expect(prompt).toContain('`hatch help <command>`');
+    expect(prompt).toContain('`outcome_unknown`');
   });
 
   it('identifies the current APP_URL', () => {
@@ -62,7 +71,7 @@ describe('Agent system prompt skills', () => {
     const prompt = buildSystemPrompt(appUrl);
 
     expect(prompt).toContain('@APP{name="..." id="..." slug="..."}');
-    expect(prompt).toContain('Use its stable id with App tools');
+    expect(prompt).toMatch(/stable id with `hatch app`\s+commands/);
     expect(prompt).toContain('supplies context');
     expect(prompt).toMatch(/does not by itself require modifying,\s+deploying/);
   });

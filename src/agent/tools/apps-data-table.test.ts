@@ -280,8 +280,8 @@ describe('query_app_data_table', () => {
     expect(query.description).not.toMatch(/total|whole[- ]call/i);
 
     const prompt = buildSystemPrompt('https://example.test');
-    expect(prompt).toMatch(/query_app_data_table/);
-    expect(prompt).toMatch(/raw_sql.*dangerous last resort/is);
+    expect(prompt).toMatch(/hatch app data-table inspect/);
+    expect(prompt).toMatch(/hatch app data-table sql.*dangerous last resort/is);
     expect(prompt).toMatch(/never use it for DDL/is);
     expect(prompt).toMatch(/does not enforce that SQL rule/is);
   });

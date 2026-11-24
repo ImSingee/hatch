@@ -2,7 +2,8 @@
 
 The installed `hatch` command automatically uses the executing Run's full public
 business authority at Connect RPC `/api/rpc`. It needs no login or profile. The
-existing App and Workflow tools remain available. This introduces no new scopes,
+existing App tools remain available, but the Agent prompt and
+Skills direct the Agent to the CLI. This introduces no new scopes,
 ACL, App/Workflow compatibility contract, or public business endpoint.
 
 ## Configuration and network

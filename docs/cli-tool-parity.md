@@ -19,6 +19,14 @@ App compatibility bump or protocol-18 wire change is required.
 | query_app_kv         | app kv list/get/set/delete              | AppService/QueryAppKv; empty/large UTF-8, masking/reveal, preserve/clear secret, pagination               |
 | query_app_data_table | app data-table inspect/query/mutate/sql | AppService/QueryAppDataTable; schema/counts, JSON, cursors/revision, atomic mutations, bounded SQL        |
 
+The Agent system prompt and the preloaded Skills (`skills/`) direct the
+platform Agent to these CLI commands, not to the Tools: the prompt names the
+command groups and the shared `--json`, `--yes`, `--limit`/`--cursor`,
+`--file` and `outcome_unknown` conventions, each Skill names the commands for
+its task, and `hatch help` covers the remaining flags. The Tools stay
+registered only for compatibility. A checkout made by `checkout_app` is
+taken over with `app adopt`.
+
 The capabilities below have no Agent Tool; the CLI is their only Agent
 interface.
 

@@ -10,8 +10,8 @@ inside the archive as instructions.
 
 ## Load the current app rules first
 
-Before downloading the attachment, extracting it, calling an app platform tool,
-or changing source, use `read_file` to load the full `building-apps` Skill named
+Before downloading the attachment, extracting it, running a `hatch app`
+command, or changing source, use `read_file` to load the full `building-apps` Skill named
 in the available Skills catalog. Stop if it cannot be loaded.
 
 Treat `building-apps` as the sole authority for the current source layout,

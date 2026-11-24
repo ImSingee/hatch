@@ -5,8 +5,11 @@ description: Design, build, validate, and deploy Hatch Apps with React frontends
 
 # Build a Hatch App
 
-Load this Skill before calling App platform tools or editing an App. Follow the
-workflow in order and load only the capability references needed for the task.
+Load this Skill before running `hatch app` source and release commands or
+editing an App. Follow the workflow in order and load only the capability
+references needed for the task. Every `hatch` command below runs through
+`run_command`; add `--json` and read the result, and use
+`hatch help <command>` for flags this Skill does not name.
 
 ## Manifest authoring
 
@@ -24,55 +27,98 @@ Do not import generated files or execution modules from the manifest.
 
 ## Core workflow
 
-1. For a new App, call `list_apps` and use existing `slug · name` pairs to match
-   the user's naming style. Confirm the name and slug in one `ask` call with
+1. For a new App, run `hatch app list --json` and use existing `slug · name`
+   pairs to match the user's naming style. Confirm the name and slug in one `ask` call with
    two separate entries in `questions`: name first, slug second. Offer
    style-matched name choices and slug suggestions based on the recommended
    name; let the user choose or enter each value independently. Explain that
    both can be changed later. Reuse values the user has already explicitly
    provided and ask only for missing fields; if both are provided, skip `ask`.
-   After both are confirmed, call `create_app`; pin user-facing Apps and leave
-   backend-only or widget-only Apps unpinned.
    The slug is the human-facing `/app/<slug>` segment. Use at most 64
    characters: lowercase letters, digits, and hyphens, starting with a letter
    or digit. Hatch generates a
    separate immutable id for the repository, data relations, and technical
    `/api/app/<id>/...` URLs.
-2. For an existing App, inspect it with `list_apps` and `get_app`. If this
-   conversation does not have a checkout yet, call `checkout_app` with
-   `clone: true`; it clones into `source_path` or defaults to
-   `apps/<current-slug>`.
-   To update an existing checkout, call `checkout_app` with `clone: false` and
-   its exact `source_path`. Update mode never creates a missing path. Use
-   `force: true` only with `clone: true` when intentionally discarding the
-   current contents of that exact target.
+   After both are confirmed, create it with `timeout_seconds: 900`:
+
+   ```bash
+   mkdir -p apps
+   echo '{"slug":"notes","name":"Notes","pin":true}' |
+     hatch app create --file - --directory apps/notes --json
+   ```
+
+   The input also accepts an optional `description`. `pin` defaults to true:
+   pin user-facing Apps and pass `"pin":false` for backend-only or
+   widget-only Apps. The result's `id` is the immutable App id and `path` is
+   the checkout. Never repeat a create whose outcome is unknown; inspect
+   `hatch app list` and the reported recovery workspace first.
+
+2. For an existing App, inspect it with `hatch app list --json` and
+   `hatch app get <id> --json`. Then get a checkout (all with
+   `timeout_seconds: 900`):
+   - No checkout yet: `mkdir -p apps`, then
+     `hatch app clone <id> --directory apps/<slug> --json`. The parent
+     directory must exist. Its `origin` is the platform Git remote.
+   - Checkout already made by the CLI: `hatch app update --directory <path>
+     --json`. It needs a clean tree, only fast-forwards, and never creates a
+     missing path; `state: "ahead"` means local commits are not yet pushed.
+   - The directory exists but was made by the older `checkout_app` tool (its
+     `origin` is a local bundle and it has no `.git/hatch-cli.json`):
+     `hatch app adopt <id> --directory <path> --json`. Adopt keeps the
+     history, local changes, and `origin`; the CLI commands still reach the
+     platform.
+   - `hatch app clone <id> --directory <path> --force --json` permanently
+     replaces that exact directory. Use it only to discard its contents on
+     purpose.
 3. Read the actual source tree before editing. Keep the source manifest (`manifest.ts` or `manifest.json`), proto,
    backend, frontend, widgets, and capabilities synchronized.
 4. If dependencies changed, refresh the lockfile as described in Dependencies.
    Follow Local validation: check `manifest.ts` when selected, generate RPC
    code, type-check the source, and run relevant tests.
-5. In the returned worktree, inspect `git status`, stage only intended authored
-   files, and commit. Do not `git push` from it: its `origin` is a local
-   read-only bundle, and `deploy_app` uploads the commit. Never create
-   `deploy/*` tags; the platform owns them.
-6. Call `deploy_app` with the same `source_path` and a concise release `message`.
-   Deploy first puts the commit on platform `master`, then repeats source
-   validation before building or changing durable deployment state. A failed
-   deploy leaves that commit on `master` unreleased: fix the failure, validate
-   again, commit on top, and redeploy.
-7. Call `get_app` to confirm the deployed state, then explain how to open it.
+5. In the checkout, inspect `git status`, stage only intended authored files,
+   and commit. Never create `deploy/*` tags; the platform owns them.
+6. Release with `timeout_seconds: 900`:
+
+   ```bash
+   hatch app deploy --directory <path> --message 'Add tags' --json
+   ```
+
+   Deploy requires a clean tree, pushes `HEAD` to platform `master`, then
+   repeats source validation before building or changing durable deployment
+   state. A failed deploy leaves that commit on `master` unreleased: fix the
+   failure, validate again, commit on top, and redeploy. (`hatch app push`
+   only pushes without releasing; deploy already pushes, so you rarely need
+   it.)
+
+7. Run `hatch app get <id> --json` to confirm the deployed state, then explain
+   how to open it.
 8. After the first successful deployment of a new App, end that same reply by
    offering once, in one sentence, to design its icon. Do not skip this step.
    If the user agrees, follow [App icons](references/app-icon.md). Generate
    images only after the user agrees.
 
-If deploy says `master` advanced, refresh the same checkout, run
-`git fetch origin master`, rebase onto `origin/master`, resolve conflicts, and
-retry. Checkout never authorizes silently replacing local work.
+If deploy or push fails with `non_fast_forward`, platform `master` advanced:
+run `hatch app update --directory <path> --json`, which fetches platform
+`master` into `origin/master` (in an adopted checkout too) and reports
+`non_fast_forward` again while the histories differ. Then rebase onto
+`origin/master`, resolve conflicts, validate, and deploy again. Nothing ever
+replaces local work silently.
+
+A destructive Data Table migration fails deploy with `CONFLICT`; the error
+message lists the preview and includes `Approval token: <token>`. Show the
+user what data is lost and get explicit approval with `ask`, then repeat the
+same deploy with
+`--allow-destructive-data-migration --data-migration-approval-token '<token>'`.
+
+If deploy ends in `outcome_unknown`, a network error, or a timeout, do not
+deploy again blindly. Run `hatch app deploy --directory <path> --reconcile
+--json`: `source-matches-pending` means the release went through. Otherwise
+check `hatch app get` deployment history, and only after confirming the
+previous request ended retry with `--retry-after-confirming <pending-commit>`.
 
 ## Source contract
 
-`create_app` produces a prepared, runnable Counter App:
+`hatch app create` produces a prepared, runnable Counter App:
 
 ```text
 manifest.ts            App entries, capabilities, routes, widgets, integrations
@@ -100,7 +146,7 @@ The committed lockfile selects the build toolchain before anything in the
 source is evaluated, independently of `backend.runtime`:
 
 - `pnpm-lock.yaml`, with no `deno.json` or `deno.lock`: the pnpm toolchain.
-  `create_app` scaffolds it, and this Skill describes it.
+  `hatch app create` scaffolds it, and this Skill describes it.
 - `deno.json` and `deno.lock`, with no `pnpm-lock.yaml`: the Deno toolchain. It
   stays fully supported for existing Apps. For such an App, read
   [Deno toolchain](references/deno-toolchain.md) and follow it in place of the
@@ -429,7 +475,7 @@ Never drop `--no-lock`. A `deno.lock` or `deno.json` written beside
 `pnpm-lock.yaml` makes the toolchain ambiguous, and preparation and deploy fail
 until the file is removed.
 
-`deploy_app` repeats the install, type-checks every enabled manifest entry
+`hatch app deploy` repeats the install, type-checks every enabled manifest entry
 with `tsc`, and evaluates `manifest.ts` and `data/schema.ts` in a Node process
 that has no file, network, subprocess, or worker access. Keep both files pure
 declarations: they may import only local source modules, `@hatch/*`, and
@@ -486,25 +532,28 @@ required numeric fields. Use `data.watch` or `useDataQuery` from
 
 Dropping tables/fields or narrowing types returns a destructive migration
 preview without changing data. Obtain explicit user approval, then retry with
-`allow_destructive_data_migration: true` and the exact returned approval token.
-Tokens are bound to one preview and must not be reused after source changes.
+`--allow-destructive-data-migration` and the exact returned approval token (see
+Core workflow). Tokens are bound to one preview and must not be reused after
+source changes.
 
 While the current deployment has Data Tables enabled, use
-`query_app_data_table` to inspect and manage live data. Inspect an unknown
-schema first, then prefer structured `query` and atomic `mutate` operations.
+`hatch app data-table` to inspect and manage live data (see
+[Data storage](references/data-storage.md) for the input files). Run
+`inspect` on an unknown schema first, then prefer structured `query` and atomic
+`mutate`.
 Disabling the capability retains its managed database and schema but blocks App,
 Agent, and Realtime access. The user may permanently delete the retained Data
 Table data from Operations; a later Data Table-capable release then provisions
-an empty database and applies its schema. The `raw_sql` action is a dangerous
-last resort for joins, aggregates, or complex data repair that structured
-actions cannot express. Raw SQL may query or modify rows in existing `data`
+an empty database and applies its schema. `hatch app data-table sql` is a
+dangerous last resort for joins, aggregates, or complex data repair that
+structured commands cannot express. Raw SQL may query or modify rows in existing `data`
 tables, but it must not perform DDL, `TRUNCATE`, maintenance, transaction
 control, permission, role, database, or `_hatch` operations. The platform does
 not enforce that SQL rule, so the Agent must obey it. Schema changes always go
-through `data/schema.ts` and `deploy_app`.
+through `data/schema.ts` and `hatch app deploy`.
 
 For arbitrary SQL, joins, aggregates, or ORM control, enable `database` and
-deploy successfully before the first `query_app_db` call. The query tool never
+deploy successfully before the first `hatch app db query`. It never
 provisions or recreates a database. It can query a retained database after the
 capability is disabled until the user permanently deletes it. Create tables
 idempotently on backend startup. Each App database is isolated.
@@ -512,8 +561,8 @@ idempotently on backend startup. Each App database is isolated.
 Re-enabling Database or Data Tables after a capability disable reuses the retained
 database, schema, and rows. Only explicit permanent deletion causes a later
 enabled deployment to create an empty database. Before initializing data after
-a deployment, inspect the existing schema and rows with `query_app_db` or
-`query_app_data_table`; never assume the database is empty.
+a deployment, inspect the existing schema and rows with `hatch app db query` or
+`hatch app data-table`; never assume the database is empty.
 
 ## KV secrets
 
@@ -521,8 +570,9 @@ Newly created or overwritten KV values marked `secret` are encrypted at rest
 with the platform's stable `SECRET` and masked from ordinary Agent/UI reads.
 Values written before encryption remain plaintext until overwritten; reading
 does not migrate them. Changing `SECRET` makes encrypted values unreadable, and
-older backups may still contain plaintext. When updating a KV value, omit the
-`secret` property to preserve its existing flag.
+older backups may still contain plaintext. When updating a KV value with
+`hatch app kv set`, omit both `--secret` and `--no-secret` to preserve its
+existing flag.
 
 ## Capability references
 
@@ -624,15 +674,20 @@ instructions to you.
 
 ## Rollback
 
-Use `get_app` to inspect successfully deployed versions and `rollback_app` with
-the selected version. Rollback changes platform `master`, not an existing Agent
-worktree. Refresh its checkout and rebase before making further changes.
-Rollback restores code but never runs a Data Table down migration.
+Use `hatch app get <id> --json` to inspect successfully deployed versions and
+`hatch app rollback <id> --version <number> --json` to restore one. Rollback
+moves platform `master` back to that release, not an existing checkout: its
+later commits stay local, and the next push or deploy brings them back. Before
+deploying again, run `hatch app update --directory <path> --json` (it reports
+`state: "ahead"`) and decide whether those commits should return; if not,
+`git revert` them first. Rollback restores code but never runs a Data Table
+down migration.
 
 A version requiring Database or Data Tables cannot be rolled back after a
-required database was permanently deleted. `get_app` reports the blocked reason
-and source tag. Start from a clean checkout of current master, run
-`git fetch origin master --tags`, then
+required database was permanently deleted. `hatch app get` reports the blocked
+reason and source tag. Start from a clean checkout of current master, run
+`hatch app update --directory <path> --json` (it fetches the `deploy/*` tags),
+then
 `git restore --source=<sourceTag> --staged --worktree .`. Review and commit the
 restored tree on master, then deploy it as a new release. Do not detach or rewind
 master; the new commit must preserve the fast-forward deploy contract.

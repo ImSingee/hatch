@@ -1,6 +1,6 @@
 ---
 name: app-compatibility
-description: Explain Hatch App deployment compatibility versions and guide handling of outdated or unsupported deployments. Use before explaining, updating, or redeploying when list_apps or get_app reports an older compatibility version, an App runtime is disabled by the platform minimum, an older deployment was restored, or the user asks about compatibility-version differences.
+description: Explain Hatch App deployment compatibility versions and guide handling of outdated or unsupported deployments. Use before explaining, updating, or redeploying when `hatch app list` or `hatch app get` reports an older compatibility version, an App runtime is disabled by the platform minimum, an older deployment was restored, or the user asks about compatibility-version differences.
 ---
 
 # App Compatibility
@@ -12,7 +12,7 @@ description: Explain Hatch App deployment compatibility versions and guide handl
   each deployment; the latter is the compatibility version set manually in
   the source manifest (`manifest.ts` or `manifest.json`).
 - Read the source compatibility version from the source manifest (`manifest.ts` or `manifest.json`), defaulting to `2`
-  when it is omitted; use `get_app` as the source of truth for the live
+  when it is omitted; use `hatch app get <id> --json` as the source of truth for the live
   deployment's compatibility version.
 
 ## Source format compatibility
@@ -152,8 +152,8 @@ only when the user asks.
    become a `package.json` dependency.
 
 7. Run the remaining Local validation from `building-apps`, commit
-   `package.json`, `pnpm-lock.yaml`, and the two deletions, and call
-   `deploy_app`.
+   `package.json`, `pnpm-lock.yaml`, and the two deletions, and run
+   `hatch app deploy`.
 
 Rollback to an earlier deployment keeps working: deployment artifacts do not
 record a toolchain. Rolling back restores the earlier source, including its
