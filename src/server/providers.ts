@@ -2,9 +2,16 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, schema } from '~/db';
-import type { ProviderApiType } from '~/db/schema';
+import type { AgentModelKind, ProviderApiType } from '~/db/schema';
 import { authMiddleware } from './auth';
 import { seedDefaultProviders } from '~agent/seed-providers';
+import { imageDriverFor } from './images/drivers';
+import {
+  assertApiTypeKeepsModels,
+  createProviderModel,
+  deleteProviderModel,
+  updateProviderModel,
+} from './provider-models';
 
 const apiTypeSchema = z.enum([
   'anthropic-messages',
@@ -14,8 +21,10 @@ const apiTypeSchema = z.enum([
 
 export type ProviderModel = {
   id: string;
+  kind: AgentModelKind;
   modelId: string;
   name: string;
+  description: string;
   reasoning: boolean;
   contextWindow: number;
   maxTokens: number;
@@ -30,6 +39,8 @@ export type ProviderWithModels = {
   baseUrl: string;
   enabled: boolean;
   sortOrder: number;
+  /** Image model ids to suggest; empty when the API cannot make images. */
+  imageModelSuggestions: string[];
   models: ProviderModel[];
 };
 
@@ -69,10 +80,15 @@ export const listProviders = createServerFn({ method: 'GET' })
         baseUrl: p.baseUrl,
         enabled: p.enabled,
         sortOrder: p.sortOrder,
+        imageModelSuggestions: [
+          ...(imageDriverFor(p.apiType)?.suggestedModels ?? []),
+        ],
         models: models.map((m) => ({
           id: m.id,
+          kind: m.kind,
           modelId: m.modelId,
           name: m.name,
+          description: m.description,
           reasoning: m.reasoning,
           contextWindow: m.contextWindow,
           maxTokens: m.maxTokens,
@@ -125,6 +141,8 @@ export const updateProvider = createServerFn({ method: 'POST' })
     updateProviderSchema.parse(data),
   )
   .handler(async ({ data }) => {
+    if (data.apiType !== undefined)
+      await assertApiTypeKeepsModels(data.id, data.apiType);
     const patch: Partial<typeof schema.agentProviders.$inferInsert> = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.apiType !== undefined) patch.apiType = data.apiType;
@@ -152,10 +170,15 @@ export const deleteProvider = createServerFn({ method: 'POST' })
     return { ok: true };
   });
 
+// A loose bound on the wire; the domain service enforces the real limit.
+const descriptionSchema = z.string().max(1000);
+
 const createModelSchema = z.object({
   providerId: z.string().min(1),
+  kind: z.enum(['chat', 'image']).default('chat'),
   modelId: z.string().min(1),
   name: z.string().min(1),
+  description: descriptionSchema.default(''),
   reasoning: z.boolean().default(false),
   contextWindow: z.number().int().positive().default(128000),
   maxTokens: z.number().int().positive().default(8192),
@@ -167,24 +190,16 @@ export const createModel = createServerFn({ method: 'POST' })
     createModelSchema.parse(data),
   )
   .handler(async ({ data }) => {
-    const [row] = await db
-      .insert(schema.agentModels)
-      .values({
-        providerId: data.providerId,
-        modelId: data.modelId.trim(),
-        name: data.name,
-        reasoning: data.reasoning,
-        contextWindow: data.contextWindow,
-        maxTokens: data.maxTokens,
-      })
-      .returning();
+    const row = await createProviderModel(data);
     return { id: row.id };
   });
 
 const updateModelSchema = z.object({
   id: z.string().min(1),
+  kind: z.enum(['chat', 'image']).optional(),
   modelId: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
+  description: descriptionSchema.optional(),
   reasoning: z.boolean().optional(),
   contextWindow: z.number().int().positive().optional(),
   maxTokens: z.number().int().positive().optional(),
@@ -196,18 +211,7 @@ export const updateModel = createServerFn({ method: 'POST' })
     updateModelSchema.parse(data),
   )
   .handler(async ({ data }) => {
-    const patch: Partial<typeof schema.agentModels.$inferInsert> = {};
-    if (data.modelId !== undefined) patch.modelId = data.modelId.trim();
-    if (data.name !== undefined) patch.name = data.name;
-    if (data.reasoning !== undefined) patch.reasoning = data.reasoning;
-    if (data.contextWindow !== undefined)
-      patch.contextWindow = data.contextWindow;
-    if (data.maxTokens !== undefined) patch.maxTokens = data.maxTokens;
-
-    await db
-      .update(schema.agentModels)
-      .set(patch)
-      .where(eq(schema.agentModels.id, data.id));
+    await updateProviderModel(data);
     return { ok: true };
   });
 
@@ -215,8 +219,6 @@ export const deleteModel = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((data: { id: string }) => z.object({ id: z.string() }).parse(data))
   .handler(async ({ data }) => {
-    await db
-      .delete(schema.agentModels)
-      .where(eq(schema.agentModels.id, data.id));
+    await deleteProviderModel(data.id);
     return { ok: true };
   });

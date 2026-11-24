@@ -11,7 +11,7 @@ export function useModelOptions() {
       .map((provider) => ({
         group: provider.name,
         items: provider.models
-          .filter((model) => model.enabled)
+          .filter((model) => model.enabled && model.kind === 'chat')
           .map((model) => ({
             value: `${provider.id}:${model.modelId}`,
             label: model.name,

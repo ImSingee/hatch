@@ -38,6 +38,7 @@ const fixtures = vi.hoisted(() => ({
       models: [
         {
           id: 'model-row-1',
+          kind: 'chat',
           modelId: 'model-1',
           name: 'Model',
           reasoning: false,

@@ -4,20 +4,29 @@ package hatch.platform.v1;
 
 import "buf/validate/validate.proto";
 
-// Image generation with the instance's single selected image model.
+// Image models and image generation. An image model is a provider model of
+// kind "image"; the instance may have several and a caller picks one per
+// generation.
 service ImageService {
-  rpc GetImageModel(GetImageModelRequest) returns (GetImageModelResponse);
-  rpc SetImageModel(SetImageModelRequest) returns (SetImageModelResponse);
-  rpc ClearImageModel(ClearImageModelRequest) returns (ClearImageModelResponse);
+  rpc ListImageModels(ListImageModelsRequest) returns (ListImageModelsResponse);
+  rpc CreateImageModel(CreateImageModelRequest) returns (CreateImageModelResponse);
+  rpc UpdateImageModel(UpdateImageModelRequest) returns (UpdateImageModelResponse);
+  rpc DeleteImageModel(DeleteImageModelRequest) returns (DeleteImageModelResponse);
   rpc GenerateImages(GenerateImagesRequest) returns (GenerateImagesResponse);
 }
 
-message SelectedImageModel {
-  string provider_id = 1;
-  string provider_name = 2;
-  string model_id = 3;
-  // False while the provider is disabled or has no API key.
-  bool usable = 4;
+message ImageModel {
+  // Image model id, taken by GenerateImages and the update calls.
+  string id = 1;
+  string provider_id = 2;
+  string provider_name = 3;
+  // Model id sent to the provider.
+  string model_id = 4;
+  string name = 5;
+  // What the model is good at; may be empty.
+  string description = 6;
+  // False while its provider is disabled or has no API key.
+  bool usable = 7;
 }
 
 // A configured provider whose wire API can generate images. Never a key.
@@ -25,23 +34,30 @@ message ImageProvider {
   string id = 1;
   string name = 2;
   bool enabled = 3;
-  // Suggestions only: any model id the provider accepts may be selected.
+  // Suggestions only: any model id the provider accepts may be used.
   repeated string suggested_models = 4;
 }
 
-message ImageModelState {
-  // Unset when no model is chosen or its provider no longer exists.
-  optional SelectedImageModel selected = 1;
-  repeated ImageProvider providers = 2;
+message ListImageModelsRequest {
+  // The next_cursor of the previous page.
+  optional string cursor = 1 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Image models per page; 0 returns every model.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
 }
 
-message GetImageModelRequest {}
-
-message GetImageModelResponse {
-  ImageModelState state = 1;
+message ListImageModelsResponse {
+  // Provider order, then each provider's model order.
+  repeated ImageModel models = 1;
+  // The model GenerateImages uses without image_model_id: the first usable
+  // one. Unset when none is usable.
+  optional string default_model_id = 2;
+  // Every provider that can hold image models, on each page.
+  repeated ImageProvider providers = 3;
+  // Set when more image models follow this page.
+  optional string next_cursor = 4;
 }
 
-message SetImageModelRequest {
+message CreateImageModelRequest {
   string provider_id = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 191
@@ -51,17 +67,48 @@ message SetImageModelRequest {
     max_len: 128
     pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
   }];
+  // Defaults to model_id.
+  optional string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  optional string description = 4 [(buf.validate.field).string.max_len = 200];
 }
 
-message SetImageModelResponse {
-  ImageModelState state = 1;
+message CreateImageModelResponse {
+  ImageModel model = 1;
 }
 
-message ClearImageModelRequest {}
-
-message ClearImageModelResponse {
-  ImageModelState state = 1;
+// Unset fields stay unchanged; an empty description clears it.
+message UpdateImageModelRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  optional string model_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+  }];
+  optional string name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  optional string description = 4 [(buf.validate.field).string.max_len = 200];
 }
+
+message UpdateImageModelResponse {
+  ImageModel model = 1;
+}
+
+message DeleteImageModelRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+
+message DeleteImageModelResponse {}
 
 message GenerateImagesRequest {
   string prompt = 1 [(buf.validate.field).string = {
@@ -84,6 +131,11 @@ message GenerateImagesRequest {
   // When set, each result must be a white glyph on black; the platform lays
   // it on a solid square tile of this colour with fixed margins.
   optional string glyph_tile = 4 [(buf.validate.field).string.pattern = "^#[0-9a-fA-F]{6}$"];
+  // Image model id from ListImageModels; the default model when unset.
+  optional string image_model_id = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
 }
 
 // A generated image kept for one day so the user can choose one.
@@ -94,6 +146,9 @@ message ImageCandidate {
 }
 
 message GenerateImagesResponse {
+  // Model id sent to the provider.
   string model_id = 1;
   repeated ImageCandidate candidates = 2;
+  // The image model that generated the candidates.
+  string image_model_id = 3;
 }

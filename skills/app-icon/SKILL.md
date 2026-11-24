@@ -1,6 +1,6 @@
 ---
 name: app-icon
-description: Design an App icon with the instance image model, let the user choose among candidates in chat, and set the chosen one. Use when the user asks for an App icon or logo, wants to change or remove one, or right after the first successful deployment of a new App.
+description: Design an App icon with one of the instance's image models, let the user choose among candidates in chat, and set the chosen one. Use when the user asks for an App icon or logo, wants to change or remove one, or right after the first successful deployment of a new App.
 ---
 
 # Design an App icon
@@ -29,9 +29,13 @@ Uploading a file the user supplies (`hatch app icon set <app> --file <path>`)
 and removing the icon (`hatch app icon clear <app>`) need no image model: run
 those commands directly. The steps below are for designing a new icon.
 
-1. Run `hatch image-model get --json`. If `selected` is null or
-   `selected.usable` is false, tell the user to choose an image model under
-   Settings → AI Providers (or with `hatch image-model set`) and stop.
+1. Run `hatch image-model list --json`. If no model has `usable: true`, tell
+   the user to add an image model to an OpenAI provider under Settings → AI
+   Providers (category Image) and stop. Otherwise pick the model whose
+   `name` and `description` best fit a crisp, simple line glyph, or the user's
+   stated preference; with no clear fit, use `defaultModelId`. Pass the
+   chosen `id` as `--model` to every generate command below so all
+   candidates come from the same model.
 2. Pick three different subjects and one colour (rules below) from the App's
    name and description. Use nothing else about the App or the user in the
    prompt. The candidates exist to offer a real choice, so each one needs its
@@ -43,9 +47,9 @@ those commands directly. The steps below are for designing a new icon.
    parallel:
 
    ```sh
-   hatch image generate --prompt-file icon-a.txt --glyph-tile '#3E63DD' --json
-   hatch image generate --prompt-file icon-b.txt --glyph-tile '#3E63DD' --json
-   hatch image generate --prompt-file icon-c.txt --glyph-tile '#3E63DD' --json
+   hatch image generate --model <id> --prompt-file icon-a.txt --glyph-tile '#3E63DD' --json
+   hatch image generate --model <id> --prompt-file icon-b.txt --glyph-tile '#3E63DD' --json
+   hatch image generate --model <id> --prompt-file icon-c.txt --glyph-tile '#3E63DD' --json
    ```
 
    Never use `--count` above 1 for icon candidates. Each result has an `id`
@@ -129,7 +133,10 @@ asks for colour or a light background makes generation fail.
 
 ## Failures
 
-- `CONFLICT` "No image model is configured": step 1 applies.
+- `CONFLICT` "No usable image model is configured", or the chosen model's
+  provider is disabled or has no API key: step 1 applies; another usable
+  model may be picked instead.
+- `NOT_FOUND` for the image model: it was removed; run step 1 again.
 - `BAD_REQUEST` naming the image provider: relay the provider's reason; do
   not retry that prompt.
 - `TOO_MANY_REQUESTS`: the hourly image limit is reached; generate nothing

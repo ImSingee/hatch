@@ -14,17 +14,12 @@
  * reachable from `src/auth/server.ts`, which the Better Auth CLI loads
  * directly and cannot resolve the `~` path alias for.
  */
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
 import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
 import { db, schema } from '../db';
 import type { JsonValue } from '../db/schema';
-
-const imageModelConfigSchema = z
-  .object({ providerId: z.string().min(1), modelId: z.string().min(1) })
-  .nullable();
-export type ImageModelConfig = z.infer<typeof imageModelConfigSchema>;
 
 /**
  * The accents come from the design tokens; nothing else lists them. Each
@@ -75,15 +70,6 @@ const REGISTRY = {
     invalidFallback: false,
   } satisfies ConfigEntry<boolean>,
   /**
-   * The one image-generation model of this instance, or null when none is
-   * chosen. Only names a provider row: the API key stays in
-   * `agent_providers`.
-   */
-  'image.model': {
-    schema: imageModelConfigSchema,
-    fallback: null,
-  } satisfies ConfigEntry<ImageModelConfig>,
-  /**
    * The instance-wide look every client applies. A stored accent that the
    * tokens no longer define falls back to the default accent.
    */
@@ -131,15 +117,6 @@ function readStored<K extends PlatformConfigKey>(
     return (entry.invalidFallback ?? entry.fallback) as PlatformConfigValue<K>;
   }
   return parsed.data as PlatformConfigValue<K>;
-}
-
-/** Remove a stored setting so its fallback applies again. */
-export async function clearPlatformConfig(
-  key: PlatformConfigKey,
-): Promise<void> {
-  await db
-    .delete(schema.platformConfig)
-    .where(eq(schema.platformConfig.key, key));
 }
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.

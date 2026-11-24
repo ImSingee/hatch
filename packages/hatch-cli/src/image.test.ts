@@ -14,11 +14,59 @@ const CANDIDATE = 'a'.repeat(32);
 
 describe('image command arguments', () => {
   it('maps each command to one explicit operation', () => {
-    expect(command('image-model', 'get')).toEqual({ kind: 'model-get' });
-    expect(command('image-model', 'clear')).toEqual({ kind: 'model-clear' });
+    expect(command('image-model', 'list')).toEqual({
+      kind: 'model-list',
+      page: { limit: 0, cursor: undefined },
+    });
     expect(
-      command('image-model', 'set', '--provider', 'p1', '--model', 'gpt-x'),
-    ).toEqual({ kind: 'model-set', providerId: 'p1', modelId: 'gpt-x' });
+      command('image-model', 'list', '--limit', '2', '--cursor', '2'),
+    ).toEqual({ kind: 'model-list', page: { limit: 2, cursor: '2' } });
+    expect(
+      command(
+        'image-model',
+        'add',
+        '--provider',
+        'p1',
+        '--model-id',
+        'gpt-x',
+        '--description',
+        ' Fast drafts ',
+      ),
+    ).toEqual({
+      kind: 'model-add',
+      providerId: 'p1',
+      modelId: 'gpt-x',
+      name: undefined,
+      description: 'Fast drafts',
+    });
+    expect(
+      command(
+        'image-model',
+        'update',
+        'm1',
+        '--name',
+        'Fine',
+        '--model-id',
+        'y',
+      ),
+    ).toEqual({
+      kind: 'model-update',
+      id: 'm1',
+      modelId: 'y',
+      name: 'Fine',
+      description: undefined,
+    });
+    // Clearing is its own flag, distinct from leaving the field unchanged.
+    expect(
+      command('image-model', 'update', 'm1', '--clear-description'),
+    ).toMatchObject({ kind: 'model-update', description: '' });
+    expect(command('image-model', 'remove', 'm1', '--yes')).toEqual({
+      kind: 'model-remove',
+      id: 'm1',
+    });
+    expect(
+      command('image', 'generate', '--prompt', 'a ring', '--model', 'm1'),
+    ).toMatchObject({ kind: 'generate', imageModelId: 'm1' });
     expect(
       command(
         'image',
@@ -36,6 +84,7 @@ describe('image command arguments', () => {
       ),
     ).toEqual({
       kind: 'generate',
+      imageModelId: undefined,
       prompt: undefined,
       promptFile: '-',
       count: 3,
@@ -80,10 +129,50 @@ describe('image command arguments', () => {
 
   it('rejects ambiguous or unusable input before any request', () => {
     const cases: string[][] = [
-      ['image-model', 'set', '--provider', 'p1'],
-      ['image-model', 'set', '--provider', 'p1', '--model', 'bad id'],
-      ['image-model', 'get', 'extra'],
-      ['image-model', 'rotate'],
+      ['image-model', 'add', '--provider', 'p1'],
+      ['image-model', 'add', '--model-id', 'gpt-x'],
+      ['image-model', 'add', '--provider', 'p1', '--model-id', 'bad id'],
+      [
+        'image-model',
+        'add',
+        '--provider',
+        'p1',
+        '--model-id',
+        'x',
+        '--name',
+        ' ',
+      ],
+      [
+        'image-model',
+        'add',
+        '--provider',
+        'p1',
+        '--model-id',
+        'x',
+        '--description',
+        'x'.repeat(201),
+      ],
+      ['image-model', 'update', 'm1'],
+      ['image-model', 'update', '--name', 'Fine'],
+      ['image-model', 'update', 'm1', '--description', ' '],
+      [
+        'image-model',
+        'update',
+        'm1',
+        '--description',
+        'a',
+        '--clear-description',
+      ],
+      ['image-model', 'remove', '--yes'],
+      ['image-model', 'remove', 'm1', 'm2', '--yes'],
+      // Deleting needs an explicit --yes.
+      ['image-model', 'remove', 'm1'],
+      ['image-model', 'list', '--limit', '0'],
+      ['image-model', 'list', '--cursor', 'next'],
+      ['image-model', 'list', 'extra'],
+      ['image-model', 'get'],
+      ['image-model', 'set', '--provider', 'p1', '--model', 'gpt-x'],
+      ['image', 'generate', '--prompt', 'a', '--model', ''],
       ['image', 'generate'],
       ['image', 'generate', '--prompt', 'a', '--prompt-file', 'b'],
       ['image', 'generate', '--prompt', ''],

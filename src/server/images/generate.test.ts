@@ -17,7 +17,8 @@ const dataDir = vi.hoisted(() => {
 });
 const model = vi.hoisted(() => ({
   resolveImageModel: vi.fn<
-    () => Promise<{
+    (imageModelId?: string) => Promise<{
+      id: string;
       driver: { suggestedModels: string[]; generate: () => Promise<Buffer> };
       provider: { baseUrl: string; apiKey: string };
       modelId: string;
@@ -63,6 +64,7 @@ beforeEach(async () => {
       suggestedModels: [],
       generate: vi.fn<() => Promise<Buffer>>(async () => drawing),
     },
+    id: 'image-model-1',
     provider,
     modelId: 'test-image-model',
   });

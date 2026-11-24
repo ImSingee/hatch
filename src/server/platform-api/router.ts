@@ -94,13 +94,18 @@ import {
 } from '~server/apps/icon';
 import { generateImages } from '~server/images/generate';
 import {
-  clearImageModel,
-  getImageModelState,
-  setImageModel,
-  type ImageModelState,
+  createImageModel,
+  deleteImageModel,
+  listImageModels,
+  updateImageModel,
 } from '~server/images/model';
 
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import { ModelService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/model_pb';
+import {
+  listProviderModels,
+  setProviderModelKind,
+} from '~server/provider-models';
 import { getThemeState, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
@@ -236,9 +241,6 @@ const iconMessage = (icon: AppIconView) => ({
     path: icon.path ?? undefined,
     sizes: icon.sizes,
   },
-});
-const imageModelMessage = (state: ImageModelState) => ({
-  state: { ...state, selected: state.selected ?? undefined },
 });
 const pinMessage = (pin: SidebarItem) => ({
   id: pin.id,
@@ -769,10 +771,36 @@ export function registerPlatformApi(
     }),
   });
   router.service(ImageService, {
-    getImageModel: async () => imageModelMessage(await getImageModelState()),
-    setImageModel: async (input) =>
-      imageModelMessage(await setImageModel(input)),
-    clearImageModel: async () => imageModelMessage(await clearImageModel()),
+    listImageModels: async (input) => {
+      const list = await listImageModels();
+      const page = listPage(list.models, input);
+      return {
+        models: page.items,
+        defaultModelId: list.defaultModelId ?? undefined,
+        providers: list.providers,
+        nextCursor: page.nextCursor,
+      };
+    },
+    createImageModel: async (input) => ({
+      model: await createImageModel({
+        providerId: input.providerId,
+        modelId: input.modelId,
+        name: input.name,
+        description: input.description,
+      }),
+    }),
+    updateImageModel: async (input) => ({
+      model: await updateImageModel({
+        id: input.id,
+        modelId: input.modelId,
+        name: input.name,
+        description: input.description,
+      }),
+    }),
+    deleteImageModel: async (input) => {
+      await deleteImageModel(input.id);
+      return {};
+    },
     generateImages: async (input, context) => {
       const result = await generateImages(
         {
@@ -780,11 +808,31 @@ export function registerPlatformApi(
           count: input.count,
           quality: input.quality as 'low' | 'medium' | 'high' | undefined,
           glyphTile: input.glyphTile,
+          imageModelId: input.imageModelId,
         },
         context.signal,
       );
-      return { modelId: result.model, candidates: result.images };
+      return {
+        imageModelId: result.imageModelId,
+        modelId: result.model,
+        candidates: result.images,
+      };
     },
+  });
+  router.service(ModelService, {
+    listModels: async (input) => {
+      const page = listPage(
+        await listProviderModels(input.kind as 'chat' | 'image' | undefined),
+        input,
+      );
+      return { models: page.items, nextCursor: page.nextCursor };
+    },
+    setModelKind: async (input) => ({
+      model: await setProviderModelKind(
+        input.id,
+        input.kind as 'chat' | 'image',
+      ),
+    }),
   });
   router.service(ThemeService, {
     getTheme: async () => ({ theme: await getThemeState() }),

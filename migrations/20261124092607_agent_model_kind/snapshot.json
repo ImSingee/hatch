@@ -1,0 +1,63 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "1f6e47c0-80f5-4784-8a12-c69730df068c",
+  "prevIds": ["db519518-8837-4882-8fac-cc9af131a1b8"],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "agent_models", "kind"],
+      "writes": [
+        "s|col|public.agent_models.kind",
+        "n|col|public.agent_models.kind",
+        "e|col|public.agent_models.kind"
+      ],
+      "reads": ["n|tbl|public.agent_models", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "agent_models", "description"],
+      "writes": [
+        "s|col|public.agent_models.description",
+        "n|col|public.agent_models.description",
+        "e|col|public.agent_models.description"
+      ],
+      "reads": ["n|tbl|public.agent_models", "n|sch|public"]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "agent_models",
+        "name": "kind",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'chat'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "agent_models",
+        "name": "description",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "''",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

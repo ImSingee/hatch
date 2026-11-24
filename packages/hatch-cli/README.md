@@ -448,20 +448,37 @@ promise compatibility with older CLI binaries.
 ## App icons and image generation
 
 ```sh
-hatch image-model get --json
-hatch image-model set --provider <provider-id> --model gpt-image-1-mini
-hatch image generate --prompt-file prompt.txt --glyph-tile '#3E63DD' --json
+hatch model list --kind chat --json
+hatch model set-kind <model-id> --kind image
+hatch image-model list --json
+hatch image-model add --provider <provider-id> --model-id gpt-image-1-mini \
+  --name 'GPT Image Mini' --description 'Fast, cheap drafts'
+hatch image-model update <image-model-id> --description 'Line icons'
+hatch image generate --model <image-model-id> --prompt-file prompt.txt \
+  --glyph-tile '#3E63DD' --json
 hatch app icon set my-app --candidate <candidate-id>
 hatch app icon set my-app --file icon.png
 hatch app icon get my-app --json
 hatch app icon clear my-app
-hatch image-model clear
+hatch image-model remove <image-model-id> --yes
 ```
 
-`image-model get` lists the providers that can generate images with suggested
-model ids; `set` replaces the single selection and uses that provider's stored
-API key. `image generate` costs provider credit and prints one candidate
-`id` and authenticated `path` per image; candidates expire after one day.
+An instance can have several image models, each a provider model of the
+image category with an optional description of what it suits. `model list`
+shows every provider model with its `kind` (`--kind` filters, `--limit` and
+`--cursor` page), and `model set-kind` moves a model between `chat` and
+`image` like the Web form's Category field; `image` is refused on a provider
+whose API cannot generate images.
+`image-model list` prints every model with its `id`, whether it is `usable`,
+the `defaultModelId` and the providers that can hold image models with
+suggested model ids; `--limit` (1 to 100) prints one page of models and a
+`nextCursor` for `--cursor`. `add` attaches a model to such a provider and uses its
+stored API key; `update` changes only the given fields (`--clear-description`
+empties the description); `remove --yes` deletes one; it cannot be undone. `image generate --model <id>`
+picks the model; without it the default, the first usable model, is used.
+`image generate` costs provider credit and prints the `imageModelId` used and
+one candidate `id` and authenticated `path` per image; candidates expire after
+one day.
 `--count` (1 to 4) repeats the same prompt, so its results are close
 variations; run one command per prompt to compare different designs.
 `--glyph-tile` expects the model to draw a white glyph on black and returns a
@@ -477,14 +494,17 @@ model or candidate id), `invalid_input` (not an image, or a `--prompt-file`
 whose content is empty or over-long), `input_too_large`, and
 `output_unwritable` when `--output-dir` cannot be created, which is checked
 before any image is generated. Prompts are limited to 4000 Unicode code points.
-Platform errors: `CONFLICT` (6) when no usable image model is selected,
-`BAD_REQUEST` (2) carrying the image provider's reason or an image that cannot
-be decoded, `TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
-`NOT_FOUND` (5) for an unknown App, provider or expired candidate,
+Platform errors: `CONFLICT` (6) when no image model is usable or the chosen
+one's provider is disabled or has no key,
+`BAD_REQUEST` (2) carrying the image provider's reason, an image that cannot
+be decoded, or `image-model add` on a provider that cannot make images,
+`TOO_MANY_REQUESTS` (2) at the hourly limit of 30 images,
+`NOT_FOUND` (5) for an unknown App, provider, image model or expired
+candidate,
 `SERVICE_UNAVAILABLE` (7) when the provider is unreachable, and
 `download_failed` (7) when a generated candidate could not be saved to
 `--output-dir`. With `--json` its `error.details` is the normal result:
-`modelId` and every candidate with `id` and `path`, plus `file` for the ones
+`imageModelId`, `modelId` and every candidate with `id` and `path`, plus `file` for the ones
 that were saved, so no image has to be generated again.
 
 ## Theme and pins
