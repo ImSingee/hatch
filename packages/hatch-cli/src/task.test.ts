@@ -86,10 +86,14 @@ describe('hatch app task arguments', () => {
       action: 'cancel',
       target: '01abc',
     });
+    expect(parse('rotate-webhook-secret', 'digest-app')).toMatchObject({
+      action: 'rotate-webhook-secret',
+      id: 'digest-app',
+    });
   });
 
   it.each([
-    [['launch', 'a'], /list, run, runs, get-run or cancel/],
+    [['launch', 'a'], /get-run, cancel or rotate-webhook-secret/],
     [['run', 'a'], /task name/],
     [['list', 'a', 'extra'], /exactly one App/],
     [
@@ -102,6 +106,9 @@ describe('hatch app task arguments', () => {
     [['runs', 'a', '--limit', '201'], /between 1 and 200/],
     [['runs', 'a', '--cursor', ''], /--cursor/],
     [['list', 'a', '--wait'], /--wait applies only to task run/],
+    [['rotate-webhook-secret'], /exactly one App/],
+    [['rotate-webhook-secret', 'a', 'b'], /exactly one App/],
+    [['rotate-webhook-secret', 'a', '--input', '{}'], /--input applies only/],
     [['run', 'a', 'b', '--task', 'x'], /--task applies only to task runs/],
     [['get-run', 'a', 'r', '--timeout', '0'], /--timeout/],
     [['run', 'a', 'b', '--bogus'], /--bogus is not a flag/],

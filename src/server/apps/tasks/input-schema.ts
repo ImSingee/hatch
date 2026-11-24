@@ -165,10 +165,20 @@ function scalarSchema(scalar: ScalarType): JsonSchema {
   }
 }
 
+/**
+ * Bounds on the expanded input: a message reused by several fields is
+ * expanded once per use, so a small proto could otherwise describe an
+ * exponentially large schema (and form) and exhaust platform memory.
+ */
+const MAX_TASK_INPUT_FIELDS = 1000;
+const MAX_TASK_INPUT_DEPTH = 16;
+
 type Walk = {
   options: Options;
   /** Messages on the current path, to reject recursive types. */
   stack: string[];
+  /** Fields expanded so far, shared by the whole walk. */
+  budget: { fields: number };
   /** Dotted JSON path of the field being converted, for errors. */
   path: string;
 };
@@ -190,10 +200,21 @@ function messageSchema(message: DescMessage, walk: Walk): JsonSchema {
       `${walk.path || 'input'} refers back to ${message.typeName}; task inputs cannot be recursive.`,
     );
   }
+  if (walk.stack.length >= MAX_TASK_INPUT_DEPTH) {
+    throw new TaskInputSchemaError(
+      `${walk.path || 'input'} nests messages more than ${MAX_TASK_INPUT_DEPTH} levels deep; flatten the task input.`,
+    );
+  }
   const properties: Record<string, JsonSchema> = {};
   const required: string[] = [];
   for (const field of message.fields) {
     const path = walk.path ? `${walk.path}.${field.jsonName}` : field.jsonName;
+    walk.budget.fields += 1;
+    if (walk.budget.fields > MAX_TASK_INPUT_FIELDS) {
+      throw new TaskInputSchemaError(
+        `the task input expands to more than ${MAX_TASK_INPUT_FIELDS} fields (at ${path}); simplify the request message.`,
+      );
+    }
     if (field.oneof && !field.proto.proto3Optional) {
       throw new TaskInputSchemaError(
         `${path} belongs to oneof "${field.oneof.name}", which task inputs do not support.`,
@@ -366,6 +387,7 @@ export function taskInputSchema(
   return messageSchema(message, {
     options: platformOptions(registry),
     stack: [],
+    budget: { fields: 0 },
     path: '',
   }) as TaskInputSchema;
 }

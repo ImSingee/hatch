@@ -13,6 +13,7 @@
  * dispatched again.
  */
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { ulid } from 'ulid';
 import {
   appCompatibility,
@@ -47,6 +48,8 @@ import { type DedicatedRunHandle, runInDedicatedInstance } from '../runtime';
 export const TASK_RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Queued runs one App may hold before new ones are refused. */
 export const TASK_QUEUE_LIMIT = 100;
+/** Largest task input, as JSON text, any trigger accepts. */
+export const MAX_TASK_INPUT_BYTES = 1_000_000;
 
 // Advisory-lock namespace for the (int, int) form of pg_advisory_xact_lock.
 // Existing namespaces elsewhere: 1 and 2 (app and Workflow deploys), 3
@@ -841,6 +844,47 @@ export async function recoverTaskRuns(): Promise<void> {
     .from(schema.appTaskRuns)
     .where(eq(schema.appTaskRuns.status, 'queued'));
   for (const { appId } of apps) dispatch(appId);
+}
+
+/* ----------------------------- webhook secret ------------------------------ */
+
+/**
+ * Mint a new shared webhook secret for an App (the App webhook and task
+ * webhooks accept it) and return it; the previous secret stops working.
+ */
+export async function rotateAppWebhookSecret(appId: string): Promise<string> {
+  const app = await db.query.apps.findFirst({
+    where: { id: appId },
+    columns: { status: true, capabilities: true, currentDeploymentId: true },
+  });
+  if (!app) throw new AppError(`App "${appId}" not found.`, 404);
+  if (app.status === 'archived') {
+    throw new AppError('The App is archived; restore it first.', 409);
+  }
+  let taskWebhook = false;
+  if (app.currentDeploymentId) {
+    const deployment = await db.query.deployments.findFirst({
+      where: { id: app.currentDeploymentId },
+      columns: { manifestNormalized: true },
+    });
+    const manifest =
+      deployment?.manifestNormalized as NormalizedManifest | null;
+    taskWebhook = Boolean(
+      manifest?.tasks?.definitions.some((task) => task.webhook),
+    );
+  }
+  if (!app.capabilities?.webhook && !taskWebhook) {
+    throw new AppError(
+      'The App has no webhook trigger: enable the App webhook or a task webhook first.',
+      409,
+    );
+  }
+  const secret = randomUUID().replaceAll('-', '');
+  await db
+    .update(schema.apps)
+    .set({ webhookSecret: secret })
+    .where(eq(schema.apps.id, appId));
+  return secret;
 }
 
 /* ---------------------------------- views ---------------------------------- */

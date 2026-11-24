@@ -182,7 +182,8 @@ It cannot start another App's tasks.
 - Webhook: with `webhook: true`, `POST` a JSON body (or `GET` with query
   parameters) to `/api/app/<id>/tasks/<name>/run`, authenticated like the App
   webhook in `platform` mode: an API key or bearer token, the App's webhook
-  secret (`x-hatch-secret` or `?secret=`, shown on the task page), or a
+  secret (`x-hatch-secret` or `?secret=`, shown on the task page; `hatch app
+  task rotate-webhook-secret <app>` mints a new one and prints it once), or a
   same-origin session. It answers `202 { runId, status }`.
 - Backend: `enqueueTask` above.
 

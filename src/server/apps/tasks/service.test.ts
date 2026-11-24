@@ -53,6 +53,7 @@ const {
   getTaskRun,
   loadTaskCronJobs,
   recoverTaskRuns,
+  rotateAppWebhookSecret,
   startTaskRun,
 } = await import('./service');
 
@@ -542,6 +543,24 @@ describe('App task runs', () => {
       releaseClaim();
       spy.mockRestore();
     }
+  });
+
+  it('rotates the shared webhook secret only for an App with a webhook trigger', async () => {
+    await expect(rotateAppWebhookSecret(APP)).rejects.toMatchObject({
+      status: 409,
+    });
+    await seed({
+      concurrency: 4,
+      definitions: [{ ...digest, webhook: true }],
+    });
+    await db.update(schema.apps).set({ webhookSecret: 'old-secret' });
+    const secret = await rotateAppWebhookSecret(APP);
+    expect(secret).toMatch(/^[0-9a-f]{32}$/);
+    const app = await db.query.apps.findFirst({
+      where: { id: APP },
+      columns: { webhookSecret: true },
+    });
+    expect(app?.webhookSecret).toBe(secret);
   });
 
   it('fails runs a previous process left running, with their steps', async () => {

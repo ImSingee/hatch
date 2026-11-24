@@ -162,6 +162,11 @@ message Req { Inner inner = 1 [(hatch.app.v1.field) = { default: "{}" }]; }
       /default -1 does not fit/,
     ],
     [
+      'a message graph that expands to too many fields',
+      'message M0 { M1 a = 1; M1 b = 2; }\nmessage M1 { M2 a = 1; M2 b = 2; }\nmessage M2 { M3 a = 1; M3 b = 2; }\nmessage M3 { M4 a = 1; M4 b = 2; }\nmessage M4 { M5 a = 1; M5 b = 2; }\nmessage M5 { M6 a = 1; M6 b = 2; }\nmessage M6 { M7 a = 1; M7 b = 2; }\nmessage M7 { M8 a = 1; M8 b = 2; }\nmessage M8 { M9 a = 1; M9 b = 2; }\nmessage M9 { M10 a = 1; M10 b = 2; }\nmessage M10 { M11 a = 1; M11 b = 2; }\nmessage M11 { M12 a = 1; M12 b = 2; }\nmessage M12 { string leaf = 1; }\nmessage Req { M0 root = 1; }',
+      /expands to more than 1000 fields/,
+    ],
+    [
       'bounds on a string',
       'message Req { string s = 1 [(hatch.app.v1.field) = { min: 1 }]; }',
       /min and max apply only to numeric fields/,

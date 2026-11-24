@@ -202,8 +202,9 @@ claim the browser's account holds.
 
 ## App tasks: CLI only, no Agent Tool
 
-`hatch app task list|run|runs|get-run|cancel` calls `AppService/ListAppTasks`,
-`RunAppTask`, `ListAppTaskRuns`, `GetAppTaskRun` and `CancelAppTaskRun`, which
+`hatch app task list|run|runs|get-run|cancel|rotate-webhook-secret` calls
+`AppService/ListAppTasks`, `RunAppTask`, `ListAppTaskRuns`, `GetAppTaskRun`,
+`CancelAppTaskRun` and `RotateAppWebhookSecret`, which
 use the same `src/server/apps/tasks/service.ts` service as the App's Tasks
 pages and the Operations panel. Sessions, API keys and Run JWTs have the same
 authority; a run started with a Run JWT records `agent` as its actor. No
@@ -211,10 +212,10 @@ operation is bound to a device or browser. The CLI covers every Web UI read
 and action: task definitions with input schema, schedules and next run times,
 webhook paths, queue and concurrency figures, run history with task and status
 filters, the run inspector (steps, log, input, output, queue position), manual
-runs and cancel. `run --wait` additionally waits for the result. The one value
-the CLI does not print is the App's shared webhook secret, which only the Web UI
-shows (as for the App webhook); task webhooks also accept API keys. No Agent
-Tool is added.
+runs and cancel. `run --wait` additionally waits for the result. The App's
+shared webhook secret, which the Web UI shows on the task page, is printed only
+by `rotate-webhook-secret`, which mints a new one (it also replaces the App
+webhook's secret). No Agent Tool is added.
 
 ## Known gaps
 

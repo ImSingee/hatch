@@ -38,6 +38,9 @@ service AppService {
   rpc GetAppTaskRun(GetAppTaskRunRequest) returns (GetAppTaskRunResponse);
   // Cancel a queued or running run; a running one has its instance killed.
   rpc CancelAppTaskRun(CancelAppTaskRunRequest) returns (CancelAppTaskRunResponse);
+  // Replace the App's shared webhook secret (used by the App webhook and task
+  // webhooks) and return it; this is the only response that carries it.
+  rpc RotateAppWebhookSecret(RotateAppWebhookSecretRequest) returns (RotateAppWebhookSecretResponse);
 }
 
 message ListAppsRequest {}
@@ -339,7 +342,8 @@ message AppTask {
   repeated AppTaskCron cron = 8;
   bool webhook = 9;
   // Platform path of the webhook trigger, when enabled. It accepts native
-  // credentials or the App's webhook secret shown in the Web UI.
+  // credentials or the App's webhook secret (shown in the Web UI; minted by
+  // RotateAppWebhookSecret).
   optional string webhook_path = 10;
   uint32 queued = 11;
   uint32 running = 12;
@@ -490,4 +494,14 @@ message CancelAppTaskRunResponse {
   // False when the run had already finished.
   bool canceled = 1;
   string status = 2;
+}
+
+message RotateAppWebhookSecretRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+message RotateAppWebhookSecretResponse {
+  string secret = 1;
 }

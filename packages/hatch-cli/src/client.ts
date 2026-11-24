@@ -868,6 +868,9 @@ export function cliClient(transport: Transport) {
           const result = await apps.cancelAppTaskRun(input);
           return { canceled: result.canceled, status: result.status };
         },
+        rotateWebhookSecret: async (input: { id: string }) => ({
+          secret: (await apps.rotateAppWebhookSecret(input)).secret,
+        }),
       },
       kv: async (input: {
         params: { id: string };

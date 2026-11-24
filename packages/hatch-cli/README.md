@@ -412,6 +412,7 @@ hatch app task run <id-or-slug> <task> --file ./input.json --json
 hatch app task runs <id-or-slug> --task <task> --status failed --limit 50 --cursor '<nextCursor>' --json
 hatch app task get-run <id-or-slug> <run-id> --json
 hatch app task cancel <id-or-slug> <run-id> --json
+hatch app task rotate-webhook-secret <id-or-slug> --json
 ```
 
 A task is a backend RPC method the App's manifest marks as runnable; every run
@@ -432,6 +433,10 @@ expires the command exits 7 with `timeout` and the run keeps going. A full
 queue answers `TOO_MANY_REQUESTS` (exit 2). `get-run` prints steps, log,
 input, output and the queue position of a queued run. `cancel` is idempotent
 and prints `canceled: false` with the final status for a finished run.
+`rotate-webhook-secret` replaces the App's shared webhook secret, which the
+App webhook and every task webhook accept, and prints `{ appId, secret }`
+once; callers using the previous secret are rejected from then on. It answers
+`CONFLICT` when the App has neither the App webhook nor a task webhook.
 
 ## App backend runtime
 

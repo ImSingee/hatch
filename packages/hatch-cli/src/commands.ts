@@ -149,7 +149,13 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['app', 'task', 'list'],
     usage: 'app task list <id-or-slug> [--json]',
     description:
-      'List the tasks of the active deployment: runnable backend RPC methods, each run in its own backend instance. Each task prints its name, method, input type and generated input JSON Schema, schedules with fixed input and next run time, webhook path (when enabled), queued/running counts, own concurrency cap and latest run. The App prints its concurrency cap and totals; available is false when it cannot run tasks (not deployed, archived or none declared). The webhook path accepts native credentials; the shared webhook secret is shown only in the Web UI.',
+      'List the tasks of the active deployment: runnable backend RPC methods, each run in its own backend instance. Each task prints its name, method, input type and generated input JSON Schema, schedules with fixed input and next run time, webhook path (when enabled), queued/running counts, own concurrency cap and latest run. The App prints its concurrency cap and totals; available is false when it cannot run tasks (not deployed, archived or none declared). The webhook path accepts native credentials or the App webhook secret, which only task rotate-webhook-secret prints.',
+  },
+  {
+    path: ['app', 'task', 'rotate-webhook-secret'],
+    usage: 'app task rotate-webhook-secret <id-or-slug> [--json]',
+    description:
+      "Replace the App's shared webhook secret, which the App webhook and every task webhook accept (x-hatch-secret or ?secret=), and print the new secret once. Side effect: callers using the previous secret are rejected from now on. Refused with CONFLICT when the App has neither the App webhook nor a task webhook enabled.",
   },
   {
     path: ['app', 'task', 'run'],

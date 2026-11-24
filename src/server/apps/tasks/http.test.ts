@@ -19,6 +19,7 @@ vi.mock('~server/auth/credentials', () => ({
 
 const started: { appId: string; task: string; options: unknown }[] = [];
 vi.mock('./service', () => ({
+  MAX_TASK_INPUT_BYTES: 1_000_000,
   startTaskRun: async (appId: string, task: string, options: unknown) => {
     started.push({ appId, task, options });
     return { runId: 'run-1', status: 'queued' };

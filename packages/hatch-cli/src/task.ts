@@ -1,4 +1,7 @@
-/** App tasks: list, run (optionally waiting), run history, inspect, cancel. */
+/**
+ * App tasks: list, run (optionally waiting), run history, inspect, cancel,
+ * and rotating the App webhook secret task webhooks accept.
+ */
 import type { JsonObject } from '@bufbuild/protobuf';
 import { parseArgs } from 'node:util';
 import { configPath, resolveCredential } from './config';
@@ -11,7 +14,14 @@ import {
 import { CliError, argumentsError } from './error';
 import { readInput } from './input';
 
-const ACTIONS = ['list', 'run', 'runs', 'get-run', 'cancel'] as const;
+const ACTIONS = [
+  'list',
+  'run',
+  'runs',
+  'get-run',
+  'cancel',
+  'rotate-webhook-secret',
+] as const;
 type Action = (typeof ACTIONS)[number];
 
 const STATUSES = ['queued', 'running', 'succeeded', 'failed', 'canceled'];
@@ -49,7 +59,7 @@ export function parseTaskCommand(
   const action = args[offset + 2] as Action | undefined;
   if (!action || !ACTIONS.includes(action))
     throw invalid(
-      'Use hatch app task list, run, runs, get-run or cancel. See hatch help app task.',
+      'Use hatch app task list, run, runs, get-run, cancel or rotate-webhook-secret. See hatch help app task.',
     );
   let parsed;
   try {
@@ -76,10 +86,14 @@ export function parseTaskCommand(
   }
   const v = parsed.values;
   const positionals = parsed.positionals;
-  const arity = action === 'list' || action === 'runs' ? 1 : 2;
+  const appOnly =
+    action === 'list' ||
+    action === 'runs' ||
+    action === 'rotate-webhook-secret';
+  const arity = appOnly ? 1 : 2;
   if (positionals.length !== arity || positionals.some((p) => !p))
     throw invalid(
-      action === 'list' || action === 'runs'
+      appOnly
         ? `Supply exactly one App ID or slug to task ${action}.`
         : action === 'run'
           ? 'Supply an App ID or slug and a task name to task run.'
@@ -286,6 +300,14 @@ export async function runTask(
       runId: command.target as string,
     });
     write(run, runText(run));
+    return;
+  }
+  if (command.action === 'rotate-webhook-secret') {
+    const { secret } = await task.rotateWebhookSecret({ id: command.id });
+    write(
+      { appId: command.id, secret },
+      `${command.id}  webhook secret: ${secret}\nThe previous secret no longer works; this is the only time the new one is printed.`,
+    );
     return;
   }
   if (command.action === 'cancel') {

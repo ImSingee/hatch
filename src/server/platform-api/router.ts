@@ -1,9 +1,11 @@
 import { listPage } from '~server/list-page';
 import {
+  MAX_TASK_INPUT_BYTES,
   cancelTaskRun,
   getTaskRun,
   listAppTasks,
   listTaskRuns,
+  rotateAppWebhookSecret,
   startTaskRun,
 } from '~server/apps/tasks/service';
 import { runMessage, runSummaryMessage, tasksMessage } from './app-tasks';
@@ -773,22 +775,36 @@ export function registerPlatformApi(
       throw publicError(error);
     }
   });
-  router.rpc(AppService.method.runAppTask, async (input, context) => {
-    try {
-      const { id } = await find('apps', input.id);
-      const { status, run } = context.values.get(publicApiContext);
-      const user = (status as { user?: { id?: string } } | undefined)?.user;
-      const result = await startTaskRun(id, input.task, {
-        trigger: 'manual',
-        input: input.input ?? {},
-        // Every credential has the same authority; a Run acts as the Agent.
-        actor: run ? 'agent' : (user?.id ?? null),
-      });
-      return { runId: result.runId, status: result.status };
-    } catch (error) {
-      throw publicError(error);
-    }
-  });
+  router.rpc(
+    AppService.method.runAppTask,
+    async (input, context) => {
+      try {
+        const { id } = await find('apps', input.id);
+        // The same input cap as the Web UI and the task webhook, measured as
+        // JSON text.
+        if (
+          Buffer.byteLength(JSON.stringify(input.input ?? {})) >
+          MAX_TASK_INPUT_BYTES
+        ) {
+          throw new AppError('Task input exceeds 1 MB.', 413);
+        }
+        const { status, run } = context.values.get(publicApiContext);
+        const user = (status as { user?: { id?: string } } | undefined)?.user;
+        const result = await startTaskRun(id, input.task, {
+          trigger: 'manual',
+          input: input.input ?? {},
+          // Every credential has the same authority; a Run acts as the Agent.
+          actor: run ? 'agent' : (user?.id ?? null),
+        });
+        return { runId: result.runId, status: result.status };
+      } catch (error) {
+        throw publicError(error);
+      }
+    },
+    // A 1 MB JSON input encodes as a Struct of up to a few times its size
+    // (each number is a tagged 8-byte double), plus message framing.
+    { readMaxBytes: MAX_TASK_INPUT_BYTES * 4 + ORDINARY_FRAMING_BYTES },
+  );
   router.rpc(AppService.method.listAppTaskRuns, async (input) => {
     try {
       const { id } = await find('apps', input.id);
@@ -826,6 +842,14 @@ export function registerPlatformApi(
     try {
       const { id } = await find('apps', input.id);
       return await cancelTaskRun(id, input.runId);
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.rotateAppWebhookSecret, async (input) => {
+    try {
+      const { id } = await find('apps', input.id);
+      return { secret: await rotateAppWebhookSecret(id) };
     } catch (error) {
       throw publicError(error);
     }

@@ -23,10 +23,10 @@ import {
   verifyHatchSignature,
 } from '~server/secrets';
 import { authenticateAppWebhook } from '../webhook-auth';
-import { startTaskRun } from './service';
+import { MAX_TASK_INPUT_BYTES, startTaskRun } from './service';
 
-/** Same cap as other inbound webhook bodies. */
-const MAX_TASK_BODY_BYTES = 1_000_000;
+/** The task input cap, which matches other inbound webhook bodies. */
+const MAX_TASK_BODY_BYTES = MAX_TASK_INPUT_BYTES;
 
 function accepted(result: { runId: string; status: string }): Response {
   return Response.json(
