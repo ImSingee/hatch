@@ -236,7 +236,7 @@ component's copy or behaviour, move that component's display strings into the
 catalogs in the same change; new components and pages start translated.
 
 Out of scope for now: `hatch` CLI output, Agent prompts and Skills, server
-logs, App/Workflow templates, and the native mobile and desktop shells. Server
+logs, App templates, and the native mobile and desktop shells. Server
 Functions should return data or stable error codes rather than new English
 sentences meant for display, so the UI can translate them.
 
