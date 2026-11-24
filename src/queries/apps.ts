@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { notFound } from '@tanstack/react-router';
 import {
   getAppBySlug,
+  getAppDocFn,
   getAppOps,
   getDeploymentBuildLog,
   getNormalizedManifest,
@@ -86,6 +87,13 @@ export const normalizedManifestQueryOptions = (id: string) =>
   queryOptions({
     queryKey: ['apps', id, 'manifest'],
     queryFn: () => getNormalizedManifest({ data: id }),
+  });
+
+/** Keyed by the body hash so a redeploy never shows a cached older body. */
+export const appDocQueryOptions = (id: string, docId: string, sha256: string) =>
+  queryOptions({
+    queryKey: ['apps', id, 'docs', docId, sha256],
+    queryFn: () => getAppDocFn({ data: { id, docId } }),
   });
 
 export const appKvQueryOptions = (id: string) =>

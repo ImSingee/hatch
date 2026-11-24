@@ -4,6 +4,9 @@ Hatch invokes authored App HTTP handlers through the existing public runtime URL
 `/api/app/<canonical-id>/hook[/suffix]`, forwarded to `/__webhook[/suffix]`.
 Management lookup remains Connect RPC at `/api/rpc`; there is no webhook invocation
 RPC or alternate REST endpoint. Backend invocation remains `hatch app invoke backend` using Connect unary JSON; webhook invocation sends raw HTTP bytes.
+An App whose webhook other services call can publish its request contract as
+external docs, which callers read with `hatch app docs list|get` (see the CLI
+README).
 
 ## Authentication and headers
 

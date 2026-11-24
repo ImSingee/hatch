@@ -8,6 +8,7 @@ import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
+import { runDocs } from './docs';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { parsePreferencesCommand, runPreferences } from './preferences';
@@ -116,6 +117,8 @@ try {
     await runBackend(args, offset, controller.signal);
   else if (name === 'app' && operation === 'task')
     await runTask(args, offset, controller.signal);
+  else if (name === 'app' && operation === 'docs')
+    await runDocs(args, offset, controller.signal);
   else if (
     name === 'image-model' ||
     name === 'image' ||

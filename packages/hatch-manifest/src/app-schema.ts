@@ -469,6 +469,78 @@ export const notificationsConfigSchema = z
     }
   });
 
+/** External doc identifier, used in CLI arguments and artifact filenames. */
+export const APP_DOC_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** Most external docs one App may publish. */
+export const APP_DOCS_MAX_COUNT = 20;
+
+/**
+ * External docs live under the fixed `docs/` source tree and are Markdown.
+ * Each one is declared explicitly so internal notes in that tree are never
+ * published by accident.
+ */
+const docPath = sourceRelativePath.refine(
+  (p) =>
+    /^docs(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]*)+$/.test(p) && p.endsWith('.md'),
+  {
+    message:
+      'doc path must be a .md file under "docs/" using "/" separators (segments may not start with ".")',
+  },
+);
+
+/**
+ * A Markdown document the App publishes for its external callers, such as
+ * the request format of its webhook or the contract of its RPC service.
+ */
+export const appDocSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(
+        APP_DOC_ID_RE,
+        'doc id must be 1-64 lowercase letters, digits or "-", starting with a letter or digit',
+      ),
+    title: singleLineNonEmpty
+      .refine((title) => title.trim().length > 0, {
+        message: 'doc title must not be blank',
+      })
+      .refine((title) => title.length <= 120, {
+        message: 'doc title must be at most 120 characters',
+      }),
+    description: z.string().max(500).optional(),
+    path: docPath,
+  })
+  .strict();
+
+export type AppDoc = z.infer<typeof appDocSchema>;
+
+const appDocsSchema = z
+  .array(appDocSchema)
+  .max(APP_DOCS_MAX_COUNT)
+  .default([])
+  .superRefine((docs, ctx) => {
+    const ids = new Set<string>();
+    const paths = new Set<string>();
+    for (const [index, doc] of docs.entries()) {
+      if (ids.has(doc.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `duplicate doc id "${doc.id}"`,
+          path: [index, 'id'],
+        });
+      }
+      ids.add(doc.id);
+      if (paths.has(doc.path)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `duplicate doc path "${doc.path}"`,
+          path: [index, 'path'],
+        });
+      }
+      paths.add(doc.path);
+    }
+  });
+
 /** Backend listener ownership; an omitted value retains self-listening Deno. */
 export const backendRuntimeSchema = z.enum(['deno-run', 'deno-serve']);
 export type BackendRuntime = z.infer<typeof backendRuntimeSchema>;
@@ -532,6 +604,11 @@ export const sourceManifestSchema = z
     notifications: notificationsConfigSchema.optional(),
     /** Runnable backend RPC methods (tasks capability). */
     tasks: tasksConfigSchema.optional(),
+    /**
+     * Markdown docs for external callers of this App's webhook or RPC API.
+     * Declare them only when the App is meant to be called by other services.
+     */
+    docs: appDocsSchema,
   })
   .strict()
   .superRefine((manifest, ctx) => {

@@ -23,6 +23,7 @@ import {
   IconApi,
   IconArchive,
   IconArchiveOff,
+  IconBook,
   IconBell,
   IconCheck,
   IconClock,
@@ -68,6 +69,7 @@ import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notic
 import { AppGlyph } from '~components/apps/app-glyph';
 import { AppIconSettings } from '~components/apps/app-icon-settings';
 import { DeploymentHistory } from '~components/apps/deployment-history';
+import { DocsPanel } from '~components/apps/docs-panel';
 import { OperationsPanel } from '~components/apps/operations-panel';
 import { StatusBadge } from '~components/system/status-badge';
 import {
@@ -165,7 +167,11 @@ function AppDetailPage() {
       onConfirm: () => remove.mutate(),
     });
 
-  const sections = useManageSections(app.id, Boolean(capabilities?.backend));
+  const sections = useManageSections(
+    app.id,
+    Boolean(capabilities?.backend),
+    isArchived,
+  );
   const manifestHasTasks = Boolean(capabilities?.tasks);
   const hash = useRouterState({ select: (state) => state.location.hash });
   const current = sections.some((section) => section.key === hash)
@@ -376,6 +382,9 @@ function AppDetailPage() {
               />
 
               {capabilities?.backend ? <ApiPanel appId={app.id} /> : null}
+
+              {/* An archived App publishes no docs, matching the CLI. */}
+              {isArchived ? null : <DocsPanel appId={app.id} slug={app.slug} />}
             </Column>
             <Column basis={360}>
               <DeploymentHistory appId={app.id} />
@@ -394,9 +403,13 @@ type ManageSection = {
   color: string;
 };
 
-/** The rail's sections: the overview, each operation the App has, its API
- * and its deployments, in page order. */
-function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
+/** The rail's sections: the overview, each operation the App has, its API,
+ * its published docs and its deployments, in page order. */
+function useManageSections(
+  appId: string,
+  hasApi: boolean,
+  isArchived: boolean,
+): ManageSection[] {
   const { data: ops } = useQuery(appOpsQueryOptions(appId));
   const { data: manifest } = useQuery(normalizedManifestQueryOptions(appId));
   const icon = (Icon: typeof IconLayoutDashboard) => (
@@ -464,6 +477,13 @@ function useManageSections(appId: string, hasApi: boolean): ManageSection[] {
       color: 'pink',
     },
     hasApi && { key: 'api', label: 'API', icon: icon(IconApi), color: 'blue' },
+    !isArchived &&
+      Boolean(manifest?.docs?.length) && {
+        key: 'docs',
+        label: 'Docs',
+        icon: icon(IconBook),
+        color: 'cyan',
+      },
     {
       key: 'deployments',
       label: 'Deployments',

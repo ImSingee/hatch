@@ -1195,6 +1195,134 @@ describe.runIf(Boolean(databaseUrl))(
       }
     }, 240000);
 
+    it('publishes external docs per deployment and serves them to API key and Run CLI callers', async () => {
+      const [, apiKey, run] = credentials;
+      const directory = path.join(root, `docs-${randomUUID()}`);
+      const file = `${directory}.json`;
+      await writeFile(
+        file,
+        JSON.stringify({
+          slug: `docs-${randomUUID()}`,
+          name: 'Docs',
+          pin: false,
+        }),
+      );
+      const created = await cliInvoke(
+        ['app', 'create', '--file', file, '--directory', directory],
+        apiKey,
+      );
+      assert.equal(created.code, 0, JSON.stringify(created));
+      const id = created.data.id as string;
+      const manifestFile = path.join(directory, 'manifest.ts');
+      const template = await readFile(manifestFile, 'utf8');
+      const release = async (docs: Record<string, string>, message: string) => {
+        await mkdir(path.join(directory, 'docs'), { recursive: true });
+        for (const [name, body] of Object.entries(docs))
+          await writeFile(path.join(directory, 'docs', `${name}.md`), body);
+        const entries = Object.keys(docs).map((name) => ({
+          id: name,
+          title: `${name} title`,
+          path: `docs/${name}.md`,
+        }));
+        await writeFile(
+          manifestFile,
+          template.replace(
+            /\n\}\);\s*$/,
+            `\n  docs: ${JSON.stringify(entries)},\n});\n`,
+          ),
+        );
+        git(directory, 'add', '.');
+        git(
+          directory,
+          '-c',
+          'user.name=Docs integration',
+          '-c',
+          'user.email=fixture@example.test',
+          'commit',
+          '-m',
+          message,
+        );
+        const deployed = await cliInvoke(
+          ['app', 'deploy', '--directory', directory, '--message', message],
+          apiKey,
+        );
+        assert.equal(deployed.code, 0, JSON.stringify(deployed));
+        return deployed.data.version as number;
+      };
+
+      await mkdir(path.join(directory, 'docs'), { recursive: true });
+      await writeFile(
+        path.join(directory, 'docs', 'internal.md'),
+        'Internal notes',
+      );
+      expect(await release({ orders: '# Orders v1\n' }, 'Docs v1')).toBe(1);
+      expect(
+        await release(
+          { orders: '# Orders v2\n', refunds: '# Refunds\n' },
+          'Docs v2',
+        ),
+      ).toBe(2);
+
+      // An internal note under docs/ that the manifest does not declare stays
+      // unpublished even though it is committed.
+      for (const headers of [apiKey, run]) {
+        const listed = await cliInvoke(['app', 'docs', 'list', id], headers);
+        assert.equal(listed.code, 0, JSON.stringify(listed));
+        expect(listed.data).toMatchObject({
+          appId: id,
+          version: 2,
+          endpoints: { webhook: null, rpc: { url: `/api/app/${id}/rpc` } },
+          nextCursor: null,
+        });
+        expect(listed.data.docs.map((doc: { id: string }) => doc.id)).toEqual([
+          'orders',
+          'refunds',
+        ]);
+        const page = await cliInvoke(
+          ['app', 'docs', 'list', id, '--limit', '1'],
+          headers,
+        );
+        expect(page.data.docs).toHaveLength(1);
+        expect(page.data.nextCursor).toBe('1');
+        const read = await cliInvoke(
+          ['app', 'docs', 'get', id, 'orders'],
+          headers,
+        );
+        assert.equal(read.code, 0, JSON.stringify(read));
+        expect(read.data).toMatchObject({
+          version: 2,
+          doc: { id: 'orders', path: 'docs/orders.md', bytes: 12 },
+          content: '# Orders v2\n',
+        });
+        const missing = await cliInvoke(
+          ['app', 'docs', 'get', id, 'nope'],
+          headers,
+        );
+        expect(missing.code).toBe(5);
+        expect(missing.data.error.code).toBe('NOT_FOUND');
+      }
+      expect(
+        (await cliInvoke(['app', 'get', id], apiKey)).data.manifest.docs,
+      ).toHaveLength(2);
+
+      const rolledBack = await cliInvoke(
+        ['app', 'rollback', id, '--version', '1'],
+        apiKey,
+      );
+      assert.equal(rolledBack.code, 0, JSON.stringify(rolledBack));
+      const restored = await cliInvoke(
+        ['app', 'docs', 'get', id, 'orders'],
+        run,
+      );
+      expect(restored.data).toMatchObject({
+        version: 1,
+        content: '# Orders v1\n',
+      });
+      expect(
+        (await cliInvoke(['app', 'docs', 'get', id, 'refunds'], run)).code,
+      ).toBe(5);
+    }, 240000);
+
     it('compares all fifteen real Tools with public CLI outputs and lifecycle side effects', async () => {
       const { createPlatformRestClient } =
         await import('~/runner/platform-rest');

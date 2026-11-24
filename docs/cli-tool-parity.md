@@ -30,6 +30,7 @@ interface.
 
 | Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown       |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
 | Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed  |
 | Model category   | model list / set-kind                                                                               | ModelService/ListModels, SetModelKind; every provider model with its kind, moved like the Web Category field     |
@@ -195,6 +196,16 @@ no operation is bound to a device or browser. The CLI covers every Web UI
 action, including the force stop the UI offers for draining instances
 (`stop --force`), and additionally offers `restart --force`. No Agent Tool is
 added.
+
+## App docs: CLI only, no Agent Tool
+
+`hatch app docs list|get` calls `AppService/ListAppDocs` and `GetAppDoc`,
+which use the same `src/server/apps/docs.ts` service as the Docs section of the
+App manage page. Both read the docs published with the current deployment; an
+archived or undeployed App fails with `CONFLICT`. The commands are read-only.
+Sessions, API keys and Run JWTs have the same authority, and no operation is
+bound to a device or browser. `app get` also lists the doc index under
+`manifest.docs`. No Agent Tool is added.
 
 ## Device login approval: browser only
 
