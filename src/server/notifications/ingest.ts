@@ -219,6 +219,7 @@ export async function ingestNotification(args: {
         priority: push.priority,
         data: push.data,
         reply: push.reply,
+        card: push.card,
         dedupeKey: push.dedupeKey,
         occurredAt: push.occurredAt ? new Date(push.occurredAt) : now,
         createdAt: now,

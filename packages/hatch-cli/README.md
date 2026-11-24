@@ -776,6 +776,7 @@ hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.
 hatch notification respond <notification-id> --answer decision=approve --json
 hatch notification list --reply-state awaiting
 hatch notification list --order activity
+hatch notification update <notification-id> --card '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}'
 hatch notification unread
 hatch notification mark-read --latest
 ```

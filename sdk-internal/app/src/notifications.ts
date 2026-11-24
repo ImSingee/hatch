@@ -94,6 +94,39 @@ export type NotificationResponse = {
 /** `-2` lowest, `-1` low, `0` normal, `1` high. */
 export type NotificationPriority = -2 | -1 | 0 | 1;
 
+/**
+ * What the Hatch timeline shows besides the title and body: a short status
+ * with a tone, and at most one block. Phones and destinations keep showing the
+ * title and body, so put the essentials there too. Empty parts are left out.
+ */
+export type NotificationCard = {
+  /** At most 24 characters, such as "CI failed". Tone defaults to neutral. */
+  status?: {
+    label: string;
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+  };
+  block?:
+    | {
+        /** A bar filled to `percent` (0-100), with an optional "3 / 14". */
+        type: 'progress';
+        label: string;
+        percent: number;
+        value?: string;
+      }
+    | {
+        /** One to three figures side by side. */
+        type: 'stats';
+        items: { value: string; label: string }[];
+      }
+    | {
+        /** A comment someone made, such as a review note. */
+        type: 'quote';
+        author: string;
+        text: string;
+        location?: string;
+      };
+};
+
 /** A notification of a kind declared in `notifications.kinds`. */
 export type NotificationInput = {
   kind: string;
@@ -126,10 +159,12 @@ export type NotificationInput = {
   /** Extra structured data delivered to webhook and App destinations. */
   data?: { [key: string]: NotificationJson };
   /**
-   * Ask people to answer: one answer per notification, from whoever answers
-   * first. It cannot be edited after sending.
+   * Ask people to answer: one answer, from whoever answers first. Ask a later
+   * question with `updateNotification(id, { reply })`.
    */
   reply?: NotificationReplyInput;
+  /** Status and one block shown in the Hatch timeline. */
+  card?: NotificationCard;
   /** Repeated pushes with the same key are stored once. */
   dedupeKey?: string;
   /** When the event happened; defaults to the time the platform accepts it. */
@@ -225,6 +260,8 @@ export type NotificationUpdateInput = {
   autoOpenUrl?: boolean;
   data?: { [key: string]: NotificationJson } | null;
   reply?: NotificationReplyInput | null;
+  /** A new card (replaces the whole card), or null to remove it. */
+  card?: NotificationCard | null;
 };
 
 /**
@@ -328,6 +365,8 @@ export type HatchNotificationEnvelope = {
     recalledAt: string | null;
     /** The form to answer, or null. */
     reply: NotificationReply | null;
+    /** The timeline card, or null; tones are always filled in. */
+    card: NotificationCard | null;
     /**
      * The answer, only in `hatch.notification.responded` (sent by a response
      * route); null in every other event.

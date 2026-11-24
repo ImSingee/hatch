@@ -836,3 +836,48 @@ describe('asking a new question in an edit', () => {
     ).rejects.toThrow(/--reply/);
   });
 });
+
+describe('cards', () => {
+  it('sends a checked card, clears it, and rejects invalid or conflicting input before any request', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse(
+        'update',
+        'notification-1',
+        '--card',
+        '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}',
+      ),
+    );
+    expect(received.updateNotification?.card).toMatchObject({
+      status: { label: 'CI failed', tone: 'danger' },
+      block: { case: 'progress', value: { percent: 86, value: '12 / 14' } },
+    });
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--clear-card'),
+    );
+    expect(received.updateNotification).toMatchObject({ clearCard: true });
+
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse(
+          'update',
+          'notification-1',
+          '--card',
+          '{"block":{"type":"chart"}}',
+        ),
+      ),
+    ).rejects.toThrow(/--card: block/);
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse('update', 'notification-1', '--card', '{}'),
+      ),
+    ).rejects.toThrow('--card: give a status or a block, or use --clear-card.');
+    expect(() =>
+      parse('update', 'notification-1', '--card', '{}', '--clear-card'),
+    ).toThrow('Use either --card/--card-file or --clear-card, not both.');
+  });
+});

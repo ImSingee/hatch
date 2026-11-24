@@ -21,6 +21,7 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../packages/hatch-platform-api/notification-reply';
+import type { NotificationCard } from '../../packages/hatch-platform-api/notification-card';
 
 export * from './auth-schema';
 
@@ -1151,6 +1152,8 @@ export const notifications = snakeCase.table(
      */
     priority: smallint().notNull().default(0),
     data: jsonb().$type<JsonObject>(),
+    /** Status and one block shown in the timeline; see notification-card.ts. */
+    card: jsonb().$type<NotificationCard>(),
     dedupeKey: text(),
     occurredAt: timestamp('occurred_at').notNull(),
     /**
@@ -1496,6 +1499,7 @@ export const notificationRevisions = snakeCase.table(
     body: text(),
     url: text(),
     data: jsonb().$type<JsonObject>(),
+    card: jsonb().$type<NotificationCard>(),
     reply: jsonb().$type<ReplyForm>(),
     replyRound: integer('reply_round').notNull(),
     /** When this version became current (its activity time). */

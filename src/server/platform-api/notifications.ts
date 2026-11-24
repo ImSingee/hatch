@@ -2,6 +2,10 @@
 import type { ConnectRouter, HandlerContext } from '@connectrpc/connect';
 import { NotificationService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
+  cardInputFromMessage,
+  cardToMessage,
+} from '../../../packages/hatch-platform-api/notification-card-proto';
+import {
   answersFromMessages,
   answersToMessages,
   replyInputFromMessage,
@@ -115,6 +119,7 @@ function summary(view: NotificationSummaryView) {
     reply: view.reply ? replyToMessage(view.reply) : undefined,
     respondedAt: none(view.respondedAt),
     response: view.response ? response(view.response) : undefined,
+    card: view.card ? cardToMessage(view.card) : undefined,
   };
 }
 
@@ -287,6 +292,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             dedupeKey: input.dedupeKey,
             occurredAt: input.occurredAt,
             reply: input.reply ? replyInputFromMessage(input.reply) : undefined,
+            card: input.card ? cardInputFromMessage(input.card) : undefined,
           },
         });
         return {
@@ -300,6 +306,12 @@ export function registerNotificationApi(router: ConnectRouter) {
           throw publicApiError(
             'BAD_REQUEST',
             'Set either reply or clear_reply, not both.',
+          );
+        }
+        if (input.card && input.clearCard) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set either card or clear_card, not both.',
           );
         }
         const result = await updateNotificationAsMember({
@@ -320,6 +332,11 @@ export function registerNotificationApi(router: ConnectRouter) {
             ? null
             : input.reply
               ? replyInputFromMessage(input.reply)
+              : undefined,
+          card: input.clearCard
+            ? null
+            : input.card
+              ? cardInputFromMessage(input.card)
               : undefined,
         });
         return { revision: result.revision, changed: result.changed };
@@ -355,6 +372,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             url: none(revision.url),
             dataJson: revision.data ? JSON.stringify(revision.data) : undefined,
             reply: revision.reply ? replyToMessage(revision.reply) : undefined,
+            card: revision.card ? cardToMessage(revision.card) : undefined,
           })),
           responses: history.responses.map(response),
         };

@@ -15,6 +15,8 @@ import {
   describeIssue,
   notificationReplySchema,
 } from '../../hatch-platform-api/notification-reply-schema';
+import { notificationCardSchema } from '../../hatch-platform-api/notification-card-schema';
+import { cardToMessage } from '../../hatch-platform-api/notification-card-proto';
 import { configPath, resolveCredential } from './config';
 import { platformTransport } from './client';
 import { CliError } from './error';
@@ -221,6 +223,31 @@ export function parseReplyForm(value: unknown, flag = 'reply') {
   const parsed = notificationReplySchema.safeParse(value);
   if (!parsed.success) invalid(`--${flag}: ${describeIssue(parsed.error)}`);
   return parsed.data;
+}
+
+/** Validate a card exactly as the platform does; an empty card is rejected. */
+export function parseCard(value: unknown, flag = 'card') {
+  const parsed = notificationCardSchema.safeParse(value);
+  if (!parsed.success) invalid(`--${flag}: ${describeIssue(parsed.error)}`);
+  if (!parsed.data)
+    invalid(`--${flag}: give a status or a block, or use --clear-card.`);
+  return parsed.data;
+}
+
+/** Load and check `--card`/`--card-file` before any request is made. */
+function cardPreparation(
+  values: Values,
+):
+  | ((
+      signal: AbortSignal,
+    ) => Promise<{ card: ReturnType<typeof cardToMessage> }>)
+  | undefined {
+  const card = jsonInput(values, 'card');
+  if (!card) return undefined;
+  const flag = values.card === undefined ? 'card-file' : 'card';
+  return async (signal) => ({
+    card: cardToMessage(parseCard(await card(signal), flag)),
+  });
 }
 
 /**
@@ -689,9 +716,12 @@ const specs: Record<string, Spec> = {
       'occurred-at': { type: 'string' },
       reply: { type: 'string' },
       'reply-file': { type: 'string' },
+      card: { type: 'string' },
+      'card-file': { type: 'string' },
     },
     build: (_positionals, values) => {
       const to = oneOf(values, ['channel', 'group', 'destination']);
+      const card = cardPreparation(values);
       if (!to) invalid('Supply one of --channel, --group or --destination.');
       const reply = jsonInput(values, 'reply');
       const kind = str(values, 'kind');
@@ -722,15 +752,20 @@ const specs: Record<string, Spec> = {
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
         },
-        ...(reply
+        ...(reply || card
           ? {
               prepare: async (signal: AbortSignal) => ({
-                reply: replyToMessage(
-                  parseReplyForm(
-                    await reply(signal),
-                    values.reply === undefined ? 'reply-file' : 'reply',
-                  ),
-                ),
+                ...(reply
+                  ? {
+                      reply: replyToMessage(
+                        parseReplyForm(
+                          await reply(signal),
+                          values.reply === undefined ? 'reply-file' : 'reply',
+                        ),
+                      ),
+                    }
+                  : {}),
+                ...(card ? await card(signal) : {}),
               }),
             }
           : {}),
@@ -770,6 +805,9 @@ const specs: Record<string, Spec> = {
       reply: { type: 'string' },
       'reply-file': { type: 'string' },
       'clear-reply': { type: 'boolean' },
+      card: { type: 'string' },
+      'card-file': { type: 'string' },
+      'clear-card': { type: 'boolean' },
     },
     build: ([id], values) => {
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
@@ -777,6 +815,10 @@ const specs: Record<string, Spec> = {
       const clearReply = values['clear-reply'] === true;
       if (reply && clearReply)
         invalid('Use either --reply/--reply-file or --clear-reply, not both.');
+      const card = cardPreparation(values);
+      const clearCard = values['clear-card'] === true;
+      if (card && clearCard)
+        invalid('Use either --card/--card-file or --clear-card, not both.');
       const title = str(values, 'title');
       if (title !== undefined && !title.trim())
         invalid('--title cannot be empty.');
@@ -794,28 +836,35 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
         clearReply: clearReply || undefined,
+        clearCard: clearCard || undefined,
       };
       const { id: _, silent, ...changes } = request;
       if (
         silent &&
         !reply &&
+        !card &&
         Object.values(changes).every((value) => value === undefined)
       )
         invalid(
-          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url, --[clear-]data or --reply/--clear-reply.',
+          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url, --[clear-]data, --reply/--clear-reply or --card/--clear-card.',
         );
       return {
         method: 'updateNotification',
         request,
-        ...(reply
+        ...(reply || card
           ? {
               prepare: async (signal: AbortSignal) => ({
-                reply: replyToMessage(
-                  parseReplyForm(
-                    await reply(signal),
-                    values.reply === undefined ? 'reply-file' : 'reply',
-                  ),
-                ),
+                ...(reply
+                  ? {
+                      reply: replyToMessage(
+                        parseReplyForm(
+                          await reply(signal),
+                          values.reply === undefined ? 'reply-file' : 'reply',
+                        ),
+                      ),
+                    }
+                  : {}),
+                ...(card ? await card(signal) : {}),
               }),
             }
           : {}),

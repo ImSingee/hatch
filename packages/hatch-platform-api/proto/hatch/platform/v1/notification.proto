@@ -128,6 +128,8 @@ message NotificationSummary {
   // Which question reply is: 1 for the form it was sent with, one more for
   // each edit that replaced or removed it.
   uint32 reply_round = 23;
+  // Status and one block the timeline shows; absent without one.
+  NotificationCard card = 24;
 }
 
 // ---------------------------------------------------------------- replies
@@ -378,6 +380,8 @@ message SendNotificationRequest {
   optional bool auto_open_url = 9;
   // Form people answer once; answers go to response routes.
   NotificationReply reply = 12;
+  // Status and one block the timeline shows; phones show title and body.
+  NotificationCard card = 15;
 
   // From the sending user, never routed: the group's enabled members.
   string group_id = 10 [
@@ -453,6 +457,10 @@ message UpdateNotificationRequest {
   NotificationReply reply = 9;
   // Remove the reply form (also starts the next round). Not with reply.
   bool clear_reply = 10;
+  // Replace the card (the whole card). Not with clear_card.
+  NotificationCard card = 11;
+  // Remove the card.
+  bool clear_card = 12;
 }
 message UpdateNotificationResponse {
   // 1 for the original; every edit and the recall increment it.
@@ -484,6 +492,81 @@ message DeleteNotificationRequest {
 }
 message DeleteNotificationResponse {}
 
+// ---------------------------------------------------------------- cards
+
+message NotificationCardStatus {
+  string label = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 24
+  }];
+  // neutral | info | success | warning | danger; empty means neutral.
+  string tone = 2 [(buf.validate.field).string = {
+    in: [
+      "",
+      "neutral",
+      "info",
+      "success",
+      "warning",
+      "danger"
+    ]
+  }];
+}
+
+// A bar filled to percent (0-100), with an optional value such as "3 / 14".
+message NotificationCardProgress {
+  string label = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  double percent = 2 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  optional string value = 3 [(buf.validate.field).string.max_len = 24];
+}
+
+message NotificationCardStat {
+  string value = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 24
+  }];
+  string label = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+}
+
+// One to three figures side by side.
+message NotificationCardStats {
+  repeated NotificationCardStat items = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 3
+  }];
+}
+
+// A comment someone made, such as a review note.
+message NotificationCardQuote {
+  string author = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  string text = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  optional string location = 3 [(buf.validate.field).string.max_len = 80];
+}
+
+// What a notification shows in the timeline besides its title and body.
+message NotificationCard {
+  NotificationCardStatus status = 1;
+  oneof block {
+    NotificationCardProgress progress = 2;
+    NotificationCardStats stats = 3;
+    NotificationCardQuote quote = 4;
+  }
+}
+
 message NotificationRevision {
   // The notification revision while this version was current.
   uint32 revision = 1;
@@ -495,6 +578,7 @@ message NotificationRevision {
   // The question it asked then; absent when it asked nothing.
   NotificationReply reply = 6;
   uint32 reply_round = 7;
+  NotificationCard card = 10;
   // ISO-8601: when this version became current, and when an edit replaced it.
   string activity_at = 8;
   string replaced_at = 9;

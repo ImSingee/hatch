@@ -124,6 +124,11 @@ asks a new question on the same notification (`UpdateNotification.reply` /
 every answer (`ListNotificationRevisions`), matching the timeline's "Earlier
 versions".
 
+`notification send|update --card <json> | --card-file <path|->` (and
+`update --clear-card`) set the timeline card (`SendNotification.card`,
+`UpdateNotification.card` / `clear_card`), checked locally with the platform's
+card schema before any request.
+
 `notification unread` and `notification mark-read (--through <id> | --latest)`
 read and move the caller's timeline read position (`GetNotificationReadState`,
 `MarkNotificationsRead`), the same domain service as the web timeline. A Run

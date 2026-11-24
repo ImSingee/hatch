@@ -24,6 +24,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { NotificationCard } from '../../../../packages/hatch-platform-api/notification-card';
 import { describeAnswers } from '../../../../packages/hatch-platform-api/notification-reply';
 import { authClient } from '~auth/client';
 import { UserAvatar } from '~components/auth/user-avatar';
@@ -423,8 +424,10 @@ function TimelineEntry({
           <Time iso={item.activityAt} />
         </div>
         <div className={bubble ? classes.bubble : classes.card}>
+          {item.card?.status ? <CardStatus card={item.card} /> : null}
           <h3 className={classes.title}>{item.title}</h3>
           {item.body ? <p className={classes.body}>{item.body}</p> : null}
+          {item.card?.block ? <CardBlock card={item.card} /> : null}
           {item.url ? <NotificationLink url={item.url} /> : null}
           {item.reply ? (
             // A new question is a new form: keyed by round, no draft carries over.
@@ -477,6 +480,70 @@ function Answer({
   );
 }
 
+/** The card's status: a tinted pill with a dot, its tone also in words. */
+function CardStatus({ card }: { card: NotificationCard }) {
+  const status = card.status;
+  if (!status) return null;
+  return (
+    <span className={classes.status} data-tone={status.tone}>
+      <span className={classes.statusDot} aria-hidden />
+      {status.label}
+    </span>
+  );
+}
+
+/** The card's one block: progress, a few figures, or a quoted comment. */
+function CardBlock({ card }: { card: NotificationCard }) {
+  const block = card.block;
+  if (!block) return null;
+  switch (block.type) {
+    case 'progress':
+      return (
+        <div className={classes.progress}>
+          <div className={classes.progressHead}>
+            <span>{block.label}</span>
+            {block.value ? (
+              <span className={classes.progressValue}>{block.value}</span>
+            ) : null}
+          </div>
+          <progress
+            className={classes.progressTrack}
+            aria-label={block.label}
+            aria-valuetext={block.value}
+            value={block.percent}
+            max={100}
+            data-tone={card.status?.tone ?? 'neutral'}
+          />
+        </div>
+      );
+    case 'stats':
+      return (
+        <dl className={classes.stats}>
+          {block.items.map((stat, index) => (
+            // Figures have no ids; their order is their identity.
+            // eslint-disable-next-line react/no-array-index-key
+            <div key={index} className={classes.stat}>
+              <dd className={classes.statValue}>{stat.value}</dd>
+              <dt className={classes.statLabel}>{stat.label}</dt>
+            </div>
+          ))}
+        </dl>
+      );
+    case 'quote':
+      return (
+        <blockquote className={classes.quote}>
+          <span className={classes.quoteMeta}>
+            <span className={classes.quoteAuthor}>{block.author}</span>
+            {block.location ? (
+              <span className={classes.quoteLocation}>{block.location}</span>
+            ) : null}
+          </span>
+          <span className={classes.quoteText}>{block.text}</span>
+        </blockquote>
+      );
+  }
+}
+
 /** What the notification said before each edit, with each round's answer. */
 function History({ item }: { item: TimelineItem }) {
   const { t } = useI18n();
@@ -501,7 +568,9 @@ function History({ item }: { item: TimelineItem }) {
       return {
         key: revision.revision,
         at: revision.activityAt,
-        title: revision.title,
+        title: revision.card?.status
+          ? `${revision.card.status.label} · ${revision.title}`
+          : revision.title,
         answer:
           response && revision.reply
             ? describeAnswers(revision.reply, response.answers)

@@ -33,6 +33,14 @@ signed-in user can see and change it.
   new question by replacing or removing the form, which starts the next
   round (`replyRound`). Each round takes one answer, from whoever answers
   first, and the answer never changes.
+- **Card**: an optional `card` the web timeline shows besides the title and
+  body: a `status` (`label`, `tone` neutral|info|success|warning|danger) and at
+  most one `block` (`progress` with `label`, `percent`, `value?`; `stats` with
+  one to three `{ value, label }`; `quote` with `author`, `text`,
+  `location?`). Phones and destinations keep showing the title and body, so a
+  card only adds to them; envelopes carry it as `notification.card`. Pushes
+  set it and edits replace or remove it (`card: null`); empty spellings mean
+  no card. The rules live in `packages/hatch-platform-api/notification-card*.ts`.
 - **Response route**: `(sourceType, sourceId?, kind?) → destination`, where the
   destination is a webhook or an App that accepts responses. Every matching
   response route receives the answer once. An App may receive answers to its

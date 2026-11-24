@@ -1191,3 +1191,53 @@ describe('new questions on the same notification', () => {
     });
   });
 });
+
+describe('cards', () => {
+  it('are stored with the push, replaced or removed by an edit, and kept in earlier versions', async () => {
+    const response = await pushAsChannel({
+      kind: 'deploy',
+      title: 'CI running',
+      card: {
+        status: { label: 'Running', tone: 'info' },
+        block: {
+          type: 'progress',
+          label: 'Checks',
+          percent: 21,
+          value: '3 / 14',
+        },
+      },
+    });
+    const { id } = (await response.json()) as { id: string };
+    expect((await service.getNotification(id)).card).toEqual({
+      status: { label: 'Running', tone: 'info' },
+      block: {
+        type: 'progress',
+        label: 'Checks',
+        percent: 21,
+        value: '3 / 14',
+      },
+    });
+
+    const sender = { type: 'channel' as const, channelId };
+    await updateNotification(
+      sender,
+      notificationUpdateSchema.parse({
+        id,
+        card: { status: { label: 'Passed', tone: 'success' } },
+      }),
+    );
+    expect((await service.getNotification(id)).card).toEqual({
+      status: { label: 'Passed', tone: 'success' },
+    });
+    await updateNotification(
+      sender,
+      notificationUpdateSchema.parse({ id, card: null }),
+    );
+    expect((await service.getNotification(id)).card).toBeNull();
+
+    const history = await service.listNotificationRevisions(id);
+    expect(
+      history.revisions.map((revision) => revision.card?.status?.label),
+    ).toEqual(['Running', 'Passed']);
+  });
+});

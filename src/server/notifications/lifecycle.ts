@@ -208,6 +208,7 @@ export async function updateNotification(
           ? current.autoOpenUrl
           : update.autoOpenUrl,
       data: update.data === undefined ? current.data : update.data,
+      card: update.card === undefined ? current.card : update.card,
     };
     // Without an explicit choice, a link follows the push default: a new
     // link opens on tap, a cleared one stops, a replaced one keeps the setting.
@@ -224,7 +225,8 @@ export async function updateNotification(
       next.body !== current.body ||
       next.url !== current.url ||
       next.autoOpenUrl !== current.autoOpenUrl ||
-      !sameJson(next.data, current.data);
+      !sameJson(next.data, current.data) ||
+      !sameJson(next.card, current.card);
     if (!changed && update.silent === true) {
       return { id: current.id, revision: current.revision, changed: false };
     }
@@ -239,6 +241,7 @@ export async function updateNotification(
           body: current.body,
           url: current.url,
           data: current.data,
+          card: current.card,
           reply: current.reply,
           replyRound: current.replyRound,
           activityAt: current.activityAt,

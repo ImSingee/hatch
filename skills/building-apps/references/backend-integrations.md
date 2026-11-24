@@ -379,8 +379,13 @@ await updateNotification(id, { title: 'Order delivered', body: null });
 await recallNotification(id);
 ```
 
+Add a `card` to show progress, figures or a quoted comment in the user's
+timeline: `{ status: { label: 'Out for delivery', tone: 'info' }, block: {
+type: 'progress', label: 'Route', percent: 60, value: '3 / 5 stops' } }`. Keep
+the essentials in `title` and `body` too: phones only show those.
+
 `updateNotification` changes any of `title`, `body`, `url`, `autoOpenUrl`,
-`data` and `reply`. Use one notification per thing the user follows (an order,
+`data`, `reply` and `card`. Use one notification per thing the user follows (an order,
 a pull request) and update it as it changes: it moves to the end of the user's
 timeline, and the earlier versions stay visible there. `reply` asks a new
 question (for example "Merge?" after "Fix the failing check?"): a form replaces

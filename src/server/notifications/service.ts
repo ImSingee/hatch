@@ -44,6 +44,7 @@ import {
 } from './contract';
 import { ingestChannelPush } from './channel-ingress';
 import type { ReplyForm } from '../../../packages/hatch-platform-api/notification-reply';
+import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
 import {
   ingestNotification,
   newNotificationId,
@@ -151,6 +152,8 @@ export type NotificationSummaryView = {
   revision: number;
   editedAt: string | null;
   recalledAt: string | null;
+  /** Status and one block the timeline shows; null without one. */
+  card: NotificationCard | null;
   /**
    * The question the notification asks now; null when it asks nothing. Each
    * round takes one answer.
@@ -376,6 +379,7 @@ function summaryView(
     revision: row.revision,
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
+    card: row.card,
     reply: row.reply,
     replyRound: row.replyRound,
     respondedAt: isoOrNull(row.respondedAt),
@@ -573,6 +577,7 @@ export type NotificationRevisionView = {
   body: string | null;
   url: string | null;
   data: Record<string, unknown> | null;
+  card: NotificationCard | null;
   reply: ReplyForm | null;
   replyRound: number;
   /** When this version became current. */
@@ -608,6 +613,7 @@ export async function listNotificationRevisions(id: string): Promise<{
       body: revision.body,
       url: revision.url,
       data: revision.data,
+      card: revision.card,
       reply: revision.reply,
       replyRound: revision.replyRound,
       activityAt: iso(revision.activityAt),
@@ -1672,6 +1678,7 @@ export async function sendTestNotification(
     priority: DEFAULT_NOTIFICATION_PRIORITY,
     data: null,
     reply: null,
+    card: null,
     dedupeKey: null,
     occurredAt: null,
   };

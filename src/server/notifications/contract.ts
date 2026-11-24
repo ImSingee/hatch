@@ -16,6 +16,8 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
+import { optionalCardSchema } from '../../../packages/hatch-platform-api/notification-card-schema';
+import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
 import {
   describeIssue,
   optionalReplySchema,
@@ -131,6 +133,8 @@ export const notificationPushSchema = z
     data: dataField,
     /** Form people answer once; the answer goes to response routes. */
     reply: optionalReplySchema.optional().transform((value) => value ?? null),
+    /** Status and one block for the timeline; phones show title and body. */
+    card: optionalCardSchema.optional().transform((value) => value ?? null),
     dedupeKey: optionalText(MAX_NOTIFICATION_DEDUPE_KEY),
     occurredAt: z
       .string()
@@ -197,6 +201,8 @@ export const notificationUpdateSchema = z
     data: dataField.optional(),
     /** A new question (starting the next round), or null to ask none. */
     reply: optionalReplySchema.optional(),
+    /** A new card, or null to remove it. */
+    card: optionalCardSchema.optional(),
     /** Only replace content without alerting again. Defaults to false. */
     silent: z.boolean().optional(),
   })
@@ -205,6 +211,7 @@ export const notificationUpdateSchema = z
     (update) =>
       update.title !== undefined ||
       update.reply !== undefined ||
+      update.card !== undefined ||
       update.body !== undefined ||
       update.url !== undefined ||
       update.autoOpenUrl !== undefined ||
@@ -294,6 +301,7 @@ export type NotificationRecord = {
   autoOpenUrl: boolean;
   priority: number;
   data: JsonObject | null;
+  card: NotificationCard | null;
   dedupeKey: string | null;
   occurredAt: Date;
   revision: number;
@@ -366,6 +374,8 @@ export type NotificationEnvelope = {
     /** -2 lowest, -1 low, 0 normal, 1 high. */
     priority: number;
     data: JsonObject | null;
+    /** Status and one block the timeline shows; null without one. */
+    card: NotificationCard | null;
     dedupeKey: string | null;
     occurredAt: string;
     revision: number;
@@ -477,6 +487,7 @@ export function buildEnvelope(args: {
       autoOpenUrl: notification.autoOpenUrl,
       priority: notification.priority,
       data: notification.data,
+      card: notification.card,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),
       revision: contentRevision(notification),
