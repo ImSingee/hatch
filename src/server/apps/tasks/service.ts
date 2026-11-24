@@ -54,9 +54,13 @@ export const TASK_QUEUE_LIMIT = 100;
 // 7 (platform-config.ts).
 const APP_TASK_QUEUE_LOCK_NS = 8;
 
-/** Retries of a dispatch pass that failed (e.g. the database was down). */
-const DISPATCH_RETRY_LIMIT = 6;
+/**
+ * Backoff for retrying a dispatch pass that failed (e.g. the database was
+ * down): doubling from the base, capped, and never giving up, since nothing
+ * else may wake an App whose queue holds accepted runs.
+ */
 const DISPATCH_RETRY_BASE_MS = 1000;
+const DISPATCH_RETRY_MAX_MS = 60_000;
 /** Output bytes kept from a method's response. */
 const MAX_TASK_OUTPUT_BYTES = 1024 * 1024;
 
@@ -302,8 +306,11 @@ export function dispatch(appId: string): void {
           );
           // Nothing else may wake this App (no run is active to finish), so
           // try again with backoff instead of leaving accepted runs queued.
-          if (state.failures < DISPATCH_RETRY_LIMIT && !state.retry) {
-            const delay = DISPATCH_RETRY_BASE_MS * 2 ** state.failures;
+          if (!state.retry) {
+            const delay = Math.min(
+              DISPATCH_RETRY_BASE_MS * 2 ** Math.min(state.failures, 16),
+              DISPATCH_RETRY_MAX_MS,
+            );
             state.failures += 1;
             state.retry = setTimeout(() => {
               state.retry = null;
