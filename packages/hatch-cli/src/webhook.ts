@@ -106,6 +106,27 @@ function isEventStream(response: Response) {
   );
 }
 
+/** How long stdout may stay unread after --max-duration before exiting. */
+const OUTPUT_GRACE_MS = 5000;
+
+/** Resolve whether everything queued on stdout is flushed within `ms`. */
+async function stdoutFlushed(ms: number): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      // A write callback runs once it and every earlier write are flushed.
+      new Promise<boolean>((resolve) =>
+        process.stdout.write('', () => resolve(true)),
+      ),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function write(value: string | Uint8Array, signal: AbortSignal) {
   if (!process.stdout.write(value))
     await once(process.stdout, 'drain', { signal });
@@ -457,8 +478,7 @@ async function streamEvents(
     }
     const reason = stop === 'max' ? 'max_duration' : 'closed';
     if (options.json)
-      // Queue the final record without waiting for drain: the stream signal
-      // may already be aborted, and a stuck reader must not hold the exit.
+      // Queue the final record; the stream signal may already be aborted.
       process.stdout.write(
         `${JSON.stringify({ type: 'end', ok: true, reason, ...details() })}\n`,
       );
@@ -466,6 +486,15 @@ async function streamEvents(
       process.stderr.write(
         `Stream ${reason === 'closed' ? 'closed by the App' : 'reached --max-duration'} after ${delivered.events} events; last event ID: ${delivered.lastEventId ?? 'none'}.\n`,
       );
+    // --max-duration bounds the whole run. A pending write to a pipe nobody
+    // reads keeps Node alive even after the command returns, so give stdout
+    // a short grace and then exit with the output discarded.
+    if (reason === 'max_duration' && !(await stdoutFlushed(OUTPUT_GRACE_MS))) {
+      process.stderr.write(
+        `stdout was not read within ${OUTPUT_GRACE_MS / 1000}s after --max-duration; pending output was discarded.\n`,
+      );
+      process.exit(7);
+    }
   } finally {
     clearTimeout(idleTimer);
     clearTimeout(maxTimer);

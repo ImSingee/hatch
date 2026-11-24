@@ -231,8 +231,20 @@ describe('server-sent event subscriptions', () => {
       0,
       new AbortController().signal,
     );
+  // Skips the empty probe write that checks whether stdout has flushed.
   const records = (output: { mock: { calls: unknown[][] } }) =>
-    output.mock.calls.map((call) => JSON.parse(String(call[0])));
+    output.mock.calls
+      .filter((call) => call[0] !== '')
+      .map((call) => JSON.parse(String(call[0])));
+  /** A stdout that accepts and flushes every write at once. */
+  const flushingStdout = () =>
+    vi.spyOn(process.stdout, 'write').mockImplementation(((
+      ...args: unknown[]
+    ) => {
+      const callback = args.at(-1);
+      if (typeof callback === 'function') callback();
+      return true;
+    }) as typeof process.stdout.write);
   const open = (response: import('node:http').ServerResponse) =>
     response.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
@@ -311,7 +323,7 @@ describe('server-sent event subscriptions', () => {
       const timer = setInterval(() => response.write(': ping\n\n'), 30);
       response.on('close', () => clearInterval(timer));
     };
-    const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    const output = flushingStdout();
     await sse('--json', '--max-duration', '0.2', '--idle-timeout', '1');
     expect(records(output).at(-1)).toEqual({
       type: 'end',
@@ -375,19 +387,29 @@ describe('server-sent event subscriptions', () => {
     });
   });
 
-  it('ends or cancels normally while stdout never drains', async () => {
+  it('ends or cancels while stdout never drains, exiting once its grace ends', async () => {
     stream = (_, response) => {
       open(response);
       const timer = setInterval(() => response.write(': ping\n\n'), 30);
       response.on('close', () => clearInterval(timer));
     };
     const output = vi.spyOn(process.stdout, 'write').mockReturnValue(false);
-    await sse('--json', '--max-duration', '0.2');
+    const errors = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exited');
+    }) as typeof process.exit);
+    await expect(sse('--json', '--max-duration', '0.2')).rejects.toThrow(
+      'exited',
+    );
     expect(records(output).at(-1)).toMatchObject({
       type: 'end',
       ok: true,
       reason: 'max_duration',
     });
+    expect(exit).toHaveBeenCalledWith(7);
+    expect(String(errors.mock.calls.at(-1)?.[0])).toMatch(
+      /stdout was not read within 5s/,
+    );
 
     const cancel = new AbortController();
     setTimeout(() => cancel.abort(), 200);
@@ -409,7 +431,7 @@ describe('server-sent event subscriptions', () => {
         cancel.signal,
       ),
     ).rejects.toMatchObject({ code: 'cancelled', exitCode: 130 });
-  });
+  }, 15000);
 
   it('reports interrupted, non-2xx and non-stream responses distinctly', async () => {
     stream = (_, response) => {

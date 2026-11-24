@@ -172,6 +172,7 @@ export default { async fetch(request: Request): Promise<Response> {
   if (mode === 'platform' && !signedOK) return Response.json(diagnostics, { status: 401 });
   if (mode === 'none' && !privateOK) return Response.json(diagnostics, { status: 401 });
   if (url.pathname.endsWith('/sse')) { const encoder = new TextEncoder(); let n = Number(request.headers.get('last-event-id') ?? '0'); let timer = 0; return new Response(new ReadableStream({ start(controller) { controller.enqueue(encoder.encode(': open\\n\\n')); timer = setInterval(() => { n++; controller.enqueue(encoder.encode('id: ' + n + '\\ndata: ' + JSON.stringify({ n }) + '\\n\\n')); if (n >= 4) { clearInterval(timer); controller.close(); } }, 700); }, cancel() { clearInterval(timer); } }), { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } }); }
+  if (url.pathname.endsWith('/sse-flood')) { const line = new TextEncoder().encode('data: ' + 'x'.repeat(65536) + '\\n\\n'); let timer = 0; return new Response(new ReadableStream({ start(controller) { timer = setInterval(() => controller.enqueue(line), 10); }, cancel() { clearInterval(timer); } }), { headers: { 'content-type': 'text/event-stream' } }); }
   if (url.pathname.endsWith('/sse-hold')) { const encoder = new TextEncoder(); let timer = 0; return new Response(new ReadableStream({ start(controller) { timer = setInterval(() => controller.enqueue(encoder.encode(': ping\\n\\n')), 200); }, cancel() { clearInterval(timer); } }), { headers: { 'content-type': 'text/event-stream' } }); }
   if (url.pathname.endsWith('/binary')) return new Response(body, { status: 201, headers: { 'content-type': 'application/octet-stream' } });
   if (url.pathname.endsWith('/stream')) return new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array([0, 255])); setTimeout(() => { controller.enqueue(new Uint8Array([128, 10])); controller.close(); }, 500); } }), { headers: { 'content-type': 'application/octet-stream' } });
@@ -758,6 +759,49 @@ describe.runIf(Boolean(databaseUrl && cliEntry))(
           details: { lastEventId: null, events: 0 },
         },
       });
+      // A reader that stops reading must not keep --max-duration from ending
+      // the process: pending stdout gets a 5s grace, then the CLI exits 7.
+      const started = Date.now();
+      const stuck = spawn(
+        process.execPath,
+        [
+          cliEntry!,
+          '--config',
+          join(root, 'no-config.json'),
+          'app',
+          'invoke',
+          'webhook',
+          slug,
+          '--method',
+          'GET',
+          '--path',
+          'sse-flood',
+          '--sse',
+          '--json',
+          '--max-duration',
+          '1',
+        ],
+        {
+          cwd: root,
+          env: { ...childEnv, HATCH_CLI_URL: origin, HATCH_CLI_TOKEN: token },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      stuck.stdout.pause();
+      let stuckError = '';
+      stuck.stderr.on('data', (chunk: Buffer) => (stuckError += chunk));
+      const [stuckCode] = (await Promise.race([
+        once(stuck, 'exit'),
+        delay(30000).then(() => {
+          stuck.kill('SIGKILL');
+          return ['hung'];
+        }),
+      ])) as [number | string];
+      expect({ code: stuckCode, stderr: stuckError }).toMatchObject({
+        code: 7,
+        stderr: expect.stringContaining('stdout was not read within 5s'),
+      });
+      expect(Date.now() - started).toBeLessThan(20000);
       const buffered = await invoke([
         '--method',
         'GET',
