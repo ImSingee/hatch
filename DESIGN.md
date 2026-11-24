@@ -272,10 +272,14 @@ A rounded square. Sizes: 22 (radius 6), 26 widget header (radius 9,
 `sizes.deskTile`), 72 hero (radius 20).
 
 - With an icon: the App's stored icon image, cropped to cover the square. No
-  border, shadow or background of its own.
+  border, shadow or background of its own. Generated icons are one object
+  (glossy 3D, frosted glass or a white line drawing) on a top-lit gradient of
+  a palette colour (`docs/app-icons.md`).
 - Without one (and for Workflows, which have no icons): a monogram, the first
   character of the name, white 800 on one of `tiles`, chosen by a stable hash
-  of the id. Text from 12 at 22 up to 26 at 72.
+  of the id, under the same top light: a vertical overlay from white 12% to
+  black 18%, which keeps the letter at 4.5:1 on every fill. Text from 12 at 22
+  up to 26 at 72.
 
 An icon shown inline in a chat message is 96 square with the window radius.
 

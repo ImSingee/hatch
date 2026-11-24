@@ -29,7 +29,7 @@ describe('image command arguments', () => {
         '3',
         '--quality',
         'medium',
-        '--glyph-tile',
+        '--subject-tile',
         '#3E63DD',
         '--output-dir',
         'out',
@@ -40,7 +40,8 @@ describe('image command arguments', () => {
       promptFile: '-',
       count: 3,
       quality: 'medium',
-      glyphTile: '#3E63DD',
+      glyphTile: undefined,
+      subjectTile: '#3E63DD',
       outputDir: 'out',
     });
     // The limit counts code points, like the public API.
@@ -51,6 +52,10 @@ describe('image command arguments', () => {
       prompt: 'a ring',
       count: 1,
     });
+    // The older icon style stays available.
+    expect(
+      command('image', 'generate', '--prompt', 'a', '--glyph-tile', '#E5484D'),
+    ).toMatchObject({ glyphTile: '#E5484D', subjectTile: undefined });
     expect(command('app', 'icon', 'get', 'my-app')).toEqual({
       kind: 'icon-get',
       id: 'my-app',
@@ -93,6 +98,17 @@ describe('image command arguments', () => {
       ['image', 'generate', '--prompt', 'a', '--count', '2.5'],
       ['image', 'generate', '--prompt', 'a', '--quality', 'ultra'],
       ['image', 'generate', '--prompt', 'a', '--glyph-tile', 'blue'],
+      ['image', 'generate', '--prompt', 'a', '--subject-tile', '3E63DD'],
+      [
+        'image',
+        'generate',
+        '--prompt',
+        'a',
+        '--glyph-tile',
+        '#3E63DD',
+        '--subject-tile',
+        '#3E63DD',
+      ],
       ['image', 'generate', '--prompt', 'a', '--unknown'],
       ['app', 'icon', 'set', 'my-app'],
       ['app', 'icon', 'set', 'my-app', '--file', 'a', '--candidate', CANDIDATE],

@@ -618,6 +618,7 @@ export function cliClient(transport: Transport) {
         count: number;
         quality?: string;
         glyphTile?: string;
+        subjectTile?: string;
       }) => {
         const result = await images.generateImages(input);
         return {

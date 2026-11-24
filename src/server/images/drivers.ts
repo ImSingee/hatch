@@ -14,6 +14,8 @@ export type ImageRequest = {
   model: string;
   prompt: string;
   quality: ImageQuality;
+  /** `transparent` asks for a cut-out subject with an alpha channel. */
+  background: 'opaque' | 'transparent';
   signal: AbortSignal;
 };
 
@@ -80,11 +82,7 @@ async function readJsonBody(response: Response): Promise<unknown> {
  * always answer with base64 PNG data, so no response format is requested.
  */
 const openai: ImageDriver = {
-  suggestedModels: [
-    'gpt-image-2.6-flare',
-    'gpt-image-2.6-sunburst',
-    'gpt-image-1-mini',
-  ],
+  suggestedModels: ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'],
   async generate(provider, request) {
     let response: Response;
     try {
@@ -102,7 +100,7 @@ const openai: ImageDriver = {
             n: 1,
             size: '1024x1024',
             quality: request.quality,
-            background: 'opaque',
+            background: request.background,
             output_format: 'png',
           }),
           signal: request.signal,

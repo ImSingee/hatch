@@ -235,9 +235,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['image', 'generate'],
     usage:
-      'image generate (--prompt <text> | --prompt-file <path|->) [--count <1-4>] [--quality low|medium|high] [--glyph-tile <#RRGGBB>] [--output-dir <path>]',
+      'image generate (--prompt <text> | --prompt-file <path|->) [--count <1-4>] [--quality low|medium|high] [--subject-tile <#RRGGBB> | --glyph-tile <#RRGGBB>] [--output-dir <path>]',
     description:
-      'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. --count runs the same prompt that many times, so results are close variations; write a separate prompt per design to compare different ideas. Prints each candidate id and authenticated path; candidates expire after one day. --glyph-tile expects a white glyph on black and lays it on a solid 512px tile of that colour. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
+      'Generate 1024px square images with the selected image model; costs provider credit, limited to 30 images per hour. --count runs the same prompt that many times, so results are close variations; write a separate prompt per design to compare different ideas. Prints each candidate id and authenticated path; candidates expire after one day. Both tile flags return a 512px tile on a gradient of that colour: --subject-tile asks the model for a transparent background and centres the cut-out subject; --glyph-tile expects a white glyph on black. --output-dir also saves <id>.png files. Default quality low, default timeout 300 seconds.',
   },
   {
     path: ['theme', 'get'],

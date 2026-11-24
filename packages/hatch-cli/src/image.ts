@@ -29,6 +29,7 @@ export type ImageCommand =
       count: number;
       quality?: (typeof QUALITIES)[number];
       glyphTile?: string;
+      subjectTile?: string;
       outputDir?: string;
     }
   | { kind: 'icon-get'; id: string }
@@ -123,6 +124,7 @@ export function parseImageCommand(
         count: { type: 'string' },
         quality: { type: 'string' },
         'glyph-tile': { type: 'string' },
+        'subject-tile': { type: 'string' },
         'output-dir': { type: 'string' },
       },
       0,
@@ -146,6 +148,11 @@ export function parseImageCommand(
     const glyphTile = text(flags, 'glyph-tile');
     if (glyphTile !== undefined && !/^#[0-9a-fA-F]{6}$/.test(glyphTile))
       throw invalid('--glyph-tile must be a #RRGGBB colour.');
+    const subjectTile = text(flags, 'subject-tile');
+    if (subjectTile !== undefined && !/^#[0-9a-fA-F]{6}$/.test(subjectTile))
+      throw invalid('--subject-tile must be a #RRGGBB colour.');
+    if (glyphTile !== undefined && subjectTile !== undefined)
+      throw invalid('Supply at most one of --glyph-tile and --subject-tile.');
     return {
       command: {
         kind: 'generate',
@@ -154,6 +161,7 @@ export function parseImageCommand(
         count,
         quality: quality as (typeof QUALITIES)[number] | undefined,
         glyphTile,
+        subjectTile,
         outputDir: text(flags, 'output-dir'),
       },
       flags,
@@ -331,6 +339,7 @@ export async function runImage(
       count: command.count,
       quality: command.quality,
       glyphTile: command.glyphTile,
+      subjectTile: command.subjectTile,
     });
     const candidates: { id: string; path: string; file?: string }[] = [];
     const unsaved: string[] = [];

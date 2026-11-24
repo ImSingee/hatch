@@ -780,6 +780,7 @@ export function registerPlatformApi(
           count: input.count,
           quality: input.quality as 'low' | 'medium' | 'high' | undefined,
           glyphTile: input.glyphTile,
+          subjectTile: input.subjectTile,
         },
         context.signal,
       );

@@ -105,6 +105,9 @@ export function AppTile({
         frame,
         {
           backgroundColor: tileFor(seed ?? name),
+          // Same top light as the web monogram and generated App icons.
+          backgroundImage:
+            'linear-gradient(rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.18))',
           alignItems: 'center',
           justifyContent: 'center',
         },
