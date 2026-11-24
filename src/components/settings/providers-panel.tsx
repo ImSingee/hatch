@@ -329,7 +329,9 @@ function ModelFormModal({
           <TextInput
             label="Display name"
             description="Optional — defaults to the model ID"
-            placeholder={form.values.modelId.trim() || 'GPT-5.5'}
+            placeholder={
+              form.values.modelId.trim() || (image ? 'GPT Image' : 'GPT-5.5')
+            }
             {...form.getInputProps('name')}
           />
           {image ? (
