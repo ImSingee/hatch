@@ -177,7 +177,10 @@ describe('buildCatalog', () => {
       apiType: 'openai-responses',
       baseUrl: 'https://api.openai.com/v1',
     });
-    expect(warnings.join('\n')).toContain('openai');
+    expect(warnings.join('\n')).toContain('API type "openai-completions"');
+    expect(warnings.join('\n')).toContain(
+      'base URL "https://attacker.example.test/v1"',
+    );
   });
 
   it('leaves out batch-only variants', () => {

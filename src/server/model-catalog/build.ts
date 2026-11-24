@@ -242,6 +242,11 @@ export function buildCatalog(raw: unknown): CatalogBuildResult {
       warnings.push(
         `Provider "${curated.id}" lists API type "${String(upstream.api)}"; kept "${apiType}".`,
       );
+    const upstreamUrl = upstream.baseUrl?.trim().replace(/\/+$/, '');
+    if (upstreamUrl && upstreamUrl !== baseUrl.replace(/\/+$/, ''))
+      warnings.push(
+        `Provider "${curated.id}" lists base URL "${upstreamUrl}"; kept "${baseUrl}".`,
+      );
 
     // A curated provider's list must be there: losing it is a broken feed,
     // not churn, and would publish a preset with no models.
