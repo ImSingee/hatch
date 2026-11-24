@@ -18,11 +18,12 @@ designs icons in chat; people can also upload a file.
    provider. Migration `20261124092607_agent_model_kind` deletes the retired
    single `image.model` setting without converting it: an instance that used
    it adds its image model again.
-2. **Skill.** `skills/app-icon/SKILL.md` holds the versioned prompt set: how to
-   offer three candidates, one per style (Glossy: a colourful 3D object;
-   Glass: a milky frosted-glass object with one accent; Line: a bold white
-   line drawing), each with its own subject, plus the tile palette and one
-   fixed template per style. The Agent sends only a short subject phrase
+2. **Skill.** The `building-apps` Skill's
+   `skills/building-apps/references/app-icon.md` reference holds the versioned
+   prompt set: how to offer three candidates, one per style (Glossy: a
+   colourful 3D object; Glass: a milky frosted-glass object with one accent;
+   Line: a bold white line drawing), each with its own subject, plus the tile
+   palette and one fixed template per style. The Agent sends only a short subject phrase
    derived from the App's name and description and the tile colour's name,
    one prompt per candidate: repeating one prompt (`--count`) returns
    near-identical objects once the tile is normalised.
