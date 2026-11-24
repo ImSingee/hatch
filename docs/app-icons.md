@@ -19,14 +19,24 @@ designs icons in chat; people can also upload a file.
    single `image.model` setting without converting it: an instance that used
    it adds its image model again.
 2. **Skill.** `skills/app-icon/SKILL.md` holds the versioned prompt set: how to
-   pick three distinct subjects, the tile palette and the fixed style
-   template. The Agent sends only a short subject phrase derived from the
-   App's name and description, one prompt per candidate: repeating one prompt
-   (`--count`) returns near-identical glyphs once the tile is normalised.
-3. **Generation.** `hatch image generate` (`ImageService/GenerateImages`) asks
-   the model for a white glyph on black. With `--glyph-tile <#RRGGBB>` the
-   platform turns luminance into opacity, scales the glyph to a fixed share of
-   a 512 px tile and lays it on that exact colour (`src/server/images/tile.ts`).
+   offer three candidates, one per style (Glossy: a colourful 3D object;
+   Glass: a milky frosted-glass object with one accent; Line: a bold white
+   line drawing), each with its own subject, plus the tile palette and one
+   fixed template per style. The Agent sends only a short subject phrase
+   derived from the App's name and description and the tile colour's name,
+   one prompt per candidate: repeating one prompt (`--count`) returns
+   near-identical objects once the tile is normalised.
+3. **Generation.** `hatch image generate --subject-tile <#RRGGBB>`
+   (`ImageService/GenerateImages`) asks the model for one object on a
+   transparent background. The platform cuts it out, scales its longer side to
+   a fixed share of a 512 px tile, centres it with a soft shadow in a deep tone
+   of the colour, and lays it on a vertical gradient of that colour with a top
+   highlight (`src/server/images/tile.ts`). An opaque or empty result is
+   rejected, so the image model must support transparent backgrounds
+   (`gpt-image-2.6-flare` and `gpt-image-2.6-sunburst` both do). With
+   `--glyph-tile` the model draws a white glyph on black instead; the
+   platform turns luminance into opacity and lays the glyph on the same
+   gradient.
 4. **Choice.** Results are _candidates_: PNG files under
    `<data dir>/image-candidates/` with an unguessable id, served at
    `/api/images/candidates/<id>` to authenticated callers and deleted after one
@@ -35,11 +45,14 @@ designs icons in chat; people can also upload a file.
 5. **Icon.** `hatch app icon set <app> --candidate <id>` (or `--file`) stores
    the icon.
 
-The model draws only the glyph because, in side-by-side tests, models drifted
-on background colour and margins when asked for a whole tile; composing on
-the platform keeps a grid of Apps reading as one family. Sample output:
-[contact sheet](app-icons/contact-sheet.png) (22, 40, 60 and 88 px on the
-Desk ground and on white).
+The model draws only the object because, in side-by-side tests, models
+drifted on background colour and margins when asked for a whole tile;
+composing on the platform keeps a grid of Apps reading as one family, in
+any mix of styles. Icons set before prompt set 3 keep their stored image
+until they are redesigned. Sample output: the
+[three styles](app-icons/styles.png) side by side (22, 40 and 88 px) and a
+[Glossy contact sheet](app-icons/contact-sheet.png) of 14 Apps (22, 40, 60
+and 88 px), both on the Desk ground and on white.
 
 ## Storage and delivery
 

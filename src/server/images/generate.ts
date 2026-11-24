@@ -4,7 +4,7 @@ import { AppError } from '~server/errors';
 import { candidatePath, saveCandidate } from './candidates';
 import type { ImageQuality } from './drivers';
 import { resolveImageModel } from './model';
-import { composeGlyphTile, isTileColor } from './tile';
+import { composeGlyphTile, composeSubjectTile, isTileColor } from './tile';
 
 export const MAX_IMAGES_PER_CALL = 4;
 export const MAX_PROMPT_LENGTH = 4000;
@@ -33,9 +33,15 @@ export type GenerateImagesInput = {
   imageModelId?: string;
   /**
    * When set, each result must be a white glyph on black and is composed
-   * onto a solid tile of this `#RRGGBB` colour.
+   * onto a gradient tile of this `#RRGGBB` colour.
    */
   glyphTile?: string;
+  /**
+   * When set, the model is asked for a transparent background and each
+   * result must be a cut-out subject; it is composed onto a gradient tile
+   * of this `#RRGGBB` colour. Excludes `glyphTile`.
+   */
+  subjectTile?: string;
 };
 
 export type GeneratedImages = {
@@ -60,8 +66,12 @@ export async function generateImages(
   if (!Number.isInteger(count) || count < 1 || count > MAX_IMAGES_PER_CALL)
     throw new AppError(`Count must be 1 to ${MAX_IMAGES_PER_CALL}.`, 400);
   const glyphTile = input.glyphTile;
-  if (glyphTile !== undefined && !isTileColor(glyphTile))
-    throw new AppError('Tile background must be a #RRGGBB colour.', 400);
+  const subjectTile = input.subjectTile;
+  for (const tile of [glyphTile, subjectTile])
+    if (tile !== undefined && !isTileColor(tile))
+      throw new AppError('Tile colour must be a #RRGGBB colour.', 400);
+  if (glyphTile !== undefined && subjectTile !== undefined)
+    throw new AppError('Choose either a glyph tile or a subject tile.', 400);
 
   const { id, driver, provider, modelId } = await resolveImageModel(
     input.imageModelId,
@@ -74,16 +84,22 @@ export async function generateImages(
         model: modelId,
         prompt,
         quality: input.quality ?? 'low',
+        background: subjectTile === undefined ? 'opaque' : 'transparent',
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
       // Never store provider bytes as-is: decode and re-encode.
       const png =
-        glyphTile === undefined
-          ? await sharp(raw, { limitInputPixels: 4096 * 4096 })
-              .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-              .png()
-              .toBuffer()
-          : await composeGlyphTile(raw, glyphTile);
+        subjectTile !== undefined
+          ? await composeSubjectTile(raw, subjectTile)
+          : glyphTile !== undefined
+            ? await composeGlyphTile(raw, glyphTile)
+            : await sharp(raw, { limitInputPixels: 4096 * 4096 })
+                .resize(1024, 1024, {
+                  fit: 'inside',
+                  withoutEnlargement: true,
+                })
+                .png()
+                .toBuffer();
       const id = await saveCandidate(png);
       return { id, path: candidatePath(id) };
     }),

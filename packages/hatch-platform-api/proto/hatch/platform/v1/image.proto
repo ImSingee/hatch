@@ -129,13 +129,17 @@ message GenerateImagesRequest {
     ]
   }];
   // When set, each result must be a white glyph on black; the platform lays
-  // it on a solid square tile of this colour with fixed margins.
+  // it on a gradient square tile of this colour with fixed margins.
   optional string glyph_tile = 4 [(buf.validate.field).string.pattern = "^#[0-9a-fA-F]{6}$"];
   // Image model id from ListImageModels; the default model when unset.
   optional string image_model_id = 5 [(buf.validate.field).string = {
     min_len: 1
     max_len: 191
   }];
+  // When set, the model is asked for a transparent background and each
+  // result must be a cut-out subject; the platform lays it on a gradient
+  // square tile of this colour at a fixed size. Excludes glyph_tile.
+  optional string subject_tile = 6 [(buf.validate.field).string.pattern = "^#[0-9a-fA-F]{6}$"];
 }
 
 // A generated image kept for one day so the user can choose one.
