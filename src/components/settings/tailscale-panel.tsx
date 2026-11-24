@@ -31,7 +31,14 @@ import {
 import copy from 'copy-to-clipboard';
 import dayjs from 'dayjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
+import {
+  type PlainTranslationKey,
+  translateError,
+  useErrorText,
+  useI18n,
+} from '~i18n';
 import { tailscaleQueryOptions } from '~queries/tailscale';
 import { configureTailscale } from '~server/tailscale';
 import {
@@ -45,31 +52,34 @@ import { openTailscaleAuthorization } from './tailscale-authorization';
 import classes from './tailscale-panel.module.css';
 
 const STATES = {
-  disconnected: { label: 'Not connected', color: 'gray' },
-  starting: { label: 'Connecting', color: 'blue' },
-  'preparing-https': { label: 'Preparing HTTPS', color: 'blue' },
-  'needs-login': { label: 'Waiting for sign-in', color: 'blue' },
-  'needs-approval': { label: 'Waiting for approval', color: 'blue' },
-  connected: { label: 'Connected', color: 'green' },
-  error: { label: 'Needs attention', color: 'red' },
+  disconnected: { label: 'tailscale.state.disconnected', color: 'gray' },
+  starting: { label: 'tailscale.state.starting', color: 'blue' },
+  'preparing-https': { label: 'tailscale.state.preparingHttps', color: 'blue' },
+  'needs-login': { label: 'tailscale.state.needsLogin', color: 'blue' },
+  'needs-approval': { label: 'tailscale.state.needsApproval', color: 'blue' },
+  connected: { label: 'tailscale.state.connected', color: 'green' },
+  error: { label: 'tailscale.state.error', color: 'red' },
 } as const satisfies Record<
   TailscaleStatus['state'],
-  { label: string; color: string }
+  { label: PlainTranslationKey; color: string }
 >;
 
 const LOGIN_METHODS = [
   {
     value: 'interactive',
-    label: 'Interactive sign-in',
-    description: 'Sign in with your Tailscale account in a new window.',
+    label: 'tailscale.method.interactive',
+    description: 'tailscale.method.interactiveDescription',
   },
   {
     value: 'auth-key',
-    label: 'Auth key',
-    description:
-      'Paste a key from the Tailscale admin console. No sign-in window opens.',
+    label: 'tailscale.method.authKey',
+    description: 'tailscale.method.authKeyDescription',
   },
-] as const;
+] as const satisfies readonly {
+  value: string;
+  label: PlainTranslationKey;
+  description: PlainTranslationKey;
+}[];
 
 type LoginMethod = (typeof LOGIN_METHODS)[number]['value'];
 
@@ -84,28 +94,60 @@ type HttpsPhase = NonNullable<TailscaleStatus['https']>['phase'];
 const HTTPS_PROBLEMS: Partial<
   Record<
     HttpsPhase,
-    { title: string; badge: string; color: string; dnsSettings: boolean }
+    {
+      title: PlainTranslationKey;
+      badge: PlainTranslationKey;
+      color: string;
+      dnsSettings: boolean;
+    }
   >
 > = {
   'certificate-delayed': {
-    title: 'HTTPS is taking longer than expected',
-    badge: 'HTTPS delayed',
+    title: 'tailscale.https.delayedTitle',
+    badge: 'tailscale.https.delayedBadge',
     color: 'yellow',
     dnsSettings: true,
   },
   'rate-limited': {
-    title: 'Certificate requests are temporarily limited',
-    badge: 'Waiting to retry',
+    title: 'tailscale.https.rateLimitedTitle',
+    badge: 'tailscale.https.rateLimitedBadge',
     color: 'yellow',
     dnsSettings: false,
   },
   'listener-error': {
-    title: 'Secure address could not start',
-    badge: 'Needs attention',
+    title: 'tailscale.https.listenerErrorTitle',
+    badge: 'tailscale.state.error',
     color: 'red',
     dnsSettings: false,
   },
 };
+
+/**
+ * The helper reports problems as English sentences. Its typed HTTPS phase and
+ * DNS flags identify which sentence it sent, so those translate through their
+ * `error.<code>` keys; any other message keeps the helper's English text in
+ * English and a generic translated sentence in other languages.
+ */
+function statusMessageCode(status: TailscaleStatus): string | undefined {
+  if (status.state !== 'error') return undefined;
+  switch (status.https?.phase) {
+    case 'certificate-delayed':
+      return 'tailscale.status.certificateDelayed';
+    case 'rate-limited':
+      return 'tailscale.status.rateLimited';
+    case 'listener-error':
+      return 'tailscale.status.listenerError';
+  }
+  if (status.https || !status.dns) return undefined;
+  const { magicDnsEnabled, httpsCertificatesEnabled } = status.dns;
+  if (magicDnsEnabled === null) return 'tailscale.status.magicDnsUnknown';
+  if (magicDnsEnabled === false && httpsCertificatesEnabled === false)
+    return 'tailscale.status.dnsSettingsDisabled';
+  if (magicDnsEnabled === false) return 'tailscale.status.magicDnsDisabled';
+  if (httpsCertificatesEnabled === false)
+    return 'tailscale.status.httpsCertificatesDisabled';
+  return undefined;
+}
 
 function DnsSettingRow({
   name,
@@ -114,23 +156,24 @@ function DnsSettingRow({
   name: string;
   enabled?: boolean | null;
 }) {
+  const { t } = useI18n();
   // A missing value means the helper could not read the setting, not that it
   // is off, so only an explicit false is reported as not enabled.
   const { label, Icon, color } =
     enabled === true
       ? {
-          label: 'Enabled',
+          label: 'common.enabled' as const,
           Icon: IconCircleCheck,
           color: 'var(--mantine-color-green-7)',
         }
       : enabled === false
         ? {
-            label: 'Not enabled',
+            label: 'tailscale.dns.notEnabled' as const,
             Icon: IconCircleX,
             color: 'var(--mantine-color-red-7)',
           }
         : {
-            label: 'Unknown',
+            label: 'common.unknown' as const,
             Icon: IconHelpCircle,
             color: 'var(--mantine-color-dimmed)',
           };
@@ -143,7 +186,7 @@ function DnsSettingRow({
         <Group gap={6} wrap="nowrap">
           <Icon size={16} color={color} aria-hidden />
           <Text span size="sm" fw={600}>
-            {label}
+            {t(label)}
           </Text>
         </Group>
       </Table.Td>
@@ -167,6 +210,8 @@ function ExternalButton({ href, label }: { href: string; label: string }) {
 }
 
 export function TailscaleSettings() {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const query = useQuery(tailscaleQueryOptions);
   const request = useRef<TailscaleConfigureInput | null>(null);
@@ -202,12 +247,12 @@ export function TailscaleSettings() {
     return (
       <Alert
         color="red"
-        title="Connection status unavailable"
+        title={t('tailscale.statusUnavailable')}
         icon={<IconAlertCircle size={18} />}
       >
         <Stack gap="sm" align="flex-start">
           <Text size="sm">
-            {query.error?.message ?? 'Loading connection status…'}
+            {errorText(query.error, 'tailscale.statusLoadFailed')}
           </Text>
           <Button
             type="button"
@@ -215,17 +260,18 @@ export function TailscaleSettings() {
             onClick={() => void query.refetch()}
             loading={query.isFetching}
           >
-            Try again
+            {t('common.tryAgain')}
           </Button>
         </Stack>
       </Alert>
     );
   }
+  const error = mutation.error ?? query.error;
   return (
     <TailscalePanel
       status={query.data}
       pending={mutation.isPending}
-      error={mutation.error?.message ?? query.error?.message ?? null}
+      error={error ? errorText(error, 'tailscale.updateFailed') : null}
       onConfigure={async (input) => {
         request.current = input;
         try {
@@ -249,6 +295,7 @@ export function TailscalePanel({
   error: string | null;
   onConfigure: (config: TailscaleConfigureInput) => Promise<TailscaleStatus>;
 }) {
+  const { t, locale } = useI18n();
   const [hostname, setHostname] = useState<string | null>(null);
   const [copiedOrigin, setCopiedOrigin] = useState<string | null>(null);
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('interactive');
@@ -316,7 +363,14 @@ export function TailscalePanel({
     submitting.current = true;
     finishAuthorization();
     const attempt = {
-      popup: !key ? openTailscaleAuthorization() : null,
+      popup: !key
+        ? openTailscaleAuthorization({
+            lang: locale,
+            title: t('tailscale.popup.title'),
+            heading: t('tailscale.popup.heading'),
+            message: t('tailscale.popup.message'),
+          })
+        : null,
       ready: false,
       navigated: false,
     };
@@ -362,14 +416,12 @@ export function TailscalePanel({
       return;
     }
     modals.openConfirmModal({
-      title: 'Disconnect this address?',
-      children: (
-        <Text size="sm">
-          You are using the Tailscale address. Disconnecting will close this
-          connection. Open Hatch at its original address to reconnect.
-        </Text>
-      ),
-      labels: { confirm: 'Disconnect', cancel: 'Keep connected' },
+      title: t('tailscale.disconnectConfirm.title'),
+      children: <Text size="sm">{t('tailscale.disconnectConfirm.body')}</Text>,
+      labels: {
+        confirm: t('tailscale.disconnect'),
+        cancel: t('tailscale.disconnectConfirm.keep'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: apply,
     });
@@ -387,18 +439,44 @@ export function TailscalePanel({
   // Errors that still allow signing in mean the connection itself failed;
   // DNS and certificate problems are settings the user can fix and wait on.
   const connectionFailed = status.state === 'error' && canAuthenticate;
-  const problemTitle =
+  const problemTitle = t(
     httpsProblem?.title ??
-    (httpsNotReady
-      ? 'HTTPS is not ready'
-      : connectionFailed
-        ? 'Could not connect to Tailscale'
-        : 'Connection needs attention');
+      (httpsNotReady
+        ? 'tailscale.problem.httpsNotReady'
+        : connectionFailed
+          ? 'tailscale.problem.connectionFailed'
+          : 'tailscale.problem.needsAttention'),
+  );
+  const problemMessage = status.message
+    ? translateError(
+        t,
+        locale,
+        { code: statusMessageCode(status), message: status.message },
+        'tailscale.problem.fallback',
+      )
+    : null;
   const problemColor =
     httpsProblem?.color ?? (connectionFailed ? 'red' : 'yellow');
   const retryAt =
     status.https?.phase === 'rate-limited' ? status.https.retryAt : null;
   const retryTime = retryAt ? dayjs(retryAt) : null;
+  const retryClock = retryTime?.isValid()
+    ? new Intl.DateTimeFormat(locale, {
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(retryTime.toDate())
+    : '';
+  const retryLabel = !retryTime?.isValid()
+    ? ''
+    : retryTime.isSame(dayjs(), 'day')
+      ? retryClock
+      : t('tailscale.retry.dateTime', {
+          date: new Intl.DateTimeFormat(locale, {
+            month: 'short',
+            day: 'numeric',
+          }).format(retryTime.toDate()),
+          time: retryClock,
+        });
   // Typed helper statuses decide from their phase; older helpers only
   // identify DNS or certificate settings problems through their message.
   const showDnsSettings = httpsProblem
@@ -417,11 +495,11 @@ export function TailscalePanel({
   // Restarting cannot lift a provider rate limit; the helper already waits
   // until the retry time. A pending interactive sign-in continues through its
   // authorization link instead.
-  const submitLabel = !status.enabled
-    ? 'Connect Tailscale'
+  const submitLabel: PlainTranslationKey | null = !status.enabled
+    ? 'tailscale.connect'
     : (status.state === 'error' && status.https?.phase !== 'rate-limited') ||
         (status.state === 'needs-login' && usesAuthKey)
-      ? 'Reconnect'
+      ? 'tailscale.reconnect'
       : null;
 
   return (
@@ -441,14 +519,20 @@ export function TailscalePanel({
             className={classes.badge}
             aria-live="polite"
           >
-            {badge.label}
+            {t(badge.label)}
           </Badge>
           {status.enabled && (
             <Text size="sm" c="dimmed" truncate className={classes.device}>
-              Device{' '}
-              <Text span inherit fw={600} c="var(--mantine-color-text)">
-                {status.hostname}
-              </Text>
+              <Trans
+                t={t}
+                i18nKey="tailscale.device"
+                values={{ hostname: status.hostname }}
+                components={{
+                  name: (
+                    <Text span inherit fw={600} c="var(--mantine-color-text)" />
+                  ),
+                }}
+              />
             </Text>
           )}
         </div>
@@ -460,28 +544,31 @@ export function TailscalePanel({
             onClick={disconnect}
           >
             {working || status.state === 'needs-login'
-              ? 'Cancel connection'
-              : 'Disconnect'}
+              ? t('tailscale.cancelConnection')
+              : t('tailscale.disconnect')}
           </Button>
         )}
       </div>
 
       {!status.available && (
         <Alert
-          title="Tailscale is not installed"
+          title={t('tailscale.notInstalled.title')}
           color="yellow"
           icon={<IconAlertTriangle size={18} />}
         >
           <Text size="sm">
-            Use a Hatch Docker image that includes Tailscale. For a source
-            installation, build the connection helper with{' '}
-            <Code>pnpm tailscale:build</Code>, then refresh this page.
+            <Trans
+              t={t}
+              i18nKey="tailscale.notInstalled.body"
+              values={{ command: 'pnpm tailscale:build' }}
+              components={{ code: <Code /> }}
+            />
           </Text>
         </Alert>
       )}
       {error && (
         <Alert
-          title="Could not update the connection"
+          title={t('tailscale.updateFailedTitle')}
           color="red"
           icon={<IconAlertCircle size={18} />}
         >
@@ -490,32 +577,26 @@ export function TailscalePanel({
       )}
       {status.state === 'starting' && (
         <Text component="output" size="sm" c="dimmed">
-          Connecting to your tailnet. With interactive sign-in, the
-          authorization window continues automatically if Tailscale asks you to
-          sign in.
+          {t('tailscale.startingBody')}
         </Text>
       )}
       {status.state === 'needs-login' && loginMethod === 'interactive' && (
         <Alert
-          title="Finish signing in to Tailscale"
+          title={t('tailscale.login.title')}
           color="blue"
           role="note"
           icon={<IconInfoCircle size={18} />}
         >
           <Stack gap="sm" align="flex-start">
-            <Text size="sm">
-              Complete authorization in the Tailscale window. If it didn’t open
-              or you closed it, continue here. This page updates when you
-              finish.
-            </Text>
+            <Text size="sm">{t('tailscale.login.body')}</Text>
             {status.loginUrl ? (
               <ExternalButton
                 href={status.loginUrl}
-                label="Continue authorization"
+                label={t('tailscale.login.continue')}
               />
             ) : (
               <Text component="output" size="sm">
-                Preparing authorization…
+                {t('tailscale.login.preparing')}
               </Text>
             )}
           </Stack>
@@ -523,39 +604,39 @@ export function TailscalePanel({
       )}
       {status.state === 'needs-approval' && (
         <Alert
-          title="Approve this device"
+          title={t('tailscale.approval.title')}
           color="blue"
           role="note"
           icon={<IconInfoCircle size={18} />}
         >
           <Stack gap="sm" align="flex-start">
             <Text size="sm">
-              Your tailnet requires an admin to approve new devices. Approve{' '}
-              <Text span inherit fw={700}>
-                {status.hostname}
-              </Text>{' '}
-              in the Tailscale admin console; this page updates automatically.
+              <Trans
+                t={t}
+                i18nKey="tailscale.approval.body"
+                values={{ hostname: status.hostname }}
+                components={{ name: <Text span inherit fw={700} /> }}
+              />
             </Text>
-            <ExternalButton href={DEVICES_URL} label="Open Tailscale devices" />
+            <ExternalButton
+              href={DEVICES_URL}
+              label={t('tailscale.approval.openDevices')}
+            />
           </Stack>
         </Alert>
       )}
       {status.state === 'preparing-https' && (
         <Alert
-          title="Preparing your secure address"
+          title={t('tailscale.preparing.title')}
           color="blue"
           role="note"
           aria-live="polite"
           icon={<IconInfoCircle size={18} />}
         >
-          <Text size="sm">
-            Your device is connected to Tailscale. Hatch is getting its HTTPS
-            certificate, which can take a few minutes the first time. You can
-            leave this page; your private address appears here when it’s ready.
-          </Text>
+          <Text size="sm">{t('tailscale.preparing.body')}</Text>
         </Alert>
       )}
-      {status.message && status.state !== 'preparing-https' && (
+      {problemMessage && status.state !== 'preparing-https' && (
         <Alert
           title={problemTitle}
           color={problemColor}
@@ -568,22 +649,24 @@ export function TailscalePanel({
           }
         >
           <Stack gap="sm" align="flex-start">
-            <Text size="sm">{status.message}</Text>
-            {retryAt && retryTime?.isValid() && (
+            <Text size="sm">{problemMessage}</Text>
+            {retryAt && retryLabel && (
               <Text size="sm">
-                Next automatic attempt:{' '}
-                <Text span fw={600} component="time" dateTime={retryAt}>
-                  {retryTime.format(
-                    retryTime.isSame(dayjs(), 'day')
-                      ? 'h:mm A'
-                      : 'MMM D [at] h:mm A',
-                  )}
-                </Text>
+                <Trans
+                  t={t}
+                  i18nKey="tailscale.retry.next"
+                  values={{ when: retryLabel }}
+                  components={{
+                    time: (
+                      <Text span fw={600} component="time" dateTime={retryAt} />
+                    ),
+                  }}
+                />
               </Text>
             )}
             {status.dns && (
               <Table
-                aria-label="Tailscale DNS settings"
+                aria-label={t('tailscale.dns.tableLabel')}
                 w="auto"
                 fz="sm"
                 horizontalSpacing={0}
@@ -596,7 +679,7 @@ export function TailscalePanel({
                     enabled={status.dns.magicDnsEnabled}
                   />
                   <DnsSettingRow
-                    name="HTTPS certificates"
+                    name={t('tailscale.dns.httpsCertificates')}
                     enabled={status.dns.httpsCertificatesEnabled}
                   />
                 </Table.Tbody>
@@ -605,7 +688,7 @@ export function TailscalePanel({
             {showDnsSettings && (
               <ExternalButton
                 href={DNS_SETTINGS_URL}
-                label="Open Tailscale DNS settings"
+                label={t('tailscale.dns.openSettings')}
               />
             )}
           </Stack>
@@ -614,7 +697,7 @@ export function TailscalePanel({
       {status.state === 'connected' && status.origin && (
         <Stack gap="xs">
           <Text size="sm" fw={700}>
-            Private address
+            {t('tailscale.address.title')}
           </Text>
           <Anchor
             href={status.origin}
@@ -627,7 +710,7 @@ export function TailscalePanel({
             {status.origin}
           </Anchor>
           <Text size="sm" c="dimmed">
-            Open it from any device signed in to your tailnet.
+            {t('tailscale.address.hint')}
           </Text>
           <Group gap="sm" mt={4}>
             <Button
@@ -643,13 +726,13 @@ export function TailscalePanel({
               onClick={async () => {
                 if (await copy(status.origin!)) {
                   setCopiedOrigin(status.origin);
-                  toast.success('Address copied');
+                  toast.success(t('tailscale.address.copied'));
                 } else {
-                  toast.error('Could not copy the address');
+                  toast.error(t('tailscale.address.copyFailed'));
                 }
               }}
             >
-              Copy address
+              {t('tailscale.address.copy')}
             </Button>
             <Button
               component="a"
@@ -659,7 +742,7 @@ export function TailscalePanel({
               variant="light"
               rightSection={<IconExternalLink size={16} />}
             >
-              Open Hatch
+              {t('tailscale.address.open')}
             </Button>
           </Group>
         </Stack>
@@ -675,22 +758,20 @@ export function TailscalePanel({
           <Stack gap="lg">
             {!status.enabled && (
               <TextInput
-                label="Device name"
-                description="Names this device in Tailscale and in its private address."
+                label={t('tailscale.deviceName.label')}
+                description={t('tailscale.deviceName.description')}
                 value={name}
                 onChange={(event) => setHostname(event.currentTarget.value)}
                 disabled={pending}
                 maxLength={63}
                 error={
-                  !validName
-                    ? 'Use lowercase letters, numbers, and hyphens; start and end with a letter or number.'
-                    : undefined
+                  !validName ? t('tailscale.deviceName.invalid') : undefined
                 }
               />
             )}
             {canAuthenticate && (
               <Radio.Group
-                label="Sign-in method"
+                label={t('tailscale.method.label')}
                 value={loginMethod}
                 onChange={chooseLoginMethod}
               >
@@ -705,10 +786,10 @@ export function TailscalePanel({
                       <Radio.Indicator className={classes.methodIndicator} />
                       <div>
                         <Text size="sm" fw={600}>
-                          {method.label}
+                          {t(method.label)}
                         </Text>
                         <Text size="sm" c="dimmed">
-                          {method.description}
+                          {t(method.description)}
                         </Text>
                       </div>
                     </Radio.Card>
@@ -718,20 +799,26 @@ export function TailscalePanel({
             )}
             {usesAuthKey && (
               <PasswordInput
-                label="Auth key"
+                visibilityToggleButtonProps={{
+                  'aria-label': t('system.togglePasswordVisibility'),
+                }}
+                label={t('tailscale.method.authKey')}
                 description={
-                  <>
-                    Used once to add this device. Hatch doesn’t save it.{' '}
-                    <Anchor
-                      href={AUTH_KEYS_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      inherit
-                      td="underline"
-                    >
-                      Create an auth key
-                    </Anchor>
-                  </>
+                  <Trans
+                    t={t}
+                    i18nKey="tailscale.authKey.description"
+                    components={{
+                      link: (
+                        <Anchor
+                          href={AUTH_KEYS_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          inherit
+                          td="underline"
+                        />
+                      ),
+                    }}
+                  />
                 }
                 placeholder="tskey-auth-…"
                 value={authKey}
@@ -749,7 +836,7 @@ export function TailscalePanel({
                 onChange={(event) => setAuthKey(event.currentTarget.value)}
                 error={
                   authKey && !validKey
-                    ? 'Enter the key exactly as Tailscale shows it, without spaces.'
+                    ? t('tailscale.authKey.invalid')
                     : undefined
                 }
               />
@@ -761,7 +848,7 @@ export function TailscalePanel({
                   loading={pending}
                   disabled={!status.available || !validName || !keyReady}
                 >
-                  {submitLabel}
+                  {t(submitLabel)}
                 </Button>
               </Group>
             )}
@@ -771,9 +858,7 @@ export function TailscalePanel({
 
       <Divider />
       <Text size="sm" c="dimmed">
-        Hatch restores this connection after a restart. Disconnecting turns off
-        private access and keeps the device identity for next time. Your
-        original Hatch address keeps working.
+        {t('tailscale.footer')}
       </Text>
     </Stack>
   );

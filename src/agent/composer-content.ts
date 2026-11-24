@@ -8,13 +8,11 @@ export const MAX_COMPOSER_TEXT_LENGTH = 100_000;
 /** Resource identity snapshots captured when a mention is selected. */
 export type ComposerInputPart =
   | { type: 'text'; text: string }
-  | { type: 'app'; id: string; name: string; slug: string }
-  | { type: 'workflow'; id: string; name: string };
+  | { type: 'app'; id: string; name: string; slug: string };
 
 export type AgentComposerContentPart =
   | { type: 'text'; text: string }
-  | { type: 'app'; id: string; name: string; slug: string }
-  | { type: 'workflow'; id: string; name: string };
+  | { type: 'app'; id: string; name: string; slug: string };
 
 const composerInputPartSchema = z.discriminatedUnion('type', [
   z.strictObject({
@@ -26,11 +24,6 @@ const composerInputPartSchema = z.discriminatedUnion('type', [
     id: z.string().min(1).max(200),
     name: z.string().max(500),
     slug: z.string().min(1).max(200),
-  }),
-  z.strictObject({
-    type: z.literal('workflow'),
-    id: z.string().min(1).max(200),
-    name: z.string().max(500),
   }),
 ]);
 
@@ -73,11 +66,6 @@ export const agentComposerContentSchema = z
         name: z.string().max(500),
         slug: z.string().min(1).max(200),
       }),
-      z.strictObject({
-        type: z.literal('workflow'),
-        id: z.string().min(1).max(200),
-        name: z.string().max(500),
-      }),
     ]),
   )
   .max(MAX_COMPOSER_PARTS);
@@ -100,6 +88,26 @@ export function compactComposerInput(
   return compact;
 }
 
+/**
+ * Read stored Composer parts. A part that no longer validates (such as a
+ * mention of a removed resource kind) keeps its visible `@name` as text, so a
+ * stored message still reads and sends.
+ */
+export function restoreComposerInput(value: unknown): ComposerInputPart[] {
+  if (!Array.isArray(value)) return [];
+  return compactComposerInput(
+    value.flatMap((item): ComposerInputPart[] => {
+      const parsed = composerInputPartSchema.safeParse(item);
+      if (parsed.success) return [parsed.data];
+      const name =
+        item && typeof item === 'object' && 'name' in item ? item.name : null;
+      return typeof name === 'string'
+        ? [{ type: 'text', text: `@${name}` }]
+        : [];
+    }),
+  );
+}
+
 /** Visible Composer/transcript text. Resource identity stays a compact @ token. */
 export function composerDisplayText(parts: AgentComposerContentPart[]): string {
   return parts
@@ -112,10 +120,7 @@ export function composerModelText(parts: AgentComposerContentPart[]): string {
   return parts
     .map((part) => {
       if (part.type === 'text') return part.text;
-      if (part.type === 'app') {
-        return `@APP{name=${JSON.stringify(part.name)} id=${JSON.stringify(part.id)} slug=${JSON.stringify(part.slug)}}`;
-      }
-      return `@WORKFLOW{name=${JSON.stringify(part.name)} id=${JSON.stringify(part.id)}}`;
+      return `@APP{name=${JSON.stringify(part.name)} id=${JSON.stringify(part.id)} slug=${JSON.stringify(part.slug)}}`;
     })
     .join('');
 }
@@ -126,7 +131,7 @@ export function parseComposerText(text: string): ComposerInputPart[] {
   // quoted representation before parsing or validating any field.
   const quoted = String.raw`("(?:\\.|[^"\\])*")`;
   const reference = new RegExp(
-    String.raw`@(APP|WORKFLOW)\{name=${quoted} id=${quoted}(?: slug=${quoted})?\}`,
+    String.raw`@APP\{name=${quoted} id=${quoted} slug=${quoted}\}`,
     'g',
   );
   const parts: ComposerInputPart[] = [];
@@ -135,10 +140,10 @@ export function parseComposerText(text: string): ComposerInputPart[] {
     let part: ComposerInputPart;
     try {
       const candidate = {
-        type: match[1] === 'APP' ? 'app' : 'workflow',
-        name: JSON.parse(match[2]!),
-        id: JSON.parse(match[3]!),
-        ...(match[4] === undefined ? {} : { slug: JSON.parse(match[4]) }),
+        type: 'app',
+        name: JSON.parse(match[1]!),
+        id: JSON.parse(match[2]!),
+        slug: JSON.parse(match[3]!),
       };
       const parsed = composerInputPartSchema.safeParse(candidate);
       if (!parsed.success) continue;

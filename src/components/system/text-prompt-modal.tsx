@@ -1,6 +1,7 @@
 import { Button, Group, Stack, Textarea, TextInput } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useState } from 'react';
+import { useI18n } from '~i18n';
 
 type TextPromptOptions = {
   title: string;
@@ -28,6 +29,7 @@ function TextPromptForm({
   modalId: string;
   options: TextPromptOptions;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(options.initialValue ?? '');
   const [pending, setPending] = useState(false);
   const allowEmpty = options.allowEmpty ?? false;
@@ -80,7 +82,7 @@ function TextPromptForm({
           disabled={!canSubmit}
           onClick={() => void submit()}
         >
-          {options.submitLabel ?? 'Save'}
+          {options.submitLabel ?? t('common.save')}
         </Button>
       </Group>
     </Stack>

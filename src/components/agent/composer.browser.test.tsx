@@ -3,7 +3,6 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { userEvent } from 'vitest/browser';
 import type { AppListItem } from '~server/apps';
-import type { WorkflowListItem } from '~server/workflows';
 import { Composer } from './composer';
 
 const apps: AppListItem[] = [
@@ -39,29 +38,6 @@ const crowdedApps: AppListItem[] = [
   apps[0]!,
 ];
 
-const workflows: WorkflowListItem[] = [
-  {
-    id: 'workflow-digest',
-    slug: 'nightly-digest',
-    name: 'Nightly Digest',
-    description: 'Send a daily summary',
-    status: 'deployed',
-    pinned: false,
-    createdAt: '2026-08-17T00:00:00.000Z',
-    updatedAt: '2026-08-17T00:00:00.000Z',
-  },
-  {
-    id: 'workflow-backup',
-    slug: 'team-backup',
-    name: 'Team Backup',
-    description: 'Archive the team workspace',
-    status: 'draft',
-    pinned: false,
-    createdAt: '2026-08-17T00:00:00.000Z',
-    updatedAt: '2026-08-17T00:00:00.000Z',
-  },
-];
-
 test('allows only one asynchronous submission at a time', async () => {
   let finish: ((accepted: boolean) => void) | undefined;
   const onSubmit = vi.fn<() => Promise<boolean>>(
@@ -92,49 +68,51 @@ test('allows only one asynchronous submission at a time', async () => {
   await expect.element(input).toHaveTextContent('');
 });
 
-test('shows only non-empty resource categories before drilling down', async () => {
+test('lists every App at a bare @ and wraps keyboard navigation', async () => {
+  const onSubmit = vi.fn<() => Promise<boolean>>(async () => true);
   const screen = await render(
     <MantineProvider>
-      <Composer onSubmit={vi.fn<() => void>()} workflows={workflows} />
+      <Composer onSubmit={onSubmit} apps={apps} />
     </MantineProvider>,
   );
   const input = screen.getByPlaceholder('Message the Agent…');
   await input.fill('Run @');
 
-  const menu = screen.getByRole('listbox', { name: 'Apps and Workflows' });
-  const workflowCategory = screen.getByRole('option', {
-    name: /Workflows.*2/,
-  });
+  const menu = screen.getByRole('listbox', { name: 'Apps' });
+  const notes = screen.getByRole('option', { name: /Team Notes/ });
+  const tasks = screen.getByRole('option', { name: /Tasks/ });
   await expect.element(menu).toBeVisible();
-  await expect.element(workflowCategory).toBeVisible();
+  expect(menu.element().querySelectorAll('[role="option"]')).toHaveLength(2);
+  await expect.element(notes).toHaveAttribute('aria-selected', 'true');
   await expect
-    .element(screen.getByRole('option', { name: /Apps/ }))
-    .not.toBeInTheDocument();
-  await expect
-    .element(screen.getByRole('option', { name: /Nightly Digest/ }))
-    .not.toBeInTheDocument();
+    .element(input)
+    .toHaveAttribute('aria-activedescendant', notes.element().id);
 
-  await workflowCategory.click();
+  await userEvent.keyboard('{ArrowUp}');
+  await expect.element(tasks).toHaveAttribute('aria-selected', 'true');
   await expect
-    .element(screen.getByRole('option', { name: /Nightly Digest/ }))
-    .toBeVisible();
-  await expect
-    .element(screen.getByRole('option', { name: /Team Backup/ }))
-    .toBeVisible();
-  await screen
-    .getByRole('option', { name: 'Back to Apps and Workflows' })
-    .click();
-  await expect.element(workflowCategory).toBeVisible();
+    .element(input)
+    .toHaveAttribute('aria-activedescendant', tasks.element().id);
+  await userEvent.keyboard('{ArrowDown}');
+  await expect.element(notes).toHaveAttribute('aria-selected', 'true');
+  await userEvent.keyboard('{ArrowDown}');
+  await expect.element(tasks).toHaveAttribute('aria-selected', 'true');
 
-  await screen.rerender(
-    <MantineProvider>
-      <Composer onSubmit={vi.fn<() => void>()} apps={apps} />
-    </MantineProvider>,
-  );
-  await expect
-    .element(screen.getByRole('option', { name: /Apps.*2/ }))
-    .toBeVisible();
-  await expect.element(workflowCategory).not.toBeInTheDocument();
+  await userEvent.keyboard('{Enter}after review');
+  await expect.element(screen.getByText('@Tasks')).toBeVisible();
+  await expect.element(input).toHaveAttribute('aria-expanded', 'false');
+
+  await screen.getByRole('button', { name: 'Send' }).click();
+  expect(onSubmit).toHaveBeenCalledWith({
+    content: [
+      { type: 'text', text: 'Run ' },
+      { type: 'app', id: 'app-tasks', name: 'Tasks', slug: 'tasks' },
+      { type: 'text', text: ' after review' },
+    ],
+    images: [],
+    files: [],
+    switchMode: false,
+  });
 });
 
 test('shows a compact empty state when there are no mentionable resources', async () => {
@@ -146,146 +124,33 @@ test('shows a compact empty state when there are no mentionable resources', asyn
   const input = screen.getByPlaceholder('Message the Agent…');
   await input.fill('Ask @');
 
-  await expect
-    .element(screen.getByText('No Apps or Workflows yet'))
-    .toBeVisible();
+  await expect.element(screen.getByText('No Apps yet')).toBeVisible();
   await expect.element(screen.getByRole('option')).not.toBeInTheDocument();
 });
 
-test('inserts a Workflow from the category menu and submits ordered content', async () => {
-  const onSubmit = vi.fn<() => Promise<boolean>>(async () => true);
+test('searches Apps by name or slug but not id or description', async () => {
   const screen = await render(
     <MantineProvider>
-      <Composer onSubmit={onSubmit} apps={apps} workflows={workflows} />
+      <Composer onSubmit={vi.fn<() => void>()} apps={apps} />
     </MantineProvider>,
   );
   const input = screen.getByPlaceholder('Message the Agent…');
-  await input.fill('Run @');
 
-  const appCategory = screen.getByRole('option', { name: /Apps.*2/ });
-  const workflowCategory = screen.getByRole('option', {
-    name: /Workflows.*2/,
-  });
-  await expect.element(appCategory).toHaveAttribute('aria-selected', 'true');
-  await userEvent.keyboard('{ArrowDown}');
-  await expect
-    .element(workflowCategory)
-    .toHaveAttribute('aria-selected', 'true');
-  await userEvent.keyboard('{Enter}');
-  const workflow = screen.getByRole('option', { name: /Nightly Digest/ });
-  await expect.element(workflow).toHaveAttribute('aria-selected', 'true');
-  await userEvent.keyboard('{Enter}after review');
-  await expect.element(screen.getByText('@Nightly Digest')).toBeVisible();
-
-  await screen.getByRole('button', { name: 'Send' }).click();
-  expect(onSubmit).toHaveBeenCalledWith({
-    content: [
-      { type: 'text', text: 'Run ' },
-      {
-        type: 'workflow',
-        id: 'workflow-digest',
-        name: 'Nightly Digest',
-      },
-      { type: 'text', text: ' after review' },
-    ],
-    images: [],
-    files: [],
-  });
-});
-
-test('returns from a resource category with listbox keyboard navigation', async () => {
-  const screen = await render(
-    <MantineProvider>
-      <Composer
-        onSubmit={vi.fn<() => void>()}
-        apps={apps}
-        workflows={workflows}
-      />
-    </MantineProvider>,
-  );
-  const input = screen.getByPlaceholder('Message the Agent…');
-  await input.fill('Run @');
-
-  const workflowCategory = screen.getByRole('option', {
-    name: /Workflows.*2/,
-  });
-  await userEvent.keyboard('{ArrowDown}{Enter}');
-
-  const firstWorkflow = screen.getByRole('option', {
-    name: /Nightly Digest/,
-  });
-  const back = screen.getByRole('option', {
-    name: 'Back to Apps and Workflows',
-  });
-  await expect.element(firstWorkflow).toHaveAttribute('aria-selected', 'true');
-  await expect
-    .element(input)
-    .toHaveAttribute('aria-activedescendant', firstWorkflow.element().id);
-
-  await userEvent.keyboard('{ArrowUp}');
-  await expect.element(back).toHaveAttribute('aria-selected', 'true');
-  await expect
-    .element(input)
-    .toHaveAttribute('aria-activedescendant', back.element().id);
-
-  await userEvent.keyboard('{Enter}');
-  await expect.element(workflowCategory).toBeVisible();
-  await expect.element(back).not.toBeInTheDocument();
-  await expect.element(input).toHaveAttribute('aria-expanded', 'true');
-});
-
-test('globally searches and groups Apps before Workflows', async () => {
-  const screen = await render(
-    <MantineProvider>
-      <Composer
-        onSubmit={vi.fn<() => void>()}
-        apps={apps}
-        workflows={workflows}
-      />
-    </MantineProvider>,
-  );
-  const input = screen.getByPlaceholder('Message the Agent…');
-  await input.fill('Compare @team');
-
-  const menu = screen.getByRole('listbox', { name: 'Apps and Workflows' });
+  await input.fill('Run @team-notes');
   await expect
     .element(screen.getByRole('option', { name: /Team Notes/ }))
     .toBeVisible();
-  await expect
-    .element(screen.getByRole('option', { name: /Team Backup/ }))
-    .toBeVisible();
-  expect(menu.element().textContent).toMatch(
-    /Apps.*Team Notes.*Workflows.*Team Backup/s,
-  );
-});
 
-test('searches Workflows by name or slug but not id or description', async () => {
-  const screen = await render(
-    <MantineProvider>
-      <Composer onSubmit={vi.fn<() => void>()} workflows={workflows} />
-    </MantineProvider>,
-  );
-  const input = screen.getByPlaceholder('Message the Agent…');
-
-  await input.fill('Run @nightly-digest');
+  await input.fill('Run @app-notes');
+  await expect.element(screen.getByText('No matching Apps')).toBeVisible();
   await expect
-    .element(screen.getByRole('option', { name: /Nightly Digest/ }))
-    .toBeVisible();
-
-  await input.fill('Run @workflow-digest');
-  await expect
-    .element(screen.getByText('No matching Apps or Workflows'))
-    .toBeVisible();
-  await expect
-    .element(screen.getByRole('option', { name: /Nightly Digest/ }))
+    .element(screen.getByRole('option', { name: /Team Notes/ }))
     .not.toBeInTheDocument();
 
-  await input.fill('Run @daily summary');
+  await input.fill('Run @shared');
+  await expect.element(screen.getByText('No matching Apps')).toBeVisible();
   await expect
-    .element(screen.getByText('No matching Apps or Workflows'))
-    .toBeVisible();
-  await expect
-    .element(screen.getByRole('option', { name: /Nightly Digest/ }))
+    .element(screen.getByRole('option', { name: /Team Notes/ }))
     .not.toBeInTheDocument();
 });
 
@@ -299,7 +164,7 @@ test('inserts an App mention inline and submits ordered content', async () => {
   const input = screen.getByPlaceholder('Message the Agent…');
   await input.fill('Please update @team');
 
-  const menu = screen.getByRole('listbox', { name: 'Apps and Workflows' });
+  const menu = screen.getByRole('listbox', { name: 'Apps' });
   await expect.element(menu).toBeVisible();
   await expect
     .element(screen.getByRole('option', { name: /Team Notes/ }))
@@ -323,6 +188,7 @@ test('inserts an App mention inline and submits ordered content', async () => {
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 
@@ -357,6 +223,7 @@ test('searches the full App list with a multi-word query', async () => {
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 
@@ -371,11 +238,9 @@ test('submits literal text when the resource menu has no matches', async () => {
   await input.fill('Summarize @missing');
 
   await expect
-    .element(screen.getByRole('listbox', { name: 'Apps and Workflows' }))
+    .element(screen.getByRole('listbox', { name: 'Apps' }))
     .toBeVisible();
-  await expect
-    .element(screen.getByText('No matching Apps or Workflows'))
-    .toBeVisible();
+  await expect.element(screen.getByText('No matching Apps')).toBeVisible();
   await expect.element(input).toHaveAttribute('aria-expanded', 'true');
   await expect.element(input).not.toHaveAttribute('aria-activedescendant');
 
@@ -384,6 +249,7 @@ test('submits literal text when the resource menu has no matches', async () => {
     content: [{ type: 'text', text: 'Summarize @missing' }],
     images: [],
     files: [],
+    switchMode: false,
   });
   await expect.element(input).toHaveTextContent('');
 });
@@ -433,6 +299,7 @@ test('waits for resource lookup before submitting an unresolved mention', async 
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 
@@ -445,7 +312,7 @@ test('resets the active resource option when the query changes', async () => {
   const input = screen.getByPlaceholder('Message the Agent…');
   await input.fill('Review @t');
 
-  const menu = screen.getByRole('listbox', { name: 'Apps and Workflows' });
+  const menu = screen.getByRole('listbox', { name: 'Apps' });
   const notes = screen.getByRole('option', { name: /Team Notes/ });
   const tasks = screen.getByRole('option', { name: /Tasks/ });
   await expect.element(menu).toBeVisible();
@@ -464,9 +331,7 @@ test('resets the active resource option when the query changes', async () => {
     .toHaveAttribute('aria-activedescendant', tasks.element().id);
 
   await userEvent.keyboard('x');
-  await expect
-    .element(screen.getByText('No matching Apps or Workflows'))
-    .toBeVisible();
+  await expect.element(screen.getByText('No matching Apps')).toBeVisible();
   await userEvent.keyboard('{Backspace}');
   await expect.element(notes).toHaveAttribute('aria-selected', 'true');
   await expect
@@ -485,7 +350,7 @@ test('dismisses resource suggestions when keyboard focus leaves the editor', asy
     </MantineProvider>,
   );
   const input = screen.getByPlaceholder('Message the Agent…');
-  const menu = screen.getByRole('listbox', { name: 'Apps and Workflows' });
+  const menu = screen.getByRole('listbox', { name: 'Apps' });
   await input.fill('Review @team');
   await expect.element(menu).toBeVisible();
 
@@ -506,16 +371,16 @@ test('leaves resource popup keystrokes to an active IME composition', async () =
   const onSubmit = vi.fn<() => void>();
   const screen = await render(
     <MantineProvider>
-      <Composer onSubmit={onSubmit} apps={apps} workflows={workflows} />
+      <Composer onSubmit={onSubmit} apps={apps} />
     </MantineProvider>,
   );
   const input = screen.getByPlaceholder('Message the Agent…');
   await input.fill('Review @');
 
-  const appCategory = screen.getByRole('option', { name: /Apps/ });
+  const firstApp = screen.getByRole('option', { name: /Team Notes/ });
   await expect
     .element(input)
-    .toHaveAttribute('aria-activedescendant', appCategory.element().id);
+    .toHaveAttribute('aria-activedescendant', firstApp.element().id);
 
   const dispatchComposingKey = (key: string) =>
     input.element().dispatchEvent(
@@ -530,7 +395,7 @@ test('leaves resource popup keystrokes to an active IME composition', async () =
   dispatchComposingKey('ArrowDown');
   await expect
     .element(input)
-    .toHaveAttribute('aria-activedescendant', appCategory.element().id);
+    .toHaveAttribute('aria-activedescendant', firstApp.element().id);
   dispatchComposingKey('Enter');
   await expect.element(input).toHaveTextContent('Review @');
   expect(input.element().querySelector('[data-type="mention"]')).toBeNull();

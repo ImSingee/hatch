@@ -26,6 +26,7 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { openTextPromptModal } from '~components/system/text-prompt-modal';
+import { useI18n } from '~i18n';
 import { sessionQueryOptions, sessionsQueryOptions } from '~queries/agent';
 import {
   deleteSession,
@@ -33,8 +34,9 @@ import {
   type SessionSummary,
 } from '~server/agent-sessions';
 import classes from './chat.module.css';
-import { groupSessionsByDate } from './session-groups';
+import { formatSessionGroupLabel, groupSessionsByDate } from './session-groups';
 import { useLocalCalendarNow } from './use-local-calendar-now';
+import { displaySessionTitle } from './session-title';
 
 function SessionRow({
   session,
@@ -49,6 +51,7 @@ function SessionRow({
   onRename: (session: SessionSummary) => void;
   onDelete: (id: string, title: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Group
       justify="space-between"
@@ -65,7 +68,7 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
       >
         <Text component="span" truncate inherit>
-          {session.title}
+          {displaySessionTitle(session.title, t)}
         </Text>
       </UnstyledButton>
       <Menu position="bottom-end" withArrow shadow="md" width={160}>
@@ -75,7 +78,7 @@ function SessionRow({
             color="gray"
             size="sm"
             className={classes.sessionAction}
-            aria-label="Chat options"
+            aria-label={t('agent.sessions.options')}
           >
             <IconDots size={15} stroke={1.7} />
           </ActionIcon>
@@ -85,14 +88,16 @@ function SessionRow({
             leftSection={<IconPencil size={15} stroke={1.7} />}
             onClick={() => onRename(session)}
           >
-            Rename
+            {t('common.rename')}
           </Menu.Item>
           <Menu.Item
             color="red"
             leftSection={<IconTrash size={15} stroke={1.7} />}
-            onClick={() => onDelete(session.id, session.title)}
+            onClick={() =>
+              onDelete(session.id, displaySessionTitle(session.title, t))
+            }
           >
-            Delete
+            {t('common.delete')}
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>
@@ -107,6 +112,7 @@ export function SessionsPanel({
   selected: string | null;
   onSelect: (id: string | null) => void;
 }) {
+  const { t, locale } = useI18n();
   const qc = useQueryClient();
   const { data: sessions } = useSuspenseQuery(sessionsQueryOptions);
   const calendarNow = useLocalCalendarNow();
@@ -130,7 +136,7 @@ export function SessionsPanel({
       // refetches (and renders empty) instead of replaying the stale messages.
       qc.removeQueries({ queryKey: sessionQueryOptions(id).queryKey });
       if (selected === id) onSelect(null);
-      toast.success('Chat deleted');
+      toast.success(t('agent.sessions.deleted'));
     },
   });
 
@@ -144,24 +150,26 @@ export function SessionsPanel({
       await qc.invalidateQueries({
         queryKey: sessionQueryOptions(variables.id).queryKey,
       });
-      toast.success('Chat renamed');
+      toast.success(t('agent.sessions.renamed'));
     },
   });
 
   const openRename = (s: { id: string; title: string }) =>
     openTextPromptModal({
-      title: 'Rename chat',
-      label: 'Title',
+      title: t('agent.sessions.renameTitle'),
+      label: t('agent.sessions.renameLabel'),
       initialValue: s.title,
       onSubmit: (title) => rename.mutateAsync({ id: s.id, title }),
     });
 
   const confirmDelete = (id: string, title: string) =>
     modals.openConfirmModal({
-      title: 'Delete chat',
+      title: t('agent.sessions.deleteTitle'),
       centered: true,
-      children: <Text size="sm">Delete “{title}”?</Text>,
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      children: (
+        <Text size="sm">{t('agent.sessions.deleteConfirm', { title })}</Text>
+      ),
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(id),
     });
@@ -183,17 +191,17 @@ export function SessionsPanel({
         <TextInput
           className={classes.sessionsSearch}
           type="search"
-          aria-label="Search chats"
-          placeholder="Search chats"
+          aria-label={t('agent.sessions.search')}
+          placeholder={t('agent.sessions.search')}
           leftSection={<IconSearch size={15} stroke={2} />}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-        <Tooltip label="New chat" withArrow>
+        <Tooltip label={t('agent.sessions.new')} withArrow>
           <ActionIcon
             size={36}
             radius="md"
-            aria-label="New chat"
+            aria-label={t('agent.sessions.new')}
             aria-current={selected === null ? 'page' : undefined}
             onClick={() => onSelect(null)}
           >
@@ -210,15 +218,17 @@ export function SessionsPanel({
           {groups.length === 0 ? (
             <Text className={classes.sessionsEmpty}>
               {sessions.length === 0
-                ? 'No chats yet.'
-                : `No chat matches “${query.trim()}”.`}
+                ? t('agent.sessions.empty')
+                : t('agent.sessions.noMatch', { query: query.trim() })}
             </Text>
           ) : (
             <>
               {groups.map((group) => (
                 <Box component="section" key={group.key}>
                   <Text component="h2" className={classes.sessionGroupTitle}>
-                    {group.label}
+                    {formatSessionGroupLabel(group.label, locale, (key) =>
+                      t(key),
+                    )}
                   </Text>
                   <Stack gap={2}>{group.sessions.map(renderSession)}</Stack>
                 </Box>

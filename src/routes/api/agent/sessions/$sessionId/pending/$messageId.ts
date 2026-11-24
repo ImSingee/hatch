@@ -13,25 +13,28 @@ import {
   updatePendingMessage,
 } from '~server/agent-pending-messages';
 import { authenticateSessionRequest } from '~server/session-http-auth';
-import { errorResponse } from '~server/errors';
+import { AppError, errorResponse } from '~server/errors';
 
 /**
  * Each given field replaces that part of the message; an omitted field stays
  * unchanged. `attachmentIds` lists the attachments to keep (only removal is
  * possible), so it restates every one that stays; `[]` removes them all.
+ * `mode` switches the message between queue and steer delivery.
  */
 const updateBodySchema = z
   .object({
     content: composerInputSchema.optional(),
     images: agentMessageImagesSchema.optional(),
     attachmentIds: agentMessageAttachmentIdsSchema.optional(),
+    mode: z.enum(['queue', 'steer']).optional(),
   })
   .strict()
   .refine(
     (body) =>
       body.content !== undefined ||
       body.images !== undefined ||
-      body.attachmentIds !== undefined,
+      body.attachmentIds !== undefined ||
+      body.mode !== undefined,
     { message: 'Supply at least one field to change.' },
   );
 
@@ -63,17 +66,20 @@ export async function patchAgentPendingMessage({
   try {
     const raw = await readCappedJson(request, MAX_BODY_BYTES);
     if (raw === TOO_LARGE) {
-      return new Response('Payload too large', { status: 413 });
+      return errorResponse(
+        new AppError('Payload too large', 413, {
+          code: 'agent.payloadTooLarge',
+        }),
+      );
     }
     parsed = updateBodySchema.parse(raw);
   } catch {
     return new Response('Bad request', { status: 400 });
   }
 
+  const { mode, ...message } = parsed;
   try {
-    return Response.json(
-      await updatePendingMessage({ ...ids, message: parsed }),
-    );
+    return Response.json(await updatePendingMessage({ ...ids, message, mode }));
   } catch (error) {
     // Service errors carry their own status; anything else is ours.
     return errorResponse(error, 500);

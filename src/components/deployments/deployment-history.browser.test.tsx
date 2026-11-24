@@ -6,7 +6,9 @@ import { DeploymentHistoryView } from './deployment-history';
 test('shows why a database-dependent deployment cannot be restored', async () => {
   const onRollback = vi.fn<(deploymentId: string) => void>();
   const reason =
-    'The app database was permanently deleted. Restore this deployment tag files onto current master and deploy as a new release.';
+    "The app database was permanently deleted. Restore this deployment tag's " +
+    'files onto current master, commit them, and deploy as a new release to ' +
+    'provision a new database.';
   const screen = await render(
     <MantineProvider>
       <DeploymentHistoryView
@@ -20,7 +22,7 @@ test('shows why a database-dependent deployment cannot be restored', async () =>
             createdAt: '2026-08-13T00:00:00.000Z',
             isCurrent: false,
             canRollback: false,
-            rollbackBlockedReason: reason,
+            rollbackBlockedCode: 'database',
             sourceCommit: '0123456789abcdef',
             sourceTag: 'deploy/v1',
             hasArtifact: true,
@@ -28,7 +30,6 @@ test('shows why a database-dependent deployment cannot be restored', async () =>
           },
         ]}
         isLoading={false}
-        emptyNoun="app"
         onRollback={onRollback}
         rollingId={null}
         renderArtifact={() => null}

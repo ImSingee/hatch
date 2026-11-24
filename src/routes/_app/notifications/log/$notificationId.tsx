@@ -12,7 +12,9 @@ import {
   useDeleteNotification,
 } from '~components/notifications/use-delete-notification';
 import { usePlatformEvent } from '~components/system/platform-events';
+import { useI18n } from '~i18n';
 import { notificationDetailQueryOptions } from '~queries/notifications';
+import { useNotificationKindName } from '~components/notifications/status';
 
 export const Route = createFileRoute('/_app/notifications/log/$notificationId')(
   {
@@ -33,6 +35,8 @@ export const Route = createFileRoute('/_app/notifications/log/$notificationId')(
 );
 
 function NotificationDetailPage() {
+  const { t } = useI18n();
+  const kindName = useNotificationKindName();
   const loaded = Route.useLoaderData();
   const { notificationId } = Route.useParams();
   const navigate = useNavigate();
@@ -55,7 +59,7 @@ function NotificationDetailPage() {
   // Another member (or tab) deleted it while it was open.
   usePlatformEvent('notification.deleted', (event) => {
     if (event.notificationId !== notificationId) return;
-    toast.info('This notification was deleted', {
+    toast.info(t('notifications.detail.deletedElsewhere'), {
       id: notificationDeletedToastId(notificationId),
     });
     leave();
@@ -66,7 +70,10 @@ function NotificationDetailPage() {
         <div className={classes.detailTitle}>
           <h2>{notification.title}</h2>
           <span className={classes.detailMeta}>
-            {notification.kindName} from {notification.sourceName}
+            {t('notifications.detail.kindFromSource', {
+              kind: kindName(notification),
+              source: notification.sourceName,
+            })}
           </span>
         </div>
         <Button
@@ -76,7 +83,7 @@ function NotificationDetailPage() {
           loading={isPending}
           onClick={() => confirmDelete(notification)}
         >
-          Delete
+          {t('common.delete')}
         </Button>
       </header>
       <WindowBody tone="sheet" size={920}>

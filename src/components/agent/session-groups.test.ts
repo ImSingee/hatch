@@ -1,6 +1,14 @@
 import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
-import { groupSessionsByDate } from './session-groups';
+import { i18n } from '~i18n';
+import {
+  formatSessionGroupLabel,
+  groupSessionsByDate,
+  type SessionGroupLabel,
+} from './session-groups';
+
+const english = (label: SessionGroupLabel) =>
+  formatSessionGroupLabel(label, 'en', (key) => i18n.t(key, { lng: 'en' }));
 
 const NOW = new Date(2026, 7, 17, 12);
 
@@ -36,7 +44,7 @@ describe('groupSessionsByDate', () => {
 
     expect(
       groups.map((group) => ({
-        label: group.label,
+        label: english(group.label),
         ids: group.sessions.map(({ id }) => id),
       })),
     ).toEqual([
@@ -65,7 +73,7 @@ describe('groupSessionsByDate', () => {
       NOW,
     );
 
-    expect(groups.map(({ label }) => label)).toEqual([
+    expect(groups.map(({ label }) => english(label))).toEqual([
       'January 15',
       'December 31, 2025',
     ]);

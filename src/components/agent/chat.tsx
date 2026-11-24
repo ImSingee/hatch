@@ -20,9 +20,12 @@ import {
 import { toast } from 'sonner';
 import { composerDisplayText, hasComposerText } from '~agent/composer-content';
 import { nextUserTurn } from '~agent/user-turns';
+import { authClient } from '~auth/client';
+import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
+import type { AgentMessageMode } from '~/db/schema';
+import { agentPreferencesQueryOptions } from '~queries/agent-preferences';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionQueryOptions, sessionsQueryOptions } from '~queries/agent';
-import { workflowsQueryOptions } from '~queries/workflows';
 import {
   createDraftSendTracker,
   uploadDraftFiles,
@@ -71,6 +74,7 @@ import {
   type WorkTiming,
 } from './work-process';
 import classes from './chat.module.css';
+import { displaySessionTitle } from './session-title';
 
 /**
  * Collapse choices are kept per run and phase: a reply reopened after it
@@ -101,10 +105,15 @@ function runTiming(startedAt: string, completedAt: string | null): WorkTiming {
 }
 
 export function Chat({ sessionId }: { sessionId: string }) {
+  const { t, locale } = useI18n();
+  const errorText = useCallback(
+    (error: unknown, fallback: PlainTranslationKey) =>
+      translateError(t, locale, error, fallback),
+    [locale, t],
+  );
   const qc = useQueryClient();
   const sessionQuery = useQuery(sessionQueryOptions(sessionId));
   const appsQuery = useQuery(appsQueryOptions);
-  const workflowsQuery = useQuery(workflowsQueryOptions);
   const { groups, first, available } = useModelOptions();
 
   const [model, setModel] = useState<string | null>(null);
@@ -151,13 +160,13 @@ export function Chat({ sessionId }: { sessionId: string }) {
     // Only surface a toast once the blips look like a real outage, and reuse a
     // stable id so it never stacks.
     if (attempt === 3) {
-      toast.error('Reconnecting to the agent…', { id: RECONNECT_TOAST_ID });
+      toast.error(t('agent.chat.reconnecting'), { id: RECONNECT_TOAST_ID });
     }
     reconnectTimerRef.current = setTimeout(() => {
       reconnectTimerRef.current = null;
       setReconnectToken((value) => value + 1);
     }, delay);
-  }, [clearReconnectTimer]);
+  }, [clearReconnectTimer, t]);
 
   const onStreamConnected = useCallback(() => {
     clearReconnectTimer();
@@ -176,7 +185,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
 
   const revalidateResources = useCallback(() => {
     void qc.invalidateQueries({ queryKey: appsQueryOptions.queryKey });
-    void qc.invalidateQueries({ queryKey: workflowsQueryOptions.queryKey });
   }, [qc]);
 
   const stream = useAgentStream({
@@ -407,6 +415,22 @@ export function Chat({ sessionId }: { sessionId: string }) {
 
   const [draftSends] = useState(createDraftSendTracker);
 
+  // The default delivery for messages sent while busy; ⌘/Ctrl+Enter sends
+  // one in the other mode.
+  const userId = authClient.useSession().data?.user.id;
+  const messageMode = useQuery({
+    ...agentPreferencesQueryOptions(userId ?? ''),
+    enabled: Boolean(userId),
+  }).data?.messageMode;
+  const switchedMode = useCallback(async (): Promise<AgentMessageMode> => {
+    if (!userId) throw new Error(t('agent.chat.signInToSend'));
+    // Fetched fresh: the preference may have changed elsewhere.
+    const { messageMode: preferred } = await qc.fetchQuery(
+      agentPreferencesQueryOptions(userId),
+    );
+    return preferred === 'steer' ? 'queue' : 'steer';
+  }, [qc, t, userId]);
+
   const sessionKey = sessionQueryOptions(sessionId).queryKey;
   // Show the tray an operation returned at once; the refetch confirms it and
   // picks up a run the operation started.
@@ -429,9 +453,12 @@ export function Chat({ sessionId }: { sessionId: string }) {
       files: ComposerFile[],
       model: { providerId: string; modelId: string },
       draft: DraftSend,
+      switchMode: boolean,
     ): Promise<boolean> => {
       let attachments;
       try {
+        // Omitted, the server applies the user's preference.
+        const mode = switchMode ? await switchedMode() : undefined;
         attachments = await uploadDraftFiles(sessionId, files, draft);
         applyPendingResult(
           await enqueuePendingMessage(sessionId, {
@@ -439,20 +466,17 @@ export function Chat({ sessionId }: { sessionId: string }) {
             images,
             attachmentIds: attachments.map((attachment) => attachment.id),
             ...model,
+            mode,
             clientMessageId: draft.clientMessageId,
           }),
         );
         return true;
       } catch (error) {
-        toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : 'Could not send the message.',
-        );
+        toast.error(errorText(error, 'agent.chat.sendFailed'));
         return false;
       }
     },
-    [applyPendingResult, sessionId],
+    [applyPendingResult, errorText, sessionId, switchedMode],
   );
 
   const send = useCallback(
@@ -461,6 +485,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
       images: ComposerImage[],
       files: ComposerFile[],
       modelValue: string,
+      switchMode: boolean,
     ): Promise<boolean> => {
       if (
         !hasComposerText(content) &&
@@ -474,7 +499,14 @@ export function Chat({ sessionId }: { sessionId: string }) {
       // names the same message, whichever path it takes now.
       const draft = draftSends.begin(sessionId, { content, images, files });
       if (busy) {
-        const sent = await sendWhileBusy(content, images, files, parsed, draft);
+        const sent = await sendWhileBusy(
+          content,
+          images,
+          files,
+          parsed,
+          draft,
+          switchMode,
+        );
         if (sent) draftSends.settle(draft);
         return sent;
       }
@@ -483,9 +515,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
       try {
         attachments = await uploadDraftFiles(sessionId, files, draft);
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : 'Could not upload files.',
-        );
+        toast.error(errorText(error, 'agent.chat.uploadFailed'));
         return false;
       }
 
@@ -564,6 +594,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
     [
       busy,
       draftSends,
+      errorText,
       messages,
       qc,
       revalidateSession,
@@ -689,7 +720,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
       );
     },
     onError: () => {
-      toast.error('Could not stop the automatic retry.');
+      toast.error(t('agent.chat.stopRetryFailed'));
     },
     onSettled: revalidateSession,
   });
@@ -842,7 +873,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 )}
                 toolResults={toolResults}
                 apps={appsQuery.data}
-                workflows={workflowsQuery.data}
                 {...retryControls(turn.userTurn)}
                 work={workFrame(
                   runKey,
@@ -858,7 +888,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 message={{ role: 'assistant', content: blocks }}
                 toolResults={toolResults}
                 apps={appsQuery.data}
-                workflows={workflowsQuery.data}
                 work={workFrame(
                   segmentWorkKey(runKey, index),
                   'completed',
@@ -883,7 +912,6 @@ export function Chat({ sessionId }: { sessionId: string }) {
     [
       answeredTurns,
       appsQuery.data,
-      workflowsQuery.data,
       liveUserTurn,
       onUserMessageToggle,
       retryControls,
@@ -924,9 +952,10 @@ export function Chat({ sessionId }: { sessionId: string }) {
     content,
     images,
     files,
+    switchMode,
   }: ComposerSubmit): Promise<boolean> => {
     if (!effectiveModel) return Promise.resolve(false);
-    return send(content, images, files, effectiveModel);
+    return send(content, images, files, effectiveModel, switchMode);
   };
 
   const selectModel = useCallback(
@@ -1150,7 +1179,11 @@ export function Chat({ sessionId }: { sessionId: string }) {
           {envAnnouncement}
         </Text>
         <SessionHeader
-          title={session?.title ?? 'Chat'}
+          title={
+            session
+              ? displaySessionTitle(session.title, t)
+              : t('agent.chat.untitled')
+          }
           model={sessionModelName}
           runnerId={session?.runnerId ?? null}
           apps={sessionApps}
@@ -1174,10 +1207,9 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 >
                   <IconSparkles size={24} stroke={1.5} />
                 </ThemeIcon>
-                <Text fw={700}>Describe an app to build</Text>
+                <Text fw={700}>{t('agent.chat.emptyTitle')}</Text>
                 <Text size="sm" c="dimmed" ta="center" maw={360}>
-                  Ask the Agent to create a tracker, a notes app, a dashboard —
-                  anything. It will scaffold, build, and deploy it for you.
+                  {t('agent.chat.emptyBody')}
                 </Text>
               </Stack>
             ) : (
@@ -1210,19 +1242,16 @@ export function Chat({ sessionId }: { sessionId: string }) {
                 sessionId={sessionId}
                 pending={session.pending}
                 apps={appsQuery.data}
-                workflows={workflowsQuery.data}
                 onResult={applyPendingResult}
               />
             ) : null}
             <Composer
               onSubmit={onComposerSubmit}
               queueWhileBusy
+              messageMode={messageMode}
               apps={appsQuery.data}
               appsLoading={appsQuery.isLoading}
               appsError={appsQuery.isError}
-              workflows={workflowsQuery.data}
-              workflowsLoading={workflowsQuery.isLoading}
-              workflowsError={workflowsQuery.isError}
               busy={busy}
               onStop={stop}
               disabled={!effectiveModel}

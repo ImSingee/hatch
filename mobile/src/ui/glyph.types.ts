@@ -4,7 +4,6 @@ export const glyphs = {
   apps: 'square.grid.2x2',
   agent: 'sparkles',
   person: 'person',
-  workflows: 'point.3.connected.trianglepath.dotted',
   more: 'ellipsis.circle',
   open: 'arrow.up.right',
   refresh: 'arrow.clockwise',

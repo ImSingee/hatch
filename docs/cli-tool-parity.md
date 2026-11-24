@@ -1,11 +1,11 @@
-# App and Workflow Tool / CLI capability parity
+# App Tool / CLI capability parity
 
 All methods below use Connect RPC under `/api/rpc/hatch.platform.v1`, except
 source transfer, which uses Git smart HTTP under `/api/git` (see below).
 Tools remain available, and every
 valid native session, API key or Run JWT has full public authority. The shared
 contract and SDK are shipped with the same platform build. No database migration,
-App/Workflow compatibility bump or protocol-18 wire change is required.
+App compatibility bump or protocol-18 wire change is required.
 
 | Original Tool        | CLI                                     | Public API / shared behavior                                                                              |
 | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -18,12 +18,6 @@ App/Workflow compatibility bump or protocol-18 wire change is required.
 | query_app_db         | app db query                            | AppService/QueryAppDb; registered DB lifecycle lock, DDL/DML, caps/cancellation; no implicit provisioning |
 | query_app_kv         | app kv list/get/set/delete              | AppService/QueryAppKv; empty/large UTF-8, masking/reveal, preserve/clear secret, pagination               |
 | query_app_data_table | app data-table inspect/query/mutate/sql | AppService/QueryAppDataTable; schema/counts, JSON, cursors/revision, atomic mutations, bounded SQL        |
-| list_workflows       | workflow list                           | WorkflowService/ListWorkflows; liveVersion, compatibility, webhook, cronCount                             |
-| get_workflow         | workflow get                            | WorkflowService/GetWorkflow; input Schema, network/triggers, runs/history/errors                          |
-| checkout_workflow    | workflow clone / update / adopt         | GetWorkflow, Git fetch (adopt: GetWorkflowSource), SdkService/GetSdk; history/dirty/generation, recovery  |
-| create_workflow      | workflow create                         | WorkflowService/CreateWorkflow; template, pin/directory, SDK, ID/slug/path/recovery                       |
-| deploy_workflow      | workflow push / deploy                  | Git push, then WorkflowService/DeployWorkflow by commit; normalized release/triggers and generation       |
-| rollback_workflow    | workflow rollback                       | WorkflowService/RollbackWorkflow; compatibility and source recovery                                       |
 
 The capabilities below have no Agent Tool; the CLI is their only Agent
 interface.
@@ -36,7 +30,7 @@ interface.
 | Model category   | model list / set-kind                                                                               | ModelService/ListModels, SetModelKind; every provider model with its kind, moved like the Web Category field     |
 | Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap      |
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
-| Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), Workflow and dashboard pinned flags, App pin and dashboard order         |
+| Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                      |
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
 | Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
 | Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
@@ -54,10 +48,10 @@ of one browser, kept in its local storage and never sent to the server. It is
 browser-bound, has no platform state, and therefore has no CLI command.
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
-`update` speak Git smart HTTP at `/api/git/{app|workflow}/<id>.git`; `deploy`
+`update` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
 pushes, then calls the Deploy RPC with the commit to release (`--commit`
 releases a commit already on `master` without pushing). The Tools keep the
-bundle transport: `deploy_app` / `deploy_workflow` upload a bundle that the
+bundle transport: `deploy_app` uploads a bundle that the
 platform fast-forwards onto `master` and then releases, and Tool checkouts keep
 a local bundle as `origin`. Two deliberate deviations from the CLI rules:
 
@@ -83,7 +77,7 @@ preparation. The pnpm toolchain adds no command, Agent Tool, public RPC method
 or CLI exception; `GetSdk` only gains tool versions and generated files.
 
 The production HTTP/PostgreSQL suite in
-`src/server/platform-api/lifecycle.integration.test.ts` calls all fifteen actual
+`src/server/platform-api/lifecycle.integration.test.ts` calls all nine actual
 Tools through the internal REST client and compares public CLI outputs and
 resource effects. It also covers session/key/Run auth, full lifecycle, migration
 approval and retained data, data commands, and PostgreSQL-observed cancellation.
@@ -95,8 +89,7 @@ an isolated database and a production build; a skipped suite is not evidence.
 Local acceptance records should distinguish observed outputs/side effects,
 programmatic quality gates, installed-package/container results, and genuinely
 untested operating systems. No host credential injection/renewal, Tool removal,
-Workflow run/cancel, storage/key management or durable operation service is part
-of this feature.
+storage/key management or durable operation service is part of this feature.
 
 ## Notification center: CLI only, no Agent Tool
 
@@ -161,21 +154,20 @@ the Web UI or the CLI, is published as `pins.updated`, so an open dock
 refetches without a reload.
 
 `hatch pin ...` calls `PinService`, backed by `src/server/pins.ts`, which the
-Web UI Server Functions in `sidebar.ts`, `workflows.ts` and `dashboards.ts`
+Web UI Server Functions in `sidebar.ts` and `dashboards.ts`
 also call. Web operation to command:
 
-| Web UI                                        | CLI                                          | RPC                |
-| --------------------------------------------- | -------------------------------------------- | ------------------ |
-| Sidebar pins, pinned Workflows and dashboards | pin list [--limit --cursor]                  | ListPins (paged)   |
-| Pin an App again (sidebar)                    | pin add --app                                | PinApp             |
-| App page pin toggle, on                       | pin add --app --if-absent                    | PinApp (if_absent) |
-| Rename a pin, set its entry point             | pin update --label / --entry / --clear-entry | UpdateAppPin       |
-| Remove one pin                                | pin remove --pin                             | UnpinApp (pin_id)  |
-| App page pin toggle, off                      | pin remove --app                             | UnpinApp (app)     |
-| Drag App pins                                 | pin reorder --pin                            | ReorderAppPins     |
-| Pin or unpin a Workflow                       | pin add / remove --workflow                  | SetWorkflowPinned  |
-| Pin or unpin a dashboard                      | pin add / remove --dashboard                 | SetDashboardPinned |
-| Drag dashboards                               | pin reorder --dashboard                      | ReorderDashboards  |
+| Web UI                             | CLI                                          | RPC                |
+| ---------------------------------- | -------------------------------------------- | ------------------ |
+| Sidebar pins and pinned dashboards | pin list [--limit --cursor]                  | ListPins (paged)   |
+| Pin an App again (sidebar)         | pin add --app                                | PinApp             |
+| App page pin toggle, on            | pin add --app --if-absent                    | PinApp (if_absent) |
+| Rename a pin, set its entry point  | pin update --label / --entry / --clear-entry | UpdateAppPin       |
+| Remove one pin                     | pin remove --pin                             | UnpinApp (pin_id)  |
+| App page pin toggle, off           | pin remove --app                             | UnpinApp (app)     |
+| Drag App pins                      | pin reorder --pin                            | ReorderAppPins     |
+| Pin or unpin a dashboard           | pin add / remove --dashboard                 | SetDashboardPinned |
+| Drag dashboards                    | pin reorder --dashboard                      | ReorderDashboards  |
 
 Both services accept sessions, API keys and Run JWTs alike; neither has a
 device- or browser-bound operation, so there is no CLI exception. Pins record
@@ -266,10 +258,11 @@ webhook's secret). No Agent Tool is added.
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`
 (workspace navigation, Dashboard auto-refresh) still accept only a native user
 session and have no `hatch` CLI commands. Pending chat messages (the queue/steer
-tray: send while a run works, edit, cancel, Send now, resume) belong to the same
-gap: like sending a message, they are only `/api/agent/sessions/<id>/pending`
-HTTP routes for the Web and mobile chat, and `AgentService/GetSession` returns
-the tray read-only. Both routes take an optional `clientMessageId` that makes a
+tray: send while a run works in either mode, edit, switch between queue and
+steer, cancel, Send now, resume) belong to the same gap: like sending a
+message, they are only `/api/agent/sessions/<id>/pending` HTTP routes for
+the Web and mobile chat, and `AgentService/GetSession` returns the tray
+read-only. Both routes take an optional `clientMessageId` that makes a
 resend after a lost response return the first outcome
 (`src/server/agent-message-receipts.ts`); a CLI send command must expose it
 too, so an Agent can retry a send safely. Both are pending: add their CLI

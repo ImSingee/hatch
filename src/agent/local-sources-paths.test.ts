@@ -39,7 +39,6 @@ const {
   agentHomeDir,
   agentSessionDir,
   agentWorkDir,
-  agentWorkflowWorkDir,
 } = await import('./paths');
 const {
   prepareAgentSessionSandbox,
@@ -48,7 +47,6 @@ const {
   wrapShellCommand,
 } = await import('./shell-sandbox');
 const { createAppTools } = await import('./tools/apps');
-const { createWorkflowTools } = await import('./tools/workflows');
 const { appHatchSdkMaterializer } = await import('./hatch-sdk');
 
 async function exists(target: string): Promise<boolean> {
@@ -66,17 +64,6 @@ function appSdkManifest(worktree: string): string {
 
 function appSdkImportMap(worktree: string): string {
   return path.join(worktree, '.hatch', 'import-map.json');
-}
-
-function workflowSdkManifest(worktree: string): string {
-  return path.join(
-    worktree,
-    '.hatch',
-    'sdk',
-    '@hatch',
-    'workflow',
-    'package.json',
-  );
 }
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
@@ -128,12 +115,6 @@ function appDetail(id: string, slug = id) {
   >;
 }
 
-function workflowDetail(id: string, slug = id) {
-  return { id, slug } as NonNullable<
-    Awaited<ReturnType<PlatformClient['getWorkflow']>>
-  >;
-}
-
 afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
@@ -145,7 +126,6 @@ describe('runner source paths', () => {
       const sourceSession = 'linux-owner-source';
       const source = await initNewWorktree(
         sourceSession,
-        'app',
         'linux-owner-source',
         async (worktree) => {
           await mkdir(path.join(worktree, 'scaffold', 'nested'), {
@@ -188,7 +168,6 @@ describe('runner source paths', () => {
       const head = headOutput.trim();
       const bundle = await bundleWorktreeForDeploy(
         sourceSession,
-        'app',
         'linux-owner-source',
         source.absolutePath,
       );
@@ -196,7 +175,6 @@ describe('runner source paths', () => {
       const targetSession = 'linux-owner-target';
       const checkout = await checkoutFromBundle(
         targetSession,
-        'app',
         {
           id: 'linux-owner-target',
           masterCommit: head,
@@ -259,18 +237,17 @@ describe('runner source paths', () => {
     await mkdir(work, { recursive: true });
 
     await expect(
-      assertWorktreeAvailable(sessionId, 'app', 'escape', '../outside'),
+      assertWorktreeAvailable(sessionId, 'escape', '../outside'),
     ).rejects.toThrow(/inside the Agent workdir/);
     await expect(
-      bundleWorktreeForDeploy(sessionId, 'app', 'escape', ''),
+      bundleWorktreeForDeploy(sessionId, 'escape', ''),
     ).rejects.toThrow('Workspace path is required.');
     await expect(
-      bundleWorktreeForDeploy(sessionId, 'app', 'escape', '../outside'),
+      bundleWorktreeForDeploy(sessionId, 'escape', '../outside'),
     ).rejects.toThrow(/inside the Agent workdir/);
     await expect(
       assertWorktreeAvailable(
         sessionId,
-        'app',
         'escape',
         path.join(root, 'host-path'),
       ),
@@ -280,7 +257,7 @@ describe('runner source paths', () => {
     await mkdir(outside, { recursive: true });
     await symlink(outside, path.join(work, 'link'));
     await expect(
-      assertWorktreeAvailable(sessionId, 'app', 'escape', 'link/source'),
+      assertWorktreeAvailable(sessionId, 'escape', 'link/source'),
     ).rejects.toThrow(/escapes the Agent workdir through a symlink/);
   });
 
@@ -288,7 +265,6 @@ describe('runner source paths', () => {
     const sessionId = 'path-overlap';
     const outer = await initNewWorktree(
       sessionId,
-      'app',
       'outer-app',
       () => Promise.resolve(),
       'custom/outer',
@@ -296,13 +272,7 @@ describe('runner source paths', () => {
     const nested = path.join(outer.absolutePath, 'inner');
 
     await expect(
-      initNewWorktree(
-        sessionId,
-        'workflow',
-        'inner-workflow',
-        () => Promise.resolve(),
-        nested,
-      ),
+      initNewWorktree(sessionId, 'inner-app', () => Promise.resolve(), nested),
     ).rejects.toThrow(/nested inside another Git checkout/);
     await expect(exists(nested)).resolves.toBe(false);
   });
@@ -422,66 +392,6 @@ describe('runner source paths', () => {
     ).resolves.toContain('app-immutable-app-id.bundle');
   });
 
-  it('creates a workflow with a generated SDK in a clean worktree', async () => {
-    const sessionId = 'create-workflow-sdk';
-    const createWorkflow = vi.fn<PlatformClient['createWorkflow']>(
-      async (input) => ({
-        id: '01immutableworkflow',
-        slug: input.slug,
-        name: input.name,
-        files: [],
-      }),
-    );
-    const tools = createWorkflowTools({
-      sessionId,
-      platform: { createWorkflow } as unknown as PlatformClient,
-    });
-    const create = tools.find(
-      (candidate) => candidate.name === 'create_workflow',
-    );
-    if (!create) throw new Error('Missing create_workflow tool.');
-
-    for (const input of [
-      { slug: '', name: 'Workflow' },
-      { slug: 'valid', name: '' },
-    ]) {
-      await expect(create.execute('invalid', input)).rejects.toThrow(
-        /too small/i,
-      );
-    }
-    expect(createWorkflow).not.toHaveBeenCalled();
-
-    const result = await create.execute('create-workflow', {
-      slug: 'daily-digest',
-      name: 'Daily digest',
-      description: null,
-      pin: [],
-      target_path: {},
-    });
-
-    const worktree = path.join(
-      agentWorkDir(sessionId),
-      'workflows',
-      'daily-digest',
-    );
-    expect(result.details).toMatchObject({
-      id: '01immutableworkflow',
-      slug: 'daily-digest',
-      absolutePath: worktree,
-      preparation: 'ready',
-    });
-    await expect(
-      readFile(workflowSdkManifest(worktree), 'utf8'),
-    ).resolves.toContain('"name": "@hatch/workflow"');
-    await expect(
-      readFile(appSdkImportMap(worktree), 'utf8'),
-    ).resolves.toContain('"./sdk/@hatch/workflow/dist/workflow.js"');
-    await expect(git(worktree, 'status', '--short')).resolves.toBe('');
-    await expect(
-      readFile(path.join(worktree, '.git', 'info', 'exclude'), 'utf8'),
-    ).resolves.toContain('/.hatch/');
-  });
-
   it('separates fresh app clones from existing checkout updates', async () => {
     const sessionId = 'checkout-app-modes';
     const getApp = vi.fn<PlatformClient['getApp']>(async () =>
@@ -566,86 +476,6 @@ describe('runner source paths', () => {
     ).rejects.toThrow(/already exists/);
   });
 
-  it('separates fresh workflow clones from existing checkout updates', async () => {
-    const sessionId = 'checkout-workflow-modes';
-    const getWorkflow = vi.fn<PlatformClient['getWorkflow']>(async () =>
-      workflowDetail('01immutableworkflow', 'human-slug'),
-    );
-    const getWorkflowSource = vi.fn<PlatformClient['getWorkflowSource']>(
-      async () => ({
-        id: '01immutableworkflow',
-        masterCommit: null,
-        bundleBase64: null,
-      }),
-    );
-    const tools = createWorkflowTools({
-      sessionId,
-      platform: {
-        getWorkflow,
-        getWorkflowSource,
-      } as unknown as PlatformClient,
-      materializeSdk: async () => undefined,
-    });
-    const checkout = tools.find((tool) => tool.name === 'checkout_workflow');
-    if (!checkout) throw new Error('Missing checkout_workflow tool.');
-    expect((checkout.parameters as { required?: string[] }).required).toEqual(
-      expect.arrayContaining(['id', 'clone']),
-    );
-    expect(checkout.parameters).not.toHaveProperty('properties.target_path');
-
-    await expect(
-      checkout.execute('update-without-path', {
-        id: '01immutableworkflow',
-        clone: false,
-        source_path: '',
-        force: '',
-      }),
-    ).rejects.toThrow('source_path is required when clone is false');
-    expect(getWorkflow).not.toHaveBeenCalled();
-
-    await expect(
-      checkout.execute('update-with-force', {
-        id: '01immutableworkflow',
-        clone: false,
-        source_path: 'custom/missing',
-        force: true,
-      }),
-    ).rejects.toThrow('force is only valid when clone is true');
-    expect(getWorkflowSource).not.toHaveBeenCalled();
-
-    await expect(
-      checkout.execute('update-missing-path', {
-        id: '01immutableworkflow',
-        clone: false,
-        source_path: 'custom/missing',
-      }),
-    ).rejects.toThrow(/does not exist/);
-    await expect(
-      exists(path.join(agentWorkDir(sessionId), 'custom/missing')),
-    ).resolves.toBe(false);
-    expect(getWorkflow).not.toHaveBeenCalled();
-
-    const cloned = await checkout.execute('clone-default', {
-      id: '01immutableworkflow',
-      clone: true,
-      source_path: [],
-      force: {},
-    });
-    expect(cloned.details).toMatchObject({
-      id: '01immutableworkflow',
-      path: 'workflows/human-slug',
-      absolutePath: agentWorkflowWorkDir(sessionId, 'human-slug'),
-    });
-    expect(getWorkflow).toHaveBeenCalledWith('01immutableworkflow');
-    expect(getWorkflowSource).toHaveBeenLastCalledWith('01immutableworkflow');
-    await expect(
-      checkout.execute('clone-existing', {
-        id: '01immutableworkflow',
-        clone: true,
-      }),
-    ).rejects.toThrow(/already exists/);
-  });
-
   it.each(['dirty', 'ahead', 'diverged'] as const)(
     'refreshes SDKs without discarding a %s checkout',
     async (state) => {
@@ -653,20 +483,17 @@ describe('runner source paths', () => {
       const targetSession = `sdk-refresh-target-${state}`;
       const original = await initNewWorktree(
         sourceSession,
-        'app',
         'refresh-app',
         async () => {},
       );
       let masterCommit = await commitFile(original.absolutePath);
       let bundle = await bundleWorktreeForDeploy(
         sourceSession,
-        'app',
         'refresh-app',
         original.absolutePath,
       );
       const checkout = await checkoutFromBundle(
         targetSession,
-        'app',
         {
           id: 'refresh-app',
           masterCommit,
@@ -690,7 +517,6 @@ describe('runner source paths', () => {
         );
         bundle = await bundleWorktreeForDeploy(
           sourceSession,
-          'app',
           'refresh-app',
           original.absolutePath,
         );
@@ -709,7 +535,6 @@ describe('runner source paths', () => {
       await expect(
         checkoutFromBundle(
           targetSession,
-          'app',
           {
             id: 'refresh-app',
             masterCommit,
@@ -738,18 +563,16 @@ describe('runner source paths', () => {
     15_000,
   );
 
-  it('reports synchronized existing app and workflow checkouts', async () => {
+  it('reports synchronized existing app checkouts', async () => {
     const sourceSessionId = 'checkout-tools-sync-source';
     const sourceWorktree = await initNewWorktree(
       sourceSessionId,
-      'app',
       'source-repo',
       () => Promise.resolve(),
     );
     const masterCommit = await commitFile(sourceWorktree.absolutePath);
     const bundle = await bundleWorktreeForDeploy(
       sourceSessionId,
-      'app',
       'source-repo',
       sourceWorktree.absolutePath,
     );
@@ -774,19 +597,8 @@ describe('runner source paths', () => {
       } as unknown as PlatformClient,
       prepareWorktree: vi.fn<() => Promise<void>>(async () => {}),
     });
-    const workflowTools = createWorkflowTools({
-      sessionId,
-      platform: {
-        getWorkflowSource: vi.fn<PlatformClient['getWorkflowSource']>(
-          async () => source('workflow-id'),
-        ),
-      } as unknown as PlatformClient,
-    });
     const app = appTools.find((tool) => tool.name === 'checkout_app');
-    const workflow = workflowTools.find(
-      (tool) => tool.name === 'checkout_workflow',
-    );
-    if (!app || !workflow) throw new Error('Missing checkout tools.');
+    if (!app) throw new Error('Missing checkout tool.');
 
     const firstApp = await app.execute('app-first', {
       id: 'app-id',
@@ -837,72 +649,18 @@ describe('runner source paths', () => {
     await expect(readFile(excludePath, 'utf8')).resolves.toContain(
       '/.hatch/\n',
     );
-
-    await workflow.execute('workflow-first', {
-      id: 'workflow-id',
-      clone: true,
-      source_path: 'custom/sync-workflow',
-    });
-    const workflowWorktree = path.join(
-      agentWorkDir(sessionId),
-      'custom/sync-workflow',
-    );
-    await expect(
-      readFile(workflowSdkManifest(workflowWorktree), 'utf8'),
-    ).resolves.toContain('"name": "@hatch/workflow"');
-    await expect(exists(appSdkManifest(workflowWorktree))).resolves.toBe(false);
-    await expect(
-      readFile(appSdkImportMap(workflowWorktree), 'utf8'),
-    ).resolves.toContain('"./sdk/@hatch/workflow/dist/workflow.js"');
-    await expect(git(workflowWorktree, 'status', '--short')).resolves.toBe('');
-    const workflowExcludePath = path.join(
-      workflowWorktree,
-      '.git',
-      'info',
-      'exclude',
-    );
-    const workflowExclude = await readFile(workflowExcludePath, 'utf8');
-    expect(workflowExclude.match(/^\/\.hatch\/$/gm)).toHaveLength(1);
-    expect(workflowExclude.match(/^\/node_modules\/$/gm)).toHaveLength(1);
-    expect(workflowExclude).not.toContain('/gen/');
-
-    await writeFile(
-      workflowExcludePath,
-      workflowExclude.replace('/.hatch/\n', ''),
-    );
-    await expect(git(workflowWorktree, 'status', '--short')).resolves.toContain(
-      '?? .hatch/',
-    );
-    const synchronizedWorkflow = await workflow.execute('workflow-sync', {
-      id: 'workflow-id',
-      clone: false,
-      source_path: 'custom/sync-workflow',
-    });
-    expect(toolText(synchronizedWorkflow)).toContain(
-      'Synchronized existing checkout',
-    );
-    expect(synchronizedWorkflow.details).toMatchObject({
-      replacedExisting: false,
-      synchronizedExisting: true,
-    });
-    await expect(git(workflowWorktree, 'status', '--short')).resolves.toBe('');
-    await expect(readFile(workflowExcludePath, 'utf8')).resolves.toContain(
-      '/.hatch/\n',
-    );
   }, 15_000);
 
   it('force replaces only the exact target and preserves unrelated checkout state', async () => {
     const sessionId = 'force-index-owner';
     const replaced = await initNewWorktree(
       sessionId,
-      'app',
       'old-app',
       () => Promise.resolve(),
       'custom/shared',
     );
     const untouched = await initNewWorktree(
       sessionId,
-      'app',
       'old-app',
       () => Promise.resolve(),
       'custom/other',
@@ -911,7 +669,6 @@ describe('runner source paths', () => {
     await commitFile(untouched.absolutePath, 'keep.txt', 'keep');
     const sharedBundle = await bundleWorktreeForDeploy(
       sessionId,
-      'app',
       'old-app',
       untouched.absolutePath,
     );
@@ -925,20 +682,19 @@ describe('runner source paths', () => {
       Buffer.from(sharedBundle.bundleBase64, 'base64'),
     );
 
-    const workflow = await checkoutFromBundle(
+    const fresh = await checkoutFromBundle(
       sessionId,
-      'workflow',
       {
-        id: 'new-workflow',
+        id: 'new-app',
         masterCommit: null,
         bundleBase64: null,
       },
       { targetPath: 'custom/shared', force: true },
     );
 
-    expect(workflow.replacedExisting).toBe(true);
+    expect(fresh.replacedExisting).toBe(true);
     await expect(
-      readFile(path.join(workflow.absolutePath, 'discard.txt'), 'utf8'),
+      readFile(path.join(fresh.absolutePath, 'discard.txt'), 'utf8'),
     ).rejects.toThrow(/ENOENT/);
     await expect(
       readFile(path.join(untouched.absolutePath, 'keep.txt'), 'utf8'),
@@ -950,7 +706,6 @@ describe('runner source paths', () => {
     const sessionId = 'force-nested-checkout';
     const nested = await initNewWorktree(
       sessionId,
-      'app',
       'nested-app',
       () => Promise.resolve(),
       'custom/group/app-a',
@@ -960,7 +715,6 @@ describe('runner source paths', () => {
     await expect(
       checkoutFromBundle(
         sessionId,
-        'workflow',
         {
           id: 'replacement',
           masterCommit: null,
@@ -981,7 +735,6 @@ describe('runner source paths', () => {
     const sessionId = 'force-displaced-owner-bundle';
     const onlyCheckout = await initNewWorktree(
       sessionId,
-      'app',
       'old-app',
       () => Promise.resolve(),
       'custom/shared',
@@ -989,7 +742,6 @@ describe('runner source paths', () => {
     await commitFile(onlyCheckout.absolutePath);
     const oldBundle = await bundleWorktreeForDeploy(
       sessionId,
-      'app',
       'old-app',
       onlyCheckout.absolutePath,
     );
@@ -1005,9 +757,8 @@ describe('runner source paths', () => {
 
     await checkoutFromBundle(
       sessionId,
-      'workflow',
       {
-        id: 'new-workflow',
+        id: 'new-app',
         masterCommit: null,
         bundleBase64: null,
       },
@@ -1027,7 +778,6 @@ describe('runner source paths', () => {
 
     const checkout = await checkoutFromBundle(
       sessionId,
-      'app',
       {
         id: 'replacement',
         masterCommit: null,
@@ -1056,12 +806,12 @@ describe('runner source paths', () => {
     };
 
     await expect(
-      checkoutFromBundle(sessionId, 'app', emptySource, {
+      checkoutFromBundle(sessionId, emptySource, {
         targetPath: fileTarget,
       }),
     ).rejects.toThrow(/already exists.*Nothing was changed/);
     await expect(readFile(fileTarget, 'utf8')).resolves.toBe('keep');
-    await checkoutFromBundle(sessionId, 'app', emptySource, {
+    await checkoutFromBundle(sessionId, emptySource, {
       targetPath: fileTarget,
       force: true,
     });
@@ -1072,16 +822,14 @@ describe('runner source paths', () => {
     await expect(
       checkoutFromBundle(
         sessionId,
-        'workflow',
-        { ...emptySource, id: 'entry-workflow' },
+        { ...emptySource, id: 'entry-app' },
         { targetPath: danglingTarget },
       ),
     ).rejects.toThrow(/already exists.*Nothing was changed/);
     expect((await lstat(danglingTarget)).isSymbolicLink()).toBe(true);
     await checkoutFromBundle(
       sessionId,
-      'workflow',
-      { ...emptySource, id: 'entry-workflow' },
+      { ...emptySource, id: 'entry-app' },
       { targetPath: danglingTarget, force: true },
     );
     expect((await lstat(danglingTarget)).isDirectory()).toBe(true);
@@ -1091,7 +839,6 @@ describe('runner source paths', () => {
     const sessionId = 'force-prepare-failure';
     const existing = await initNewWorktree(
       sessionId,
-      'app',
       'existing-app',
       () => Promise.resolve(),
       'custom/replace-me',
@@ -1100,7 +847,6 @@ describe('runner source paths', () => {
 
     const source = await initNewWorktree(
       sessionId,
-      'app',
       'source-app',
       () => Promise.resolve(),
       'custom/source',
@@ -1108,7 +854,6 @@ describe('runner source paths', () => {
     await commitFile(source.absolutePath);
     const bundle = await bundleWorktreeForDeploy(
       sessionId,
-      'app',
       'source-app',
       source.absolutePath,
     );
@@ -1116,7 +861,6 @@ describe('runner source paths', () => {
     await expect(
       checkoutFromBundle(
         sessionId,
-        'workflow',
         {
           id: 'replacement',
           masterCommit: '0000000000000000000000000000000000000000',
@@ -1132,30 +876,20 @@ describe('runner source paths', () => {
 
   it('requires a matching origin, a clean worktree, and at least one commit', async () => {
     const sessionId = 'deploy-validation';
-    const empty = await initNewWorktree(sessionId, 'app', 'empty-app', () =>
+    const empty = await initNewWorktree(sessionId, 'empty-app', () =>
       Promise.resolve(),
     );
     await expect(
-      bundleWorktreeForDeploy(
-        sessionId,
-        'app',
-        'empty-app',
-        empty.absolutePath,
-      ),
+      bundleWorktreeForDeploy(sessionId, 'empty-app', empty.absolutePath),
     ).rejects.toThrow(/no commits yet/);
 
-    const dirty = await initNewWorktree(sessionId, 'app', 'dirty-app', () =>
+    const dirty = await initNewWorktree(sessionId, 'dirty-app', () =>
       Promise.resolve(),
     );
     await commitFile(dirty.absolutePath);
     await writeFile(path.join(dirty.absolutePath, 'source.txt'), 'dirty\n');
     await expect(
-      bundleWorktreeForDeploy(
-        sessionId,
-        'app',
-        'dirty-app',
-        dirty.absolutePath,
-      ),
+      bundleWorktreeForDeploy(sessionId, 'dirty-app', dirty.absolutePath),
     ).rejects.toThrow(/worktree is dirty/);
 
     const foreign = path.join(agentWorkDir(sessionId), 'foreign');
@@ -1166,11 +900,11 @@ describe('runner source paths', () => {
     await git(foreign, 'config', 'user.email', 'test@example.test');
     await commitFile(foreign);
     await expect(
-      bundleWorktreeForDeploy(sessionId, 'app', 'foreign-app', foreign),
+      bundleWorktreeForDeploy(sessionId, 'foreign-app', foreign),
     ).rejects.toThrow(/found no origin/);
     await git(foreign, 'remote', 'add', 'origin', path.join(root, 'other.git'));
     await expect(
-      bundleWorktreeForDeploy(sessionId, 'app', 'foreign-app', foreign),
+      bundleWorktreeForDeploy(sessionId, 'foreign-app', foreign),
     ).rejects.toThrow(/expected origin/);
   });
 
@@ -1178,7 +912,6 @@ describe('runner source paths', () => {
     const sessionId = 'legacy-layout';
     const legacy = await initNewWorktree(
       sessionId,
-      'app',
       'legacy-app',
       () => Promise.resolve(),
       'legacy-app',
@@ -1190,12 +923,7 @@ describe('runner source paths', () => {
       exists(agentAppWorkDir(sessionId, 'legacy-app')),
     ).resolves.toBe(false);
     await expect(
-      bundleWorktreeForDeploy(
-        sessionId,
-        'app',
-        'legacy-app',
-        legacy.absolutePath,
-      ),
+      bundleWorktreeForDeploy(sessionId, 'legacy-app', legacy.absolutePath),
     ).resolves.toMatchObject({ headCommit: head });
     expect(legacy.absolutePath).toBe(
       path.join(agentWorkDir(sessionId), 'legacy-app'),

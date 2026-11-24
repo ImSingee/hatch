@@ -27,7 +27,9 @@ const ATTACHMENT_ID_RE = /^[a-z0-9][a-z0-9-]{0,127}$/;
 
 export function requireAttachmentId(id: string): string {
   if (!ATTACHMENT_ID_RE.test(id)) {
-    throw new AppError('Invalid attachment id.', 400);
+    throw new AppError('Invalid attachment id.', 400, {
+      code: 'agent.attachmentInvalidId',
+    });
   }
   return id;
 }
@@ -62,11 +64,17 @@ async function writeCappedUpload(
       size += value.byteLength;
       if (size > MAX_AGENT_ATTACHMENT_BYTES) {
         await reader.cancel();
-        throw new AppError('Attachment is too large.', 413);
+        throw new AppError('Attachment is too large.', 413, {
+          code: 'agent.attachmentTooLarge',
+        });
       }
       await writeChunkFully(handle, value);
     }
-    if (size === 0) throw new AppError('Attachment is empty.', 400);
+    if (size === 0) {
+      throw new AppError('Attachment is empty.', 400, {
+        code: 'agent.attachmentEmpty',
+      });
+    }
     complete = true;
   } finally {
     await handle.close();
@@ -121,14 +129,20 @@ export async function uploadAgentAttachment(input: {
     input.declaredBytes != null &&
     input.declaredBytes > MAX_AGENT_ATTACHMENT_BYTES
   ) {
-    throw new AppError('Attachment is too large.', 413);
+    throw new AppError('Attachment is too large.', 413, {
+      code: 'agent.attachmentTooLarge',
+    });
   }
 
   const session = await db.query.agentSessions.findFirst({
     where: { id: input.sessionId },
     columns: { id: true },
   });
-  if (!session) throw new AppError('Session not found.', 404);
+  if (!session) {
+    throw new AppError('Session not found.', 404, {
+      code: 'agent.sessionNotFound',
+    });
+  }
 
   const existing = await db.query.agentAttachments.findFirst({
     where: { id },
@@ -137,7 +151,9 @@ export async function uploadAgentAttachment(input: {
     existing &&
     (existing.sessionId !== input.sessionId || existing.attachedAt != null)
   ) {
-    throw new AppError('Attachment id is already in use.', 409);
+    throw new AppError('Attachment id is already in use.', 409, {
+      code: 'agent.attachmentInUse',
+    });
   }
 
   const name = safeAttachmentName(input.name);
@@ -158,7 +174,9 @@ export async function uploadAgentAttachment(input: {
         locked &&
         (locked.sessionId !== input.sessionId || locked.attachedAt != null)
       ) {
-        throw new AppError('Attachment id is already in use.', 409);
+        throw new AppError('Attachment id is already in use.', 409, {
+          code: 'agent.attachmentInUse',
+        });
       }
 
       // A repeated PUT for the same pending id is an idempotent retry. Keep the

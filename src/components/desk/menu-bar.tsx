@@ -3,7 +3,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import { IconBell, IconMenu2 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 import { useNotificationReadState } from '~components/notifications/use-notification-read-state';
-import { useI18n } from '~/i18n';
+import { type PlainTranslationKey, useI18n } from '~i18n';
 import { AccountMenu } from './account-menu';
 import { Brand } from './brand';
 import { CommandPalette } from './command-palette';
@@ -12,10 +12,10 @@ import { DESK_HOME } from './paths';
 import classes from './menu-bar.module.css';
 
 const NAV = [
-  { to: DESK_HOME, label: 'Desk' },
-  { to: '/agent', label: 'Agent' },
-  { to: '/apps', label: 'All apps' },
-] as const;
+  { to: DESK_HOME, label: 'nav.desk' },
+  { to: '/agent', label: 'nav.agent' },
+  { to: '/apps', label: 'nav.allApps' },
+] as const satisfies readonly { to: string; label: PlainTranslationKey }[];
 
 function isUnder(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`);
@@ -28,6 +28,7 @@ function isUnder(pathname: string, to: string) {
  * which section is open instead; the runner warning keeps only its dot.
  */
 export function MenuBar() {
+  const { t, locale } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV.find((item) => isUnder(pathname, item.to));
 
@@ -38,7 +39,7 @@ export function MenuBar() {
           <Menu.Target>
             <UnstyledButton
               className={`${classes.item} ${classes.fold}`}
-              aria-label="Open navigation"
+              aria-label={t('nav.openNavigation')}
             >
               <IconMenu2 size={20} stroke={2} aria-hidden />
             </UnstyledButton>
@@ -49,7 +50,7 @@ export function MenuBar() {
                 key={item.to}
                 renderRoot={(props) => <Link to={item.to} {...props} />}
               >
-                {item.label}
+                {t(item.label)}
               </Menu.Item>
             ))}
           </Menu.Dropdown>
@@ -58,14 +59,14 @@ export function MenuBar() {
         <Link
           to={DESK_HOME}
           className={`${classes.item} ${classes.brand}`}
-          aria-label="Hatch, back to the desk"
+          aria-label={t('nav.brandHome')}
         >
           <Brand size="xs" />
         </Link>
 
         <span aria-hidden className={classes.divider} />
 
-        <nav aria-label="Primary" className={classes.nav}>
+        <nav aria-label={t('desktop.primary')} className={classes.nav}>
           {NAV.map((item) => (
             <Link
               key={item.to}
@@ -73,14 +74,14 @@ export function MenuBar() {
               className={classes.item}
               aria-current={current === item ? 'page' : undefined}
             >
-              {item.label}
+              {t(item.label)}
             </Link>
           ))}
         </nav>
 
         {current ? (
           <Text component="span" className={classes.section}>
-            {current.label}
+            {t(current.label)}
           </Text>
         ) : null}
       </div>
@@ -90,7 +91,11 @@ export function MenuBar() {
         <CommandPalette />
         <NotificationsLink current={isUnder(pathname, '/notifications')} />
         <Text component="span" className={classes.date}>
-          {dayjs().format('ddd, MMM D')}
+          {new Intl.DateTimeFormat(locale, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          }).format(dayjs().toDate())}
         </Text>
         <AccountMenu />
       </div>

@@ -1,4 +1,4 @@
-import { Group, Paper, Text, ThemeIcon, UnstyledButton } from '@mantine/core';
+import { Group, Paper, Text, UnstyledButton } from '@mantine/core';
 import { shift } from '@floating-ui/dom';
 import { Mention } from '@tiptap/extension-mention';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -8,12 +8,6 @@ import { PluginKey } from '@tiptap/pm/state';
 import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { exitSuggestion, type SuggestionProps } from '@tiptap/suggestion';
-import {
-  IconApps,
-  IconChevronLeft,
-  IconChevronRight,
-  IconRepeat,
-} from '@tabler/icons-react';
 import {
   forwardRef,
   useEffect,
@@ -32,8 +26,8 @@ import {
 } from '~agent/composer-content';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { useEventCallback } from '~hooks/use-latest-committed';
+import { useI18n } from '~i18n';
 import type { AppListItem } from '~server/apps';
-import type { WorkflowListItem } from '~server/workflows';
 import {
   composerDocumentFromParts,
   plainTextComposerDocument,
@@ -41,11 +35,9 @@ import {
 } from './composer-editor-content';
 import classes from './chat.module.css';
 
-type ResourceType = 'app' | 'workflow';
 type MentionAttributes = {
   id: string;
   label: string;
-  resourceType: ResourceType;
   slug?: string | null;
 };
 
@@ -55,14 +47,6 @@ const ResourceMention = Mention.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
-      resourceType: {
-        default: 'app',
-        parseHTML: (element) =>
-          element.getAttribute('data-resource-type') ?? 'app',
-        renderHTML: (attributes) => ({
-          'data-resource-type': attributes.resourceType ?? 'app',
-        }),
-      },
       slug: {
         default: null,
         parseHTML: (element) => element.getAttribute('data-slug'),
@@ -73,38 +57,19 @@ const ResourceMention = Mention.extend({
   },
 });
 
-type MentionSource<T> = {
-  items: T[];
+type MentionSource = {
+  items: AppListItem[];
   loading: boolean;
   error: boolean;
 };
 
-type MentionSources = {
-  apps: MentionSource<AppListItem>;
-  workflows: MentionSource<WorkflowListItem>;
-};
-
-type CategoryMentionItem = {
-  kind: 'category';
-  resourceType: ResourceType;
-  count: number;
-};
-
-type ResourceMentionItem =
-  | { kind: 'resource'; resourceType: 'app'; resource: AppListItem }
-  | {
-      kind: 'resource';
-      resourceType: 'workflow';
-      resource: WorkflowListItem;
-    };
-
-type MentionItem = CategoryMentionItem | ResourceMentionItem;
+type MentionItem = AppListItem;
 
 type ResourceMentionMenuProps = SuggestionProps<
   MentionItem,
   MentionAttributes
 > & {
-  sources: MentionSources;
+  source: MentionSource;
   listboxId: string;
   onActiveOptionChange: (optionId: string | undefined) => void;
   onNavigableItemsChange: (hasItems: boolean) => void;
@@ -114,96 +79,19 @@ type ResourceMentionMenuHandle = {
   onKeyDown: (event: KeyboardEvent) => boolean;
 };
 
-function mentionItemKey(item: MentionItem): string {
-  return item.kind === 'category'
-    ? `category-${item.resourceType}`
-    : `${item.resourceType}-${item.resource.id}`;
-}
-
 function mentionOptionId(listboxId: string, item: MentionItem): string {
-  return `${listboxId}-option-${mentionItemKey(item).replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`;
+  return `${listboxId}-option-app-${item.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`;
 }
 
-function resourceItems(
-  sources: MentionSources,
-  resourceType: ResourceType,
-): ResourceMentionItem[] {
-  return resourceType === 'app'
-    ? sources.apps.items.map((resource) => ({
-        kind: 'resource' as const,
-        resourceType: 'app' as const,
-        resource,
-      }))
-    : sources.workflows.items.map((resource) => ({
-        kind: 'resource' as const,
-        resourceType: 'workflow' as const,
-        resource,
-      }));
-}
-
-function mentionItems(sources: MentionSources, query: string): MentionItem[] {
+/** Every App for an empty query; otherwise those whose name or slug match. */
+function mentionItems(source: MentionSource, query: string): MentionItem[] {
   const needle = query.trim().toLocaleLowerCase();
-  if (!needle) {
-    const categories: CategoryMentionItem[] = [];
-    if (sources.apps.items.length > 0) {
-      categories.push({
-        kind: 'category',
-        resourceType: 'app',
-        count: sources.apps.items.length,
-      });
-    }
-    if (sources.workflows.items.length > 0) {
-      categories.push({
-        kind: 'category',
-        resourceType: 'workflow',
-        count: sources.workflows.items.length,
-      });
-    }
-    return categories;
-  }
-
-  const apps = sources.apps.items
-    .filter((resource) =>
-      [resource.name, resource.slug].some((value) =>
-        value.toLocaleLowerCase().includes(needle),
-      ),
-    )
-    .map((resource) => ({
-      kind: 'resource' as const,
-      resourceType: 'app' as const,
-      resource,
-    }));
-  const workflows = sources.workflows.items
-    .filter((resource) =>
-      [resource.name, resource.slug].some((value) =>
-        value.toLocaleLowerCase().includes(needle),
-      ),
-    )
-    .map((resource) => ({
-      kind: 'resource' as const,
-      resourceType: 'workflow' as const,
-      resource,
-    }));
-  return [...apps, ...workflows];
-}
-
-function sourceStatus(
-  sources: MentionSources,
-  resourceType: ResourceType,
-): string | null {
-  const source = resourceType === 'app' ? sources.apps : sources.workflows;
-  const label = resourceType === 'app' ? 'Apps' : 'Workflows';
-  if (source.loading) return `Loading ${label}…`;
-  if (source.error) return `Could not load ${label}`;
-  return null;
-}
-
-function mentionSourcesLoading(sources: MentionSources): boolean {
-  return sources.apps.loading || sources.workflows.loading;
-}
-
-function resourceLabel(resourceType: ResourceType): string {
-  return resourceType === 'app' ? 'Apps' : 'Workflows';
+  if (!needle) return source.items;
+  return source.items.filter((app) =>
+    [app.name, app.slug].some((value) =>
+      value.toLocaleLowerCase().includes(needle),
+    ),
+  );
 }
 
 /* eslint-disable jsx-a11y/prefer-tag-over-role -- ARIA listbox semantics are
@@ -217,27 +105,17 @@ const ResourceMentionMenu = forwardRef<
     items,
     command,
     query,
-    sources,
+    source,
     listboxId,
     onActiveOptionChange,
     onNavigableItemsChange,
   },
   reference,
 ) {
-  const [scope, setScope] = useState<ResourceType | null>(null);
+  const { t } = useI18n();
   const hasQuery = query.trim().length > 0;
-  const activeScope = hasQuery ? null : scope;
-  const visibleItems = activeScope
-    ? resourceItems(sources, activeScope)
-    : items;
-  const backOptionOffset = activeScope ? 1 : 0;
-  const navigationLength = visibleItems.length + backOptionOffset;
-  const backOptionId = `${listboxId}-option-back`;
-  const selectionKey = JSON.stringify([
-    activeScope,
-    query,
-    visibleItems.map(mentionItemKey),
-  ]);
+  const navigationLength = items.length;
+  const selectionKey = JSON.stringify([query, items.map((item) => item.id)]);
   const [selection, setSelection] = useState({
     key: selectionKey,
     index: 0,
@@ -245,24 +123,17 @@ const ResourceMentionMenu = forwardRef<
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   let currentSelection = selection;
   if (selection.key !== selectionKey) {
-    currentSelection = {
-      key: selectionKey,
-      index: activeScope && visibleItems.length > 0 ? 1 : 0,
-    };
+    currentSelection = { key: selectionKey, index: 0 };
     setSelection(currentSelection);
   }
-  const selectedIndex = currentSelection.index;
   const activeIndex =
-    navigationLength > 0 ? Math.min(selectedIndex, navigationLength - 1) : -1;
-  const activeItemIndex = activeIndex - backOptionOffset;
-  const activeItem =
-    activeItemIndex >= 0 ? visibleItems[activeItemIndex] : undefined;
-  const activeOptionId =
-    activeScope && activeIndex === 0
-      ? backOptionId
-      : activeItem
-        ? mentionOptionId(listboxId, activeItem)
-        : undefined;
+    navigationLength > 0
+      ? Math.min(currentSelection.index, navigationLength - 1)
+      : -1;
+  const activeItem = activeIndex >= 0 ? items[activeIndex] : undefined;
+  const activeOptionId = activeItem
+    ? mentionOptionId(listboxId, activeItem)
+    : undefined;
 
   useEffect(() => {
     optionRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest' });
@@ -275,29 +146,12 @@ const ResourceMentionMenu = forwardRef<
   }, [navigationLength, onNavigableItemsChange]);
 
   const select = (index: number) => {
-    if (activeScope && index === 0) {
-      setScope(null);
-      return;
-    }
-    const item = visibleItems[index - backOptionOffset];
+    const item = items[index];
     if (!item) return;
-    if (item.kind === 'category') {
-      setScope(item.resourceType);
-      return;
-    }
-    if (item.resourceType === 'app') {
-      command({
-        id: item.resource.id,
-        label: item.resource.name,
-        resourceType: 'app',
-        slug: item.resource.slug,
-      });
-      return;
-    }
     command({
-      id: item.resource.id,
-      label: item.resource.name,
-      resourceType: 'workflow',
+      id: item.id,
+      label: item.name,
+      slug: item.slug,
     });
   };
 
@@ -327,24 +181,15 @@ const ResourceMentionMenu = forwardRef<
     },
   }));
 
-  const visibleSourceTypes: ResourceType[] = activeScope
-    ? [activeScope]
-    : ['app', 'workflow'];
-  const statuses = visibleSourceTypes.flatMap((resourceType) => {
-    const status = sourceStatus(sources, resourceType);
-    return status ? [{ resourceType, status }] : [];
-  });
+  const status = source.loading
+    ? t('mention.loading')
+    : source.error
+      ? t('mention.loadFailed')
+      : null;
   let emptyMessage: string | null = null;
-  if (visibleItems.length === 0 && statuses.length === 0) {
-    if (activeScope) {
-      emptyMessage = `No ${resourceLabel(activeScope)} yet`;
-    } else if (hasQuery) {
-      emptyMessage = 'No matching Apps or Workflows';
-    } else {
-      emptyMessage = 'No Apps or Workflows yet';
-    }
+  if (items.length === 0 && !status) {
+    emptyMessage = hasQuery ? t('mention.noMatches') : t('mention.empty');
   }
-  const groupedSearch = hasQuery && !activeScope;
 
   return (
     <Paper
@@ -354,149 +199,51 @@ const ResourceMentionMenu = forwardRef<
       p={4}
       className={classes.mentionMenu}
       role="listbox"
-      aria-label="Apps and Workflows"
+      aria-label={t('mention.label')}
     >
-      {activeScope ? (
-        <div className={classes.mentionMenuHeader}>
-          <UnstyledButton
-            id={backOptionId}
-            ref={(element) => {
-              optionRefs.current[0] = element;
-            }}
-            type="button"
-            role="option"
-            aria-label="Back to Apps and Workflows"
-            aria-selected={activeIndex === 0}
-            tabIndex={-1}
-            className={classes.mentionMenuBack}
-            data-selected={activeIndex === 0 || undefined}
-            onMouseDown={(event) => event.preventDefault()}
-            onMouseMove={() => {
-              if (activeIndex !== 0) {
-                setSelection({ key: selectionKey, index: 0 });
-              }
-            }}
-            onClick={() => select(0)}
-          >
-            <IconChevronLeft size={16} stroke={1.8} />
-            <Text size="sm" fw={700}>
-              {resourceLabel(activeScope)}
-            </Text>
-          </UnstyledButton>
-        </div>
-      ) : null}
-      {visibleItems.length > 0 ? (
+      {items.length > 0 ? (
         <div className={classes.mentionMenuItems}>
-          {visibleItems.map((item, index) => {
-            const navigationIndex = index + backOptionOffset;
-            const previous = visibleItems[index - 1];
-            const showGroup =
-              groupedSearch &&
-              item.kind === 'resource' &&
-              (previous?.kind !== 'resource' ||
-                previous.resourceType !== item.resourceType);
-            return (
-              <div key={mentionItemKey(item)}>
-                {showGroup && item.kind === 'resource' ? (
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                    fw={700}
-                    className={classes.mentionMenuSection}
-                  >
-                    {resourceLabel(item.resourceType)}
+          {items.map((item, index) => (
+            <UnstyledButton
+              key={item.id}
+              id={mentionOptionId(listboxId, item)}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
+              type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              tabIndex={-1}
+              className={classes.mentionMenuItem}
+              data-selected={index === activeIndex || undefined}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseMove={() => {
+                if (activeIndex !== index) {
+                  setSelection({ key: selectionKey, index });
+                }
+              }}
+              onClick={() => select(index)}
+            >
+              <Group gap="sm" wrap="nowrap">
+                <AppGlyph name={item.name} seed={item.id} size="sm" />
+                <div className={classes.mentionMenuIdentity}>
+                  <Text size="sm" fw={600} truncate>
+                    {item.name}
                   </Text>
-                ) : null}
-                <UnstyledButton
-                  id={mentionOptionId(listboxId, item)}
-                  ref={(element) => {
-                    optionRefs.current[navigationIndex] = element;
-                  }}
-                  type="button"
-                  role="option"
-                  aria-selected={navigationIndex === activeIndex}
-                  tabIndex={-1}
-                  className={classes.mentionMenuItem}
-                  data-selected={navigationIndex === activeIndex || undefined}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseMove={() => {
-                    if (activeIndex !== navigationIndex) {
-                      setSelection({
-                        key: selectionKey,
-                        index: navigationIndex,
-                      });
-                    }
-                  }}
-                  onClick={() => select(navigationIndex)}
-                >
-                  <Group gap="sm" wrap="nowrap">
-                    {item.kind === 'category' ? (
-                      <ThemeIcon
-                        size={30}
-                        radius="sm"
-                        variant="light"
-                        color={item.resourceType === 'app' ? 'primary' : 'blue'}
-                      >
-                        {item.resourceType === 'app' ? (
-                          <IconApps size={17} stroke={1.7} />
-                        ) : (
-                          <IconRepeat size={17} stroke={1.7} />
-                        )}
-                      </ThemeIcon>
-                    ) : (
-                      <AppGlyph
-                        icon={item.resourceType === 'app'}
-                        name={item.resource.name}
-                        seed={item.resource.id}
-                        size="sm"
-                      />
-                    )}
-                    <div className={classes.mentionMenuIdentity}>
-                      <Text size="sm" fw={600} truncate>
-                        {item.kind === 'category'
-                          ? resourceLabel(item.resourceType)
-                          : item.resource.name}
-                      </Text>
-                      <Text size="xs" c="dimmed" truncate>
-                        {item.kind === 'category'
-                          ? item.resourceType === 'app'
-                            ? 'Browse every app'
-                            : 'Browse every workflow'
-                          : item.resourceType === 'app'
-                            ? `/${item.resource.slug}`
-                            : (item.resource.description ?? item.resource.id)}
-                      </Text>
-                    </div>
-                    {item.kind === 'category' ? (
-                      <>
-                        <Text
-                          size="xs"
-                          c="dimmed"
-                          className={classes.mentionMenuCategoryCount}
-                        >
-                          {item.count}
-                        </Text>
-                        <IconChevronRight
-                          size={16}
-                          stroke={1.8}
-                          className={classes.mentionMenuChevron}
-                        />
-                      </>
-                    ) : null}
-                  </Group>
-                </UnstyledButton>
-              </div>
-            );
-          })}
+                  <Text size="xs" c="dimmed" truncate>
+                    {`/${item.slug}`}
+                  </Text>
+                </div>
+              </Group>
+            </UnstyledButton>
+          ))}
         </div>
       ) : null}
-      {statuses.length > 0 ? (
+      {status ? (
         <div className={classes.mentionMenuStatuses} aria-live="polite">
-          {statuses.map(({ resourceType, status }) => (
-            <Text key={resourceType} size="sm" c="dimmed" px="sm" py={6}>
-              {status}
-            </Text>
-          ))}
+          <Text size="sm" c="dimmed" px="sm" py={6}>
+            {status}
+          </Text>
         </div>
       ) : null}
       {emptyMessage ? (
@@ -526,9 +273,6 @@ export const ComposerEditor = forwardRef<
     apps?: AppListItem[];
     appsLoading?: boolean;
     appsError?: boolean;
-    workflows?: WorkflowListItem[];
-    workflowsLoading?: boolean;
-    workflowsError?: boolean;
     disabled: boolean;
     focusOnMount: boolean;
     placeholder: string;
@@ -538,7 +282,8 @@ export const ComposerEditor = forwardRef<
     seedContent?: ComposerInputPart[];
     onChange: (content: ComposerInputPart[]) => void;
     onMentionLookupPendingChange: (pending: boolean) => void;
-    onSubmit: () => void;
+    /** `switchMode`: sent with ⌘/Ctrl held, to flip the busy delivery mode. */
+    onSubmit: (options: { switchMode: boolean }) => void;
     onPasteFiles: (files: File[]) => void;
   }
 >(function ComposerEditor(
@@ -546,9 +291,6 @@ export const ComposerEditor = forwardRef<
     apps,
     appsLoading = false,
     appsError = false,
-    workflows,
-    workflowsLoading = false,
-    workflowsError = false,
     disabled,
     focusOnMount,
     placeholder,
@@ -564,17 +306,10 @@ export const ComposerEditor = forwardRef<
 ) {
   const editorId = useId();
   const listboxId = `${editorId}-resource-mentions`;
-  const getSources = useEventCallback((): MentionSources => ({
-    apps: {
-      items: apps ?? [],
-      loading: appsLoading,
-      error: appsError,
-    },
-    workflows: {
-      items: workflows ?? [],
-      loading: workflowsLoading,
-      error: workflowsError,
-    },
+  const getSource = useEventCallback((): MentionSource => ({
+    items: apps ?? [],
+    loading: appsLoading,
+    error: appsError,
   }));
   const emitChange = useEventCallback(onChange);
   const emitMentionLookupPendingChange = useEventCallback(
@@ -631,7 +366,7 @@ export const ComposerEditor = forwardRef<
           placement: 'top-start',
           offset: { mainAxis: 8 },
           floatingUi: { middleware: [shift({ padding: 12 })] },
-          items: ({ query }) => mentionItems(getSources(), query),
+          items: ({ query }) => mentionItems(getSource(), query),
           allow: ({ state, range }) => {
             let mentions = 0;
             state.doc.descendants((node) => {
@@ -666,7 +401,7 @@ export const ComposerEditor = forwardRef<
               props: SuggestionProps<MentionItem, MentionAttributes>,
             ): ResourceMentionMenuProps => ({
               ...props,
-              sources: getSources(),
+              source: getSource(),
               listboxId,
               onActiveOptionChange,
               onNavigableItemsChange,
@@ -675,9 +410,7 @@ export const ComposerEditor = forwardRef<
               onStart(props) {
                 menuOpenRef.current = true;
                 menuHasItemsRef.current = props.items.length > 0;
-                emitMentionLookupPendingChange(
-                  mentionSourcesLoading(getSources()),
-                );
+                emitMentionLookupPendingChange(getSource().loading);
                 editorElement = props.editor.view.dom;
                 editorElement.setAttribute('aria-expanded', 'true');
                 editorElement.setAttribute('aria-controls', listboxId);
@@ -696,9 +429,7 @@ export const ComposerEditor = forwardRef<
               },
               onUpdate(props) {
                 menuHasItemsRef.current = props.items.length > 0;
-                emitMentionLookupPendingChange(
-                  mentionSourcesLoading(getSources()),
-                );
+                emitMentionLookupPendingChange(getSource().loading);
                 suggestionPropsRef.current = props;
                 menuRendererRef.current?.updateProps(menuProps(props));
               },
@@ -728,7 +459,7 @@ export const ComposerEditor = forwardRef<
         },
       }),
     ],
-    [emitMentionLookupPendingChange, getSources, listboxId, placeholder],
+    [emitMentionLookupPendingChange, getSource, listboxId, placeholder],
   );
 
   const editor = useEditor({
@@ -758,7 +489,7 @@ export const ComposerEditor = forwardRef<
         ) {
           if (menuOpenRef.current && menuHasItemsRef.current) return false;
           event.preventDefault();
-          emitSubmit();
+          emitSubmit({ switchMode: event.metaKey || event.ctrlKey });
           return true;
         }
         return false;
@@ -846,9 +577,9 @@ export const ComposerEditor = forwardRef<
   useEffect(() => {
     const props = suggestionPropsRef.current;
     if (!props || !menuRendererRef.current) return;
-    const sources = getSources();
-    emitMentionLookupPendingChange(mentionSourcesLoading(sources));
-    const items = mentionItems(sources, props.query);
+    const source = getSource();
+    emitMentionLookupPendingChange(source.loading);
+    const items = mentionItems(source, props.query);
     menuHasItemsRef.current = items.length > 0;
     const nextProps = {
       ...props,
@@ -857,7 +588,7 @@ export const ComposerEditor = forwardRef<
     suggestionPropsRef.current = nextProps;
     menuRendererRef.current.updateProps({
       ...nextProps,
-      sources,
+      source,
       listboxId,
       onActiveOptionChange: (optionId: string | undefined) => {
         const editorElement = props.editor.view.dom;
@@ -876,11 +607,8 @@ export const ComposerEditor = forwardRef<
     appsError,
     appsLoading,
     emitMentionLookupPendingChange,
-    getSources,
+    getSource,
     listboxId,
-    workflows,
-    workflowsError,
-    workflowsLoading,
   ]);
 
   useImperativeHandle(
@@ -889,14 +617,13 @@ export const ComposerEditor = forwardRef<
       getSnapshot: () => ({
         content: editor ? serializeComposerDocument(editor.getJSON()) : [],
         revision: revisionRef.current,
-        mentionLookupPending:
-          menuOpenRef.current && mentionSourcesLoading(getSources()),
+        mentionLookupPending: menuOpenRef.current && getSource().loading,
       }),
       clearIfRevision: (revision) => {
         if (revisionRef.current === revision) editor?.commands.clearContent();
       },
     }),
-    [editor, getSources],
+    [editor, getSource],
   );
 
   return <EditorContent editor={editor} className={classes.composerEditor} />;

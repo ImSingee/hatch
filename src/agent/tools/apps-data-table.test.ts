@@ -1,4 +1,4 @@
-import { validateToolArguments } from '@earendil-works/pi-ai';
+import { validateToolArguments, type JsonObject } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlatformClient } from '../platform-client';
 import { buildSystemPrompt } from '../system-prompt';
@@ -94,7 +94,7 @@ describe('query_app_data_table', () => {
           type: 'toolCall',
           id: 'filled',
           name: query.name,
-          arguments: prepared as Record<string, unknown>,
+          arguments: prepared as JsonObject,
         }),
       );
       expect(args).toEqual(original);
@@ -279,9 +279,7 @@ describe('query_app_data_table', () => {
     );
     expect(query.description).not.toMatch(/total|whole[- ]call/i);
 
-    const prompt = buildSystemPrompt('https://example.test', {
-      workflowBetaEnabled: false,
-    });
+    const prompt = buildSystemPrompt('https://example.test');
     expect(prompt).toMatch(/query_app_data_table/);
     expect(prompt).toMatch(/raw_sql.*dangerous last resort/is);
     expect(prompt).toMatch(/never use it for DDL/is);

@@ -28,8 +28,6 @@ describe('deep links', () => {
       ['hatch://app/sales/manage', { kind: 'appPage', slug: 'sales' }],
       ['hatch://agent', { kind: 'tab', tab: 'agent' }],
       ['hatch://agent/s-42', { kind: 'conversation', id: 's-42' }],
-      ['hatch://workflows', { kind: 'tab', tab: 'workflows' }],
-      ['hatch://workflow/nightly', { kind: 'workflow', slug: 'nightly' }],
       ['hatch://notifications', { kind: 'notifications' }],
       ['hatch://notifications/log', { kind: 'notifications' }],
       ['hatch://notifications/log/n1', { kind: 'notification', id: 'n1' }],
@@ -38,7 +36,6 @@ describe('deep links', () => {
       ['hatch://more/instance', { kind: 'phone', page: 'instance' }],
       ['hatch://more/notifications', { kind: 'phone', page: 'notifications' }],
       ['hatch://more/pin-app', { kind: 'phone', page: 'pin-app' }],
-      ['hatch://more/pin-workflow', { kind: 'phone', page: 'pin-workflow' }],
     ];
     for (const [link, page] of pages) {
       expect({ link, page: target(link) }).toEqual({ link, page });
@@ -73,9 +70,9 @@ describe('deep links', () => {
       kind: 'web',
       path: '/app/sales/manage/data',
     });
-    expect(target('hatch://workflow/nightly/execution/r1#log')).toEqual({
+    expect(target('hatch://app/sales/tasks#log')).toEqual({
       kind: 'web',
-      path: '/workflow/nightly/execution/r1',
+      path: '/app/sales/tasks',
       hash: 'log',
     });
     expect(target('hatch://settings/providers')?.kind).toBe('web');
@@ -183,12 +180,12 @@ describe('deep links', () => {
       open: 'page',
       link: { instance: other, target: { kind: 'conversation', id: 's1' } },
     });
-    expect(notificationUrlAction(`${origin}/workflow/nightly`, origin)).toEqual(
+    expect(notificationUrlAction(`${origin}/app/sales/manage`, origin)).toEqual(
       {
         open: 'page',
         link: {
           instance: origin,
-          target: { kind: 'workflow', slug: 'nightly' },
+          target: { kind: 'appPage', slug: 'sales' },
         },
       },
     );
@@ -239,16 +236,15 @@ describe('deep links', () => {
   it('writes links that read back as the same page', () => {
     const pages: LinkTarget[] = [
       { kind: 'start' },
-      { kind: 'tab', tab: 'workflows' },
+      { kind: 'tab', tab: 'apps' },
       { kind: 'dashboard', id: 'd1' },
       { kind: 'app', slug: 'sales', hash: '/reports?period=month' },
       { kind: 'conversation', id: 's1' },
-      { kind: 'workflow', slug: 'nightly' },
       { kind: 'notifications' },
       { kind: 'notification', id: 'n1' },
       { kind: 'appPage', slug: 'sales' },
       { kind: 'phone', page: 'instance' },
-      { kind: 'phone', page: 'pin-workflow' },
+      { kind: 'phone', page: 'pin-app' },
       { kind: 'web', path: '/settings/providers', hash: 'keys' },
       { kind: 'web', path: '/settings/users', search: '?q=ada' },
     ];

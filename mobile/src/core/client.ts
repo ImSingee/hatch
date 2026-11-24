@@ -9,7 +9,6 @@ import {
   AppService,
   AgentService,
   AuthService,
-  WorkflowService,
   WorkspaceService,
   NotificationService,
   PreferenceService,
@@ -112,7 +111,6 @@ export class HatchApiClient {
   private readonly appRpc: Client<typeof AppService>;
   private readonly agentRpc: Client<typeof AgentService>;
   private readonly authRpc: Client<typeof AuthService>;
-  private readonly workflowRpc: Client<typeof WorkflowService>;
   private readonly workspaceRpc: Client<typeof WorkspaceService>;
   private readonly notificationRpc: Client<typeof NotificationService>;
   private readonly preferenceRpc: Client<typeof PreferenceService>;
@@ -147,7 +145,6 @@ export class HatchApiClient {
     this.appRpc = createClient(AppService, transport);
     this.agentRpc = createClient(AgentService, transport);
     this.authRpc = createClient(AuthService, transport);
-    this.workflowRpc = createClient(WorkflowService, transport);
     this.workspaceRpc = createClient(WorkspaceService, transport);
     this.notificationRpc = createClient(NotificationService, transport);
     this.preferenceRpc = createClient(PreferenceService, transport);
@@ -387,7 +384,7 @@ export class HatchApiClient {
       );
     return response.theme.accent;
   }
-  /** Pinned Apps and Workflows, in the order every client shows them. */
+  /** Pinned Apps, in the order every client shows them. */
   async pins(signal?: AbortSignal): Promise<Pins> {
     const response = await this.rpcRequest(
       (signal) => this.pinRpc.listPins({}, { signal }),
@@ -401,11 +398,6 @@ export class HatchApiClient {
         label: pin.label,
         entryHash: pin.entryHash ?? '',
         appStatus: pin.appStatus,
-      })),
-      workflows: response.workflows.map((workflow) => ({
-        id: workflow.id,
-        slug: workflow.slug,
-        name: workflow.name,
       })),
     };
   }
@@ -424,13 +416,6 @@ export class HatchApiClient {
           { target: { case: 'pinId', value: pinId } },
           { signal },
         ),
-      signal,
-    ).then(() => undefined);
-  }
-  setWorkflowPinned(workflow: string, pinned: boolean, signal?: AbortSignal) {
-    return this.rpcRequest(
-      (signal) =>
-        this.pinRpc.setWorkflowPinned({ workflow, pinned }, { signal }),
       signal,
     ).then(() => undefined);
   }
@@ -563,25 +548,6 @@ export class HatchApiClient {
         this.notificationRpc.updateDestination({ id, name }, { signal }),
       signal,
     ).then(() => undefined);
-  }
-  async workflows(signal?: AbortSignal): Promise<AppSummary[]> {
-    const result = await this.rpcRequest(
-      (signal) => this.workflowRpc.listWorkflows({}, { signal }),
-      signal,
-    );
-    return result.resources.map(appProjection);
-  }
-  async workflow(id: string, signal?: AbortSignal): Promise<AppSummary> {
-    const result = await this.rpcRequest(
-      (signal) => this.workflowRpc.getWorkflow({ id }, { signal }),
-      signal,
-    );
-    if (!result.resource)
-      throw new MobileError(
-        'invalid_response',
-        'The instance returned no workflow.',
-      );
-    return appProjection(result.resource);
   }
   async app(id: string, signal?: AbortSignal): Promise<AppDetail> {
     const response = await this.rpcRequest(

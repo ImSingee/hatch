@@ -328,9 +328,7 @@ try {
   await emitDeclarations();
   for (const definition of SDK_DEFINITIONS) await buildDefinition(definition);
   await publish();
-  console.log(
-    'Built @hatch/app, @hatch/workflow and legacy @hatch/data re-exports.',
-  );
+  console.log('Built @hatch/app and legacy @hatch/data re-exports.');
 } finally {
   if (!preserveTemporary) await rm(temporary, { recursive: true, force: true });
 }

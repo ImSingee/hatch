@@ -29,8 +29,7 @@ const testDataRoot = await mkdtemp(
   path.join(os.tmpdir(), 'hatch-sdk-filesystem-'),
 );
 vi.stubEnv('HATCH_DATA_DIR', testDataRoot);
-const { materializeAppHatchSdk, materializeWorkflowHatchSdk } =
-  await import('./hatch-sdk');
+const { materializeAppHatchSdk } = await import('./hatch-sdk');
 const { HATCH_SDK_STAGING_DIR } = await import('./paths');
 
 afterEach(() => {
@@ -43,10 +42,7 @@ afterAll(async () => {
 });
 
 describe('Hatch SDK filesystem boundary', () => {
-  it.each([
-    ['App', materializeAppHatchSdk],
-    ['Workflow', materializeWorkflowHatchSdk],
-  ] as const)(
+  it.each([['App', materializeAppHatchSdk]] as const)(
     'preserves the installed %s generation and cleans staging when devices differ',
     async (_kind, materialize) => {
       const root = await mkdtemp(path.join(testDataRoot, 'source-'));

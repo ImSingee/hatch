@@ -73,7 +73,7 @@ function DeliveryLogLayout() {
             size="compact-sm"
             leftSection={<IconSettings size={14} stroke={1.8} />}
           >
-            {t('notifications.timeline.deliverySettings')}
+            {t('notifications.window.deliverySettings')}
           </Button>
         </>
       }
@@ -93,7 +93,10 @@ function DeliveryLogLayout() {
         className={classes.split}
         data-open={notificationId ? '' : undefined}
       >
-        <aside className={classes.list} aria-label="All notifications">
+        <aside
+          className={classes.list}
+          aria-label={t('notifications.window.allNotifications')}
+        >
           <NotificationHistory selected={notificationId} />
         </aside>
         <section className={classes.detail}>

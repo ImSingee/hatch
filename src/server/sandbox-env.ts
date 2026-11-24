@@ -1,6 +1,6 @@
 /**
  * Server-only: build the environment handed to an untrusted Deno subprocess
- * (deployed app backends and author-written workflows).
+ * (deployed app backends).
  *
  * Such subprocesses run with `--allow-env`, so they must never inherit the
  * platform's `process.env` (which holds `DATABASE_URL`, auth secrets, provider

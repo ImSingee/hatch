@@ -1,6 +1,7 @@
 /** Server-only: permanent deletion for a disabled managed Data Table. */
 import { eq } from 'drizzle-orm';
 import { db, schema } from '~/db';
+import { AppError } from '~server/errors';
 import { appDeployLock } from '../deploy-lock';
 import { waitForDataMigrationBarrier } from './migrate';
 import { dropAppDataDatabase, withAppDataCutoverLock } from './provision';
@@ -37,31 +38,43 @@ export async function deleteAppDataDatabase(
       });
       if (!app) throw new Error(`App "${id}" not found.`);
       if (app.status === 'building') {
-        throw new Error(
+        throw new AppError(
           'Cannot delete the Data Table database while a deployment is in progress.',
+          409,
+          { code: 'ops.dataTable.deleteDeployInProgress' },
         );
       }
       if (app.capabilities?.dataTable) {
-        throw new Error(
+        throw new AppError(
           'Disable capabilities.dataTable before deleting the Data Table database.',
+          409,
+          { code: 'ops.dataTable.capabilityEnabled' },
         );
       }
       if (app.dataActivationId) {
-        throw new Error(
+        throw new AppError(
           'Cannot delete the Data Table database while a deployment is being finalized.',
+          409,
+          { code: 'ops.dataTable.deleteFinalizing' },
         );
       }
       if (!app.dataDbName) {
-        throw new Error(APP_DATA_DATABASE_NOT_PROVISIONED_ERROR);
+        throw new AppError(APP_DATA_DATABASE_NOT_PROVISIONED_ERROR, 409, {
+          code: 'ops.dataTable.notProvisioned',
+        });
       }
       if (app.dataDbName !== expectedDbName) {
-        throw new Error(
+        throw new AppError(
           'Data Table database name confirmation does not match.',
+          400,
+          { code: 'ops.dataTable.nameMismatch' },
         );
       }
 
       if (app.name !== expectedAppName) {
-        throw new Error('App name confirmation does not match.');
+        throw new AppError('App name confirmation does not match.', 400, {
+          code: 'ops.appNameMismatch',
+        });
       }
 
       await closeDataRealtime(id);

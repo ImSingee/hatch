@@ -63,10 +63,7 @@ const payload: RunStartPayload = {
 
 type FinishedMessage = Extract<RunnerMessage, { type: 'run.finished' }>;
 
-function setupExecutor(
-  tavilyApiKey?: string,
-  getBetaFeatures: () => readonly string[] = () => [],
-) {
+function setupExecutor(tavilyApiKey?: string) {
   const sent: RunnerMessage[] = [];
   const executor = new RunnerExecutor({
     appUrl: APP_URL,
@@ -76,7 +73,6 @@ function setupExecutor(
       },
     }),
     ...(tavilyApiKey ? { tavilyApiKey } : {}),
-    getBetaFeatures,
     platform: stubPlatform,
     send: (message) => {
       sent.push(message);
@@ -429,22 +425,6 @@ describe('RunnerExecutor environment delivery', () => {
 });
 
 describe('RunnerExecutor terminal outcomes', () => {
-  it('snapshots the latest Platform beta features for each new run', async () => {
-    const configured = ['workflow'];
-    vi.mocked(runAgentTurn).mockResolvedValueOnce({ messages: [] });
-    const { executor, finished } = setupExecutor(undefined, () => configured);
-
-    expect(executor.start(payload)).toEqual({ accepted: true });
-    await vi.waitFor(() => expect(finished()).toBeDefined());
-
-    expect(runAgentTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ betaFeatures: ['workflow'] }),
-    );
-    const options = vi.mocked(runAgentTurn).mock.calls[0]?.[0];
-    expect(Object.isFrozen(options?.betaFeatures)).toBe(true);
-    executor.ackFinish(payload.runId);
-  });
-
   it('rejects before claiming a session whose workspace cannot be prepared', () => {
     vi.mocked(prepareAgentSessionSandbox).mockImplementationOnce(() => {
       throw new Error('unsafe workspace layout');

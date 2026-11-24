@@ -1,17 +1,38 @@
-/**
- * Shared display formatting helpers. Importing this module also registers the
- * dayjs relativeTime plugin, so callers never need their own `dayjs.extend`.
- */
+/** Shared display formatting helpers. */
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
 
 type DateInput = string | number | Date | null | undefined;
 
-/** "3 minutes ago"-style relative timestamp. */
-export function formatRelative(date: DateInput): string {
-  return dayjs(date).fromNow();
+/**
+ * Relative timestamp in the viewer's language ("3 minutes ago", "3 分钟前").
+ * Unit thresholds follow dayjs `fromNow()`.
+ */
+export function formatRelativeTime(
+  date: DateInput,
+  locale: string,
+  now: number = Date.now(),
+): string {
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'always' });
+  const diff = dayjs(date).valueOf() - now;
+  const sign = diff < 0 ? -1 : 1;
+  const seconds = Math.abs(diff) / 1000;
+  const minutes = seconds / 60;
+  const hours = minutes / 60;
+  const days = hours / 24;
+  const months = days / 30.4375;
+  const at = (value: number, unit: Intl.RelativeTimeFormatUnit) =>
+    rtf.format(sign * Math.max(1, Math.round(value)), unit);
+  if (seconds < 45) return at(seconds, 'second');
+  if (seconds < 90) return at(1, 'minute');
+  if (minutes < 45) return at(minutes, 'minute');
+  if (minutes < 90) return at(1, 'hour');
+  if (hours < 22) return at(hours, 'hour');
+  if (hours < 36) return at(1, 'day');
+  if (days < 26) return at(days, 'day');
+  if (days < 46) return at(1, 'month');
+  if (months < 11) return at(months, 'month');
+  if (months < 18) return at(1, 'year');
+  return at(days / 365.25, 'year');
 }
 
 /** Exact timestamp for tooltips / detail views. */

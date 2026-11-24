@@ -437,7 +437,6 @@ function SourceTile({ item }: { item: TimelineItem }) {
       name={item.sourceName}
       seed={item.sourceId ?? item.sourceName}
       size="widget"
-      icon={item.sourceType === 'app'}
     />
   );
 }

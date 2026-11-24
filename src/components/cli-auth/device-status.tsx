@@ -11,7 +11,9 @@ import {
   type Icon,
 } from '@tabler/icons-react';
 import { type ReactNode, useEffect } from 'react';
+import { Trans } from 'react-i18next';
 import { DEVICE_CLIENTS, type DeviceClientId } from '~auth/device-clients';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import { formatUserCode, type DeviceOutcome } from './device-api';
 import { ViewHeader } from './layout';
 import { retryWait, type Problem } from './problems';
@@ -22,83 +24,93 @@ type Action = 'new-code' | 'sign-in' | 'recheck' | 'home';
 type StatusCopy = {
   icon?: Icon;
   color?: string;
+  title: PlainTranslationKey;
+  /** `null`: the view writes the body (it includes the server's wait). */
+  body: PlainTranslationKey | null;
+  actions: Action[];
+};
+
+/** A status step's copy, translated for display. */
+type StatusText = Omit<StatusCopy, 'title' | 'body'> & {
   title: string;
   body: string;
-  actions: Action[];
 };
 
 const PROBLEMS: Record<Problem, StatusCopy> = {
   expired: {
     icon: IconClockX,
     color: 'gray',
-    title: 'This request has expired',
-    body: 'Start a new sign-in on your device, then enter the new code.',
+    title: 'cliAuth.problem.expired.title',
+    body: 'cliAuth.problem.expired.body',
     actions: ['new-code'],
   },
   closed: {
     icon: IconHistory,
     color: 'gray',
-    title: 'This request is already closed',
-    body: 'It was approved, denied or cancelled earlier. Your device shows the result.',
+    title: 'cliAuth.problem.closed.title',
+    body: 'cliAuth.problem.closed.body',
     actions: ['new-code'],
   },
   elsewhere: {
     icon: IconDevices,
     color: 'yellow',
-    title: 'Claimed by another account',
-    body: 'Another Hatch account already opened this request. Finish there, or start a new sign-in on your device.',
+    title: 'cliAuth.problem.elsewhere.title',
+    body: 'cliAuth.problem.elsewhere.body',
     actions: ['new-code'],
   },
   'signed-out': {
     icon: IconLogin2,
     color: 'gray',
-    title: 'Sign in to continue',
-    body: 'Your session has ended. You’ll come back to this code after signing in.',
+    title: 'cliAuth.problem.signedOut.title',
+    body: 'cliAuth.problem.signedOut.body',
     actions: ['sign-in'],
   },
   origin: {
     icon: IconWorldX,
     color: 'red',
-    title: 'Wrong address',
-    body: 'Nothing was approved. Open the link exactly as your device printed it.',
+    title: 'cliAuth.problem.origin.title',
+    body: 'cliAuth.problem.origin.body',
     actions: ['home'],
   },
   'rate-limited': {
     icon: IconHourglassHigh,
     color: 'yellow',
-    title: 'Too many attempts',
-    body: 'Nothing was recorded.',
+    title: 'cliAuth.problem.rateLimited.title',
+    body: null,
     actions: ['recheck'],
   },
   unconfirmed: {
     icon: IconCloudX,
     color: 'yellow',
-    title: 'Couldn’t confirm your choice',
-    body: 'It may or may not have been saved. Your device shows the real result.',
+    title: 'cliAuth.problem.unconfirmed.title',
+    body: 'cliAuth.problem.unconfirmed.body',
     actions: ['recheck', 'new-code'],
   },
 };
 
-const OUTCOMES: Record<DeviceOutcome, StatusCopy> = {
+const OUTCOMES: Record<
+  DeviceOutcome,
+  StatusCopy & { body: PlainTranslationKey }
+> = {
   approved: {
-    title: 'Device approved',
-    body: 'Return to your device to finish. You can close this tab.',
+    title: 'cliAuth.outcome.approved.title',
+    body: 'cliAuth.outcome.approved.body',
     actions: [],
   },
   denied: {
     icon: IconBan,
     color: 'gray',
-    title: 'Request denied',
-    body: 'Your device won’t get access. You can close this tab.',
+    title: 'cliAuth.outcome.denied.title',
+    body: 'cliAuth.outcome.denied.body',
     actions: [],
   },
 };
 
-const ACTION_LABEL: Record<Action, string> = {
-  'new-code': 'Enter a new code',
-  'sign-in': 'Sign in again',
-  recheck: 'Check again',
-  home: 'Go to Hatch',
+const ACTION_LABEL: Record<Action, PlainTranslationKey> = {
+  'new-code': 'cliAuth.action.newCode',
+  'sign-in': 'cliAuth.action.signIn',
+  recheck: 'cliAuth.action.recheck',
+  home: 'cliAuth.action.home',
 };
 
 type Handlers = {
@@ -121,11 +133,17 @@ export function ProblemView({
   retryAfter: number | null;
   handlers: Handlers;
 }) {
+  const { t } = useI18n();
   const base = PROBLEMS[problem];
-  const copy =
-    problem === 'rate-limited'
-      ? { ...base, body: `${base.body} ${retryWait(retryAfter)}` }
-      : base;
+  const copy: StatusText = {
+    ...base,
+    title: t(base.title),
+    body: base.body
+      ? t(base.body)
+      : t('cliAuth.problem.rateLimited.body', {
+          wait: retryWait(t, retryAfter),
+        }),
+  };
   return (
     <StatusLayout copy={copy} userCode={userCode}>
       <Group justify="center" gap="sm">
@@ -151,6 +169,7 @@ export function OutcomeView({
   userCode: string;
   clientId: DeviceClientId;
 }) {
+  const { t } = useI18n();
   const client = DEVICE_CLIENTS[clientId];
   const returnUrl = outcome === 'approved' ? client.returnUrl : null;
   // An app on this computer comes back to the front by itself; the button
@@ -158,18 +177,25 @@ export function OutcomeView({
   useEffect(() => {
     if (returnUrl) window.location.assign(returnUrl);
   }, [returnUrl]);
+  const base = OUTCOMES[outcome];
   if (!returnUrl)
-    return <StatusLayout copy={OUTCOMES[outcome]} userCode={userCode} />;
+    return (
+      <StatusLayout
+        copy={{ ...base, title: t(base.title), body: t(base.body) }}
+        userCode={userCode}
+      />
+    );
   return (
     <StatusLayout
       copy={{
-        ...OUTCOMES.approved,
-        body: `${client.name} is signed in. You can close this tab.`,
+        ...base,
+        title: t(base.title),
+        body: t('cliAuth.outcome.approved.appBody', { client: client.name }),
       }}
       userCode={userCode}
     >
       <Button component="a" href={returnUrl} radius="md">
-        Open {client.name}
+        {t('cliAuth.outcome.openClient', { client: client.name })}
       </Button>
     </StatusLayout>
   );
@@ -180,10 +206,11 @@ function StatusLayout({
   userCode,
   children,
 }: {
-  copy: StatusCopy;
+  copy: StatusText;
   userCode: string;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className={classes.status}>
       {copy.icon ? (
@@ -202,8 +229,12 @@ function StatusLayout({
       </ViewHeader>
       {userCode ? (
         <Text size="sm" c="dimmed">
-          Code{' '}
-          <span className={classes.inlineCode}>{formatUserCode(userCode)}</span>
+          <Trans
+            t={t}
+            i18nKey="cliAuth.status.code"
+            values={{ code: formatUserCode(userCode) }}
+            components={{ code: <span className={classes.inlineCode} /> }}
+          />
         </Text>
       ) : null}
       {children}
@@ -220,11 +251,12 @@ function ActionButton({
   primary: boolean;
   handlers: Handlers;
 }) {
+  const { t } = useI18n();
   const variant = primary ? 'filled' : 'default';
   if (action === 'home')
     return (
       <Button component="a" href="/dashboard" variant={variant}>
-        {ACTION_LABEL.home}
+        {t(ACTION_LABEL.home)}
       </Button>
     );
   const onClick = {
@@ -241,7 +273,7 @@ function ActionButton({
       disabled={handlers.pending !== null && !loading}
       onClick={onClick}
     >
-      {ACTION_LABEL[action]}
+      {t(ACTION_LABEL[action])}
     </Button>
   );
 }

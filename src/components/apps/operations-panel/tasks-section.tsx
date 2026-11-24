@@ -2,7 +2,8 @@ import { Anchor, Button, Group, Stack, Table, Text } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
 import { IconListCheck, IconPlayerPlay } from '@tabler/icons-react';
 import { RunStatusBadge } from '~components/runs/run-status';
-import { formatRelative } from '~lib/format';
+import { useI18n } from '~i18n';
+import { formatRelativeTime } from '~lib/format';
 import type { AppTasksView } from '~server/app-tasks';
 import { SectionHeader } from './section-header';
 
@@ -14,16 +15,20 @@ export function TasksSection({
   appSlug: string;
   tasks: AppTasksView;
 }) {
+  const { t, locale } = useI18n();
   return (
     <Stack gap="sm">
       <Group justify="space-between" wrap="nowrap">
         <SectionHeader
           icon={<IconListCheck size={16} stroke={1.8} />}
-          title="Tasks"
+          title={t('tasks.section.tasks')}
           meta={
             <Text size="xs" c="dimmed">
-              {tasks.running} running · {tasks.queued} queued · up to{' '}
-              {tasks.concurrency} at once
+              {t('ops.tasks.meta', {
+                running: tasks.running,
+                queued: tasks.queued,
+                concurrency: tasks.concurrency,
+              })}
             </Text>
           }
         />
@@ -35,7 +40,7 @@ export function TasksSection({
             <Link to="/app/$appSlug/tasks" params={{ appSlug }} {...props} />
           )}
         >
-          Open tasks
+          {t('ops.tasks.open')}
         </Button>
       </Group>
       <Table withTableBorder verticalSpacing={6}>
@@ -60,9 +65,11 @@ export function TasksSection({
               <Table.Td>
                 <Text size="xs" c="dimmed">
                   {[
-                    'manual',
+                    t('ops.tasks.trigger.manual'),
                     ...task.cron.map((job) => job.schedule),
-                    ...(task.webhook.enabled ? ['webhook'] : []),
+                    ...(task.webhook.enabled
+                      ? [t('ops.tasks.trigger.webhook')]
+                      : []),
                   ].join(' · ')}
                 </Text>
               </Table.Td>
@@ -71,12 +78,12 @@ export function TasksSection({
                   <Group gap={6} wrap="nowrap">
                     <RunStatusBadge status={task.latestRun.status} />
                     <Text size="xs" c="dimmed">
-                      {formatRelative(task.latestRun.createdAt)}
+                      {formatRelativeTime(task.latestRun.createdAt, locale)}
                     </Text>
                   </Group>
                 ) : (
                   <Text size="xs" c="dimmed">
-                    Never run
+                    {t('tasks.neverRun')}
                   </Text>
                 )}
               </Table.Td>

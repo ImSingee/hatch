@@ -1,4 +1,4 @@
-import { validateToolArguments } from '@earendil-works/pi-ai';
+import { validateToolArguments, type JsonObject } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlatformClient } from '../platform-client';
 import { createAppTools } from './apps';
@@ -62,7 +62,7 @@ describe('query_app_kv', () => {
         type: 'toolCall',
         id: 'filled',
         name: query.name,
-        arguments: prepared as Record<string, unknown>,
+        arguments: prepared as JsonObject,
       });
       await query.execute('filled', validated);
       expect(args).toEqual(original);
@@ -113,7 +113,7 @@ describe('query_app_kv', () => {
           type: 'toolCall',
           id: 'valid',
           name: query.name,
-          arguments: prepared,
+          arguments: prepared as JsonObject,
         }),
       ).toEqual(prepared);
       await query.execute('valid', args);

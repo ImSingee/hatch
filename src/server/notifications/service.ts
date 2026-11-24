@@ -81,11 +81,32 @@ const DESCRIPTION_MAX = 500;
 const LIST_LIMIT_MAX = 100;
 const MAX_GROUP_MEMBERS = 200;
 
-function cleanName(value: string, label: string): string {
+/** Each checked name, with the stable code suffix its errors carry. */
+const NAME_CODES = {
+  Name: 'name',
+  'Device name': 'deviceName',
+  'Group name': 'groupName',
+  'Route name': 'routeName',
+  'Channel name': 'channelName',
+} as const;
+
+function cleanName(value: string, label: keyof typeof NAME_CODES): string {
   const name = value.trim();
-  if (!name) throw new AppError(`${label} is required.`, 400);
+  const code = NAME_CODES[label];
+  if (!name) {
+    throw new AppError(`${label} is required.`, 400, {
+      code: `notifications.${code}Required`,
+    });
+  }
   if (name.length > NAME_MAX) {
-    throw new AppError(`${label} must be at most ${NAME_MAX} characters.`, 400);
+    throw new AppError(
+      `${label} must be at most ${NAME_MAX} characters.`,
+      400,
+      {
+        code: `notifications.${code}TooLong`,
+        params: { max: NAME_MAX },
+      },
+    );
   }
   return name;
 }
@@ -96,6 +117,10 @@ function cleanDescription(value: string | null | undefined): string | null {
     throw new AppError(
       `Description must be at most ${DESCRIPTION_MAX} characters.`,
       400,
+      {
+        code: 'notifications.descriptionTooLong',
+        params: { max: DESCRIPTION_MAX },
+      },
     );
   }
   return description || null;
@@ -104,13 +129,31 @@ function cleanDescription(value: string | null | undefined): string | null {
 function cleanWebhookUrl(value: string): string {
   const url = value.trim();
   if (url.length > 2048 || !isHttpUrl(url)) {
-    throw new AppError('Webhook URL must be an absolute http(s) URL.', 400);
+    throw new AppError('Webhook URL must be an absolute http(s) URL.', 400, {
+      code: 'notifications.webhookUrlInvalid',
+    });
   }
   return url;
 }
 
-function notFound(what: string): never {
-  throw new AppError(`${what} not found.`, 404);
+/** Each missing record, with the stable code its 404 carries. */
+const NOT_FOUND_CODES = {
+  Notification: 'notifications.notificationNotFound',
+  Delivery: 'notifications.deliveryNotFound',
+  Destination: 'notifications.destinationNotFound',
+  Webhook: 'notifications.webhookNotFound',
+  Group: 'notifications.groupNotFound',
+  'App source': 'notifications.appSourceNotFound',
+  Channel: 'notifications.channelNotFound',
+  Route: 'notifications.routeNotFound',
+  'Response route': 'notifications.responseRouteNotFound',
+  'Agent chat': 'notifications.agentChatNotFound',
+} as const;
+
+function notFound(what: keyof typeof NOT_FOUND_CODES): never {
+  throw new AppError(`${what} not found.`, 404, {
+    code: NOT_FOUND_CODES[what],
+  });
 }
 
 /** ================== read models ================== */
@@ -645,16 +688,22 @@ export async function retryDelivery(deliveryId: string): Promise<void> {
     }));
   if (!delivery) notFound('Delivery');
   if (delivery.status !== 'failed') {
-    throw new AppError('Only failed deliveries can be retried.', 409);
+    throw new AppError('Only failed deliveries can be retried.', 409, {
+      code: 'notifications.retryNotFailed',
+    });
   }
   if (!delivery.destinationId) {
-    throw new AppError('The destination of this delivery was removed.', 409);
+    throw new AppError('The destination of this delivery was removed.', 409, {
+      code: 'notifications.retryDestinationRemoved',
+    });
   }
   if (
     !(await requeueDelivery(deliveryId)) &&
     !(await requeueResponseDelivery(deliveryId))
   ) {
-    throw new AppError('Only failed deliveries can be retried.', 409);
+    throw new AppError('Only failed deliveries can be retried.', 409, {
+      code: 'notifications.retryNotFailed',
+    });
   }
 }
 
@@ -875,6 +924,7 @@ export async function updateDestination(input: {
     throw new AppError(
       'Push was turned off on this device; turn it back on in the Hatch app.',
       409,
+      { code: 'notifications.devicePushOff' },
     );
   }
   if (input.url !== undefined && row.type !== 'webhook') {
@@ -1293,7 +1343,10 @@ async function routeSource(
     if (!declared)
       notFound(input.sourceType === 'app' ? 'App source' : 'Channel');
     if (kind && !declared.some((entry) => entry.kind === kind)) {
-      throw new AppError(`The source does not declare kind "${kind}".`, 400);
+      throw new AppError(`The source does not declare kind "${kind}".`, 400, {
+        code: 'notifications.kindNotDeclared',
+        params: { kind },
+      });
     }
   }
   return {
@@ -1508,6 +1561,7 @@ async function responseRouteValues(
       throw new AppError(
         'Answers can only go to a webhook, or to an App whose manifest sets notifications.destination.responses.',
         400,
+        { code: 'notifications.responseTargetInvalid' },
       );
     }
   }
@@ -1781,7 +1835,9 @@ export async function sendTestNotification(
   });
   if (!destination) notFound('Destination');
   if (!destination.enabled) {
-    throw new AppError('Enable the destination before testing it.', 409);
+    throw new AppError('Enable the destination before testing it.', 409, {
+      code: 'notifications.testDestinationDisabled',
+    });
   }
   const push: NotificationPush = {
     kind: TEST_KIND.kind,

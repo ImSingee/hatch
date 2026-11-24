@@ -2,6 +2,7 @@ import { UnstyledButton } from '@mantine/core';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { DashboardItem } from '~server/dashboards';
 import type { DashboardLayouts } from '~/lib/dashboard-layout';
+import { useI18n } from '~i18n';
 import { WIDGET_ROW_HEIGHT, WIDGET_ROW_GAP } from './dashboard-grid';
 import { WidgetCard } from './widget-card';
 import classes from './widget-pager.module.css';
@@ -22,6 +23,7 @@ export function WidgetPager({
   refreshSignal: number;
   onShowAll: () => void;
 }) {
+  const { t } = useI18n();
   const track = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const order = layouts.mobile.flatMap((geometry) => {
@@ -104,7 +106,12 @@ export function WidgetPager({
                   dots.current[index] = element;
                 }}
                 className={classes.dot}
-                aria-label={`Widget ${index + 1} of ${order.length}: ${item.name} from ${item.appName}`}
+                aria-label={t('dashboard.pager.dot', {
+                  index: index + 1,
+                  total: order.length,
+                  name: item.name,
+                  app: item.appName,
+                })}
                 aria-current={index === page || undefined}
                 // One stop in the tab order; the arrows reach the others.
                 tabIndex={index === page ? 0 : -1}
@@ -115,7 +122,7 @@ export function WidgetPager({
           </div>
         ) : null}
         <UnstyledButton className={classes.showAll} onClick={onShowAll}>
-          All widgets ›
+          {t('dashboard.pager.showAll')}
         </UnstyledButton>
       </div>
     </div>

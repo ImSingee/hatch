@@ -1,13 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  materializeAppHatchSdk,
-  materializeWorkflowHatchSdk,
-} from './agent/hatch-sdk';
+import { materializeAppHatchSdk } from './agent/hatch-sdk';
 import { loadSourceManifest, manifestRunner } from './source-manifest';
 import { parseSourceManifest } from './server/apps/manifest';
-import { parseSourceWorkflowManifest } from './server/workflows/manifest';
 import { createManifestFixtureRoot } from './test-manifest-fixture';
 
 let root: string;
@@ -17,22 +13,10 @@ const app = {
   capabilities: { frontend: true },
   app: { entry: 'app/main.tsx' },
 };
-const workflow = {
-  id: 'demo',
-  name: 'Demo',
-  compatibilityVersion: 1,
-  network: [],
-};
 const loadApp = (evaluationTimeoutMs?: number) =>
   loadSourceManifest(root, {
-    kind: 'app',
     parse: parseSourceManifest,
     evaluationTimeoutMs,
-  });
-const loadWorkflow = () =>
-  loadSourceManifest(root, {
-    kind: 'workflow',
-    parse: parseSourceWorkflowManifest,
   });
 const write = (source: string) =>
   fs.writeFile(path.join(root, 'manifest.ts'), source);
@@ -43,7 +27,7 @@ beforeAll(async () => {
   root = await createManifestFixtureRoot();
   for (const file of ['package.json', 'deno.json', 'deno.lock']) {
     await fs.copyFile(
-      path.resolve('src/test-fixtures/deno-toolchain/workflow', file),
+      path.resolve('src/test-fixtures/deno-toolchain/app', file),
       path.join(root, file),
     );
   }
@@ -193,7 +177,6 @@ describe('source manifest contract', { concurrent: false }, () => {
     const execute = manifestRunner(root, { signal: controller.signal });
     await expect(
       loadSourceManifest(root, {
-        kind: 'app',
         parse: parseSourceManifest,
         run: async (args, extra) => {
           const timer =
@@ -222,25 +205,6 @@ describe('source manifest contract', { concurrent: false }, () => {
     );
     await expect(loadApp()).rejects.toThrow(
       /Requires import access|remote|https|Unsupported/,
-    );
-  });
-
-  it('gives Workflow the same capability without defaulting its required compatibility version', async () => {
-    await materializeWorkflowHatchSdk(root);
-    const source = `import { defineWorkflowManifest } from '@hatch/workflow/manifest';\nexport default defineWorkflowManifest(${JSON.stringify(workflow)});`;
-    await write(source);
-    expect((await loadWorkflow()).manifest).toEqual(
-      parseSourceWorkflowManifest(workflow),
-    );
-    await write(source.replace('"compatibilityVersion":1,', ''));
-    await expect(loadWorkflow()).rejects.toThrow(/compatibilityVersion/);
-    await fs.rm(path.join(root, 'manifest.ts'));
-    await fs.writeFile(
-      path.join(root, 'manifest.json'),
-      JSON.stringify(workflow),
-    );
-    expect((await loadWorkflow()).manifest).toEqual(
-      parseSourceWorkflowManifest(workflow),
     );
   });
 });

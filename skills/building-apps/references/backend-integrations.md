@@ -1,7 +1,7 @@
 # Backend integrations
 
 Read this reference for backend RPC, cron, webhook, long-running processes, or
-calling top-level Workflows.
+starting App task runs from backend code.
 
 ## Deno Fetch/Connect backend
 
@@ -83,7 +83,7 @@ explicitly authorized `backend.extraPermissions` flag such as
 `--allow-ffi=backend/assets/library.so`; host commands/sidecars require scoped
 `--allow-run` and a reviewed host executable or packaged asset. Relative paths
 resolve from the artifact directory. These permissions must be strictly
-necessary: use network, storage, KV, Data Tables, Workflow calls, or JS/Wasm
+necessary: use network, storage, KV, Data Tables, App tasks, or JS/Wasm
 instead whenever possible. Before writing or deploying any such declaration,
 explain the exact flags, necessity, and host-access risks and obtain explicit
 user authorization; repeat this for every addition, broadening, or modification.
@@ -568,57 +568,10 @@ finishing requests. `stop --force` and `restart --force` kill instances
 immediately and fail their in-flight requests; use them only when a drain must
 not be waited for.
 
-## Calling top-level Workflows
+## Background runs from backend code
 
-Apps call Workflows created in the Workflow module; they do not define
-Workflows themselves. Use `list_workflows` and copy each target's exact
-`id` into `workflow`; a Workflow slug does not resolve here. Add a readable
-`alias` for the stable key used by backend code:
-
-```json
-{
-  "workflows": [
-    {
-      "workflow": "01k43s9az5t2qpy7ejf0hm6vwc",
-      "alias": "dailyDigest"
-    }
-  ]
-}
-```
-
-Each target must already be deployed with its webhook trigger enabled. The
-platform injects `HATCH_WORKFLOWS`, a JSON map from alias (or the Workflow id
-when no alias is declared) to
-`{ workflow, name, url, secret }`.
-
-```ts
-type WorkflowTarget = {
-  workflow: string;
-  name: string;
-  url: string;
-  secret: string;
-};
-
-const workflows = JSON.parse(Deno.env.get('HATCH_WORKFLOWS') ?? '{}') as Record<
-  string,
-  WorkflowTarget
->;
-
-async function callWorkflow(alias: string, input: unknown) {
-  const workflow = workflows[alias];
-  if (!workflow) throw new Error(`Workflow ${alias} is unavailable.`);
-  const response = await fetch(workflow.url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-hatch-secret': workflow.secret,
-    },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) throw new Error(`Workflow returned ${response.status}.`);
-  return (await response.json()) as { runId: string; status: string };
-}
-```
-
-The call enqueues a run and returns without waiting for completion. Keep the
-injected registry and secret in backend code; never send them to the frontend.
+Start long or scheduled backend work as an App task instead of calling another
+service: mark the RPC method runnable in the manifest and enqueue it from the
+backend with `enqueueTask` from `@hatch/app/tasks`. Each run gets its own
+backend instance, a recorded history and step records. See
+[tasks.md](tasks.md).

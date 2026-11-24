@@ -21,7 +21,7 @@ export { isDeepLink, isDevClientLink } from '@hatch/platform-api';
  *   hatch://app/sales#/reports              an App page, at its own route
  *   hatch://app/sales/manage                the App's own page
  *   hatch://agent/<conversation id>
- *   hatch://workflow/nightly?instance=hatch.example.com
+ *   hatch://app/sales?instance=hatch.example.com
  *
  * `instance` names which signed-in instance the page belongs to; without it
  * the link opens on the instance in use. Pages that exist only on the phone
@@ -38,7 +38,6 @@ export type LinkTarget =
   /** The App's own page: status, the way in, and web management. */
   | { kind: 'appPage'; slug: string }
   | { kind: 'conversation'; id: string }
-  | { kind: 'workflow'; slug: string }
   | { kind: 'notifications' }
   | { kind: 'notification'; id: string }
   | { kind: 'phone'; page: PhonePage }
@@ -49,9 +48,8 @@ export type PhonePage =
   | 'tabs'
   | 'instance'
   | 'notifications'
-  /** The pickers that pin an App or a Workflow to Home. */
-  | 'pin-app'
-  | 'pin-workflow';
+  /** The picker that pins an App to Home. */
+  | 'pin-app';
 export type DeepLink = {
   /** Canonical origin the link names, or null for the instance in use. */
   instance: string | null;
@@ -68,7 +66,6 @@ const PHONE_PAGES = new Set<string>([
   'instance',
   'notifications',
   'pin-app',
-  'pin-workflow',
 ]);
 
 /** The page a web path names, or null when it names none that may open. */
@@ -117,12 +114,6 @@ export function platformTarget(
       if (count === 2)
         return ID.test(second) ? { kind: 'conversation', id: second } : null;
       return web();
-    case 'workflows':
-      return count === 1 ? { kind: 'tab', tab: 'workflows' } : web();
-    case 'workflow':
-      if (count === 1) return { kind: 'tab', tab: 'workflows' };
-      if (!SLUG.test(second)) return null;
-      return count === 2 ? { kind: 'workflow', slug: second } : web();
     case 'notifications':
       // The web timeline, and its delivery log with one notification open.
       if (count === 1 || (count === 2 && second === 'log'))
@@ -245,8 +236,6 @@ function segmentsOf(target: LinkTarget): string[] {
       return ['app', target.slug, 'manage'];
     case 'conversation':
       return ['agent', target.id];
-    case 'workflow':
-      return ['workflow', target.slug];
     case 'notifications':
       return ['notifications'];
     case 'notification':

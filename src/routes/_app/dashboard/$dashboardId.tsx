@@ -1,4 +1,4 @@
-import { routeErrorMessage } from '~components/system/route-error';
+import { routeErrorKey } from '~components/system/route-error';
 import { Button, Skeleton, Text } from '@mantine/core';
 import { useDocumentTitle, useMediaQuery } from '@mantine/hooks';
 import {
@@ -34,6 +34,7 @@ import { WidgetPager } from '~components/dashboard/widget-pager';
 import { DeskHome } from '~components/desk/desk-home';
 import { QuickAgentChat } from '~components/desk/quick-agent-chat';
 import { TodayPanel } from '~components/desk/today-panel';
+import { useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import {
   availableWidgetsQueryOptions,
@@ -81,6 +82,7 @@ function DashboardPage() {
 
 /** "Good afternoon, Sam" from the time of day and the first name. */
 function useGreeting(): string {
+  const { t } = useI18n();
   const { data } = authClient.useSession();
   const hour = dayjs().hour();
   const part =
@@ -92,10 +94,21 @@ function useGreeting(): string {
           ? 'afternoon'
           : 'evening';
   const name = data?.user.name?.trim().split(/\s+/)[0];
-  return name ? `Good ${part}, ${name}` : `Good ${part}`;
+  if (part === 'morning')
+    return name
+      ? t('dashboard.greeting.morningName', { name })
+      : t('dashboard.greeting.morning');
+  if (part === 'afternoon')
+    return name
+      ? t('dashboard.greeting.afternoonName', { name })
+      : t('dashboard.greeting.afternoon');
+  return name
+    ? t('dashboard.greeting.eveningName', { name })
+    : t('dashboard.greeting.evening');
 }
 
 function HeadingActions({ appCount }: { appCount: number }) {
+  const { t } = useI18n();
   return (
     <>
       <Button
@@ -103,16 +116,17 @@ function HeadingActions({ appCount }: { appCount: number }) {
         to="/agent"
         leftSection={<IconPlus size={15} stroke={2.2} />}
       >
-        New app
+        {t('dashboard.toolbar.newApp')}
       </Button>
       <Button component={Link} to="/apps" variant="default">
-        All apps ({appCount})
+        {t('dashboard.allApps', { appCount })}
       </Button>
     </>
   );
 }
 
 function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const greeting = useGreeting();
   const { data: dashboards } = useSuspenseQuery(dashboardsQueryOptions);
@@ -123,7 +137,7 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
   const { data: apps } = useSuspenseQuery(appsQueryOptions);
   const current = dashboards.find((dashboard) => dashboard.id === dashboardId);
   // The heading greets the user; the tab names the dashboard.
-  useDocumentTitle(current?.name ?? 'Dashboard');
+  useDocumentTitle(current?.name ?? t('dashboard.fallbackName'));
   const [editing, setEditing] = useState(false);
   const [previewBreakpoint, setPreviewBreakpoint] =
     useState<DashboardBreakpoint>('desktop');
@@ -139,7 +153,7 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
     shouldBlockFn: () =>
       editing &&
       (editor.dirty || editor.locked) &&
-      !window.confirm('Dashboard changes are not saved yet. Leave this page?'),
+      !window.confirm(t('dashboard.leaveConfirm')),
     enableBeforeUnload: editing && (editor.dirty || editor.locked),
   });
 
@@ -173,7 +187,7 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
   const finish = (saved: boolean) => {
     if (!saved) return;
     setEditing(false);
-    toast.success('Dashboard changes saved');
+    toast.success(t('dashboard.toast.saved'));
   };
   const cancelEditing = () => {
     if (!editor.cancel()) return;
@@ -251,7 +265,7 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
       }
       editor={
         <EditorHeading
-          dashboardName={current?.name ?? 'Dashboard'}
+          dashboardName={current?.name ?? t('dashboard.fallbackName')}
           autoRefreshSeconds={autoRefreshSeconds}
           widgetCount={editor.draft.widgets.length}
           previewBreakpoint={previewBreakpoint}
@@ -287,11 +301,12 @@ function DashboardWorkspace({ dashboardId }: { dashboardId: string }) {
 
 /** While the desk loads: its shape, with nothing to read yet. */
 function DeskSkeleton() {
+  const { t } = useI18n();
   return (
     <div
       className={classes.state}
       aria-busy="true"
-      aria-label="Loading the desk"
+      aria-label={t('dashboard.loadingDesk')}
     >
       <div className={classes.skeletonHeading}>
         <Skeleton height={14} width={150} radius="sm" />
@@ -317,6 +332,7 @@ function DeskSkeleton() {
 
 /** The desk could not be read: say so on the desk and offer a retry. */
 function DeskError({ error, reset }: ErrorComponentProps) {
+  const { t } = useI18n();
   const router = useRouter();
   useEffect(() => {
     console.error(error);
@@ -327,9 +343,9 @@ function DeskError({ error, reset }: ErrorComponentProps) {
         <span className={classes.errorTile} aria-hidden>
           <IconAlertTriangle size={26} stroke={1.7} />
         </span>
-        <h1 className={classes.errorTitle}>The desk didn’t load</h1>
+        <h1 className={classes.errorTitle}>{t('dashboard.deskError')}</h1>
         <Text c="dimmed" ta="center" maw={420}>
-          {routeErrorMessage(error)}
+          {t(routeErrorKey(error))}
         </Text>
         <Button
           type="button"
@@ -339,7 +355,7 @@ function DeskError({ error, reset }: ErrorComponentProps) {
             void router.invalidate();
           }}
         >
-          Try again
+          {t('common.tryAgain')}
         </Button>
       </div>
     </div>

@@ -9,12 +9,12 @@ test('keeps code block lines aligned without applying inline code decoration', a
       <div style={{ width: 300 }}>
         <Markdownish
           text={[
-            'Use `hatch workflow list`:',
+            'Use `hatch app list`:',
             '',
             '```sh',
-            'hatch workflow list',
-            'hatch workflow get <id>',
-            `hatch workflow deploy --message "${'long command '.repeat(20)}"`,
+            'hatch app list',
+            'hatch app get <id>',
+            `hatch app deploy --message "${'long command '.repeat(20)}"`,
             '```',
           ].join('\n')}
         />

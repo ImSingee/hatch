@@ -17,7 +17,7 @@ System controls (tab bar, navigation bar, native fields and menus) keep the
 system font. A sheet on the ground floats on `shadows.card`; a group inside a
 sheet is divided by hairlines; never nest a shadowed sheet in another. App
 tiles go through `AppTile`, which shows the App's stored icon and falls back
-to the monogram; Workflows pass `workflow`. A tile's touch-and-hold actions
+to the monogram. A tile's touch-and-hold actions
 go through `TileMenu` (the system context menu on iOS, an anchored Material
 menu on Android), never an alert. Keep every text/surface pair at
 4.5:1 or better; `theme.test.ts` guards the pairings. Respect Reduce Motion
@@ -27,10 +27,11 @@ Web surfaces are opaque white by default. Only pages that leave their
 background to the app, the `/mobile/` pages, pass `transparent` to
 `SecureSurface`, so the desk ground shows through; App surfaces stay opaque.
 
-The tab bar is the system one: Home, Apps, Agent and Me by default, with
-Workflows hidden. Which sections sit in it, their order and the start page
-stay the user's choice (Tabs & start page); never hard-code four tabs. The
-home tab keeps the `dashboard` id.
+The tab bar is the system one: Home, Apps, Agent and Me by default. Which
+sections sit in it, their order and the start page stay the user's choice
+(Tabs & start page); never hard-code the tabs. `normalizeNavigation` drops a
+saved section that no longer exists, and a start page that named one becomes
+the first visible tab (or Me). The home tab keeps the `dashboard` id.
 
 React Native owns page composition, buttons, rows, tiles, the transcript,
 composer, questions and attachment previews. Use `@expo/ui` where the system

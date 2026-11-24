@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react';
+import { useI18n } from '~i18n';
 import {
   InsideDeskShellProvider,
   WindowMaximizeProvider,
@@ -57,6 +58,7 @@ export function DeskShell({
   openItems,
   children,
 }: DeskShellProps) {
+  const { t } = useI18n();
   const [maximized, setMaximized] = useState(readMaximized);
   const toggleMaximized = () => {
     storeMaximized(!maximized);
@@ -71,7 +73,7 @@ export function DeskShell({
       data-maximized={view === 'window' && maximized ? 'true' : undefined}
     >
       <a href="#desk-stage" className={classes.skip}>
-        Skip to content
+        {t('desktop.skipToContent')}
       </a>
       <div aria-hidden className={classes.menuEdge} />
       <div className={classes.menuBar}>

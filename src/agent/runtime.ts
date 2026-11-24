@@ -12,14 +12,15 @@ import {
   type AgentMessage,
   type StreamFn,
 } from '@earendil-works/pi-agent-core';
-import type {
-  Api,
-  AssistantMessage,
-  ImageContent,
-  Model,
-  Models,
+import {
+  toToolDeclaration,
+  type Api,
+  type AssistantMessage,
+  type ImageContent,
+  type Model,
+  type Models,
+  type SystemMessage,
 } from '@earendil-works/pi-ai';
-import { hasBetaFeature, WORKFLOW_BETA_FEATURE } from '~/beta-features';
 import type { JsonValue } from '~/db/schema';
 import {
   createTranscriptCompactor,
@@ -296,7 +297,6 @@ function failureMessage(
 export type RunAgentTurnOptions = {
   commandCredentials?: CommandCredentials;
   appUrl: string;
-  betaFeatures: readonly string[];
   tavilyApiKey?: string | null;
   priorMessages: AgentMessage[];
   sessionId: string;
@@ -324,10 +324,6 @@ export async function runAgentTurn(
 ): Promise<RunAgentTurnResult> {
   const { priorMessages, sessionId, userText, signal, emit, models, picked } =
     opts;
-  const workflowBetaEnabled = hasBetaFeature(
-    opts.betaFeatures,
-    WORKFLOW_BETA_FEATURE,
-  );
 
   prepareAgentSessionSandbox(sessionId);
 
@@ -345,10 +341,9 @@ export async function runAgentTurn(
   // the transcript derives the (possibly compacted) model context from it.
   const transcript = Transcript.load(priorMessages);
 
-  const skills = await loadAgentSkills(env, { workflowBetaEnabled });
+  const skills = await loadAgentSkills(env);
   const tools = createTools(env, {
     commandCredentials: opts.commandCredentials,
-    workflowBetaEnabled,
     platform: opts.platform,
     ...(opts.tavilyApiKey ? { tavilyApiKey: opts.tavilyApiKey } : {}),
     ...(opts.ask ? { ask: opts.ask } : {}),
@@ -375,11 +370,19 @@ export async function runAgentTurn(
   }
 
   const thinkingLevel = picked.model.reasoning ? 'medium' : 'off';
-  const systemPrompt = buildSystemPrompt(
-    opts.appUrl,
-    { workflowBetaEnabled },
-    skills,
-  );
+  const systemPrompt = buildSystemPrompt(opts.appUrl, skills);
+  // The prompt and the tool declarations travel as the leading system message
+  // of every request. It is rebuilt for each run and never stored.
+  const systemMessage: SystemMessage = {
+    role: 'system',
+    content: systemPrompt,
+    toolsAdded: tools.map(toToolDeclaration),
+    timestamp: Date.now(),
+  };
+  const modelContext = (): AgentMessage[] => [
+    systemMessage,
+    ...transcript.modelContext(),
+  ];
   const compactor = createTranscriptCompactor({
     transcript,
     models,
@@ -411,11 +414,11 @@ export async function runAgentTurn(
     contextWindow: picked.model.contextWindow,
     signal,
     recover: async () =>
-      (await compactor.compactAfterOverflow())
-        ? transcript.modelContext()
-        : undefined,
+      (await compactor.compactAfterOverflow()) ? modelContext() : undefined,
   });
-  // The Hatch session id routes provider-side prompt caching.
+  // Only these options reach the provider: the Hatch session id routes
+  // provider-side prompt caching, and nothing opts into deferred responses or
+  // pi's provider attribution (the loop's `identity`).
   const streamFn: StreamFn = (model, context, options) =>
     streamModels.streamSimple(model, context, {
       reasoning: options?.reasoning,
@@ -594,9 +597,12 @@ export async function runAgentTurn(
     }
   };
   // Every message is recorded before listeners see its end, as pi's harness
-  // did, so a compaction triggered by the next request includes it.
+  // did, so a compaction triggered by the next request includes it. System
+  // messages are per-run request framing, not conversation history.
   const sink = async (event: AgentEvent) => {
-    if (event.type === 'message_end') transcript.appendMessage(event.message);
+    if (event.type === 'message_end' && event.message.role !== 'system') {
+      transcript.appendMessage(event.message);
+    }
     await handleEvent(event);
   };
 
@@ -657,7 +663,7 @@ export async function runAgentTurn(
     try {
       return await runAgentLoop(
         [prompt],
-        { systemPrompt, messages: transcript.modelContext(), tools },
+        { messages: modelContext(), tools },
         {
           model: picked.model,
           reasoning: thinkingLevel === 'off' ? undefined : thinkingLevel,
@@ -669,7 +675,7 @@ export async function runAgentTurn(
           // always goes out on the transcript's model context.
           transformContext: async () => {
             await compactor.compactIfOverThreshold();
-            return transcript.modelContext();
+            return modelContext();
           },
           afterToolCall,
           getSteeringMessages,

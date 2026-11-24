@@ -2,7 +2,8 @@ import { Button, Group, Loader, Text } from '@mantine/core';
 import { IconAlertCircle, IconCheck, IconPencil } from '@tabler/icons-react';
 import type { DashboardBreakpoint } from '~/lib/dashboard-layout';
 import { DashboardLayoutPreview } from './dashboard-layout-preview';
-import { refreshText } from './desk-toolbar';
+import { useI18n } from '~i18n';
+import { useRefreshText } from './desk-toolbar';
 import type { DashboardDraftStatus } from './use-dashboard-draft';
 import classes from './editor-heading.module.css';
 
@@ -28,18 +29,22 @@ export function EditorHeading({
   onDone: () => void;
   doneDisabled: boolean;
 }) {
+  const { t } = useI18n();
+  const refreshText = useRefreshText();
   return (
-    <div className={classes.root} role="toolbar" aria-label="Dashboard editor">
+    <div
+      className={classes.root}
+      role="toolbar"
+      aria-label={t('dashboard.editor.label')}
+    >
       <div className={classes.text}>
         <span className={classes.eyebrow}>
           <IconPencil size={13} stroke={2.4} aria-hidden />
-          Editing
+          {t('dashboard.editor.eyebrow')}
         </span>
-        <h1 className={classes.title}>Edit desk layout</h1>
+        <h1 className={classes.title}>{t('dashboard.editor.title')}</h1>
         <span className={classes.hint}>
-          Drag a widget by its handle, switch its size or remove it with the
-          corner button. {widgetCount}{' '}
-          {widgetCount === 1 ? 'widget is' : 'widgets are'} on this desk.
+          {t('dashboard.editor.hint', { count: widgetCount })}
         </span>
       </div>
       <div className={classes.controls}>
@@ -59,7 +64,7 @@ export function EditorHeading({
           disabled={doneDisabled}
           onClick={onDone}
         >
-          Done
+          {t('common.done')}
         </Button>
       </div>
     </div>
@@ -73,6 +78,7 @@ function DraftStatus({
   status: DashboardDraftStatus;
   onCheckStatus: () => void;
 }) {
+  const { t } = useI18n();
   if (
     status.state === 'conflict' ||
     status.state === 'error' ||
@@ -82,7 +88,7 @@ function DraftStatus({
       <Group gap="xs" className={classes.draftError} wrap="nowrap" role="alert">
         <IconAlertCircle size={16} stroke={1.8} />
         <Text size="sm" fw={600}>
-          {status.message}
+          {t(status.messageKey)}
         </Text>
         {status.state === 'unknown' ? (
           <Button
@@ -92,7 +98,7 @@ function DraftStatus({
             size="compact-xs"
             onClick={onCheckStatus}
           >
-            Check status
+            {t('dashboard.editor.checkStatus')}
           </Button>
         ) : null}
       </Group>
@@ -102,7 +108,7 @@ function DraftStatus({
       <Group gap={6} className={classes.draftStatus} aria-live="polite">
         <Loader size={14} />
         <Text size="sm" fw={600}>
-          Checking save status
+          {t('dashboard.editor.checking')}
         </Text>
       </Group>
     );

@@ -191,7 +191,6 @@ beforeEach(async () => {
   await db.delete(schema.agentProviders);
   await db.delete(schema.verification);
   await db.delete(schema.dashboards);
-  await db.delete(schema.workflows);
   await db.insert(schema.dashboards).values({
     id: 'dashboard-one',
     name: 'Handoff dashboard',
@@ -1409,32 +1408,6 @@ describe('session workspace navigation', () => {
         },
         { id: 'hidden', appId: 'archived', label: 'Hidden', sortOrder: 0 },
       ]);
-      await db.insert(schema.workflows).values([
-        {
-          id: 'older',
-          slug: 'older',
-          name: 'Older',
-          pinned: true,
-          sortOrder: 0,
-          updatedAt: new Date('2026-01-01'),
-        },
-        {
-          id: 'newer',
-          slug: 'newer',
-          name: 'Newer',
-          pinned: true,
-          sortOrder: 9,
-          updatedAt: new Date('2026-02-01'),
-        },
-        {
-          id: 'hidden',
-          slug: 'hidden',
-          name: 'Hidden',
-          pinned: true,
-          status: 'archived',
-        },
-        { id: 'unpinned', slug: 'unpinned', name: 'Unpinned', pinned: false },
-      ]);
       const workspace = await client(useBinaryFormat).workspace.getWorkspace(
         {},
       );
@@ -1484,7 +1457,6 @@ describe('session workspace navigation', () => {
           entryHash: '',
         },
       ]);
-      expect(workspace.pinnedWorkflowIds).toEqual(['newer', 'older']);
       const serialized = JSON.stringify(workspace);
       expect(serialized).not.toContain('never-return');
       expect(serialized).not.toContain('/private/repo');
@@ -1516,7 +1488,6 @@ describe('session workspace navigation', () => {
         { id: 'default', name: 'My Dashboard', pinned: true },
       ]);
       expect(value.appPins).toEqual([]);
-      expect(value.pinnedWorkflowIds).toEqual([]);
     }
     expect(await db.query.dashboards.findMany()).toHaveLength(1);
   });

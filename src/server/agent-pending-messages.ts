@@ -18,7 +18,7 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema, type DB, type TX } from '~/db';
-import type { JsonValue } from '~/db/schema';
+import type { AgentMessageMode, JsonValue } from '~/db/schema';
 import type { AgentAttachmentRef } from '~agent/attachments';
 import {
   hasComposerText,
@@ -83,7 +83,11 @@ async function lockSession(tx: TX, sessionId: string): Promise<void> {
     .from(schema.agentSessions)
     .where(eq(schema.agentSessions.id, sessionId))
     .for('update');
-  if (!session) throw new AppError('Session not found.', 404);
+  if (!session) {
+    throw new AppError('Session not found.', 404, {
+      code: 'agent.sessionNotFound',
+    });
+  }
 }
 
 /** Lock a message that is still the user's to change. */
@@ -91,9 +95,15 @@ async function lockEditable(tx: TX, sessionId: string, messageId: string) {
   await lockSession(tx, sessionId);
   const rows = await loadPendingRows(tx, sessionId, { forUpdate: true });
   const row = rows.find((candidate) => candidate.id === messageId);
-  if (!row) throw new AppError('Pending message not found.', 404);
+  if (!row) {
+    throw new AppError('Pending message not found.', 404, {
+      code: 'agent.pendingNotFound',
+    });
+  }
   if (effectivePendingStatus(row, row.claimedRunStatus) !== 'pending') {
-    throw new AppError(NOT_EDITABLE, 409);
+    throw new AppError(NOT_EDITABLE, 409, {
+      code: 'agent.pendingNotEditable',
+    });
   }
   return row;
 }
@@ -127,7 +137,8 @@ async function result(
 }
 
 /**
- * Add a message in the sender's preferred mode. When the session is idle
+ * Add a message in `mode`, or the sender's preferred mode when it is
+ * omitted. When the session is idle
  * (and not paused) it is delivered right away.
  *
  * With a `clientMessageId`, a resend of a message sent before (to this
@@ -140,6 +151,7 @@ export async function enqueuePendingMessage(input: {
   providerId: string;
   modelId: string;
   message: PendingMessageInput;
+  mode?: AgentMessageMode;
   clientMessageId?: string;
 }): Promise<PendingMessagesResult> {
   const receiptKey = input.clientMessageId
@@ -170,7 +182,8 @@ export async function enqueuePendingMessage(input: {
       if (receipt) return replay(receipt.runId);
     }
     await assertAgentModelAvailable(input.providerId, input.modelId);
-    const { messageMode: mode } = await readAgentPreferences(input.userId);
+    const mode =
+      input.mode ?? (await readAgentPreferences(input.userId)).messageMode;
     const replayed = await db.transaction(async (tx) => {
       await lockSession(tx, input.sessionId);
       if (receiptKey) {
@@ -197,12 +210,15 @@ export async function enqueuePendingMessage(input: {
               .for('update')
           : [];
       if (rows.length !== attachmentIds.length) {
-        throw new AppError('One or more attachments were not found.', 404);
+        throw new AppError('One or more attachments were not found.', 404, {
+          code: 'agent.attachmentsNotFound',
+        });
       }
       if (rows.some((row) => row.attachedAt != null)) {
         throw new AppError(
           'One or more attachments are already attached.',
           409,
+          { code: 'agent.attachmentsAttached' },
         );
       }
       const byId = new Map(rows.map((row) => [row.id, row]));
@@ -254,15 +270,18 @@ export async function enqueuePendingMessage(input: {
 /**
  * Change a waiting message. Each given field replaces that part; an omitted
  * field stays unchanged. Attachments can only be removed (`attachmentIds`
- * lists the ones to keep); removed ones are released.
+ * lists the ones to keep); removed ones are released. `mode` switches how it
+ * is delivered; a message switched to steer joins the running reply at its
+ * next tool-call boundary.
  */
 export async function updatePendingMessage(input: {
   sessionId: string;
   messageId: string;
   message: Partial<PendingMessageInput>;
+  mode?: AgentMessageMode;
 }): Promise<PendingMessagesResult> {
   return enqueuePendingTask(input.sessionId, async () => {
-    await db.transaction(async (tx) => {
+    const steered = await db.transaction(async (tx) => {
       const row = await lockEditable(tx, input.sessionId, input.messageId);
       const current = pendingRowContent(row);
       const content = input.message.content ?? current.content;
@@ -278,6 +297,7 @@ export async function updatePendingMessage(input: {
         throw new AppError(
           'An edit can only remove attachments, not add them.',
           400,
+          { code: 'agent.pendingAddAttachments' },
         );
       }
       const kept = current.attachments.filter((attachment) =>
@@ -291,12 +311,17 @@ export async function updatePendingMessage(input: {
         throw new AppError(
           'Message must include text or an attachment. Cancel it instead.',
           400,
+          { code: 'agent.pendingEmpty' },
         );
       }
       if (images.length + kept.length > MAX_MESSAGE_FILES) {
         throw new AppError(
           `Message supports at most ${MAX_MESSAGE_FILES} attachments.`,
           400,
+          {
+            code: 'agent.tooManyAttachments',
+            params: { max: MAX_MESSAGE_FILES },
+          },
         );
       }
       await releaseAttachments(
@@ -314,10 +339,13 @@ export async function updatePendingMessage(input: {
           content: content as unknown as JsonValue[],
           images: images as unknown as JsonValue[],
           attachments: kept as unknown as JsonValue[],
+          ...(input.mode ? { mode: input.mode } : {}),
           updatedAt: new Date(),
         })
         .where(eq(schema.agentPendingMessages.id, input.messageId));
+      return input.mode === 'steer' && row.mode !== 'steer';
     });
+    if (steered) await notifyActiveRunOfSteer(input.sessionId);
     return result(input.sessionId);
   });
 }
@@ -413,6 +441,10 @@ export async function getPendingMessages(
     where: { id: sessionId },
     columns: { id: true },
   });
-  if (!session) throw new AppError('Session not found.', 404);
+  if (!session) {
+    throw new AppError('Session not found.', 404, {
+      code: 'agent.sessionNotFound',
+    });
+  }
   return listSessionPendingMessages(sessionId);
 }

@@ -13,7 +13,7 @@ import {
   getPendingMessages,
 } from '~server/agent-pending-messages';
 import { authenticateSessionRequest } from '~server/session-http-auth';
-import { errorResponse } from '~server/errors';
+import { AppError, errorResponse } from '~server/errors';
 
 const enqueueBodySchema = refineAgentMessage(
   z.object({
@@ -21,6 +21,8 @@ const enqueueBodySchema = refineAgentMessage(
     modelId: z.string().min(1),
     /** Reused when resending the same draft; see agent-message-receipts. */
     clientMessageId: clientMessageIdSchema.optional(),
+    /** Delivery for this message; the sender's preference when omitted. */
+    mode: z.enum(['queue', 'steer']).optional(),
     ...agentMessageFields,
   }),
 );
@@ -50,8 +52,8 @@ export async function getAgentPendingMessages({
 }
 
 /**
- * Send a message while the session's run is working, in the user's
- * preferred queue/steer mode. An idle session delivers it right away
+ * Send a message while the session's run is working, in the given
+ * queue/steer mode or the user's preferred one. An idle session delivers it right away
  * (`startedRunId`).
  */
 export async function postAgentPendingMessage({
@@ -68,7 +70,11 @@ export async function postAgentPendingMessage({
   try {
     const raw = await readCappedJson(request, MAX_BODY_BYTES);
     if (raw === TOO_LARGE) {
-      return new Response('Payload too large', { status: 413 });
+      return errorResponse(
+        new AppError('Payload too large', 413, {
+          code: 'agent.payloadTooLarge',
+        }),
+      );
     }
     parsed = enqueueBodySchema.parse(raw);
   } catch {
@@ -76,7 +82,7 @@ export async function postAgentPendingMessage({
   }
 
   try {
-    const { providerId, modelId, clientMessageId, ...message } = parsed;
+    const { providerId, modelId, clientMessageId, mode, ...message } = parsed;
     return Response.json(
       await enqueuePendingMessage({
         sessionId,
@@ -84,6 +90,7 @@ export async function postAgentPendingMessage({
         providerId,
         modelId,
         message,
+        mode,
         clientMessageId,
       }),
     );

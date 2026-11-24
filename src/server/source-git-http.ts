@@ -1,5 +1,5 @@
 /**
- * Server-only: Git smart HTTP for App and Workflow source.
+ * Server-only: Git smart HTTP for App source.
  *
  * Serves `git clone`, `fetch` and `push` against the canonical bare repos by
  * running `git upload-pack` / `git receive-pack --stateless-rpc`. Git owns the
@@ -20,13 +20,11 @@ import {
   CredentialError,
   type CredentialContext,
 } from './auth/credentials';
-import { ensureWorkflowRepo } from './workflows/git';
 
 type Service = 'git-upload-pack' | 'git-receive-pack';
-type Kind = 'app' | 'workflow';
 
 const ROUTE =
-  /^\/api\/git\/(app|workflow)\/([a-z0-9][a-z0-9-]{0,190})\.git\/(info\/refs|git-upload-pack|git-receive-pack)$/;
+  /^\/api\/git\/app\/([a-z0-9][a-z0-9-]{0,190})\.git\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 
 /** `Git-Protocol` is client-controlled and becomes an environment variable. */
 const GIT_PROTOCOL = /^[a-z0-9=:.-]{1,128}$/;
@@ -91,23 +89,16 @@ async function authenticate(
 }
 
 async function resolveRepository(
-  kind: Kind,
   idOrSlug: string,
 ): Promise<{ id: string; repoDir: string } | null> {
   const columns = { id: true } as const;
   const lookup = (where: { id: string } | { slug: string }) =>
-    kind === 'app'
-      ? db.query.apps.findFirst({ where, columns })
-      : db.query.workflows.findFirst({ where, columns });
+    db.query.apps.findFirst({ where, columns });
   // The repository path is derived from the stored row, never from the URL.
   const row =
     (await lookup({ id: idOrSlug })) ?? (await lookup({ slug: idOrSlug }));
   if (!row) return null;
-  const repoDir =
-    kind === 'app'
-      ? await ensureAppRepo(row.id)
-      : await ensureWorkflowRepo(row.id);
-  return { id: row.id, repoDir };
+  return { id: row.id, repoDir: await ensureAppRepo(row.id) };
 }
 
 function gitEnvironment(request: Request): NodeJS.ProcessEnv {
@@ -228,9 +219,8 @@ export async function handleGitHttpRequest(
   const url = new URL(request.url);
   const match = ROUTE.exec(url.pathname);
   if (!match) return plain(404, 'Not found.');
-  const kind = match[1] as Kind;
-  const idOrSlug = match[2];
-  const endpoint = match[3];
+  const idOrSlug = match[1];
+  const endpoint = match[2];
 
   const advertisement = endpoint === 'info/refs';
   const service = advertisement ? url.searchParams.get('service') : endpoint;
@@ -253,11 +243,11 @@ export async function handleGitHttpRequest(
       'www-authenticate': 'Basic realm="Hatch", charset="UTF-8"',
     });
 
-  const repository = await resolveRepository(kind, idOrSlug);
+  const repository = await resolveRepository(idOrSlug);
   if (!repository) return plain(404, 'Repository not found.');
 
   if (advertisement) return advertiseRefs(service, repository.repoDir, request);
-  if (kind === 'app' && service === 'git-receive-pack' && credential.run)
+  if (service === 'git-receive-pack' && credential.run)
     await associateAgentSessionApp(credential.run.sessionId, repository.id);
   return serveRpc(service, repository.repoDir, request);
 }

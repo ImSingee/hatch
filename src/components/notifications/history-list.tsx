@@ -12,7 +12,8 @@ import { Link } from '@tanstack/react-router';
 import { IconBell, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { EmptyState } from '~components/page/page';
-import { formatExact, formatRelative } from '~lib/format';
+import { useI18n } from '~i18n';
+import { formatExact, formatRelativeTime } from '~lib/format';
 import {
   notificationHistoryQueryOptions,
   notificationSourcesQueryOptions,
@@ -30,6 +31,7 @@ import {
   REPLY_STATE_OPTIONS,
   NotificationStatusBadge,
   SourceTypeIcon,
+  useNotificationKindName,
 } from './status';
 import { useDeleteNotification } from './use-delete-notification';
 import classes from './notifications-window.module.css';
@@ -56,6 +58,8 @@ export function NotificationHistory({
   /** The open notification's id. */
   selected?: string;
 }) {
+  const { t, locale } = useI18n();
+  const kindName = useNotificationKindName();
   const [source, setSource] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
   const [status, setStatus] = useState<NotificationStatus | null>(null);
@@ -78,7 +82,7 @@ export function NotificationHistory({
       ...(sources?.apps.length
         ? [
             {
-              group: 'Apps',
+              group: t('notifications.history.source.apps'),
               items: sources.apps.map((app) => ({
                 value: `app:${app.id}`,
                 label: app.name,
@@ -89,7 +93,7 @@ export function NotificationHistory({
       ...(sources?.channels.length
         ? [
             {
-              group: 'Channels',
+              group: t('notifications.history.source.channels'),
               items: sources.channels.map((channel) => ({
                 value: `channel:${channel.id}`,
                 label: channel.name,
@@ -100,12 +104,15 @@ export function NotificationHistory({
       {
         group: 'Hatch',
         items: [
-          { value: 'user', label: 'Sent by people' },
-          { value: 'platform', label: 'Test notifications' },
+          { value: 'user', label: t('notifications.history.source.user') },
+          {
+            value: 'platform',
+            label: t('notifications.history.source.platform'),
+          },
         ],
       },
     ],
-    [sources],
+    [sources, t],
   );
 
   const kindOptions = useMemo(() => {
@@ -144,8 +151,8 @@ export function NotificationHistory({
     <>
       <div className={classes.filters}>
         <Select
-          placeholder="All sources"
-          aria-label="Filter by source"
+          placeholder={t('notifications.history.filter.allSources')}
+          aria-label={t('notifications.history.filter.source')}
           data={sourceOptions}
           value={source}
           onChange={(value) => {
@@ -157,8 +164,8 @@ export function NotificationHistory({
           comboboxProps={{ width: 260, position: 'bottom-start' }}
         />
         <Select
-          placeholder="All kinds"
-          aria-label="Filter by kind"
+          placeholder={t('notifications.history.filter.allKinds')}
+          aria-label={t('notifications.history.filter.kind')}
           data={kindOptions}
           value={kind}
           onChange={setKind}
@@ -168,18 +175,24 @@ export function NotificationHistory({
           comboboxProps={{ width: 280, position: 'bottom-end' }}
         />
         <Select
-          placeholder="Any status"
-          aria-label="Filter by delivery status"
-          data={NOTIFICATION_STATUS_OPTIONS}
+          placeholder={t('notifications.history.filter.anyStatus')}
+          aria-label={t('notifications.history.filter.status')}
+          data={NOTIFICATION_STATUS_OPTIONS.map((option) => ({
+            value: option.value,
+            label: t(option.label),
+          }))}
           value={status}
           onChange={(value) => setStatus(value as NotificationStatus | null)}
           clearable
           comboboxProps={{ width: 220, position: 'bottom-start' }}
         />
         <Select
-          placeholder="Any reply state"
-          aria-label="Filter by reply state"
-          data={REPLY_STATE_OPTIONS}
+          placeholder={t('notifications.history.filter.anyReplyState')}
+          aria-label={t('notifications.history.filter.replyState')}
+          data={REPLY_STATE_OPTIONS.map((option) => ({
+            value: option.value,
+            label: t(option.label),
+          }))}
           value={replyState}
           onChange={(value) =>
             setReplyState(value as NotificationReplyState | null)
@@ -199,7 +212,9 @@ export function NotificationHistory({
             variant="dashed"
             icon={<IconBell size={20} stroke={1.8} />}
             title={
-              filtered ? 'No matching notifications' : 'No notifications yet'
+              filtered
+                ? t('notifications.history.empty.filteredTitle')
+                : t('notifications.history.empty.title')
             }
             actions={
               !filtered ? (
@@ -208,18 +223,21 @@ export function NotificationHistory({
                   to="/settings/notifications"
                   variant="default"
                 >
-                  Set up delivery
+                  {t('notifications.history.empty.setUp')}
                 </Button>
               ) : undefined
             }
           >
             {filtered
-              ? 'Try clearing a filter.'
-              : 'Notifications pushed by Apps and Channels show up here, with where each one was delivered.'}
+              ? t('notifications.history.empty.filteredBody')
+              : t('notifications.history.empty.body')}
           </EmptyState>
         ) : (
           <>
-            <ul className={classes.rows} aria-label="Notifications">
+            <ul
+              className={classes.rows}
+              aria-label={t('notifications.history.list')}
+            >
               {items.map((item) => (
                 <li
                   key={item.id}
@@ -236,14 +254,14 @@ export function NotificationHistory({
                       <span className={classes.title}>{item.title}</span>
                       <Tooltip label={formatExact(item.createdAt)} withArrow>
                         <span className={classes.time}>
-                          {formatRelative(item.createdAt)}
+                          {formatRelativeTime(item.createdAt, locale)}
                         </span>
                       </Tooltip>
                     </span>
                     <span className={classes.meta}>
                       <SourceTypeIcon type={item.sourceType} size={14} />
                       <span className={classes.metaText}>
-                        {item.sourceName} · {item.kindName}
+                        {item.sourceName} · {kindName(item)}
                         {item.body ? ` · ${item.body}` : ''}
                       </span>
                     </span>
@@ -268,7 +286,9 @@ export function NotificationHistory({
                           variant="subtle"
                           color="gray"
                           size="sm"
-                          aria-label={`Actions for ${item.title}`}
+                          aria-label={t('notifications.actionsFor', {
+                            name: item.title,
+                          })}
                         >
                           <IconDotsVertical size={15} stroke={1.8} />
                         </ActionIcon>
@@ -279,7 +299,7 @@ export function NotificationHistory({
                           leftSection={<IconTrash size={14} stroke={1.6} />}
                           onClick={() => confirmDelete(item)}
                         >
-                          Delete
+                          {t('common.delete')}
                         </Menu.Item>
                       </Menu.Dropdown>
                     </Menu>
@@ -294,7 +314,7 @@ export function NotificationHistory({
                   loading={history.isFetchingNextPage}
                   onClick={() => void history.fetchNextPage()}
                 >
-                  Load more
+                  {t('notifications.history.loadMore')}
                 </Button>
               </div>
             ) : null}

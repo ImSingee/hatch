@@ -16,6 +16,7 @@ import { modals } from '@mantine/modals';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { IconPencil, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState, type FormEvent } from 'react';
+import { useI18n } from '~i18n';
 import {
   notificationDestinationsQueryOptions,
   notificationGroupsQueryOptions,
@@ -26,7 +27,7 @@ import {
   updateGroupFn,
   type GroupView,
 } from '~server/notifications';
-import { DESTINATION_TYPE_LABEL } from './status';
+import { DESTINATION_TYPE_PLURAL } from './status';
 import { SectionTitle } from './section-title';
 import { useNotificationMutation } from './use-notification-mutation';
 
@@ -37,6 +38,7 @@ function GroupModal({
   editing: GroupView | null;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const { data: destinations } = useSuspenseQuery(
     notificationDestinationsQueryOptions,
   );
@@ -60,14 +62,16 @@ function GroupModal({
         ? updateGroupFn({ data: { id: editing.id, ...input } })
         : createGroupFn({ data: input }),
     {
-      success: editing ? 'Group updated' : 'Group created',
+      success: editing
+        ? t('notifications.groups.updated')
+        : t('notifications.groups.created'),
       onSuccess: () => onClose(),
     },
   );
 
   const options = (['device', 'webhook', 'app'] as const)
     .map((type) => ({
-      group: `${DESTINATION_TYPE_LABEL[type]}s`,
+      group: t(DESTINATION_TYPE_PLURAL[type]),
       items: destinations
         .filter((destination) => destination.type === type)
         .map((destination) => ({
@@ -91,14 +95,16 @@ function GroupModal({
     <Modal
       opened
       onClose={onClose}
-      title={editing ? 'Edit group' : 'New group'}
+      title={
+        editing ? t('notifications.groups.edit') : t('notifications.groups.new')
+      }
       centered
     >
       <form onSubmit={submit}>
         <Stack gap="md">
           <TextInput
-            label="Name"
-            placeholder="My phones"
+            label={t('common.name')}
+            placeholder={t('notifications.groups.namePlaceholder')}
             value={name}
             onChange={(event) => setName(event.currentTarget.value)}
             required
@@ -106,32 +112,36 @@ function GroupModal({
             data-autofocus
           />
           <TextInput
-            label="Description"
+            label={t('notifications.description')}
             value={description}
             onChange={(event) => setDescription(event.currentTarget.value)}
             maxLength={500}
           />
           <MultiSelect
-            label="Destinations"
-            placeholder={members.length ? undefined : 'Choose destinations'}
+            label={t('notifications.destinations.title')}
+            placeholder={
+              members.length
+                ? undefined
+                : t('notifications.groups.chooseDestinations')
+            }
             data={options}
             value={members}
             onChange={setMembers}
             searchable
-            nothingFoundMessage="No destinations"
+            nothingFoundMessage={t('notifications.groups.noDestinations')}
           />
           <Switch
-            label="Add new devices automatically"
-            description="Devices that turn on notifications later join this group. Existing devices are not added, and you can remove any device."
+            label={t('notifications.groups.autoAdd')}
+            description={t('notifications.groups.autoAddDescription')}
             checked={autoAddDevices}
             onChange={(event) => setAutoAddDevices(event.currentTarget.checked)}
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={save.isPending}>
-              {editing ? 'Save' : 'Create group'}
+              {editing ? t('common.save') : t('notifications.groups.create')}
             </Button>
           </Group>
         </Stack>
@@ -141,6 +151,7 @@ function GroupModal({
 }
 
 export function GroupsSection() {
+  const { t } = useI18n();
   const { data: groups } = useSuspenseQuery(notificationGroupsQueryOptions);
   const { data: destinations } = useSuspenseQuery(
     notificationDestinationsQueryOptions,
@@ -150,21 +161,19 @@ export function GroupsSection() {
   );
   const remove = useNotificationMutation(
     (id: string) => deleteGroupFn({ data: id }),
-    { success: 'Group deleted' },
+    { success: t('notifications.groups.deleted') },
   );
   const nameOf = new Map(destinations.map((d) => [d.id, d.name]));
 
   const confirmDelete = (group: GroupView) =>
     modals.openConfirmModal({
-      title: `Delete ${group.name}?`,
+      title: t('notifications.groups.deleteTitle', { name: group.name }),
       centered: true,
-      children: (
-        <Text size="sm">
-          Routes that deliver to this group are deleted too. The destinations
-          themselves stay.
-        </Text>
-      ),
-      labels: { confirm: 'Delete group', cancel: 'Cancel' },
+      children: <Text size="sm">{t('notifications.groups.deleteBody')}</Text>,
+      labels: {
+        confirm: t('notifications.groups.delete'),
+        cancel: t('common.cancel'),
+      },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(group.id),
     });
@@ -172,31 +181,33 @@ export function GroupsSection() {
   return (
     <Stack gap="md">
       <SectionTitle
-        title="Groups"
-        description="Bundle destinations so one route can reach all of them."
+        title={t('notifications.groups.title')}
+        description={t('notifications.groups.description')}
         action={
           <Button
             variant="default"
             leftSection={<IconPlus size={16} stroke={1.8} />}
             onClick={() => setModal({ editing: null })}
           >
-            New group
+            {t('notifications.groups.new')}
           </Button>
         }
       />
 
       {groups.length === 0 ? (
         <Text size="sm" c="dimmed" py="md">
-          No groups yet.
+          {t('notifications.groups.empty')}
         </Text>
       ) : (
         <Table.ScrollContainer minWidth={620} type="native">
           <Table verticalSpacing="sm" layout="fixed">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th w="32%">Group</Table.Th>
-                <Table.Th>Destinations</Table.Th>
-                <Table.Th w={84} aria-label="Actions" />
+                <Table.Th w="32%">
+                  {t('notifications.groups.column.group')}
+                </Table.Th>
+                <Table.Th>{t('notifications.destinations.title')}</Table.Th>
+                <Table.Th w={84} aria-label={t('common.actions')} />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -213,14 +224,14 @@ export function GroupsSection() {
                     ) : null}
                     {group.autoAddDevices ? (
                       <Text size="xs" c="dimmed">
-                        Adds new devices automatically
+                        {t('notifications.groups.autoAdds')}
                       </Text>
                     ) : null}
                   </Table.Td>
                   <Table.Td>
                     {group.destinationIds.length === 0 ? (
                       <Text size="sm" c="dimmed">
-                        Empty
+                        {t('notifications.groups.emptyMembers')}
                       </Text>
                     ) : (
                       <Group gap={6}>
@@ -231,7 +242,8 @@ export function GroupsSection() {
                             color="gray"
                             radius="sm"
                           >
-                            {nameOf.get(id) ?? 'Removed'}
+                            {nameOf.get(id) ??
+                              t('notifications.groups.removedMember')}
                           </Badge>
                         ))}
                       </Group>
@@ -239,21 +251,28 @@ export function GroupsSection() {
                   </Table.Td>
                   <Table.Td>
                     <Group gap={4} wrap="nowrap">
-                      <Tooltip label="Edit group" withArrow>
+                      <Tooltip label={t('notifications.groups.edit')} withArrow>
                         <ActionIcon
                           variant="subtle"
                           color="gray"
-                          aria-label={`Edit ${group.name}`}
+                          aria-label={t('notifications.editName', {
+                            name: group.name,
+                          })}
                           onClick={() => setModal({ editing: group })}
                         >
                           <IconPencil size={16} stroke={1.6} />
                         </ActionIcon>
                       </Tooltip>
-                      <Tooltip label="Delete group" withArrow>
+                      <Tooltip
+                        label={t('notifications.groups.delete')}
+                        withArrow
+                      >
                         <ActionIcon
                           variant="subtle"
                           color="red"
-                          aria-label={`Delete ${group.name}`}
+                          aria-label={t('notifications.deleteName', {
+                            name: group.name,
+                          })}
                           onClick={() => confirmDelete(group)}
                         >
                           <IconTrash size={16} stroke={1.6} />

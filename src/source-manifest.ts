@@ -1,13 +1,9 @@
-/** Load authored App/Workflow configuration without executing it in the host. */
+/** Load authored App configuration without executing it in the host. */
 import { constants, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, type Plugin } from 'esbuild';
-import {
-  APP_HATCH_SDK_IMPORTS,
-  WORKFLOW_HATCH_SDK_IMPORTS,
-  hatchImportMapPath,
-} from './agent/hatch-sdk';
+import { APP_HATCH_SDK_IMPORTS, hatchImportMapPath } from './agent/hatch-sdk';
 import { subprocessSandboxEnv } from './server/sandbox-env';
 import { run, type RunOptions, type RunResult } from './server/subprocess';
 
@@ -17,7 +13,6 @@ export type ManifestRunner = (
   options: { input?: string; timeoutMs?: number },
 ) => Promise<RunResult>;
 export type ManifestReader = (file: string) => Promise<string | null>;
-type SourceKind = 'app' | 'workflow';
 
 function inside(root: string, file: string): boolean {
   const relative = path.relative(root, file);
@@ -98,12 +93,10 @@ import {
 
 function manifestBundleBoundary(
   root: string,
-  kind: SourceKind,
   read: ManifestReader,
   subject: string,
 ): Plugin {
-  const imports =
-    kind === 'app' ? APP_HATCH_SDK_IMPORTS : WORKFLOW_HATCH_SDK_IMPORTS;
+  const imports = APP_HATCH_SDK_IMPORTS;
   const escapes = `${subject[0].toUpperCase()}${subject.slice(1)} import escapes source root`;
   return {
     name: 'manifest-source-boundary',
@@ -165,7 +158,6 @@ function manifestBundleBoundary(
 export async function bundleEvaluationModule(options: {
   /** Canonical source root. */
   root: string;
-  kind: SourceKind;
   read: ManifestReader;
   /** Trusted entry that imports the authored module. */
   contents: string;
@@ -201,12 +193,7 @@ export async function bundleEvaluationModule(options: {
     logLevel: 'silent',
     metafile: true,
     plugins: [
-      manifestBundleBoundary(
-        options.root,
-        options.kind,
-        options.read,
-        options.subject,
-      ),
+      manifestBundleBoundary(options.root, options.read, options.subject),
     ],
   });
   if (
@@ -323,7 +310,6 @@ function denoManifestSteps(options: {
 export async function loadSourceManifest<T>(
   root: string,
   options: {
-    kind: SourceKind;
     parse: (raw: unknown) => T;
     run?: ManifestRunner;
     read?: ManifestReader;
@@ -355,7 +341,6 @@ export async function loadSourceManifest<T>(
     await steps.graph(file);
     const source = await bundleEvaluationModule({
       root: canonicalRoot,
-      kind: options.kind,
       read: reader,
       contents: `import manifest from './manifest.ts';\n__hatchSerialize(manifest);`,
       conditions: steps.conditions,

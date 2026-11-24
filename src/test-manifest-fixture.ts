@@ -1,10 +1,7 @@
 /** Exercise a rendered scaffold through the production manifest loader. */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import {
-  materializeAppHatchSdk,
-  materializeWorkflowHatchSdk,
-} from './agent/hatch-sdk';
+import { materializeAppHatchSdk } from './agent/hatch-sdk';
 import { BUILD_WORK_DIR } from './agent/paths';
 import {
   detectSourceToolchain,
@@ -13,7 +10,6 @@ import {
 import { createSourceToolchain } from './toolchain';
 import { platformToolchainContext } from './toolchain/platform';
 import { parseSourceManifest } from './server/apps/manifest';
-import { parseSourceWorkflowManifest } from './server/workflows/manifest';
 
 export async function createManifestFixtureRoot(): Promise<string> {
   // Match production build inputs: SDK generations are staged privately on
@@ -22,15 +18,12 @@ export async function createManifestFixtureRoot(): Promise<string> {
   return fs.mkdtemp(path.join(BUILD_WORK_DIR, 'manifest-test-'));
 }
 
-export async function evaluateTemplateManifest(
-  source: string,
-  kind: 'app' | 'workflow',
-) {
+export async function evaluateTemplateManifest(source: string) {
   const root = await createManifestFixtureRoot();
   try {
     // Use the dependency files the template ships, with the toolchain they
     // select, exactly as a deploy of a freshly scaffolded source would.
-    const template = path.resolve(`templates/default-${kind}`);
+    const template = path.resolve('templates/default-app');
     for (const file of await fs.readdir(template)) {
       if (
         /^(?:package\.json|pnpm-lock\.yaml|deno\.json|deno\.lock)$/.test(file)
@@ -40,20 +33,12 @@ export async function evaluateTemplateManifest(
     await fs.writeFile(path.join(root, 'manifest.ts'), source);
     const toolchain = createSourceToolchain(
       await detectSourceToolchain(sourceToolchainReader(root)),
-      platformToolchainContext(kind, root, []),
+      platformToolchainContext(root, []),
     );
     await toolchain.validateDependencies();
-    await (
-      kind === 'app' ? materializeAppHatchSdk : materializeWorkflowHatchSdk
-    )(root);
+    await materializeAppHatchSdk(root);
     await toolchain.install();
-    return (
-      await toolchain.evaluateManifest((raw) =>
-        kind === 'app'
-          ? parseSourceManifest(raw)
-          : parseSourceWorkflowManifest(raw),
-      )
-    ).manifest;
+    return (await toolchain.evaluateManifest(parseSourceManifest)).manifest;
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

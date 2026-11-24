@@ -4,7 +4,6 @@ import {
   AppService,
   type CreateAppRequest,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
-import { WorkflowService } from '../../hatch-platform-api/gen/hatch/platform/v1/workflow_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { fromJson } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
@@ -53,6 +52,8 @@ let createRequests: unknown[];
 /** Extra scaffold files, layered over the default fixture. */
 let scaffoldFiles: Record<string, string>;
 let sdkTooling: Record<string, string> | undefined;
+/** PATH entry holding a pnpm that matches the platform's major version. */
+let tools: string;
 const PNPM_LOCKFILE = `lockfileVersion: '9.0'
 
 settings:
@@ -98,7 +99,13 @@ function createResource(
     name: 'Fixture',
     files: Object.entries({
       'package.json': '{"type":"module","dependencies":{}}',
-      'manifest.ts': 'export default {id:"immutable", compatibilityVersion:1};',
+      'manifest.json': JSON.stringify({
+        id: 'immutable',
+        name: 'Fixture',
+        compatibilityVersion: 1,
+        capabilities: {},
+      }),
+      'pnpm-lock.yaml': PNPM_LOCKFILE,
       ...scaffoldFiles,
     }).map(([path, content]) => ({ path, content: Buffer.from(content) })),
   };
@@ -117,11 +124,7 @@ const rpc = connectNodeAdapter({
         appId: 'immutable',
         association: 'not-applicable',
       }),
-    });
-    router.service(WorkflowService, {
-      createWorkflow: createResource,
-      getWorkflow: () => ({ resource: getResource() }),
-      deployWorkflow: async (data) => {
+      deployApp: async (data) => {
         deploys++;
         deployedCommits.push(data.commit);
         released = data.commit ?? null;
@@ -134,8 +137,6 @@ const rpc = connectNodeAdapter({
               id: 'immutable',
               name: 'Fixture',
               description: '',
-              entry: 'workflow.ts',
-              triggers: { cron: [], webhook: { enabled: false, url: null } },
             }),
           },
         };
@@ -199,11 +200,11 @@ function gitHttp(request: IncomingMessage, response: ServerResponse) {
   child.stdout.pipe(response);
 }
 const server = createServer(async (request, response) => {
-  if (request.url?.startsWith('/api/git/workflow/immutable.git/')) {
+  if (request.url?.startsWith('/api/git/app/immutable.git/')) {
     gitHttp(request, response);
     return;
   }
-  if (loseResponse && request.url?.endsWith('/DeployWorkflow')) {
+  if (loseResponse && request.url?.endsWith('/DeployApp')) {
     deploys++;
     request.socket.destroy();
     return;
@@ -218,6 +219,7 @@ function run(args: string[], extra: NodeJS.ProcessEnv = {}) {
     HATCH_CLI_TOKEN: token,
     HATCH_CLI_API_KEY: undefined,
     FORCE_COLOR: undefined,
+    PATH: `${tools}${delimiter}${process.env.PATH}`,
     ...extra,
   };
   const child = spawn(
@@ -257,7 +259,7 @@ async function create() {
   const file = join(directory, 'input.json');
   await writeFile(file, '{"slug":"fixture","name":"Fixture","pin":false}');
   const result = await run([
-    'workflow',
+    'app',
     'create',
     '--file',
     file,
@@ -333,7 +335,25 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     resourceSlug = 'fixture';
     createRequests = [];
     scaffoldFiles = {};
-    sdkTooling = undefined;
+    sdkTooling = NODE_TOOLING;
+    // App preparation installs with pnpm; this one only reports its version.
+    tools = join(directory, 'tools');
+    await mkdir(tools);
+    await writeFile(
+      join(tools, 'pnpm.cjs'),
+      `if (process.argv.includes('--version')) console.log(${JSON.stringify(NODE_TOOLING.pnpmVersion)});\n`,
+    );
+    if (process.platform === 'win32')
+      await writeFile(
+        join(tools, 'pnpm.cmd'),
+        '@echo off\r\nnode "%~dp0pnpm.cjs" %*\r\n',
+      );
+    else
+      await writeFile(
+        join(tools, 'pnpm'),
+        `#!/bin/sh\nexec "${process.execPath}" "${join(tools, 'pnpm.cjs')}" "$@"\n`,
+        { mode: 0o755 },
+      );
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
     );
@@ -344,71 +364,61 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     await rm(directory, { recursive: true, force: true });
     await rm(remote, { recursive: true, force: true });
   });
-  it.each(['app', 'workflow'])(
-    'creates a %s with a digit-leading slug in the default directory',
-    async (kind) => {
-      const input = {
-        slug: `123-test-${kind}`,
-        name: 'Test resource',
-        pin: false,
-      };
-      const file = join(directory, 'input.json');
-      await writeFile(file, JSON.stringify(input));
+  it('creates an App with a digit-leading slug in the default directory and keeps it when preparation fails', async () => {
+    const input = { slug: '123-test-app', name: 'Test resource', pin: false };
+    const file = join(directory, 'input.json');
+    await writeFile(file, JSON.stringify(input));
+    // Without the platform's pnpm toolchain preparation fails. Registration
+    // must succeed, then preparation must retain its checkout.
+    sdkTooling = undefined;
 
-      const result = await run([
-        kind,
-        'create',
-        '--file',
-        file,
-        '--workdir',
-        directory,
-      ]).result;
+    const result = await run([
+      'app',
+      'create',
+      '--file',
+      file,
+      '--workdir',
+      directory,
+    ]).result;
 
-      // This fixture intentionally has no authored Deno configuration. App
-      // registration must succeed, then preparation must retain its checkout.
-      assert.equal(result.code, kind === 'app' ? 6 : 0, JSON.stringify(result));
-      expect(createRequests).toEqual([input]);
-      const root = join(directory, input.slug);
-      expect(
-        kind === 'app' ? result.data.error.message : result.data.directory,
-      ).toContain(await realpath(root));
-      expect(
-        JSON.parse(await readFile(join(root, '.git/hatch-cli.json'), 'utf8')),
-      ).toMatchObject({ kind, id: 'immutable' });
-      expect(git(root, 'log', '-1', '--format=%s')).toBe('Initialize scaffold');
-      expect(await readFile(join(root, '.hatch/import-map.json'), 'utf8')).toBe(
-        '{"imports":{}}',
-      );
-    },
-  );
-  it.each(['app', 'workflow'])(
-    'rejects unsafe %s slugs before creating remote or local state',
-    async (kind) => {
-      const file = join(directory, 'input.json');
-      await writeFile(
-        file,
-        JSON.stringify({ slug: '../123-test-resource', name: 'Test resource' }),
-      );
+    assert.equal(result.code, 6, JSON.stringify(result));
+    expect(result.data.error.code).toBe('app_preparation_failed');
+    expect(createRequests).toEqual([input]);
+    const root = join(directory, input.slug);
+    expect(result.data.error.message).toContain(await realpath(root));
+    expect(
+      JSON.parse(await readFile(join(root, '.git/hatch-cli.json'), 'utf8')),
+    ).toMatchObject({ kind: 'app', id: 'immutable' });
+    expect(git(root, 'log', '-1', '--format=%s')).toBe('Initialize scaffold');
+    expect(await readFile(join(root, '.hatch/import-map.json'), 'utf8')).toBe(
+      '{"imports":{}}',
+    );
+  });
+  it('rejects unsafe App slugs before creating remote or local state', async () => {
+    const file = join(directory, 'input.json');
+    await writeFile(
+      file,
+      JSON.stringify({ slug: '../123-test-resource', name: 'Test resource' }),
+    );
 
-      const result = await run([
-        kind,
-        'create',
-        '--file',
-        file,
-        '--workdir',
-        directory,
-      ]).result;
+    const result = await run([
+      'app',
+      'create',
+      '--file',
+      file,
+      '--workdir',
+      directory,
+    ]).result;
 
-      expect(result.data.error.code).toBe('invalid_input');
-      expect(createRequests).toEqual([]);
-      expect(await readdir(directory)).toEqual(['input.json']);
-    },
-  );
+    expect(result.data.error.code).toBe('invalid_input');
+    expect(createRequests).toEqual([]);
+    expect((await readdir(directory)).sort()).toEqual(['input.json', 'tools']);
+  });
   it('rejects malformed create field types before a remote mutation', async () => {
     const file = join(directory, 'input.json');
     await writeFile(file, JSON.stringify({ slug: 'valid-slug', name: 42 }));
     const result = await run([
-      'workflow',
+      'app',
       'create',
       '--file',
       file,
@@ -423,34 +433,39 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     const root = await create();
     await publish(root);
     expect(
-      (
-        await run(['workflow', 'clone', 'immutable', '--directory', root])
-          .result
-      ).code,
+      (await run(['app', 'clone', 'immutable', '--directory', root]).result)
+        .code,
     ).toBe(6);
     await writeFile(join(root, 'local.txt'), 'local work');
     expect(
-      (await run(['workflow', 'update', '--directory', root]).result).data.error
+      (await run(['app', 'update', '--directory', root]).result).data.error
         .code,
     ).toBe('dirty_workspace');
     expect(await readFile(join(root, 'local.txt'), 'utf8')).toBe('local work');
     commit(root, 'Keep local work');
     generation = new Date(Date.now() + 1000).toISOString();
     expect(
-      (await run(['workflow', 'deploy', '--directory', root]).result).data.error
+      (await run(['app', 'deploy', '--directory', root]).result).data.error
         .code,
     ).toBe('RESOURCE_GENERATION_CONFLICT');
     expect(deploys).toBe(0);
     const metadata = JSON.parse(
       await readFile(join(root, '.git/hatch-cli.json'), 'utf8'),
     );
-    metadata.url = 'https://another.example.test';
-    await writeFile(
-      join(root, '.git/hatch-cli.json'),
-      JSON.stringify(metadata),
-    );
+    const bind = (value: Record<string, unknown>) =>
+      writeFile(
+        join(root, '.git/hatch-cli.json'),
+        JSON.stringify({ ...metadata, ...value }),
+      );
+    await bind({ url: 'https://another.example.test' });
     expect(
-      (await run(['workflow', 'update', '--directory', root]).result).data.error
+      (await run(['app', 'update', '--directory', root]).result).data.error
+        .code,
+    ).toBe('workspace_instance_mismatch');
+    // Only App checkouts exist; a checkout of any other kind is refused.
+    await bind({ kind: 'workflow' });
+    expect(
+      (await run(['app', 'update', '--directory', root]).result).data.error
         .code,
     ).toBe('workspace_instance_mismatch');
   });
@@ -459,16 +474,14 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     await publish(root);
     const clone = join(directory, 'clone');
     expect(
-      (
-        await run(['workflow', 'clone', 'immutable', '--directory', clone])
-          .result
-      ).code,
+      (await run(['app', 'clone', 'immutable', '--directory', clone]).result)
+        .code,
     ).toBe(0);
     await writeFile(join(root, 'remote.txt'), 'remote');
     commit(root, 'Remote');
     await publish(root);
     expect(
-      (await run(['workflow', 'update', '--directory', clone]).result).code,
+      (await run(['app', 'update', '--directory', clone]).result).code,
     ).toBe(0);
     expect(git(clone, 'rev-parse', 'HEAD')).toBe(master);
     await writeFile(join(clone, 'local.txt'), 'local');
@@ -478,15 +491,14 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     commit(root, 'Other');
     await publish(root);
     expect(
-      (await run(['workflow', 'update', '--directory', clone]).result).data
-        .error.code,
+      (await run(['app', 'update', '--directory', clone]).result).data.error
+        .code,
     ).toBe('non_fast_forward');
     expect(git(clone, 'rev-parse', 'HEAD')).toBe(local);
     expect(git(clone, 'rev-parse', 'origin/master')).toBe(master);
     // A push from the diverged checkout is refused the same way.
     expect(
-      (await run(['workflow', 'push', '--directory', clone]).result).data.error
-        .code,
+      (await run(['app', 'push', '--directory', clone]).result).data.error.code,
     ).toBe('non_fast_forward');
     expect(remoteMaster()).toBe(master);
   });
@@ -495,18 +507,17 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     const first = git(root, 'rev-parse', 'HEAD');
     // Uncommitted work neither blocks a push nor is sent.
     await writeFile(join(root, 'draft.txt'), 'uncommitted');
-    const pushed = await run(['workflow', 'push', '--directory', root]).result;
+    const pushed = await run(['app', 'push', '--directory', root]).result;
     expect(pushed.data).toMatchObject({ commit: first, state: 'pushed' });
     expect(remoteMaster()).toBe(first);
     expect(
-      (await run(['workflow', 'push', '--directory', root]).result).data.state,
+      (await run(['app', 'push', '--directory', root]).result).data.state,
     ).toBe('up-to-date');
     expect(deploys).toBe(0);
 
     commit(root, 'Second');
     const second = git(root, 'rev-parse', 'HEAD');
-    const deployed = await run(['workflow', 'deploy', '--directory', root])
-      .result;
+    const deployed = await run(['app', 'deploy', '--directory', root]).result;
     expect(deployed.data).toMatchObject({
       sourceCommit: second,
       pushState: 'pushed',
@@ -517,7 +528,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     await writeFile(join(root, 'third.txt'), 'local only');
     commit(root, 'Third');
     const older = await run([
-      'workflow',
+      'app',
       'deploy',
       '--directory',
       root,
@@ -535,10 +546,8 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       ['--commit', first, '--reconcile'],
     ])
       expect(
-        (
-          await run(['workflow', 'deploy', '--directory', root, ...extra])
-            .result
-        ).data.error.code,
+        (await run(['app', 'deploy', '--directory', root, ...extra]).result)
+          .data.error.code,
       ).toBe('invalid_arguments');
     expect(deploys).toBe(2);
   });
@@ -553,12 +562,11 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     // A rollback rewinds platform master to the restored release.
     git(remote, 'update-ref', 'refs/heads/master', first);
 
-    const updated = await run(['workflow', 'update', '--directory', root])
-      .result;
+    const updated = await run(['app', 'update', '--directory', root]).result;
     expect(updated.data).toMatchObject({ state: 'ahead', headCommit: next });
     expect(git(root, 'rev-parse', 'origin/master')).toBe(first);
     expect(
-      (await run(['workflow', 'push', '--directory', root]).result).data.state,
+      (await run(['app', 'push', '--directory', root]).result).data.state,
     ).toBe('pushed');
     expect(remoteMaster()).toBe(next);
   });
@@ -567,7 +575,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     async () => {
       const root = await create();
       await publish(root);
-      const url = `${origin}/api/git/workflow/immutable.git`;
+      const url = `${origin}/api/git/app/immutable.git`;
       expect(git(root, 'remote', 'get-url', 'origin')).toBe(url);
       expect(await readFile(join(root, '.git/config'), 'utf8')).not.toContain(
         token,
@@ -632,7 +640,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       const clone = join(directory, 'clone');
       const cloned = await run(
         [
-          'workflow',
+          'app',
           'clone',
           'immutable',
           '--directory',
@@ -658,13 +666,13 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     await mkdir(target);
     await writeFile(join(target, 'local.txt'), 'valuable work');
     expect(
-      (await run(['workflow', 'clone', 'immutable', '--force']).result).data
-        .error.code,
+      (await run(['app', 'clone', 'immutable', '--force']).result).data.error
+        .code,
     ).toBe('invalid_arguments');
     expect(
       (
         await run([
-          'workflow',
+          'app',
           'clone',
           'immutable',
           '--directory',
@@ -677,33 +685,21 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     ).toBe('unsafe_target');
     expect(
       (
-        await run([
-          'workflow',
-          'clone',
-          'immutable',
-          '--directory',
-          '/',
-          '--force',
-        ]).result
+        await run(['app', 'clone', 'immutable', '--directory', '/', '--force'])
+          .result
       ).data.error.code,
     ).toBe('unsafe_target');
     const link = join(directory, 'linked');
     await symlink(target, link);
     expect(
       (
-        await run([
-          'workflow',
-          'clone',
-          'immutable',
-          '--directory',
-          link,
-          '--force',
-        ]).result
+        await run(['app', 'clone', 'immutable', '--directory', link, '--force'])
+          .result
       ).data.error.code,
     ).toBe('unsafe_target');
     sdkFailure = true;
     const failed = await run([
-      'workflow',
+      'app',
       'clone',
       'immutable',
       '--directory',
@@ -716,7 +712,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     );
     sdkFailure = false;
     const replaced = await run([
-      'workflow',
+      'app',
       'clone',
       'immutable',
       '--directory',
@@ -732,28 +728,26 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     const root = await create();
     loseResponse = true;
     expect(
-      (await run(['workflow', 'deploy', '--directory', root]).result).code,
+      (await run(['app', 'deploy', '--directory', root]).result).code,
     ).toBe(7);
     const pending = JSON.parse(
       await readFile(join(root, '.git/hatch-cli.json'), 'utf8'),
     ).pending;
     expect(pending.commit).toBe(git(root, 'rev-parse', 'HEAD'));
     expect(
-      (await run(['workflow', 'deploy', '--directory', root]).result).data.error
+      (await run(['app', 'deploy', '--directory', root]).result).data.error
         .code,
     ).toBe('deployment_outcome_unknown');
     expect(
-      (
-        await run(['workflow', 'deploy', '--directory', root, '--reconcile'])
-          .result
-      ).data.state,
+      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
+        .data.state,
     ).toBe('outcome-unresolved');
     expect(deploys).toBe(1);
     loseResponse = false;
     expect(
       (
         await run([
-          'workflow',
+          'app',
           'deploy',
           '--directory',
           root,
@@ -785,10 +779,10 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       started();
       return waiting;
     };
-    const updating = run(['workflow', 'update', '--directory', root]);
+    const updating = run(['app', 'update', '--directory', root]);
     await startedPromise;
     expect(
-      (await run(['workflow', 'deploy', '--directory', root]).result).data.error
+      (await run(['app', 'deploy', '--directory', root]).result).data.error
         .code,
     ).toBe('workspace_locked');
     if (process.platform !== 'win32') updating.child.kill('SIGINT');
@@ -836,12 +830,12 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
           ),
     };
   }
-  async function createWorkflow(env: NodeJS.ProcessEnv) {
+  async function createApp(env: NodeJS.ProcessEnv) {
     const input = join(directory, 'input.json');
     await writeFile(input, '{"slug":"fixture","name":"Fixture"}');
     return run(
       [
-        'workflow',
+        'app',
         'create',
         '--file',
         input,
@@ -851,17 +845,15 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       env,
     ).result;
   }
-  it('reproduces a pnpm-lockfile Workflow with the install the platform runs at deploy', async () => {
-    scaffoldFiles = { 'pnpm-lock.yaml': PNPM_LOCKFILE };
-    sdkTooling = NODE_TOOLING;
+  it('reproduces a pnpm-lockfile App with the install the platform runs at deploy', async () => {
     const pnpm = await recordingPnpm('12.4.0');
 
-    const result = await createWorkflow(pnpm.env);
+    const result = await createApp(pnpm.env);
 
     assert.equal(result.code, 0, JSON.stringify(result));
     const calls = await pnpm.calls();
     // Frozen and offline after the fetch, with the platform's own argument
-    // lists: no editor-only `--lockfile=false` install.
+    // lists. A manifest.json needs no TypeScript or esbuild run.
     expect(calls.map((call) => call.args)).toEqual([
       ['--pm-on-fail=ignore', '--version'],
       pnpmFetchArgs(),
@@ -873,16 +865,14 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       expect(call.configHome).not.toBe(process.env.XDG_CONFIG_HOME);
     }
   });
-  it('refuses to prepare a pnpm-lockfile Workflow with another pnpm major', async () => {
-    scaffoldFiles = { 'pnpm-lock.yaml': PNPM_LOCKFILE };
-    sdkTooling = NODE_TOOLING;
+  it('refuses to prepare a pnpm-lockfile App with another pnpm major', async () => {
     const pnpm = await recordingPnpm('9.15.0');
 
-    const result = await createWorkflow(pnpm.env);
+    const result = await createApp(pnpm.env);
 
     expect(result.code).toBe(6);
     expect(result.data.error).toMatchObject({
-      code: 'workflow_preparation_failed',
+      code: 'app_preparation_failed',
       message: expect.stringContaining(
         'pnpm 9.15.0 cannot reproduce this source. Install pnpm 12',
       ),
@@ -894,8 +884,6 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
   it.skipIf(process.platform === 'win32')(
     'reports a missing pnpm as a tool failure, not as a source conflict',
     async () => {
-      scaffoldFiles = { 'pnpm-lock.yaml': PNPM_LOCKFILE };
-      sdkTooling = NODE_TOOLING;
       // A PATH that holds git and nothing else.
       const bin = join(directory, 'bin');
       await mkdir(bin);
@@ -904,13 +892,13 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
         join(bin, 'git'),
       );
 
-      const result = await createWorkflow({ PATH: bin });
+      const result = await createApp({ PATH: bin });
 
       expect(result.code).toBe(7);
       expect(result.data.error).toMatchObject({
         code: 'tool_unavailable',
         message: expect.stringContaining(
-          'Workflow preparation failed during dependency install',
+          'App preparation failed during dependency install',
         ),
       });
     },
@@ -932,20 +920,19 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     [
       'carries a pnpm hook',
       { 'pnpm-lock.yaml': PNPM_LOCKFILE, '.pnpmfile.cjs': 'module.exports={}' },
-      'workflow sources cannot include .pnpmfile.cjs',
+      'app sources cannot include .pnpmfile.cjs',
     ],
   ])(
-    'rejects a Workflow that %s before running pnpm',
+    'rejects an App that %s before running pnpm',
     async (_label, files, message) => {
       scaffoldFiles = files;
-      sdkTooling = NODE_TOOLING;
       const pnpm = await recordingPnpm('12.22.0');
 
-      const result = await createWorkflow(pnpm.env);
+      const result = await createApp(pnpm.env);
 
       expect(result.code).toBe(6);
       expect(result.data.error).toMatchObject({
-        code: 'workflow_preparation_failed',
+        code: 'app_preparation_failed',
         message: expect.stringContaining(message),
       });
       expect(await pnpm.calls()).toEqual([]);
@@ -970,14 +957,15 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       '#!/usr/bin/env node\n' +
         "require('node:fs').writeFileSync(" +
         JSON.stringify(captured) +
-        ', JSON.stringify(Object.keys(process.env).filter(key => /TOKEN|SECRET|API_KEY|DATABASE_URL/.test(key))));\n',
+        ', JSON.stringify(Object.keys(process.env).filter(key => /TOKEN|SECRET|API_KEY|DATABASE_URL/.test(key))));\n' +
+        `if (process.argv.includes('--version')) console.log(${JSON.stringify(NODE_TOOLING.pnpmVersion)});\n`,
       { mode: 0o755 },
     );
     const input = join(directory, 'input.json');
     await writeFile(input, '{"slug":"fixture","name":"Fixture"}');
     const result = await run(
       [
-        'workflow',
+        'app',
         'create',
         '--file',
         input,
@@ -999,12 +987,12 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     'rejects tracked symlinks and leaves source unchanged',
     async () => {
       const root = await create();
-      await symlink('manifest.ts', join(root, 'link'));
+      await symlink('manifest.json', join(root, 'link'));
       commit(root, 'Symlink');
       const head = git(root, 'rev-parse', 'HEAD');
       expect(
-        (await run(['workflow', 'deploy', '--directory', root]).result).data
-          .error.code,
+        (await run(['app', 'deploy', '--directory', root]).result).data.error
+          .code,
       ).toBe('unsafe_source');
       expect(git(root, 'rev-parse', 'HEAD')).toBe(head);
       expect(deploys).toBe(0);

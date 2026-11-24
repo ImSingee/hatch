@@ -280,7 +280,7 @@ A rounded square. Sizes: 22 (radius 6), 26 widget header (radius 9,
   border, shadow or background of its own. Generated icons are one object
   (glossy 3D, frosted glass or a white line drawing) on a top-lit gradient of
   a palette colour (`docs/app-icons.md`).
-- Without one (and for Workflows, which have no icons): a monogram, the first
+- Without one: a monogram, the first
   character of the name, white 800 on one of `tiles`, chosen by a stable hash
   of the id, under the `tileLight` overlay. Text from 12 at 22
   up to 26 at 72.
@@ -338,9 +338,6 @@ bar.
   dot under the name, or 5 under the tile when names are hidden.
 - A tile has no button of its own: its actions are in the dock's right-click
   menu (a long press on touch, Shift+F10 or the Menu key from the keyboard).
-- Workflow tiles use radius `12 12 12 3` to differ from App tiles by shape.
-- The groups carry no labels; a hairline divider separates Apps from
-  Workflows.
 - Once anything is pinned, the Apps group ends with an All apps tile that is
   not a pin: four 10 dots (teal, orange, violet, blue, shade 6) on a white
   tile with the `card` shadow. It is never dragged and stays visible when the
@@ -349,8 +346,7 @@ bar.
   labelled like any tile. Only an empty Apps group shows it, so a dock with
   no pins shows this tile alone. Otherwise adding lives in the dock's
   right-click menu: the clicked pin's own actions (Edit, Unpin, Manage),
-  then Add an app ›, Add a workflow › and New with Agent. The Workflows
-  group, with its divider, shows only while a Workflow is pinned.
+  then Add an app › and New with Agent.
 - The dock itself: `surfaces.dock` fill with blur, 1 px white border, radius
   28 (`radius.dock`), `dock` shadow, padding 14 18 8 with names and
   14 18 5 without, so the space above the tiles matches the space under the

@@ -67,16 +67,16 @@ vi.mock('~queries/agent', () => ({
   }),
 }));
 
+vi.mock('~queries/agent-preferences', () => ({
+  agentPreferencesQueryOptions: (userId: string) => ({
+    queryKey: ['test-agent-preferences', userId],
+    queryFn: async () => ({ userId, messageMode: 'steer' }),
+  }),
+}));
+
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: { queryKey: ['scroll-test-apps'], queryFn: async () => [] },
 }));
-vi.mock('~queries/workflows', () => ({
-  workflowsQueryOptions: {
-    queryKey: ['scroll-test-workflows'],
-    queryFn: async () => [],
-  },
-}));
-
 // Keep the production router configuration and Chat; replace only unrelated
 // platform routes and server-backed data with an isolated browser fixture.
 vi.mock('~/routeTree.gen', async () => {

@@ -1,6 +1,6 @@
 ---
 name: building-apps
-description: Design, build, validate, and deploy Hatch Apps with React frontends, Connect/Deno backends, widgets, managed Data Tables, storage, and integrations. Use whenever creating, modifying, debugging, or deploying an App.
+description: Design, build, validate, and deploy Hatch Apps with React frontends, Connect/Deno backends, widgets, managed Data Tables, storage, integrations, and App icons. Use whenever creating, modifying, debugging, or deploying an App, or designing, changing, or removing its icon.
 ---
 
 # Build a Hatch App
@@ -61,8 +61,10 @@ Do not import generated files or execution modules from the manifest.
    deploy leaves that commit on `master` unreleased: fix the failure, validate
    again, commit on top, and redeploy.
 7. Call `get_app` to confirm the deployed state, then explain how to open it.
-8. After the first successful deployment of a new App, offer once to design
-   its icon and follow the `app-icon` Skill if the user agrees.
+8. After the first successful deployment of a new App, end that same reply by
+   offering once, in one sentence, to design its icon. Do not skip this step.
+   If the user agrees, follow [App icons](references/app-icon.md). Generate
+   images only after the user agrees.
 
 If deploy says `master` advanced, refresh the same checkout, run
 `git fetch origin master`, rebase onto `origin/master`, resolve conflicts, and
@@ -181,8 +183,8 @@ Runtime selection is preserved in each deployment artifact and on rollback.
 Give an App page its own address with hash routing: the web host at
 `/app/<slug>#<route>` and pins pass `<route>` to the App. Link to Hatch pages
 with same-origin paths: `/app/<slug>#<route>` (another App, or this one at a
-route), `/agent/<session id>`, `/workflow/<slug>`, `/dashboard/<id>`,
-`/notifications/log/<id>`. In the Hatch phone app these links open the matching
+route), `/agent/<session id>`, `/dashboard/<id>`, `/notifications/log/<id>`. In the
+Hatch phone app these links open the matching
 native page; `hatch://<same path>` names the same page from outside Hatch.
 Follow them as normal links in the same window: `target="_blank"` and
 `window.open` always leave for the system browser, and navigation a page
@@ -290,7 +292,7 @@ arbitrary networking. Compatibility v1 and v2 still accept an omitted
 `network` and run it unrestricted; never omit it from new source.
 
 The platform automatically adds only the backend's exact loopback listener
-plus enabled Database, Data Tables, KV, Notifications, and Workflow endpoints. These platform
+plus enabled Database, Data Tables, KV, Notifications, and task endpoints. These platform
 channels do not need to appear in the manifest. In `"deno-run"` mode, bind to
 `127.0.0.1:${PORT}`, not `0.0.0.0`, `::`, or an unspecified host. In
 `"deno-serve"` mode, Hatch supplies the loopback host and port. Every other
@@ -299,11 +301,11 @@ destination must be declared.
 ### Extra Deno permissions
 
 1. Declare `extraPermissions` **only when strictly necessary**. If platform
-   capabilities (network, storage, database, KV, Data Tables, Workflow calls,
+   capabilities (network, storage, database, KV, Data Tables, App tasks,
    or a pure JS/Wasm implementation) can achieve the goal, you must not use it.
 2. **Obtain explicit user authorization before writing the declaration or
    deploying.** Explain the exact flags, why each is necessary, and the risks:
-   Apps, Workflows, and the platform share the same OS user; these permissions
+   Apps and the platform share the same OS user; these permissions
    are equivalent to host access and can expose platform credentials and other
    Apps' data. Without explicit consent, do not write the flags into a manifest
    or deploy them. Adding, broadening, or modifying an existing declaration
@@ -531,7 +533,7 @@ Read only the reference relevant to the requested capability:
   Connect clients, App-scoped browser storage, responsive widget sizing, and
   refresh behavior.
 - [Backend integrations](references/backend-integrations.md): Connect backend,
-  cron authentication, webhooks, long-running mode, and workflow calls.
+  cron authentication, webhooks, long-running mode, and enqueuing tasks.
   Webhooks always strip Authorization and x-api-key (all casing), including
   `auth: none`; they cannot carry App-private authentication. Use a dedicated
   nonreserved header such as X-App-Token or a raw-body provider signature.
@@ -550,6 +552,10 @@ Read only the reference relevant to the requested capability:
   new scheduled or triggered jobs.
 - [Data and storage](references/data-storage.md): Postgres, Storage, KV, runtime
   assets, and Data Table query/mutation details.
+- [App icons](references/app-icon.md): design candidate icons with an image
+  model and let the user choose, upload a user-supplied file, or remove the
+  icon (`hatch app icon`). Read it whenever the user asks for an App icon or
+  logo, and after the user accepts the icon offer from Core workflow step 8.
 - [Notifications](references/backend-integrations.md#notifications): declare
   notification kinds, push with `notify()` from `@hatch/app/notifications`
   (edit or recall later with `updateNotification` / `recallNotification`, or

@@ -10,7 +10,7 @@ import {
 import {
   SDK_DENO_TYPES,
   SDK_DENO_TYPES_LICENSE,
-  sdkDefinitionsFor,
+  SDK_DEFINITIONS,
   sdkImports,
   sdkToolchainFiles,
 } from '../../../sdk-internal/definitions';
@@ -19,8 +19,8 @@ import {
 // the source repository are not part of the public SDK delivery contract.
 const builtFiles = import.meta.glob<string>(
   [
-    '../../../sdk-internal/{app,data,workflow}/package.json',
-    '../../../sdk-internal/{app,data,workflow}/dist/**/*',
+    '../../../sdk-internal/{app,data}/package.json',
+    '../../../sdk-internal/{app,data}/dist/**/*',
   ],
   { eager: true, query: '?raw', import: 'default' },
 );
@@ -57,8 +57,8 @@ export function platformTooling() {
   };
 }
 
-export async function sdkPayload(kind: 'app' | 'workflow') {
-  const definitions = sdkDefinitionsFor(kind);
+export async function sdkPayload() {
+  const definitions = SDK_DEFINITIONS;
   const files: { path: string; contentBase64: string }[] = [];
   for (const definition of definitions) {
     const prefix = `../../../sdk-internal/${definition.directory}/`;
@@ -79,23 +79,20 @@ export async function sdkPayload(kind: 'app' | 'workflow') {
       JSON.stringify({ imports: sdkImports(definitions) }, null, 2),
     ).toString('base64'),
   });
-  if (kind === 'app')
-    files.push(
-      {
-        path: 'buf.gen.yaml',
-        contentBase64: Buffer.from(PLATFORM_APP_BUF_GEN_YAML).toString(
-          'base64',
-        ),
-      },
-      {
-        path: APP_TASK_OPTIONS_PROTO_FILE,
-        contentBase64: Buffer.from(APP_TASK_OPTIONS_PROTO).toString('base64'),
-      },
-    );
+  files.push(
+    {
+      path: 'buf.gen.yaml',
+      contentBase64: Buffer.from(PLATFORM_APP_BUF_GEN_YAML).toString('base64'),
+    },
+    {
+      path: APP_TASK_OPTIONS_PROTO_FILE,
+      contentBase64: Buffer.from(APP_TASK_OPTIONS_PROTO).toString('base64'),
+    },
+  );
   // Generated configuration is delivered, not rebuilt by the client, so the
   // platform, the Runner and the CLI check a source against the same bytes.
   for (const [file, contents] of Object.entries({
-    ...sdkToolchainFiles(kind),
+    ...sdkToolchainFiles(),
     [SDK_DENO_TYPES]: denoTypesFile('index.d.ts'),
     [SDK_DENO_TYPES_LICENSE]: denoTypesFile('LICENSE'),
   }))

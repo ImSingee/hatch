@@ -35,8 +35,9 @@ message GetWorkspaceResponse {
   repeated DashboardSummary dashboards = 1;
   // Preserve server order and duplicate App entries; excludes archived Apps.
   repeated AppPin app_pins = 2;
-  // Web sidebar order; excludes archived Workflows.
-  repeated string pinned_workflow_ids = 3;
+  // Removed with Workflows.
+  reserved 3;
+  reserved "pinned_workflow_ids";
 }
 
 message SetDashboardAutoRefreshRequest {

@@ -60,7 +60,8 @@ async function findUser(userId: string) {
 
 export async function getUserAvatar(userId: string): Promise<UserAvatarView> {
   const user = await findUser(userId);
-  if (!user) throw new AppError('User not found.', 404);
+  if (!user)
+    throw new AppError('User not found.', 404, { code: 'users.notFound' });
   return avatarView(user.id, userAvatarKey(user.id, user.image));
 }
 
@@ -103,14 +104,19 @@ export async function setUserAvatar(
 ): Promise<UserAvatarView> {
   const dir = avatarDir(userId);
   if (!dir || !(await findUser(userId)))
-    throw new AppError('User not found.', 404);
-  const encoded = await encodeSquareImage(bytes, 'Avatar', USER_AVATAR_SIZES);
+    throw new AppError('User not found.', 404, { code: 'users.notFound' });
+  const encoded = await encodeSquareImage(
+    bytes,
+    'Avatar',
+    USER_AVATAR_SIZES,
+    'account.avatar',
+  );
   const key = await writeSquareImage(dir, encoded);
   const previous = await swapAvatarKey(userId, key);
   if (previous === undefined) {
     // The user was deleted meanwhile; leave nothing behind.
     await removeAvatarKeyFiles(dir, key);
-    throw new AppError('User not found.', 404);
+    throw new AppError('User not found.', 404, { code: 'users.notFound' });
   }
   await removeAvatarKeyFiles(dir, previous);
   return avatarView(userId, key);
@@ -120,7 +126,7 @@ export async function clearUserAvatar(userId: string): Promise<UserAvatarView> {
   const dir = avatarDir(userId);
   const previous = dir ? await swapAvatarKey(userId, null) : undefined;
   if (!dir || previous === undefined)
-    throw new AppError('User not found.', 404);
+    throw new AppError('User not found.', 404, { code: 'users.notFound' });
   await removeAvatarKeyFiles(dir, previous);
   return avatarView(userId, null);
 }

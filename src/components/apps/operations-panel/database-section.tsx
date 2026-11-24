@@ -1,6 +1,7 @@
 import { ActionIcon, Box, Group, Stack, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { IconDatabase, IconTrash } from '@tabler/icons-react';
+import { useI18n } from '~i18n';
 import { DeleteDatabaseForm } from './delete-database-form';
 import { SectionHeader, StatusDot } from './section-header';
 
@@ -20,6 +21,7 @@ export function DatabaseSection({
   database: DatabaseOperationState;
   onDelete: (dbName: string, appName: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const { enabled, dbName } = database;
   if (!enabled && !dbName) return null;
 
@@ -28,7 +30,7 @@ export function DatabaseSection({
     const modalId = `delete-app-database-${appId}`;
     modals.open({
       modalId,
-      title: 'Delete database?',
+      title: t('ops.database.deleteTitle'),
       centered: true,
       children: (
         <DeleteDatabaseForm
@@ -47,12 +49,12 @@ export function DatabaseSection({
         <Box style={{ minWidth: 0 }}>
           <SectionHeader
             icon={<IconDatabase size={16} stroke={1.8} />}
-            title="Database"
+            title={t('ops.database.title')}
             meta={
               <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
                 <StatusDot active={enabled} />
                 <Text size="xs" c="dimmed">
-                  {enabled ? 'Enabled' : 'Disabled'}
+                  {enabled ? t('common.enabled') : t('common.disabled')}
                 </Text>
                 <Text size="xs" c="dimmed">
                   ·
@@ -63,7 +65,7 @@ export function DatabaseSection({
                   </Text>
                 ) : (
                   <Text size="xs" c="dimmed">
-                    not provisioned
+                    {t('ops.database.notProvisionedStatus')}
                   </Text>
                 )}
               </Group>
@@ -71,12 +73,12 @@ export function DatabaseSection({
           />
         </Box>
         {!enabled && dbName ? (
-          <Tooltip label="Delete database" withArrow position="top">
+          <Tooltip label={t('ops.database.delete')} withArrow position="top">
             <ActionIcon
               variant="subtle"
               color="red"
               size="sm"
-              aria-label={`Delete database ${dbName}`}
+              aria-label={t('ops.database.deleteLabel', { name: dbName })}
               onClick={confirmDelete}
             >
               <IconTrash size={15} stroke={1.8} />
@@ -87,9 +89,9 @@ export function DatabaseSection({
       <Text size="xs" c="dimmed">
         {enabled
           ? dbName
-            ? 'A dedicated Postgres database for this app.'
-            : 'A dedicated Postgres database is provisioned during deployment.'
-          : 'Database capability is disabled. This retained database is not injected into the app backend.'}
+            ? t('ops.database.dedicated')
+            : t('ops.database.provisionedOnDeploy')
+          : t('ops.database.disabledNote')}
       </Text>
     </Stack>
   );

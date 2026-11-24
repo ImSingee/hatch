@@ -19,7 +19,7 @@ export type PlatformEvent =
     }
   /** The instance theme changed; clients re-read it. */
   | { type: 'theme.updated'; accent: string }
-  /** App, Workflow or dashboard pins changed; clients re-read them. */
+  /** App or dashboard pins changed; clients re-read them. */
   | { type: 'pins.updated' }
   /**
    * A dashboard, its settings or its widgets changed; clients re-read it.

@@ -31,8 +31,24 @@
 }
 
 .mode {
+  display: inline-flex;
   flex: none;
   margin-top: 2px;
+  border-radius: var(--mantine-radius-xl);
+}
+
+/* The badge of a waiting message switches it between queue and steer. */
+button.mode:not(:disabled) {
+  cursor: pointer;
+}
+
+button.mode:not(:disabled):hover > * {
+  filter: brightness(0.95);
+}
+
+button.mode:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .body {

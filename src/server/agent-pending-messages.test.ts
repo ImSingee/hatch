@@ -48,7 +48,7 @@ beforeEach(async () => {
   vi.mocked(hub.listConnectedRunners).mockReturnValue([
     {
       runnerId: RUNNER,
-      protocolVersion: 21,
+      protocolVersion: 22,
       activeRunCount: 0,
       connectedAt: '2026-11-20T00:00:00.000Z',
       lastSeenAt: '2026-11-20T00:00:00.000Z',
@@ -291,6 +291,58 @@ describe('steer messages', () => {
       userText: 'And a dark theme',
       steerPending: true,
     });
+  });
+});
+
+describe('per-message delivery mode', () => {
+  it('overrides the preference when sent and switches while waiting', async () => {
+    await updateAgentPreferences(USER, { messageMode: 'queue' });
+    const runId = await startRun('Build a tracker');
+    vi.mocked(hub.sendRunSteer).mockClear();
+    const { pending: sent } = await pending.enqueuePendingMessage({
+      sessionId: SESSION,
+      userId: USER,
+      ...MODEL,
+      message: { content: text('Use blue') },
+      mode: 'steer',
+    });
+    const [blue] = sent.messages;
+    expect(blue.mode).toBe('steer');
+    expect(hub.sendRunSteer).toHaveBeenCalledWith(RUNNER, runId);
+
+    // Switched to queue, the run no longer takes it in.
+    vi.mocked(hub.sendRunSteer).mockClear();
+    const queued = await pending.updatePendingMessage({
+      sessionId: SESSION,
+      messageId: blue.id,
+      message: {},
+      mode: 'queue',
+    });
+    expect(queued.pending.messages[0]).toMatchObject({
+      mode: 'queue',
+      text: 'Use blue',
+    });
+    expect(hub.sendRunSteer).not.toHaveBeenCalled();
+    expect(await runs.claimSteerMessages(RUNNER, runId)).toEqual([]);
+
+    // Switched back, the Runner hears of it and claims it.
+    await pending.updatePendingMessage({
+      sessionId: SESSION,
+      messageId: blue.id,
+      message: {},
+      mode: 'steer',
+    });
+    expect(hub.sendRunSteer).toHaveBeenCalledWith(RUNNER, runId);
+    const claimed = await runs.claimSteerMessages(RUNNER, runId);
+    expect(claimed.map((message) => message.userText)).toEqual(['Use blue']);
+    await expect(
+      pending.updatePendingMessage({
+        sessionId: SESSION,
+        messageId: blue.id,
+        message: {},
+        mode: 'queue',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
   });
 });
 

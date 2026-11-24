@@ -18,6 +18,7 @@ import { getPlatformConfig } from '../server/platform-config';
 export async function assertSignupAllowed(): Promise<void> {
   if (await getPlatformConfig('auth.allowSignup')) return;
   throw new APIError('BAD_REQUEST', {
+    code: 'SIGNUP_DISABLED',
     message: 'Sign-up is currently disabled.',
   });
 }

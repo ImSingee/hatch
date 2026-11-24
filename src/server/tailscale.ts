@@ -4,6 +4,7 @@ import {
   type TailscaleConfigureInput,
 } from '../tailscale';
 import { authMiddleware } from './auth';
+import { AppError } from './errors';
 import { getTailscaleManager } from './tailscale-manager';
 
 export const getTailscaleStatus = createServerFn({ method: 'GET' })
@@ -17,7 +18,9 @@ export const configureTailscale = createServerFn({ method: 'POST' })
   .validator((input: TailscaleConfigureInput) => {
     const result = tailscaleConfigureSchema.safeParse(input);
     if (!result.success)
-      throw new Error('Invalid Tailscale connection settings.');
+      throw new AppError('Invalid Tailscale connection settings.', 400, {
+        code: 'tailscale.invalidSettings',
+      });
     return result.data;
   })
   .handler(async ({ data }) => {

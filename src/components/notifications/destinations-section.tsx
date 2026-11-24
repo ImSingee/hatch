@@ -26,6 +26,8 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useState, type FormEvent } from 'react';
+import { Trans } from 'react-i18next';
+import { useI18n } from '~i18n';
 import {
   apnsStatusQueryOptions,
   notificationDestinationsQueryOptions,
@@ -43,7 +45,10 @@ import { DESTINATION_TYPE_LABEL, DestinationTypeIcon } from './status';
 import { SectionTitle } from './section-title';
 import { useNotificationMutation } from './use-notification-mutation';
 
+type Translate = ReturnType<typeof useI18n>['t'];
+
 function ApnsStatusLine() {
+  const { t } = useI18n();
   const { data } = useSuspenseQuery(apnsStatusQueryOptions);
   if (data.error) {
     return (
@@ -52,50 +57,68 @@ function ApnsStatusLine() {
         variant="light"
         icon={<IconAlertCircle size={18} stroke={1.6} />}
       >
-        iOS push is misconfigured: {data.error}
+        {t('notifications.apns.misconfigured', { error: data.error })}
       </Alert>
     );
   }
-  const environments = [
-    data.production ? 'production' : null,
-    data.sandbox ? 'sandbox' : null,
-  ].filter(Boolean);
+  const environments =
+    data.production && data.sandbox
+      ? t('notifications.apns.environment.both')
+      : data.production
+        ? t('notifications.apns.environment.production')
+        : data.sandbox
+          ? t('notifications.apns.environment.sandbox')
+          : null;
   return (
     <Text size="sm" c="dimmed">
-      iOS push:{' '}
-      {environments.length === 0
-        ? 'no APNs key is configured yet, so device deliveries will fail.'
-        : `${data.source === 'builtin' ? 'built-in shared key' : 'this instance’s own key'} (${environments.join(', ')}).`}{' '}
-      Pushes are end-to-end encrypted; Apple only sees a placeholder.
+      {environments === null
+        ? t('notifications.apns.none')
+        : data.source === 'builtin'
+          ? t('notifications.apns.builtin', { environments })
+          : t('notifications.apns.own', { environments })}
     </Text>
   );
 }
 
-function describe(destination: DestinationView): string {
+function describe(t: Translate, destination: DestinationView): string {
   if (destination.device) {
     return [
-      destination.device.userName ?? 'Unknown user',
+      destination.device.userName ??
+        t('notifications.destinations.unknownUser'),
       destination.device.platform === 'ios'
         ? 'iOS'
         : destination.device.platform,
-      destination.device.environment === 'sandbox' ? 'development build' : null,
+      destination.device.environment === 'sandbox'
+        ? t('notifications.destinations.developmentBuild')
+        : null,
     ]
       .filter(Boolean)
       .join(' · ');
   }
   if (destination.webhook) {
     return destination.lifecycleEvents
-      ? `${destination.webhook.url} · edits and recalls`
+      ? t('notifications.destinations.webhookWithEdits', {
+          url: destination.webhook.url,
+        })
       : destination.webhook.url;
   }
   if (destination.app) {
     return destination.app.accepting
-      ? `App · /app/${destination.app.slug ?? destination.app.appId}${
-          destination.lifecycleEvents ? ' · receives edits and recalls' : ''
-        }${destination.acceptsResponses ? ' · accepts answers' : ''}`
-      : 'App no longer accepts notifications';
+      ? [
+          t('notifications.destinationType.app'),
+          `/app/${destination.app.slug ?? destination.app.appId}`,
+          destination.lifecycleEvents
+            ? t('notifications.destinations.receivesEdits')
+            : null,
+          destination.acceptsResponses
+            ? t('notifications.destinations.acceptsAnswers')
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : t('notifications.destinations.appNotAccepting');
   }
-  return DESTINATION_TYPE_LABEL[destination.type];
+  return t(DESTINATION_TYPE_LABEL[destination.type]);
 }
 
 function WebhookModal({
@@ -107,6 +130,7 @@ function WebhookModal({
   onClose: () => void;
   editing: DestinationView | null;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(editing?.name ?? '');
   const [url, setUrl] = useState(editing?.webhook?.url ?? '');
   const [lifecycleEvents, setLifecycleEvents] = useState(
@@ -118,7 +142,7 @@ function WebhookModal({
     (input: { name: string; url: string; lifecycleEvents: boolean }) =>
       createWebhookFn({ data: input }),
     {
-      success: 'Webhook added',
+      success: t('notifications.webhook.added'),
       onSuccess: (result) => setSecret(result.secret),
     },
   );
@@ -129,7 +153,10 @@ function WebhookModal({
       url: string;
       lifecycleEvents: boolean;
     }) => updateDestinationFn({ data: input }),
-    { success: 'Webhook updated', onSuccess: () => onClose() },
+    {
+      success: t('notifications.webhook.updated'),
+      onSuccess: () => onClose(),
+    },
   );
 
   const submit = (event: FormEvent) => {
@@ -143,7 +170,11 @@ function WebhookModal({
       opened={opened}
       onClose={onClose}
       title={
-        editing ? 'Edit webhook' : secret ? 'Webhook added' : 'Add webhook'
+        editing
+          ? t('notifications.webhook.edit')
+          : secret
+            ? t('notifications.webhook.added')
+            : t('notifications.webhook.add')
       }
       centered
       closeOnClickOutside={!secret}
@@ -151,21 +182,26 @@ function WebhookModal({
       {secret ? (
         <Stack gap="md">
           <Text size="sm">
-            Hatch POSTs a JSON envelope to this URL and signs it with this
-            secret: verify <code>x-hatch-signature</code> as HMAC-SHA256 over{' '}
-            <code>{'<x-hatch-timestamp>.<body>'}</code>.
+            <Trans
+              t={t}
+              i18nKey="notifications.webhook.signing"
+              components={{
+                header: <code />,
+                signed: <code>{'<x-hatch-timestamp>.<body>'}</code>,
+              }}
+            />
           </Text>
-          <SecretReveal label="Signing secret" secret={secret} />
+          <SecretReveal kind="signingSecret" secret={secret} />
           <Group justify="flex-end">
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{t('common.done')}</Button>
           </Group>
         </Stack>
       ) : (
         <form onSubmit={submit}>
           <Stack gap="md">
             <TextInput
-              label="Name"
-              placeholder="Home automation"
+              label={t('common.name')}
+              placeholder={t('notifications.webhook.namePlaceholder')}
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
               required
@@ -173,17 +209,17 @@ function WebhookModal({
               data-autofocus
             />
             <TextInput
-              label="URL"
+              label={t('notifications.webhook.url')}
               placeholder="https://example.com/hooks/hatch"
               value={url}
               onChange={(event) => setUrl(event.currentTarget.value)}
               required
               type="url"
-              description="Redirects are not followed. Local network and Tailscale addresses are allowed."
+              description={t('notifications.webhook.urlDescription')}
             />
             <Checkbox
-              label="Also send edits and recalls"
-              description="When a source edits or recalls a notification this webhook received, Hatch POSTs hatch.notification.updated or hatch.notification.recalled. Leave this off if the receiver treats every request as a new notification."
+              label={t('notifications.webhook.lifecycle')}
+              description={t('notifications.webhook.lifecycleDescription')}
               checked={lifecycleEvents}
               onChange={(event) =>
                 setLifecycleEvents(event.currentTarget.checked)
@@ -191,13 +227,13 @@ function WebhookModal({
             />
             <Group justify="flex-end">
               <Button variant="default" onClick={onClose}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 type="submit"
                 loading={create.isPending || update.isPending}
               >
-                {editing ? 'Save' : 'Add webhook'}
+                {editing ? t('common.save') : t('notifications.webhook.add')}
               </Button>
             </Group>
           </Stack>
@@ -214,23 +250,21 @@ function RotatedSecretModal({
   secret: string | null;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
       opened={secret !== null}
       onClose={onClose}
-      title="New signing secret"
+      title={t('notifications.webhook.newSecret')}
       centered
       closeOnClickOutside={false}
     >
       {secret ? (
         <Stack gap="md">
-          <Text size="sm">
-            The previous secret stopped working. Update the receiver before the
-            next delivery.
-          </Text>
-          <SecretReveal label="Signing secret" secret={secret} />
+          <Text size="sm">{t('notifications.webhook.secretRotated')}</Text>
+          <SecretReveal kind="signingSecret" secret={secret} />
           <Group justify="flex-end">
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{t('common.done')}</Button>
           </Group>
         </Stack>
       ) : null}
@@ -245,23 +279,32 @@ function RenameDeviceModal({
   device: DestinationView;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(device.name);
   const rename = useNotificationMutation(
     (input: { id: string; name: string }) =>
       updateDestinationFn({ data: input }),
-    { success: 'Device renamed', onSuccess: () => onClose() },
+    {
+      success: t('notifications.device.renamed'),
+      onSuccess: () => onClose(),
+    },
   );
   const submit = (event: FormEvent) => {
     event.preventDefault();
     rename.mutate({ id: device.id, name: name.trim() });
   };
   return (
-    <Modal opened onClose={onClose} title="Rename device" centered>
+    <Modal
+      opened
+      onClose={onClose}
+      title={t('notifications.device.rename')}
+      centered
+    >
       <form onSubmit={submit}>
         <Stack gap="md">
           <TextInput
-            label="Name"
-            description="The app keeps this name when it registers again."
+            label={t('common.name')}
+            description={t('notifications.device.nameDescription')}
             value={name}
             onChange={(event) => setName(event.currentTarget.value)}
             maxLength={80}
@@ -270,14 +313,14 @@ function RenameDeviceModal({
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
               loading={rename.isPending}
               disabled={!name.trim()}
             >
-              Save
+              {t('common.save')}
             </Button>
           </Group>
         </Stack>
@@ -287,6 +330,7 @@ function RenameDeviceModal({
 }
 
 export function DestinationsSection() {
+  const { t } = useI18n();
   const { data: destinations } = useSuspenseQuery(
     notificationDestinationsQueryOptions,
   );
@@ -302,7 +346,7 @@ export function DestinationsSection() {
   );
   const test = useNotificationMutation(
     (id: string) => sendTestNotificationFn({ data: id }),
-    { success: 'Test notification sent — check the history for the result' },
+    { success: t('notifications.destinations.testSent') },
   );
   const rotate = useNotificationMutation(
     (id: string) => rotateWebhookSecretFn({ data: id }),
@@ -310,35 +354,35 @@ export function DestinationsSection() {
   );
   const remove = useNotificationMutation(
     (id: string) => deleteDestinationFn({ data: id }),
-    { success: 'Destination removed' },
+    { success: t('notifications.destinations.removed') },
   );
 
   const confirmRotate = (destination: DestinationView) =>
     modals.openConfirmModal({
-      title: `Rotate the secret of ${destination.name}?`,
+      title: t('notifications.webhook.rotateTitle', { name: destination.name }),
       centered: true,
-      children: (
-        <Text size="sm">
-          The current secret stops working immediately. Deliveries are signed
-          with the new one.
-        </Text>
-      ),
-      labels: { confirm: 'Rotate secret', cancel: 'Cancel' },
+      children: <Text size="sm">{t('notifications.webhook.rotateBody')}</Text>,
+      labels: {
+        confirm: t('notifications.webhook.rotate'),
+        cancel: t('common.cancel'),
+      },
       onConfirm: () => rotate.mutate(destination.id),
     });
 
   const confirmDelete = (destination: DestinationView) =>
     modals.openConfirmModal({
-      title: `Remove ${destination.name}?`,
+      title: t('notifications.destinations.removeTitle', {
+        name: destination.name,
+      }),
       centered: true,
       children: (
         <Text size="sm">
           {destination.type === 'device'
-            ? 'The device stops receiving pushes until it turns push notifications on again.'
-            : 'Routes and group memberships that point at this webhook are removed. Delivery history is kept.'}
+            ? t('notifications.destinations.removeDevice')
+            : t('notifications.destinations.removeWebhook')}
         </Text>
       ),
-      labels: { confirm: 'Remove', cancel: 'Cancel' },
+      labels: { confirm: t('common.remove'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(destination.id),
     });
@@ -346,15 +390,15 @@ export function DestinationsSection() {
   return (
     <Stack gap="md">
       <SectionTitle
-        title="Destinations"
-        description="Devices register themselves from the Hatch iOS app. Apps appear when their manifest accepts notifications."
+        title={t('notifications.destinations.title')}
+        description={t('notifications.destinations.description')}
         action={
           <Button
             variant="default"
             leftSection={<IconPlus size={16} stroke={1.8} />}
             onClick={() => setWebhookModal({ editing: null })}
           >
-            Add webhook
+            {t('notifications.webhook.add')}
           </Button>
         }
       />
@@ -362,17 +406,18 @@ export function DestinationsSection() {
 
       {destinations.length === 0 ? (
         <Text size="sm" c="dimmed" py="md">
-          No destinations yet. Add a webhook, sign in from the iOS app, or
-          deploy an App that accepts notifications.
+          {t('notifications.destinations.empty')}
         </Text>
       ) : (
         <Table.ScrollContainer minWidth={620} type="native">
           <Table verticalSpacing="sm" layout="fixed">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Destination</Table.Th>
-                <Table.Th w={90}>Enabled</Table.Th>
-                <Table.Th w={48} aria-label="Actions" />
+                <Table.Th>
+                  {t('notifications.destinations.column.destination')}
+                </Table.Th>
+                <Table.Th w={90}>{t('common.enabled')}</Table.Th>
+                <Table.Th w={48} aria-label={t('common.actions')} />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -389,11 +434,11 @@ export function DestinationsSection() {
                             {destination.name}
                           </Text>
                           <Badge size="xs" variant="light" color="gray">
-                            {DESTINATION_TYPE_LABEL[destination.type]}
+                            {t(DESTINATION_TYPE_LABEL[destination.type])}
                           </Badge>
                         </Group>
                         <Text size="xs" c="dimmed" truncate>
-                          {describe(destination)}
+                          {describe(t, destination)}
                         </Text>
                         {destination.lastError ? (
                           <Text size="xs" c="red.8">
@@ -417,7 +462,9 @@ export function DestinationsSection() {
                           enabled: event.currentTarget.checked,
                         })
                       }
-                      aria-label={`Enable ${destination.name}`}
+                      aria-label={t('notifications.enableName', {
+                        name: destination.name,
+                      })}
                     />
                   </Table.Td>
                   <Table.Td>
@@ -426,7 +473,9 @@ export function DestinationsSection() {
                         <ActionIcon
                           variant="subtle"
                           color="gray"
-                          aria-label={`Actions for ${destination.name}`}
+                          aria-label={t('notifications.actionsFor', {
+                            name: destination.name,
+                          })}
                         >
                           <IconDotsVertical size={16} stroke={1.6} />
                         </ActionIcon>
@@ -437,14 +486,14 @@ export function DestinationsSection() {
                           disabled={!destination.enabled}
                           onClick={() => test.mutate(destination.id)}
                         >
-                          Send test
+                          {t('notifications.destinations.sendTest')}
                         </Menu.Item>
                         {destination.type === 'device' ? (
                           <Menu.Item
                             leftSection={<IconPencil size={14} stroke={1.6} />}
                             onClick={() => setRenaming(destination)}
                           >
-                            Rename
+                            {t('common.rename')}
                           </Menu.Item>
                         ) : null}
                         {destination.type === 'webhook' ? (
@@ -457,13 +506,13 @@ export function DestinationsSection() {
                                 setWebhookModal({ editing: destination })
                               }
                             >
-                              Edit
+                              {t('common.edit')}
                             </Menu.Item>
                             <Menu.Item
                               leftSection={<IconKey size={14} stroke={1.6} />}
                               onClick={() => confirmRotate(destination)}
                             >
-                              Rotate secret
+                              {t('notifications.webhook.rotate')}
                             </Menu.Item>
                           </>
                         ) : null}
@@ -473,7 +522,7 @@ export function DestinationsSection() {
                             leftSection={<IconTrash size={14} stroke={1.6} />}
                             onClick={() => confirmDelete(destination)}
                           >
-                            Remove
+                            {t('common.remove')}
                           </Menu.Item>
                         ) : null}
                       </Menu.Dropdown>

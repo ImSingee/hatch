@@ -22,7 +22,7 @@ import { DATA_SCHEMA_SENTINEL, dataSchemaFromOutput } from './data-schema';
 export function createDenoToolchain(
   context: SourceToolchainContext,
 ): SourceToolchain {
-  const { root, kind, logs } = context;
+  const { root, logs } = context;
   const deno = (
     step: ToolchainStep,
     args: string[],
@@ -36,7 +36,6 @@ export function createDenoToolchain(
       const read = context.read;
       await validateDenoDependencySource(
         root,
-        kind,
         context.readDependenciesThroughReader && read
           ? (file: DenoDependencySourceFile) => read(file)
           : undefined,
@@ -44,60 +43,31 @@ export function createDenoToolchain(
     },
 
     async install() {
-      if (kind === 'app') {
-        // Reproduce the Agent-reviewed dependency install from the committed
-        // package.json + deno.lock. `--no-config` prevents Deno from implicitly
-        // executing source-controlled lifecycle policy. App deploys never run
-        // npm preinstall/install/postinstall code inside the platform process.
-        const installArgs = [
-          'install',
-          '--no-config',
-          '--package-json',
-          '--node-modules-dir=auto',
-          '--lock=deno.lock',
-          '--frozen',
-        ];
-        const install = await deno('install', installArgs);
-        logs?.push(`$ deno ${installArgs.join(' ')}\n${install.output.trim()}`);
-        if (install.code !== 0) {
-          throw new Error(
-            'Dependency install failed with the committed deno.lock. Load the ' +
-              '"building-apps" Skill, run deno install locally, commit the updated ' +
-              `dependency files, and deploy again:\n${install.output}`,
-          );
-        }
-        return;
-      }
-      // Reproduce the source-controlled dependency graph. Deno reads reviewed
-      // allowScripts entries from deno.json; --frozen rejects uncommitted
-      // changes.
+      // Reproduce the Agent-reviewed dependency install from the committed
+      // package.json + deno.lock. `--no-config` prevents Deno from implicitly
+      // executing source-controlled lifecycle policy. App deploys never run
+      // npm preinstall/install/postinstall code inside the platform process.
       const installArgs = [
         'install',
+        '--no-config',
         '--package-json',
         '--node-modules-dir=auto',
         '--lock=deno.lock',
         '--frozen',
       ];
       const install = await deno('install', installArgs);
-      logs?.push(
-        `$ deno ${installArgs.join(' ')}\n${(
-          install.stderr || install.stdout
-        ).trim()}`,
-      );
+      logs?.push(`$ deno ${installArgs.join(' ')}\n${install.output.trim()}`);
       if (install.code !== 0) {
         throw new Error(
-          'Workflow dependency install failed with the committed deno.lock. ' +
-            'Load the "building-workflows" Skill, run deno install locally, ' +
-            `commit the updated dependency files, and deploy again:\n${
-              install.stderr || install.stdout
-            }`,
+          'Dependency install failed with the committed deno.lock. Load the ' +
+            '"building-apps" Skill, run deno install locally, commit the updated ' +
+            `dependency files, and deploy again:\n${install.output}`,
         );
       }
     },
 
     evaluateManifest(parse) {
       return loadSourceManifest(root, {
-        kind,
         parse,
         read: context.read,
         logs,
@@ -108,26 +78,6 @@ export function createDenoToolchain(
     },
 
     async check({ entries, fetchContract }) {
-      if (kind === 'workflow') {
-        const checkArgs = [
-          'check',
-          '--config=deno.json',
-          '--node-modules-dir=auto',
-          `--import-map=${hatchImportMapPath(root)}`,
-          '--lock=deno.lock',
-          '--frozen',
-          ...entries.map((entry) => `./${entry}`),
-        ];
-        const checked = await deno('check', checkArgs);
-        logs?.push(`$ deno ${checkArgs.join(' ')}\n${checked.output.trim()}`);
-        if (checked.code !== 0) {
-          throw new Error(
-            `Workflow source validation failed during deno check:\n${checked.output}`,
-          );
-        }
-        return;
-      }
-
       const checkPaths = [...entries];
       const contractEntry = fetchContract
         ? '.hatch/backend-fetch-contract.ts'
@@ -203,32 +153,6 @@ export function createDenoToolchain(
     },
 
     async bundle({ entry, outfile, outputRoot }) {
-      if (kind === 'workflow') {
-        const bundleArgs = [
-          'bundle',
-          '--node-modules-dir=auto',
-          '--lock=deno.lock',
-          '--frozen',
-          '--import-map',
-          hatchImportMapPath(root),
-          '-o',
-          outfile,
-          path.join(root, entry),
-        ];
-        const bundle = await deno('bundle', bundleArgs);
-        logs?.push(
-          `$ deno ${bundleArgs.join(' ')}\n${(
-            bundle.stderr || bundle.stdout
-          ).trim()}`,
-        );
-        if (bundle.code !== 0 || !(await exists(outfile))) {
-          throw new Error(
-            `Workflow bundle failed:\n${bundle.stderr || bundle.stdout}`,
-          );
-        }
-        return;
-      }
-
       const bundleArgs = [
         'bundle',
         '--config=deno.json',

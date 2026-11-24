@@ -113,17 +113,15 @@ message Req {
       },
     });
     // The platform validates with these schemas before every run.
-    expect(
-      validateSchemaInput(schema, { repo: 'a/b' }, { strict: true }),
-    ).toEqual({
+    expect(validateSchemaInput(schema, { repo: 'a/b' })).toEqual({
       success: true,
       data: { repo: 'a/b', limit: 20 },
     });
-    const rejected = validateSchemaInput(
-      schema,
-      { repo: 'ab', limit: 101, other: true },
-      { strict: true },
-    );
+    const rejected = validateSchemaInput(schema, {
+      repo: 'ab',
+      limit: 101,
+      other: true,
+    });
     expect(rejected.success).toBe(false);
   });
 

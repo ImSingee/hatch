@@ -100,7 +100,6 @@ describe('adopt manifest validation', () => {
     await expect(
       adopt(
         root,
-        'app',
         'immutable',
         {} as Profile,
         client(failingLookup),
@@ -131,7 +130,6 @@ describe('adopt manifest validation', () => {
       await expect(
         adopt(
           root,
-          'app',
           'immutable',
           {} as Profile,
           client(async () => ({ tooling })),
@@ -147,7 +145,6 @@ describe('adopt manifest validation', () => {
     await expect(
       adopt(
         root,
-        'app',
         'immutable',
         {} as Profile,
         client(failingLookup),

@@ -85,10 +85,10 @@ export async function rpcCall<T = any>(
     let data: unknown;
     if (collection === 'auth' && id === 'status')
       data = await client.auth.status({});
-    else if (collection === 'sdk')
-      data = await client.sdk.get({ kind: id as 'app' | 'workflow' });
-    else if (collection === 'apps' || collection === 'workflows') {
-      const api = client[collection];
+    else if (collection === 'sdk' && id === 'app')
+      data = await client.sdk.get();
+    else if (collection === 'apps') {
+      const api = client.apps;
       if (!id)
         data = body === undefined ? await api.list({}) : await api.create(body);
       else if (!operation) data = await api.get({ id });

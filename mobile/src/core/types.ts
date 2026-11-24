@@ -282,7 +282,6 @@ export type AppPin = {
 };
 export type Pins = {
   apps: AppPin[];
-  workflows: { id: string; slug: string; name: string }[];
 };
 
 /** How far this user has read the notification timeline, on every device. */
