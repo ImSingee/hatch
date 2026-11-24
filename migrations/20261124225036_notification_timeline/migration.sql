@@ -46,7 +46,7 @@ DROP INDEX "notification_response_deliveries_notification_destination_idx";--> s
 CREATE UNIQUE INDEX "notification_response_deliveries_notification_destination_idx" ON "notification_response_deliveries" ("notification_id","round","destination_id");--> statement-breakpoint
 CREATE INDEX "notifications_activity_idx" ON "notifications" ("activity_at","id");--> statement-breakpoint
 ALTER TABLE "notification_read_cursors" ADD CONSTRAINT "notification_read_cursors_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "notification_response_routes" ADD CONSTRAINT "notification_response_routes_5CDPz6v9cxYl_fkey" FOREIGN KEY ("agent_session_id") REFERENCES "agent_sessions"("id") ON DELETE SET NULL;--> statement-breakpoint
+ALTER TABLE "notification_response_routes" ADD CONSTRAINT "notification_response_routes_5CDPz6v9cxYl_fkey" FOREIGN KEY ("agent_session_id") REFERENCES "agent_sessions"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "notification_revisions" ADD CONSTRAINT "notification_revisions_notification_id_notifications_id_fkey" FOREIGN KEY ("notification_id") REFERENCES "notifications"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_agent_session_id_agent_sessions_id_fkey" FOREIGN KEY ("agent_session_id") REFERENCES "agent_sessions"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "notification_response_routes" ADD CONSTRAINT "notification_response_routes_target_check" CHECK ((

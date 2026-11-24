@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "9cf9d79d-09a7-4c4c-8763-99d5edd68aa5",
+  "id": "1e776e8e-b0ac-4b26-9739-cb6ccd9fad97",
   "prevIds": ["f4c7b13a-e729-4699-9f7f-c2abd570c148"],
   "footprints": [
     {
@@ -896,7 +896,7 @@
         "tableTo": "agent_sessions",
         "columnsTo": ["id"],
         "onUpdate": "NO ACTION",
-        "onDelete": "SET NULL",
+        "onDelete": "CASCADE",
         "entityType": "fks"
       }
     },

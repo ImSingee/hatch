@@ -61,7 +61,8 @@ with `hatch notification get` / `revisions`, as tool output.
 - A notification the Agent sent with its Run credential keeps that chat
   (`notifications.agent_session_id`); answers go back there.
 - A response route with an `agent` target sends answers to a fixed chat
-  (`agent_session_id`), or opens one chat per notification on its first
+  (`agent_session_id`; deleting that chat deletes the route, as deleting a
+  destination does), or opens one chat per notification on its first
   answer, which later questions on the same notification reuse. Its optional
   `agent_instructions` follow the answer in the message.
 - Creating or retargeting an Agent route needs a model to run the answers:

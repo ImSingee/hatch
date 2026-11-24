@@ -1389,11 +1389,13 @@ export const notificationResponseRoutes = snakeCase.table(
     }),
     /**
      * For an `agent` target: the chat every answer goes to, or null for one
-     * chat per notification (opened by its first answer).
+     * chat per notification (opened by its first answer). Deleting that chat
+     * deletes the route, like deleting a destination does; it never turns
+     * into the other mode.
      */
     agentSessionId: ulid('agent_session_id').references(
       () => agentSessions.id,
-      { onDelete: 'set null' },
+      { onDelete: 'cascade' },
     ),
     /** For an `agent` target: what the Agent should do with the answer. */
     agentInstructions: text('agent_instructions'),

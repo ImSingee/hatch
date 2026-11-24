@@ -54,6 +54,8 @@ import {
 const AT_END = 80;
 /** How long the newest must stay in view before it counts as read, in ms. */
 const READ_AFTER = 600;
+/** Older pages the unread jump loads before handing back to scrolling. */
+const JUMP_PAGES = 20;
 
 const VIA: Record<string, string> = {
   web: 'on the web',
@@ -215,17 +217,29 @@ export default function NotificationsScreen() {
     if (scrollToUnread()) return;
     // The first unread notification is on an older page: load until it is.
     pendingJump.current = true;
-    let result = await loadEarlier();
-    for (
-      let page = 1;
-      !result.data?.pages.some((p) =>
+    const reached = (data: typeof query.data) =>
+      data?.pages.some((p) =>
         p.items.some((item) => item.id === firstUnreadId),
-      ) &&
-      result.hasNextPage &&
-      page < 20;
-      page += 1
-    ) {
-      result = await loadEarlier();
+      ) ?? false;
+    let found = false;
+    try {
+      let result = await loadEarlier();
+      for (
+        let page = 1;
+        !reached(result.data) && result.hasNextPage && page < JUMP_PAGES;
+        page += 1
+      ) {
+        result = await loadEarlier();
+      }
+      found = reached(result.data);
+    } finally {
+      // Not reached within the page budget, or a load failed: drop the
+      // pending jump so a later load cannot fire it, and offer it again to
+      // go on from here.
+      if (!found) {
+        pendingJump.current = false;
+        setJumped(false);
+      }
     }
   };
 

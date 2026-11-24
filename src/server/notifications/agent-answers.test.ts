@@ -238,6 +238,18 @@ describe('answers handed to the Agent', () => {
     await deliverAnswers();
     expect(enqueued).toHaveBeenCalledTimes(1);
     expect(enqueued.mock.calls[0]![0].sessionId).toBe('session-fixed');
+
+    // Deleting the chat removes the route; it never falls back to one chat
+    // per notification.
+    await db
+      .delete(schema.agentSessions)
+      .where(eq(schema.agentSessions.id, 'session-fixed'));
+    expect((await service.listResponseRoutes()).routes).toEqual([]);
+    const next = await notification({});
+    await answer(next);
+    await deliverAnswers();
+    expect(enqueued).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(schema.agentSessions)).toEqual([]);
   });
 });
 
