@@ -51,9 +51,11 @@ export type FormProps = {
 
 const DRAFT_PREFIX = 'hatch.ui.draft.';
 
-/** How many `Form`s are mounted for each draft key. A mounted form owns its
- * draft; one that went away leaves the key to it. */
-const mountedForms = new Map<string, number>();
+/** The newest `Form` made for each draft key, by a number each form takes
+ * when it is made. The newest form owns the draft, mounted or not: an older
+ * one that went away never touches the key again once a newer one exists. */
+const newestForm = new Map<string, number>();
+const formCount: { made: number } = { made: 0 };
 const SAVE_DELAY_MS = 400;
 const REQUIRED_MESSAGE = 'Fill in this field.';
 
@@ -196,13 +198,13 @@ export function Form(props: FormProps): JSX.Element {
   effect(() => {
     if (lifecycle() === 'background') void writeDraft();
   });
-  mountedForms.set(draftKey, (mountedForms.get(draftKey) ?? 0) + 1);
+  formCount.made += 1;
+  const generation = formCount.made;
+  newestForm.set(draftKey, generation);
+  const ownsDraft = () => newestForm.get(draftKey) === generation;
   cleanup(() => {
     void writeDraft();
     draft.gone = true;
-    const left = (mountedForms.get(draftKey) ?? 1) - 1;
-    if (left > 0) mountedForms.set(draftKey, left);
-    else mountedForms.delete(draftKey);
   });
 
   const discardDraft = () => {
@@ -214,13 +216,15 @@ export function Form(props: FormProps): JSX.Element {
     void Storage.removeItem(draftKey);
   };
 
-  // After the form went away. A newer form with the same id that is mounted
-  // owns the draft: it is left alone, whatever it holds. Otherwise nothing
-  // else writes this key, and the stored draft (this form's last input) is
-  // removed only when it holds nothing but what was just sent; input made
-  // after the send stays a draft.
+  // After the form went away. Once a newer form with the same id exists
+  // (open or closed since), the draft is its own: left alone, whatever it
+  // holds. Otherwise nothing else has written the key, and the stored draft
+  // (this form's last input) is removed only when it holds nothing but what
+  // was just sent; input made after the send stays a draft. Ownership is
+  // checked again right before removing, as a newer form may be made while
+  // the draft is read.
   const forgetSentDraft = async (sent: FormValues) => {
-    if (!saveDraft() || mountedForms.has(draftKey)) return;
+    if (!saveDraft() || !ownsDraft()) return;
     const stored = await Storage.getItem(draftKey).catch(() => null);
     if (stored === null) return;
     let values: FormValues;
@@ -232,7 +236,8 @@ export function Form(props: FormProps): JSX.Element {
     const unsent = Object.entries(values).some(([name, value]) =>
       changedFrom(value, sent[name]),
     );
-    if (!unsent) await Storage.removeItem(draftKey).catch(() => undefined);
+    if (!unsent && ownsDraft())
+      await Storage.removeItem(draftKey).catch(() => undefined);
   };
 
   const submit = async () => {

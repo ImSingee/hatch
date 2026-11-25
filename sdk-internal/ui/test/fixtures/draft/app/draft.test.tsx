@@ -143,3 +143,17 @@ test('a send that ends after its form closed leaves an open form its draft', asy
   const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
   expect(saved.memo).toBe('Same memo');
 });
+
+test('a newer form keeps its draft after it closes too', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Memo', 'Same memo');
+  await app.press('Send memo');
+  await app.press('Close memo');
+  await app.press('Open memo');
+  await app.waitFor('text:Restored your unsent changes.');
+  await app.press('Close memo');
+  await app.press('Finish sending');
+  await app.wait(300);
+  const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
+  expect(saved.memo).toBe('Same memo');
+});
