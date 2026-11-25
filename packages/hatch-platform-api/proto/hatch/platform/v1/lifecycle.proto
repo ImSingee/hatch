@@ -20,12 +20,6 @@ message Resource {
   optional string icon_path = 9;
 }
 
-message Source {
-  string id = 1;
-  optional string master_commit = 2;
-  optional bytes bundle = 3;
-}
-
 message Deployment {
   string deployment_id = 1;
   uint32 version = 2;

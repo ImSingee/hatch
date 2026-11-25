@@ -1,8 +1,9 @@
 /**
- * Platform source transfer over git bundles, as the public App RPCs use it:
+ * Platform source transfer over the deprecated bundle upload that DeployApp
+ * still accepts:
  *
- *   platform exportMasterBundle -> client clones and commits -> client
- *   bundles HEAD -> platform importBundleToMaster (fast-forward master) ->
+ *   client clones platform master and commits -> client bundles HEAD ->
+ *   platform importBundleToMaster (fast-forward master) ->
  *   publishDeploymentSource (deploy tag).
  *
  * Everything runs against throwaway temp dirs.
@@ -89,15 +90,20 @@ async function seedPlatformSource(
   return commit;
 }
 
-/** Export platform master and clone it into a fresh client checkout. */
+/** Clone platform master into a fresh client checkout, as Git fetch does. */
 async function cloneMaster(id: string, name: string): Promise<string> {
-  const bundle = await platform.exportMasterBundle(id);
-  expect(bundle).not.toBeNull();
-  const file = path.join(root, `export-${id}-${name}.bundle`);
-  await writeFile(file, bundle!);
   const checkout = path.join(root, 'clients', `${id}-${name}`);
   await mkdir(path.dirname(checkout), { recursive: true });
-  await git(['clone', '--branch', 'master', file, checkout], root);
+  await git(
+    [
+      'clone',
+      '--branch',
+      'master',
+      path.join(root, 'repos', `${id}.git`),
+      checkout,
+    ],
+    root,
+  );
   await configureIdentity(checkout);
   return checkout;
 }

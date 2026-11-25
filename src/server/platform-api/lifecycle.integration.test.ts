@@ -99,6 +99,35 @@ function git(dir: string, ...args: string[]) {
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
 }
+/**
+ * Plain git against an App's smart HTTP remote, authenticated by the fixture
+ * API key: source is read over Git, never through an RPC.
+ */
+function remoteGit(...args: string[]) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      PATH: process.env.PATH,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: os.devNull,
+    },
+  }).trim();
+}
+const appRemote = (id: string) =>
+  `${origin.replace('//', `//hatch:${credentials[1]['x-api-key']}@`)}/api/git/app/${id}.git`;
+/** Platform master of an App, or null while it has no commits. */
+function masterCommit(id: string) {
+  return (
+    remoteGit('ls-remote', appRemote(id), 'refs/heads/master').split(/\s/)[0] ||
+    null
+  );
+}
+/** Clone platform master of an App into `dir`. */
+function cloneMaster(id: string, dir: string) {
+  remoteGit('clone', '--branch', 'master', appRemote(id), dir);
+}
 async function bundle(dir: string) {
   git(dir, 'add', '.');
   git(
@@ -372,12 +401,7 @@ describe.runIf(Boolean(databaseUrl))(
               (row: { id: string }) => row.id === id,
             ),
           ).toBe(true);
-          const emptySource = await api(`${collection}/${id}/source`, headers);
-          expect(emptySource.data).toEqual({
-            id,
-            masterCommit: null,
-            bundleBase64: null,
-          });
+          expect(masterCommit(id)).toBeNull();
           if (collection === 'apps' && credentialIndex === 2) {
             // oxlint-disable-next-line vitest/no-conditional-expect -- Run association is an App-only business contract.
             expect(
@@ -435,17 +459,10 @@ describe.runIf(Boolean(databaseUrl))(
             'slug',
             'version',
           ]);
-          const downloaded = await api(`${collection}/${id}/source`, headers);
-          expect(downloaded.data.masterCommit).toBe(
-            git(dir, 'rev-parse', 'HEAD'),
-          );
-          const sourceFile = path.join(root, `${id}.bundle`);
-          await writeFile(
-            sourceFile,
-            Buffer.from(downloaded.data.bundleBase64, 'base64'),
-          );
+          const firstRelease = git(dir, 'rev-parse', 'HEAD');
+          expect(masterCommit(id)).toBe(firstRelease);
           const clone = path.join(root, `${id}-roundtrip`);
-          execFileSync('git', ['clone', sourceFile, clone], { stdio: 'pipe' });
+          cloneMaster(id, clone);
           expect(await readFile(path.join(clone, 'manifest.ts'), 'utf8')).toBe(
             await readFile(path.join(dir, 'manifest.ts'), 'utf8'),
           );
@@ -469,10 +486,7 @@ describe.runIf(Boolean(databaseUrl))(
           expect(rollback.response.status).toBe(200);
           expect(rollback.data.version).toBe(1);
           expect(rollback.data.compatibility.isSupported).toBe(true);
-          expect(
-            (await api(`${collection}/${id}/source`, headers)).data
-              .masterCommit,
-          ).toBe(downloaded.data.masterCommit);
+          expect(masterCommit(id)).toBe(firstRelease);
           const row = await database.db.query.apps.findFirst({
             where: { id },
           });
@@ -496,10 +510,7 @@ describe.runIf(Boolean(databaseUrl))(
             (await api(`${collection}/${id}/rollback`, headers, { version: 2 }))
               .response.status,
           ).toBe(500);
-          expect(
-            (await api(`${collection}/${id}/source`, headers)).data
-              .masterCommit,
-          ).toBe(downloaded.data.masterCommit);
+          expect(masterCommit(id)).toBe(firstRelease);
         }
       }
     }, 180000);
@@ -527,7 +538,7 @@ describe.runIf(Boolean(databaseUrl))(
         expect(releases.map((result) => result.data.version).sort()).toEqual([
           3, 4,
         ]);
-        const stable = await api(`${collection}/${id}/source`, credentials[2]);
+        const stable = masterCommit(id);
         git(dir, 'checkout', '--orphan', 'divergent');
         await writeFile(path.join(dir, 'release.txt'), 'unrelated history');
         const divergent = await bundle(dir);
@@ -539,10 +550,7 @@ describe.runIf(Boolean(databaseUrl))(
         expect(denied.data.code).toBe('CONFLICT');
         expect(denied.data.message).toContain('master advanced');
         expect(denied.data.message).not.toContain(root);
-        expect(
-          (await api(`${collection}/${id}/source`, credentials[0])).data
-            .masterCommit,
-        ).toBe(stable.data.masterCommit);
+        expect(masterCommit(id)).toBe(stable);
         const deployments = await database.db.query.deployments.findMany({
           where: { appId: id },
         });
@@ -554,7 +562,11 @@ describe.runIf(Boolean(databaseUrl))(
       const { id, generation } = resources.find(
         (row) => row.collection === 'apps',
       )!;
-      const source = await api(`apps/${id}/source`, credentials[0]);
+      const master = masterCommit(id);
+      const checkout = path.join(root, `${id}-${randomUUID()}`);
+      cloneMaster(id, checkout);
+      const masterBundle = path.join(root, `${randomUUID()}.bundle`);
+      git(checkout, 'bundle', 'create', masterBundle, 'master');
       const { withAppDataCutoverLock } =
         await import('~server/apps/data-table/provision');
       let pending: ReturnType<typeof api> | undefined;
@@ -563,7 +575,7 @@ describe.runIf(Boolean(databaseUrl))(
         pending = api(`apps/${id}/deploy`, credentials[0], {
           message: 'Queued generation fixture',
           generation,
-          bundleBase64: source.data.bundleBase64,
+          bundleBase64: (await readFile(masterBundle)).toString('base64'),
         });
         for (let attempt = 0; attempt < 100; attempt++) {
           const rows = await database.db.execute(
@@ -587,9 +599,7 @@ describe.runIf(Boolean(databaseUrl))(
       const denied = await pending!;
       expect(denied.response.status).toBe(409);
       expect(denied.data.code).toBe('CONFLICT');
-      expect(
-        (await api(`apps/${id}/source`, credentials[0])).data.masterCommit,
-      ).toBe(source.data.masterCommit);
+      expect(masterCommit(id)).toBe(master);
       expect(
         await database.db.query.deployments.findMany({ where: { appId: id } }),
       ).toHaveLength(4);
@@ -621,9 +631,9 @@ describe.runIf(Boolean(databaseUrl))(
         expect(detail.data.id).toBe(id);
         expect(detail.data.name).toBe('Exact ID owner');
         expect(detail.data.webhookSecret).toBeUndefined();
-        expect(
-          (await api(`${collection}/${id}/source`, credentials[2])).data.id,
-        ).toBe(id);
+        expect((await api(`${collection}/${id}`, credentials[2])).data.id).toBe(
+          id,
+        );
         const list = await api(collection, credentials[0]);
         expect(JSON.stringify(list.data)).not.toContain(
           'fixture-webhook-secret',
@@ -638,11 +648,9 @@ describe.runIf(Boolean(databaseUrl))(
       const { id, generation } = resources.find(
         (row) => row.collection === 'apps',
       )!;
-      const source = await api(`apps/${id}/source`, credentials[0]);
-      const file = path.join(root, `${randomUUID()}.bundle`);
-      await writeFile(file, Buffer.from(source.data.bundleBase64, 'base64'));
+      const master = masterCommit(id);
       const dir = path.join(root, `${id}-data`);
-      execFileSync('git', ['clone', file, dir], { stdio: 'pipe' });
+      cloneMaster(id, dir);
       const manifest = await readFile(path.join(dir, 'manifest.ts'), 'utf8');
       await writeFile(
         path.join(dir, 'manifest.ts'),
@@ -682,7 +690,7 @@ describe.runIf(Boolean(databaseUrl))(
           url: origin,
           id,
           generation,
-          masterCommit: source.data.masterCommit,
+          masterCommit: master,
         }),
       );
       const denied = await cliInvoke(
@@ -714,9 +722,7 @@ describe.runIf(Boolean(databaseUrl))(
       );
       expect(wrong.code).toBe(6);
       // The rejected commit was pushed, so it is on master, but not released.
-      expect(
-        (await api(`apps/${id}/source`, credentials[0])).data.masterCommit,
-      ).toBe(git(dir, 'rev-parse', 'HEAD'));
+      expect(masterCommit(id)).toBe(git(dir, 'rev-parse', 'HEAD'));
       expect(
         (await api(`apps/${id}`, credentials[0])).data.currentSourceCommit,
       ).not.toBe(git(dir, 'rev-parse', 'HEAD'));
@@ -1059,9 +1065,7 @@ describe.runIf(Boolean(databaseUrl))(
           );
           expect(restored.code).toBe(0);
           expect(restored.data.compatibility.isSupported).toBe(true);
-          expect(
-            (await api(`apps/${id}/source`, headers)).data.masterCommit,
-          ).toBe(git(clone, 'rev-parse', 'HEAD'));
+          expect(masterCommit(id)).toBe(git(clone, 'rev-parse', 'HEAD'));
           // Rollback moved master back; the newer local commit stays local
           // and an ordinary push puts it on master again without releasing.
           const collection = 'apps';
@@ -1122,10 +1126,7 @@ describe.runIf(Boolean(databaseUrl))(
             sourceCommit: firstCommit,
           });
           expect(await live()).toBe(firstCommit);
-          expect(
-            (await api(`${collection}/${id}/source`, headers)).data
-              .masterCommit,
-          ).toBe(thirdCommit);
+          expect(masterCommit(id)).toBe(thirdCommit);
           // A commit that never reached master cannot be released.
           await writeFile(path.join(clone, 'unpushed.txt'), 'unpushed');
           git(clone, 'add', '.');
@@ -1333,16 +1334,9 @@ describe.runIf(Boolean(databaseUrl))(
         const checkout = path.join(session, 'work', 'apps', 'adopt');
         await mkdir(path.dirname(bundleFile), { recursive: true });
         await mkdir(path.dirname(checkout), { recursive: true });
-        const source = await api(`apps/${id}/source`, apiKey);
-        await writeFile(
-          bundleFile,
-          Buffer.from(source.data.bundleBase64, 'base64'),
-        );
-        execFileSync(
-          'git',
-          ['clone', '--branch', 'master', bundleFile, checkout],
-          { stdio: 'pipe' },
-        );
+        cloneMaster(id, checkout);
+        git(checkout, 'bundle', 'create', bundleFile, 'master');
+        git(checkout, 'remote', 'set-url', 'origin', bundleFile);
         // The Runner materialized the generated SDK beside the source and
         // Git-excluded the generated paths, so the bundle did not carry them.
         await cp(
@@ -1940,10 +1934,7 @@ describe.runIf(Boolean(databaseUrl))(
         expect(cloned.code).toBe(6);
         expect(cloned.data.error.message).toContain(directory);
         expect(git(directory, 'status', '--porcelain')).toBe('');
-        expect(
-          (await api(`${collection}/${created.data.id}/source`, credentials[1]))
-            .data,
-        ).toMatchObject({ masterCommit: null, bundleBase64: null });
+        expect(masterCommit(created.data.id)).toBeNull();
         expect(
           JSON.parse(
             await readFile(
@@ -2080,9 +2071,6 @@ describe.runIf(Boolean(databaseUrl))(
         pin: false,
       });
       expect((await client.apps.get({ id: result.id })).id).toBe(result.id);
-      expect(
-        (await client.apps.source({ id: result.id })).bundleBase64,
-      ).toBeNull();
       await expect(client.apps.get({ id: 'missing' })).rejects.toMatchObject({
         code: Code.NotFound,
       });

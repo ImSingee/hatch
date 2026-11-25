@@ -92,7 +92,6 @@ export async function rpcCall<T = any>(
       if (!id)
         data = body === undefined ? await api.list({}) : await api.create(body);
       else if (!operation) data = await api.get({ id });
-      else if (operation === 'source') data = await api.source({ id });
       else if (operation === 'deploy') {
         // Fixtures still exercise the deprecated bundle transport, which the
         // CLI client no longer sends; the extra field reaches the wire as-is.

@@ -31,6 +31,12 @@ vi.mock('./process', async (importOriginal) => {
   return { ...actual, command };
 });
 
+// Platform master is empty: the checkout below has no commits to compare.
+vi.mock('./workspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./workspace')>()),
+  fetchRemote: async () => null,
+}));
+
 const bases: string[] = [];
 
 /** An uncommitted Agent checkout of a pnpm-toolchain App, owned by the Run. */
@@ -67,11 +73,6 @@ function client(tooling: () => Promise<unknown>): PlatformClient {
   return {
     apps: {
       get: async () => ({ id: 'immutable', createdAt: 'generation' }),
-      source: async () => ({
-        id: 'immutable',
-        masterCommit: null,
-        bundleBase64: null,
-      }),
     },
     auth: {
       status: async () => ({
@@ -103,6 +104,7 @@ describe('adopt manifest validation', () => {
         'immutable',
         {} as Profile,
         client(failingLookup),
+        1000,
         new AbortController().signal,
       ),
     ).rejects.toBe(lookup);
@@ -133,6 +135,7 @@ describe('adopt manifest validation', () => {
           'immutable',
           {} as Profile,
           client(async () => ({ tooling })),
+          1000,
           new AbortController().signal,
         ),
       ).rejects.toMatchObject({ code: 'local_command_timeout', exitCode: 7 });
@@ -148,6 +151,7 @@ describe('adopt manifest validation', () => {
         'immutable',
         {} as Profile,
         client(failingLookup),
+        1000,
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: 'manifest_mismatch', exitCode: 6 });

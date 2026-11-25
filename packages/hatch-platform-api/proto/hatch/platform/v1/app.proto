@@ -12,7 +12,6 @@ service AppService {
   rpc ListApps(ListAppsRequest) returns (ListAppsResponse);
   rpc CreateApp(CreateAppRequest) returns (CreateAppResponse);
   rpc GetApp(GetAppRequest) returns (GetAppResponse);
-  rpc GetAppSource(GetAppSourceRequest) returns (GetAppSourceResponse);
   rpc DeployApp(DeployAppRequest) returns (DeployAppResponse);
   rpc RollbackApp(RollbackAppRequest) returns (RollbackAppResponse);
   rpc QueryAppKv(QueryAppKvRequest) returns (QueryAppKvResponse);
@@ -83,17 +82,6 @@ message GetAppRequest {
 
 message GetAppResponse {
   Resource resource = 1;
-}
-
-message GetAppSourceRequest {
-  string id = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 191
-  }];
-}
-
-message GetAppSourceResponse {
-  Source source = 1;
 }
 
 message DeployAppRequest {

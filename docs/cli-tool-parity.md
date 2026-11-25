@@ -16,7 +16,7 @@ so saved transcripts keep rendering.
 | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | list_apps            | app list                                | AppService/ListApps; currentVersion, compatibility, capabilities                                          |
 | get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, history                                           |
-| checkout_app         | app clone / update / adopt              | GetApp, Git fetch (adopt: GetAppSource), SdkService/GetSdk, AssociateAppSession; frozen preparation       |
+| checkout_app         | app clone / update / adopt              | GetApp, Git fetch, SdkService/GetSdk, AssociateAppSession; frozen preparation                             |
 | create_app           | app create                              | AppService/CreateApp; template, pin, directory, SDK, ID/slug/path/recovery                                |
 | deploy_app           | app push / deploy                       | Git push, then AppService/DeployApp by commit; release/URLs, generation, migration approval, association  |
 | rollback_app         | app rollback                            | AppService/RollbackApp; compatibility and forward-only data/source recovery                               |
@@ -63,7 +63,7 @@ of one browser, kept in its local storage and never sent to the server. It is
 browser-bound, has no platform state, and therefore has no CLI command.
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
-`update` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
+`update` / `adopt` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
 pushes, then calls the Deploy RPC with the commit to release (`--commit`
 releases a commit already on `master` without pushing). The Deploy RPC still
 accepts an uploaded bundle for older CLIs, which the platform fast-forwards onto
