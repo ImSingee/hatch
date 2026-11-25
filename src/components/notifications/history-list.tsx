@@ -11,6 +11,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { IconBell, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+import { notificationHeadline } from '../../../packages/hatch-platform-api/notification-content';
 import { EmptyState } from '~components/page/page';
 import { useI18n } from '~i18n';
 import { formatExact, formatRelativeTime } from '~lib/format';
@@ -25,6 +26,7 @@ import type {
 } from '~server/notifications';
 import {
   NOTIFICATION_STATUS_OPTIONS,
+  NotificationFormatBadge,
   NotificationPriorityBadge,
   NotificationReplyBadge,
   NotificationRevisionBadge,
@@ -251,7 +253,9 @@ export function NotificationHistory({
                     aria-current={item.id === selected ? 'page' : undefined}
                   >
                     <span className={classes.titleLine}>
-                      <span className={classes.title}>{item.title}</span>
+                      <span className={classes.title}>
+                        {notificationHeadline(item)}
+                      </span>
                       <Tooltip label={formatExact(item.createdAt)} withArrow>
                         <span className={classes.time}>
                           {formatRelativeTime(item.createdAt, locale)}
@@ -262,11 +266,18 @@ export function NotificationHistory({
                       <SourceTypeIcon type={item.sourceType} size={14} />
                       <span className={classes.metaText}>
                         {item.sourceName} · {kindName(item)}
-                        {item.body ? ` · ${item.body}` : ''}
+                        {item.format === 'text' && !item.summary && item.body
+                          ? ` · ${item.body}`
+                          : ''}
                       </span>
                     </span>
+                    {/* A text notification's push line, when it has one. */}
+                    {item.format === 'text' && item.summary ? (
+                      <span className={classes.summary}>{item.summary}</span>
+                    ) : null}
                     <span className={classes.badges}>
                       <NotificationStatusBadge status={item.status} />
+                      <NotificationFormatBadge format={item.format} />
                       <NotificationPriorityBadge priority={item.priority} />
                       <NotificationRevisionBadge
                         editedAt={item.editedAt}
@@ -287,7 +298,7 @@ export function NotificationHistory({
                           color="gray"
                           size="sm"
                           aria-label={t('notifications.actionsFor', {
-                            name: item.title,
+                            name: notificationHeadline(item),
                           })}
                         >
                           <IconDotsVertical size={15} stroke={1.8} />

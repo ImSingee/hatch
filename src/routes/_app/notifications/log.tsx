@@ -7,6 +7,7 @@ import {
   useParams,
 } from '@tanstack/react-router';
 import { IconMessages, IconSettings } from '@tabler/icons-react';
+import { notificationHeadline } from '../../../../packages/hatch-platform-api/notification-content';
 import { DeskWindow } from '~components/desk/window';
 import { NotificationHistory } from '~components/notifications/history-list';
 import classes from '~components/notifications/notifications-window.module.css';
@@ -43,7 +44,7 @@ function DeliveryLogLayout() {
   const { data: openTitle } = useQuery({
     ...notificationDetailQueryOptions(notificationId ?? ''),
     enabled: Boolean(notificationId),
-    select: (notification) => notification.title,
+    select: notificationHeadline,
   });
   return (
     <DeskWindow

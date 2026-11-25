@@ -25,6 +25,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import {
+  answeredCardHead,
+  hasInlineInputs,
+  notificationHeadline,
+} from '../../../../packages/hatch-platform-api/notification-content';
 import { describeAnswers } from '../../../../packages/hatch-platform-api/notification-reply';
 import { authClient } from '~auth/client';
 import { UserAvatar } from '~components/auth/user-avatar';
@@ -38,10 +43,14 @@ import {
   notificationTimelineQueryOptions,
 } from '~queries/notifications';
 import { markNotificationsReadFn } from '~server/notifications';
-import { CardBlock, CardStatus } from '../notification-card-view';
+import {
+  CardIconTile,
+  NotificationContent,
+} from '../notification-content-view';
 import { NotificationHistory } from '../notification-history';
 import { NotificationLink } from '../notification-link';
 import { ReplySection } from '../reply-section';
+import { useNotificationKindName } from '../status';
 import { useNotificationReadState } from '../use-notification-read-state';
 import {
   buildTimelineRows,
@@ -454,7 +463,7 @@ export function NotificationTimeline() {
                     <span className={classes.recalledText}>
                       {t('notifications.timeline.recalled', {
                         source: row.item.sourceName,
-                        title: row.item.title,
+                        title: notificationHeadline(row.item),
                       })}
                     </span>
                     <span className={classes.recalledOpen}>
@@ -494,7 +503,9 @@ export function NotificationTimeline() {
                   count: historyItem.earlierVersions + 1,
                 })}
               </span>
-              <h2 className={classes.panelName}>{historyItem.title}</h2>
+              <h2 className={classes.panelName}>
+                {notificationHeadline(historyItem)}
+              </h2>
               <span className={classes.panelSource}>
                 {historyItem.sourceName}
               </span>
@@ -569,7 +580,8 @@ function SourceTile({ item }: { item: TimelineItem }) {
 /**
  * One notification: a bubble for a message a person sent, a card for
  * everything else, with its reply form until someone answers and, once its
- * source edited it, what it said before.
+ * source edited it, what it said before. A Markdown or card notification
+ * shows its rendered content; a card's inline inputs are its reply form.
  */
 function TimelineEntry({
   item,
@@ -583,29 +595,67 @@ function TimelineEntry({
   onOpenHistory: (opener: HTMLElement) => void;
 }) {
   const { t } = useI18n();
-  const bubble = item.sourceType === 'user' && !item.reply && !item.url;
+  const kindName = useNotificationKindName();
+  const text = item.format === 'text';
+  const bubble = text && item.sourceType === 'user' && !item.reply && !item.url;
+  const inline = hasInlineInputs(item.content);
+  const head = answeredCardHead({
+    content: item.content,
+    answers: item.response?.answers,
+    respondedAt: item.response?.respondedAt,
+    editedAt: item.editedAt,
+  });
   return (
     <article
       className={classes.item}
-      aria-label={`${item.sourceName}: ${item.title}`}
+      aria-label={`${item.sourceName}: ${notificationHeadline(item)}`}
     >
       <span className={classes.tile}>
-        <SourceTile item={item} />
+        {head.icon ? (
+          <CardIconTile name={head.icon} />
+        ) : (
+          <SourceTile item={item} />
+        )}
       </span>
       <div className={classes.main}>
         <div className={classes.meta}>
-          <span className={classes.source}>{item.sourceName}</span>
+          <span className={classes.source}>
+            {item.sourceName} · {kindName(item)}
+          </span>
           <Time iso={item.activityAt} />
         </div>
         <div className={bubble ? classes.bubble : classes.card}>
-          {item.card?.status ? <CardStatus card={item.card} /> : null}
-          <h3 className={classes.title}>{item.title}</h3>
-          {item.body ? <p className={classes.body}>{item.body}</p> : null}
-          {item.card?.block ? <CardBlock card={item.card} /> : null}
+          {text ? (
+            <>
+              <h3 className={classes.title}>{item.title}</h3>
+              {item.body ? <p className={classes.body}>{item.body}</p> : null}
+            </>
+          ) : (
+            <NotificationContent
+              format={item.format}
+              content={item.content}
+              head={head}
+              form={
+                item.reply && !item.response && !item.recalledAt
+                  ? {
+                      notificationId: item.id,
+                      reply: item.reply,
+                      round: item.replyRound,
+                    }
+                  : null
+              }
+              answers={item.response?.answers}
+            />
+          )}
           {item.url ? <NotificationLink url={item.url} /> : null}
           {item.reply ? (
             // A new question is a new form: keyed by round, no draft carries over.
-            <Answer key={item.replyRound} item={item} userId={userId} />
+            <Answer
+              key={item.replyRound}
+              item={item}
+              userId={userId}
+              inline={inline}
+            />
           ) : null}
           {item.earlierVersions > 0 ? (
             <button
@@ -626,17 +676,29 @@ function TimelineEntry({
   );
 }
 
+/**
+ * The question's form until someone answers, then who answered what, from
+ * where. A card that asks inline is its own form: only the outcome is
+ * drawn here, in the fixed place below its content.
+ */
 function Answer({
   item,
   userId,
+  inline,
 }: {
   item: TimelineItem;
   userId: string | undefined;
+  inline: boolean;
 }) {
   const { t } = useI18n();
   const { reply, response } = item;
   if (!reply) return null;
   if (!response) {
+    if (inline) {
+      return item.recalledAt ? (
+        <p className={classes.answer}>{t('notifications.reply.recalled')}</p>
+      ) : null;
+    }
     return (
       <ReplySection
         notificationId={item.id}
@@ -652,7 +714,7 @@ function Answer({
     .join(' · ');
   const via = t(`notifications.timeline.via.${response.via}`);
   return (
-    <p className={classes.answer}>
+    <p className={classes.answer} data-inline={inline || undefined}>
       <IconCheck size={15} stroke={2.4} aria-hidden />
       <span>
         {response.respondedBy.userId && response.respondedBy.userId === userId
@@ -706,7 +768,9 @@ function QuietGroup({ items }: { items: TimelineItem[] }): ReactNode {
                   className={classes.quietLine}
                 >
                   <span className={classes.source}>{item.sourceName}</span>
-                  <span className={classes.quietTitle}>{item.title}</span>
+                  <span className={classes.quietTitle}>
+                    {notificationHeadline(item)}
+                  </span>
                   <Time iso={item.activityAt} />
                   <IconChevronRight
                     size={14}

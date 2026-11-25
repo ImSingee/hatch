@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
@@ -7,6 +8,7 @@ import {
   Group,
   Stack,
   Table,
+  Paper,
   Text,
   Tooltip,
 } from '@mantine/core';
@@ -15,8 +17,14 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
-import { IconRefresh } from '@tabler/icons-react';
+import { IconCopy, IconRefresh } from '@tabler/icons-react';
+import copy from 'copy-to-clipboard';
 import { toast } from 'sonner';
+import {
+  answeredCardHead,
+  hasInlineInputs,
+} from '../../../packages/hatch-platform-api/notification-content';
+import { contentToMarkup } from '../../../packages/hatch-platform-api/notification-content-text';
 import { Field } from '~components/system/field';
 import { useErrorText, useI18n, type PlainTranslationKey } from '~i18n';
 import { formatExact, formatRelativeTime } from '~lib/format';
@@ -24,7 +32,11 @@ import {
   NOTIFICATIONS_KEY,
   notificationDetailQueryOptions,
 } from '~queries/notifications';
-import { retryDeliveryFn, type DeliveryView } from '~server/notifications';
+import {
+  retryDeliveryFn,
+  type DeliveryView,
+  type NotificationDetail as NotificationDetailData,
+} from '~server/notifications';
 import {
   DELIVERY_TARGET_LABEL,
   DeliveryStatusBadge,
@@ -35,7 +47,7 @@ import {
   notificationPriorityLabelKey,
   useNotificationKindName,
 } from './status';
-import { CardBlock, CardStatus } from './notification-card-view';
+import { NotificationContent } from './notification-content-view';
 import { NotificationHistory } from './notification-history';
 import { NotificationLink } from './notification-link';
 import { ReplySection } from './reply-section';
@@ -54,6 +66,9 @@ export function NotificationDetail({ id }: { id: string }) {
   const kindName = useNotificationKindName();
   const { data } = useSuspenseQuery(notificationDetailQueryOptions(id));
   const priorityKey = notificationPriorityLabelKey(data.priority);
+  // A card that asks inline is answered in the card itself.
+  const inlineQuestion =
+    hasInlineInputs(data.content) && !data.response && !data.recalledAt;
 
   return (
     <Stack gap="xl">
@@ -153,21 +168,7 @@ export function NotificationDetail({ id }: { id: string }) {
             </Group>
           ) : null}
         </Stack>
-        {data.card ? (
-          <Stack gap="sm" mt="lg" align="flex-start">
-            {data.card.status ? <CardStatus card={data.card} /> : null}
-            {data.card.block ? (
-              <Box w="100%">
-                <CardBlock card={data.card} />
-              </Box>
-            ) : null}
-          </Stack>
-        ) : null}
-        {data.body ? (
-          <Text size="sm" mt="lg" style={{ whiteSpace: 'pre-wrap' }}>
-            {data.body}
-          </Text>
-        ) : null}
+        <NotificationBody data={data} />
         {data.data ? (
           <Stack gap={6} mt="lg">
             <Text size="sm" fw={700}>
@@ -210,7 +211,11 @@ export function NotificationDetail({ id }: { id: string }) {
                   : 'notifications.detail.answerDeliveries',
               )}
             </Text>
-            {data.reply ? (
+            {data.reply && inlineQuestion ? (
+              <Text size="sm" c="dimmed">
+                {t('notifications.detail.answerInCard')}
+              </Text>
+            ) : data.reply ? (
               <ReplySection
                 notificationId={id}
                 reply={data.reply}
@@ -264,6 +269,114 @@ export function NotificationDetail({ id }: { id: string }) {
           />
         )}
       </Box>
+    </Stack>
+  );
+}
+
+/**
+ * What the notification says: a text one's body, or a Markdown or card one
+ * rendered as the timeline shows it; then the line a push shows and the
+ * source the sender wrote, to copy and edit.
+ */
+function NotificationBody({ data }: { data: NotificationDetailData }) {
+  const { t } = useI18n();
+  const source =
+    data.format === 'markdown'
+      ? data.markdown
+      : data.format === 'card' && data.content
+        ? contentToMarkup(data.content)
+        : null;
+  return (
+    <Stack gap="lg" mt="lg">
+      {data.format === 'text' ? (
+        data.body ? (
+          <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+            {data.body}
+          </Text>
+        ) : null
+      ) : (
+        <Paper withBorder radius="lg" px={16} py={14}>
+          <NotificationContent
+            format={data.format}
+            content={data.content}
+            head={answeredCardHead({
+              content: data.content,
+              answers: data.response?.answers,
+              respondedAt: data.response?.respondedAt,
+              editedAt: data.editedAt,
+            })}
+            form={
+              data.reply && !data.response && !data.recalledAt
+                ? {
+                    notificationId: data.id,
+                    reply: data.reply,
+                    round: data.replyRound,
+                  }
+                : null
+            }
+            answers={data.response?.answers}
+          />
+        </Paper>
+      )}
+      <Stack gap={4}>
+        <Text size="sm" fw={700}>
+          {t('notifications.detail.pushText')}
+        </Text>
+        <Text
+          size="sm"
+          c={data.summary ? undefined : 'dimmed'}
+          style={{ overflowWrap: 'anywhere' }}
+        >
+          {data.summary ?? t('notifications.detail.pushTextDefault')}
+        </Text>
+      </Stack>
+      {source ? (
+        <SourceBlock
+          label={t(
+            data.format === 'markdown'
+              ? 'notifications.detail.markdownSource'
+              : 'notifications.detail.cardMarkup',
+          )}
+          code={source}
+        />
+      ) : null}
+    </Stack>
+  );
+}
+
+/** Source the sender wrote, monospaced, with a copy button. */
+function SourceBlock({ label, code }: { label: string; code: string }) {
+  const { t } = useI18n();
+  return (
+    <Stack gap={6}>
+      <Group gap="xs" justify="space-between" wrap="nowrap">
+        <Text size="sm" fw={700}>
+          {label}
+        </Text>
+        <Tooltip label={t('common.copy')} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            aria-label={t('notifications.detail.copySource', { label })}
+            onClick={() => {
+              copy(code, { format: 'text/plain' });
+              toast.success(t('common.copied'));
+            }}
+          >
+            <IconCopy size={15} stroke={1.8} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
+      <Code
+        block
+        style={{
+          fontSize: 'var(--mantine-font-size-xs)',
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {code}
+      </Code>
     </Stack>
   );
 }

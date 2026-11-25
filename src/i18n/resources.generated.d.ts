@@ -1041,6 +1041,8 @@ export type TranslationResource = {
   'notifications.badge.edited': 'Edited';
   'notifications.badge.answered': 'Answered';
   'notifications.badge.awaiting': 'Awaiting answer';
+  'notifications.format.markdown': 'Markdown';
+  'notifications.format.card': 'Card';
   'notifications.priority.lowest': 'Lowest';
   'notifications.priority.lowest.full': 'Lowest (-2) · history only, not pushed to phones';
   'notifications.priority.lowest.description': 'Priority -2: kept in history and sent to webhooks and Apps, never pushed to phones.';
@@ -1274,6 +1276,19 @@ export type TranslationResource = {
   'notifications.detail.opensOnTapHint': 'Tapping the phone notification opens this link instead of the notification.';
   'notifications.detail.opensOnTap': 'Opens on tap';
   'notifications.detail.data': 'Data';
+  'notifications.detail.pushText': 'Push text';
+  'notifications.detail.pushTextDefault': 'No summary, so pushes show the title and text.';
+  'notifications.detail.markdownSource': 'Markdown source';
+  'notifications.detail.cardMarkup': 'Card markup';
+  'notifications.detail.copySource': 'Copy {{label}}';
+  'notifications.detail.answerInCard': 'Answer it in the card above.';
+  'notifications.content.step.done': 'Done';
+  'notifications.content.step.failed': 'Failed';
+  'notifications.content.step.running': 'In progress';
+  'notifications.content.step.pending': 'Not started';
+  'notifications.content.step.skipped': 'Skipped';
+  'notifications.content.trend': '{{label}}: {{values}}';
+  'notifications.content.trendDefault': 'Chart';
   'notifications.detail.reply': 'Reply';
   'notifications.detail.answerDeliveries': 'Answer deliveries';
   'notifications.detail.noResponseRoute': 'No response route matched, so the answer is only recorded here. Add a response route in Settings → Notifications.';
@@ -1310,6 +1325,7 @@ export type TranslationResource = {
   'notifications.reply.error.selectRange': 'Select {{min}}-{{max}} options.';
   'notifications.reply.error.invalid': 'This answer is not valid.';
   'notifications.reply.confirmAnswer': 'Answer “{{answer}}”? Each question takes one answer, and it cannot be changed.';
+  'notifications.reply.confirmTitle': 'Send this answer?';
   'notifications.reply.send': 'Send answer';
   'notifications.reply.oneAnswer': 'One answer is accepted, and it cannot be changed.';
   'notifications.reply.chooseExactly': 'Choose {{number}}';
@@ -2021,7 +2037,9 @@ export type TranslationResource = {
   'notifications.versions.field.title': 'Title';
   'notifications.versions.field.body': 'Text';
   'notifications.versions.field.link': 'Link';
-  'notifications.versions.field.card': 'Card';
+  'notifications.versions.field.format': 'Format';
+  'notifications.versions.field.summary': 'Summary';
+  'notifications.versions.field.content': 'Content';
   'notifications.versions.field.data': 'Data';
   'notifications.versions.field.question': 'New question';
   'notifications.versions.field.questionRemoved': 'Question removed';

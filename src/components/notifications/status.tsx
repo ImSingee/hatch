@@ -375,3 +375,23 @@ export function useNotificationKindName() {
     return item.kindName;
   };
 }
+
+const FORMAT_LABEL = {
+  markdown: 'notifications.format.markdown',
+  card: 'notifications.format.card',
+} as const satisfies Record<'markdown' | 'card', PlainTranslationKey>;
+
+/** How a notification is written, for the Markdown and card ones. */
+export function NotificationFormatBadge({
+  format,
+}: {
+  format: 'text' | 'markdown' | 'card';
+}) {
+  const { t } = useI18n();
+  if (format === 'text') return null;
+  return (
+    <Badge color="gray" variant="outline" radius="sm">
+      {t(FORMAT_LABEL[format])}
+    </Badge>
+  );
+}
