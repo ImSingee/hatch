@@ -50,3 +50,9 @@ test('keeps rows and visited tabs when the App passes new arrays', async () => {
   await app.press('label:South');
   expect(app.value('label:South notes')).toBe('Mulch in May');
 });
+
+test('a disabled row takes no input from its actions either', async () => {
+  const app = await open('./main.tsx');
+  expect(app.enabled('label:Clear Bed 1')).toBe(true);
+  expect(app.enabled('label:Clear Bed 2')).toBe(false);
+});

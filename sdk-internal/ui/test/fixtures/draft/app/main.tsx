@@ -20,6 +20,9 @@ function describe(values: FormValues): string {
 
 function App() {
   const showPin = signal(true);
+  const revealPin = signal(false);
+  const twinOpen = signal(false);
+  const codeSecret = signal(false);
   const nickname = signal(false);
   const memoOpen = signal(true);
   const finishSend: { resolve: () => void } = { resolve: () => undefined };
@@ -45,9 +48,23 @@ function App() {
       <Form id="account" onSubmit={() => undefined}>
         <TextField name="nickname" label="Nickname" />
         <If when={showPin()}>
-          <TextField name="pin" label="PIN" kind="password" />
+          <TextField
+            name="pin"
+            label="PIN"
+            kind={revealPin() ? 'text' : 'password'}
+          />
         </If>
         <Button label="Hide PIN" onPress={() => showPin.set(false)} />
+        <Button label="Show PIN" onPress={() => revealPin.set(true)} />
+        <TextField
+          name="code"
+          label="Code"
+          kind={codeSecret() ? 'password' : 'text'}
+        />
+        <Button
+          label="Treat code as secret"
+          onPress={() => codeSecret.set(true)}
+        />
       </Form>
       <Form
         id="terms"
@@ -88,6 +105,12 @@ function App() {
           <Button label="Send memo" type="submit" />
         </Form>
       </If>
+      <If when={twinOpen()}>
+        <Form id="memo" onSubmit={() => undefined}>
+          <TextField name="memo" label="Twin memo" />
+        </Form>
+      </If>
+      <Button label="Open twin memo" onPress={() => twinOpen.set(true)} />
       <Button label="Close memo" onPress={() => memoOpen.set(false)} />
       <Button label="Open memo" onPress={() => memoOpen.set(true)} />
       <Button label="Finish sending" onPress={() => finishSend.resolve()} />

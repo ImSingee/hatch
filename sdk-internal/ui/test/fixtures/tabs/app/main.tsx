@@ -27,8 +27,8 @@ const beds: TabItem[] = [
 ];
 
 const ROWS = [
-  { id: 'row-1', name: 'Bed 1' },
-  { id: 'row-2', name: 'Bed 2' },
+  { id: 'row-1', name: 'Bed 1', locked: false },
+  { id: 'row-2', name: 'Bed 2', locked: true },
 ];
 
 function App() {
@@ -81,6 +81,10 @@ function App() {
           renderItem={(row) => (
             <ListItem
               title={row().name}
+              disabled={row().locked}
+              actions={[
+                { label: `Clear ${row().name}`, onPress: () => undefined },
+              ]}
               control={
                 <TextField label={`Note for ${row().name}`} labelHidden />
               }

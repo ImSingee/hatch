@@ -182,7 +182,7 @@ export function ListItem(props: ListItemProps): JSX.Element {
                 icon={action().icon ?? IconChevronRight}
                 label={action().label}
                 size="sm"
-                disabled={action().disabled}
+                disabled={props.disabled === true || action().disabled}
                 onPress={action().onPress}
               />
             )}

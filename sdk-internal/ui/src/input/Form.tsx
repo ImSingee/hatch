@@ -20,6 +20,7 @@ import type { FieldValue, FormApi, FormValues } from './form-context';
 
 type FormField = {
   required: () => boolean;
+  secret: () => boolean;
   initial: FieldValue;
   controlled: () => FieldValue | undefined;
 };
@@ -122,6 +123,14 @@ export function Form(props: FormProps): JSX.Element {
     clearTimeout(draft.timer);
     draft.timer = undefined;
   };
+  // The newest form made with this id owns the draft: only it reads it back
+  // into its own fields' storage, writes it or removes it. An older form,
+  // open or closed, leaves the key alone once a newer one exists.
+  formCount.made += 1;
+  const generation = formCount.made;
+  newestForm.set(draftKey, generation);
+  const ownsDraft = () => newestForm.get(draftKey) === generation;
+
   // What the form sends: what each field shows. That is the App's `value`
   // for a controlled field, else the form's value, else the field's starting
   // value (a slider's minimum, an unchecked box).
@@ -136,16 +145,19 @@ export function Form(props: FormProps): JSX.Element {
   };
   // A draft leaves out passwords and controlled fields: the App keeps the
   // latter itself, and the field shows the App's value, not a restored one.
-  const keptValues = (): FormValues =>
-    Object.fromEntries(
+  // A field that was a password once stays out for the form's lifetime.
+  const keptValues = (): FormValues => {
+    for (const [name, field] of fields) if (field.secret()) secrets.add(name);
+    return Object.fromEntries(
       Object.entries(values()).filter(
         ([name]) =>
           !secrets.has(name) && fields.get(name)?.controlled() === undefined,
       ),
     );
+  };
   const writeDraft = async (): Promise<void> => {
     stopTimer();
-    if (!draft.loaded || !saveDraft()) return;
+    if (!draft.loaded || !saveDraft() || !ownsDraft()) return;
     const kept = untracked(keptValues);
     const changed = Object.entries(kept).some(([name, value]) =>
       changedFrom(value, draft.sent[name]),
@@ -198,10 +210,6 @@ export function Form(props: FormProps): JSX.Element {
   effect(() => {
     if (lifecycle() === 'background') void writeDraft();
   });
-  formCount.made += 1;
-  const generation = formCount.made;
-  newestForm.set(draftKey, generation);
-  const ownsDraft = () => newestForm.get(draftKey) === generation;
   cleanup(() => {
     void writeDraft();
     draft.gone = true;
@@ -213,7 +221,7 @@ export function Form(props: FormProps): JSX.Element {
       errors.set({});
       restored.set(false);
     });
-    void Storage.removeItem(draftKey);
+    if (ownsDraft()) void Storage.removeItem(draftKey);
   };
 
   // After the form went away. Once a newer form with the same id exists
@@ -302,13 +310,21 @@ export function Form(props: FormProps): JSX.Element {
     },
     error: (name) => errors()[name],
     register: (name, field) => {
-      if (field.keep === false) secrets.add(name);
+      const secret = field.secret ?? (() => false);
+      // A password is remembered as one when it registers, as it changes
+      // (each draft write) and as it goes, so its value never reaches a
+      // draft even after the field is gone or shown as text.
+      if (untracked(secret)) secrets.add(name);
       fields.set(name, {
         required: field.required,
+        secret,
         initial: field.initial,
         controlled: field.controlled,
       });
-      return () => fields.delete(name);
+      return () => {
+        if (untracked(secret)) secrets.add(name);
+        fields.delete(name);
+      };
     },
     submit: () => void submit(),
     submitting: () => submitting(),

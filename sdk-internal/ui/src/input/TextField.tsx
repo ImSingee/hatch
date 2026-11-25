@@ -97,9 +97,12 @@ export type TextFieldProps = FieldProps & {
 /** A one-line text field with its label. */
 export function TextField(props: TextFieldProps): JSX.Element {
   const form = FormContext();
-  const kind = props.kind ?? 'text';
+  // Read as it changes: an App may switch a field between `password` and
+  // `text` to show or hide what was typed.
+  const kind = () => props.kind ?? 'text';
+  const behaviour = () => KIND[kind()];
   const field = bindField<string>(form, props, '', {
-    keep: kind !== 'password' && kind !== 'new-password',
+    secret: () => kind() === 'password' || kind() === 'new-password',
   });
   const error = fieldError(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
@@ -135,7 +138,12 @@ export function TextField(props: TextFieldProps): JSX.Element {
             invalid: error() !== undefined,
             disabled: disabled(),
           }}
-          {...KIND[kind]}
+          keyboardType={behaviour().keyboardType ?? 'default'}
+          autoComplete={behaviour().autoComplete}
+          autoCapitalize={behaviour().autoCapitalize ?? 'sentences'}
+          autoCorrect={behaviour().autoCorrect ?? true}
+          masked={behaviour().masked ?? false}
+          returnKeyType={behaviour().returnKeyType ?? 'default'}
         />
       </View>
     </Field>

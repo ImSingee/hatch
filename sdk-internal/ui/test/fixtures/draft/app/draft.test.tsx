@@ -198,3 +198,41 @@ test('a newer form made while a late send reads the draft keeps it', async () =>
   await app.wait(100);
   expect(store.get('hatch.ui.draft.memo')).toBe('{"memo":"Same memo"}');
 });
+
+test('only the newest form with an id writes its draft', async () => {
+  const app = await open('./main.tsx');
+  await app.press('Open twin memo');
+  await app.type('label:Memo', 'From the older form');
+  await app.wait(800);
+  expect(app.storage()['hatch.ui.draft.memo']).toBe(undefined);
+  await app.type('label:Twin memo', 'From the newer form');
+  await app.wait(800);
+  const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
+  expect(saved.memo).toBe('From the newer form');
+});
+
+test('a password shown as text stays out of the draft', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:PIN', '4921');
+  await app.press('Show PIN');
+  expect(app.value('label:PIN')).toBe('4921');
+  await app.type('label:Nickname', 'Ivy');
+  await app.wait(800);
+  const saved = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
+  expect(saved.nickname).toBe('Ivy');
+  expect(saved.pin).toBe(undefined);
+});
+
+test('a field that becomes a password leaves the draft', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Code', 'A1B2');
+  await app.wait(800);
+  const before = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
+  expect(before.code).toBe('A1B2');
+  await app.press('Treat code as secret');
+  await app.type('label:Nickname', 'Ivy');
+  await app.wait(800);
+  const after = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
+  expect(after.nickname).toBe('Ivy');
+  expect(after.code).toBe(undefined);
+});

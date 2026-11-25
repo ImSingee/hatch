@@ -67,13 +67,13 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('keeps form drafts in the App storage', () => {
     expect(run(['test', 'app/draft.test.tsx'], fixture('draft'))).toMatch(
-      /^ok\n[\s\S]*15 passed/,
+      /^ok\n[\s\S]*18 passed/,
     );
   }, 240_000);
 
   it('keeps a tab selected while the items change', () => {
     expect(run(['test', 'app/tabs.test.tsx'], fixture('tabs'))).toMatch(
-      /^ok\n[\s\S]*5 passed/,
+      /^ok\n[\s\S]*6 passed/,
     );
   }, 240_000);
 

@@ -18,13 +18,14 @@ export type FormApi = {
   error: (name: string) => string | undefined;
   /** Registers a field so the form checks `required` on submit and sends
    * `controlled()` when the App controls the field's value, else the value
-   * the field shows (`initial` until the user changes it); `keep: false`
-   * leaves its value out of the draft (passwords) for the form's lifetime. */
+   * the field shows (`initial` until the user changes it); while `secret()`
+   * holds (a password) its value is left out of the draft, and stays out for
+   * the form's lifetime once it has. */
   register: (
     name: string,
     field: {
       required: () => boolean;
-      keep?: boolean;
+      secret?: () => boolean;
       initial: FieldValue;
       controlled: () => FieldValue | undefined;
     },
@@ -43,8 +44,8 @@ export const FormContext = context<FormApi | null>(null);
  * else the form's when the field has a `name` inside a `Form`, else the
  * field's own, starting at `initial`. A named field inside a `Form` is
  * registered with it: the form checks `required` and sends the field's value,
- * the App's `value` when it controls the field. `keep: false` leaves the value
- * out of the form's draft (passwords).
+ * the App's `value` when it controls the field. While `secret()` holds
+ * (passwords) the value is left out of the form's draft.
  */
 export function bindField<T extends FieldValue>(
   form: FormApi | null,
@@ -55,7 +56,7 @@ export function bindField<T extends FieldValue>(
     onChange?: (value: T) => void;
   },
   initial: T,
-  options: { keep?: boolean } = {},
+  options: { secret?: () => boolean } = {},
 ): { get: () => T; set: (value: T) => void } {
   const own = signal<T>(initial);
   if (form) {
@@ -73,7 +74,7 @@ export function bindField<T extends FieldValue>(
         cleanup(
           form.register(name, {
             required: () => props.required === true,
-            keep: options.keep,
+            secret: options.secret,
             initial,
             controlled: () => props.value,
           }),
