@@ -2,6 +2,17 @@ import { type ReactNode, useRef, useState } from 'react';
 
 type WithId = { id: string };
 
+/** Mark the element an item drags from when the list uses `handle`. */
+export const DRAG_HANDLE_ATTRIBUTE = 'data-drag-handle';
+
+/** What `renderItem` can do besides dragging, for keyboard reordering. */
+export type SortableItemControls = {
+  /** Move the item one place up (-1) or down (1) and persist the order. */
+  move: (delta: -1 | 1) => void;
+  isFirst: boolean;
+  isLast: boolean;
+};
+
 /**
  * Returns a new array ordered to match `orderedIds`. Useful for optimistically
  * updating a cached list to a freshly-dragged order. Items whose id is missing
@@ -24,18 +35,26 @@ export function sortByIds<T extends WithId>(
  * Minimal dependency-free vertical sortable list using native HTML5 drag and
  * drop. Reorders optimistically while dragging and persists the final order via
  * `onReorder` once the drag ends.
+ *
+ * With `handle`, an item drags only from an element carrying
+ * `DRAG_HANDLE_ATTRIBUTE` inside it, so the rest of the item (text fields,
+ * menus) works normally. Lists may be nested: drag events stop at the list
+ * that owns the dragged item.
  */
 export function SortableList<T extends WithId>({
   items,
   onReorder,
   renderItem,
+  handle = false,
 }: {
   items: T[];
   onReorder: (orderedIds: string[]) => void;
-  renderItem: (item: T) => ReactNode;
+  renderItem: (item: T, controls: SortableItemControls) => ReactNode;
+  handle?: boolean;
 }) {
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [armedId, setArmedId] = useState<string | null>(null);
   const dragOrderRef = useRef<string[] | null>(null);
   const movedRef = useRef(false);
   const itemOrder = items.map((item) => item.id);
@@ -60,14 +79,39 @@ export function SortableList<T extends WithId>({
     setDragOrder(next);
   };
 
+  const moveBy = (id: string, delta: -1 | 1) => {
+    const index = itemOrder.indexOf(id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= itemOrder.length) return;
+    const next = [...itemOrder];
+    next.splice(index, 1);
+    next.splice(target, 0, id);
+    onReorder(next);
+  };
+
   return (
     <>
-      {ordered.map((item) => (
+      {ordered.map((item, index) => (
         <div
           key={item.id}
-          draggable
+          data-sortable-item=""
+          draggable={!handle || armedId === item.id}
           style={{ opacity: draggingId === item.id ? 0.5 : 1 }}
+          onPointerDown={
+            handle
+              ? (e) => {
+                  const grip = (e.target as Element).closest(
+                    `[${DRAG_HANDLE_ATTRIBUTE}]`,
+                  );
+                  // A handle of a nested list belongs to that list's item.
+                  const owner = grip?.closest('[data-sortable-item]');
+                  setArmedId(owner === e.currentTarget ? item.id : null);
+                }
+              : undefined
+          }
+          onPointerUp={handle ? () => setArmedId(null) : undefined}
           onDragStart={(e) => {
+            e.stopPropagation();
             dragOrderRef.current = itemOrder;
             setDragOrder(itemOrder);
             setDraggingId(item.id);
@@ -81,16 +125,22 @@ export function SortableList<T extends WithId>({
             if (draggingId && draggingId !== item.id) move(draggingId, item.id);
           }}
           onDragOver={(e) => e.preventDefault()}
-          onDragEnd={() => {
+          onDragEnd={(e) => {
+            e.stopPropagation();
             const finalOrder = dragOrderRef.current;
             dragOrderRef.current = null;
             setDragOrder(null);
             setDraggingId(null);
+            setArmedId(null);
             if (movedRef.current && finalOrder) onReorder(finalOrder);
             movedRef.current = false;
           }}
         >
-          {renderItem(item)}
+          {renderItem(item, {
+            move: (delta) => moveBy(item.id, delta),
+            isFirst: index === 0,
+            isLast: index === ordered.length - 1,
+          })}
         </div>
       ))}
     </>

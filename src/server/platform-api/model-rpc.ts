@@ -33,6 +33,8 @@ import {
   listModelViews,
   listProviderViews,
   listRemoteModels,
+  reorderModels,
+  reorderProviders,
   setProviderModelKind,
   testProvider,
   updateProvider,
@@ -242,6 +244,9 @@ export function registerModelServices(router: ConnectRouter): void {
         })),
       };
     },
+    reorderProviders: async (input) => ({
+      providerIds: await reorderProviders(input.providerIds),
+    }),
   });
 
   router.service(ModelService, {
@@ -316,6 +321,9 @@ export function registerModelServices(router: ConnectRouter): void {
       await deleteProviderModel(input.id);
       return {};
     },
+    reorderModels: async (input) => ({
+      modelIds: await reorderModels(input.providerId, input.modelIds),
+    }),
   });
 
   router.service(CatalogService, {

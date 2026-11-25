@@ -1,9 +1,13 @@
 /** Shared reorder persistence for sortOrder-carrying tables. */
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, type SQL } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import { AppError } from './errors';
 
-type SortableTable = typeof schema.dashboards | typeof schema.sidebarItems;
+type SortableTable =
+  | typeof schema.dashboards
+  | typeof schema.sidebarItems
+  | typeof schema.agentProviders
+  | typeof schema.agentModels;
 
 /**
  * Move the listed rows to the front in the given order; rows that are not
@@ -15,11 +19,15 @@ type SortableTable = typeof schema.dashboards | typeof schema.sidebarItems;
  * concurrent reorders acquire row locks in the same sequence (no deadlock);
  * whichever transaction commits last wins wholesale.
  *
+ * `scope` limits the list to the rows one order covers (a provider's models);
+ * an id outside it counts as unknown.
+ *
  * Returns every row id in its new order. Rejects duplicate and unknown ids.
  */
 export async function persistSortOrder(
   table: SortableTable,
   orderedIds: string[],
+  scope?: SQL,
 ): Promise<string[]> {
   if (new Set(orderedIds).size !== orderedIds.length)
     throw new AppError('The same id is listed more than once.', 400);
@@ -27,6 +35,7 @@ export async function persistSortOrder(
     const rows = await tx
       .select({ id: table.id })
       .from(table)
+      .where(scope)
       .orderBy(asc(table.sortOrder), asc(table.createdAt));
     const known = new Set(rows.map((row) => row.id));
     const unknown = orderedIds.filter((id) => !known.has(id));
@@ -41,7 +50,10 @@ export async function persistSortOrder(
       .map((id, index) => ({ id, index }))
       .sort((a, b) => a.id.localeCompare(b.id));
     for (const { id, index } of targets) {
-      await tx.update(table).set({ sortOrder: index }).where(eq(table.id, id));
+      await tx
+        .update(table)
+        .set({ sortOrder: index })
+        .where(and(eq(table.id, id), scope));
     }
     return order;
   });

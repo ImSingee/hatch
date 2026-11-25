@@ -33,6 +33,8 @@ import {
   listProviderViews,
   listRemoteModels,
   PROVIDER_API_TYPES,
+  reorderModels as reorderModelRecords,
+  reorderProviders as reorderProviderRecords,
   testProvider as testProviderConnection,
   updateProvider as updateProviderRecord,
   type ModelView,
@@ -163,6 +165,24 @@ export const deleteModel = createServerFn({ method: 'POST' })
     await deleteProviderModel(data.id);
     return { ok: true };
   });
+
+const idList = z.array(z.string().min(1).max(200)).min(1).max(1000);
+
+/** Drag order of the provider cards; see `reorderProviders`. */
+export const reorderProviders = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((data: { providerIds: string[] }) =>
+    z.object({ providerIds: idList }).parse(data),
+  )
+  .handler(({ data }) => reorderProviderRecords(data.providerIds));
+
+/** Drag order of one provider's models; see `reorderModels`. */
+export const reorderModels = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((data: { providerId: string; modelIds: string[] }) =>
+    z.object({ providerId: z.string().min(1), modelIds: idList }).parse(data),
+  )
+  .handler(({ data }) => reorderModelRecords(data.providerId, data.modelIds));
 
 /** Providers the "Add provider" gallery offers. */
 export const listCatalogProviders = createServerFn({ method: 'GET' })

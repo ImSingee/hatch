@@ -314,6 +314,12 @@ const definitions: readonly CliCommandDefinition[] = [
       'Permanently delete a provider, its API key and every model under it, chat and image; cannot be undone, so --yes is required.',
   },
   {
+    path: ['provider', 'reorder'],
+    usage: 'provider reorder <provider-id>...',
+    description:
+      'Set the provider order, as dragging the cards in Settings → AI Providers does: the listed providers come first in the given order and the rest keep their order after them. The model picker and the first-model fallback for new chats follow it. Prints every provider id in its new order.',
+  },
+  {
     path: ['provider', 'test'],
     usage: 'provider test <provider-id> [--model <model-id>]',
     description:
@@ -364,6 +370,12 @@ const definitions: readonly CliCommandDefinition[] = [
     usage: 'model remove <model-id> --yes',
     description:
       'Permanently delete a model of either kind; cannot be undone, so --yes is required.',
+  },
+  {
+    path: ['model', 'reorder'],
+    usage: 'model reorder --provider <provider-id> <model-id>...',
+    description:
+      "Set the order of one provider's models, as dragging them on its card does: the listed models (ids from model list, all of that provider) come first in the given order and the rest keep their order after them. The model picker follows it. Prints the provider id and every model id of that provider in its new order.",
   },
   {
     path: ['model', 'set-kind'],

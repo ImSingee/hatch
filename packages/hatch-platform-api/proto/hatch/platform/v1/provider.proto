@@ -17,6 +17,9 @@ service ProviderService {
   rpc TestProvider(TestProviderRequest) returns (TestProviderResponse);
   // The models the provider itself lists (GET …/models).
   rpc ListRemoteModels(ListRemoteModelsRequest) returns (ListRemoteModelsResponse);
+  // Sets the provider order Settings, the model picker and the first-model
+  // fallback follow.
+  rpc ReorderProviders(ReorderProvidersRequest) returns (ReorderProvidersResponse);
 }
 
 message Provider {
@@ -209,4 +212,25 @@ message ListRemoteModelsResponse {
   optional string next_cursor = 2;
   // True when the provider listed more than the platform reads (2,000).
   bool truncated = 3;
+}
+
+message ReorderProvidersRequest {
+  // Provider ids in their new order. Providers that are not listed keep
+  // their relative order after the listed ones.
+  repeated string provider_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 1000
+    unique: true
+    items: {
+      string: {
+        min_len: 1
+        max_len: 200
+      }
+    }
+  }];
+}
+
+message ReorderProvidersResponse {
+  // Every provider id in its new order.
+  repeated string provider_ids = 1;
 }

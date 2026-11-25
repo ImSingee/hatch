@@ -24,6 +24,7 @@ import {
 import {
   IconAdjustments,
   IconDotsVertical,
+  IconGripVertical,
   IconPencil,
   IconPlugConnected,
   IconPlus,
@@ -34,6 +35,12 @@ import {
 import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import { useErrorText, useI18n } from '~i18n';
+import {
+  DRAG_HANDLE_ATTRIBUTE,
+  SortableList,
+  sortByIds,
+  type SortableItemControls,
+} from '~components/desk/sortable-list';
 import { ProviderAvatar } from '~components/providers/provider-avatar';
 import { formatExact, formatRelativeTime } from '~/lib/format';
 import {
@@ -46,6 +53,8 @@ import {
   deleteModel,
   deleteProvider,
   refreshCatalog,
+  reorderModels,
+  reorderProviders,
   testProvider,
   updateModel,
   updateModelCatalogSettings,
@@ -72,14 +81,84 @@ function useInvalidateProviders() {
     ]);
 }
 
+/**
+ * Grip that drags its row; with focus, ArrowUp and ArrowDown move the row
+ * one place instead.
+ */
+function DragHandle({
+  name,
+  controls,
+}: {
+  name: string;
+  controls: SortableItemControls;
+}) {
+  const { t } = useI18n();
+  return (
+    <ActionIcon
+      variant="subtle"
+      color="gray"
+      size="sm"
+      className={classes.dragHandle}
+      aria-label={t('providers.reorderNamed', { name })}
+      {...{ [DRAG_HANDLE_ATTRIBUTE]: '' }}
+      onKeyDown={(event) => {
+        const delta =
+          event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+        if (!delta) return;
+        event.preventDefault();
+        if (delta < 0 ? !controls.isFirst : !controls.isLast)
+          controls.move(delta);
+      }}
+    >
+      <IconGripVertical size={15} stroke={1.6} />
+    </ActionIcon>
+  );
+}
+
+/**
+ * Persist a drag order. The providers cache takes the new order at once and
+ * rolls back if the server rejects it; the picker's list follows on refetch.
+ */
+function useReorder<T>(
+  mutationFn: (ids: string[]) => Promise<T>,
+  apply: (
+    providers: ProviderWithModels[],
+    ids: string[],
+  ) => ProviderWithModels[],
+) {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateProviders();
+  return useMutation({
+    mutationFn,
+    onMutate: async (ids: string[]) => {
+      await qc.cancelQueries({ queryKey: providersQueryOptions.queryKey });
+      const previous = qc.getQueryData<ProviderWithModels[]>(
+        providersQueryOptions.queryKey,
+      );
+      qc.setQueryData<ProviderWithModels[]>(
+        providersQueryOptions.queryKey,
+        (old) => (old ? apply(old, ids) : old),
+      );
+      return { previous };
+    },
+    onError: (_error, _ids, context) => {
+      if (context?.previous)
+        qc.setQueryData(providersQueryOptions.queryKey, context.previous);
+    },
+    onSettled: () => invalidate(),
+  });
+}
+
 function ModelRow({
   provider,
   model,
   onEdit,
+  controls,
 }: {
   provider: ProviderWithModels;
   model: ProviderModel;
   onEdit: () => void;
+  controls: SortableItemControls;
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -131,6 +210,7 @@ function ModelRow({
       className={classes.modelRow}
       data-disabled={!model.enabled || undefined}
     >
+      <DragHandle name={model.name} controls={controls} />
       <Group gap="sm" wrap="nowrap" className={classes.modelMain}>
         <Text size="sm" fw={600} className={classes.modelName}>
           {model.name}
@@ -150,8 +230,15 @@ function ModelRow({
             {formatTokenCount(model.chat.contextWindow)}
           </span>
         ) : null}
-        {model.chat?.overridden.length ? (
-          <Tooltip label={t('providers.model.customTooltip')} withArrow>
+        {!model.inCatalog || model.chat?.overridden.length ? (
+          <Tooltip
+            label={t(
+              model.inCatalog
+                ? 'providers.model.customTooltip'
+                : 'providers.model.notInCatalogTooltip',
+            )}
+            withArrow
+          >
             <Badge variant="light" size="sm">
               {t('providers.model.custom')}
             </Badge>
@@ -289,12 +376,28 @@ function AddModel({ provider }: { provider: ProviderWithModels }) {
   );
 }
 
-function ProviderCard({ provider }: { provider: ProviderWithModels }) {
+function ProviderCard({
+  provider,
+  controls,
+}: {
+  provider: ProviderWithModels;
+  controls: SortableItemControls;
+}) {
   const { t } = useI18n();
   const qc = useQueryClient();
   const invalidate = useInvalidateProviders();
   const [editOpen, editHandlers] = useDisclosure(false);
   const [editing, setEditing] = useState<ProviderModel | null>(null);
+  const reorder = useReorder(
+    (modelIds) =>
+      reorderModels({ data: { providerId: provider.id, modelIds } }),
+    (providers, ids) =>
+      providers.map((p) =>
+        p.id === provider.id
+          ? { ...p, models: sortByIds(p.models, ids) ?? p.models }
+          : p,
+      ),
+  );
 
   const toggleEnabled = useMutation({
     mutationKey: ['provider-enabled', provider.id],
@@ -362,6 +465,7 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     <div className={classes.provider}>
       <div className={classes.providerHead}>
         <Group className={classes.providerInfo} wrap="nowrap" gap="sm">
+          <DragHandle name={provider.name} controls={controls} />
           <ProviderAvatar
             catalogProviderId={provider.catalogProviderId}
             apiType={provider.apiType}
@@ -469,14 +573,19 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
       <div className={classes.models}>
         {provider.models.length > 0 ? (
           <Stack gap={2}>
-            {provider.models.map((m) => (
-              <ModelRow
-                key={m.id}
-                provider={provider}
-                model={m}
-                onEdit={() => setEditing(m)}
-              />
-            ))}
+            <SortableList
+              handle
+              items={provider.models}
+              onReorder={(ids) => reorder.mutate(ids)}
+              renderItem={(m, modelControls) => (
+                <ModelRow
+                  provider={provider}
+                  model={m}
+                  onEdit={() => setEditing(m)}
+                  controls={modelControls}
+                />
+              )}
+            />
           </Stack>
         ) : (
           <Text size="sm" c="dimmed" className={classes.emptyModels}>
@@ -647,6 +756,10 @@ export function ProvidersPanel({
 }) {
   const { t } = useI18n();
   const { data: providers } = useSuspenseQuery(providersQueryOptions);
+  const reorder = useReorder(
+    (providerIds) => reorderProviders({ data: { providerIds } }),
+    (list, ids) => sortByIds(list, ids) ?? list,
+  );
 
   return (
     <Stack gap="md">
@@ -673,9 +786,14 @@ export function ProvidersPanel({
         </Stack>
       ) : (
         <div className={classes.providerList}>
-          {providers.map((p) => (
-            <ProviderCard key={p.id} provider={p} />
-          ))}
+          <SortableList
+            handle
+            items={providers}
+            onReorder={(ids) => reorder.mutate(ids)}
+            renderItem={(p, controls) => (
+              <ProviderCard provider={p} controls={controls} />
+            )}
+          />
         </div>
       )}
     </Stack>
