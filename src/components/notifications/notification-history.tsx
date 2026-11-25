@@ -57,7 +57,11 @@ export function NotificationHistory({
   const { t } = useI18n();
   const query = useInfiniteQuery(notificationRevisionsQueryOptions(item.id));
   if (!query.data) {
-    return <Loader size="sm" aria-label={t('notifications.versions.title')} />;
+    return query.isError ? (
+      <LoadFailed onRetry={() => void query.refetch()} />
+    ) : (
+      <Loader size="sm" aria-label={t('notifications.versions.title')} />
+    );
   }
   const total = item.earlierVersions + 1;
   const revisions = query.data.pages.flatMap((page) => page.revisions);
@@ -189,7 +193,10 @@ export function NotificationHistory({
           );
         })}
       </ol>
-      {query.hasNextPage ? (
+      {/* A later page that failed keeps what loaded and offers the retry. */}
+      {query.isFetchNextPageError ? (
+        <LoadFailed onRetry={() => void query.fetchNextPage()} />
+      ) : query.hasNextPage ? (
         <button
           type="button"
           className={classes.more}
@@ -253,6 +260,18 @@ function Question({
             : t('notifications.versions.noAnswer')}
         </p>
       )}
+    </div>
+  );
+}
+
+function LoadFailed({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className={classes.failed} role="alert">
+      <span>{t('notifications.versions.loadFailed')}</span>
+      <button type="button" className={classes.more} onClick={onRetry}>
+        {t('common.tryAgain')}
+      </button>
     </div>
   );
 }

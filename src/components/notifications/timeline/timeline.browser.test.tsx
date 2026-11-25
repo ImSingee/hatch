@@ -300,16 +300,22 @@ test('opens every version of an edited or recalled notification beside the timel
   await expect.element(panel).not.toBeInTheDocument();
 });
 
-test('reads nothing while the versions panel covers the timeline on a narrow window', async () => {
+test('covers the timeline with the versions panel on a narrow window, reading nothing behind it', async () => {
   fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
   fixtures.items[2]!.earlierVersions = 1;
-  const { screen, queryClient } = await renderTimeline(600, 600);
-  await screen
-    .getByRole('button', { name: 'Edited 1 time · View history' })
-    .click();
+  const { screen, scroller, queryClient } = await renderTimeline(600, 600);
+  const opener = screen.getByRole('button', {
+    name: 'Edited 1 time · View history',
+  });
+  await opener.click();
   await expect
     .element(screen.getByRole('complementary', { name: 'Earlier versions' }))
     .toBeVisible();
+  // Focus moves into the panel, and the covered timeline is out of reach.
+  await expect
+    .element(screen.getByRole('button', { name: 'Close earlier versions' }))
+    .toHaveFocus();
+  expect(scroller().inert).toBe(true);
 
   // Something new arrives while the panel hides the timeline.
   queryClient.setQueryData(['notifications', 'read-state'], {
@@ -321,5 +327,7 @@ test('reads nothing while the versions panel covers the timeline on a narrow win
   expect(fixtures.markRead).toEqual([]);
 
   await screen.getByRole('button', { name: 'Close earlier versions' }).click();
+  expect(scroller().inert).toBe(false);
+  await expect.element(opener).toHaveFocus();
   await vi.waitFor(() => expect(fixtures.markRead).toEqual(['n002']));
 });

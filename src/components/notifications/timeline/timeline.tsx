@@ -120,8 +120,12 @@ export function NotificationTimeline() {
   const historyItem = historyId
     ? items.find((item) => item.id === historyId)
     : undefined;
-  const toggleHistory = (id: string) =>
+  // The button that opened the panel, given focus back when it closes.
+  const historyOpener = useRef<HTMLElement | null>(null);
+  const toggleHistory = (id: string) => {
+    historyOpener.current = document.activeElement as HTMLElement | null;
     setHistoryId((current) => (current === id ? null : id));
+  };
   const firstUnreadId = opened?.firstUnreadId ?? null;
   const rows = useMemo(
     () => buildTimelineRows(items, moved, firstUnreadId),
@@ -197,6 +201,34 @@ export function NotificationTimeline() {
   const timelineCovered = () =>
     panelRef.current !== null &&
     getComputedStyle(panelRef.current).position === 'absolute';
+  // While the panel covers the timeline, the timeline is inert and focus
+  // moves into the panel; it returns to the opening button on close. Side by
+  // side, both stay in reach.
+  const panelCloseRef = useRef<HTMLButtonElement>(null);
+  const [covered, setCovered] = useState(false);
+  const historyOpen = historyId !== null;
+  useLayoutEffect(() => {
+    if (!historyOpen) {
+      setCovered(false);
+      // Reachable again before the opener inside it takes focus back.
+      if (scrollRef.current) scrollRef.current.inert = false;
+      const opener = historyOpener.current;
+      if (opener?.isConnected) opener.focus();
+      historyOpener.current = null;
+      return;
+    }
+    const update = () => setCovered(timelineCovered());
+    update();
+    const layout = panelRef.current?.parentElement;
+    if (!layout) return;
+    const observer = new ResizeObserver(update);
+    observer.observe(layout);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only
+  }, [historyOpen]);
+  useLayoutEffect(() => {
+    if (covered) panelCloseRef.current?.focus();
+  }, [covered]);
   // Reading means the newest has been on screen for a moment in a visible tab.
   const readNewest = useEventCallback(() => {
     if (
@@ -347,6 +379,7 @@ export function NotificationTimeline() {
     <div className={classes.layout}>
       <section
         ref={scrollRef}
+        inert={covered}
         className={classes.scroll}
         onScroll={onScroll}
         aria-label={t('notifications.timeline.label')}
@@ -456,6 +489,7 @@ export function NotificationTimeline() {
             </div>
             <button
               type="button"
+              ref={panelCloseRef}
               className={classes.panelClose}
               aria-label={t('notifications.versions.close')}
               onClick={() => setHistoryId(null)}

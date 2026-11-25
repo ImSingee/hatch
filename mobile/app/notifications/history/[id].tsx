@@ -243,7 +243,18 @@ export default function NotificationHistoryScreen() {
             </View>
           );
         })}
-        {earlier.hasNextPage ? (
+        {/* A later page that failed keeps what loaded and offers the retry. */}
+        {earlier.isFetchNextPageError ? (
+          <Notice
+            tone="danger"
+            title="Couldn’t load earlier versions"
+            detail={errorText(earlier.error)}
+            action={{
+              label: 'Try again',
+              onPress: () => void earlier.fetchNextPage(),
+            }}
+          />
+        ) : earlier.hasNextPage ? (
           <Button
             label="Show earlier versions"
             variant="secondary"

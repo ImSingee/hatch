@@ -180,3 +180,12 @@
   cursor: progress;
   opacity: 0.6;
 }
+
+.failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--mantine-color-red-7);
+  font-size: 13px;
+}

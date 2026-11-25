@@ -2033,5 +2033,6 @@
   "notifications.versions.openEdited_one": "已修改 {{count}} 次 · 查看历史",
   "notifications.versions.openEdited_other": "已修改 {{count}} 次 · 查看历史",
   "notifications.versions.openRecalled": "查看原通知",
-  "notifications.versions.sectionTitle": "版本历史"
+  "notifications.versions.sectionTitle": "版本历史",
+  "notifications.versions.loadFailed": "无法加载历史版本。"
 }

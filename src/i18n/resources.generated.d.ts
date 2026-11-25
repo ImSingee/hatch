@@ -2036,4 +2036,5 @@ export type TranslationResource = {
   'notifications.versions.openEdited_other': 'Edited {{count}} times · View history';
   'notifications.versions.openRecalled': 'View original';
   'notifications.versions.sectionTitle': 'Version history';
+  'notifications.versions.loadFailed': 'Couldn’t load earlier versions.';
 };
