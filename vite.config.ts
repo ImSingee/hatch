@@ -73,13 +73,26 @@ const config = defineConfig(({ mode, isPreview }) => ({
       // matches, and every TanStack route sits behind one catch-all. An
       // `<img>` pointing at an API route (App icons) would therefore 404 in
       // dev only. API paths are never static assets, so drop the hint.
+      //
+      // Vite also takes any `.js`/`.css` URL for a source module of its own.
+      // A native App's player, styles, module and fonts (under its embed
+      // page) and the NSH runtime files are served by platform routes, so
+      // mark those requests as documents: Vite then leaves them alone and
+      // Nitro routes them as it does a page.
       name: 'hatch-api-is-not-an-asset',
       apply: 'serve',
       enforce: 'pre',
       configureServer(server) {
         server.middlewares.use((req, _res, next) => {
-          if (req.url?.startsWith('/api/'))
+          const url = req.url ?? '';
+          if (
+            /^\/app\/[^/]+\/embed\//.test(url) ||
+            url.startsWith('/api/app-runtime/')
+          ) {
+            req.headers['sec-fetch-dest'] = 'document';
+          } else if (url.startsWith('/api/')) {
             delete req.headers['sec-fetch-dest'];
+          }
           next();
         });
       },
