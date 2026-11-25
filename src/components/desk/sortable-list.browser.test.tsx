@@ -71,3 +71,31 @@ test('a handle list drags from its handle only, and nested lists stay apart', as
   await userEvent.keyboard('{ArrowDown}');
   expect(inner).toHaveBeenLastCalledWith(['b2', 'b1']);
 });
+
+test('quick key presses build on the order just submitted', async () => {
+  const onReorder = vi.fn<(ids: string[]) => void>();
+  // The caller's update lands later, so `items` stays as it was.
+  const screen = await render(
+    <SortableList
+      handle
+      items={[{ id: 'a' }, { id: 'b' }, { id: 'c' }]}
+      onReorder={onReorder}
+      renderItem={(row, controls) => (
+        <button
+          type="button"
+          aria-label={`grip ${row.id}`}
+          {...handle}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') controls.move(1);
+          }}
+        >
+          {row.id}
+        </button>
+      )}
+    />,
+  );
+
+  await userEvent.click(screen.getByRole('button', { name: 'grip a' }));
+  await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+  expect(onReorder.mock.calls).toEqual([[['b', 'a', 'c']], [['b', 'c', 'a']]]);
+});

@@ -41,6 +41,7 @@ import {
   sortByIds,
   type SortableItemControls,
 } from '~components/desk/sortable-list';
+import { useSerialSave } from '~components/desk/use-serial-save';
 import { ProviderAvatar } from '~components/providers/provider-avatar';
 import { formatExact, formatRelativeTime } from '~/lib/format';
 import {
@@ -106,8 +107,7 @@ function DragHandle({
           event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
         if (!delta) return;
         event.preventDefault();
-        if (delta < 0 ? !controls.isFirst : !controls.isLast)
-          controls.move(delta);
+        controls.move(delta);
       }}
     >
       <IconGripVertical size={15} stroke={1.6} />
@@ -116,11 +116,13 @@ function DragHandle({
 }
 
 /**
- * Persist a drag order. The providers cache takes the new order at once and
- * rolls back if the server rejects it; the picker's list follows on refetch.
+ * Persist a drag order. The providers cache takes each new order at once;
+ * saves of one list go out one at a time (see `useSerialSave`) so a quick
+ * second move is never overwritten by the first save landing late. The
+ * cache refetches once the list is saved, which also undoes a failed save.
  */
 function useReorder<T>(
-  mutationFn: (ids: string[]) => Promise<T>,
+  save: (ids: string[]) => Promise<T>,
   apply: (
     providers: ProviderWithModels[],
     ids: string[],
@@ -128,25 +130,17 @@ function useReorder<T>(
 ) {
   const qc = useQueryClient();
   const invalidate = useInvalidateProviders();
-  return useMutation({
-    mutationFn,
-    onMutate: async (ids: string[]) => {
-      await qc.cancelQueries({ queryKey: providersQueryOptions.queryKey });
-      const previous = qc.getQueryData<ProviderWithModels[]>(
-        providersQueryOptions.queryKey,
-      );
-      qc.setQueryData<ProviderWithModels[]>(
-        providersQueryOptions.queryKey,
-        (old) => (old ? apply(old, ids) : old),
-      );
-      return { previous };
-    },
-    onError: (_error, _ids, context) => {
-      if (context?.previous)
-        qc.setQueryData(providersQueryOptions.queryKey, context.previous);
-    },
-    onSettled: () => invalidate(),
-  });
+  // The mutation only reports a failed save through the global error toast.
+  const { mutateAsync } = useMutation({ mutationFn: save });
+  const submit = useSerialSave(mutateAsync, invalidate);
+  return (ids: string[]) => {
+    void qc.cancelQueries({ queryKey: providersQueryOptions.queryKey });
+    qc.setQueryData<ProviderWithModels[]>(
+      providersQueryOptions.queryKey,
+      (old) => (old ? apply(old, ids) : old),
+    );
+    submit(ids);
+  };
 }
 
 function ModelRow({
@@ -576,7 +570,7 @@ function ProviderCard({
             <SortableList
               handle
               items={provider.models}
-              onReorder={(ids) => reorder.mutate(ids)}
+              onReorder={(ids) => reorder(ids)}
               renderItem={(m, modelControls) => (
                 <ModelRow
                   provider={provider}
@@ -789,7 +783,7 @@ export function ProvidersPanel({
           <SortableList
             handle
             items={providers}
-            onReorder={(ids) => reorder.mutate(ids)}
+            onReorder={(ids) => reorder(ids)}
             renderItem={(p, controls) => (
               <ProviderCard provider={p} controls={controls} />
             )}

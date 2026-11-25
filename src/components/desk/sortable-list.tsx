@@ -7,10 +7,11 @@ export const DRAG_HANDLE_ATTRIBUTE = 'data-drag-handle';
 
 /** What `renderItem` can do besides dragging, for keyboard reordering. */
 export type SortableItemControls = {
-  /** Move the item one place up (-1) or down (1) and persist the order. */
+  /**
+   * Move the item one place up (-1) or down (1) and persist the order; a
+   * move past either end does nothing.
+   */
   move: (delta: -1 | 1) => void;
-  isFirst: boolean;
-  isLast: boolean;
 };
 
 /**
@@ -58,10 +59,19 @@ export function SortableList<T extends WithId>({
   const dragOrderRef = useRef<string[] | null>(null);
   const movedRef = useRef(false);
   const itemOrder = items.map((item) => item.id);
-  const order = dragOrder ?? itemOrder;
+  // The order the last keyboard move submitted, shown until `items` changes
+  // (the caller's update can land a tick later); a quick next key press
+  // builds on it instead of on stale props.
+  const [submitted, setSubmitted] = useState<{
+    basedOn: string;
+    order: string[];
+  } | null>(null);
+  const itemsKey = itemOrder.join('\n');
+  const settledOrder =
+    submitted?.basedOn === itemsKey ? submitted.order : itemOrder;
 
   const byId = new Map(items.map((i) => [i.id, i]));
-  const ordered = order
+  const ordered = (dragOrder ?? settledOrder)
     .map((id) => byId.get(id))
     .filter((x): x is T => Boolean(x));
 
@@ -80,18 +90,19 @@ export function SortableList<T extends WithId>({
   };
 
   const moveBy = (id: string, delta: -1 | 1) => {
-    const index = itemOrder.indexOf(id);
+    const index = settledOrder.indexOf(id);
     const target = index + delta;
-    if (index < 0 || target < 0 || target >= itemOrder.length) return;
-    const next = [...itemOrder];
+    if (index < 0 || target < 0 || target >= settledOrder.length) return;
+    const next = [...settledOrder];
     next.splice(index, 1);
     next.splice(target, 0, id);
+    setSubmitted({ basedOn: itemsKey, order: next });
     onReorder(next);
   };
 
   return (
     <>
-      {ordered.map((item, index) => (
+      {ordered.map((item) => (
         <div
           key={item.id}
           data-sortable-item=""
@@ -112,8 +123,8 @@ export function SortableList<T extends WithId>({
           onPointerUp={handle ? () => setArmedId(null) : undefined}
           onDragStart={(e) => {
             e.stopPropagation();
-            dragOrderRef.current = itemOrder;
-            setDragOrder(itemOrder);
+            dragOrderRef.current = settledOrder;
+            setDragOrder(settledOrder);
             setDraggingId(item.id);
             movedRef.current = false;
             e.dataTransfer.effectAllowed = 'move';
@@ -138,8 +149,6 @@ export function SortableList<T extends WithId>({
         >
           {renderItem(item, {
             move: (delta) => moveBy(item.id, delta),
-            isFirst: index === 0,
-            isLast: index === ordered.length - 1,
           })}
         </div>
       ))}
