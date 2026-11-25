@@ -122,6 +122,35 @@ describe('buildApp output replacement', () => {
     expect((failure as NodeJS.ErrnoException).code).toBe('ENOSPC');
   }, 60_000);
 
+  it('reports a missing source without its path, and keeps access errors internal', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-src-'));
+    tempDirs.push(root);
+    const missing = await buildApp('demo', {
+      sourceDir: path.join(root, 'absent'),
+      outputDir: path.join(root, 'out'),
+    }).catch((error: unknown) => error);
+    expect(missing).toBeInstanceOf(AppBuildError);
+    expect((missing as Error).message).toBe('App source not found for demo.');
+    expect((missing as Error).message).not.toContain(root);
+
+    // A source the platform may not read is not the caller's problem.
+    // (Permissions do not stop root, so this half needs another user.)
+    if (process.getuid?.() === 0) return;
+    const locked = path.join(root, 'locked');
+    await fs.mkdir(path.join(locked, 'src'), { recursive: true });
+    await fs.chmod(locked, 0o000);
+    try {
+      const denied = await buildApp('demo', {
+        sourceDir: path.join(locked, 'src'),
+        outputDir: path.join(root, 'out'),
+      }).catch((error: unknown) => error);
+      expect(denied).not.toBeInstanceOf(AppBuildError);
+      expect((denied as NodeJS.ErrnoException).code).toBe('EACCES');
+    } finally {
+      await fs.chmod(locked, 0o755);
+    }
+  });
+
   it('keeps the previous output when copying across devices fails', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-swap-'));
     tempDirs.push(root);

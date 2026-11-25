@@ -279,8 +279,10 @@ describe.skipIf(!nshAvailable())(
           '    const createClient = (_: unknown) => ({ watch: () => 0 });',
           '    const local = createClient(CounterService);',
           '    local.watch(); // a local factory, not Connect',
-          "    const key = 'getCount' as const;",
-          '    void client[key]({}); // a unary method under a computed key',
+          "    const watch = 'getCount' as const;",
+          '    void client[watch]({}); // unary, whatever the key is called',
+          "    const key = 'watch' as const;",
+          '    void client[key]({}); // the streaming method under a const key',
           '  }',
           '  const go = (next: string) => {',
         ].join('\n'),
@@ -307,7 +309,10 @@ describe.skipIf(!nshAvailable())(
         `app/main.tsx:${lineOf(main, 'local.watch(); // a local factory')}:`,
       );
       expect(message).not.toContain(
-        `app/main.tsx:${lineOf(main, 'void client[key]')}:`,
+        `app/main.tsx:${lineOf(main, 'void client[watch]')}:`,
+      );
+      expect(message).toContain(
+        `app/main.tsx:${lineOf(main, 'void client[key]')}: app.v1.CounterService/Watch`,
       );
     });
 

@@ -37,7 +37,7 @@ import {
   type SourceFile,
   type VariableDeclaration,
 } from 'typescript/unstable/ast';
-import { API, type Checker } from 'typescript/unstable/async';
+import { API, TypeFlags, type Checker } from 'typescript/unstable/async';
 import { sourceBoundaryPlugin } from '../../../toolchain/esbuild-plugins';
 import type { RpcServiceApi } from '../manifest';
 
@@ -444,6 +444,8 @@ async function fileFindings(
   const connectFactories: Node[] = [];
   const connectNamespaces: Node[] = [];
   const memberCalls: { receiver: Node; method: string; at: Node }[] = [];
+  // `client[key](...)` with a non-literal key, resolved from its type below.
+  const computedCalls: { receiver: Node; key: Node; at: Node }[] = [];
 
   const visit = (node: Node): void => {
     switch (node.kind) {
@@ -563,10 +565,14 @@ async function fileFindings(
         } else if (callee.kind === SyntaxKind.ElementAccessExpression) {
           const access = callee as ElementAccessExpression;
           receiver = unwrap(access.expression);
-          // Only a literal key names the method; `client[key]` is not read
-          // by its spelling.
+          // A literal key names the method; any other key is resolved from
+          // its type (`const key = 'watch' as const`), never its spelling.
           const key = unwrap(access.argumentExpression);
-          method = isStringLike(key) ? key.text : undefined;
+          if (isStringLike(key)) {
+            method = key.text;
+          } else {
+            computedCalls.push({ receiver, key, at: callee });
+          }
         }
         if (receiver && method) {
           memberCalls.push({ receiver, method, at: callee });
@@ -578,7 +584,25 @@ async function fileFindings(
   };
   visit(source);
 
-  if (streaming.size === 0 || memberCalls.length === 0) return findings;
+  if (streaming.size === 0) return findings;
+  if (computedCalls.length > 0) {
+    const types = await checker.getTypeAtLocation(
+      computedCalls.map(({ key }) => key),
+    );
+    computedCalls.forEach(({ receiver, at }, index) => {
+      const type = types[index] as
+        | { flags: number; value?: unknown }
+        | undefined;
+      if (
+        type &&
+        type.flags & TypeFlags.StringLiteral &&
+        typeof type.value === 'string'
+      ) {
+        memberCalls.push({ receiver, method: type.value, at });
+      }
+    });
+  }
+  if (memberCalls.length === 0) return findings;
   const reportStreaming = (service: string, method: string, at: Node) => {
     const found = streaming.get(service)?.get(method);
     if (!found) return;

@@ -664,8 +664,14 @@ async function buildAppInner(
   const out = options.outputDir ?? appBuildDir(id);
   const logs: string[] = [];
 
-  if (!(await pathExists(originalSrc))) {
-    throw new Error(`App source not found: ${originalSrc}`);
+  try {
+    await fs.access(originalSrc);
+  } catch (error) {
+    // Only a missing source is the caller's problem; any other failure
+    // (permissions, I/O) is the platform's and stays an internal error.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    // The message reaches the caller, so it names the App, not a server path.
+    throw new Error(`App source not found for ${id}.`);
   }
 
   const tempSrc = path.join(BUILD_WORK_DIR, id, randomUUID());
