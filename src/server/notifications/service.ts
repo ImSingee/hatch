@@ -196,6 +196,8 @@ export type NotificationSummaryView = {
   activityAt: string;
   /** 1 for the original; every edit and the recall increment it. */
   revision: number;
+  /** Versions an edit replaced, kept in its history; 0 when never edited. */
+  earlierVersions: number;
   editedAt: string | null;
   recalledAt: string | null;
   /** Status and one block the timeline shows; null without one. */
@@ -367,6 +369,23 @@ function deliveryStatus(counts: DeliveryCounts): NotificationStatus {
   return 'partial';
 }
 
+/** How many earlier versions each notification keeps. */
+async function earlierVersionCounts(
+  notificationIds: string[],
+): Promise<Map<string, number>> {
+  if (notificationIds.length === 0) return new Map();
+  const r = schema.notificationRevisions;
+  const rows = await db
+    .select({
+      notificationId: r.notificationId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(r)
+    .where(inArray(r.notificationId, notificationIds))
+    .groupBy(r.notificationId);
+  return new Map(rows.map((row) => [row.notificationId, row.count]));
+}
+
 async function deliveryCounts(
   notificationIds: string[],
 ): Promise<Map<string, DeliveryCounts>> {
@@ -409,6 +428,7 @@ function summaryView(
   row: NotificationRow,
   counts: DeliveryCounts | undefined,
   response: NotificationResponseView | null,
+  earlierVersions: number,
 ): NotificationSummaryView {
   const deliveries = counts ?? {
     pending: 0,
@@ -432,6 +452,7 @@ function summaryView(
     createdAt: iso(row.createdAt),
     activityAt: iso(row.activityAt),
     revision: row.revision,
+    earlierVersions,
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
     card: row.card,
@@ -551,14 +572,20 @@ export async function listNotifications(
     .limit(limit + 1);
   const page = rows.slice(0, limit);
   const ids = page.map((row) => row.id);
-  const [counts, responses] = await Promise.all([
+  const [counts, responses, versions] = await Promise.all([
     deliveryCounts(ids),
     loadResponseViews(page),
+    earlierVersionCounts(ids),
   ]);
   const last = page.at(-1);
   return {
     items: page.map((row) =>
-      summaryView(row, counts.get(row.id), responses.get(row.id) ?? null),
+      summaryView(
+        row,
+        counts.get(row.id),
+        responses.get(row.id) ?? null,
+        versions.get(row.id) ?? 0,
+      ),
     ),
     nextCursor:
       rows.length > limit && last
@@ -618,9 +645,12 @@ export async function getNotification(
       ? loadResponseView(id, row.replyRound)
       : Promise.resolve(null),
   ]);
-  const counts = (await deliveryCounts([id])).get(id);
+  const [counts, versions] = await Promise.all([
+    deliveryCounts([id]),
+    earlierVersionCounts([id]),
+  ]);
   return {
-    ...summaryView(row, counts, response),
+    ...summaryView(row, counts.get(id), response, versions.get(id) ?? 0),
     data: row.data,
     dedupeKey: row.dedupeKey,
     deliveryList: deliveries.map(deliveryView),
@@ -634,6 +664,8 @@ export type NotificationRevisionView = {
   title: string;
   body: string | null;
   url: string | null;
+  /** Whether tapping the phone push opened `url` (false before it was kept). */
+  autoOpenUrl: boolean;
   data: Record<string, unknown> | null;
   card: NotificationCard | null;
   reply: ReplyForm | null;
@@ -703,6 +735,7 @@ export async function listNotificationRevisions(
       title: revision.title,
       body: revision.body,
       url: revision.url,
+      autoOpenUrl: revision.autoOpenUrl,
       data: revision.data,
       card: revision.card,
       reply: revision.reply,

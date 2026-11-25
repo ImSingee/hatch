@@ -8,6 +8,7 @@ import {
   type AgentSession,
   type AgentSessionSummary,
   type GetModelCatalogResponse,
+  type ListNotificationRevisionsResponse,
   type NotificationDetail as RpcNotificationDetail,
   type NotificationReadState as RpcNotificationReadState,
   type NotificationResponse as RpcNotificationResponse,
@@ -22,6 +23,7 @@ import type {
   NotificationDetail,
   NotificationReadState,
   NotificationSummary,
+  NotificationVersionsPage,
   RunStatus,
   SessionDetail,
   SessionSummary,
@@ -203,6 +205,8 @@ export function notificationSummaryProjection(
     status: value.status,
     priority: value.priority,
     editedAt: value.editedAt ?? null,
+    revision: value.revision,
+    earlierVersions: value.earlierVersions,
     recalledAt: value.recalledAt ?? null,
     reply: value.reply ? replyFromMessage(value.reply) : null,
     replyRound: value.replyRound || 1,
@@ -211,6 +215,26 @@ export function notificationSummaryProjection(
     // Instances from before the timeline have no activity time.
     activityAt: value.activityAt || value.createdAt,
     card: value.card ? cardFromMessage(value.card) : null,
+  };
+}
+
+export function versionsPageProjection(
+  value: ListNotificationRevisionsResponse,
+): NotificationVersionsPage {
+  return {
+    versions: value.revisions.map((revision) => ({
+      revision: revision.revision,
+      title: revision.title,
+      body: revision.body ?? null,
+      url: revision.url ?? null,
+      card: revision.card ? cardFromMessage(revision.card) : null,
+      reply: revision.reply ? replyFromMessage(revision.reply) : null,
+      replyRound: revision.replyRound || 1,
+      activityAt: revision.activityAt,
+      replacedAt: revision.replacedAt,
+    })),
+    answers: value.responses.map(answerProjection),
+    nextCursor: value.nextCursor ?? null,
   };
 }
 

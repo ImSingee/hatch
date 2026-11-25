@@ -28,6 +28,7 @@ const fixtures = vi.hoisted(() => ({
   },
   pagesRequested: 0,
   markRead: [] as string[],
+  revisions: {} as Record<string, unknown[]>,
 }));
 
 // Server Functions cannot load in the browser project.
@@ -70,8 +71,8 @@ vi.mock('~queries/notifications', () => {
       infiniteQueryOptions({
         queryKey: [...key, 'revisions', id],
         queryFn: async () => ({
-          revisions: [],
-          responses: [],
+          revisions: (fixtures.revisions[id] ?? []) as never[],
+          responses: [] as never[],
           nextCursor: null as string | null,
         }),
         initialPageParam: null as string | null,
@@ -120,6 +121,7 @@ function notification(index: number): NotificationSummaryView {
     createdAt: at,
     activityAt: at,
     revision: 1,
+    earlierVersions: 0,
     editedAt: null,
     recalledAt: null,
     card: null,
@@ -144,9 +146,10 @@ beforeEach(() => {
   };
   fixtures.pagesRequested = 0;
   fixtures.markRead = [];
+  fixtures.revisions = {};
 });
 
-async function renderTimeline(height = 600) {
+async function renderTimeline(height = 600, width?: number) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -156,7 +159,9 @@ async function renderTimeline(height = 600) {
       cssVariablesResolver={appCssVariablesResolver}
     >
       <QueryClientProvider client={queryClient}>
-        <div style={{ height, display: 'flex', flexDirection: 'column' }}>
+        <div
+          style={{ height, width, display: 'flex', flexDirection: 'column' }}
+        >
           <NotificationTimeline />
         </div>
       </QueryClientProvider>
@@ -170,7 +175,7 @@ async function renderTimeline(height = 600) {
     document.querySelector<HTMLElement>(
       `article[aria-label="GitHub: Notification ${index}"]`,
     );
-  return { screen, scroller, article };
+  return { screen, scroller, article, queryClient };
 }
 
 test('opens at the newest and marks it read, and holds the view while older pages load', async () => {
@@ -242,4 +247,116 @@ test('gives paging back when the jump runs out of pages before the first unread'
   view.scrollTop = 0;
   view.dispatchEvent(new Event('scroll'));
   await vi.waitFor(() => expect(fixtures.pagesRequested).toBeGreaterThan(21));
+});
+
+test('opens every version of an edited or recalled notification beside the timeline', async () => {
+  fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
+  const edited = fixtures.items[2]!;
+  Object.assign(edited, {
+    body: 'All 14 checks passed.',
+    card: { status: { label: 'CI passed', tone: 'success' } },
+    editedAt: edited.activityAt,
+    earlierVersions: 1,
+  });
+  fixtures.revisions[edited.id] = [
+    {
+      revision: 1,
+      title: edited.title,
+      body: '2 checks failed.',
+      url: null,
+      autoOpenUrl: false,
+      data: null,
+      card: { status: { label: 'CI failed', tone: 'danger' } },
+      reply: null,
+      replyRound: 1,
+      activityAt: fixtures.items[0]!.activityAt,
+      replacedAt: edited.activityAt,
+    },
+  ];
+  const recalled = fixtures.items[1]!;
+  recalled.recalledAt = recalled.activityAt;
+  const { screen } = await renderTimeline();
+
+  await screen
+    .getByRole('button', { name: 'Edited 1 time · View history' })
+    .click();
+  const panel = screen.getByRole('complementary', { name: 'Earlier versions' });
+  await expect.element(panel.getByText('Current')).toBeVisible();
+  await expect.element(panel.getByText('Original')).toBeVisible();
+  await expect.element(panel.getByText('2 checks failed.')).toBeVisible();
+  await expect
+    .element(panel.getByText('Changed from the version before: Status · Text'))
+    .toBeVisible();
+
+  await screen
+    .getByRole('button', { name: /GitHub recalled “Notification 1”/ })
+    .click();
+  await expect.element(panel.getByText('Before the recall')).toBeVisible();
+  await expect
+    .element(panel.getByText(/GitHub recalled this notification at/))
+    .toBeVisible();
+
+  await screen.getByRole('button', { name: 'Close earlier versions' }).click();
+  await expect.element(panel).not.toBeInTheDocument();
+});
+
+test('covers the timeline with the versions panel on a narrow window, reading nothing behind it', async () => {
+  fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
+  fixtures.items[2]!.earlierVersions = 1;
+  const { screen, scroller, queryClient } = await renderTimeline(600, 600);
+  const opener = screen.getByRole('button', {
+    name: 'Edited 1 time · View history',
+  });
+  await opener.click();
+  await expect
+    .element(screen.getByRole('complementary', { name: 'Earlier versions' }))
+    .toBeVisible();
+  // Focus moves into the panel, and the covered timeline is out of reach.
+  await expect
+    .element(screen.getByRole('button', { name: 'Close earlier versions' }))
+    .toHaveFocus();
+  expect(scroller().inert).toBe(true);
+
+  // Something new arrives while the panel hides the timeline.
+  queryClient.setQueryData(['notifications', 'read-state'], {
+    ...fixtures.readState,
+    unreadCount: 1,
+    firstUnreadId: fixtures.items[2]!.id,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(fixtures.markRead).toEqual([]);
+
+  await screen.getByRole('button', { name: 'Close earlier versions' }).click();
+  expect(scroller().inert).toBe(false);
+  await expect.element(opener).toHaveFocus();
+  await vi.waitFor(() => expect(fixtures.markRead).toEqual(['n002']));
+});
+
+test('gives the timeline back when the shown notification goes away, and focus to a button clicked without focusing it', async () => {
+  fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
+  fixtures.items[2]!.earlierVersions = 1;
+  const { screen, scroller, queryClient } = await renderTimeline(600, 600);
+  const opener = screen.getByRole('button', {
+    name: 'Edited 1 time · View history',
+  });
+  await expect.element(opener).toBeVisible();
+
+  // Safari leaves focus where it was when a button is clicked.
+  (document.activeElement as HTMLElement | null)?.blur();
+  opener.element().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const close = screen.getByRole('button', { name: 'Close earlier versions' });
+  await expect.element(close).toHaveFocus();
+  await close.click();
+  await expect.element(opener).toHaveFocus();
+
+  await opener.click();
+  await expect.element(close).toHaveFocus();
+  expect(scroller().inert).toBe(true);
+  // Deleted from another client: the timeline refreshes without it.
+  fixtures.items = fixtures.items.slice(0, 2);
+  await queryClient.refetchQueries({ queryKey: ['notifications', 'timeline'] });
+  await expect
+    .element(screen.getByRole('complementary', { name: 'Earlier versions' }))
+    .not.toBeInTheDocument();
+  await vi.waitFor(() => expect(scroller().inert).toBe(false));
 });

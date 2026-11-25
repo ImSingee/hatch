@@ -245,6 +245,7 @@ export async function updateNotification(
           title: current.title,
           body: current.body,
           url: current.url,
+          autoOpenUrl: current.autoOpenUrl,
           data: current.data,
           card: current.card,
           reply: current.reply,
