@@ -5,21 +5,23 @@ desktop layout. macOS only, light only.
 
 ## What is native and what is web
 
-| Native (this folder)                                           | Web (the instance)                                |
-| -------------------------------------------------------------- | ------------------------------------------------- |
-| Window, traffic lights, window state, Dock reopen              | Every page: desk, Agent, Apps, Settings           |
-| Application menu and shortcuts (`⌘,` `⌘N` `⌘K` `⌘1`–`⌘4` `⌘[`) | The sidebar (`src/components/desktop-host/`)      |
-| First-run page: instance address, sign-in, errors              | Apps, through the same `AppSurface` as on the web |
-| Session in the Keychain, browser sign-in, browser handoff      |                                                   |
-| `hatch://` deep links, navigation rules, downloads             |                                                   |
+| Native (this folder)                                      | Web (the instance)                                |
+| --------------------------------------------------------- | ------------------------------------------------- |
+| Window, traffic lights, window state, Dock reopen         | Every page: desk, Agent, Apps, Settings           |
+| Application menu and shortcuts (`⌘,` `⌘N` `⌘1`–`⌘4` `⌘[`) | The sidebar (`src/components/desktop-host/`)      |
+| First-run page: instance address, sign-in, errors         | Apps, through the same `AppSurface` as on the web |
+| Session in the Keychain, browser sign-in, browser handoff |                                                   |
+| `hatch://` deep links, navigation rules, downloads        |                                                   |
 
 The web UI draws the sidebar layout (the `Mac-App` artboard) instead of the
 desk's menu bar and dock when the user agent contains `HatchDesktop/<version>`,
 which this app sends. Menu commands reach the page as a
 `hatch:desktop-command` event (`src/components/desktop-host/host.ts`). Nothing
-here re-implements a page: the sidebar's search and `⌘K` open the desk's own
-search palette, and pages use the desk's windows, framed flat by the
-`WindowFrame` context.
+here re-implements a page: the sidebar's search and the Search Apps menu item
+open the desk's own search palette. `⌘K` is not a menu accelerator: the page
+handles it as a platform shortcut, so an App that reserves it in its manifest
+receives it. Pages use the desk's windows, framed flat by the `WindowFrame`
+context.
 
 ## Sign-in and the session
 

@@ -7,9 +7,14 @@ import {
 
 /**
  * Every platform keyboard shortcut, by stable id. Adding a shortcut here is
- * all it takes: the shell's own document, every App page and widget frame and
- * the desktop menu dispatch through `PLATFORM_SHORTCUTS`, and an App that
- * reserved the chord in its manifest (`keyboard.reserve`) keeps it.
+ * all it takes: the shell's own document and every App page and widget frame
+ * dispatch through `PLATFORM_SHORTCUTS`, and an App that reserved the chord
+ * in its manifest (`keyboard.reserve`) keeps it.
+ *
+ * Only the page may own these keys. A native accelerator (such as a desktop
+ * menu item's) takes the key before the page sees it, so a reserving App
+ * could never receive it; the desktop menu therefore offers its items without
+ * these accelerators.
  *
  * `reservable: false` marks a shortcut that must keep working inside every
  * App, such as a future escape hatch; App reservations of its chord are
@@ -66,10 +71,7 @@ export function platformShortcutKeys(id: PlatformShortcutId) {
   };
 }
 
-/** How a shortcut was triggered: a key press, or the desktop app's menu. */
-export type PlatformShortcutSource = 'keyboard' | 'menu';
-
-type Handler = (source: PlatformShortcutSource) => void;
+type Handler = () => void;
 
 const handlers = new Map<PlatformShortcutId, Handler>();
 
@@ -136,7 +138,7 @@ function dispatchKeydown(
   if (!handler) return false;
   event.preventDefault();
   if (stop) event.stopImmediatePropagation();
-  handler('keyboard');
+  handler();
   return true;
 }
 
@@ -154,7 +156,7 @@ function onShellKeydown(event: KeyboardEvent) {
 export function usePlatformShortcut(id: PlatformShortcutId, handler: Handler) {
   const run = useEffectEvent(handler);
   useEffect(() => {
-    const registered: Handler = (source) => run(source);
+    const registered: Handler = () => run();
     if (handlers.size === 0) window.addEventListener('keydown', onShellKeydown);
     handlers.set(id, registered);
     return () => {
@@ -165,9 +167,6 @@ export function usePlatformShortcut(id: PlatformShortcutId, handler: Handler) {
     };
   }, [id]);
 }
-
-/** Frames whose platform shortcuts are attached, with their reservations. */
-const frames = new WeakMap<Window, () => ReadonlySet<string>>();
 
 /**
  * Make platform shortcuts work while focus is inside a same-origin App frame.
@@ -197,37 +196,11 @@ export function attachPlatformShortcuts(
     dispatchKeydown(event, current(), true);
   };
   frameWindow.addEventListener('keydown', onKeydown, true);
-  frames.set(frameWindow, current);
   return () => {
-    frames.delete(frameWindow);
     try {
       frameWindow.removeEventListener('keydown', onKeydown, true);
     } catch {
       // window already torn down
     }
   };
-}
-
-/** The reservations of the frame that holds focus, if any. */
-function focusedFrameReservations() {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLIFrameElement) || !active.contentWindow) {
-    return NO_RESERVATIONS;
-  }
-  return frames.get(active.contentWindow)?.() ?? NO_RESERVATIONS;
-}
-
-/**
- * Run a platform shortcut from outside the page's key events: the desktop
- * app's native menu, whose accelerator can fire while focus is inside an App.
- * Does nothing when the focused App reserved the shortcut's chord.
- */
-export function runPlatformShortcut(
-  id: PlatformShortcutId,
-  source: PlatformShortcutSource,
-) {
-  const shortcut = PLATFORM_SHORTCUTS.find((item) => item.id === id);
-  if (!shortcut) return;
-  if (isReserved(shortcut, focusedFrameReservations())) return;
-  handlers.get(id)?.(source);
 }

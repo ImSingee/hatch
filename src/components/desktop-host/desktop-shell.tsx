@@ -25,10 +25,7 @@ import { SearchPalette } from '~components/desk/command-palette';
 import type { DockOpenItem } from '~components/desk/dock-item';
 import { isAppPinOpen } from '~components/desk/dock';
 import { DESK_HOME } from '~components/desk/paths';
-import {
-  platformShortcutKeys,
-  runPlatformShortcut,
-} from '~components/desk/platform-shortcuts';
+import { platformShortcutKeys } from '~components/desk/platform-shortcuts';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
 import { appsQueryOptions } from '~queries/apps';
@@ -64,11 +61,9 @@ export function DesktopShell({
     event.preventDefault();
     if (command.type === 'navigate') void navigate({ to: command.to });
     if (command.type === 'toggle-sidebar') setCollapsed((value) => !value);
-    // The menu accelerator can fire while focus is inside an App, so it goes
-    // through the platform shortcut, which respects the App's reservations.
-    if (command.type === 'focus-search') {
-      runPlatformShortcut('palette.open', 'menu');
-    }
+    // Only a click on the menu item: ⌘K itself is a platform shortcut the
+    // page handles, so Apps that reserve it receive it.
+    if (command.type === 'focus-search') spotlight.open();
   });
   useEffect(() => {
     window.addEventListener(DESKTOP_COMMAND_EVENT, onCommand);

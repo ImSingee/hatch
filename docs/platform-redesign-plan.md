@@ -246,8 +246,9 @@ page or widget frame: platform shortcuts are listed once in
 `src/components/desk/platform-shortcuts.ts`, and `AppSurface` and the widget
 card catch them on the same-origin frame in the capture phase. An App that
 lists the chord under `keyboard.reserve` in its manifest receives it instead
-while focus is inside its page or widgets; the desktop menu accelerator
-respects the same reservation.
+while focus is inside its page or widgets. The desktop app's Search Apps
+menu item has no `⌘K` accelerator, because a native accelerator would take
+the key before a reserving App could receive it.
 
 **[decision]** `AppSurface` is the only component that knows how an App is
 rendered, and it hosts exactly one running App inside a Desk window. Today it

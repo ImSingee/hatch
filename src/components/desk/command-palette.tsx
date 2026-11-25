@@ -118,10 +118,7 @@ export function SearchPalette() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const apps = useQuery(appsQueryOptions);
-  // The desktop menu item only ever opens the palette; the key toggles it.
-  usePlatformShortcut('palette.open', (source) =>
-    source === 'menu' ? spotlight.open() : spotlight.toggle(),
-  );
+  usePlatformShortcut('palette.open', () => spotlight.toggle());
 
   const actions = useMemo<SpotlightActionGroupData[]>(
     () => [

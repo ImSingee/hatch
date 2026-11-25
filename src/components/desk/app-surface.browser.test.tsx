@@ -4,11 +4,7 @@ import { expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
-import {
-  type PlatformShortcutSource,
-  runPlatformShortcut,
-  usePlatformShortcut,
-} from './platform-shortcuts';
+import { usePlatformShortcut } from './platform-shortcuts';
 
 // Browser Mode serves a blank same-origin document titled "Embedded app" at
 // `/app/<slug>/embed/` (see vitest.config.ts).
@@ -86,17 +82,13 @@ test('reload loads the App again', async () => {
 
 const MOD = /mac/i.test(navigator.platform) ? 'Meta' : 'Control';
 
-function PaletteShortcut({
-  onRun,
-}: {
-  onRun: (source: PlatformShortcutSource) => void;
-}) {
+function PaletteShortcut({ onRun }: { onRun: () => void }) {
   usePlatformShortcut('palette.open', onRun);
   return null;
 }
 
 async function renderWithShortcut(reservedShortcuts?: string[]) {
-  const onRun = vi.fn<(source: PlatformShortcutSource) => void>();
+  const onRun = vi.fn<() => void>();
   const onTitleChange = vi.fn<(title: string | null) => void>();
   const screen = await render(
     <MantineProvider>
@@ -126,12 +118,8 @@ test('platform shortcuts work while focus is inside the App', async () => {
 
   await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
 
-  expect(onRun).toHaveBeenCalledExactlyOnceWith('keyboard');
+  expect(onRun).toHaveBeenCalledOnce();
   expect(appKeys.filter((event) => event.key === 'k')).toEqual([]);
-
-  // The desktop menu accelerator runs it too.
-  runPlatformShortcut('palette.open', 'menu');
-  expect(onRun).toHaveBeenLastCalledWith('menu');
 });
 
 test('an App that reserves a chord receives it instead of the platform', async () => {
@@ -142,9 +130,5 @@ test('an App that reserves a chord receives it instead of the platform', async (
   const pressed = appKeys.filter((event) => event.key === 'k');
   expect(pressed).toHaveLength(1);
   expect(pressed[0].defaultPrevented).toBe(false);
-  expect(onRun).not.toHaveBeenCalled();
-
-  // Nor does the desktop menu accelerator take it from the focused App.
-  runPlatformShortcut('palette.open', 'menu');
   expect(onRun).not.toHaveBeenCalled();
 });
