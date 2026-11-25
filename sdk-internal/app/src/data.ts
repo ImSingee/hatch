@@ -572,6 +572,11 @@ export function createDataClient<TSchema extends DataSchema>(
       },
 ): DataClient<TSchema> {
   const custom = 'transport' in options && options.transport ? options : null;
+  if (custom && !custom.cacheNamespace) {
+    throw new Error(
+      'createDataClient: a custom transport needs a cacheNamespace.',
+    );
+  }
   const transport =
     custom?.transport ?? httpDataTransport(options as HttpDataOptions);
   const cacheNamespace =
@@ -582,11 +587,6 @@ export function createDataClient<TSchema extends DataSchema>(
         runtimeDeploymentId() ??
         null,
     ]);
-  if (custom && !custom.cacheNamespace) {
-    throw new Error(
-      'createDataClient: a custom transport needs a cacheNamespace.',
-    );
-  }
 
   const rawQuery = <TResult extends DataQueryResult>(
     input: DataQuery,
