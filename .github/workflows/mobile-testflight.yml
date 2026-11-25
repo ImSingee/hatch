@@ -22,8 +22,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Branch, tag or commit SHA to build (defaults to the selected workflow ref)
+        description: Branch, tag or commit SHA to build
         required: false
+        default: master
         type: string
       what_to_test:
         description: 'TestFlight "What to Test" notes (optional)'

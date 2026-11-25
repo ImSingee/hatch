@@ -115,7 +115,7 @@ jobs:
           TAG: ${{ steps.inputs.outputs.tag }}
         run: |
           gh workflow run docker.yml --ref "$TAG"
-          gh workflow run mobile-testflight.yml --ref "$TAG"
+          gh workflow run mobile-testflight.yml --ref "$TAG" -f ref="$TAG"
 
       - name: Summary
         env:
