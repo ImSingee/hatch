@@ -162,9 +162,10 @@ is rejected with `workspace_instance_mismatch`.
   symlink traversal and nested checkouts, and prepares before replacing. On
   preparation failure the old directory remains intact; on swap failure it is
   restored. Recoverable preparation work remains at the reported path.
-- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`),
-  immutable ID, manifest, current platform generation and source history before
-  adding CLI metadata. Local HEAD must contain platform master; dirty work and origin are
+- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`;
+  the file itself may be absent, as `create_app` never wrote it), immutable ID,
+  manifest, current platform generation and source history before adding CLI
+  metadata. Local HEAD must contain platform master; dirty work and origin are
   preserved. Empty canonical source is ambiguous unless an uncommitted checkout
   belongs to the verified Run's session. Adoption never resets local history.
 - **Update:** require clean source; fetch platform `master` and the platform's
@@ -365,9 +366,9 @@ exit 7 except `http_error`, which maps 401/403/404 to 3/4/5); see
 | 8    | Explicitly unsupported command                       |
 | 130  | Cancellation; inspect any in-flight mutation         |
 
-Operation commands and API key management remain unsupported. Platform Agent
-Tools remain usable. Run credentials come from the caller; host injection and
-renewal are outside this feature.
+Operation commands and API key management remain unsupported. The platform
+Agent uses these commands for every platform capability. Run credentials come
+from the caller; host injection and renewal are outside this feature.
 
 ## Complete views and App data
 

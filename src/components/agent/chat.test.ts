@@ -55,6 +55,57 @@ describe('successfullyDeployedAppIds', () => {
 
     expect(successfullyDeployedAppIds(blocks, toolResults)).toEqual(['alpha']);
   });
+
+  it('reads every App a successful report names and keeps legacy deploy_app calls', () => {
+    const blocks: AssistantBlock[] = [
+      {
+        type: 'toolCall',
+        id: 'legacy',
+        name: 'deploy_app',
+        arguments: { id: 'alpha' },
+      },
+      {
+        type: 'toolCall',
+        id: 'failed-report',
+        name: 'report_deployed_apps',
+        arguments: { app_ids: ['ignored'] },
+      },
+      {
+        type: 'toolCall',
+        id: 'report',
+        name: 'report_deployed_apps',
+        arguments: { app_ids: ['beta', ' gamma ', 'alpha', '', 7] },
+      },
+      {
+        type: 'toolCall',
+        id: 'unanswered',
+        name: 'report_deployed_apps',
+        arguments: { app_ids: ['delta'] },
+      },
+    ];
+    const result = (
+      toolCallId: string,
+      toolName: string,
+      isError = false,
+    ): ToolResultMessage => ({
+      role: 'toolResult',
+      toolCallId,
+      toolName,
+      content: [{ type: 'text', text: 'result' }],
+      isError,
+    });
+    const toolResults = new Map([
+      ['legacy', result('legacy', 'deploy_app')],
+      ['failed-report', result('failed-report', 'report_deployed_apps', true)],
+      ['report', result('report', 'report_deployed_apps')],
+    ]);
+
+    expect(successfullyDeployedAppIds(blocks, toolResults)).toEqual([
+      'alpha',
+      'beta',
+      'gamma',
+    ]);
+  });
 });
 
 describe('groupTurns', () => {

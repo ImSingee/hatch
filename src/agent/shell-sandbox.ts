@@ -944,12 +944,6 @@ export function setAgentOwned(
   chownTree(targets, identity);
 }
 
-/** Make Runner-private session metadata root-owned after an atomic move. */
-export function setRunnerOwned(targets: readonly string[]): void {
-  if (targets.length === 0 || !canSetpriv()) return;
-  chownTree(targets, rootIdentity());
-}
-
 /** Prepare global sandbox roots before accepting Runner work. */
 export function initializeAgentSandbox(): void {
   if (process.platform === 'darwin') {

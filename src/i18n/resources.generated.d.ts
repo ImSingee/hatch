@@ -584,6 +584,7 @@ export type TranslationResource = {
   'agent.tool.query_app_db': 'Query app DB';
   'agent.tool.query_app_data_table': 'Query app Data Table';
   'agent.tool.query_app_kv': 'Query app KV';
+  'agent.tool.report_deployed_apps': 'Show deployed apps';
   'agent.tool.web_search': 'Web search';
   'agent.tool.web_fetch': 'Fetch web page';
   'agent.tool.ask': 'Ask the user';

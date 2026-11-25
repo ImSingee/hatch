@@ -1,57 +1,23 @@
 /**
- * Server-only: the internal REST API the Agent Runner's PlatformClient calls
+ * Server-only: the internal REST API the Agent Runner calls
  * (bearer-authenticated by internal-server.ts before requests reach here).
+ * Platform capabilities are public RPCs that the Agent reaches through the
+ * `hatch` CLI with its Run credential; only Runner plumbing lives here.
  *
- * Routes (all JSON):
- *   GET  /internal/api/apps                     → AppSummary[]
- *   GET  /internal/api/apps/:appId              → AppDetail (404 when absent)
- *   POST /internal/api/apps                     → CreateAppResult (scaffold files)
- *   GET  /internal/api/apps/:appId/source       → SourceBundleResponse
- *   POST /internal/api/apps/:appId/deploy       → AppDeployResponse
- *   POST /internal/api/apps/:appId/rollback     → { version }
- *   POST /internal/api/apps/:appId/query-db     → { text, rowCount }
- *   POST /internal/api/apps/:appId/query-kv     → QueryAppKvResponse
- *   POST /internal/api/apps/:appId/query-data-table
- *                                                → QueryAppDataTableResponse
- *   POST /internal/api/agent-sessions/:sessionId/apps/:appId
- *                                                → { appId }
+ * Routes:
+ *   POST /internal/api/runs/:runId/token {runnerId}
+ *                                                → a fresh Run credential
+ *   GET  /internal/api/agent-sessions/:sessionId/attachments/:attachmentId
+ *                                                → the attachment bytes
  */
 import type http from 'node:http';
-import {
-  createAppForSessionRequestSchema,
-  deploySourceRequestSchema,
-  queryAppDataTableRequestSchema,
-  queryAppDbRequestSchema,
-  queryAppKvRequestSchema,
-  rollbackRequestSchema,
-  type SourceBundleResponse,
-} from '~agent/protocol';
 import { z } from 'zod';
 import { AppError } from '~server/errors';
 import { mintRunToken, RunTokenError } from './run-auth';
-import { db } from '~/db';
-import { associateAgentSessionApp } from '~server/agent-session-apps';
 import { getAgentAttachment } from '~server/agent-attachments';
-import { listAppsForAgent, getAppDetailForAgent } from '~server/apps/inspect';
-import { createApp } from '~server/apps/scaffold';
-import {
-  appMasterCommit,
-  exportAppMasterBundle,
-  importAppBundleToMaster,
-} from '~server/apps/git';
-import { deployApp } from '~server/apps/deploy';
-import { appSlug } from '~server/apps/access';
-import { projectAppManifestUrls } from '~server/apps/manifest';
-import { rollbackAppToVersion } from '~server/apps/manage';
-import { queryAppDatabase } from '~server/apps/query-db';
-import { queryAppKv } from '~server/apps/query-kv';
-import { queryAppDataTable } from '~server/apps/query-data-table';
 
-/**
- * JSON body cap. Deploy bundles ride in as base64 (~4/3 of the packfile), so
- * the cap must fit a real app repo while still bounding a runaway request.
- */
-const MAX_BODY_BYTES = 256 * 1024 * 1024;
+/** JSON body cap: the only body is a small Run token request. */
+const MAX_BODY_BYTES = 64 * 1024;
 
 function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -114,33 +80,6 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-async function requireExistingAppId(appId: string): Promise<string> {
-  const app = await db.query.apps.findFirst({
-    where: { id: appId },
-    columns: { id: true },
-  });
-  if (!app) throw new AppError(`App "${appId}" not found.`, 404);
-  return app.id;
-}
-
-async function requireAppGeneration(id: string): Promise<string> {
-  const row = await db.query.apps.findFirst({
-    where: { id },
-    columns: { createdAt: true },
-  });
-  if (!row) throw new AppError(`App "${id}" not found.`, 404);
-  return row.createdAt.toISOString();
-}
-
-function requireGeneration(id: string, expected: string, actual: string): void {
-  if (expected === actual) return;
-  throw new AppError(
-    `App "${id}" was deleted or recreated while preparing the deploy. ` +
-      'Checkout the current source and try again.',
-    409,
-  );
-}
-
 export async function handleInternalApiRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -177,10 +116,6 @@ export async function handleInternalApiRequest(
       );
       return;
     }
-    if (resource === 'apps') {
-      await handleApps(req, res, method, rest);
-      return;
-    }
     if (resource === 'agent-sessions') {
       await handleAgentSessions(res, method, rest);
       return;
@@ -206,12 +141,6 @@ async function handleAgentSessions(
   method: string,
   rest: string[],
 ): Promise<void> {
-  if (method === 'POST' && rest.length === 3 && rest[1] === 'apps') {
-    const sessionId = decodeURIComponent(rest[0]);
-    const appId = decodeURIComponent(rest[2]);
-    json(res, 200, await associateAgentSessionApp(sessionId, appId));
-    return;
-  }
   if (method !== 'GET' || rest.length !== 3 || rest[1] !== 'attachments') {
     throw new AppError('Not found.', 404);
   }
@@ -226,138 +155,4 @@ async function handleAgentSessions(
     'cache-control': 'private, no-store',
   });
   res.end(got.body);
-}
-
-async function handleApps(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  method: string,
-  rest: string[],
-): Promise<void> {
-  if (rest.length === 0) {
-    if (method === 'GET') {
-      json(res, 200, await listAppsForAgent());
-      return;
-    }
-    if (method === 'POST') {
-      const { sessionId, ...body } = createAppForSessionRequestSchema.parse(
-        await readJsonBody(req),
-      );
-      json(res, 200, await createApp(body, { sessionId }));
-      return;
-    }
-    throw new AppError('Method not allowed.', 405);
-  }
-
-  const appId = decodeURIComponent(rest[0]);
-  const action = rest[1];
-
-  if (!action) {
-    if (method !== 'GET') throw new AppError('Method not allowed.', 405);
-    const detail = await getAppDetailForAgent(appId);
-    if (!detail) throw new AppError(`App "${appId}" not found.`, 404);
-    json(res, 200, detail);
-    return;
-  }
-
-  if (action === 'source' && method === 'GET') {
-    const id = await requireExistingAppId(appId);
-    const commit = await appMasterCommit(id);
-    const bundle = await exportAppMasterBundle(id);
-    const payload: SourceBundleResponse = {
-      id,
-      masterCommit: commit,
-      bundleBase64: bundle ? bundle.toString('base64') : null,
-    };
-    json(res, 200, payload);
-    return;
-  }
-
-  if (action === 'deploy' && method === 'POST') {
-    const id = appId;
-    const body = deploySourceRequestSchema.parse(await readJsonBody(req));
-    requireGeneration(id, body.generation, await requireAppGeneration(id));
-    // The bundle transport pushes and deploys in one request: fast-forward
-    // master to the uploaded HEAD, then release that commit.
-    const commit = await importAppBundleToMaster(
-      id,
-      Buffer.from(body.bundleBase64, 'base64'),
-    );
-    const result = await deployApp(id, {
-      commit,
-      message: body.message,
-      allowDestructiveDataMigration: body.allowDestructiveDataMigration,
-      dataMigrationApprovalToken: body.dataMigrationApprovalToken,
-    });
-    const slug = await appSlug(id);
-    if (!slug) {
-      throw new AppError(`App "${id}" not found after deployment.`, 500);
-    }
-    json(res, 200, {
-      deploymentId: result.deploymentId,
-      version: result.version,
-      compatibilityVersion: result.compatibilityVersion,
-      slug,
-      normalized: projectAppManifestUrls(result.normalized, id, slug),
-    });
-    return;
-  }
-
-  if (action === 'rollback' && method === 'POST') {
-    const id = await requireExistingAppId(appId);
-    const body = rollbackRequestSchema.parse(await readJsonBody(req));
-    json(res, 200, await rollbackAppToVersion(id, body.version));
-    return;
-  }
-
-  if (action === 'query-db' && method === 'POST') {
-    const id = await requireExistingAppId(appId);
-    const body = queryAppDbRequestSchema.parse(await readJsonBody(req));
-    // When the runner aborts the request (run cancelled), tear down the
-    // running statement instead of letting it run to its 30s timeout.
-    const abort = new AbortController();
-    res.on('close', () => {
-      if (!res.writableEnded) abort.abort();
-    });
-    json(res, 200, await queryAppDatabase(id, body.sql, abort.signal));
-    return;
-  }
-
-  if (action === 'query-kv' && method === 'POST') {
-    const id = await requireExistingAppId(appId);
-    const body = queryAppKvRequestSchema.parse(await readJsonBody(req));
-    json(res, 200, await queryAppKv(id, body));
-    return;
-  }
-
-  if (action === 'query-data-table' && method === 'POST') {
-    // Register before any await so a runner disconnect cannot be missed while
-    // resolving the App or reading the body.
-    const abort = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) abort.abort();
-    };
-    res.once('close', onClose);
-    const bodyPromise = readJsonBody(req);
-    const [id, rawBody] = await Promise.all([
-      requireExistingAppId(appId),
-      bodyPromise,
-    ]);
-    const body = queryAppDataTableRequestSchema.parse(rawBody);
-    if (body.action !== 'raw_sql') {
-      res.off('close', onClose);
-    }
-    json(
-      res,
-      200,
-      await queryAppDataTable(
-        id,
-        body,
-        body.action === 'raw_sql' ? abort.signal : undefined,
-      ),
-    );
-    return;
-  }
-
-  throw new AppError('Not found.', 404);
 }

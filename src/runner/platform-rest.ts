@@ -3,54 +3,14 @@
  * internal API (see src/server/agent-runner/internal-api.ts for the routes).
  */
 import type {
-  AppDeployResponse,
-  CreateAppResult,
   DownloadedAttachment,
   PlatformClient,
-  QueryAppDbResponse,
 } from '~agent/platform-client';
-import type {
-  QueryAppDataTableResponse,
-  QueryAppKvResponse,
-  SourceBundleResponse,
-} from '~agent/protocol';
 
 export function createPlatformRestClient(opts: {
   baseUrl: string;
   token: string;
 }): PlatformClient {
-  const call = async <T>(
-    method: 'GET' | 'POST',
-    path: string,
-    body?: unknown,
-    allow404 = false,
-    signal?: AbortSignal,
-  ): Promise<T> => {
-    const res = await fetch(`${opts.baseUrl}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${opts.token}`,
-        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      ...(signal ? { signal } : {}),
-    });
-    if (allow404 && res.status === 404) {
-      return null as T;
-    }
-    if (!res.ok) {
-      let message = `Platform API ${method} ${path} failed (${res.status}).`;
-      try {
-        const payload = (await res.json()) as { error?: string };
-        if (payload.error) message = payload.error;
-      } catch {
-        // Non-JSON error body; keep the generic message.
-      }
-      throw new Error(message);
-    }
-    return (await res.json()) as T;
-  };
-
   const enc = encodeURIComponent;
 
   return {
@@ -89,56 +49,5 @@ export function createPlatformRestClient(opts: {
         body,
       } satisfies DownloadedAttachment;
     },
-
-    listApps: () => call('GET', '/internal/api/apps'),
-    getApp: (appId) =>
-      call('GET', `/internal/api/apps/${enc(appId)}`, undefined, true),
-    associateSessionApp: (sessionId, appId) =>
-      call(
-        'POST',
-        `/internal/api/agent-sessions/${enc(sessionId)}/apps/${enc(appId)}`,
-      ),
-    createApp: (input, sessionId) =>
-      call<CreateAppResult>('POST', '/internal/api/apps', {
-        ...input,
-        sessionId,
-      }),
-    getAppSource: (appId) =>
-      call<SourceBundleResponse>(
-        'GET',
-        `/internal/api/apps/${enc(appId)}/source`,
-      ),
-    deployApp: (appId, body) =>
-      call<AppDeployResponse>(
-        'POST',
-        `/internal/api/apps/${enc(appId)}/deploy`,
-        body,
-      ),
-    rollbackApp: (appId, version) =>
-      call('POST', `/internal/api/apps/${enc(appId)}/rollback`, { version }),
-    queryAppDb: (appId, sql, signal) =>
-      call<QueryAppDbResponse>(
-        'POST',
-        `/internal/api/apps/${enc(appId)}/query-db`,
-        { sql },
-        false,
-        signal,
-      ),
-    queryAppKv: (appId, input, signal) =>
-      call<QueryAppKvResponse>(
-        'POST',
-        `/internal/api/apps/${enc(appId)}/query-kv`,
-        input,
-        false,
-        signal,
-      ),
-    queryAppDataTable: (appId, input, signal) =>
-      call<QueryAppDataTableResponse>(
-        'POST',
-        `/internal/api/apps/${enc(appId)}/query-data-table`,
-        input,
-        false,
-        signal,
-      ),
   };
 }

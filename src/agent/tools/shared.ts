@@ -103,27 +103,3 @@ export function unwrap<T>(
 
 /** Cap on file page content and per-stream command output characters. */
 export const MAX_FILE_CHARS = 60000;
-
-/**
- * Identifier shape that is safe to use as a single path segment, Git worktree
- * name, or database identifier: lowercase alphanumerics and hyphens. A leading
- * digit is allowed so generated ULID app ids pass alongside kebab-case
- * slugs. This is a path-safety guard, not a semantic check.
- */
-const ID_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
-
-/**
- * Guard a model-supplied id before it flows into filesystem paths, Git
- * worktrees, or database names. Without this a hallucinated or injected id like
- * "../../outside" or "/tmp/pwn" would resolve repo/worktree/DB targets outside
- * the intended workspace.
- */
-export function requireIdSlug(id: string): string {
-  if (!ID_SLUG_RE.test(id)) {
-    throw new Error(
-      `Invalid id "${id}": must contain only lowercase letters, digits, and ` +
-        'hyphens.',
-    );
-  }
-  return id;
-}

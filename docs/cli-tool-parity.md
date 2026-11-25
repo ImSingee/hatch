@@ -1,13 +1,18 @@
-# App Tool / CLI capability parity
+# Agent CLI coverage of platform capabilities
 
-All methods below use Connect RPC under `/api/rpc/hatch.platform.v1`, except
-source transfer, which uses Git smart HTTP under `/api/git` (see below).
-Tools remain available, and every
-valid native session, API key or Run JWT has full public authority. The shared
-contract and SDK are shipped with the same platform build. No database migration,
-App compatibility bump or protocol-18 wire change is required.
+The platform Agent reaches every platform capability through the `hatch` CLI
+with its Run credential; it has no Agent Tool for one. All methods below use
+Connect RPC under `/api/rpc/hatch.platform.v1`, except source transfer, which
+uses Git smart HTTP under `/api/git` (see below). Every valid native session,
+API key or Run JWT has full public authority. The shared contract and SDK are
+shipped with the same platform build.
 
-| Original Tool        | CLI                                     | Public API / shared behavior                                                                              |
+The App Tools listed first were removed in favour of these commands, together
+with the Runner's bundle checkouts and the internal `/internal/api/apps*`
+routes they used (Platform/Runner protocol 23). Their names stay in the chat UI
+so saved transcripts keep rendering.
+
+| Removed Tool         | CLI                                     | Public API / shared behavior                                                                              |
 | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | list_apps            | app list                                | AppService/ListApps; currentVersion, compatibility, capabilities                                          |
 | get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, history                                           |
@@ -19,8 +24,19 @@ App compatibility bump or protocol-18 wire change is required.
 | query_app_kv         | app kv list/get/set/delete              | AppService/QueryAppKv; empty/large UTF-8, masking/reveal, preserve/clear secret, pagination               |
 | query_app_data_table | app data-table inspect/query/mutate/sql | AppService/QueryAppDataTable; schema/counts, JSON, cursors/revision, atomic mutations, bounded SQL        |
 
-The capabilities below have no Agent Tool; the CLI is their only Agent
-interface.
+The Agent system prompt and the preloaded Skills (`skills/`) direct the
+platform Agent to the CLI: the prompt names the command groups and the shared
+`--json`, `--yes`, `--limit`/`--cursor`, `--file` and `outcome_unknown`
+conventions, each Skill names the commands for its task, and `hatch help`
+covers the remaining flags. A checkout made by the removed `checkout_app` Tool
+in an older chat is taken over with `app adopt`.
+
+After deploying, the Agent calls the `report_deployed_apps` Tool with the ids
+of the Apps it deployed in that turn. It changes no platform state; the chat
+reads its arguments to show the deployed Apps with their open actions, as it
+read `deploy_app` calls before.
+
+The capabilities below never had an Agent Tool.
 
 | Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -50,10 +66,9 @@ browser-bound, has no platform state, and therefore has no CLI command.
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
 pushes, then calls the Deploy RPC with the commit to release (`--commit`
-releases a commit already on `master` without pushing). The Tools keep the
-bundle transport: `deploy_app` uploads a bundle that the
-platform fast-forwards onto `master` and then releases, and Tool checkouts keep
-a local bundle as `origin`. Two deliberate deviations from the CLI rules:
+releases a commit already on `master` without pushing). The Deploy RPC still
+accepts an uploaded bundle for older CLIs, which the platform fast-forwards onto
+`master` and then releases. Two deliberate deviations from the CLI rules:
 
 - `push` and source fetch are not backed by a Connect RPC. Git is the public
   contract for source transfer; the endpoint accepts the same credentials as
@@ -77,26 +92,25 @@ preparation. The pnpm toolchain adds no command, Agent Tool, public RPC method
 or CLI exception; `GetSdk` only gains tool versions and generated files.
 
 The production HTTP/PostgreSQL suite in
-`src/server/platform-api/lifecycle.integration.test.ts` calls all nine actual
-Tools through the internal REST client and compares public CLI outputs and
-resource effects. It also covers session/key/Run auth, full lifecycle, migration
-approval and retained data, data commands, and PostgreSQL-observed cancellation.
-Workspace concurrency/recovery cases run real child processes/Git in
-`packages/hatch-cli/src/workspace.test.ts`. Existing Tool normalization and domain
-security/migration regressions remain part of the unit suite. The tests require
+`src/server/platform-api/lifecycle.integration.test.ts` covers session/key/Run
+auth, the full CLI lifecycle, migration approval and retained data, data
+commands, and PostgreSQL-observed cancellation. Workspace concurrency/recovery
+cases run real child processes/Git in
+`packages/hatch-cli/src/workspace.test.ts`. Domain security/migration
+regressions remain part of the unit suite. The tests require
 an isolated database and a production build; a skipped suite is not evidence.
 
 Local acceptance records should distinguish observed outputs/side effects,
 programmatic quality gates, installed-package/container results, and genuinely
-untested operating systems. No host credential injection/renewal, Tool removal,
+untested operating systems. No host credential injection/renewal,
 storage/key management or durable operation service is part of this feature.
 
 ## Notification center: CLI only, no Agent Tool
 
 `hatch notification ...` (history, test/send/update/recall/delete/respond/retry, sources, APNs status,
 destinations, webhooks, groups, routes, response routes and channels) calls
-`NotificationService` and has no Agent Tool counterpart because Agent Tools
-for platform capabilities are frozen: the platform Agent uses the CLI. The
+`NotificationService` and has no Agent Tool counterpart: the platform Agent
+uses the CLI for platform capabilities. The
 service accepts sessions, API keys and Run JWTs alike, and every online CLI
 command refreshes Run credentials in `packages/hatch-cli/src/main.ts`. A Run
 has no user, so its group and destination sends come from source `platform`

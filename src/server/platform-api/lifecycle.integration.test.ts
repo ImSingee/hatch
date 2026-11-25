@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import postgres from 'postgres';
 import { randomUUID, createHash } from 'node:crypto';
-import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import {
+  cp,
   mkdtemp,
   mkdir,
   readFile,
@@ -12,7 +12,6 @@ import {
   rm,
   readdir,
   realpath,
-  chmod,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -1297,206 +1296,116 @@ describe.runIf(Boolean(databaseUrl))(
       ).toBe(5);
     }, 240000);
 
-    it('compares every real App Tool with public CLI outputs and lifecycle side effects', async () => {
-      const { createPlatformRestClient } =
-        await import('~/runner/platform-rest');
-      const { createAppTools } = await import('~agent/tools/apps');
-      const platform = createPlatformRestClient({
-        baseUrl: internal,
-        token: fleet,
-      });
-      const tools: AgentTool[] = [...createAppTools({ platform, sessionId })];
-      const exercised = new Set<string>();
-      const execute = async (name: string, args: unknown) => {
-        const tool = tools.find((value) => value.name === name)!;
-        const result = await tool.execute(randomUUID(), args);
-        exercised.add(name);
-        if (name === 'query_app_db')
-          return {
-            ...(result.details as Record<string, unknown>),
-            text: result.content
-              .filter((value) => value.type === 'text')
-              .map((value) => value.text)
-              .join('\n'),
-          };
-        return result.details as Record<string, any>;
-      };
-      const records: Record<string, any>[] = [];
-      for (const kind of ['app']) {
-        const slug = `parity-${randomUUID()}`;
-        const created = await execute(`create_${kind}`, {
-          slug,
-          name: 'Tool parity',
-          pin: false,
-        });
-        expect(created).toMatchObject({
-          id: expect.any(String),
-          slug,
-          preparation: 'ready',
-          absolutePath: expect.any(String),
-        });
-        const dir = created.absolutePath as string;
-        const file = path.join(dir, 'manifest.ts');
+    it.each([
+      ['checkout_app', true],
+      // create_app pointed origin at a bundle it never wrote.
+      ['create_app', false],
+    ])(
+      'adopts a checkout left by the removed %s Tool and deploys from it',
+      async (_tool, bundleWritten) => {
+        const [, apiKey, run] = credentials;
+        const directory = path.join(root, `adopt-src-${randomUUID()}`);
+        const file = `${directory}.json`;
         await writeFile(
           file,
-          (await readFile(file, 'utf8'))
-            .replace('kv: false', 'kv: true')
-            .replace('database: false', 'database: true'),
+          JSON.stringify({
+            slug: `adopt-${randomUUID()}`,
+            name: 'Adopt',
+            pin: false,
+          }),
         );
-        await bundle(dir);
-        const release = await execute(`deploy_${kind}`, {
-          id: created.id,
-          source_path: dir,
-          message: 'Tool first release',
-        });
-        expect(release.version).toBe(1);
-        const view = await execute(`get_${kind}`, { id: created.id });
-        const publicView = await cliInvoke(
-          [kind, 'get', created.id],
-          credentials[1],
+        const created = await cliInvoke(
+          ['app', 'create', '--file', file, '--directory', directory],
+          apiKey,
         );
-        expect(publicView.code).toBe(0);
-        expect(publicView.data).toMatchObject(view);
-        const inventory = await execute('list_apps', {});
-        const listed = await cliInvoke([kind, 'list'], credentials[3]);
-        expect(
-          listed.data.find((row: { id: string }) => row.id === created.id),
-        ).toMatchObject(
-          inventory.apps.find((row: { id: string }) => row.id === created.id),
+        assert.equal(created.code, 0, JSON.stringify(created));
+        const id = created.data.id as string;
+        const first = await cliInvoke(
+          ['app', 'deploy', '--directory', directory, '--message', 'First'],
+          apiKey,
         );
-        const checkout = await execute(`checkout_${kind}`, {
-          id: created.id,
-          clone: true,
-          source_path: `${kind}s/parity-clone`,
-        });
-        expect(checkout).toMatchObject({
-          headCommit: git(dir, 'rev-parse', 'HEAD'),
-        });
-        await execute(`checkout_${kind}`, {
-          id: created.id,
-          clone: false,
-          source_path: checkout.absolutePath,
-        });
+        assert.equal(first.code, 0, JSON.stringify(first));
+
+        // The layout the removed Tool left in older chats: a Runner work tree
+        // whose origin is the session's local bundle of platform master.
+        const session = path.join(root, 'agents', `session-${randomUUID()}`);
+        const bundleFile = path.join(session, 'bundles', `app-${id}.bundle`);
+        const checkout = path.join(session, 'work', 'apps', 'adopt');
+        await mkdir(path.dirname(bundleFile), { recursive: true });
+        await mkdir(path.dirname(checkout), { recursive: true });
+        const source = await api(`apps/${id}/source`, apiKey);
         await writeFile(
-          path.join(checkout.absolutePath, 'dirty.txt'),
-          'preserved dirty author work',
+          bundleFile,
+          Buffer.from(source.data.bundleBase64, 'base64'),
         );
-        const originBefore = git(
-          checkout.absolutePath,
-          'remote',
-          'get-url',
-          'origin',
+        execFileSync(
+          'git',
+          ['clone', '--branch', 'master', bundleFile, checkout],
+          { stdio: 'pipe' },
         );
-        const lockBefore = await readFile(
-          path.join(checkout.absolutePath, 'pnpm-lock.yaml'),
-          'utf8',
+        // The Runner materialized the generated SDK beside the source and
+        // Git-excluded the generated paths, so the bundle did not carry them.
+        await cp(
+          path.join(directory, '.hatch'),
+          path.join(checkout, '.hatch'),
+          {
+            recursive: true,
+          },
         );
-        if (process.platform !== 'win32')
-          await chmod(path.join(checkout.absolutePath, '.hatch'), 0o555);
+        await writeFile(
+          path.join(checkout, '.git', 'info', 'exclude'),
+          [
+            '/.hatch/',
+            '/.hatch-install-*/',
+            '/.hatch-backup-*/',
+            '/node_modules/',
+            '/pnpm-workspace.yaml',
+            '/gen/',
+          ].join('\n') + '\n',
+        );
+        await writeFile(
+          path.join(checkout, 'agent-work.txt'),
+          'committed work',
+        );
+        git(checkout, 'add', '.');
+        git(
+          checkout,
+          '-c',
+          'user.name=Agent',
+          '-c',
+          'user.email=agent@example.test',
+          'commit',
+          '-m',
+          'Agent work',
+        );
+        if (!bundleWritten) await rm(bundleFile);
+        await writeFile(path.join(checkout, 'dirty.txt'), 'uncommitted work');
+
         const adopted = await cliInvoke(
-          [kind, 'adopt', created.id, '--directory', checkout.absolutePath],
-          credentials[1],
+          ['app', 'adopt', id, '--directory', checkout],
+          run,
         );
         assert.equal(adopted.code, 0, JSON.stringify(adopted));
-        if (process.platform !== 'win32')
-          await chmod(path.join(checkout.absolutePath, '.hatch'), 0o755);
-        expect(
-          await readFile(
-            path.join(checkout.absolutePath, 'pnpm-lock.yaml'),
-            'utf8',
-          ),
-        ).toBe(lockBefore);
         expect(adopted.data.dirty).toBe(true);
-        expect(git(checkout.absolutePath, 'remote', 'get-url', 'origin')).toBe(
-          originBefore,
+        expect(git(checkout, 'remote', 'get-url', 'origin')).toBe(bundleFile);
+        await expect(
+          readFile(path.join(checkout, 'dirty.txt'), 'utf8'),
+        ).resolves.toBe('uncommitted work');
+
+        await rm(path.join(checkout, 'dirty.txt'));
+        const deployed = await cliInvoke(
+          ['app', 'deploy', '--directory', checkout, '--message', 'From adopt'],
+          run,
         );
-        await bundle(checkout.absolutePath);
-        const second = await cliInvoke(
-          [kind, 'deploy', '--directory', checkout.absolutePath],
-          credentials[2],
+        assert.equal(deployed.code, 0, JSON.stringify(deployed));
+        expect(deployed.data.version).toBe(2);
+        expect(deployed.data.sourceCommit).toBe(
+          git(checkout, 'rev-parse', 'HEAD'),
         );
-        assert.equal(second.code, 0, JSON.stringify(second));
-        expect(second.data.version).toBe(2);
-        expect(second.data.normalized).toMatchObject(release.normalized);
-        const rolled = await cliInvoke(
-          [kind, 'rollback', created.id, '--version', '1'],
-          credentials[3],
-        );
-        expect(rolled.code).toBe(0);
-        expect(rolled.data.sourceRecovery).toContain(
-          'pushed or deployed again',
-        );
-        const toolRolled = await execute(`rollback_${kind}`, {
-          id: created.id,
-          version: 1,
-        });
-        expect(rolled.data).toMatchObject(toolRolled);
-        records.push({
-          kind,
-          id: created.id,
-          release: second.data,
-          detail: publicView.data,
-        });
-      }
-      const id = records[0].id as string;
-      const sqlFile = path.join(root, 'tool-parity.sql');
-      await writeFile(
-        sqlFile,
-        'create table if not exists parity (value integer); insert into parity values (0)',
-      );
-      expect(
-        (
-          await cliInvoke(
-            ['app', 'db', 'query', id, '--file', sqlFile],
-            credentials[1],
-          )
-        ).code,
-      ).toBe(0);
-      await writeFile(sqlFile, 'select value from parity');
-      expect(
-        (
-          await cliInvoke(
-            ['app', 'db', 'query', id, '--file', sqlFile],
-            credentials[3],
-          )
-        ).data,
-      ).toEqual(
-        await execute('query_app_db', { id, sql: 'select value from parity' }),
-      );
-      const value = path.join(root, 'parity-value');
-      await writeFile(value, '');
-      expect(
-        (
-          await cliInvoke(
-            ['app', 'kv', 'set', id, 'empty', '--file', value],
-            credentials[2],
-          )
-        ).data.record.value,
-      ).toBe('');
-      expect(
-        (await cliInvoke(['app', 'kv', 'get', id, 'empty'], credentials[1]))
-          .data,
-      ).toEqual(
-        await execute('query_app_kv', { id, action: 'get', key: 'empty' }),
-      );
-      expect(
-        (await cliInvoke(['app', 'data-table', 'inspect', id], credentials[3]))
-          .data,
-      ).toEqual(
-        await execute('query_app_data_table', { id, action: 'inspect' }),
-      );
-      expect([...exercised].sort()).toEqual(
-        tools.map((tool) => tool.name).sort(),
-      );
-      if (process.env.HATCH_PLATFORM_TEST_EVIDENCE_DIR)
-        await writeFile(
-          path.join(
-            process.env.HATCH_PLATFORM_TEST_EVIDENCE_DIR,
-            'tool-parity.json',
-          ),
-          JSON.stringify({ tools: [...exercised].sort(), records }, null, 2),
-        );
-    }, 300000);
+        expect(git(checkout, 'remote', 'get-url', 'origin')).toBe(bundleFile);
+      },
+      240000,
+    );
 
     it('exercises KV masking, large and empty writes, pagination and Run association without spoofing', async () => {
       const created = await api('apps', credentials[1], {

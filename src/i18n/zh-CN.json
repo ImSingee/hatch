@@ -582,6 +582,7 @@
   "agent.tool.query_app_db": "查询 App 数据库",
   "agent.tool.query_app_data_table": "查询 App 数据表",
   "agent.tool.query_app_kv": "查询 App KV",
+  "agent.tool.report_deployed_apps": "显示已部署的 App",
   "agent.tool.web_search": "网页搜索",
   "agent.tool.web_fetch": "获取网页",
   "agent.tool.ask": "询问用户",

@@ -23,7 +23,6 @@ import {
   type HubMessage,
   type RunnerMessage,
 } from '~agent/protocol';
-import { withSourceWorkspaceLock } from '~agent/local-sources';
 import { initializeAgentSandbox } from '~agent/shell-sandbox';
 import { getAgentRunnerEnv } from '~env';
 import { createCommandCredentials } from './command-credentials';
@@ -132,9 +131,7 @@ function handleHubMessage(message: HubMessage): void {
           [...new Set(message.staleWorkspaceSessionIds)].map(
             async (sessionId) => {
               await executor.abortSession(sessionId);
-              await withSourceWorkspaceLock(sessionId, () =>
-                removeSessionWorkspace(sessionId),
-              );
+              await removeSessionWorkspace(sessionId);
             },
           ),
         );
@@ -227,11 +224,7 @@ function handleHubMessage(message: HubMessage): void {
     case 'workspace.cleanup': {
       void executor
         .abortSession(message.sessionId)
-        .then(() =>
-          withSourceWorkspaceLock(message.sessionId, () =>
-            removeSessionWorkspace(message.sessionId),
-          ),
-        )
+        .then(() => removeSessionWorkspace(message.sessionId))
         .catch((error) => {
           console.error('[runner] session workspace cleanup failed:', error);
         });
