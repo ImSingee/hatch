@@ -91,6 +91,13 @@ function App() {
       <Button label="Close memo" onPress={() => memoOpen.set(false)} />
       <Button label="Open memo" onPress={() => memoOpen.set(true)} />
       <Button label="Finish sending" onPress={() => finishSend.resolve()} />
+      <Button
+        label="Finish and reopen"
+        onPress={() => {
+          finishSend.resolve();
+          setTimeout(() => memoOpen.set(true), 50);
+        }}
+      />
     </Page>
   );
 }

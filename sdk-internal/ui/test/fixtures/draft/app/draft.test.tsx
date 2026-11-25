@@ -157,3 +157,44 @@ test('a newer form keeps its draft after it closes too', async () => {
   const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
   expect(saved.memo).toBe('Same memo');
 });
+
+test('a newer form made while a late send reads the draft keeps it', async () => {
+  // Storage stands in for the device's, with the late send's read of the
+  // draft held for 200 ms; the form is reopened 50 ms into that read.
+  const store = new Map<string, string>();
+  const held = { armed: false, released: false };
+  const app = await open('./main.tsx', {
+    modules: {
+      nsh: {
+        'Storage.getItem': (key: string) => {
+          const value = store.get(key) ?? null;
+          if (!held.armed || key !== 'hatch.ui.draft.memo') return value;
+          held.armed = false;
+          return new Promise((resolve) =>
+            setTimeout(() => {
+              held.released = true;
+              resolve(store.get(key) ?? null);
+            }, 200),
+          );
+        },
+        'Storage.setItem': (key: string, value: string) => {
+          store.set(key, value);
+        },
+        'Storage.removeItem': (key: string) => {
+          store.delete(key);
+        },
+      },
+    },
+  });
+  await app.type('label:Memo', 'Same memo');
+  await app.press('Send memo');
+  await app.press('Close memo');
+  await app.wait(100);
+  expect(store.get('hatch.ui.draft.memo')).toBe('{"memo":"Same memo"}');
+  held.armed = true;
+  await app.press('Finish and reopen');
+  await app.waitUntil(() => held.released);
+  await app.waitFor('text:Restored your unsent changes.');
+  await app.wait(100);
+  expect(store.get('hatch.ui.draft.memo')).toBe('{"memo":"Same memo"}');
+});
