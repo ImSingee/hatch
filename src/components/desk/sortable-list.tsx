@@ -61,12 +61,15 @@ export function SortableList<T extends WithId>({
   const itemOrder = items.map((item) => item.id);
   // The order the last keyboard move submitted, shown until `items` changes
   // (the caller's update can land a tick later); a quick next key press
-  // builds on it instead of on stale props.
+  // builds on it instead of on stale props. Any change of `items` settles
+  // it for good, so it never comes back when an earlier order returns (a
+  // drag back, or a refetch after a failed save).
   const [submitted, setSubmitted] = useState<{
     basedOn: string;
     order: string[];
   } | null>(null);
   const itemsKey = itemOrder.join('\n');
+  if (submitted && submitted.basedOn !== itemsKey) setSubmitted(null);
   const settledOrder =
     submitted?.basedOn === itemsKey ? submitted.order : itemOrder;
 

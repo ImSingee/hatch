@@ -99,3 +99,40 @@ test('quick key presses build on the order just submitted', async () => {
   await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
   expect(onReorder.mock.calls).toEqual([[['b', 'a', 'c']], [['b', 'c', 'a']]]);
 });
+
+test('a keyboard order is dropped once items move on, even back to the old order', async () => {
+  const list = (ids: string[]) => (
+    <SortableList
+      handle
+      items={ids.map((id) => ({ id }))}
+      onReorder={vi.fn<(ids: string[]) => void>()}
+      renderItem={(row, controls) => (
+        <button
+          type="button"
+          aria-label={`grip ${row.id}`}
+          {...handle}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') controls.move(1);
+          }}
+        >
+          {row.id}
+        </button>
+      )}
+    />
+  );
+  const shown = () =>
+    Array.from(document.querySelectorAll('[data-drag-handle]'), (el) =>
+      el.textContent?.trim(),
+    );
+  const screen = await render(list(['a', 'b', 'c']));
+
+  await userEvent.click(screen.getByRole('button', { name: 'grip a' }));
+  await userEvent.keyboard('{ArrowDown}');
+  expect(shown()).toEqual(['b', 'a', 'c']);
+
+  // The caller acknowledges the move, then the order returns (a drag back,
+  // or a refetch after the save failed).
+  await screen.rerender(list(['b', 'a', 'c']));
+  await screen.rerender(list(['a', 'b', 'c']));
+  await vi.waitFor(() => expect(shown()).toEqual(['a', 'b', 'c']));
+});
