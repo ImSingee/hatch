@@ -97,6 +97,8 @@ export const status = {
   success: ramp(tokens.hues.green),
   warning: ramp(tokens.hues.amber),
   info: ramp(tokens.hues.blue),
+  /** Work in progress, such as a card's "Fixing" status. */
+  working: ramp(tokens.hues.orange),
 } as const;
 
 /** Fills for monogram and row tiles; every one carries white text at AA. */

@@ -3,15 +3,24 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import {
+  notificationHeadline,
+  type ContentNode,
+  type NotificationFormat,
+} from '../../../../packages/hatch-platform-api/notification-content';
+import {
   buildVersionList,
   type VersionChange,
+  type VersionContent,
 } from '../../../../packages/hatch-platform-api/notification-versions';
 import type { NotificationAnswer } from '../../../src/core/types';
 import { MobileError } from '../../../src/core';
 import { useSession } from '../../../src/state/session';
 import { useNotificationDeleted } from '../../../src/state/use-delete-notification';
 import { Button } from '../../../src/ui/button';
-import { CardBlock, CardStatus } from '../../../src/ui/notification-card';
+import {
+  NotificationContent,
+  asksInline,
+} from '../../../src/ui/notification-card';
 import { notificationTime } from '../../../src/ui/notification-status';
 import {
   Busy,
@@ -31,10 +40,12 @@ import {
 
 const CHANGE_LABELS: Record<VersionChange, string> = {
   status: 'Status',
+  format: 'Format',
   title: 'Title',
+  summary: 'Summary',
   body: 'Text',
+  content: 'Content',
   link: 'Link',
-  card: 'Card',
   data: 'Data',
   question: 'New question',
   questionRemoved: 'Question removed',
@@ -45,6 +56,15 @@ const VIA: Record<string, string> = {
   mobile: 'in the app',
   push: 'from the notification',
   cli: 'from the CLI',
+};
+
+/** A version as this screen lists it. */
+type Version = VersionContent & {
+  key: string;
+  from: string;
+  to: string | null;
+  /** Plain text of content this build cannot read. */
+  text: string | null;
 };
 
 /**
@@ -120,31 +140,42 @@ export default function NotificationHistoryScreen() {
   }
   if (item.response) answers.set(item.response.round, item.response);
 
-  const versions = buildVersionList(
-    {
-      key: 'current',
-      from: item.activityAt,
-      to: item.recalledAt,
-      title: item.title,
-      body: item.body,
-      url: item.url,
-      card: item.card,
-      reply: item.reply,
-      replyRound: item.replyRound,
+  const version = (
+    key: string,
+    from: string,
+    to: string | null,
+    value: {
+      format: NotificationFormat;
+      title: string | null;
+      body: string | null;
+      summary: string | null;
+      content: ContentNode | null;
+      text: string | null;
+      url: string | null;
+      reply: Version['reply'];
+      replyRound: number;
     },
+  ): Version => ({
+    key,
+    from,
+    to,
+    format: value.format,
+    title: value.title,
+    body: value.body,
+    summary: value.summary,
+    content: value.content,
+    text: value.text,
+    url: value.url,
+    reply: value.reply,
+    replyRound: value.replyRound,
+  });
+  const versions = buildVersionList<Version>(
+    version('current', item.activityAt, item.recalledAt, item),
     earlier.data.pages
       .flatMap((page) => page.versions)
-      .map((version) => ({
-        key: String(version.revision),
-        from: version.activityAt,
-        to: version.replacedAt as string | null,
-        title: version.title,
-        body: version.body,
-        url: version.url,
-        card: version.card,
-        reply: version.reply,
-        replyRound: version.replyRound,
-      })),
+      .map((kept) =>
+        version(String(kept.revision), kept.activityAt, kept.replacedAt, kept),
+      ),
     { total: item.earlierVersions + 1 },
   );
 
@@ -153,7 +184,7 @@ export default function NotificationHistoryScreen() {
       readable
       nested
       eyebrow={`${item.earlierVersions + 1} versions`}
-      title={item.title}
+      title={notificationHeadline(item)}
     >
       <View style={{ paddingHorizontal: 16, gap: 18 }}>
         {item.recalledAt ? (
@@ -173,6 +204,10 @@ export default function NotificationHistoryScreen() {
             : version.number === 1
               ? 'Original'
               : `Version ${version.number}`;
+          // Only the last version of a round shows the round's answer.
+          const answer = version.lastOfRound
+            ? (answers.get(version.replyRound) ?? null)
+            : null;
           const when = version.to
             ? `${notificationTime(version.from)} – ${notificationTime(version.to)}`
             : `Since ${notificationTime(version.from)}`;
@@ -211,20 +246,28 @@ export default function NotificationHistoryScreen() {
                     .join(' · ')}
                 </Text>
               ) : null}
-              <View
-                style={[
-                  styles.body,
-                  !version.current && { backgroundColor: c.muted },
-                ]}
-              >
-                {version.card ? <CardStatus card={version.card} /> : null}
-                <Text style={type.heading}>{version.title}</Text>
-                {version.body ? (
-                  <Text selectable style={type.small}>
-                    {version.body}
-                  </Text>
-                ) : null}
-                {version.card ? <CardBlock card={version.card} /> : null}
+              <View style={styles.body}>
+                {version.format !== 'text' && version.content ? (
+                  <NotificationContent
+                    selectable
+                    content={version.content}
+                    reply={version.reply}
+                    answer={answer}
+                    // A kept version was edited when it was replaced.
+                    editedAt={version.current ? item.editedAt : version.to}
+                  />
+                ) : (
+                  <>
+                    <Text style={type.heading}>
+                      {notificationHeadline(version)}
+                    </Text>
+                    {(version.body ?? version.text) ? (
+                      <Text selectable style={type.small}>
+                        {version.body ?? version.text}
+                      </Text>
+                    ) : null}
+                  </>
+                )}
                 {version.url ? (
                   <Text selectable style={[type.small, { color: c.inkSoft }]}>
                     {version.url}
@@ -233,11 +276,8 @@ export default function NotificationHistoryScreen() {
                 {version.reply ? (
                   <Question
                     reply={version.reply}
-                    answer={
-                      version.lastOfRound
-                        ? (answers.get(version.replyRound) ?? null)
-                        : undefined
-                    }
+                    inline={asksInline(version.content, version.reply)}
+                    answer={version.lastOfRound ? answer : undefined}
                     open={version.current && !item.recalledAt}
                   />
                 ) : null}
@@ -272,19 +312,22 @@ export default function NotificationHistoryScreen() {
 /** The question a version asked and, when it took it, its answer. */
 function Question({
   reply,
+  inline,
   answer,
   open,
 }: {
   reply: ReplyForm;
+  /** The card asked it inside itself, where its inputs already show. */
+  inline: boolean;
   answer: NotificationAnswer | null | undefined;
   open: boolean;
 }) {
   return (
     <View style={styles.question}>
-      {reply.fields.map((field) => (
+      {(inline ? [] : reply.fields).map((field) => (
         <View key={field.id} style={{ gap: 2 }}>
           <Text style={[type.small, { fontWeight: weights.strong }]}>
-            Question: {field.label}
+            Question: {field.label || 'Choose one'}
           </Text>
           <Text style={type.caption}>
             {field.type === 'text'

@@ -16,19 +16,28 @@ export function OptionRow({
   selected,
   disabled,
   onPress,
+  note,
+  badge,
+  readOnly,
 }: {
   label: string;
   multiple: boolean;
   selected: boolean;
   disabled: boolean;
   onPress: () => void;
+  /** Shown at the end, such as "about 1 minute". */
+  note?: string;
+  /** A small tag, such as "breaking". */
+  badge?: string;
+  /** Cannot be changed, but not dimmed: an answer already given. */
+  readOnly?: boolean;
 }) {
   const accent = useAccent();
   return (
     <Pressable
       accessibilityRole={multiple ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected, disabled }}
-      disabled={disabled}
+      accessibilityState={{ checked: selected, disabled: disabled || readOnly }}
+      disabled={disabled || readOnly}
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 48,
@@ -41,7 +50,7 @@ export function OptionRow({
         borderWidth: 1,
         borderColor: selected ? accent.fill : c.input,
         backgroundColor: selected ? accent.tint : pressed ? c.muted : c.card,
-        opacity: disabled ? 0.5 : 1,
+        opacity: disabled && !readOnly ? 0.5 : 1,
       })}
     >
       <View
@@ -72,6 +81,10 @@ export function OptionRow({
         ) : null}
       </View>
       <Text style={[type.body, { flex: 1 }]}>{label}</Text>
+      {note ? (
+        <Text style={[type.caption, { flexShrink: 1 }]}>{note}</Text>
+      ) : null}
+      {badge ? <Tag label={badge} tone="quiet" /> : null}
     </Pressable>
   );
 }

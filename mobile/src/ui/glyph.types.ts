@@ -39,6 +39,23 @@ export const glyphs = {
   pause: 'pause.fill',
   info: 'info.circle',
   pinSlash: 'pin.slash',
+  chevronDown: 'chevron.down',
+  circle: 'circle',
+  minus: 'minus',
+  square: 'square',
+  checkSquare: 'checkmark.square.fill',
+  // Card icons (`CARD_ICONS`), shown where the source tile is.
+  pullRequest: 'arrow.triangle.pull',
+  deploy: 'paperplane',
+  task: 'checklist',
+  shield: 'checkmark.shield',
+  chart: 'chart.bar',
+  clock: 'clock',
+  database: 'cylinder.split.1x2',
+  bug: 'ladybug',
+  message: 'bubble.left',
+  package: 'shippingbox',
+  money: 'banknote',
 } as const;
 
 export type GlyphName = keyof typeof glyphs;

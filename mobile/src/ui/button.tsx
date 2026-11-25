@@ -5,7 +5,7 @@ import type { GlyphName } from './glyph.types';
 import { Text } from './text';
 import { palette as c, pill, radii, status, weights } from './theme';
 
-type Variant = 'primary' | 'secondary' | 'quiet' | 'danger';
+type Variant = 'primary' | 'secondary' | 'quiet' | 'danger' | 'muted';
 
 export type ButtonProps = {
   label: string;
@@ -13,7 +13,13 @@ export type ButtonProps = {
   variant?: Variant;
   size?: 'large' | 'regular' | 'small';
   glyph?: GlyphName;
+  /** Drawn after the label, such as the arrow of a link that leaves. */
+  trailingGlyph?: GlyphName;
   disabled?: boolean;
+  /** A chosen answer: drawn selected, also to assistive technology. */
+  selected?: boolean;
+  /** Cannot be pressed, but not dimmed: an answer already given. */
+  readOnly?: boolean;
   busy?: boolean;
   fullWidth?: boolean;
   /** Keep the label on one line, cut off where the button runs out of room. */
@@ -29,7 +35,10 @@ export function Button({
   variant = 'primary',
   size = 'regular',
   glyph,
+  trailingGlyph,
   disabled,
+  selected,
+  readOnly,
   busy,
   fullWidth,
   singleLine,
@@ -56,14 +65,20 @@ export function Button({
       fg: status.danger.ink,
       border: 'transparent',
     },
+    // A link among answers: grey, never mistaken for one.
+    muted: { bg: c.muted, down: c.pressed, fg: c.ink, border: 'transparent' },
   }[variant];
-  const unavailable = Boolean(disabled || busy);
+  const unavailable = Boolean(disabled || busy || readOnly);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: unavailable, busy: Boolean(busy) }}
+      accessibilityState={{
+        disabled: unavailable,
+        busy: Boolean(busy),
+        ...(selected === undefined ? {} : { selected }),
+      }}
       disabled={unavailable}
       onPress={onPress}
       hitSlop={size === 'small' ? 5 : 4}
@@ -81,7 +96,7 @@ export function Button({
         justifyContent: 'center',
         gap: 8,
         alignSelf: fullWidth ? 'stretch' : 'flex-start',
-        opacity: unavailable ? 0.5 : 1,
+        opacity: unavailable && !readOnly ? 0.5 : 1,
       })}
     >
       {glyph ? (
@@ -99,6 +114,13 @@ export function Button({
       >
         {label}
       </Text>
+      {trailingGlyph ? (
+        <Glyph
+          name={trailingGlyph}
+          size={size === 'small' ? 11 : 13}
+          color={tone.fg}
+        />
+      ) : null}
     </Pressable>
   );
 }

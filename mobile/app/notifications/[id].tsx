@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { ReplyAnswers } from '@hatch/platform-api';
 import {
   Stack,
@@ -7,19 +7,24 @@ import {
   useLocalSearchParams,
   useNavigation,
 } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { Alert, Linking, RefreshControl, StyleSheet, View } from 'react-native';
-import { MobileError, notificationUrlAction } from '../../src/core';
-import { openSurfaceLink } from '../../src/state/deep-links';
-import { allowDevelopmentLoopback, useSession } from '../../src/state/session';
+import { RefreshControl, StyleSheet, View } from 'react-native';
+import { notificationHeadline } from '../../../packages/hatch-platform-api/notification-content';
+import { contentToMarkup } from '../../../packages/hatch-platform-api/notification-content-text';
+import { MobileError } from '../../src/core';
+import { useSession } from '../../src/state/session';
 import {
   useDeleteNotification,
   useNotificationDeleted,
 } from '../../src/state/use-delete-notification';
+import { useOpenNotificationUrl } from '../../src/state/use-open-notification-url';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
+import { useRespondToNotification } from '../../src/state/use-respond-notification';
 import { Button } from '../../src/ui/button';
 import { glyphs } from '../../src/ui/glyph.types';
-import { CardBlock, CardStatus } from '../../src/ui/notification-card';
+import {
+  NotificationContent,
+  asksInline,
+} from '../../src/ui/notification-card';
 import {
   Busy,
   Card,
@@ -35,11 +40,11 @@ import {
   NotificationStatusTag,
   notificationTime,
 } from '../../src/ui/notification-status';
-import { AnswerCard, ReplyFormCard } from '../../src/ui/reply-card';
+import { AnswerCard, AnswerLine, ReplyFormCard } from '../../src/ui/reply-card';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
 import { useAccent } from '../../src/ui/accent';
-import { palette as c } from '../../src/ui/theme';
+import { palette as c, radii } from '../../src/ui/theme';
 
 const destinationLabels: Record<string, string> = {
   device: 'Device',
@@ -60,27 +65,8 @@ export default function NotificationScreen() {
     enabled: Boolean(api) && !deleted,
   });
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
-  const queryClient = useQueryClient();
-  const respond = useMutation({
-    // The round on screen, so a question an edit replaced meanwhile is
-    // refused rather than answered with this form.
-    mutationFn: (input: { round: number; answers: ReplyAnswers }) =>
-      api!.respondToNotification(id, input.round, input.answers),
-    onError: (error) =>
-      Alert.alert(
-        'Answer not sent',
-        error instanceof MobileError && error.status === 409
-          ? 'Someone already answered, the sender recalled it, or it now asks something else.'
-          : errorText(error),
-      ),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [origin, 'notification', id],
-        }),
-        queryClient.invalidateQueries({ queryKey: [origin, 'notifications'] }),
-      ]),
-  });
+  const respond = useRespondToNotification(id);
+  const openUrl = useOpenNotificationUrl();
   const { confirmDelete, isPending: deleting } = useDeleteNotification({
     onDeleted: () => {
       // A slow response must not pop a screen the user opened since.
@@ -119,12 +105,22 @@ export default function NotificationScreen() {
       </View>
     );
   if (!data) return <Busy label="Loading notification" />;
+  const inline = asksInline(data.content, data.reply);
+  const submit = (answers: ReplyAnswers) =>
+    respond.mutate({ round: data.replyRound, answers });
+  // What the sender wrote: the Markdown, or the card's canonical markup.
+  const source =
+    data.format === 'markdown'
+      ? data.markdown
+      : data.format === 'card' && data.content
+        ? contentToMarkup(data.content)
+        : null;
   return (
     <ScrollScreen
       readable
       nested
       eyebrow={`${data.sourceName} · ${data.kindName}`}
-      title={data.title}
+      title={notificationHeadline(data)}
       refreshControl={
         <RefreshControl
           refreshing={pull.refreshing}
@@ -186,24 +182,33 @@ export default function NotificationScreen() {
             onPress={() => router.push(`/notifications/history/${id}`)}
           />
         ) : null}
-        {data.card ? (
-          <Card>
-            <View style={{ gap: 12, alignItems: 'flex-start' }}>
-              <CardStatus card={data.card} />
-              <View style={{ alignSelf: 'stretch' }}>
-                <CardBlock card={data.card} />
-              </View>
-            </View>
+        {data.format !== 'text' && data.content ? (
+          <Card style={{ gap: 12 }}>
+            <NotificationContent
+              key={data.replyRound}
+              selectable
+              content={data.content}
+              reply={data.reply}
+              answer={data.response}
+              editedAt={data.editedAt}
+              respond={
+                inline && !data.recalledAt
+                  ? { busy: respond.isPending, onSubmit: submit }
+                  : null
+              }
+            />
+            {inline && data.reply && data.response ? (
+              <AnswerLine reply={data.reply} answer={data.response} />
+            ) : null}
           </Card>
-        ) : null}
-        {data.body ? (
+        ) : (data.body ?? data.text) ? (
           <Card>
             <Text selectable style={type.body}>
-              {data.body}
+              {data.body ?? data.text}
             </Text>
           </Card>
         ) : null}
-        {data.reply && data.response ? (
+        {inline ? null : data.reply && data.response ? (
           <AnswerCard reply={data.reply} answer={data.response} />
         ) : data.reply && !data.recalledAt ? (
           <ReplyFormCard
@@ -211,9 +216,7 @@ export default function NotificationScreen() {
             key={`${id}:${data.replyRound}`}
             reply={data.reply}
             busy={respond.isPending}
-            onSubmit={(answers) =>
-              respond.mutate({ round: data.replyRound, answers })
-            }
+            onSubmit={submit}
           />
         ) : null}
         {data.url ? (
@@ -222,32 +225,33 @@ export default function NotificationScreen() {
             glyph="browser"
             label="Open link"
             fullWidth
-            onPress={() => {
-              // Hatch pages, by address or deep link, open here; other web
-              // pages in the browser, and any other scheme in its own app.
-              const action = notificationUrlAction(data.url!, origin!, {
-                allowDevelopmentLoopback,
-              });
-              if (action.open === 'page') openSurfaceLink(action.link);
-              else if (action.open === 'none')
-                Alert.alert(
-                  'Couldn’t open link',
-                  'This version of Hatch can’t open this page. Update the app and try again.',
-                );
-              else if (/^https?:/i.test(action.url))
-                void WebBrowser.openBrowserAsync(action.url).catch(
-                  (error: unknown) =>
-                    Alert.alert('Couldn’t open link', errorText(error)),
-                );
-              else
-                void Linking.openURL(action.url).catch(() =>
-                  Alert.alert(
-                    'Couldn’t open link',
-                    `No app on this device opens “${action.url.split(':')[0]}” links.`,
-                  ),
-                );
-            }}
+            onPress={() => openUrl(data.url!)}
           />
+        ) : null}
+        {data.summary ? (
+          <>
+            <SectionLabel>Summary</SectionLabel>
+            <Text style={type.small}>
+              Shown in pushes, lists and wherever the content is not.
+            </Text>
+            <Card>
+              <Text selectable style={type.body}>
+                {data.summary}
+              </Text>
+            </Card>
+          </>
+        ) : null}
+        {source ? (
+          <>
+            <SectionLabel>
+              {data.format === 'markdown' ? 'Markdown source' : 'Card markup'}
+            </SectionLabel>
+            <View style={styles.source}>
+              <Text selectable style={[type.mono, { color: c.ink }]}>
+                {source}
+              </Text>
+            </View>
+          </>
         ) : null}
         <SectionLabel count={data.deliveries.length}>Deliveries</SectionLabel>
         {data.deliveries.length === 0 ? (
@@ -301,6 +305,11 @@ export default function NotificationScreen() {
 }
 
 const styles = StyleSheet.create({
+  source: {
+    padding: 14,
+    borderRadius: radii.md,
+    backgroundColor: c.sunken,
+  },
   delivery: { paddingVertical: 12, gap: 6 },
   header: { flexDirection: 'row', gap: 10, alignItems: 'center' },
 });

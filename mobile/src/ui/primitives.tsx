@@ -137,6 +137,7 @@ export type TagTone =
   | 'success'
   | 'warning'
   | 'danger'
+  | 'working'
   | 'outline';
 
 /** Status chip: a pill in sentence case, tinted, with an optional dot. */
@@ -171,6 +172,7 @@ export function Tag({
     success: tint(status.success),
     warning: tint(status.warning),
     danger: tint(status.danger),
+    working: tint(status.working),
     outline: {
       bg: 'transparent',
       fg: c.inkSoft,

@@ -41,6 +41,9 @@ struct HatchPushPlaintext: Decodable {
   let a: Bool?
   /// Reply form, as the phone offers it (absent when it asks nothing).
   let q: HatchPushReply?
+  /// 1: the title already names the source (Markdown and card
+  /// notifications), so the subtitle is the kind alone.
+  let ks: Int?
 }
 
 /// "b": buttons of field \`f\`; "t": system text reply for field \`f\`; "f": open
@@ -302,7 +305,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
     let content = UNMutableNotificationContent()
     content.title = message.t
-    content.subtitle = "\\(message.s) · \\(message.k)"
+    content.subtitle = message.ks == 1 ? message.k : "\\(message.s) · \\(message.k)"
     content.body = message.b ?? ""
     content.sound = original.sound
     content.interruptionLevel = original.interruptionLevel
