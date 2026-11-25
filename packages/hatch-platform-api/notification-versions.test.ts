@@ -17,11 +17,19 @@ const form = (label: string) => ({
   submitLabel: 'Send',
 });
 
+const status = (label: string, tone: string) => ({
+  type: 'Card',
+  props: { status: label, tone },
+  children: [{ type: 'Title', children: ['PR #261'] }],
+});
+
 const version = (patch: Partial<VersionContent>): VersionContent => ({
+  format: 'text',
   title: 'PR #261',
   body: null,
+  summary: null,
+  content: null,
   url: null,
-  card: null,
   reply: null,
   replyRound: 1,
   ...patch,
@@ -32,19 +40,28 @@ describe('the versions of a notification', () => {
     const list = buildVersionList(
       version({
         body: 'All 14 checks passed.',
-        card: { status: { label: 'CI passed', tone: 'success' } },
+        format: 'card',
+        title: null,
+        summary: 'PR #261',
+        content: status('CI passed', 'success'),
         reply: form('Merge now?'),
         replyRound: 2,
       }),
       [
         version({
           body: '2 checks failed.',
-          card: { status: { label: 'CI failed', tone: 'danger' } },
+          format: 'card',
+          title: null,
+          summary: 'PR #261',
+          content: status('CI failed', 'danger'),
           reply: form('Fix it?'),
         }),
         version({
           body: '2 checks failed.',
-          card: { status: { label: 'Running', tone: 'info' } },
+          format: 'card',
+          title: null,
+          summary: 'PR #261',
+          content: status('Running', 'info'),
           reply: form('Fix it?'),
         }),
       ],
@@ -67,6 +84,36 @@ describe('the versions of a notification', () => {
     );
     expect(list.map((entry) => entry.number)).toEqual([5, 4]);
     expect(list[1]!.changes).toEqual([]);
+  });
+
+  it('tell a format switch, a new summary and new content apart from a new status', () => {
+    const card = version({
+      format: 'card',
+      title: null,
+      summary: 'CI failed',
+      content: status('CI failed', 'danger'),
+    });
+    const text = version({ title: 'CI failed', body: '2 checks failed.' });
+    expect(buildVersionList(card, [text], { total: 2 })[0]!.changes).toEqual([
+      'status',
+      'format',
+      'title',
+      'summary',
+      'body',
+      'content',
+    ]);
+    // jsonb hands trees back with their keys reordered: not a change.
+    const stored = {
+      ...card,
+      content: {
+        children: card.content!.children,
+        props: { tone: 'danger', status: 'CI failed' },
+        type: 'Card',
+      },
+    };
+    expect(buildVersionList(stored, [card], { total: 2 })[0]!.changes).toEqual(
+      [],
+    );
   });
 
   it('report a removed question, and data only when asked to compare it', () => {

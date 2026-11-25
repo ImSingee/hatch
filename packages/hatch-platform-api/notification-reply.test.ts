@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  defaultAnswers,
   describeAnswers,
   replyPushMode,
+  submitsWithButtons,
   validateAnswers,
   type ReplyForm,
 } from './notification-reply';
@@ -220,5 +222,95 @@ describe('answers', () => {
       one({ id: 'a', type: 'single', label: 'A', options: choice(2) }),
     ).toBe('form');
     expect(replyPushMode(form)).toBe('form');
+  });
+});
+
+describe('form additions', () => {
+  it('keep primary, notes, badges and defaults where they apply', () => {
+    const form = notificationReplySchema.parse({
+      fields: [
+        {
+          id: 'pick',
+          type: 'multiple',
+          label: 'Upgrade',
+          default: ['zod', 'vitest'],
+          options: [
+            { id: 'vitest', label: 'vitest', badge: 'patch' },
+            { id: 'zod', label: 'zod', note: 'tested' },
+            { id: 'drizzle', label: 'drizzle-orm', badge: 'breaking' },
+          ],
+        },
+        {
+          id: 'go',
+          type: 'buttons',
+          options: [
+            { id: 'yes', label: 'Upgrade', primary: true },
+            { id: 'no', label: 'Skip' },
+          ],
+        },
+      ],
+    });
+    expect(form.fields[0]).toMatchObject({
+      // Kept in option order, like answers.
+      default: ['vitest', 'zod'],
+      options: [
+        { id: 'vitest', label: 'vitest', badge: 'patch' },
+        { id: 'zod', label: 'zod', note: 'tested' },
+        { id: 'drizzle', label: 'drizzle-orm', badge: 'breaking' },
+      ],
+    });
+    expect(form.fields[1]).toMatchObject({
+      label: '',
+      options: [{ id: 'yes', label: 'Upgrade', primary: true }, { id: 'no' }],
+    });
+    expect(submitsWithButtons(form)).toBe(true);
+    expect(defaultAnswers(form)).toEqual({ pick: ['vitest', 'zod'] });
+    expect(replyFromMessage(replyToMessage(form))).toEqual(form);
+  });
+
+  it('reject additions on the wrong kind of field', () => {
+    const issue = (field: Record<string, unknown>) =>
+      describeIssue(
+        notificationReplySchema.safeParse({ fields: [field] }).error!,
+        'reply',
+      );
+    const options = [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+    ];
+    expect(
+      issue({
+        id: 'q',
+        type: 'single',
+        label: 'Q',
+        options,
+        default: ['a', 'b'],
+      }),
+    ).toBe('reply.fields.0.default: a single field has one default option');
+    expect(
+      issue({ id: 'q', type: 'single', label: 'Q', options, default: 'c' }),
+    ).toBe('reply.fields.0.default: default names unknown option "c"');
+    expect(
+      issue({
+        id: 'q',
+        type: 'single',
+        label: 'Q',
+        options: [{ id: 'a', label: 'A', primary: true }, options[1]],
+      }),
+    ).toBe(
+      'reply.fields.0.options.0.primary: primary is only allowed on buttons options',
+    );
+    expect(
+      issue({
+        id: 'q',
+        type: 'buttons',
+        options: [{ id: 'a', label: 'A', note: 'x' }],
+      }),
+    ).toBe(
+      'reply.fields.0.options.0.note: note is only allowed on single and multiple options',
+    );
+    expect(issue({ id: 'q', type: 'text' })).toBe(
+      'reply.fields.0.label: label is required',
+    );
   });
 });
