@@ -117,6 +117,36 @@ describe('App manifest top-level fields', () => {
   });
 });
 
+describe('frontend runtime manifest', () => {
+  const source = (app: Record<string, unknown>) => ({
+    id: 'demo',
+    name: 'Demo',
+    capabilities: { frontend: true },
+    app: { entry: 'app/main.tsx', routes: [], ...app },
+  });
+
+  it('defaults to the web runtime and records only native ones', () => {
+    for (const app of [{}, { runtime: 'web' }]) {
+      const parsed = parseSourceManifest(source(app));
+      expect(normalizeManifest(parsed).app).not.toHaveProperty('runtime');
+    }
+    const native = parseSourceManifest(source({ runtime: 'native' }));
+    expect(native.app?.runtime).toBe('native');
+    expect(normalizeManifest(native).app?.runtime).toBe('native');
+  });
+
+  it('rejects unknown runtimes and an HTML page for a native frontend', () => {
+    expect(() => parseSourceManifest(source({ runtime: 'nsh' }))).toThrow(
+      /app\.runtime must be one of: web, native/,
+    );
+    expect(() =>
+      parseSourceManifest(
+        source({ runtime: 'native', html: 'app/index.html' }),
+      ),
+    ).toThrow(/app\.html applies only to the web runtime/);
+  });
+});
+
 describe('backend manifest', () => {
   const source = (backend: Record<string, unknown>) => ({
     id: 'demo',

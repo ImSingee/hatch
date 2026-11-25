@@ -51,6 +51,23 @@ jobs:
         with:
           deno-version: ${{ steps.deno.outputs.version }}
 
+      # The Dockerfile's NSH stage pins the version and SHA-256 of the CLI and
+      # its web runtime; native App build tests run with the same release.
+      - name: Install NSH from the Dockerfile pin
+        run: |
+          arg() { sed -nE "s#^ARG $1=(.+)\$#\\1#p" Dockerfile; }
+          version="$(arg NSH_VERSION)"
+          base="https://github.com/longbridge/nsh/releases/download/v${version}"
+          curl -fsSL -o /tmp/nsh.tar.gz "$base/nsh-linux-x86_64.tar.gz"
+          echo "$(arg NSH_LINUX_X86_64_SHA256)  /tmp/nsh.tar.gz" | sha256sum -c -
+          curl -fsSL -o /tmp/nsh-web.tar.gz "$base/nsh-web.tar.gz"
+          echo "$(arg NSH_WEB_SHA256)  /tmp/nsh-web.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/nsh.tar.gz -C /opt
+          sudo tar -xzf /tmp/nsh-web.tar.gz -C /opt
+          sudo mkdir -p /opt/nsh/components
+          printf '{"version":"%s","commit":"%s"}' "$version" "$(arg NSH_COMMIT)" | sudo tee /opt/nsh/components/web.json
+          echo "HATCH_NSH_BIN=/opt/nsh/bin/nsh" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

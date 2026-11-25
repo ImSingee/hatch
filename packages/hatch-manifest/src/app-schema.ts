@@ -100,6 +100,14 @@ const singleLineNonEmpty = z
   .refine(hasNoLineBreak, { message: 'must not contain line breaks' });
 
 /** A user-facing route the app exposes through its hash router. */
+/** How an App's frontend runs; see `app.runtime`. */
+export const APP_FRONTEND_RUNTIMES = ['web', 'native'] as const;
+export const appFrontendRuntimeSchema = z.enum(APP_FRONTEND_RUNTIMES, {
+  error: () =>
+    `app.runtime must be one of: ${APP_FRONTEND_RUNTIMES.join(', ')}`,
+});
+export type AppFrontendRuntime = z.infer<typeof appFrontendRuntimeSchema>;
+
 export const appRouteSchema = z.object({
   path: singleLineNonEmpty.refine((path) => path.startsWith('/'), {
     message: 'route path must start with "/"',
@@ -579,6 +587,12 @@ export const sourceManifestSchema = z
     app: z
       .object({
         entry: sourceRelativePath,
+        /**
+         * Frontend runtime: `web` (a React bundle served as a page, the
+         * default) or `native` (NSH TSX run by the platform's player and the
+         * native shells).
+         */
+        runtime: appFrontendRuntimeSchema.optional(),
         html: sourceRelativePath.optional(),
         /** Discoverability metadata only; the platform does not register routes. */
         routes: appRoutesSchema,
@@ -610,6 +624,14 @@ export const sourceManifestSchema = z
   })
   .strict()
   .superRefine((manifest, ctx) => {
+    if (manifest.app?.runtime === 'native' && manifest.app.html !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'app.html applies only to the web runtime; a native App has no HTML page',
+        path: ['app', 'html'],
+      });
+    }
     if (
       manifest.workflows !== undefined &&
       !(Array.isArray(manifest.workflows) && manifest.workflows.length === 0)

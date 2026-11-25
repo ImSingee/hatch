@@ -73,6 +73,12 @@ above.
   supported, and omitting runtime retains `deno-run`. Follow `building-apps`
   for source migration.
 
+- `app.runtime: "native"` (NSH TSX on the shared UI library) may become the
+  only frontend runtime for new Apps in a future compatibility version.
+  Currently `app.runtime` is optional and independent of
+  `compatibilityVersion`: omitting it keeps `web`, both runtimes deploy, serve
+  and roll back, and each deployment records its own runtime.
+
 - Compatibility v3 and later will require `manifest.ts`; `manifest.json` will
   no longer be accepted as source for those contracts. When that contract is
   released and the user requests an upgrade, convert the JSON object using

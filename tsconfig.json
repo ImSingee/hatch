@@ -9,8 +9,13 @@
     "vitest.browser.config.ts",
     "vitest.browser.setup.ts",
     "postcss.config.ts",
-    "drizzle.config.ts"
+    "drizzle.config.ts",
+    // Unit tests import `@hatch/app/native`, which imports the NSH runtime's
+    // `nsh` module; this declares the part it uses.
+    "sdk-internal/app/src/nsh-host.d.ts"
   ],
+  // NSH TSX fixtures are checked by `nsh check` in the tests that build them.
+  "exclude": ["src/**/test-fixtures/native-*/**"],
 
   "compilerOptions": {
     "target": "ES2022",

@@ -14,28 +14,35 @@ const BIN_DIR = path.join(REPO_ROOT, 'node_modules', '.bin');
 const TSC = path.join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
 
 /**
- * The command that evaluates authored code. Node's permission model does not
- * cover signals: a process with the platform's identity could stop it, or
- * send SIGUSR1 to open its inspector on the loopback interface. The sandbox
- * identity may signal neither, so production refuses to evaluate without it
- * unless the operator accepted unsandboxed subprocesses, the switch the Agent
- * Runner honors for the same risk.
+ * The command that runs authored code on the platform (manifest and schema
+ * evaluation, a native App's start-up check). Node's permission model does
+ * not cover signals: a process with the platform's identity could stop it,
+ * or send SIGUSR1 to open its inspector on the loopback interface. The
+ * sandbox identity may signal neither, so production refuses to run authored
+ * code without it unless the operator accepted unsandboxed subprocesses, the
+ * switch the Agent Runner honors for the same risk.
  */
-function evaluationCommand(args: string[]): [string, string[]] {
+export function sandboxedEvaluationCommand(
+  argv: [string, ...string[]],
+): [string, string[]] {
   if (
     process.env.NODE_ENV === 'production' &&
     !sandboxSwitchesIdentity() &&
     process.env.HATCH_ALLOW_UNSANDBOXED !== 'true'
   ) {
     throw new Error(
-      'Cannot evaluate pnpm-toolchain source: the platform cannot switch to ' +
+      'Cannot run authored source: the platform cannot switch to ' +
         'the sandbox identity. Run it as root on Linux with setpriv, as the ' +
         'published image does, or set HATCH_ALLOW_UNSANDBOXED=true to accept ' +
         'that evaluated source can signal the platform process.',
     );
   }
-  const spawned = sandboxSpawn([process.execPath, ...args]);
+  const spawned = sandboxSpawn(argv);
   return [spawned.command, spawned.args];
+}
+
+function evaluationCommand(args: string[]): [string, string[]] {
+  return sandboxedEvaluationCommand([process.execPath, ...args]);
 }
 
 /**

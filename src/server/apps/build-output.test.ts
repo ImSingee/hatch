@@ -1,0 +1,218 @@
+/**
+ * A build replaces the requested output only once it has fully succeeded:
+ * a failure in a step after source validation (here the frontend bundle)
+ * leaves a direct caller's previous output in place.
+ */
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const failBundles: { on: false | 'source' | 'system' } = { on: false };
+
+vi.mock('esbuild', async (importOriginal) => {
+  const real = await importOriginal<typeof import('esbuild')>();
+  return {
+    ...real,
+    // Fail only the frontend bundle, which runs after source validation.
+    build: ((options: Parameters<typeof real.build>[0]) => {
+      if (
+        !failBundles.on ||
+        !options.outfile?.endsWith(path.join('app', 'app.js'))
+      ) {
+        return real.build(options);
+      }
+      if (failBundles.on === 'system') {
+        return Promise.reject(
+          Object.assign(new Error('ENOSPC: no space left on device, write'), {
+            code: 'ENOSPC',
+            errno: -28,
+            syscall: 'write',
+          }),
+        );
+      }
+      return Promise.reject(new Error('frontend bundle failed'));
+    }) as typeof real.build,
+  };
+});
+
+const { AppBuildError, buildApp, replaceDirectory } = await import('./build');
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  failBundles.on = false;
+  await Promise.all(
+    tempDirs.splice(0).map((d) => fs.rm(d, { recursive: true, force: true })),
+  );
+});
+
+describe('buildApp output replacement', () => {
+  it('keeps the previous output when a later build step fails', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-out-'));
+    tempDirs.push(root);
+    const sourceDir = path.join(root, 'src');
+    const outputDir = path.join(root, 'out');
+    const files: Record<string, string> = {
+      'manifest.json': JSON.stringify({
+        id: 'demo',
+        name: 'Demo',
+        capabilities: { frontend: true },
+        app: { entry: 'app/main.ts' },
+      }),
+      'package.json': JSON.stringify({ private: true, type: 'module' }),
+      'deno.json': JSON.stringify({
+        nodeModulesDir: 'auto',
+        compilerOptions: {
+          strict: true,
+          jsx: 'react-jsx',
+          jsxImportSource: 'react',
+          lib: [
+            'deno.ns',
+            'dom',
+            'dom.iterable',
+            'dom.asynciterable',
+            'esnext',
+          ],
+        },
+        allowScripts: [],
+      }),
+      'deno.lock': JSON.stringify({
+        version: '5',
+        specifiers: {},
+        npm: {},
+        workspace: { packageJson: { dependencies: [] } },
+      }),
+      'app/main.ts': "document.title = 'Demo';\n",
+      'app/index.html':
+        '<!doctype html><html><head><title>Demo</title></head><body></body></html>\n',
+    };
+    for (const [file, contents] of Object.entries(files)) {
+      await fs.mkdir(path.dirname(path.join(sourceDir, file)), {
+        recursive: true,
+      });
+      await fs.writeFile(path.join(sourceDir, file), contents, 'utf8');
+    }
+
+    await buildApp('demo', { sourceDir, outputDir });
+    const before = await fs.readFile(
+      path.join(outputDir, 'manifest.normalized.json'),
+      'utf8',
+    );
+    await fs.access(path.join(outputDir, 'app', 'app.js'));
+
+    failBundles.on = 'source';
+    await expect(buildApp('demo', { sourceDir, outputDir })).rejects.toThrow(
+      /frontend bundle failed/,
+    );
+    expect(
+      await fs.readFile(
+        path.join(outputDir, 'manifest.normalized.json'),
+        'utf8',
+      ),
+    ).toBe(before);
+    await fs.access(path.join(outputDir, 'app', 'app.js'));
+
+    // A failed system call is not a source error: it stays internal.
+    failBundles.on = 'system';
+    const failure = await buildApp('demo', { sourceDir, outputDir }).catch(
+      (error: unknown) => error,
+    );
+    expect(failure).not.toBeInstanceOf(AppBuildError);
+    expect((failure as NodeJS.ErrnoException).code).toBe('ENOSPC');
+  }, 60_000);
+
+  it('reports a missing source without its path, and keeps access errors internal', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-src-'));
+    tempDirs.push(root);
+    const missing = await buildApp('demo', {
+      sourceDir: path.join(root, 'absent'),
+      outputDir: path.join(root, 'out'),
+    }).catch((error: unknown) => error);
+    expect(missing).toBeInstanceOf(AppBuildError);
+    expect((missing as Error).message).toBe('App source not found for demo.');
+    expect((missing as Error).message).not.toContain(root);
+
+    // A source the platform may not read is not the caller's problem.
+    // (Permissions do not stop root, so this half needs another user.)
+    if (process.getuid?.() === 0) return;
+    const locked = path.join(root, 'locked');
+    await fs.mkdir(path.join(locked, 'src'), { recursive: true });
+    await fs.chmod(locked, 0o000);
+    try {
+      const denied = await buildApp('demo', {
+        sourceDir: path.join(locked, 'src'),
+        outputDir: path.join(root, 'out'),
+      }).catch((error: unknown) => error);
+      expect(denied).not.toBeInstanceOf(AppBuildError);
+      expect((denied as NodeJS.ErrnoException).code).toBe('EACCES');
+    } finally {
+      await fs.chmod(locked, 0o755);
+    }
+  });
+
+  it('names where the previous output is when the swap and its undo fail', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-undo-'));
+    tempDirs.push(root);
+    const staged = path.join(root, 'staged');
+    const target = path.join(root, 'out');
+    await fs.mkdir(staged);
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(target, 'old.txt'), 'old');
+    const denied = () =>
+      Object.assign(new Error('EACCES: permission denied, rename'), {
+        code: 'EACCES',
+        errno: -13,
+        syscall: 'rename',
+      });
+    const failure = (await replaceDirectory(staged, target, {
+      mkdir: fs.mkdir,
+      rm: fs.rm,
+      cp: fs.cp,
+      rename: async (from, to) => {
+        // Moving the new output in, and moving the old one back, both fail.
+        if (String(to) === target) throw denied();
+        return fs.rename(from, to);
+      },
+    } as Parameters<typeof replaceDirectory>[2]).catch(
+      (error: unknown) => error,
+    )) as NodeJS.ErrnoException;
+    const kept = (await fs.readdir(root)).find((name) =>
+      name.startsWith('out.previous-'),
+    );
+    expect(kept).toBeDefined();
+    expect(failure.message).toContain(path.join(root, kept!));
+    expect(failure.code).toBe('EACCES');
+    expect(await fs.readdir(path.join(root, kept!))).toEqual(['old.txt']);
+  });
+
+  it('keeps the previous output when copying across devices fails', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-swap-'));
+    tempDirs.push(root);
+    const staged = path.join(root, 'staged');
+    const target = path.join(root, 'out');
+    await fs.mkdir(staged);
+    await fs.writeFile(path.join(staged, 'new.txt'), 'new');
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(target, 'old.txt'), 'old');
+    const crossDevice = Object.assign(new Error('EXDEV'), { code: 'EXDEV' });
+    await expect(
+      replaceDirectory(staged, target, {
+        mkdir: fs.mkdir,
+        rm: fs.rm,
+        rename: async (from, to) => {
+          if (String(from) === staged) throw crossDevice;
+          return fs.rename(from, to);
+        },
+        // Writes part of the copy, then fails.
+        cp: async (_from, to) => {
+          await fs.mkdir(String(to), { recursive: true });
+          await fs.writeFile(path.join(String(to), 'partial.txt'), 'x');
+          throw new Error('copy failed');
+        },
+      } as Parameters<typeof replaceDirectory>[2]),
+    ).rejects.toThrow('copy failed');
+    expect(await fs.readdir(target)).toEqual(['old.txt']);
+    expect((await fs.readdir(root)).sort()).toEqual(['out', 'staged']);
+  });
+});

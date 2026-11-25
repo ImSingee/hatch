@@ -60,6 +60,8 @@ import {
 } from './tasks/input-schema';
 import { assertDenoPermissionFlags } from '../deno-permissions';
 import { run as runSubprocess } from '../subprocess';
+import { buildNativeFrontend } from './native/build-native';
+import { AppError } from '../errors';
 
 export type BuildResult = {
   source: SourceManifest;
@@ -67,6 +69,20 @@ export type BuildResult = {
   dataSchema?: DataSchemaDescriptor;
   log: string;
 };
+
+/**
+ * A failed build: source validation, codegen, a deploy check or bundling.
+ * Nothing has been released when it is thrown, so callers report it as a
+ * definite rejection with its message (files and lines for the author)
+ * instead of an internal failure with an unknown outcome.
+ */
+export class AppBuildError extends AppError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, 400);
+    this.name = 'AppBuildError';
+    if (options && 'cause' in options) this.cause = options.cause;
+  }
+}
 
 export type BuildAppOptions = {
   sourceDir?: string;
@@ -306,7 +322,12 @@ type SourceCheckEntry = {
  */
 function sourceCheckEntries(manifest: SourceManifest): SourceCheckEntry[] {
   const entries: SourceCheckEntry[] = [];
-  if (manifest.capabilities.frontend && manifest.app) {
+  // A native frontend is NSH TSX, checked by `nsh check` in its own step.
+  if (
+    manifest.capabilities.frontend &&
+    manifest.app &&
+    manifest.app.runtime !== 'native'
+  ) {
     entries.push({
       path: manifest.app.entry,
       missingMessage: `app entry not found: ${manifest.app.entry}`,
@@ -343,6 +364,15 @@ async function checkAppSource(
   manifest: SourceManifest,
   toolchain: SourceToolchain,
 ): Promise<void> {
+  if (
+    manifest.capabilities.frontend &&
+    manifest.app?.runtime === 'native' &&
+    !(await pathExists(path.join(src, manifest.app.entry)))
+  ) {
+    throw new Error(
+      `Source validation failed: app entry not found: ${manifest.app.entry}`,
+    );
+  }
   const entries = sourceCheckEntries(manifest);
   if (entries.length === 0) return;
 
@@ -619,15 +649,41 @@ export async function buildApp(
   id: string,
   options: BuildAppOptions = {},
 ): Promise<BuildResult> {
+  try {
+    return await buildAppInner(id, options);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    // A failed system call (disk full, permissions) is the platform's
+    // problem, not the source's: it stays an internal error, and its message
+    // (which names server paths) does not reach the caller.
+    if (isSystemError(error)) throw error;
+    throw new AppBuildError(
+      error instanceof Error ? error.message : String(error),
+      { cause: error },
+    );
+  }
+}
+
+async function buildAppInner(
+  id: string,
+  options: BuildAppOptions,
+): Promise<BuildResult> {
   const originalSrc = options.sourceDir ?? appSrcDir(id);
   const out = options.outputDir ?? appBuildDir(id);
   const logs: string[] = [];
 
-  if (!(await pathExists(originalSrc))) {
-    throw new Error(`App source not found: ${originalSrc}`);
+  try {
+    await fs.access(originalSrc);
+  } catch (error) {
+    // Only a missing source is the caller's problem; any other failure
+    // (permissions, I/O) is the platform's and stays an internal error.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    // The message reaches the caller, so it names the App, not a server path.
+    throw new Error(`App source not found for ${id}.`);
   }
 
   const tempSrc = path.join(BUILD_WORK_DIR, id, randomUUID());
+  const stage = `${tempSrc}-out`;
   await fs.rm(tempSrc, { recursive: true, force: true });
   await fs.mkdir(path.dirname(tempSrc), { recursive: true });
   const src = tempSrc;
@@ -780,12 +836,6 @@ export async function buildApp(
       logs.push(`captured ${docs.length} external doc(s)`);
     }
 
-    // Only start replacing the requested output after every source validation
-    // step has passed. Deploy builds use a fresh path, while direct callers do
-    // not lose a prior output merely because new source fails validation.
-    await fs.rm(out, { recursive: true, force: true });
-    await fs.mkdir(out, { recursive: true });
-
     // Browser bundles may resolve only modules materialized inside this build's
     // disposable App root. The install above put every declared npm dependency there;
     // falling back to the platform repository would make builds non-hermetic.
@@ -817,26 +867,51 @@ export async function buildApp(
     };
 
     const define = browserDefine(id, manifest.name, options.deploymentId);
+    const nativeFrontend =
+      manifest.capabilities.frontend && manifest.app?.runtime === 'native';
     const storageInstall =
-      (manifest.capabilities.frontend && manifest.app) ||
+      (manifest.capabilities.frontend && manifest.app && !nativeFrontend) ||
       (manifest.capabilities.widgets && manifest.widgets.length > 0)
         ? await storageInstallScript(id, esbuildResolve)
         : '';
     let bundledBackendEntry: string | undefined;
+    let nshVersion: string | undefined;
+
+    // Everything is built into a staging directory that replaces the
+    // requested output only once the whole build has succeeded. Deploy builds
+    // use a fresh path, while direct callers do not lose a prior output when
+    // a check or a later bundling step fails.
+    await fs.rm(stage, { recursive: true, force: true });
+    await fs.mkdir(stage, { recursive: true });
+
+    // 3a) A native frontend: NSH deploy checks, the linked web module, the
+    // player page and the bundle native shells load.
+    if (nativeFrontend && manifest.app) {
+      ({ nshVersion } = await buildNativeFrontend({
+        src,
+        out: stage,
+        app: { id, name: manifest.name, entry: manifest.app.entry },
+        api,
+        dataTable: manifest.capabilities.dataTable,
+        deploymentId: options.deploymentId,
+        esbuildResolve,
+        logs,
+      }));
+    }
 
     // 3) Bundle the frontend SPA -> static app/app.js + index.html.
-    if (manifest.capabilities.frontend && manifest.app) {
+    if (manifest.capabilities.frontend && manifest.app && !nativeFrontend) {
       const entry = path.join(src, manifest.app.entry);
       if (!(await pathExists(entry))) {
         throw manifestInvalid(['app', 'entry'], 'file not found').inFile(
           manifestFile,
         );
       }
-      await fs.mkdir(path.join(out, 'app'), { recursive: true });
+      await fs.mkdir(path.join(stage, 'app'), { recursive: true });
       const appBundle = await esbuild.build({
         ...esbuildResolve,
         entryPoints: [entry],
-        outfile: path.join(out, 'app', 'app.js'),
+        outfile: path.join(stage, 'app', 'app.js'),
         bundle: true,
         format: 'esm',
         platform: 'browser',
@@ -858,7 +933,7 @@ export async function buildApp(
       // Inline the bundle into index.html. The platform serves the app over an
       // extensionless HTML route; inlining avoids a separate .js asset request
       // (which dev middleware would intercept) and keeps the app a single doc.
-      const code = await fs.readFile(path.join(out, 'app', 'app.js'), 'utf8');
+      const code = await fs.readFile(path.join(stage, 'app', 'app.js'), 'utf8');
       const inlined = `<script type="module">${code.replace(
         /<\/script>/g,
         '<\\/script>',
@@ -877,13 +952,13 @@ export async function buildApp(
       html = scriptTag.test(html)
         ? html.replace(scriptTag, () => inlined)
         : html.replace('</body>', () => `${inlined}\n</body>`);
-      await fs.writeFile(path.join(out, 'app', 'index.html'), html, 'utf8');
+      await fs.writeFile(path.join(stage, 'app', 'index.html'), html, 'utf8');
       logs.push('bundled app -> inlined into app/index.html');
     }
 
     // 4) Bundle each widget -> standalone ESM module exporting mount().
     if (manifest.capabilities.widgets && manifest.widgets.length > 0) {
-      await fs.mkdir(path.join(out, 'widgets'), { recursive: true });
+      await fs.mkdir(path.join(stage, 'widgets'), { recursive: true });
       for (const [index, widget] of manifest.widgets.entries()) {
         const entry = path.join(src, widget.entry);
         if (!(await pathExists(entry))) {
@@ -895,7 +970,7 @@ export async function buildApp(
         const widgetBundle = await esbuild.build({
           ...esbuildResolve,
           entryPoints: [entry],
-          outfile: path.join(out, 'widgets', `${widget.id}.js`),
+          outfile: path.join(stage, 'widgets', `${widget.id}.js`),
           // Runs before the widget's modules: each widget has its own frame.
           banner: { js: storageInstall },
           bundle: true,
@@ -917,17 +992,17 @@ export async function buildApp(
     // runtime entry. Source files and dependency manifests remain build inputs;
     // only files below the fixed backend/assets directory enter the artifact.
     if (manifest.capabilities.backend && manifest.backend) {
-      await copyBackendAssets(src, out);
+      await copyBackendAssets(src, stage);
       await validateBackendBundleSourceTree(src);
 
       const sourceEntry = manifest.backend.entry;
       bundledBackendEntry = backendBundleEntry(sourceEntry);
-      const bundlePath = path.join(out, bundledBackendEntry);
+      const bundlePath = path.join(stage, bundledBackendEntry);
       await fs.mkdir(path.dirname(bundlePath), { recursive: true });
       await toolchain.bundle({
         entry: sourceEntry,
         outfile: bundlePath,
-        outputRoot: out,
+        outputRoot: stage,
       });
       logs.push(`bundled backend -> ${bundledBackendEntry}`);
     }
@@ -947,10 +1022,13 @@ export async function buildApp(
         `captured ${normalized.tasks.definitions.length} task input schema(s)`,
       );
     }
-    await writeAppDocs(out, docs);
+    await writeAppDocs(stage, docs);
     if (docs.length > 0) normalized.docs = docs.map(({ doc }) => doc);
+    if (nshVersion && normalized.app) {
+      normalized.app = { ...normalized.app, nshVersion };
+    }
     await fs.writeFile(
-      path.join(out, 'manifest.normalized.json'),
+      path.join(stage, 'manifest.normalized.json'),
       JSON.stringify(normalized, null, 2),
       'utf8',
     );
@@ -958,11 +1036,13 @@ export async function buildApp(
       // Runtime workers use this immutable marker to reject/restart a backend
       // whose process was spawned from a superseded shared build directory.
       await fs.writeFile(
-        path.join(out, 'deployment.json'),
+        path.join(stage, 'deployment.json'),
         JSON.stringify({ deploymentId: options.deploymentId }, null, 2),
         'utf8',
       );
     }
+
+    await replaceDirectory(stage, out);
 
     return {
       source: manifest,
@@ -972,5 +1052,82 @@ export async function buildApp(
     };
   } finally {
     await fs.rm(tempSrc, { recursive: true, force: true });
+    await fs.rm(stage, { recursive: true, force: true });
   }
+}
+
+function isSystemError(error: unknown): boolean {
+  const failure = error as NodeJS.ErrnoException | null;
+  return (
+    typeof failure?.code === 'string' &&
+    typeof failure.syscall === 'string' &&
+    typeof failure.errno === 'number'
+  );
+}
+
+type DirectoryIo = Pick<typeof fs, 'cp' | 'mkdir' | 'rename' | 'rm'>;
+
+/**
+ * Replace `target` with the finished `staged` directory. The previous output
+ * stays in place until the new one is complete beside it, and is put back if
+ * the swap fails, so a failure never leaves a partial output.
+ */
+export async function replaceDirectory(
+  staged: string,
+  target: string,
+  io: DirectoryIo = fs,
+): Promise<void> {
+  const code = (error: unknown) => (error as NodeJS.ErrnoException).code;
+  const discard = (dir: string) =>
+    io.rm(dir, { recursive: true, force: true }).catch(() => {});
+  await io.mkdir(path.dirname(target), { recursive: true });
+  // 1) The new output, complete, next to the target (same filesystem).
+  const incoming = `${target}.incoming-${randomUUID()}`;
+  try {
+    await io.rename(staged, incoming);
+  } catch (error) {
+    if (code(error) !== 'EXDEV') throw error;
+    try {
+      await io.cp(staged, incoming, { recursive: true });
+    } catch (copyError) {
+      await discard(incoming);
+      throw copyError;
+    }
+  }
+  // 2) Swap, keeping the previous output until the new one is in place.
+  const previous = `${target}.previous-${randomUUID()}`;
+  let hadPrevious = true;
+  try {
+    await io.rename(target, previous);
+  } catch (error) {
+    if (code(error) !== 'ENOENT') {
+      await discard(incoming);
+      throw error;
+    }
+    hadPrevious = false;
+  }
+  try {
+    await io.rename(incoming, target);
+  } catch (error) {
+    await discard(incoming);
+    if (!hadPrevious) throw error;
+    try {
+      await io.rename(previous, target);
+    } catch (restoreError) {
+      // Neither output is in place: say where the previous one was kept.
+      // It stays a system error, so it is reported as an internal failure.
+      const failure = error as NodeJS.ErrnoException;
+      throw Object.assign(
+        new Error(
+          `Could not install the new build output (${failure.message}) ` +
+            `or restore the previous one (${(restoreError as Error).message}); ` +
+            `the previous output is kept at ${previous}.`,
+          { cause: restoreError },
+        ),
+        { code: failure.code, errno: failure.errno, syscall: failure.syscall },
+      );
+    }
+    throw error;
+  }
+  if (hadPrevious) await discard(previous);
 }

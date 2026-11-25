@@ -15,7 +15,7 @@ so saved transcripts keep rendering.
 | Removed Tool         | CLI                                     | Public API / shared behavior                                                                              |
 | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | list_apps            | app list                                | AppService/ListApps; currentVersion, compatibility, capabilities                                          |
-| get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, history                                           |
+| get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, `frontend.runtime`/`frontend.nshVersion`, history |
 | checkout_app         | app clone / update / adopt              | GetApp, Git fetch, SdkService/GetSdk, AssociateAppSession; frozen preparation                             |
 | create_app           | app create                              | AppService/CreateApp; template, pin, directory, SDK, ID/slug/path/recovery                                |
 | deploy_app           | app push / deploy                       | Git push, then AppService/DeployApp by commit; release/URLs, generation, migration approval, association  |
@@ -52,6 +52,15 @@ The capabilities below never had an Agent Tool.
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
 | Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
 | Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
+
+`frontend` in `app get` reports how the live deployment's frontend runs:
+`runtime` is `web` (a React page) or `native` (NSH TSX in the platform's
+player), and `nshVersion` is the NSH release a native frontend was built with
+(`null` for `web`). It is read from the deployment's normalized manifest, so
+a rollback reports the rolled-back runtime. The web player and its host
+bridge add no command: they are how a frame renders an App, the same as the
+Web UI, and the bridge's requests are the existing App RPC and Data API
+calls (see [Native App runtime](app-native-runtime.md)).
 
 Image models are the provider models of kind `image`; `image-model` keeps
 its own commands (backed by `ImageService`), and `model add --kind image`,

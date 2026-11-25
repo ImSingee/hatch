@@ -34,6 +34,7 @@ import {
   LEGACY_DATA_SDK,
   SDK_DENO_TYPES,
   SDK_DENO_TYPES_LICENSE,
+  appMaterializedSdkDefinitions,
   sdkImports,
   sdkToolchainFiles,
   type SdkDefinition,
@@ -105,7 +106,9 @@ const APP_HATCH_SDK_GENERATION: HatchSdkGeneration = {
   label: '@hatch/app',
   sourceRootLabel: 'App source root',
   imports: APP_HATCH_SDK_IMPORTS,
-  packages: [sdkPackage(APP_SDK), sdkPackage(LEGACY_DATA_SDK)],
+  // Native-only libraries (NATIVE_APP_SDK_DEFINITIONS) are installed too, but
+  // stay out of the import map: only the generated nsh.json resolves them.
+  packages: appMaterializedSdkDefinitions().map(sdkPackage),
   extraFiles: {
     'buf.gen.yaml': PLATFORM_APP_BUF_GEN_YAML,
     [APP_TASK_OPTIONS_PROTO_FILE]: APP_TASK_OPTIONS_PROTO,

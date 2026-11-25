@@ -3,6 +3,7 @@ import { createRef } from 'react';
 import { expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { applyAccent } from '~/ui/theme';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
 import { usePlatformShortcut } from './platform-shortcuts';
 
@@ -80,6 +81,78 @@ test('reload loads the App again', async () => {
   expect(appWindow().location.hash).toBe('#/settings');
 });
 
+test('runs a native App over the player channel instead of reading its frame', async () => {
+  const handle = createRef<AppSurfaceHandle>();
+  const onRouteChange = vi.fn<(route: string) => void>();
+  const onTitleChange = vi.fn<(title: string | null) => void>();
+  const surface = (visible: boolean, latestDeployment = 'd1') => (
+    <MantineProvider>
+      <AppSurface
+        ref={handle}
+        app={{ slug: 'native-notes', name: 'Notes' }}
+        route="/inbox"
+        visible={visible}
+        onRouteChange={onRouteChange}
+        onTitleChange={onTitleChange}
+        latestDeployment={latestDeployment}
+      />
+    </MantineProvider>
+  );
+  const screen = await render(surface(true));
+  const player = () =>
+    screen.container.querySelector('iframe')!.contentWindow! as Window & {
+      received: unknown[];
+    };
+
+  // The player starts the App where the host asked, in the host's accent,
+  // and its route and title come back over the channel.
+  await vi.waitFor(() => {
+    expect(onTitleChange).toHaveBeenLastCalledWith('Native home');
+    expect(onRouteChange).toHaveBeenLastCalledWith('/inbox');
+  });
+  expect(player().received[0]).toEqual({
+    type: 'init',
+    route: '/inbox',
+    accent: 'indigo',
+    visible: true,
+  });
+  // The page's own title and fragment are the player's, not the App's.
+  expect(onTitleChange).not.toHaveBeenCalledWith('Native player');
+  expect(player().location.hash).toBe('');
+
+  handle.current!.navigate('/settings');
+  await vi.waitFor(() =>
+    expect(onRouteChange).toHaveBeenLastCalledWith('/settings'),
+  );
+
+  applyAccent('teal');
+  await screen.rerender(surface(false));
+  await vi.waitFor(() =>
+    expect(player().received).toEqual(
+      expect.arrayContaining([
+        { type: 'navigate', route: '/settings' },
+        { type: 'theme', accent: 'teal' },
+        { type: 'visibility', visible: false },
+      ]),
+    ),
+  );
+  applyAccent('indigo');
+
+  // The player runs `d1`, as the host knows it: no notice. Once the host's
+  // live deployment moves on (an event, or a re-read after a reconnect),
+  // the App is told once.
+  const updates = () =>
+    player().received.filter(
+      (message) => (message as { type: string }).type === 'update-available',
+    );
+  expect(updates()).toHaveLength(0);
+  await screen.rerender(surface(false, 'd2'));
+  await vi.waitFor(() => expect(updates()).toHaveLength(1));
+  await screen.rerender(surface(true, 'd2'));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(updates()).toHaveLength(1);
+});
+
 const MOD = /mac/i.test(navigator.platform) ? 'Meta' : 'Control';
 
 function PaletteShortcut({ onRun }: { onRun: () => void }) {
@@ -87,14 +160,17 @@ function PaletteShortcut({ onRun }: { onRun: () => void }) {
   return null;
 }
 
-async function renderWithShortcut(reservedShortcuts?: string[]) {
+async function renderWithShortcut(
+  reservedShortcuts?: string[],
+  slug = 'notes',
+) {
   const onRun = vi.fn<() => void>();
   const onTitleChange = vi.fn<(title: string | null) => void>();
   const screen = await render(
     <MantineProvider>
       <PaletteShortcut onRun={onRun} />
       <AppSurface
-        app={{ slug: 'notes', name: 'Notes' }}
+        app={{ slug, name: 'Notes' }}
         route=""
         reservedShortcuts={reservedShortcuts}
         onTitleChange={onTitleChange}
@@ -131,4 +207,17 @@ test('an App that reserves a chord receives it instead of the platform', async (
   expect(pressed).toHaveLength(1);
   expect(pressed[0].defaultPrevented).toBe(false);
   expect(onRun).not.toHaveBeenCalled();
+});
+
+test('platform shortcuts also work inside a native App', async () => {
+  // `native-*` slugs get the stand-in player page (vitest.config.ts).
+  const { onRun, appKeys } = await renderWithShortcut(
+    undefined,
+    'native-notes',
+  );
+
+  await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
+
+  expect(onRun).toHaveBeenCalledOnce();
+  expect(appKeys.filter((event) => event.key === 'k')).toEqual([]);
 });

@@ -944,6 +944,40 @@ export function setAgentOwned(
   chownTree(targets, identity);
 }
 
+/**
+ * Run `task` while the shared sandbox identity (`hatch-sandbox`) owns
+ * `targets`, then give them back to root. Platform build copies are private to
+ * root (their checkout root is 0700); a check that runs authored code under
+ * the sandbox identity and must read or write that copy gets it only for that
+ * long. A no-op hand-over where the sandbox does not switch identity.
+ */
+export async function withSandboxOwnership<T>(
+  targets: readonly string[],
+  task: () => Promise<T>,
+): Promise<T> {
+  if (targets.length === 0 || !canSetpriv()) return task();
+  chownTree(targets, sandboxUserIdentity());
+  try {
+    return await task();
+  } finally {
+    chownTree(targets, rootIdentity());
+  }
+}
+
+function sandboxUserIdentity(): AgentSandboxIdentity {
+  const id = (flag: '-u' | '-g') => {
+    const result = spawnSync('id', [flag, SANDBOX_USER], { encoding: 'utf8' });
+    const value = Number(result.stdout?.trim());
+    if (result.status !== 0 || !Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(
+        `[shell-sandbox] The sandbox user "${SANDBOX_USER}" does not exist.`,
+      );
+    }
+    return value;
+  };
+  return { uid: id('-u'), gid: id('-g') };
+}
+
 /** Prepare global sandbox roots before accepting Runner work. */
 export function initializeAgentSandbox(): void {
   if (process.platform === 'darwin') {

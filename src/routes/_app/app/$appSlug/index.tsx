@@ -81,7 +81,7 @@ function AppView() {
     app.compatibility &&
     app.compatibility.version > app.compatibility.latestVersion,
   );
-  const { updateAvailable } = useAppDeploymentUpdate({
+  const { pendingRevision, updateAvailable } = useAppDeploymentUpdate({
     appId: app.id,
     deploymentRevision: app.deploymentRevision,
     revisionReader: readDeploymentRevision,
@@ -298,6 +298,9 @@ function AppView() {
           reservedShortcuts={app.reservedShortcuts}
           onRouteChange={mirrorRoute}
           onTitleChange={mirrorTitle}
+          latestDeployment={
+            updateAvailable ? pendingRevision : app.deploymentRevision
+          }
         />
       ) : (
         <Box className={classes.empty}>

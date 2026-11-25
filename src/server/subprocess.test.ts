@@ -75,4 +75,15 @@ describe.runIf(process.platform !== 'win32')('run process groups', () => {
     const descendantPid = Number(await fs.readFile(pidFile, 'utf8'));
     expect(await eventuallyNotRunning(descendantPid)).toBe(true);
   });
+
+  it('reports a process killed by a signal as a failure', async () => {
+    const result = await run(
+      process.execPath,
+      ['-e', "process.kill(process.pid, 'SIGTERM')"],
+      { cwd: os.tmpdir() },
+    );
+
+    expect(result.code).not.toBe(0);
+    expect(result.output).toContain('terminated by SIGTERM');
+  });
 });

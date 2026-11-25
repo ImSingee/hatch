@@ -89,6 +89,8 @@ export const appManifestViewSchema = z.object({
     .object({
       url: str,
       routes: z.array(z.object({ path: str, description: str })).optional(),
+      runtime: z.literal('native').optional(),
+      nshVersion: str.optional(),
     })
     .optional(),
   widgets: z.array(
@@ -186,6 +188,13 @@ export const appDetailSchema = appSummarySchema
     currentDeploymentId: nullable,
     currentSourceCommit: nullable,
     manifest: appManifestViewSchema.nullable(),
+    frontend: z
+      .object({
+        runtime: z.enum(['web', 'native']),
+        nshVersion: nullable,
+      })
+      .strict()
+      .nullable(),
     ops: z
       .object({
         backend: z

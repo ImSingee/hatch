@@ -176,6 +176,10 @@ export type NormalizedManifest = {
     url: string;
     /** Optional only for normalized manifests persisted before route metadata. */
     routes?: AppRoute[];
+    /** Present only for `native` frontends; absent means `web`. */
+    runtime?: 'native';
+    /** The pinned NSH version a `native` frontend was built with. */
+    nshVersion?: string;
   };
   widgets: NormalizedWidget[];
   /** Connect RPC base URL + fully-qualified service name, when a backend is present. */
@@ -394,7 +398,11 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
     };
   }
   if (src.capabilities.frontend && src.app) {
-    out.app = { url: appAssetUrl(src.id), routes: src.app.routes };
+    out.app = {
+      url: appAssetUrl(src.id),
+      routes: src.app.routes,
+      ...(src.app.runtime === 'native' ? { runtime: 'native' as const } : {}),
+    };
   }
   if (
     (src.capabilities.frontend || src.capabilities.widgets) &&
