@@ -307,6 +307,9 @@ export function Form(props: FormProps): JSX.Element {
       // The old name leaves the form; its value moves unless the new name
       // already has one, which is kept.
       const { [from]: moved, ...rest } = current;
+      // Input typed while the draft loads stays protected from the draft
+      // under its new name too.
+      if (changedWhileLoading.has(from)) changedWhileLoading.add(to);
       // A password stays one under its new name, shown as text or not.
       if (secrets.has(from) || fields.get(from)?.secret()) {
         secrets.add(from);
