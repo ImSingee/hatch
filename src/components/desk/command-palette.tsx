@@ -21,6 +21,10 @@ import { AppGlyph } from '~components/apps/app-glyph';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import { DESK_HOME } from './paths';
+import {
+  platformShortcutKeys,
+  usePlatformShortcut,
+} from './platform-shortcuts';
 import classes from './menu-bar.module.css';
 
 const PLACES: {
@@ -81,21 +85,23 @@ const placeIcon = (icon: ReactNode) => (
 
 /**
  * Search across the places of the desk and every App,
- * opened from the menu bar or with ⌘K / Ctrl+K anywhere in the shell.
+ * opened from the menu bar or with ⌘K (Ctrl+K off Apple platforms) anywhere,
+ * including inside Apps that do not reserve that chord.
  */
 export function CommandPalette() {
   const { t } = useI18n();
+  const keys = platformShortcutKeys('palette.open');
   return (
     <>
       <UnstyledButton
         className={`${classes.item} ${classes.search}`}
         aria-label={t('palette.search')}
-        aria-keyshortcuts="Meta+K Control+K"
+        aria-keyshortcuts={keys.aria}
         onClick={() => spotlight.open()}
       >
         <IconSearch size={17} stroke={1.9} aria-hidden />
         <kbd className={classes.kbd} aria-hidden>
-          ⌘K
+          {keys.label}
         </kbd>
       </UnstyledButton>
       <SearchPalette />
@@ -112,6 +118,10 @@ export function SearchPalette() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const apps = useQuery(appsQueryOptions);
+  // The desktop menu item only ever opens the palette; the key toggles it.
+  usePlatformShortcut('palette.open', (source) =>
+    source === 'menu' ? spotlight.open() : spotlight.toggle(),
+  );
 
   const actions = useMemo<SpotlightActionGroupData[]>(
     () => [
@@ -152,11 +162,9 @@ export function SearchPalette() {
   return (
     <Spotlight
       actions={actions}
-      shortcut={['mod + K']}
-      // Nothing in the shell uses ⌘K inside a field, so the palette opens
-      // from search boxes and the Agent composer too.
-      tagsToIgnore={[]}
-      triggerOnContentEditable
+      // The key is a platform shortcut (see platform-shortcuts.ts) so it also
+      // works while focus is inside an App, from fields included.
+      shortcut={null}
       nothingFound={t('palette.nothingFound')}
       highlightQuery
       scrollable

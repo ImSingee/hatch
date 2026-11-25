@@ -381,7 +381,8 @@ test('the menu bar warns only while the runner is offline, and ⌘K searches', a
     .element(screen.getByRole('link', { name: /Runner offline/ }))
     .not.toBeInTheDocument();
 
-  await userEvent.keyboard('{Control>}k{/Control}');
+  const mod = /mac/i.test(navigator.platform) ? 'Meta' : 'Control';
+  await userEvent.keyboard(`{${mod}>}k{/${mod}}`);
   const search = screen.getByRole('textbox', {
     name: 'Search apps and pages',
   });

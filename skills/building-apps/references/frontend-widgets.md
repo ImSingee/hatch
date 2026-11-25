@@ -88,6 +88,30 @@ preferences and drafts here; store user data with Data Tables, KV, or the
 backend. The scope prevents collisions, not snooping, so never store secrets
 in browser storage.
 
+## Keyboard shortcuts
+
+Hatch's own shortcuts, such as `mod+K` for the command palette, keep working
+while focus is inside the App's page or widgets, including inside text fields.
+Hatch handles those key presses first, so App code never receives them. `mod`
+means Command on macOS and Control elsewhere.
+
+If the App needs one of these chords itself, for example `mod+K` to insert a
+link in an editor, reserve it in the source manifest:
+
+```ts
+keyboard: { reserve: ['mod+K'] },
+```
+
+While focus is inside this App's page or one of its widgets, a reserved chord
+reaches the App and Hatch ignores it. Everywhere else the Hatch shortcut keeps
+working, and users can still open the palette from the menu bar. Reserve only
+chords the App really handles. A chord joins modifiers (`mod`, `ctrl`, `meta`,
+`alt`, `shift`) and one key with `+`. It needs at least one of `mod`, `ctrl`,
+`meta` or `alt`. `keyboard.reserve` requires `capabilities.frontend` or
+`capabilities.widgets`. Reserving a chord that Hatch does not use yet is
+allowed, and it protects that chord if Hatch adds a shortcut for it later.
+Changes apply after the next deployment.
+
 ## Widgets
 
 Each widget is a standalone bundle and must export `mount(element, context)`

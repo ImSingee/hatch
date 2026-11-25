@@ -22,6 +22,7 @@ import { normalizedManifestFor } from './apps/access';
 import {
   APP_DOC_ID_RE,
   type NormalizedManifest,
+  reservedShortcuts,
   type WebhookAuth,
 } from './apps/manifest';
 import { readAppDoc } from './apps/docs';
@@ -113,6 +114,8 @@ export type AppDetail = {
   capabilities: AppCapabilities | null;
   deploymentRevision: string | null;
   compatibility: AppCompatibility | null;
+  /** Chords the live deployment handles itself; see `keyboard.reserve`. */
+  reservedShortcuts: string[];
   currentSourceCommit: string | null;
   dbName: string | null;
   createdAt: string;
@@ -151,7 +154,7 @@ export const getAppBySlug = createServerFn({ method: 'GET' })
     const deployment = currentDeploymentId
       ? await db.query.deployments.findFirst({
           where: { id: currentDeploymentId },
-          columns: { compatibilityVersion: true },
+          columns: { compatibilityVersion: true, manifestNormalized: true },
         })
       : null;
     return {
@@ -160,6 +163,9 @@ export const getAppBySlug = createServerFn({ method: 'GET' })
       compatibility: deployment
         ? appCompatibility(deployment.compatibilityVersion)
         : null,
+      reservedShortcuts: reservedShortcuts(
+        deployment?.manifestNormalized as NormalizedManifest | null,
+      ),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

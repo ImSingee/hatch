@@ -186,6 +186,12 @@ export type NormalizedManifest = {
   webhook?: { url: string; auth: WebhookAuth };
   /** Runnable backend RPC methods, when the tasks capability is enabled. */
   tasks?: NormalizedTasks;
+  /**
+   * Canonical chords (`mod+shift+k`) the App's page and widgets handle instead
+   * of the platform. Absent when none are reserved and on historical
+   * deployments, where every platform shortcut stays active.
+   */
+  keyboard?: { reserve: string[] };
   /** KV REST base URL, when the kv capability is enabled. */
   kv?: { url: string };
   /** Managed Data Table REST/SSE base URL. */
@@ -383,6 +389,13 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
   if (src.capabilities.frontend && src.app) {
     out.app = { url: appAssetUrl(src.id), routes: src.app.routes };
   }
+  if (
+    (src.capabilities.frontend || src.capabilities.widgets) &&
+    src.keyboard &&
+    src.keyboard.reserve.length > 0
+  ) {
+    out.keyboard = { reserve: src.keyboard.reserve };
+  }
   if (src.capabilities.backend && src.rpc) {
     out.rpc = { url: rpcUrl(src.id), service: src.rpc.service };
   }
@@ -451,4 +464,14 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
     };
   }
   return out;
+}
+
+/**
+ * Chords the live deployment reserves for the App itself. Historical
+ * deployments recorded none, so every platform shortcut stays active there.
+ */
+export function reservedShortcuts(
+  manifest: Pick<NormalizedManifest, 'keyboard'> | null | undefined,
+): string[] {
+  return manifest?.keyboard?.reserve ?? [];
 }

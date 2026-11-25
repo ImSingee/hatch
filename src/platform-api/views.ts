@@ -160,6 +160,7 @@ export const appManifestViewSchema = z.object({
     })
     .optional(),
   docs: z.array(appDocView).optional(),
+  keyboard: z.object({ reserve: z.array(str) }).optional(),
 });
 const networkView = z
   .object({

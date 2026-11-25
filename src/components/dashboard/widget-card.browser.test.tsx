@@ -11,6 +11,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { userEvent } from 'vitest/browser';
 import { useState } from 'react';
+import { usePlatformShortcut } from '~components/desk/platform-shortcuts';
 import type { DashboardItem } from '~server/dashboards';
 import { WidgetCard } from './widget-card';
 import { WIDGET_CHANNEL } from './widget-frame';
@@ -116,6 +117,7 @@ function dashboardItem(id: string): DashboardItem {
     sortOrder: 0,
     defaultSize: { w: 4, h: 3 },
     supportedSizes: [],
+    reservedShortcuts: [],
   };
 }
 
@@ -538,4 +540,43 @@ test('capability changes cannot release an active refresh early', async () => {
   } finally {
     window.removeEventListener('message', onMessage);
   }
+});
+
+function PaletteShortcut({ onRun }: { onRun: () => void }) {
+  usePlatformShortcut('palette.open', onRun);
+  return null;
+}
+
+test('platform shortcuts work inside a widget unless its App reserves them', async () => {
+  const MOD = /mac/i.test(navigator.platform) ? 'Meta' : 'Control';
+  const onRun = vi.fn<() => void>();
+  await render(<PaletteShortcut onRun={onRun} />);
+  const open = dashboardItem('open');
+  const reserved = {
+    ...dashboardItem('reserved'),
+    reservedShortcuts: ['mod+k'],
+  };
+  const screen = await renderDashboard([open, reserved], {
+    [open.url]: UNSUPPORTED_WIDGET,
+    [reserved.url]: UNSUPPORTED_WIDGET,
+  });
+  const frames = [...screen.container.querySelectorAll('iframe')];
+  await vi.waitFor(() =>
+    frames.forEach((frame) =>
+      expect(iframeText(frame)).toBe('unsupported-content'),
+    ),
+  );
+  const pressInside = async (frame: HTMLIFrameElement) => {
+    const doc = frame.contentDocument!;
+    const field = doc.createElement('input');
+    doc.body.append(field);
+    field.focus();
+    await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
+  };
+
+  await pressInside(frames[1]);
+  expect(onRun).not.toHaveBeenCalled();
+
+  await pressInside(frames[0]);
+  expect(onRun).toHaveBeenCalledOnce();
 });

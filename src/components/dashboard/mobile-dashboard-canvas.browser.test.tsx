@@ -80,6 +80,7 @@ test('the native host drives refresh and opens Apps outside the canvas router', 
     sortOrder: 0,
     defaultSize: { w: 4, h: 3 },
     supportedSizes: [],
+    reservedShortcuts: [],
   };
   const geometry = [{ id: item.id, x: 0, y: 0, w: 4, h: 3 }];
   fixture.read.mockResolvedValue({

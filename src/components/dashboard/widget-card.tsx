@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
+import { attachPlatformShortcuts } from '~components/desk/platform-shortcuts';
 import { EmptyState } from '~components/page/page';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import { useI18n } from '~i18n';
@@ -196,6 +197,31 @@ export function WidgetCard({
   }, [attempt, code, getUnits]);
 
   const effectiveStatus = bundle.isError ? 'error' : status;
+
+  // Platform shortcuts keep working while focus is inside the widget. Each
+  // srcdoc load is a fresh document, so attach again on every load.
+  const getReservedShortcuts = useEventCallback(() => item.reservedShortcuts);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    let detach: (() => void) | null = null;
+    const onLoad = () => {
+      detach?.();
+      detach = null;
+      const win = frame.contentWindow;
+      if (!win) return;
+      try {
+        detach = attachPlatformShortcuts(win, getReservedShortcuts);
+      } catch {
+        // cross-origin frame
+      }
+    };
+    frame.addEventListener('load', onLoad);
+    return () => {
+      frame.removeEventListener('load', onLoad);
+      detach?.();
+    };
+  }, [getReservedShortcuts]);
 
   // Push grid-unit changes (a resize that lands new w/h) to the running widget
   // without reloading it. Pixel size is measured inside the frame, so it needs

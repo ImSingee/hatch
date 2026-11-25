@@ -413,6 +413,79 @@ describe('app route manifest', () => {
   });
 });
 
+describe('keyboard manifest', () => {
+  const parse = (
+    keyboard: unknown,
+    capabilities: object = { frontend: true },
+  ) =>
+    normalizeManifest(
+      parseSourceManifest({
+        id: 'demo',
+        name: 'Demo',
+        capabilities,
+        app: { entry: 'app/main.tsx' },
+        keyboard,
+      }),
+    ).keyboard;
+
+  it('stores reserved chords in canonical spelling', () => {
+    expect(
+      parse({ reserve: ['Mod + K', 'cmd+Option+Shift+P', 'ctrl+esc'] }),
+    ).toEqual({ reserve: ['mod+k', 'meta+alt+shift+p', 'ctrl+escape'] });
+  });
+
+  it('records nothing when no chord is reserved, as on old deployments', () => {
+    expect(parse(undefined)).toBeUndefined();
+    expect(parse({})).toBeUndefined();
+    expect(parse({ reserve: [] })).toBeUndefined();
+  });
+
+  const issues = (
+    keyboard: unknown,
+    capabilities: object = { frontend: true },
+  ) => {
+    const result = sourceManifestSchema.safeParse({
+      id: 'demo',
+      name: 'Demo',
+      capabilities,
+      ...('frontend' in capabilities
+        ? { app: { entry: 'app/main.tsx' } }
+        : { backend: { entry: 'backend/main.ts' } }),
+      keyboard,
+    });
+    return result.success
+      ? []
+      : result.error.issues.map(({ path, message }) => ({ path, message }));
+  };
+
+  it('rejects chords a platform shortcut could never use', () => {
+    const invalid = ['K', 'shift+K', 'mod+', 'mod+hyper+K', 'mod+ä'];
+    expect(invalid.map((chord) => issues({ reserve: [chord] }))).toEqual(
+      invalid.map(() => [
+        { path: ['keyboard', 'reserve', 0], message: expect.any(String) },
+      ]),
+    );
+  });
+
+  it('rejects the same chord spelled twice', () => {
+    expect(issues({ reserve: ['mod+K', 'Mod+k'] })).toEqual([
+      {
+        path: ['keyboard', 'reserve', 1],
+        message: 'duplicate reserved shortcut "mod+k"',
+      },
+    ]);
+  });
+
+  it('requires a page or widget to receive the keys', () => {
+    expect(issues({ reserve: ['mod+K'] }, { backend: true })).toEqual([
+      {
+        path: ['keyboard', 'reserve'],
+        message: expect.stringMatching(/requires capabilities\.frontend/),
+      },
+    ]);
+  });
+});
+
 describe('capability entry contracts', () => {
   it.each([
     [{ frontend: true }, /app\.entry is not declared/],

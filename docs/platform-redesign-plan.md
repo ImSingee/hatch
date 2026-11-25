@@ -241,8 +241,13 @@ dashboard already.
 **[decision]** Search (`⌘K` / `Ctrl+K`, or the menu bar button) is a command
 palette over the shell's places, every App and every Workflow, built on
 `@mantine/spotlight`. It searches what the client already has; there is no
-search RPC. The shortcut also works from text fields. While focus is inside
-an App or widget frame, the key press goes to that frame, not to the shell.
+search RPC. The shortcut also works from text fields, and from inside an App
+page or widget frame: platform shortcuts are listed once in
+`src/components/desk/platform-shortcuts.ts`, and `AppSurface` and the widget
+card catch them on the same-origin frame in the capture phase. An App that
+lists the chord under `keyboard.reserve` in its manifest receives it instead
+while focus is inside its page or widgets; the desktop menu accelerator
+respects the same reservation.
 
 **[decision]** `AppSurface` is the only component that knows how an App is
 rendered, and it hosts exactly one running App inside a Desk window. Today it
