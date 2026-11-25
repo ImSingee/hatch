@@ -1,11 +1,22 @@
 /** Connect adapter for the notification center management API. */
 import type { ConnectRouter, HandlerContext } from '@connectrpc/connect';
 import { AppError } from '~server/errors';
-import { NotificationService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
+import {
+  NotificationService,
+  type NotificationCard as NotificationCardMessage,
+} from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
   cardInputFromMessage,
   cardToMessage,
 } from '../../../packages/hatch-platform-api/notification-card-proto';
+import {
+  cardHead,
+  notificationHeadline,
+  type ContentNode,
+  type NotificationFormat,
+} from '../../../packages/hatch-platform-api/notification-content';
+import { legacyCardPreview } from '../../../packages/hatch-platform-api/notification-content-legacy';
+import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
 import {
   answersFromMessages,
   answersToMessages,
@@ -109,19 +120,85 @@ function channel(view: ChannelView) {
   };
 }
 
-function summary(view: NotificationSummaryView) {
+/**
+ * A notification's content as NotificationSummary and NotificationRevision
+ * carry it. Builds that predate `format` read `title` and `body`, so a
+ * markdown or card notification fills them with its summary and plain text,
+ * and `card` with the #319 shape of its status and first block.
+ */
+function contentFields(view: {
+  format: NotificationFormat;
+  title: string | null;
+  body: string | null;
+  summary: string | null;
+  markdown: string | null;
+  content: ContentNode | null;
+}) {
+  const text =
+    view.format !== 'text' && view.content
+      ? contentToPlainText(view.content)
+      : undefined;
+  const head = cardHead(view.content);
+  const card = view.format === 'card' ? legacyCardPreview(view.content) : null;
   return {
-    ...view,
+    format: view.format,
+    title: notificationHeadline(view),
+    body: view.format === 'text' ? none(view.body) : text || undefined,
+    summary: none(view.summary),
+    markdown: none(view.markdown),
+    contentJson: view.content ? JSON.stringify(view.content) : undefined,
+    text,
+    flag: none(head.flag),
+    icon: none(head.icon),
+    cardStatus: head.status ?? undefined,
+    card: card ? cardToMessage(card) : undefined,
+  };
+}
+
+function summary(view: NotificationSummaryView) {
+  const { content: _content, ...rest } = view;
+  return {
+    ...rest,
+    ...contentFields(view),
     sourceId: none(view.sourceId),
-    body: none(view.body),
     url: none(view.url),
     editedAt: none(view.editedAt),
     recalledAt: none(view.recalledAt),
     reply: view.reply ? replyToMessage(view.reply) : undefined,
     respondedAt: none(view.respondedAt),
     response: view.response ? response(view.response) : undefined,
-    card: view.card ? cardToMessage(view.card) : undefined,
   };
+}
+
+/**
+ * The card a request gives: markup, a JSON tree (`card_json`, parsed here so
+ * a JSON error names it) or the #319 message; at most one of them.
+ */
+function cardFromRequest(input: {
+  card?: NotificationCardMessage;
+  cardMarkup?: string;
+  cardJson?: string;
+}): unknown {
+  const given = [
+    input.card !== undefined,
+    input.cardMarkup !== undefined,
+    input.cardJson !== undefined,
+  ].filter(Boolean).length;
+  if (given > 1) {
+    throw publicApiError(
+      'BAD_REQUEST',
+      'Set only one of card, card_markup or card_json.',
+    );
+  }
+  if (input.cardMarkup !== undefined) return input.cardMarkup;
+  if (input.cardJson !== undefined) {
+    try {
+      return JSON.parse(input.cardJson) as unknown;
+    } catch {
+      throw publicApiError('BAD_REQUEST', 'card_json must be valid JSON.');
+    }
+  }
+  return input.card ? cardInputFromMessage(input.card) : undefined;
 }
 
 function delivery(view: DeliveryView) {
@@ -325,8 +402,11 @@ export function registerNotificationApi(router: ConnectRouter) {
               : sender,
           body: {
             kind: input.kind || undefined,
-            title: input.title,
+            title: input.title || undefined,
             body: input.body,
+            summary: input.summary,
+            markdown: input.markdown,
+            card: cardFromRequest(input),
             url: input.url,
             autoOpenUrl: input.autoOpenUrl,
             priority: input.priority,
@@ -334,7 +414,6 @@ export function registerNotificationApi(router: ConnectRouter) {
             dedupeKey: input.dedupeKey,
             occurredAt: input.occurredAt,
             reply: input.reply ? replyInputFromMessage(input.reply) : undefined,
-            card: input.card ? cardInputFromMessage(input.card) : undefined,
           },
         });
         return {
@@ -350,12 +429,24 @@ export function registerNotificationApi(router: ConnectRouter) {
             'Set either reply or clear_reply, not both.',
           );
         }
-        if (input.card && input.clearCard) {
+        if (
+          input.clearCard &&
+          (input.card ||
+            input.cardMarkup !== undefined ||
+            input.cardJson !== undefined)
+        ) {
           throw publicApiError(
             'BAD_REQUEST',
-            'Set either card or clear_card, not both.',
+            'Set either a card or clear_card, not both.',
           );
         }
+        if (input.summary !== undefined && input.clearSummary) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set either summary or clear_summary, not both.',
+          );
+        }
+        const card = cardFromRequest(input);
         const result = await updateNotificationAsMember({
           id: input.id,
           title: input.title,
@@ -375,11 +466,9 @@ export function registerNotificationApi(router: ConnectRouter) {
             : input.reply
               ? replyInputFromMessage(input.reply)
               : undefined,
-          card: input.clearCard
-            ? null
-            : input.card
-              ? cardInputFromMessage(input.card)
-              : undefined,
+          summary: input.clearSummary ? null : input.summary,
+          markdown: input.markdown,
+          card: input.clearCard ? null : card,
         });
         return { revision: result.revision, changed: result.changed };
       },
@@ -413,14 +502,17 @@ export function registerNotificationApi(router: ConnectRouter) {
         });
         return {
           nextCursor: history.nextCursor ?? undefined,
-          revisions: history.revisions.map((revision) => ({
-            ...revision,
-            body: none(revision.body),
-            url: none(revision.url),
-            dataJson: revision.data ? JSON.stringify(revision.data) : undefined,
-            reply: revision.reply ? replyToMessage(revision.reply) : undefined,
-            card: revision.card ? cardToMessage(revision.card) : undefined,
-          })),
+          revisions: history.revisions.map(
+            ({ content: _content, data, ...revision }) => ({
+              ...revision,
+              ...contentFields({ ...revision, content: _content }),
+              url: none(revision.url),
+              dataJson: data ? JSON.stringify(data) : undefined,
+              reply: revision.reply
+                ? replyToMessage(revision.reply)
+                : undefined,
+            }),
+          ),
           responses: history.responses.map(response),
         };
       },

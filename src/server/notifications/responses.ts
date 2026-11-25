@@ -19,6 +19,7 @@ import {
   validateAnswers,
   type ReplyAnswers,
 } from '../../../packages/hatch-platform-api/notification-reply';
+import { notificationHeadline } from '../../../packages/hatch-platform-api/notification-content';
 import { wakeNotificationDispatcher } from './dispatcher';
 import type { NotificationSource } from './ingest';
 import { agentAnswerTargets } from './agent-answers';
@@ -364,9 +365,8 @@ export async function respondToNotification(
         destinationType: 'agent' as const,
         // The notification's own chat is named after it.
         destinationName:
-          (chat.agentSessionId
-            ? chatTitles.get(chat.agentSessionId)
-            : notification.title) || notification.title,
+          (chat.agentSessionId ? chatTitles.get(chat.agentSessionId) : null) ||
+          notificationHeadline(notification),
         agentSessionId: chat.agentSessionId,
         agentInstructions: chat.instructions,
         routeIds: chat.routeIds,

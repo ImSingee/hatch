@@ -10,6 +10,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { summaryFromTitle } from '../../../packages/hatch-platform-api/notification-content';
+import { legacyToContent } from '../../../packages/hatch-platform-api/notification-content-legacy';
+import {
+  compileCard,
+  compileMarkdown,
+} from '../../../packages/hatch-platform-api/notification-content-schema';
+import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
 
 vi.mock('~/db', async () => {
   const { createTestDb } = await import('~/db/test-db');
@@ -44,6 +51,7 @@ const { deliverToApp } = await import('./adapters/app');
 const { pushPlaintext } = await import('./adapters/device');
 const { recallNotification, updateNotification } = await import('./lifecycle');
 const { notificationUpdateSchema } = await import('./contract');
+const { applyLifecycleRequest } = await import('./lifecycle-http');
 const { pruneHistory } = await import('~server/retention');
 const { syncAppNotificationDestination } = await import('./app-destinations');
 const {
@@ -1390,52 +1398,393 @@ describe('earlier versions', () => {
   });
 });
 
-describe('cards', () => {
-  it('are stored with the push, replaced or removed by an edit, and kept in earlier versions', async () => {
-    const response = await pushAsChannel({
-      kind: 'deploy',
-      title: 'CI running',
-      card: {
-        status: { label: 'Running', tone: 'info' },
-        block: {
-          type: 'progress',
-          label: 'Checks',
-          percent: 21,
-          value: '3 / 14',
+const TEXT_PUSH = { kind: 'deploy', title: 'Deploy #88', body: 'Queued' };
+const MARKDOWN_PUSH = {
+  kind: 'deploy',
+  markdown: '## Release v12\n\n- Fixes the login **redirect**',
+  summary: 'v12 released',
+};
+const CARD_PUSH = {
+  kind: 'deploy',
+  card: '<Card status="CI failed" tone="danger" flag="Urgent"><Title>PR #261</Title><Text>e2e/login failed</Text></Card>',
+  summary: 'PR #261 CI failed',
+};
+const LEGACY_CARD = {
+  status: { label: 'Running', tone: 'info' },
+  block: { type: 'progress', label: 'Checks', percent: 21, value: '3 / 14' },
+} as const;
+const LEGACY_PUSH = {
+  kind: 'deploy',
+  title: 'CI running',
+  body: 'Started by Ada',
+  card: LEGACY_CARD,
+};
+/** APPROVE_FORM written inside the card. */
+const INLINE_PUSH = {
+  kind: 'deploy',
+  card: `<Card><Title>Deploy?</Title>
+    <Buttons id="decision" label="Approve the deploy?">
+      <Button id="approve">Approve</Button>
+      <Button id="reject" destructive>Reject</Button>
+    </Buttons></Card>`,
+  summary: 'Deploy waiting for approval',
+};
+
+async function pushed(body: Record<string, unknown>) {
+  const response = await pushAsChannel(body);
+  const text = await response.text();
+  expect({ status: response.status, text }).toMatchObject({ status: 202 });
+  const { id } = JSON.parse(text) as { id: string };
+  await runAll();
+  return id;
+}
+
+describe('content', () => {
+  it('shows each format on the phone and in webhook envelopes', async () => {
+    const markdownTree = compileMarkdown(MARKDOWN_PUSH.markdown);
+    const cases = [
+      {
+        push: TEXT_PUSH,
+        stored: { format: 'text', title: 'Deploy #88', summary: null },
+        phone: { t: 'Deploy #88', b: 'Queued' },
+        envelope: { title: 'Deploy #88', body: 'Queued', card: null },
+      },
+      {
+        push: { ...TEXT_PUSH, summary: 'Deploy queued' },
+        stored: {
+          format: 'text',
+          title: 'Deploy #88',
+          summary: 'Deploy queued',
+        },
+        phone: { t: 'Deploy #88', b: 'Deploy queued' },
+        envelope: { title: 'Deploy #88', body: 'Queued', card: null },
+      },
+      {
+        push: MARKDOWN_PUSH,
+        stored: {
+          format: 'markdown',
+          title: null,
+          body: null,
+          summary: 'v12 released',
+          markdown: MARKDOWN_PUSH.markdown,
+          content: markdownTree,
+        },
+        phone: { t: 'CI', b: 'v12 released', ks: 1 },
+        envelope: {
+          title: 'v12 released',
+          body: contentToPlainText(markdownTree),
+          markdown: MARKDOWN_PUSH.markdown,
+          content: markdownTree,
+          card: null,
         },
       },
-    });
-    const { id } = (await response.json()) as { id: string };
-    expect((await service.getNotification(id)).card).toEqual({
-      status: { label: 'Running', tone: 'info' },
-      block: {
-        type: 'progress',
-        label: 'Checks',
-        percent: 21,
-        value: '3 / 14',
+      {
+        push: CARD_PUSH,
+        stored: { format: 'card', title: null, summary: 'PR #261 CI failed' },
+        phone: { t: 'CI', b: 'PR #261 CI failed', ks: 1 },
+        envelope: {
+          title: 'PR #261 CI failed',
+          body: 'CI failed · Urgent\nPR #261\ne2e/login failed',
+          markdown: null,
+          card: { status: { label: 'CI failed', tone: 'danger' } },
+        },
       },
-    });
+    ];
+    for (const { push, stored, phone, envelope } of cases) {
+      received.length = 0;
+      deviceCalls.length = 0;
+      const id = await pushed(push);
+      expect(await service.getNotification(id)).toMatchObject(stored);
+      const [call] = deviceCalls;
+      const plaintext = pushPlaintext(call!.notification, call!.event, 'o');
+      expect({ t: plaintext.t, b: plaintext.b, ks: plaintext.ks }).toEqual({
+        ks: undefined,
+        ...phone,
+      });
+      const sent = JSON.parse(received[0]!.body);
+      expect(sent.notification).toMatchObject({
+        format: stored.format,
+        summary: stored.summary,
+        ...envelope,
+      });
+    }
+  });
 
-    const sender = { type: 'channel' as const, channelId };
-    await updateNotification(
-      sender,
-      notificationUpdateSchema.parse({
-        id,
-        card: { status: { label: 'Passed', tone: 'success' } },
-      }),
+  it('rejects content it cannot use and says what to fix', async () => {
+    const rejected = async (body: Record<string, unknown>) => {
+      const response = await pushAsChannel(body);
+      expect(response.status).toBe(400);
+      return response.text();
+    };
+    const { summary: _markdownSummary, ...markdownOnly } = MARKDOWN_PUSH;
+    const { summary: _cardSummary, ...cardOnly } = CARD_PUSH;
+    expect(await rejected(markdownOnly)).toBe(
+      'summary is required for markdown and card notifications',
     );
-    expect((await service.getNotification(id)).card).toEqual({
-      status: { label: 'Passed', tone: 'success' },
-    });
-    await updateNotification(
-      sender,
-      notificationUpdateSchema.parse({ id, card: null }),
+    expect(await rejected(cardOnly)).toBe(
+      'summary is required for markdown and card notifications',
     );
-    expect((await service.getNotification(id)).card).toBeNull();
-
-    const history = await service.listNotificationRevisions(id);
+    expect(await rejected({ ...MARKDOWN_PUSH, title: 'Release' })).toMatch(
+      /only one content/,
+    );
+    expect(await rejected({ ...MARKDOWN_PUSH, card: CARD_PUSH.card })).toMatch(
+      /only one content/,
+    );
+    expect(await rejected({ ...MARKDOWN_PUSH, summary: 'v12\nreleased' })).toBe(
+      'summary must be one line, without line breaks',
+    );
+    expect(await rejected({ ...TEXT_PUSH, summary: 'Deploy\r\nqueued' })).toBe(
+      'summary must be one line, without line breaks',
+    );
+    expect(await rejected({ ...INLINE_PUSH, reply: APPROVE_FORM })).toBe(
+      'reply: cannot be combined with inputs written in the card',
+    );
+    expect(await rejected({ kind: 'deploy', card: LEGACY_CARD })).toMatch(
+      /needs a title/,
+    );
+    // Parser positions reach the sender as the parser wrote them.
+    const markup = '<Card>\n  <Title>PR</Title>\n  <Bogus/>\n</Card>';
+    let parserMessage = '';
+    try {
+      compileCard(markup);
+    } catch (error) {
+      parserMessage = (error as Error).message;
+    }
+    expect(parserMessage).toMatch(/^3:\d+: /);
     expect(
-      history.revisions.map((revision) => revision.card?.status?.label),
-    ).toEqual(['Passed', 'Running']);
+      await rejected({ kind: 'deploy', card: markup, summary: 'PR' }),
+    ).toBe(`card: ${parserMessage}`);
+  });
+
+  it('turns a #319 card into a card notification that reads back the same', async () => {
+    received.length = 0;
+    const id = await pushed(LEGACY_PUSH);
+    const legacy = {
+      title: LEGACY_PUSH.title,
+      body: LEGACY_PUSH.body,
+      card: LEGACY_CARD,
+    };
+    expect(await service.getNotification(id)).toMatchObject({
+      format: 'card',
+      title: null,
+      body: null,
+      summary: summaryFromTitle(LEGACY_PUSH.title),
+      content: legacyToContent(legacy),
+    });
+    // Receivers that read `card` still get the card they were sent.
+    const sent = JSON.parse(received[0]!.body);
+    expect(sent.notification).toMatchObject({
+      title: 'CI running',
+      card: LEGACY_CARD,
+    });
+  });
+
+  it('applies edits by the format they leave the notification in', async () => {
+    const sender = { type: 'channel' as const, channelId };
+    const cases: {
+      name: string;
+      push: Record<string, unknown>;
+      update: Record<string, unknown>;
+      expected: Record<string, unknown> | RegExp;
+    }[] = [
+      {
+        name: 'text to markdown',
+        push: TEXT_PUSH,
+        update: { markdown: '# Notes', summary: 'Notes' },
+        expected: {
+          format: 'markdown',
+          title: null,
+          body: null,
+          summary: 'Notes',
+          markdown: '# Notes',
+        },
+      },
+      {
+        name: 'text to markdown without a summary',
+        push: TEXT_PUSH,
+        update: { markdown: '# Notes' },
+        expected: /^summary is required/,
+      },
+      {
+        name: 'text with a summary to a card, keeping it',
+        push: { ...TEXT_PUSH, summary: 'Deploy queued' },
+        update: { card: CARD_PUSH.card },
+        expected: { format: 'card', title: null, summary: 'Deploy queued' },
+      },
+      {
+        name: 'markdown to text, keeping the summary',
+        push: MARKDOWN_PUSH,
+        update: { title: 'Released' },
+        expected: {
+          format: 'text',
+          title: 'Released',
+          body: null,
+          summary: 'v12 released',
+          markdown: null,
+          content: null,
+        },
+      },
+      {
+        name: 'markdown with only a body',
+        push: MARKDOWN_PUSH,
+        update: { body: 'More' },
+        expected: /^title is required/,
+      },
+      {
+        name: 'removing the summary of a card',
+        push: CARD_PUSH,
+        update: { summary: null },
+        expected: /^summary is required/,
+      },
+      {
+        name: 'removing the summary of text',
+        push: { ...TEXT_PUSH, summary: 'Deploy queued' },
+        update: { summary: null },
+        expected: { format: 'text', summary: null },
+      },
+      {
+        name: 'a #319 card retitled, its summary following',
+        push: LEGACY_PUSH,
+        update: { title: 'CI passed' },
+        expected: {
+          format: 'card',
+          summary: 'CI passed',
+          content: legacyToContent({
+            title: 'CI passed',
+            body: LEGACY_PUSH.body,
+            card: LEGACY_CARD,
+          }),
+        },
+      },
+      {
+        name: 'a #319 card with its own summary retitled',
+        push: { ...LEGACY_PUSH, summary: 'Nightly CI' },
+        update: { title: 'CI passed' },
+        expected: { format: 'card', summary: 'Nightly CI' },
+      },
+      {
+        name: 'a #319 card removed',
+        push: LEGACY_PUSH,
+        update: { card: null },
+        expected: {
+          format: 'text',
+          title: 'CI running',
+          body: 'Started by Ada',
+          summary: null,
+          content: null,
+        },
+      },
+      {
+        name: 'a #319 card added to text',
+        push: TEXT_PUSH,
+        update: { card: { status: { label: 'Done', tone: 'success' } } },
+        expected: {
+          format: 'card',
+          summary: 'Deploy #88',
+          content: legacyToContent({
+            title: 'Deploy #88',
+            body: 'Queued',
+            card: { status: { label: 'Done', tone: 'success' } },
+          }),
+        },
+      },
+      {
+        name: 'a #319 card given to a free-form card without a title',
+        push: CARD_PUSH,
+        update: { card: { status: { label: 'Done', tone: 'success' } } },
+        expected: /^title is required/,
+      },
+      {
+        name: 'a free-form card replaced by a title and a #319 card',
+        push: CARD_PUSH,
+        update: {
+          title: 'Fixed',
+          card: { status: { label: 'Done', tone: 'success' } },
+        },
+        expected: {
+          format: 'card',
+          summary: 'PR #261 CI failed',
+          content: legacyToContent({
+            title: 'Fixed',
+            body: null,
+            card: { status: { label: 'Done', tone: 'success' } },
+          }),
+        },
+      },
+      {
+        name: 'markdown and a title at once',
+        push: MARKDOWN_PUSH,
+        update: { markdown: '# New', title: 'New' },
+        expected: /only one content/,
+      },
+      {
+        name: 'a card that drops its inline inputs',
+        push: INLINE_PUSH,
+        update: { card: CARD_PUSH.card },
+        expected: { format: 'card', reply: null, replyRound: 2 },
+      },
+      {
+        name: 'a reply replacing inline inputs',
+        push: INLINE_PUSH,
+        update: { reply: APPROVE_FORM },
+        expected: /^reply cannot replace the inputs/,
+      },
+      {
+        name: 'a reply beside new inline inputs',
+        push: CARD_PUSH,
+        update: { card: INLINE_PUSH.card, reply: APPROVE_FORM },
+        expected: /^reply: cannot be combined/,
+      },
+    ];
+    for (const { name, push, update, expected } of cases) {
+      const id = await pushed(push);
+      const response = await applyLifecycleRequest(sender, 'update', {
+        id,
+        ...update,
+      });
+      const message = response.status === 200 ? null : await response.text();
+      // `matches` says whether a rejection said what the case expects.
+      const outcome = {
+        name,
+        status: response.status,
+        message,
+        matches: expected instanceof RegExp && expected.test(message ?? ''),
+        view: message === null ? await service.getNotification(id) : null,
+      };
+      expect(outcome).toMatchObject(
+        expected instanceof RegExp
+          ? { name, status: 400, matches: true }
+          : { name, status: 200, view: expected },
+      );
+    }
+  });
+
+  it('asks inline inputs as the reply form they spell out', async () => {
+    const handWritten = await sendForm();
+    deviceCalls.length = 0;
+    const inline = await pushed(INLINE_PUSH);
+    const stored = await service.getNotification(inline);
+    expect(stored.reply).toEqual(
+      (await service.getNotification(handWritten)).reply,
+    );
+    // Tapping the push still opens the form, and its buttons answer it.
+    expect(stored.autoOpenUrl).toBe(false);
+    const [call] = deviceCalls;
+    expect(pushPlaintext(call!.notification, call!.event, 'o').q).toEqual({
+      m: 'b',
+      f: 'decision',
+      a: [
+        { i: 'approve', l: 'Approve' },
+        { i: 'reject', l: 'Reject', d: 1 },
+      ],
+    });
+    await respondToNotification(
+      inline,
+      { decision: 'reject' },
+      { userId: 'user-1', via: 'web' },
+    );
+    expect((await service.getNotification(inline)).response).toMatchObject({
+      answers: { decision: 'reject' },
+    });
   });
 });

@@ -1,5 +1,9 @@
 /** Shared HTTP handling of edit and recall requests after authentication. */
-import { notificationRecallSchema, notificationUpdateSchema } from './contract';
+import {
+  notificationRecallSchema,
+  notificationUpdateSchema,
+  pushIssueMessage,
+} from './contract';
 import {
   NotificationLifecycleError,
   recallNotification,
@@ -18,10 +22,7 @@ export async function applyLifecycleRequest(
     if (action === 'update') {
       const update = notificationUpdateSchema.safeParse(json);
       if (!update.success) {
-        return new Response(
-          update.error.issues[0]?.message ?? 'Invalid request',
-          { status: 400 },
-        );
+        return new Response(pushIssueMessage(update.error), { status: 400 });
       }
       return Response.json(await updateNotification(sender, update.data));
     }

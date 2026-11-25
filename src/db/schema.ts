@@ -21,7 +21,10 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../packages/hatch-platform-api/notification-reply';
-import type { NotificationCard } from '../../packages/hatch-platform-api/notification-card';
+import type {
+  ContentNode,
+  NotificationFormat,
+} from '../../packages/hatch-platform-api/notification-content';
 
 export * from './auth-schema';
 
@@ -1029,6 +1032,20 @@ export const notificationChannels = snakeCase.table(
 );
 
 /**
+ * Which content columns each format uses: text has a title (and maybe a body
+ * and summary); markdown and card have a summary and a tree instead, and
+ * markdown also its source.
+ */
+function contentCheck(table: string) {
+  const column = (name: string) => sql.raw(`"${table}"."${name}"`);
+  return sql`(
+    (${column('format')} = 'text' and ${column('title')} is not null and ${column('markdown')} is null and ${column('content')} is null)
+    or (${column('format')} in ('markdown', 'card') and ${column('title')} is null and ${column('body')} is null and ${column('summary')} is not null and ${column('content')} is not null
+      and (${column('format')} = 'markdown') = (${column('markdown')} is not null))
+  )`;
+}
+
+/**
  * Every accepted notification. Source names and kind names are snapshots so
  * history stays readable after the App or Channel is renamed or removed.
  */
@@ -1059,8 +1076,23 @@ export const notifications = snakeCase.table(
     sourceName: text().notNull(),
     kind: text().notNull(),
     kindName: text().notNull(),
-    title: text().notNull(),
+    /**
+     * How the content is written: `text` (title and body), `markdown` or
+     * `card`; see notification-content.ts and the content check below.
+     */
+    format: text().$type<NotificationFormat>().notNull().default('text'),
+    /** Text notifications only. */
+    title: text(),
     body: text(),
+    /**
+     * One plain line naming it where the content is not shown (push, lists).
+     * Optional for text, required for markdown and card.
+     */
+    summary: text(),
+    /** The Markdown source of a markdown notification. */
+    markdown: text(),
+    /** The render tree (root `Document` or `Card`) of markdown and card. */
+    content: jsonb().$type<ContentNode>(),
     url: text(),
     /** Tapping the phone push opens `url` instead of the notification. */
     autoOpenUrl: boolean().notNull().default(false),
@@ -1070,8 +1102,6 @@ export const notifications = snakeCase.table(
      */
     priority: smallint().notNull().default(0),
     data: jsonb().$type<JsonObject>(),
-    /** Status and one block shown in the timeline; see notification-card.ts. */
-    card: jsonb().$type<NotificationCard>(),
     dedupeKey: text(),
     occurredAt: timestamp('occurred_at').notNull(),
     /**
@@ -1149,6 +1179,7 @@ export const notifications = snakeCase.table(
         or ("notifications"."source_type" = 'user' and "notifications"."app_id" is null and "notifications"."channel_id" is null)
       )`,
     ),
+    check('notifications_content_check', contentCheck('notifications')),
   ],
 );
 
@@ -1413,12 +1444,16 @@ export const notificationRevisions = snakeCase.table(
       .references(() => notifications.id, { onDelete: 'cascade' }),
     /** The notification's revision while this version was current. */
     revision: integer().notNull(),
-    title: text().notNull(),
+    /** Content columns as on `notifications`. */
+    format: text().$type<NotificationFormat>().notNull().default('text'),
+    title: text(),
     body: text(),
+    summary: text(),
+    markdown: text(),
+    content: jsonb().$type<ContentNode>(),
     url: text(),
     autoOpenUrl: boolean('auto_open_url').notNull().default(false),
     data: jsonb().$type<JsonObject>(),
-    card: jsonb().$type<NotificationCard>(),
     reply: jsonb().$type<ReplyForm>(),
     replyRound: integer('reply_round').notNull(),
     /** When this version became current (its activity time). */
@@ -1426,7 +1461,13 @@ export const notificationRevisions = snakeCase.table(
     /** When an edit replaced it. */
     replacedAt: timestamp('replaced_at').notNull(),
   },
-  (table) => [primaryKey({ columns: [table.notificationId, table.revision] })],
+  (table) => [
+    primaryKey({ columns: [table.notificationId, table.revision] }),
+    check(
+      'notification_revisions_content_check',
+      contentCheck('notification_revisions'),
+    ),
+  ],
 );
 
 export type NotificationResponseTargetType = 'destination' | 'agent';

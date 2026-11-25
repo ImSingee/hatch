@@ -53,6 +53,12 @@ export type PushPlaintext = {
   s: string;
   /** Kind display name. */
   k: string;
+  /**
+   * `t` is already the source name (markdown and card notifications, whose
+   * text is the summary), so the subtitle shows only the kind. Builds that
+   * predate it ignore it and show "source · kind".
+   */
+  ks?: 1;
   /** Thread grouping key (source id). */
   g: string;
   u: string | null;

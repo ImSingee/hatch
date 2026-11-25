@@ -20,6 +20,7 @@ import {
 } from '../apns/payload';
 import {
   notificationSourceId,
+  notificationText,
   type NotificationEvent,
   type NotificationRecord,
   type NotificationResponseRecord,
@@ -140,6 +141,27 @@ export function pushReply(
 }
 
 /**
+ * The words a push shows: a text notification's title over its summary (or
+ * its body without one); for markdown and card, which a push cannot render,
+ * the source name over the summary.
+ */
+function pushText(
+  notification: NotificationRecord,
+): Pick<PushPlaintext, 't' | 'b' | 'ks'> {
+  if (notification.format === 'text') {
+    return {
+      t: notification.title ?? '',
+      b: notification.summary ?? notification.body,
+    };
+  }
+  return {
+    t: notification.sourceName,
+    b: notification.summary ?? notificationText(notification),
+    ks: 1,
+  };
+}
+
+/**
  * What the phone decrypts. A recall carries no content, so a phone that
  * cannot hide the notification only shows that it was recalled.
  */
@@ -166,8 +188,7 @@ export function pushPlaintext(
   const q = pushReply(notification, response);
   return {
     ...base,
-    t: notification.title,
-    b: notification.body,
+    ...pushText(notification),
     u: notification.url,
     ...(notification.url && notification.autoOpenUrl
       ? { ao: true as const }

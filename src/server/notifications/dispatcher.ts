@@ -553,11 +553,14 @@ async function asAnswered(
   if (!kept) return notification;
   return {
     ...notification,
+    format: kept.format,
     title: kept.title,
     body: kept.body,
+    summary: kept.summary,
+    markdown: kept.markdown,
+    content: kept.content,
     url: kept.url,
     data: kept.data,
-    card: kept.card,
     reply: kept.reply,
     replyRound: kept.replyRound,
     revision: kept.revision,
