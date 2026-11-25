@@ -20,19 +20,24 @@ export type TabItem = {
   content?: () => JSX.Element;
 };
 
-/** The selected id: the App's, else an own signal starting at the first
- * enabled item. */
+/** The selected id: the App's, else the one the user chose (at first
+ * `defaultValue`) while it is among the items, else the first enabled item.
+ * So items that arrive later, or the removal of the selected one, never leave
+ * the content area empty. */
 export function selection(props: {
   items: readonly TabItem[];
   value?: string;
   defaultValue?: string;
   onChange?: (id: string) => void;
 }): { get: () => string; set: (id: string) => void } {
-  const first =
-    props.defaultValue ?? props.items.find((item) => !item.disabled)?.id ?? '';
-  const own = signal(first);
+  const own = signal(props.defaultValue);
+  const uncontrolled = (): string => {
+    const chosen = own();
+    if (props.items.some((item) => item.id === chosen)) return chosen ?? '';
+    return props.items.find((item) => !item.disabled)?.id ?? '';
+  };
   return {
-    get: () => props.value ?? own(),
+    get: () => props.value ?? uncontrolled(),
     set: (id) => {
       own.set(id);
       props.onChange?.(id);

@@ -10,7 +10,6 @@ import {
   WELL_HEIGHT,
   WELL_TEXT,
   fieldError,
-  useFormField,
   wellState,
 } from './Field';
 import type { FieldProps } from './Field';
@@ -98,10 +97,11 @@ export type TextFieldProps = FieldProps & {
 /** A one-line text field with its label. */
 export function TextField(props: TextFieldProps): JSX.Element {
   const form = FormContext();
-  const field = bindField<string>(form, props, '');
-  const error = fieldError(props);
   const kind = props.kind ?? 'text';
-  useFormField(props, { keep: kind !== 'password' && kind !== 'new-password' });
+  const field = bindField<string>(form, props, '', {
+    keep: kind !== 'password' && kind !== 'new-password',
+  });
+  const error = fieldError(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
   return (
     <Field
@@ -163,7 +163,6 @@ export function TextArea(props: TextAreaProps): JSX.Element {
   const form = FormContext();
   const field = bindField<string>(form, props, '');
   const error = fieldError(props);
-  useFormField(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
   return (
     <Field
@@ -222,7 +221,6 @@ export function NumberField(props: NumberFieldProps): JSX.Element {
   const form = FormContext();
   const field = bindField<number | null>(form, props, null);
   const error = fieldError(props);
-  useFormField(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
   return (
     <Field

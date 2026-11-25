@@ -1,4 +1,4 @@
-import { Text, View, cleanup } from 'nsh';
+import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Glyph } from '../icons/Icon';
 import { IconAlertCircle } from '../icons/icons.gen';
@@ -29,21 +29,6 @@ export function fieldError(props: Pick<FieldProps, 'error' | 'name'>) {
   return (): string | undefined =>
     props.error ??
     (form && props.name !== undefined ? form.error(props.name) : undefined);
-}
-
-/** Registers a named field with its form, so `required` is checked. */
-export function useFormField(
-  props: Pick<FieldProps, 'name' | 'required'>,
-  options: { keep?: boolean } = {},
-): void {
-  const form = FormContext();
-  if (!form || props.name === undefined) return;
-  cleanup(
-    form.register(props.name, {
-      required: () => props.required === true,
-      keep: options.keep,
-    }),
-  );
 }
 
 /** A form control's label, description and error around the control. */

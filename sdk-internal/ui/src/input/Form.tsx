@@ -18,6 +18,12 @@ import { Button } from './Button';
 import { FormContext } from './form-context';
 import type { FieldValue, FormApi, FormValues } from './form-context';
 
+type FormField = {
+  required: () => boolean;
+  keep: boolean;
+  controlled: () => FieldValue | undefined;
+};
+
 export type { FieldValue, FormValues };
 
 export type FormProps = {
@@ -56,8 +62,14 @@ function isEmpty(value: FieldValue | undefined): boolean {
   );
 }
 
-function sameValues(a: FormValues, b: FormValues): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+/** Whether `value` is an unsent change from `base`: any difference,
+ * including clearing a value, but not one empty spelling for another. */
+function changedFrom(
+  value: FieldValue | undefined,
+  base: FieldValue | undefined,
+): boolean {
+  if (isEmpty(value) || isEmpty(base)) return isEmpty(value) !== isEmpty(base);
+  return JSON.stringify(value) !== JSON.stringify(base);
 }
 
 /**
@@ -71,39 +83,53 @@ export function Form(props: FormProps): JSX.Element {
   const submitting = signal(false);
   const failure = signal<string | null>(null);
   const restored = signal(false);
-  const fields = new Map<string, { required: () => boolean; keep: boolean }>();
+  const fields = new Map<string, FormField>();
   const draftKey = DRAFT_PREFIX + props.id;
   const saveDraft = () => props.saveDraft !== false;
 
   // The draft: restored once, then saved a moment after each change and at
-  // once when the App goes to the background.
-  const draft: { loaded: boolean; timer: number | undefined } = {
-    loaded: false,
-    timer: undefined,
-  };
+  // once when the App goes to the background. `sent` is what the fields held
+  // when last sent (else `initialValues`): only changes from it are a draft.
+  const draft: {
+    loaded: boolean;
+    timer: number | undefined;
+    sent: FormValues;
+  } = { loaded: false, timer: undefined, sent: initial };
   const stopTimer = () => {
     clearTimeout(draft.timer);
     draft.timer = undefined;
   };
+  // What the form sends: its own values, with a controlled field's value
+  // (the App's `value`) in place of the one the form holds for it.
+  const effectiveValues = (): FormValues => {
+    const current = { ...values() };
+    for (const [name, field] of fields) {
+      const controlled = field.controlled();
+      if (controlled !== undefined) current[name] = controlled;
+    }
+    return current;
+  };
+  // A draft leaves out passwords and controlled fields: the App keeps the
+  // latter itself, and the field shows the App's value, not a restored one.
   const keptValues = (): FormValues =>
     Object.fromEntries(
-      Object.entries(values()).filter(
-        ([name]) => fields.get(name)?.keep !== false,
-      ),
+      Object.entries(values()).filter(([name]) => {
+        const field = fields.get(name);
+        return !field || (field.keep && field.controlled() === undefined);
+      }),
     );
-  const writeDraft = () => {
+  const writeDraft = async (): Promise<void> => {
     stopTimer();
     if (!draft.loaded || !saveDraft()) return;
     const kept = untracked(keptValues);
-    const changed = Object.entries(kept).some(
-      ([name, value]) =>
-        !sameValues({ value }, { value: initial[name] ?? null }) &&
-        !isEmpty(value),
+    const changed = Object.entries(kept).some(([name, value]) =>
+      changedFrom(value, draft.sent[name]),
     );
-    const pending = changed
-      ? Storage.setItem(draftKey, JSON.stringify(kept))
-      : Storage.removeItem(draftKey);
-    pending.catch(() => {
+    await (
+      changed
+        ? Storage.setItem(draftKey, JSON.stringify(kept))
+        : Storage.removeItem(draftKey)
+    ).catch(() => {
       // A full store keeps the previous draft; typing goes on.
     });
   };
@@ -134,16 +160,16 @@ export function Form(props: FormProps): JSX.Element {
     values();
     if (!draft.loaded) return;
     stopTimer();
-    draft.timer = setTimeout(writeDraft, SAVE_DELAY_MS);
+    draft.timer = setTimeout(() => void writeDraft(), SAVE_DELAY_MS);
   });
   effect(() => {
-    if (lifecycle() === 'background') writeDraft();
+    if (lifecycle() === 'background') void writeDraft();
   });
-  cleanup(() => writeDraft());
+  cleanup(() => void writeDraft());
 
   const discardDraft = () => {
     batch(() => {
-      values.set({ ...initial });
+      values.set({ ...draft.sent });
       errors.set({});
       restored.set(false);
     });
@@ -152,7 +178,7 @@ export function Form(props: FormProps): JSX.Element {
 
   const submit = async () => {
     if (submitting() || props.disabled) return;
-    const current = values();
+    const current = untracked(effectiveValues);
     const found: Record<string, string> = {};
     for (const [name, field] of fields) {
       if (field.required() && isEmpty(current[name]))
@@ -167,9 +193,11 @@ export function Form(props: FormProps): JSX.Element {
     submitting.set(true);
     try {
       await props.onSubmit(current);
-      stopTimer();
+      // Sent: these values are no longer a draft. Input typed while sending
+      // still is, so the draft is rewritten rather than deleted.
+      draft.sent = current;
       restored.set(false);
-      await Storage.removeItem(draftKey).catch(() => undefined);
+      await writeDraft();
     } catch (error) {
       failure.set(
         error instanceof Error && error.message
@@ -194,7 +222,11 @@ export function Form(props: FormProps): JSX.Element {
     },
     error: (name) => errors()[name],
     register: (name, field) => {
-      fields.set(name, { required: field.required, keep: field.keep ?? true });
+      fields.set(name, {
+        required: field.required,
+        keep: field.keep ?? true,
+        controlled: field.controlled,
+      });
       return () => fields.delete(name);
     },
     submit: () => void submit(),

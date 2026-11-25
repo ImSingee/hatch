@@ -22,7 +22,6 @@ import {
   WELL_HEIGHT,
   WELL_TEXT,
   fieldError,
-  useFormField,
   wellState,
 } from './Field';
 import type { FieldProps } from './Field';
@@ -98,7 +97,6 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
   const form = FormContext();
   const field = bindField<string | null>(form, props, null);
   const error = fieldError(props);
-  useFormField(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
   const shown = () => {
     const value = field.get();

@@ -11,7 +11,7 @@ import { Each } from '../core/control';
 import { FOCUS_RING } from '../core/styles';
 import { Glyph } from '../icons/Icon';
 import { IconCheck, IconMinus } from '../icons/icons.gen';
-import { Field, fieldError, useFormField } from './Field';
+import { Field, fieldError } from './Field';
 import type { FieldProps } from './Field';
 import { FormContext, bindField } from './form-context';
 
@@ -59,7 +59,6 @@ export function Checkbox(props: CheckboxProps): JSX.Element {
     },
     false,
   );
-  useFormField(props);
   const error = fieldError(props);
   const marked = () => field.get() || props.indeterminate === true;
   return (
@@ -117,7 +116,6 @@ export function Switch(props: SwitchProps): JSX.Element {
     },
     false,
   );
-  useFormField(props);
   return (
     <BaseSwitch
       checked={field.get()}
@@ -161,6 +159,9 @@ export function RadioGroup(props: RadioGroupProps): JSX.Element {
       get name() {
         return props.name;
       },
+      get required() {
+        return props.required;
+      },
       get value() {
         return props.value;
       },
@@ -171,7 +172,6 @@ export function RadioGroup(props: RadioGroupProps): JSX.Element {
     null,
   );
   const error = fieldError(props);
-  useFormField(props);
   return (
     <Field
       label={props.label}
@@ -227,7 +227,6 @@ export function Slider(props: SliderProps): JSX.Element {
   const form = FormContext();
   const min = () => props.min ?? 0;
   const field = bindField<number>(form, props, props.min ?? 0);
-  useFormField(props);
   const shown = () =>
     props.formatValue ? props.formatValue(field.get()) : String(field.get());
   return (

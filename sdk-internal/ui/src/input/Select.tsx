@@ -17,7 +17,6 @@ import {
   WELL_HEIGHT,
   WELL_TEXT,
   fieldError,
-  useFormField,
   wellState,
 } from './Field';
 import type { FieldProps } from './Field';
@@ -72,7 +71,6 @@ export function Select(props: SelectProps): JSX.Element {
   const form = FormContext();
   const field = bindField<string | null>(form, props, null);
   const error = fieldError(props);
-  useFormField(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
   const chosen = () =>
     props.options.find((option) => option.value === field.get())?.label;
@@ -145,7 +143,6 @@ export function Combobox(props: ComboboxProps): JSX.Element {
   const form = FormContext();
   const field = bindField<readonly string[]>(form, props, []);
   const error = fieldError(props);
-  useFormField(props);
   const disabled = () => props.disabled === true || (form?.disabled() ?? false);
   return (
     <Field
