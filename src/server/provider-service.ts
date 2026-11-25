@@ -26,6 +26,7 @@ import {
   updateProviderModel,
 } from '~server/provider-models';
 import { resolveModelSpec, type ModelSpec } from '~server/model-spec';
+import { persistSortOrder } from '~server/sort-order';
 
 export const PROVIDER_API_TYPES = [
   'anthropic-messages',
@@ -461,6 +462,31 @@ export async function deleteProvider(id: string): Promise<void> {
     throw new AppError('Provider not found.', 404, {
       code: 'providers.providerNotFound',
     });
+}
+
+/**
+ * Put the listed providers first, in this order; unlisted ones keep their
+ * order after them. Settings, the model picker and the first-model fallback
+ * all follow it. Returns every provider id in its new order.
+ */
+export function reorderProviders(providerIds: string[]): Promise<string[]> {
+  return persistSortOrder(schema.agentProviders, providerIds);
+}
+
+/**
+ * Order one provider's models the same way. Every id must be a model of
+ * that provider. Returns all of its model ids in their new order.
+ */
+export async function reorderModels(
+  providerId: string,
+  modelIds: string[],
+): Promise<string[]> {
+  await getProviderView(providerId);
+  return persistSortOrder(
+    schema.agentModels,
+    modelIds,
+    eq(schema.agentModels.providerId, providerId),
+  );
 }
 
 /** ================== talking to the provider ================== */

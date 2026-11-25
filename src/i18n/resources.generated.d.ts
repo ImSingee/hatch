@@ -1851,6 +1851,7 @@ export type TranslationResource = {
   'system.togglePasswordVisibility': 'Toggle password visibility';
   'providers.addNamed': 'Add {{name}}';
   'providers.addCustom': 'Add custom provider';
+  'providers.reorderNamed': 'Reorder {{name}}: drag, or use the up and down arrow keys';
   'providers.card.noApiKey': 'No API key';
   'providers.card.enableNamed': 'Enable {{name}}';
   'providers.card.disableNamed': 'Disable {{name}}';
@@ -1860,6 +1861,7 @@ export type TranslationResource = {
   'providers.test.noDetails': 'no details';
   'providers.model.custom': 'Custom';
   'providers.model.customTooltip': 'Some values differ from the catalog';
+  'providers.model.notInCatalogTooltip': "Not in the model catalog; it uses the values you set, or Hatch's defaults";
   'providers.model.editNamed': 'Edit {{name}}';
   'providers.model.removeNamed': 'Remove {{name}}';
   'providers.model.enableNamed': 'Enable {{name}}';

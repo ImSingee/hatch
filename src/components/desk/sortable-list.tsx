@@ -2,6 +2,18 @@ import { type ReactNode, useRef, useState } from 'react';
 
 type WithId = { id: string };
 
+/** Mark the element an item drags from when the list uses `handle`. */
+export const DRAG_HANDLE_ATTRIBUTE = 'data-drag-handle';
+
+/** What `renderItem` can do besides dragging, for keyboard reordering. */
+export type SortableItemControls = {
+  /**
+   * Move the item one place up (-1) or down (1) and persist the order; a
+   * move past either end does nothing.
+   */
+  move: (delta: -1 | 1) => void;
+};
+
 /**
  * Returns a new array ordered to match `orderedIds`. Useful for optimistically
  * updating a cached list to a freshly-dragged order. Items whose id is missing
@@ -24,25 +36,45 @@ export function sortByIds<T extends WithId>(
  * Minimal dependency-free vertical sortable list using native HTML5 drag and
  * drop. Reorders optimistically while dragging and persists the final order via
  * `onReorder` once the drag ends.
+ *
+ * With `handle`, an item drags only from an element carrying
+ * `DRAG_HANDLE_ATTRIBUTE` inside it, so the rest of the item (text fields,
+ * menus) works normally. Lists may be nested: drag events stop at the list
+ * that owns the dragged item.
  */
 export function SortableList<T extends WithId>({
   items,
   onReorder,
   renderItem,
+  handle = false,
 }: {
   items: T[];
   onReorder: (orderedIds: string[]) => void;
-  renderItem: (item: T) => ReactNode;
+  renderItem: (item: T, controls: SortableItemControls) => ReactNode;
+  handle?: boolean;
 }) {
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [armedId, setArmedId] = useState<string | null>(null);
   const dragOrderRef = useRef<string[] | null>(null);
   const movedRef = useRef(false);
   const itemOrder = items.map((item) => item.id);
-  const order = dragOrder ?? itemOrder;
+  // The order the last keyboard move submitted, shown until `items` changes
+  // (the caller's update can land a tick later); a quick next key press
+  // builds on it instead of on stale props. Any change of `items` settles
+  // it for good, so it never comes back when an earlier order returns (a
+  // drag back, or a refetch after a failed save).
+  const [submitted, setSubmitted] = useState<{
+    basedOn: string;
+    order: string[];
+  } | null>(null);
+  const itemsKey = itemOrder.join('\n');
+  if (submitted && submitted.basedOn !== itemsKey) setSubmitted(null);
+  const settledOrder =
+    submitted?.basedOn === itemsKey ? submitted.order : itemOrder;
 
   const byId = new Map(items.map((i) => [i.id, i]));
-  const ordered = order
+  const ordered = (dragOrder ?? settledOrder)
     .map((id) => byId.get(id))
     .filter((x): x is T => Boolean(x));
 
@@ -60,16 +92,42 @@ export function SortableList<T extends WithId>({
     setDragOrder(next);
   };
 
+  const moveBy = (id: string, delta: -1 | 1) => {
+    const index = settledOrder.indexOf(id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= settledOrder.length) return;
+    const next = [...settledOrder];
+    next.splice(index, 1);
+    next.splice(target, 0, id);
+    setSubmitted({ basedOn: itemsKey, order: next });
+    onReorder(next);
+  };
+
   return (
     <>
       {ordered.map((item) => (
         <div
           key={item.id}
-          draggable
+          data-sortable-item=""
+          draggable={!handle || armedId === item.id}
           style={{ opacity: draggingId === item.id ? 0.5 : 1 }}
+          onPointerDown={
+            handle
+              ? (e) => {
+                  const grip = (e.target as Element).closest(
+                    `[${DRAG_HANDLE_ATTRIBUTE}]`,
+                  );
+                  // A handle of a nested list belongs to that list's item.
+                  const owner = grip?.closest('[data-sortable-item]');
+                  setArmedId(owner === e.currentTarget ? item.id : null);
+                }
+              : undefined
+          }
+          onPointerUp={handle ? () => setArmedId(null) : undefined}
           onDragStart={(e) => {
-            dragOrderRef.current = itemOrder;
-            setDragOrder(itemOrder);
+            e.stopPropagation();
+            dragOrderRef.current = settledOrder;
+            setDragOrder(settledOrder);
             setDraggingId(item.id);
             movedRef.current = false;
             e.dataTransfer.effectAllowed = 'move';
@@ -81,16 +139,20 @@ export function SortableList<T extends WithId>({
             if (draggingId && draggingId !== item.id) move(draggingId, item.id);
           }}
           onDragOver={(e) => e.preventDefault()}
-          onDragEnd={() => {
+          onDragEnd={(e) => {
+            e.stopPropagation();
             const finalOrder = dragOrderRef.current;
             dragOrderRef.current = null;
             setDragOrder(null);
             setDraggingId(null);
+            setArmedId(null);
             if (movedRef.current && finalOrder) onReorder(finalOrder);
             movedRef.current = false;
           }}
         >
-          {renderItem(item)}
+          {renderItem(item, {
+            move: (delta) => moveBy(item.id, delta),
+          })}
         </div>
       ))}
     </>

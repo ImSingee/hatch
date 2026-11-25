@@ -11,6 +11,8 @@ service ModelService {
   rpc CreateModel(CreateModelRequest) returns (CreateModelResponse);
   rpc UpdateModel(UpdateModelRequest) returns (UpdateModelResponse);
   rpc DeleteModel(DeleteModelRequest) returns (DeleteModelResponse);
+  // Sets the order of one provider's models.
+  rpc ReorderModels(ReorderModelsRequest) returns (ReorderModelsResponse);
 }
 
 message ProviderModel {
@@ -187,3 +189,28 @@ message DeleteModelRequest {
 }
 
 message DeleteModelResponse {}
+
+message ReorderModelsRequest {
+  string provider_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // Model ids of that provider in their new order. Models that are not
+  // listed keep their relative order after the listed ones.
+  repeated string model_ids = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 1000
+    unique: true
+    items: {
+      string: {
+        min_len: 1
+        max_len: 200
+      }
+    }
+  }];
+}
+
+message ReorderModelsResponse {
+  // Every model id of the provider in its new order.
+  repeated string model_ids = 1;
+}

@@ -38,6 +38,12 @@
   border-radius: var(--mantine-radius-sm);
 }
 
+.dragHandle {
+  flex: none;
+  cursor: grab;
+  color: var(--mantine-color-dimmed);
+}
+
 .modelRow:hover {
   background-color: var(--mantine-color-default-hover);
 }

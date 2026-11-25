@@ -237,6 +237,19 @@ describe('model command arguments', () => {
     });
   });
 
+  it("orders one provider's models", () => {
+    expect(command('model', 'reorder', '--provider', 'p1', 'm2', 'm1')).toEqual(
+      { kind: 'reorder', providerId: 'p1', modelIds: ['m2', 'm1'] },
+    );
+    for (const args of [
+      ['model', 'reorder', 'm2', 'm1'],
+      ['model', 'reorder', '--provider', 'p1'],
+      ['model', 'reorder', '--provider', 'p1', 'm1', 'm1'],
+      ['model', 'reorder', '--provider', 'p1', 'm 1'],
+    ])
+      expect(rejected(...args)).toBe('invalid_arguments');
+  });
+
   it('maps catalog commands', () => {
     expect(
       command(

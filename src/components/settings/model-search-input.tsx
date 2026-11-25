@@ -13,6 +13,7 @@ import { IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useErrorText, useI18n } from '~i18n';
+import type { CatalogLimits } from '~/lib/model-limits';
 import type { CatalogModel } from '~server/model-catalog/types';
 import { fetchProviderModels, searchCatalog } from '~server/providers';
 import { formatTokenCount } from './token-count';
@@ -26,6 +27,8 @@ export type PickedModel = {
   /** Catalog entry, or null for an id typed by hand or listed by the provider. */
   catalogRef: string | null;
   contextWindow?: number;
+  /** The catalog entry's own values, for a chat model picked from it. */
+  limits?: CatalogLimits;
 };
 
 type Option = PickedModel & { key: string; source: 'catalog' | 'provider' };
@@ -106,6 +109,15 @@ export function ModelSearchInput({
         kind: hit.model.kind,
         catalogRef: `${hit.providerId}/${hit.model.id}`,
         contextWindow: hit.model.contextWindow,
+        ...(hit.model.kind === 'chat'
+          ? {
+              limits: {
+                reasoning: hit.model.reasoning,
+                contextWindow: hit.model.contextWindow,
+                maxTokens: hit.model.maxTokens,
+              },
+            }
+          : {}),
       });
     }
     for (const model of remote.data ?? []) {
