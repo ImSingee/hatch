@@ -9,6 +9,14 @@ const DEFAULT_COUNTER_FIXTURE_ID = '\0default-counter-template-test-fixture';
 const DEFAULT_COUNTER_TEMPLATE_PATH = fileURLToPath(
   new URL('./templates/default-app/widgets/counter.tsx', import.meta.url),
 );
+// `nsh` exists only inside the NSH runtime; unit tests of the native SDK
+// entries resolve it to a stub they mock.
+const NSH_MODULE_STUB_PATH = fileURLToPath(
+  new URL(
+    './src/server/apps/native/test-fixtures/nsh-module.ts',
+    import.meta.url,
+  ),
+);
 
 function defaultCounterTemplateFixture(): Plugin {
   const isDefaultCounterTemplate = (importer: string | undefined) =>
@@ -96,6 +104,7 @@ export default defineConfig({
       {
         resolve: {
           tsconfigPaths: true,
+          alias: { nsh: NSH_MODULE_STUB_PATH },
         },
         test: {
           name: 'unit',

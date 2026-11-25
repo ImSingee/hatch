@@ -165,7 +165,9 @@ own session. The grant is exactly these names (plus, later, the
   `host.call` timeout. `hatch.data.events` waits up to 25 s for a change and
   answers `events: []` if none came; while the App is hidden it answers
   `events: []` after the wait without a request, and the App's cursor makes it
-  catch up when shown.
+  catch up when shown. `@hatch/app/native` treats an empty answer that comes
+  back within a second (an empty proxy response) as a dropped stream, so the
+  Data Table watch backs off before polling again.
 - Events the shell sends (`player.hostEvent` on the web): `hatch.theme`
   `{ theme }`, `hatch.nav` `{ route }`, `hatch.visibility` `{ visible }`,
   `hatch.update` `{}`.

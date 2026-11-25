@@ -20,6 +20,8 @@ export { HostCallError } from './native-bridge.js';
 
 /** How long one `hatch.data.events` call may wait for a change. */
 const DATA_EVENTS_TIMEOUT_MS = 60_000;
+/** An empty events answer faster than this ends the poll loop. */
+const EMPTY_POLL_DISCONNECT_MS = 1_000;
 
 /** Theme the shell resolved for this App: NSH's shadcn `cssVars` shape. */
 export type ShellTheme = {
@@ -152,6 +154,7 @@ const hostDataTransport: DataTransport = {
       let answer: {
         events: { revision?: number; reset?: boolean }[];
       };
+      const asked = Date.now();
       try {
         answer = await callHost(
           'hatch.data.events',
@@ -175,6 +178,15 @@ const hostDataTransport: DataTransport = {
           cursor = reset ? revision : Math.max(cursor, revision);
         }
         onChange({ revision, reset });
+      }
+      // A long poll that comes back empty at once is a dropped stream (an
+      // empty proxy response, say). End this connection so the watch loop
+      // backs off before asking again, as it does for an HTTP stream.
+      if (
+        answer.events.length === 0 &&
+        Date.now() - asked < EMPTY_POLL_DISCONNECT_MS
+      ) {
+        return;
       }
     }
   },
