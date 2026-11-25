@@ -536,14 +536,13 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['preferences', 'get'],
     usage: 'preferences get',
     description:
-      "Show the caller's personal preferences: agentMessageMode (queue or steer) and defaultModel (providerId, modelId and thinkingLevel new chats start with, as saved; null uses the first available model). With a Run credential, the preferences of the user who sent the run's prompt.",
+      "Show the caller's personal preferences: agentMessageMode (queue or steer). With a Run credential, the preferences of the user who sent the run's prompt.",
   },
   {
     path: ['preferences', 'set'],
-    usage:
-      'preferences set [--agent-message-mode queue|steer] [--default-model <provider-id>:<model-id> [--thinking off|minimal|low|medium|high|xhigh|max] | --clear-default-model]',
+    usage: 'preferences set --agent-message-mode queue|steer',
     description:
-      "Change personal preferences; omitted ones stay unchanged and at least one is required. --agent-message-mode sets how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish; it applies to messages sent afterwards. --default-model sets the model new chats start with, as providerId and modelId from model list (only the first ':' separates them); it must be an enabled chat model. --thinking picks its thinking level, which the model must offer; without it the model's default level is used. --clear-default-model goes back to the first available model.",
+      'Set how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish. Applies to messages sent afterwards; already pending ones keep their mode.',
   },
   {
     path: ['notification', 'list'],

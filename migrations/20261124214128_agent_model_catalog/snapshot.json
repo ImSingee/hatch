@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "8fd16840-9316-446a-8c8f-92c5ccb7a6a5",
+  "id": "63064197-55c4-4f53-b839-0386e94d2dbe",
   "prevIds": ["f4c7b13a-e729-4699-9f7f-c2abd570c148"],
   "footprints": [
     {
@@ -82,21 +82,6 @@
         "e|col|public.agent_sessions.thinking_level"
       ],
       "reads": ["n|tbl|public.agent_sessions", "n|sch|public"]
-    },
-    {
-      "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "user_preferences",
-        "agent_model"
-      ],
-      "writes": [
-        "s|col|public.user_preferences.agent_model",
-        "n|col|public.user_preferences.agent_model",
-        "e|col|public.user_preferences.agent_model"
-      ],
-      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
     },
     {
       "statementType": "alter_column",
@@ -383,22 +368,6 @@
         "notNull": true,
         "dimensions": 0,
         "default": "now()",
-        "generated": null,
-        "identity": null,
-        "entityType": "columns"
-      }
-    },
-    {
-      "op": "create",
-      "row": {
-        "schema": "public",
-        "table": "user_preferences",
-        "name": "agent_model",
-        "type": "jsonb",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
         "generated": null,
         "identity": null,
         "entityType": "columns"

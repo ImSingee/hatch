@@ -19,7 +19,6 @@ type FixtureProvider = {
 /** Browser-test model choices built from provider fixtures. */
 export function choicesFrom(
   providers: readonly FixtureProvider[],
-  saved: { providerId: string; modelId: string } | null = null,
 ): AgentModelCatalog {
   const enabled = providers
     .filter((provider) => provider.enabled !== false)
@@ -41,26 +40,15 @@ export function choicesFrom(
         })),
     }))
     .filter((provider) => provider.models.length > 0);
-  const pick =
-    (saved &&
-      enabled
-        .find((provider) => provider.id === saved.providerId)
-        ?.models.find((model) => model.modelId === saved.modelId) &&
-      saved) ||
-    (enabled[0]
-      ? { providerId: enabled[0].id, modelId: enabled[0].models[0].modelId }
-      : null);
-  const model = pick
-    ? enabled
-        .find((provider) => provider.id === pick.providerId)!
-        .models.find((item) => item.modelId === pick.modelId)!
-    : null;
+  const first = enabled[0];
   return {
     providers: enabled,
-    savedDefault: saved !== null,
-    defaultModel:
-      pick && model
-        ? { ...pick, thinkingLevel: model.defaultThinkingLevel }
-        : null,
+    defaultModel: first
+      ? {
+          providerId: first.id,
+          modelId: first.models[0].modelId,
+          thinkingLevel: first.models[0].defaultThinkingLevel,
+        }
+      : null,
   };
 }

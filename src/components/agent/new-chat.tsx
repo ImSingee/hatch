@@ -16,17 +16,10 @@ import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import { createDraftSendTracker, uploadDraftFiles } from './draft-send';
 import { Composer, type ComposerSubmit } from './composer';
-import {
-  useImportLegacyModelChoice,
-  useRememberModel,
-} from './model-preference';
+import { useLastSelectedModel } from './model-preference';
 import { ModelPicker } from './model-picker';
 import { useModelOptions } from './model-options';
-import {
-  resolveEffectiveModel,
-  splitModelValue,
-  type ModelChoice,
-} from './model-value';
+import { resolveEffectiveModel, splitModelValue } from './model-value';
 import { createEmptyAgentSession } from './new-chat-api';
 import { startAgentRunRequest } from './use-agent-stream';
 import classes from './chat.module.css';
@@ -74,10 +67,8 @@ export function NewChat({
   const errorText = useErrorText();
   const qc = useQueryClient();
   const appsQuery = useQuery(appsQueryOptions);
-  const { groups, options, fallback, savedDefault } = useModelOptions();
-  const [picked, setPicked] = useState<ModelChoice | null>(null);
-  const remember = useRememberModel();
-  useImportLegacyModelChoice(options, savedDefault);
+  const { groups, options, fallback } = useModelOptions();
+  const [picked, remember] = useLastSelectedModel();
   const [creating, setCreating] = useState(false);
   // Reuse a session created by a failed first attempt so a retry doesn't leave
   // a trail of empty "New chat" shells in the chat list.
@@ -175,9 +166,7 @@ export function NewChat({
                   value={effectiveModel?.value ?? null}
                   thinkingLevel={effectiveModel?.thinkingLevel ?? null}
                   onChange={(value, thinkingLevel) => {
-                    const choice = { value, thinkingLevel };
-                    setPicked(choice);
-                    remember(choice);
+                    remember({ value, thinkingLevel });
                   }}
                   disabled={creating}
                 />

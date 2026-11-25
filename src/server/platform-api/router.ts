@@ -77,7 +77,6 @@ import { PreferenceService } from '../../../packages/hatch-platform-api/gen/hatc
 import {
   readAgentPreferences,
   updateAgentPreferences,
-  type AgentPreferences,
 } from '~server/agent-preferences';
 import {
   appIconPath,
@@ -100,7 +99,6 @@ import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/pla
 import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import { buildInfo } from '~/build-info';
 import { registerModelServices } from './model-rpc';
-import type { AgentThinkingLevel } from '~/db/schema';
 import { getThemeState, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
@@ -249,13 +247,6 @@ const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
  * session or API key, or for a Run credential the user who sent the prompt
  * the run answers.
  */
-function preferencesMessage(preferences: AgentPreferences) {
-  return {
-    messageMode: preferences.messageMode,
-    defaultModel: preferences.defaultModel ?? undefined,
-  };
-}
-
 async function preferenceUserId(context: HandlerContext): Promise<string> {
   const { status, run } = context.values.get(publicApiContext);
   if (
@@ -511,10 +502,8 @@ export function registerPlatformApi(
   router.service(
     AgentService,
     {
-      getModelCatalog: async (_input, context) => {
-        const catalog = await getAgentModelCatalog(
-          await preferenceUserId(context),
-        );
+      getModelCatalog: async () => {
+        const catalog = await getAgentModelCatalog();
         return {
           providers: catalog.providers.map((provider) => ({
             ...provider,
@@ -805,35 +794,16 @@ export function registerPlatformApi(
   });
   router.service(PreferenceService, {
     getAgentPreferences: async (_input, context) => ({
-      preferences: preferencesMessage(
-        await readAgentPreferences(await preferenceUserId(context)),
+      preferences: await readAgentPreferences(await preferenceUserId(context)),
+    }),
+    updateAgentPreferences: async (input, context) => ({
+      preferences: await updateAgentPreferences(
+        await preferenceUserId(context),
+        input.messageMode === undefined
+          ? {}
+          : { messageMode: input.messageMode as 'queue' | 'steer' },
       ),
     }),
-    updateAgentPreferences: async (input, context) => {
-      if (input.defaultModel && input.clearDefaultModel)
-        throw publicApiError(
-          'BAD_REQUEST',
-          'Set only one of default_model and clear_default_model.',
-        );
-      return {
-        preferences: preferencesMessage(
-          await updateAgentPreferences(await preferenceUserId(context), {
-            messageMode: input.messageMode as 'queue' | 'steer' | undefined,
-            defaultModel: input.clearDefaultModel
-              ? null
-              : input.defaultModel
-                ? {
-                    providerId: input.defaultModel.providerId,
-                    modelId: input.defaultModel.modelId,
-                    thinkingLevel: input.defaultModel.thinkingLevel as
-                      | AgentThinkingLevel
-                      | undefined,
-                  }
-                : undefined,
-          }),
-        ),
-      };
-    },
   });
   router.service(ImageService, {
     listImageModels: async (input) => {

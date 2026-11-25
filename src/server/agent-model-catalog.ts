@@ -1,11 +1,9 @@
 /**
- * Server-only: the chat models a user can run the Agent with, and the one
- * they start with. Every client (Web, mobile, CLI) reads the same list and
- * the same default.
+ * Server-only: the chat models the Agent can run with, and the first one,
+ * which clients start new chats with until the user picks another.
  */
 import { db } from '~/db';
-import type { AgentModelPreference, AgentThinkingLevel } from '~/db/schema';
-import { AppError } from '~server/errors';
+import type { AgentThinkingLevel } from '~/db/schema';
 import { resolveModelSpec } from '~server/model-spec';
 
 export type AgentCatalogModel = {
@@ -38,10 +36,8 @@ export type AgentModelSelection = {
 
 export type AgentModelCatalog = {
   providers: AgentCatalogProvider[];
-  /** The user's saved default while usable, else the first model. */
+  /** The first model, at its default level; clients start new chats with it. */
   defaultModel: AgentModelSelection | null;
-  /** Whether the user has saved a default (usable or not). */
-  savedDefault: boolean;
 };
 
 /** Enabled chat models of enabled providers, in display order. */
@@ -85,93 +81,17 @@ export async function listAgentModels(): Promise<AgentCatalogProvider[]> {
     .filter((provider) => provider.models.length > 0);
 }
 
-function findModel(
-  providers: AgentCatalogProvider[],
-  providerId: string,
-  modelId: string,
-): AgentCatalogModel | undefined {
-  return providers
-    .find((provider) => provider.id === providerId)
-    ?.models.find((model) => model.modelId === modelId);
-}
-
-/**
- * A saved choice resolved against what is configured now: null when the
- * model is gone; a level the model no longer offers becomes its default.
- */
-export function resolveSelection(
-  providers: AgentCatalogProvider[],
-  choice: AgentModelPreference | null | undefined,
-): AgentModelSelection | null {
-  if (!choice) return null;
-  const model = findModel(providers, choice.providerId, choice.modelId);
-  if (!model) return null;
-  const level =
-    choice.thinkingLevel && model.thinkingLevels.includes(choice.thinkingLevel)
-      ? choice.thinkingLevel
-      : model.defaultThinkingLevel;
-  return {
-    providerId: choice.providerId,
-    modelId: choice.modelId,
-    thinkingLevel: level,
-  };
-}
-
-/** Reject a default the user could not run with. */
-export async function assertSelectableModel(
-  choice: AgentModelPreference,
-): Promise<void> {
-  const model = findModel(
-    await listAgentModels(),
-    choice.providerId,
-    choice.modelId,
-  );
-  if (!model)
-    throw new AppError(
-      'That model is not available. Pick an enabled chat model.',
-      400,
-      { code: 'agent.defaultModelUnavailable' },
-    );
-  if (
-    choice.thinkingLevel &&
-    !(model.thinkingLevels.length
-      ? model.thinkingLevels.includes(choice.thinkingLevel)
-      : choice.thinkingLevel === 'off')
-  )
-    throw new AppError(
-      `The model does not support thinking level "${choice.thinkingLevel}".`,
-      400,
-      {
-        code: 'agent.thinkingLevelUnsupported',
-        params: { level: choice.thinkingLevel },
-      },
-    );
-}
-
-export async function getAgentModelCatalog(
-  userId?: string | null,
-): Promise<AgentModelCatalog> {
+export async function getAgentModelCatalog(): Promise<AgentModelCatalog> {
   const providers = await listAgentModels();
-  const preference = userId
-    ? (
-        await db.query.userPreferences.findFirst({
-          where: { userId },
-          columns: { agentModel: true },
-        })
-      )?.agentModel
-    : null;
   const first = providers[0]?.models[0];
   return {
     providers,
-    savedDefault: Boolean(preference),
-    defaultModel:
-      resolveSelection(providers, preference) ??
-      (first
-        ? {
-            providerId: providers[0].id,
-            modelId: first.modelId,
-            thinkingLevel: first.defaultThinkingLevel,
-          }
-        : null),
+    defaultModel: first
+      ? {
+          providerId: providers[0].id,
+          modelId: first.modelId,
+          thinkingLevel: first.defaultThinkingLevel,
+        }
+      : null,
   };
 }

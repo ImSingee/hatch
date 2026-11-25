@@ -1931,11 +1931,6 @@ export type TranslationResource = {
   'agent.thinkingLevel.high': 'High';
   'agent.thinkingLevel.xhigh': 'Extra high';
   'agent.thinkingLevel.max': 'Max';
-  'settings.agentPreferences.defaultModel.title': 'Default model';
-  'settings.agentPreferences.defaultModel.description': 'New chats start with this model and thinking level, on the web and in the mobile app. Picking a model in a chat also makes it the default.';
-  'settings.agentPreferences.defaultModel.useFirst': 'Use the first model';
-  'settings.agentPreferences.defaultModel.saved': 'Default model updated';
-  'settings.agentPreferences.defaultModel.saveFailed': 'Could not update the default model.';
   'error.providers.modelIdTooLong': 'Model ID must be at most {{max}} characters.';
   'error.providers.nameTooLong': 'Name must be at most {{max}} characters.';
   'error.providers.contextWindowNotPositive': 'Context window must be a positive whole number.';
@@ -1962,7 +1957,6 @@ export type TranslationResource = {
   'error.providers.remoteListNotJson': 'The provider’s model list is not JSON.';
   'error.providers.remoteListNoData': 'The provider’s model list has no data.';
   'error.models.catalogSourceHttps': 'The source URL must be an https URL.';
-  'error.agent.defaultModelUnavailable': 'That model is not available. Pick an enabled chat model.';
   'error.agent.thinkingLevelUnsupported': 'The model does not support thinking level “{{level}}”.';
   'error.providers.apiKeyRequiredForEndpoint': 'Enter the API key again when changing the base URL or API type.';
   'providers.form.apiKeyForEndpoint': 'Enter the key again to change the base URL or API type';

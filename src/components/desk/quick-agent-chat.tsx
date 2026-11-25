@@ -13,16 +13,12 @@ import {
   uploadDraftFiles,
 } from '~components/agent/draft-send';
 import { Composer, type ComposerSubmit } from '~components/agent/composer';
-import {
-  useImportLegacyModelChoice,
-  useRememberModel,
-} from '~components/agent/model-preference';
+import { useLastSelectedModel } from '~components/agent/model-preference';
 import { ModelPicker } from '~components/agent/model-picker';
 import { useModelOptions } from '~components/agent/model-options';
 import {
   resolveEffectiveModel,
   splitModelValue,
-  type ModelChoice,
 } from '~components/agent/model-value';
 import { createEmptyAgentSession } from '~components/agent/new-chat-api';
 import { startAgentRunRequest } from '~components/agent/use-agent-stream';
@@ -43,10 +39,8 @@ export function QuickAgentChat() {
   const navigate = useNavigate();
   const sessions = useQuery(sessionsQueryOptions);
   const apps = useQuery(appsQueryOptions);
-  const { groups, options, fallback, savedDefault } = useModelOptions();
-  const [picked, setPicked] = useState<ModelChoice | null>(null);
-  const remember = useRememberModel();
-  useImportLegacyModelChoice(options, savedDefault);
+  const { groups, options, fallback } = useModelOptions();
+  const [picked, remember] = useLastSelectedModel();
   const [starting, setStarting] = useState(false);
   // A failed first send keeps its session so a retry does not leave empty
   // sessions behind.
@@ -198,9 +192,7 @@ export function QuickAgentChat() {
                 value={effectiveModel?.value ?? null}
                 thinkingLevel={effectiveModel?.thinkingLevel ?? null}
                 onChange={(value, thinkingLevel) => {
-                  const choice = { value, thinkingLevel };
-                  setPicked(choice);
-                  remember(choice);
+                  remember({ value, thinkingLevel });
                 }}
                 disabled={starting}
               />

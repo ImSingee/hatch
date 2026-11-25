@@ -3,13 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { Chat } from './chat';
+import { LAST_SELECTED_MODEL_STORAGE_KEY } from './model-preference';
 
-const modelPreference = vi.hoisted(() => ({
-  saved: null as { providerId: string; modelId: string } | null,
-  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
-    async () => ({}),
-  ),
-}));
 // The model menu links to settings; these tests render without a router.
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -22,10 +17,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
       {children}
     </a>
   ),
-}));
-vi.mock('~server/agent-preference-settings', () => ({
-  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
-  updateAgentPreferenceSettings: modelPreference.update,
 }));
 
 const FAILED_MESSAGES = [
@@ -150,8 +141,7 @@ vi.mock('~queries/agent', async () => {
   return {
     agentModelChoicesQueryOptions: {
       queryKey: ['test-agent-model-choices'],
-      queryFn: async () =>
-        choicesFrom(fixtures.providers, modelPreference.saved),
+      queryFn: async () => choicesFrom(fixtures.providers),
     },
     sessionsQueryOptions: {
       queryKey: ['test-agent-sessions'],
@@ -205,8 +195,7 @@ function openResponse(signal?: AbortSignal | null): Response {
 }
 
 beforeEach(() => {
-  modelPreference.update.mockClear();
-  modelPreference.saved = null;
+  localStorage.removeItem(LAST_SELECTED_MODEL_STORAGE_KEY);
   fixtures.failSessionFetch = false;
   fixtures.sessionFetchCount = 0;
   fixtures.session.updatedAt = '2026-07-11T12:00:00.000Z';
@@ -232,10 +221,13 @@ afterEach(() => {
 });
 
 test('keeps the conversation model when another model was selected elsewhere', async () => {
-  modelPreference.saved = {
-    providerId: 'provider-latest',
-    modelId: 'model-latest',
-  };
+  localStorage.setItem(
+    LAST_SELECTED_MODEL_STORAGE_KEY,
+    JSON.stringify({
+      value: 'provider-latest:model-latest',
+      thinkingLevel: 'off',
+    }),
+  );
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -427,17 +419,9 @@ test('retries once with the selected model, hides stale error, and allows a same
   await expect.element(retry).toBeVisible();
   await screen.getByRole('button', { name: 'Original model' }).click();
   await screen.getByRole('menuitem', { name: 'Latest model' }).click();
-  await vi.waitFor(() =>
-    expect(modelPreference.update).toHaveBeenCalledWith({
-      data: {
-        defaultModel: {
-          providerId: 'provider-latest',
-          modelId: 'model-latest',
-          thinkingLevel: 'off',
-        },
-      },
-    }),
-  );
+  expect(
+    JSON.parse(localStorage.getItem(LAST_SELECTED_MODEL_STORAGE_KEY)!),
+  ).toEqual({ value: 'provider-latest:model-latest', thinkingLevel: 'off' });
   const latestModelPicker = screen.getByRole('button', {
     name: 'Latest model',
   });

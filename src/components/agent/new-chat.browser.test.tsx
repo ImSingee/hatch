@@ -3,13 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { NewChat } from './new-chat';
+import { LAST_SELECTED_MODEL_STORAGE_KEY } from './model-preference';
 
-const modelPreference = vi.hoisted(() => ({
-  saved: null as { providerId: string; modelId: string } | null,
-  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
-    async () => ({}),
-  ),
-}));
 // The model menu links to settings; these tests render without a router.
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -22,10 +17,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
       {children}
     </a>
   ),
-}));
-vi.mock('~server/agent-preference-settings', () => ({
-  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
-  updateAgentPreferenceSettings: modelPreference.update,
 }));
 
 const fixtures = vi.hoisted(() => ({
@@ -67,8 +58,7 @@ vi.mock('~queries/agent', async () => {
   return {
     agentModelChoicesQueryOptions: {
       queryKey: ['test-agent-model-choices'],
-      queryFn: async () =>
-        choicesFrom(fixtures.providers, modelPreference.saved),
+      queryFn: async () => choicesFrom(fixtures.providers),
     },
     sessionsQueryOptions: {
       queryKey: ['test-agent-sessions'],
@@ -90,11 +80,11 @@ vi.mock('./new-chat-api', () => ({
 
 beforeEach(() => {
   fixtures.createSession.mockClear();
-  modelPreference.update.mockClear();
-  modelPreference.saved = null;
+  localStorage.removeItem(LAST_SELECTED_MODEL_STORAGE_KEY);
 });
 
 afterEach(() => {
+  localStorage.removeItem(LAST_SELECTED_MODEL_STORAGE_KEY);
   vi.unstubAllGlobals();
 });
 
@@ -113,22 +103,17 @@ test('records an explicit model choice before the model is used', async () => {
   await screen.getByRole('button', { name: 'Model A' }).click();
   await screen.getByRole('menuitem', { name: 'Model B' }).click();
 
-  await vi.waitFor(() =>
-    expect(modelPreference.update).toHaveBeenCalledWith({
-      data: {
-        defaultModel: {
-          providerId: 'provider-b',
-          modelId: 'model-b',
-          thinkingLevel: 'off',
-        },
-      },
-    }),
-  );
+  expect(
+    JSON.parse(localStorage.getItem(LAST_SELECTED_MODEL_STORAGE_KEY)!),
+  ).toEqual({ value: 'provider-b:model-b', thinkingLevel: 'off' });
   expect(fixtures.createSession).not.toHaveBeenCalled();
 });
 
-test('defaults a new chat to the saved default model', async () => {
-  modelPreference.saved = { providerId: 'provider-b', modelId: 'model-b' };
+test('defaults a new chat to the last selected available model', async () => {
+  localStorage.setItem(
+    LAST_SELECTED_MODEL_STORAGE_KEY,
+    JSON.stringify('provider-b:model-b'),
+  );
   let runBody: Record<string, unknown> | undefined;
   vi.stubGlobal(
     'fetch',

@@ -5,17 +5,6 @@ import { render } from 'vitest-browser-react';
 import { userEvent } from 'vitest/browser';
 import { Chat } from './chat';
 
-const modelPreference = vi.hoisted(() => ({
-  saved: null as { providerId: string; modelId: string } | null,
-  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
-    async () => ({}),
-  ),
-}));
-vi.mock('~server/agent-preference-settings', () => ({
-  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
-  updateAgentPreferenceSettings: modelPreference.update,
-}));
-
 const fixtures = vi.hoisted(() => ({
   sessionFetchCount: 0,
   session: {
@@ -68,8 +57,7 @@ vi.mock('~queries/agent', async () => {
   return {
     agentModelChoicesQueryOptions: {
       queryKey: ['test-agent-model-choices'],
-      queryFn: async () =>
-        choicesFrom(fixtures.providers, modelPreference.saved),
+      queryFn: async () => choicesFrom(fixtures.providers),
     },
     sessionsQueryOptions: {
       queryKey: ['test-agent-sessions'],

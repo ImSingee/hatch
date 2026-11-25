@@ -4,7 +4,7 @@
  */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { authMiddleware, requireSession } from './auth';
+import { authMiddleware } from './auth';
 import {
   getAgentModelCatalog,
   type AgentModelCatalog,
@@ -212,13 +212,10 @@ export const testProvider = createServerFn({ method: 'POST' })
     testProviderConnection(data.id, data.modelId),
   );
 
-/** The chat models the signed-in user can pick, and their default. */
+/** The chat models the signed-in user can pick, and the first one. */
 export const getAgentModelChoices = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .handler(async (): Promise<AgentModelCatalog> => {
-    const { user } = await requireSession();
-    return getAgentModelCatalog(user.id);
-  });
+  .handler((): Promise<AgentModelCatalog> => getAgentModelCatalog());
 
 export const getModelCatalogStatus = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])

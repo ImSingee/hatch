@@ -21,7 +21,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_preference: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'CiJoYXRjaC9wbGF0Zm9ybS92MS9wcmVmZXJlbmNlLnByb3RvEhFoYXRjaC5wbGF0Zm9ybS52MSJ8ChBBZ2VudFByZWZlcmVuY2VzEhQKDG1lc3NhZ2VfbW9kZRgBIAEoCRJACg1kZWZhdWx0X21vZGVsGAIgASgLMiQuaGF0Y2gucGxhdGZvcm0udjEuRGVmYXVsdEFnZW50TW9kZWxIAIgBAUIQCg5fZGVmYXVsdF9tb2RlbCK2AQoRRGVmYXVsdEFnZW50TW9kZWwSHwoLcHJvdmlkZXJfaWQYASABKAlCCrpIB3IFEAEYvwESHAoIbW9kZWxfaWQYAiABKAlCCrpIB3IFEAEYyAESTwoOdGhpbmtpbmdfbGV2ZWwYAyABKAlCMrpIL3ItUgNvZmZSB21pbmltYWxSA2xvd1IGbWVkaXVtUgRoaWdoUgV4aGlnaFIDbWF4SACIAQFCEQoPX3RoaW5raW5nX2xldmVsIhwKGkdldEFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0IlcKG0dldEFnZW50UHJlZmVyZW5jZXNSZXNwb25zZRI4CgtwcmVmZXJlbmNlcxgBIAEoCzIjLmhhdGNoLnBsYXRmb3JtLnYxLkFnZW50UHJlZmVyZW5jZXMi0QEKHVVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Ei4KDG1lc3NhZ2VfbW9kZRgBIAEoCUITukgQcg5SBXF1ZXVlUgVzdGVlckgAiAEBEkAKDWRlZmF1bHRfbW9kZWwYAiABKAsyJC5oYXRjaC5wbGF0Zm9ybS52MS5EZWZhdWx0QWdlbnRNb2RlbEgBiAEBEhsKE2NsZWFyX2RlZmF1bHRfbW9kZWwYAyABKAhCDwoNX21lc3NhZ2VfbW9kZUIQCg5fZGVmYXVsdF9tb2RlbCJaCh5VcGRhdGVBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USOAoLcHJlZmVyZW5jZXMYASABKAsyIy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFByZWZlcmVuY2VzMogCChFQcmVmZXJlbmNlU2VydmljZRJ0ChNHZXRBZ2VudFByZWZlcmVuY2VzEi0uaGF0Y2gucGxhdGZvcm0udjEuR2V0QWdlbnRQcmVmZXJlbmNlc1JlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USfQoWVXBkYXRlQWdlbnRQcmVmZXJlbmNlcxIwLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0GjEuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlYgZwcm90bzM',
+    'CiJoYXRjaC9wbGF0Zm9ybS92MS9wcmVmZXJlbmNlLnByb3RvEhFoYXRjaC5wbGF0Zm9ybS52MSIoChBBZ2VudFByZWZlcmVuY2VzEhQKDG1lc3NhZ2VfbW9kZRgBIAEoCSIcChpHZXRBZ2VudFByZWZlcmVuY2VzUmVxdWVzdCJXChtHZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USOAoLcHJlZmVyZW5jZXMYASABKAsyIy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFByZWZlcmVuY2VzImAKHVVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Ei4KDG1lc3NhZ2VfbW9kZRgBIAEoCUITukgQcg5SBXF1ZXVlUgVzdGVlckgAiAEBQg8KDV9tZXNzYWdlX21vZGUiWgoeVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEjgKC3ByZWZlcmVuY2VzGAEgASgLMiMuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcmVmZXJlbmNlczKIAgoRUHJlZmVyZW5jZVNlcnZpY2USdAoTR2V0QWdlbnRQcmVmZXJlbmNlcxItLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Gi4uaGF0Y2gucGxhdGZvcm0udjEuR2V0QWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEn0KFlVwZGF0ZUFnZW50UHJlZmVyZW5jZXMSMC5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVBZ2VudFByZWZlcmVuY2VzUmVxdWVzdBoxLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXNwb25zZWIGcHJvdG8z',
     [file_buf_validate_validate],
   );
 
@@ -37,14 +37,6 @@ export type AgentPreferences = Message<'hatch.platform.v1.AgentPreferences'> & {
    * @generated from field: string message_mode = 1;
    */
   messageMode: string;
-
-  /**
-   * The model new chats start with, as saved; it may name a model removed
-   * since. Unset uses the first available model.
-   *
-   * @generated from field: optional hatch.platform.v1.DefaultAgentModel default_model = 2;
-   */
-  defaultModel?: DefaultAgentModel | undefined;
 };
 
 /**
@@ -54,37 +46,6 @@ export type AgentPreferences = Message<'hatch.platform.v1.AgentPreferences'> & {
 export const AgentPreferencesSchema: GenMessage<AgentPreferences> =
   /*@__PURE__*/
   messageDesc(file_hatch_platform_v1_preference, 0);
-
-/**
- * @generated from message hatch.platform.v1.DefaultAgentModel
- */
-export type DefaultAgentModel =
-  Message<'hatch.platform.v1.DefaultAgentModel'> & {
-    /**
-     * @generated from field: string provider_id = 1;
-     */
-    providerId: string;
-
-    /**
-     * @generated from field: string model_id = 2;
-     */
-    modelId: string;
-
-    /**
-     * Unset uses the model's default level.
-     *
-     * @generated from field: optional string thinking_level = 3;
-     */
-    thinkingLevel?: string | undefined;
-  };
-
-/**
- * Describes the message hatch.platform.v1.DefaultAgentModel.
- * Use `create(DefaultAgentModelSchema)` to create a new message.
- */
-export const DefaultAgentModelSchema: GenMessage<DefaultAgentModel> =
-  /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_preference, 1);
 
 /**
  * @generated from message hatch.platform.v1.GetAgentPreferencesRequest
@@ -98,7 +59,7 @@ export type GetAgentPreferencesRequest =
  */
 export const GetAgentPreferencesRequestSchema: GenMessage<GetAgentPreferencesRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_preference, 2);
+  messageDesc(file_hatch_platform_v1_preference, 1);
 
 /**
  * @generated from message hatch.platform.v1.GetAgentPreferencesResponse
@@ -117,7 +78,7 @@ export type GetAgentPreferencesResponse =
  */
 export const GetAgentPreferencesResponseSchema: GenMessage<GetAgentPreferencesResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_preference, 3);
+  messageDesc(file_hatch_platform_v1_preference, 2);
 
 /**
  * @generated from message hatch.platform.v1.UpdateAgentPreferencesRequest
@@ -130,20 +91,6 @@ export type UpdateAgentPreferencesRequest =
      * @generated from field: optional string message_mode = 1;
      */
     messageMode?: string | undefined;
-
-    /**
-     * Replaces the default model.
-     *
-     * @generated from field: optional hatch.platform.v1.DefaultAgentModel default_model = 2;
-     */
-    defaultModel?: DefaultAgentModel | undefined;
-
-    /**
-     * Clears the default model. Excludes default_model.
-     *
-     * @generated from field: bool clear_default_model = 3;
-     */
-    clearDefaultModel: boolean;
   };
 
 /**
@@ -152,7 +99,7 @@ export type UpdateAgentPreferencesRequest =
  */
 export const UpdateAgentPreferencesRequestSchema: GenMessage<UpdateAgentPreferencesRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_preference, 4);
+  messageDesc(file_hatch_platform_v1_preference, 3);
 
 /**
  * @generated from message hatch.platform.v1.UpdateAgentPreferencesResponse
@@ -171,7 +118,7 @@ export type UpdateAgentPreferencesResponse =
  */
 export const UpdateAgentPreferencesResponseSchema: GenMessage<UpdateAgentPreferencesResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_preference, 5);
+  messageDesc(file_hatch_platform_v1_preference, 4);
 
 /**
  * Personal preferences of the calling user. A Run credential acts for the

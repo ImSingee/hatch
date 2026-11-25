@@ -782,8 +782,6 @@ deleting the last dashboard.
 ```sh
 hatch preferences get --json
 hatch preferences set --agent-message-mode queue
-hatch preferences set --default-model '<provider-id>:openrouter/meta/llama:free' --thinking high
-hatch preferences set --clear-default-model
 ```
 
 `preferences` reads and writes the caller's personal preferences. With a Run
@@ -793,25 +791,12 @@ working is delivered: `steer` (the default) injects it into the running run
 after its current tool calls finish, and several waiting messages go together;
 `queue` waits until the run completes and then starts one run per message, in
 send order. A change applies to messages sent afterwards.
-`defaultModel` is the model new chats start with, as saved (`null` uses the
-first available model; a saved model may since have been removed).
-`--default-model <provider-id>:<model-id>` takes the `providerId` and
-`modelId` that `model list` prints; only the first `:` separates them, since
-model ids may contain `:` and `/`. It must be an enabled chat model.
-`--thinking` (off, minimal, low, medium, high, xhigh or max) must be a level
-the model offers; without it the model's default level applies.
-`--clear-default-model` removes the choice. `set` changes only the given
-preferences.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
-`set` with none of `--agent-message-mode`, `--default-model` and
-`--clear-default-model`, a mode other than `queue` or `steer`, a
-`--default-model` without both ids, `--default-model` with
-`--clear-default-model`, `--thinking` without `--default-model` or with an
-unknown level, a repeated flag, or a positional argument). Platform errors:
-`BAD_REQUEST` (2) for a model that is not an enabled chat model or a thinking
-level it does not offer, and `CONFLICT` (6) for a Run credential whose run has
-no recorded user (created before preferences, or the user was deleted).
+a missing `--agent-message-mode`, a value other than `queue` or `steer`, or a
+positional argument). Platform errors: `CONFLICT` (6) for a Run credential
+whose run has no recorded user (created before preferences, or the user was
+deleted).
 
 ## Server info
 

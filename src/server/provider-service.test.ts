@@ -12,7 +12,6 @@ const { createProvider, getModelView, getProviderView, updateProvider } =
 const { createProviderModel, updateProviderModel } =
   await import('./provider-models');
 const { getAgentModelCatalog } = await import('./agent-model-catalog');
-const { updateAgentPreferences } = await import('./agent-preferences');
 const { assertAgentModelAvailable } = await import('./agent-runs');
 
 const anthropic = bundledCatalog().providers.find((p) => p.id === 'anthropic')!;
@@ -249,7 +248,7 @@ describe('linking a provider to the catalog', () => {
 });
 
 describe('thinking levels and the default model', () => {
-  it('rejects a level the model does not offer and remembers a valid default', async () => {
+  it('rejects a level the model does not offer and defaults to the first model', async () => {
     const provider = await createProvider({
       catalogProviderId: 'anthropic',
       apiKey: 'k',
@@ -267,43 +266,12 @@ describe('thinking levels and the default model', () => {
       assertAgentModelAvailable(provider.id, opusId, levels.at(-1)),
     ).resolves.toBeUndefined();
 
-    await db.insert(schema.user).values({
-      id: 'u1',
-      name: 'U',
-      email: 'u1@example.test',
-      emailVerified: true,
-    });
-    await expect(
-      updateAgentPreferences('u1', {
-        defaultModel: {
-          providerId: provider.id,
-          modelId: opusId,
-          thinkingLevel: unsupported,
-        },
-      }),
-    ).rejects.toThrow(/does not support/);
-    await updateAgentPreferences('u1', {
-      defaultModel: {
-        providerId: provider.id,
-        modelId: opusId,
-        thinkingLevel: levels.at(-1),
-      },
-    });
-    expect((await getAgentModelCatalog('u1')).defaultModel).toEqual({
+    // New chats start with the first model at its default level.
+    expect((await getAgentModelCatalog()).defaultModel).toEqual({
       providerId: provider.id,
       modelId: opusId,
-      thinkingLevel: levels.at(-1),
-    });
-    // A removed default falls back to the first available model.
-    await db.delete(schema.agentModels);
-    await createProviderModel({
-      providerId: provider.id,
-      kind: 'chat',
-      modelId: 'other-model',
-    });
-    expect((await getAgentModelCatalog('u1')).defaultModel).toMatchObject({
-      modelId: 'other-model',
-      thinkingLevel: 'off',
+      thinkingLevel: (await getProviderView(provider.id)).models[0].chat!
+        .defaultThinkingLevel,
     });
   });
 });

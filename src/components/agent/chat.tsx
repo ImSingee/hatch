@@ -54,7 +54,7 @@ import {
   type PendingMessagesResult,
 } from './pending-api';
 import { PendingTray } from './pending-tray';
-import { useRememberModel } from './model-preference';
+import { useLastSelectedModel } from './model-preference';
 import { useModelOptions } from './model-options';
 import { ModelPicker } from './model-picker';
 import { SessionHeader } from './session-header';
@@ -122,7 +122,7 @@ export function Chat({ sessionId }: { sessionId: string }) {
   const { groups, options, fallback } = useModelOptions();
 
   const [model, setModel] = useState<ModelChoice | null>(null);
-  const rememberModel = useRememberModel();
+  const [, rememberModel] = useLastSelectedModel();
   const [reconnectToken, setReconnectToken] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<{

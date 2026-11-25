@@ -13,7 +13,6 @@ ALTER TABLE "agent_pending_messages" ADD COLUMN "thinking_level" text;--> statem
 ALTER TABLE "agent_providers" ADD COLUMN "catalog_provider_id" text;--> statement-breakpoint
 ALTER TABLE "agent_runs" ADD COLUMN "thinking_level" text;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD COLUMN "thinking_level" text;--> statement-breakpoint
-ALTER TABLE "user_preferences" ADD COLUMN "agent_model" jsonb;--> statement-breakpoint
 ALTER TABLE "agent_models" ALTER COLUMN "reasoning" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "agent_models" ALTER COLUMN "reasoning" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "agent_models" ALTER COLUMN "context_window" DROP DEFAULT;--> statement-breakpoint

@@ -9,17 +9,6 @@ import type {
   SessionPendingMessages,
 } from './pending-api';
 
-const modelPreference = vi.hoisted(() => ({
-  saved: null as { providerId: string; modelId: string } | null,
-  update: vi.fn<(input: { data: unknown }) => Promise<unknown>>(
-    async () => ({}),
-  ),
-}));
-vi.mock('~server/agent-preference-settings', () => ({
-  getAgentPreferenceSettings: vi.fn<() => Promise<unknown>>(),
-  updateAgentPreferenceSettings: modelPreference.update,
-}));
-
 const fixtures = vi.hoisted(() => ({
   messageMode: 'steer' as 'queue' | 'steer',
   session: {
@@ -77,8 +66,7 @@ vi.mock('~queries/agent', async () => {
   return {
     agentModelChoicesQueryOptions: {
       queryKey: ['test-agent-model-choices'],
-      queryFn: async () =>
-        choicesFrom(fixtures.providers, modelPreference.saved),
+      queryFn: async () => choicesFrom(fixtures.providers),
     },
     sessionsQueryOptions: {
       queryKey: ['test-agent-sessions'],

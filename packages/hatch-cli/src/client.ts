@@ -602,29 +602,10 @@ export function cliClient(transport: Transport) {
   const providers = createClient(ProviderService, transport);
   const catalog = createClient(CatalogService, transport);
   const agentPreferences = (
-    value:
-      | {
-          messageMode: string;
-          defaultModel?: {
-            providerId: string;
-            modelId: string;
-            thinkingLevel?: string;
-          };
-        }
-      | undefined,
-  ) => {
-    const { messageMode, defaultModel } = required(value);
-    return {
-      agentMessageMode: messageMode,
-      defaultModel: defaultModel
-        ? {
-            providerId: defaultModel.providerId,
-            modelId: defaultModel.modelId,
-            thinkingLevel: defaultModel.thinkingLevel ?? null,
-          }
-        : null,
-    };
-  };
+    value: { messageMode: string } | undefined,
+  ): { agentMessageMode: string } => ({
+    agentMessageMode: required(value).messageMode,
+  });
   return {
     dashboards: {
       list: async (page: { limit: number; cursor?: string }) => {
@@ -953,21 +934,11 @@ export function cliClient(transport: Transport) {
         agentPreferences(
           (await preferences.getAgentPreferences({})).preferences,
         ),
-      update: async (input: {
-        agentMessageMode?: string;
-        defaultModel?: {
-          providerId: string;
-          modelId: string;
-          thinkingLevel?: string;
-        };
-        clearDefaultModel?: boolean;
-      }) =>
+      update: async (input: { agentMessageMode: string }) =>
         agentPreferences(
           (
             await preferences.updateAgentPreferences({
               messageMode: input.agentMessageMode,
-              defaultModel: input.defaultModel,
-              clearDefaultModel: input.clearDefaultModel,
             })
           ).preferences,
         ),

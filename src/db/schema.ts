@@ -145,13 +145,6 @@ export type AgentThinkingLevel =
   | 'xhigh'
   | 'max';
 
-/** A user's default Agent model (`user_preferences.agent_model`). */
-export type AgentModelPreference = {
-  providerId: string;
-  modelId: string;
-  thinkingLevel?: AgentThinkingLevel;
-};
-
 /**
  * `pending` is editable; `claimed` was handed to a running run's Runner for
  * injection and `injected` is in that run's context, kept until its
@@ -957,8 +950,6 @@ export const userPreferences = snakeCase.table(
       .$type<AgentMessageMode>()
       .notNull()
       .default('steer'),
-    /** Default Agent model and thinking level; null picks the first model. */
-    agentModel: jsonb('agent_model').$type<AgentModelPreference>(),
     updatedAt,
   },
   () => [

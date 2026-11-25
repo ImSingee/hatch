@@ -1,7 +1,6 @@
 import {
   Alert,
   Button,
-  Group,
   SegmentedControl,
   Skeleton,
   Stack,
@@ -10,11 +9,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { authClient } from '~auth/client';
-import type { AgentMessageMode, AgentThinkingLevel } from '~/db/schema';
-import { ModelPicker } from '~components/agent/model-picker';
-import { splitModelValue } from '~components/agent/model-value';
+import type { AgentMessageMode } from '~/db/schema';
 import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
-import { agentModelChoicesQueryOptions } from '~queries/agent';
 import { agentPreferencesQueryOptions } from '~queries/agent-preferences';
 import { updateAgentPreferenceSettings } from '~server/agent-preference-settings';
 
@@ -80,113 +76,27 @@ function AgentPreferences({ userId }: { userId: string }) {
     : settings.data.messageMode;
 
   return (
-    <Stack gap="xl">
-      <DefaultModel />
-      <Stack gap="md">
-        <Stack gap={2}>
-          <Text fw={600} id="agent-message-mode-label">
-            {t('settings.agentPreferences.title')}
-          </Text>
-          <Text size="sm" c="dimmed">
-            {t('settings.agentPreferences.description')}
-          </Text>
-        </Stack>
-        <SegmentedControl
-          aria-labelledby="agent-message-mode-label"
-          value={mode}
-          disabled={save.isPending}
-          onChange={(value) => save.mutate(value as AgentMessageMode)}
-          data={[
-            { value: 'steer', label: t('settings.agentPreferences.steer') },
-            { value: 'queue', label: t('settings.agentPreferences.queue') },
-          ]}
-          w="fit-content"
-        />
-        <Text size="sm">{t(MODE_DESCRIPTION[mode])}</Text>
-      </Stack>
-    </Stack>
-  );
-}
-
-/** The model and thinking level new chats start with, on every device. */
-function DefaultModel() {
-  const { t } = useI18n();
-  const errorText = useErrorText();
-  const queryClient = useQueryClient();
-  const choices = useQuery(agentModelChoicesQueryOptions);
-  const save = useMutation({
-    mutationFn: (
-      defaultModel: {
-        providerId: string;
-        modelId: string;
-        thinkingLevel: AgentThinkingLevel;
-      } | null,
-    ) => updateAgentPreferenceSettings({ data: { defaultModel } }),
-    meta: { errorToast: false },
-    retry: false,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: agentModelChoicesQueryOptions.queryKey,
-      });
-      toast.success(t('settings.agentPreferences.defaultModel.saved'));
-    },
-    onError: (error) =>
-      toast.error(
-        errorText(error, 'settings.agentPreferences.defaultModel.saveFailed'),
-      ),
-  });
-  if (!choices.data) return <Skeleton height={56} />;
-  const { defaultModel, providers, savedDefault } = choices.data;
-  const groups = providers.map((provider) => ({
-    id: provider.id,
-    group: provider.name,
-    catalogProviderId: provider.catalogProviderId,
-    items: provider.models.map((model) => ({
-      value: `${provider.id}:${model.modelId}`,
-      label: model.name,
-      thinkingLevels: model.thinkingLevels,
-      defaultThinkingLevel: model.defaultThinkingLevel,
-    })),
-  }));
-
-  return (
-    <Stack gap="xs">
+    <Stack gap="md">
       <Stack gap={2}>
-        <Text fw={600}>
-          {t('settings.agentPreferences.defaultModel.title')}
+        <Text fw={600} id="agent-message-mode-label">
+          {t('settings.agentPreferences.title')}
         </Text>
         <Text size="sm" c="dimmed">
-          {t('settings.agentPreferences.defaultModel.description')}
+          {t('settings.agentPreferences.description')}
         </Text>
       </Stack>
-      <Group gap="xs">
-        <ModelPicker
-          groups={groups}
-          value={
-            defaultModel
-              ? `${defaultModel.providerId}:${defaultModel.modelId}`
-              : null
-          }
-          thinkingLevel={defaultModel?.thinkingLevel ?? null}
-          disabled={save.isPending}
-          onChange={(value, thinkingLevel) => {
-            const parsed = splitModelValue(value);
-            if (parsed) save.mutate({ ...parsed, thinkingLevel });
-          }}
-        />
-        {savedDefault ? (
-          <Button
-            type="button"
-            size="xs"
-            variant="subtle"
-            color="gray"
-            disabled={save.isPending}
-            onClick={() => save.mutate(null)}
-          >
-            {t('settings.agentPreferences.defaultModel.useFirst')}
-          </Button>
-        ) : null}
-      </Group>
+      <SegmentedControl
+        aria-labelledby="agent-message-mode-label"
+        value={mode}
+        disabled={save.isPending}
+        onChange={(value) => save.mutate(value as AgentMessageMode)}
+        data={[
+          { value: 'steer', label: t('settings.agentPreferences.steer') },
+          { value: 'queue', label: t('settings.agentPreferences.queue') },
+        ]}
+        w="fit-content"
+      />
+      <Text size="sm">{t(MODE_DESCRIPTION[mode])}</Text>
     </Stack>
   );
 }

@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { agentModelChoicesQueryOptions } from '~queries/agent';
 import type { ModelGroup, ModelOption } from './model-picker';
 
-/** The chat models the user can pick, grouped by provider, and the default. */
+/** The chat models the user can pick, grouped by provider, and the first one. */
 export function useModelOptions() {
   const { data } = useSuspenseQuery(agentModelChoicesQueryOptions);
   return useMemo(() => {
@@ -27,6 +27,6 @@ export function useModelOptions() {
           thinkingLevel: data.defaultModel.thinkingLevel,
         }
       : null;
-    return { groups, options, fallback, savedDefault: data.savedDefault };
+    return { groups, options, fallback };
   }, [data]);
 }
