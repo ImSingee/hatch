@@ -665,6 +665,7 @@ async function buildAppInner(
   }
 
   const tempSrc = path.join(BUILD_WORK_DIR, id, randomUUID());
+  const stage = `${tempSrc}-out`;
   await fs.rm(tempSrc, { recursive: true, force: true });
   await fs.mkdir(path.dirname(tempSrc), { recursive: true });
   const src = tempSrc;
@@ -858,14 +859,19 @@ async function buildAppInner(
     let bundledBackendEntry: string | undefined;
     let nshVersion: string | undefined;
 
+    // Everything is built into a staging directory that replaces the
+    // requested output only once the whole build has succeeded. Deploy builds
+    // use a fresh path, while direct callers do not lose a prior output when
+    // a check or a later bundling step fails.
+    await fs.rm(stage, { recursive: true, force: true });
+    await fs.mkdir(stage, { recursive: true });
+
     // 3a) A native frontend: NSH deploy checks, the linked web module, the
-    // player page and the bundle native shells load. Its checks are source
-    // validation too, so it builds into a staging directory first.
-    const nativeStage = `${tempSrc}-native-out`;
+    // player page and the bundle native shells load.
     if (nativeFrontend && manifest.app) {
       ({ nshVersion } = await buildNativeFrontend({
         src,
-        out: nativeStage,
+        out: stage,
         app: { id, name: manifest.name, entry: manifest.app.entry },
         api,
         dataTable: manifest.capabilities.dataTable,
@@ -875,28 +881,17 @@ async function buildAppInner(
       }));
     }
 
-    // Only start replacing the requested output after every source validation
-    // step has passed. Deploy builds use a fresh path, while direct callers do
-    // not lose a prior output merely because new source fails validation.
-    await fs.rm(out, { recursive: true, force: true });
-    await fs.mkdir(out, { recursive: true });
-    if (nshVersion) {
-      await fs.cp(path.join(nativeStage, 'app'), path.join(out, 'app'), {
-        recursive: true,
-      });
-    }
-
     // 3) Bundle the frontend SPA -> static app/app.js + index.html.
     if (manifest.capabilities.frontend && manifest.app && !nativeFrontend) {
       const entry = path.join(src, manifest.app.entry);
       if (!(await pathExists(entry))) {
         throw new Error(`app entry not found: ${manifest.app.entry}`);
       }
-      await fs.mkdir(path.join(out, 'app'), { recursive: true });
+      await fs.mkdir(path.join(stage, 'app'), { recursive: true });
       const appBundle = await esbuild.build({
         ...esbuildResolve,
         entryPoints: [entry],
-        outfile: path.join(out, 'app', 'app.js'),
+        outfile: path.join(stage, 'app', 'app.js'),
         bundle: true,
         format: 'esm',
         platform: 'browser',
@@ -916,7 +911,7 @@ async function buildAppInner(
       // Inline the bundle into index.html. The platform serves the app over an
       // extensionless HTML route; inlining avoids a separate .js asset request
       // (which dev middleware would intercept) and keeps the app a single doc.
-      const code = await fs.readFile(path.join(out, 'app', 'app.js'), 'utf8');
+      const code = await fs.readFile(path.join(stage, 'app', 'app.js'), 'utf8');
       const inlined = `<script type="module">${code.replace(
         /<\/script>/g,
         '<\\/script>',
@@ -935,13 +930,13 @@ async function buildAppInner(
       html = scriptTag.test(html)
         ? html.replace(scriptTag, () => inlined)
         : html.replace('</body>', () => `${inlined}\n</body>`);
-      await fs.writeFile(path.join(out, 'app', 'index.html'), html, 'utf8');
+      await fs.writeFile(path.join(stage, 'app', 'index.html'), html, 'utf8');
       logs.push('bundled app -> inlined into app/index.html');
     }
 
     // 4) Bundle each widget -> standalone ESM module exporting mount().
     if (manifest.capabilities.widgets && manifest.widgets.length > 0) {
-      await fs.mkdir(path.join(out, 'widgets'), { recursive: true });
+      await fs.mkdir(path.join(stage, 'widgets'), { recursive: true });
       for (const widget of manifest.widgets) {
         const entry = path.join(src, widget.entry);
         if (!(await pathExists(entry))) {
@@ -950,7 +945,7 @@ async function buildAppInner(
         const widgetBundle = await esbuild.build({
           ...esbuildResolve,
           entryPoints: [entry],
-          outfile: path.join(out, 'widgets', `${widget.id}.js`),
+          outfile: path.join(stage, 'widgets', `${widget.id}.js`),
           // Runs before the widget's modules: each widget has its own frame.
           banner: { js: storageInstall },
           bundle: true,
@@ -972,17 +967,17 @@ async function buildAppInner(
     // runtime entry. Source files and dependency manifests remain build inputs;
     // only files below the fixed backend/assets directory enter the artifact.
     if (manifest.capabilities.backend && manifest.backend) {
-      await copyBackendAssets(src, out);
+      await copyBackendAssets(src, stage);
       await validateBackendBundleSourceTree(src);
 
       const sourceEntry = manifest.backend.entry;
       bundledBackendEntry = backendBundleEntry(sourceEntry);
-      const bundlePath = path.join(out, bundledBackendEntry);
+      const bundlePath = path.join(stage, bundledBackendEntry);
       await fs.mkdir(path.dirname(bundlePath), { recursive: true });
       await toolchain.bundle({
         entry: sourceEntry,
         outfile: bundlePath,
-        outputRoot: out,
+        outputRoot: stage,
       });
       logs.push(`bundled backend -> ${bundledBackendEntry}`);
     }
@@ -1002,13 +997,13 @@ async function buildAppInner(
         `captured ${normalized.tasks.definitions.length} task input schema(s)`,
       );
     }
-    await writeAppDocs(out, docs);
+    await writeAppDocs(stage, docs);
     if (docs.length > 0) normalized.docs = docs.map(({ doc }) => doc);
     if (nshVersion && normalized.app) {
       normalized.app = { ...normalized.app, nshVersion };
     }
     await fs.writeFile(
-      path.join(out, 'manifest.normalized.json'),
+      path.join(stage, 'manifest.normalized.json'),
       JSON.stringify(normalized, null, 2),
       'utf8',
     );
@@ -1016,11 +1011,13 @@ async function buildAppInner(
       // Runtime workers use this immutable marker to reject/restart a backend
       // whose process was spawned from a superseded shared build directory.
       await fs.writeFile(
-        path.join(out, 'deployment.json'),
+        path.join(stage, 'deployment.json'),
         JSON.stringify({ deploymentId: options.deploymentId }, null, 2),
         'utf8',
       );
     }
+
+    await replaceDirectory(stage, out);
 
     return {
       source: manifest,
@@ -1030,6 +1027,18 @@ async function buildAppInner(
     };
   } finally {
     await fs.rm(tempSrc, { recursive: true, force: true });
-    await fs.rm(`${tempSrc}-native-out`, { recursive: true, force: true });
+    await fs.rm(stage, { recursive: true, force: true });
+  }
+}
+
+/** Replace `target` with the finished `staged` directory. */
+async function replaceDirectory(staged: string, target: string): Promise<void> {
+  await fs.rm(target, { recursive: true, force: true });
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  try {
+    await fs.rename(staged, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    await fs.cp(staged, target, { recursive: true });
   }
 }
