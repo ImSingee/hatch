@@ -43,7 +43,8 @@
     "mobile:release:ios": "pnpm --dir mobile release:ios",
     "mobile:submit:ios": "pnpm --dir mobile submit:ios",
     "i18n:types": "tsx scripts/i18n.ts",
-    "i18n:check": "tsx scripts/i18n.ts --check"
+    "i18n:check": "tsx scripts/i18n.ts --check",
+    "release:set-version": "tsx scripts/set-release-version.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.26",

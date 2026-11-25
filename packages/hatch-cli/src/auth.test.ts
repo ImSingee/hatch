@@ -3,6 +3,7 @@ import { Code, ConnectError } from '@connectrpc/connect';
 import { create } from '@bufbuild/protobuf';
 import { AuthService } from '../../hatch-platform-api/gen/hatch/platform/v1/auth_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
+import manifest from '../package.json' with { type: 'json' };
 import { createServer } from 'node:http';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -506,7 +507,7 @@ describe('CLI authentication boundary', () => {
       env: { HATCH_CLI_TOKEN: 'partial-env' },
     });
     expect(help.code).toBe(0);
-    expect(JSON.parse(help.stdout).version).toBe('0.1.0');
+    expect(JSON.parse(help.stdout).version).toBe(manifest.version);
     expect(calls).toEqual([]);
   });
 
