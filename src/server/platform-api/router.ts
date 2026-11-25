@@ -37,11 +37,7 @@ import { publicApiError, publicError } from './errors';
 import { AppError } from '~server/errors';
 import { db } from '~/db';
 import { deployApp } from '~server/apps/deploy';
-import {
-  appMasterCommit,
-  exportAppMasterBundle,
-  importAppBundleToMaster,
-} from '~server/apps/git';
+import { importAppBundleToMaster } from '~server/apps/git';
 import { rollbackAppToVersion } from '~server/apps/manage';
 import {
   type AppBackendView,
@@ -363,15 +359,6 @@ async function find(id: string) {
   if (!row) throw publicApiError('NOT_FOUND');
   return row;
 }
-async function source(id: string) {
-  const row = await find(id);
-  const bundle = await exportAppMasterBundle(row.id);
-  return {
-    id: row.id,
-    masterCommit: (await appMasterCommit(row.id)) ?? undefined,
-    bundle: bundle ?? undefined,
-  };
-}
 
 function files(value: { files: { path: string; contentBase64: string }[] }) {
   return value.files.map((file) => ({
@@ -413,9 +400,6 @@ const apps = {
       },
     };
   },
-  source: async (input: { id: string }) => ({
-    source: await source(input.id),
-  }),
   deploy: async (
     input: {
       id: string;
@@ -1010,7 +994,6 @@ export function registerPlatformApi(
   router.rpc(AppService.method.listApps, apps.list);
   router.rpc(AppService.method.createApp, apps.create);
   router.rpc(AppService.method.getApp, apps.get);
-  router.rpc(AppService.method.getAppSource, apps.source);
   router.rpc(AppService.method.rollbackApp, apps.rollback);
   router.rpc(AppService.method.deployApp, apps.deploy, {
     readMaxBytes: deployBodyLimit,

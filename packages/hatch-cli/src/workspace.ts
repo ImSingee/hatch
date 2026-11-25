@@ -571,36 +571,3 @@ export async function pushHead(
     );
   throw remoteFailure(result.stderr);
 }
-export async function importBundle(
-  root: string,
-  source: { masterCommit: string | null; bundleBase64: string | null },
-  signal: AbortSignal,
-) {
-  if (Boolean(source.masterCommit) !== Boolean(source.bundleBase64))
-    throw new CliError(
-      'source_changed',
-      'Source commit and bundle disagree.',
-      6,
-    );
-  if (!source.masterCommit || !source.bundleBase64) return null;
-  const file = join(root, '.git', `hatch-source-${randomUUID()}.bundle`);
-  try {
-    await writeFile(file, Buffer.from(source.bundleBase64, 'base64'), {
-      flag: 'wx',
-    });
-    await git(root, signal, ['bundle', 'verify', file]);
-    await git(root, signal, ['fetch', '--no-tags', file, 'refs/heads/master']);
-    const actual = (await git(root, signal, ['rev-parse', 'FETCH_HEAD']))
-      .stdout;
-    if (actual !== source.masterCommit)
-      throw new CliError(
-        'source_changed',
-        'Source commit and bundle disagree. Fetch again; local files were preserved.',
-        6,
-      );
-    await safeTree(root, signal, actual);
-    return actual;
-  } finally {
-    await rm(file, { force: true });
-  }
-}

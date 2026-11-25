@@ -66,7 +66,6 @@ import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_p
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import {
   type Resource,
-  type Source,
   type Deployment,
   type RestoredVersion,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/lifecycle_pb';
@@ -119,14 +118,6 @@ const files = (values: File[]) =>
     path: value.path,
     contentBase64: Buffer.from(value.content).toString('base64'),
   }));
-const source = (value: Source) => ({
-  id: value.id,
-  masterCommit: value.masterCommit ?? null,
-  bundleBase64:
-    value.bundle === undefined
-      ? null
-      : Buffer.from(value.bundle).toString('base64'),
-});
 const deployment = (value: Deployment) => ({
   deploymentId: value.deploymentId,
   version: value.version,
@@ -440,7 +431,6 @@ export function cliClient(transport: Transport) {
       request: CreateInput,
     ) => Promise<{ id: string; slug: string; name: string; files: File[] }>;
     get: (request: { id: string }) => Promise<{ resource?: Resource }>;
-    source: (request: { id: string }) => Promise<{ source?: Source }>;
     deploy: (request: {
       id: string;
       message: string;
@@ -477,8 +467,6 @@ export function cliClient(transport: Transport) {
       },
       get: async (input: { id: string }) =>
         resource(required((await client.get(input)).resource)),
-      source: async (input: { id: string }) =>
-        source(required((await client.source(input)).source)),
       deploy: async (input: DeployInput) =>
         deployment(
           required(
@@ -838,7 +826,6 @@ export function cliClient(transport: Transport) {
         create: (input) =>
           apps.createApp(parseCreate(CreateAppRequestSchema, input)),
         get: apps.getApp,
-        source: apps.getAppSource,
         deploy: apps.deployApp,
         rollback: apps.rollbackApp,
       }),

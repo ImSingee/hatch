@@ -14,7 +14,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_lifecycle: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'CiFoYXRjaC9wbGF0Zm9ybS92MS9saWZlY3ljbGUucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIuABCghSZXNvdXJjZRIKCgJpZBgBIAEoCRIMCgRzbHVnGAIgASgJEgwKBG5hbWUYAyABKAkSGAoLZGVzY3JpcHRpb24YBCABKAlIAIgBARIOCgZzdGF0dXMYBSABKAkSEgoKY3JlYXRlZF9hdBgGIAEoCRISCgp1cGRhdGVkX2F0GAcgASgJEiQKBHZpZXcYCCABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWUSFgoJaWNvbl9wYXRoGAkgASgJSAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgwKCl9pY29uX3BhdGgiYgoGU291cmNlEgoKAmlkGAEgASgJEhoKDW1hc3Rlcl9jb21taXQYAiABKAlIAIgBARITCgZidW5kbGUYAyABKAxIAYgBAUIQCg5fbWFzdGVyX2NvbW1pdEIJCgdfYnVuZGxlIpsBCgpEZXBsb3ltZW50EhUKDWRlcGxveW1lbnRfaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoDRIdChVjb21wYXRpYmlsaXR5X3ZlcnNpb24YAyABKA0SEQoEc2x1ZxgEIAEoCUgAiAEBEioKCm5vcm1hbGl6ZWQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBwoFX3NsdWcihAEKDUNvbXBhdGliaWxpdHkSDwoHdmVyc2lvbhgBIAEoDRIWCg5sYXRlc3RfdmVyc2lvbhgCIAEoDRIhChltaW5pbXVtX3N1cHBvcnRlZF92ZXJzaW9uGAMgASgNEhQKDGlzX3N1cHBvcnRlZBgEIAEoCBIRCglpc19sYXRlc3QYBSABKAgilwEKD1Jlc3RvcmVkVmVyc2lvbhIPCgd2ZXJzaW9uGAEgASgNEjcKDWNvbXBhdGliaWxpdHkYAiABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5Db21wYXRpYmlsaXR5EiEKFGRhdGFfc2NoZW1hX21pc21hdGNoGAMgASgISACIAQFCFwoVX2RhdGFfc2NoZW1hX21pc21hdGNoYgZwcm90bzM',
+    'CiFoYXRjaC9wbGF0Zm9ybS92MS9saWZlY3ljbGUucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIuABCghSZXNvdXJjZRIKCgJpZBgBIAEoCRIMCgRzbHVnGAIgASgJEgwKBG5hbWUYAyABKAkSGAoLZGVzY3JpcHRpb24YBCABKAlIAIgBARIOCgZzdGF0dXMYBSABKAkSEgoKY3JlYXRlZF9hdBgGIAEoCRISCgp1cGRhdGVkX2F0GAcgASgJEiQKBHZpZXcYCCABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWUSFgoJaWNvbl9wYXRoGAkgASgJSAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgwKCl9pY29uX3BhdGgimwEKCkRlcGxveW1lbnQSFQoNZGVwbG95bWVudF9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgNEh0KFWNvbXBhdGliaWxpdHlfdmVyc2lvbhgDIAEoDRIRCgRzbHVnGAQgASgJSACIAQESKgoKbm9ybWFsaXplZBgFIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIHCgVfc2x1ZyKEAQoNQ29tcGF0aWJpbGl0eRIPCgd2ZXJzaW9uGAEgASgNEhYKDmxhdGVzdF92ZXJzaW9uGAIgASgNEiEKGW1pbmltdW1fc3VwcG9ydGVkX3ZlcnNpb24YAyABKA0SFAoMaXNfc3VwcG9ydGVkGAQgASgIEhEKCWlzX2xhdGVzdBgFIAEoCCKXAQoPUmVzdG9yZWRWZXJzaW9uEg8KB3ZlcnNpb24YASABKA0SNwoNY29tcGF0aWJpbGl0eRgCIAEoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLkNvbXBhdGliaWxpdHkSIQoUZGF0YV9zY2hlbWFfbWlzbWF0Y2gYAyABKAhIAIgBAUIXChVfZGF0YV9zY2hlbWFfbWlzbWF0Y2hiBnByb3RvMw',
     [file_google_protobuf_struct],
   );
 
@@ -84,34 +84,6 @@ export const ResourceSchema: GenMessage<Resource> =
   messageDesc(file_hatch_platform_v1_lifecycle, 0);
 
 /**
- * @generated from message hatch.platform.v1.Source
- */
-export type Source = Message<'hatch.platform.v1.Source'> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: optional string master_commit = 2;
-   */
-  masterCommit?: string | undefined;
-
-  /**
-   * @generated from field: optional bytes bundle = 3;
-   */
-  bundle?: Uint8Array | undefined;
-};
-
-/**
- * Describes the message hatch.platform.v1.Source.
- * Use `create(SourceSchema)` to create a new message.
- */
-export const SourceSchema: GenMessage<Source> =
-  /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_lifecycle, 1);
-
-/**
  * @generated from message hatch.platform.v1.Deployment
  */
 export type Deployment = Message<'hatch.platform.v1.Deployment'> & {
@@ -147,7 +119,7 @@ export type Deployment = Message<'hatch.platform.v1.Deployment'> & {
  */
 export const DeploymentSchema: GenMessage<Deployment> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_lifecycle, 2);
+  messageDesc(file_hatch_platform_v1_lifecycle, 1);
 
 /**
  * @generated from message hatch.platform.v1.Compatibility
@@ -185,7 +157,7 @@ export type Compatibility = Message<'hatch.platform.v1.Compatibility'> & {
  */
 export const CompatibilitySchema: GenMessage<Compatibility> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_lifecycle, 3);
+  messageDesc(file_hatch_platform_v1_lifecycle, 2);
 
 /**
  * @generated from message hatch.platform.v1.RestoredVersion
@@ -215,4 +187,4 @@ export type RestoredVersion = Message<'hatch.platform.v1.RestoredVersion'> & {
  */
 export const RestoredVersionSchema: GenMessage<RestoredVersion> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_lifecycle, 4);
+  messageDesc(file_hatch_platform_v1_lifecycle, 3);

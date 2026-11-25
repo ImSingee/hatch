@@ -101,10 +101,10 @@ Agent tool arguments keep their own Zod validation.
 
 Lists return a `resources` array. Resource metadata contains only public identity,
 status and ISO timestamps. Optional fields have explicit presence; omitted and
-explicit `false` remain distinguishable. Files and source bundles are bytes,
-represented as base64 in Protobuf JSON. Missing source/bundle fields mean there
-is no published source. The CLI projects messages into its existing JSON output
-and workspace format, including nullable fields and base64 file contents.
+explicit `false` remain distinguishable. Files and the deprecated Deploy
+`bundle` are bytes, represented as base64 in Protobuf JSON. The CLI projects
+messages into its existing JSON output and workspace format, including nullable
+fields and base64 file contents.
 
 IDs resolve exact immutable ID before slug. Domain services still enforce
 resource existence, generation conflicts, Git cleanliness/fast-forward,
@@ -117,10 +117,11 @@ smart HTTP at `/api/git/app/<id-or-slug>.git`, authenticated by the
 same credentials (HTTP Basic password, `Authorization: Bearer` or `X-API-Key`;
 never a Cookie). `master` accepts fast-forward pushes only and `deploy/*` tags
 belong to the platform. A Deploy request names the `commit` to release, which
-must be on `master`, and defaults to its tip. The `bundle` field and the
-`Get*Source` bundle remain for older CLIs: an uploaded bundle is
-fast-forwarded onto `master` and then released. Rollback moves `master` back to
-the restored release.
+must be on `master`, and defaults to its tip. The Deploy `bundle` field remains
+for older CLIs: an uploaded bundle is fast-forwarded onto `master` and then
+released. There is no RPC that downloads source; read it with Git fetch, whose
+master commit always matches the history it delivers. Rollback moves `master`
+back to the restored release.
 
 ## Authentication and transport policy
 
