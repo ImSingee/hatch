@@ -1124,3 +1124,21 @@ export function textToInline(text: string): ContentChild[] {
   });
   return tidyInline(out, { trimEdges: true });
 }
+
+/**
+ * Raw markup text (Code, Markdown) without the markup's own layout: the line
+ * break after the opening tag, a whitespace-only last line before the
+ * closing tag, the indentation every line shares and trailing whitespace.
+ */
+export function dedentRaw(text: string): string {
+  const lines = text.replace(/^\r?\n/, '').split(/\r?\n/);
+  if (lines.length > 0 && /^[ \t]*$/.test(lines.at(-1)!)) lines.pop();
+  const indents = lines
+    .filter((line) => line.trim() !== '')
+    .map((line) => /^[ \t]*/.exec(line)![0].length);
+  const common = indents.length > 0 ? Math.min(...indents) : 0;
+  return lines
+    .map((line) => line.slice(common))
+    .join('\n')
+    .replace(/\s+$/, '');
+}

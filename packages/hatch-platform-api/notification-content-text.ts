@@ -6,6 +6,7 @@
 import {
   CARD_ROOT,
   componentSpec,
+  dedentRaw,
   isNode,
   nodeChildren,
   propBool,
@@ -292,6 +293,16 @@ function attributes(node: ContentNode): string {
     .join('');
 }
 
+/**
+ * Code or Markdown text as markup. Plain text loses its leading indentation
+ * and trailing whitespace when read back (markup layout is dropped), so text
+ * where those matter is written as CDATA, which is read exactly.
+ */
+function rawMarkup(text: string): string {
+  if (dedentRaw(text) === text) return escapeMarkupText(text);
+  return `<![CDATA[${text.replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
+}
+
 function inlineMarkup(children: readonly ContentChild[]): string {
   return children
     .map((child) =>
@@ -307,17 +318,22 @@ function elementMarkup(node: ContentNode, depth = 0): string {
   if (node.type === 'Markdown') {
     // Its compiled children are derived; the source is what was written.
     const source = propString(node, 'source') ?? '';
-    return `${pad}<Markdown>${escapeMarkupText(source)}</Markdown>`;
+    return `${pad}<Markdown>${rawMarkup(source)}</Markdown>`;
   }
   const open = `<${node.type}${attributes(node)}`;
   const children = nodeChildren(node);
   const spec = componentSpec(node.type);
   if (children.length === 0) return `${pad}${open} />`;
   const content = spec?.content ?? 'blocks';
+  if (content === 'raw') {
+    const text = children
+      .map((child) => (typeof child === 'string' ? child : ''))
+      .join('');
+    return `${pad}${open}>${rawMarkup(text)}</${node.type}>`;
+  }
   if (
     content === 'inline' ||
     content === 'text' ||
-    content === 'raw' ||
     (content === 'flow' && children.every(isInline))
   ) {
     return `${pad}${open}>${inlineMarkup(children)}</${node.type}>`;

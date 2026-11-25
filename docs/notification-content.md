@@ -217,8 +217,9 @@ Card markup is a strict subset of XML. The "CI failed" card:
   (`&#169;`, `&#xA9;`). A literal `&` must be written `&amp;`. Document types,
   entity definitions, processing instructions and the XML declaration are
   rejected, so no input can expand or fetch anything.
-- CDATA only saves escaping (`<![CDATA[a < b & c]]>`); its text follows the
-  same whitespace rules as any other text.
+- CDATA saves escaping (`<![CDATA[a < b & c]]>`); its text follows the same
+  whitespace rules as any other text, except inside `Code` and `Markdown`,
+  where CDATA text is kept exactly (see below).
 - Number lists are comma-separated (`values="210,180,260"`); times are
   ISO-8601 (`2026-11-25T02:14:00Z`; a date alone also works).
 
@@ -240,6 +241,9 @@ Markup is indented freely, so text is tidied the way HTML reads it:
   and trailing whitespace are removed. Start the text on the line after the
   opening tag to have the markup's own indentation removed; text that starts
   right after the tag keeps its following lines' indentation as written.
+  Text in a CDATA section inside `Code` or `Markdown` is kept exactly, with
+  no dedenting; the canonical markup writes text whose leading indentation
+  or trailing line breaks matter that way, so it reads back unchanged.
 - In a JSON tree, a `\n` in inline content becomes a line break (other runs
   of whitespace still become one space), and `Code` and `Markdown` text is
   kept exactly, without dedenting.

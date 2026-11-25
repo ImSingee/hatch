@@ -1524,6 +1524,10 @@ describe('content', () => {
     expect(await rejected(cardOnly)).toBe(
       'summary is required for markdown and card notifications',
     );
+    // A blank summary is no summary.
+    expect(await rejected({ ...CARD_PUSH, summary: '   ' })).toBe(
+      'summary is required for markdown and card notifications',
+    );
     expect(await rejected({ ...MARKDOWN_PUSH, title: 'Release' })).toMatch(
       /only one content/,
     );

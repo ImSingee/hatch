@@ -12,8 +12,13 @@ import {
   type NotificationDetail as RpcNotificationDetail,
   type NotificationReadState as RpcNotificationReadState,
   type NotificationResponse as RpcNotificationResponse,
+  type NotificationCard as RpcNotificationCard,
   type NotificationSummary as RpcNotificationSummary,
 } from '@hatch/platform-api';
+import { cardFromMessage } from '../../../packages/hatch-platform-api/notification-card-proto';
+import { summaryFromTitle } from '../../../packages/hatch-platform-api/notification-content';
+import { legacyToContent } from '../../../packages/hatch-platform-api/notification-content-legacy';
+import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
 import { contentFromJson, knownFormat } from './notification-content';
 import { MobileError } from './security';
 import type {
@@ -202,7 +207,28 @@ function contentProjection(value: {
   markdown?: string;
   contentJson?: string;
   text?: string;
+  card?: RpcNotificationCard;
 }) {
+  // An instance from before formats sends no format, and its #319 card
+  // beside the title and body: show it as the card it became on newer ones.
+  const legacy =
+    !value.format && value.card ? cardFromMessage(value.card) : null;
+  if (legacy) {
+    const content = legacyToContent({
+      title: value.title,
+      body: value.body ?? null,
+      card: legacy,
+    });
+    return {
+      format: 'card' as const,
+      title: null,
+      body: null,
+      summary: summaryFromTitle(value.title),
+      markdown: null,
+      content,
+      text: contentToPlainText(content),
+    };
+  }
   const format = knownFormat(value.format);
   if (format === 'text') {
     return {

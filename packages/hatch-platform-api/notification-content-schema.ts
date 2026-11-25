@@ -31,6 +31,7 @@ import {
   propBool,
   propNumber,
   propString,
+  dedentRaw,
   tidyInline,
   walkContent,
   type ComponentSpec,
@@ -89,6 +90,7 @@ const MAX_ISSUES = 20;
 export const summarySchema = z
   .string({ error: 'summary must be a string' })
   .trim()
+  .min(1, 'summary must not be empty')
   .refine((value) => !/[\r\n]/.test(value), {
     message: 'summary must be one line, without line breaks',
   })
@@ -97,8 +99,14 @@ export const summarySchema = z
   });
 
 export const optionalSummarySchema = z.preprocess(
+  // Blank text is an empty spelling too: it would leave a Markdown or card
+  // notification without anything to show where its content is not shown.
   (value) =>
-    value === null || value === undefined || value === '' ? null : value,
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && value.trim() === '')
+      ? null
+      : value,
   summarySchema.nullable(),
 );
 
@@ -147,7 +155,7 @@ function textFromMarkup(text: MarkupText): InputText {
     kind: 'text',
     text: text.text,
     where: { line: text.line, column: text.column },
-    raw: false,
+    raw: text.cdata,
   };
 }
 
@@ -389,17 +397,25 @@ function isBlockNode(node: ContentNode): boolean {
   return placement !== 'inline';
 }
 
-function dedent(text: string): string {
-  const lines = text.replace(/^\r?\n/, '').split(/\r?\n/);
-  if (lines.length > 0 && /^[ \t]*$/.test(lines.at(-1)!)) lines.pop();
-  const indents = lines
-    .filter((line) => line.trim() !== '')
-    .map((line) => /^[ \t]*/.exec(line)![0].length);
-  const common = indents.length > 0 ? Math.min(...indents) : 0;
-  return lines
-    .map((line) => line.slice(common))
-    .join('\n')
-    .replace(/\s+$/, '');
+/**
+ * The text of a Code or Markdown element. Markup text is written inside
+ * indented markup, so its indentation is dropped; text in CDATA is kept
+ * exactly as written (the canonical markup uses it for text whose spacing
+ * matters), with whitespace-only markup text around it ignored. A JSON tree's
+ * text is already exact.
+ */
+function rawText(input: InputNode): string {
+  const texts = input.children.filter(
+    (child): child is InputText => child.kind === 'text',
+  );
+  if (!input.markup) return texts.map((child) => child.text).join('');
+  if (texts.some((child) => child.raw)) {
+    return texts
+      .filter((child) => child.raw || /[^ \t\r\n\f]/.test(child.text))
+      .map((child) => child.text)
+      .join('');
+  }
+  return dedentRaw(texts.map((child) => child.text).join(''));
 }
 
 /** Text as inline content, by where it came from. */
@@ -527,18 +543,7 @@ function walk(
     if (stored !== undefined && typeof stored !== 'string') {
       issue(`${tag('Markdown')} source must be text`);
     }
-    const source =
-      typeof stored === 'string'
-        ? stored
-        : input.markup
-          ? dedent(
-              input.children
-                .map((child) => (child.kind === 'text' ? child.text : ''))
-                .join(''),
-            )
-          : input.children
-              .map((child) => (child.kind === 'text' ? child.text : ''))
-              .join('');
+    const source = typeof stored === 'string' ? stored : rawText(input);
     if (
       stored === undefined &&
       input.children.some((child) => child.kind === 'node')
@@ -567,10 +572,7 @@ function walk(
 
   for (const child of input.children) {
     if (child.kind === 'text') {
-      if (content === 'raw') {
-        kids.push(input.markup ? child.text : child.text);
-        continue;
-      }
+      if (content === 'raw') continue; // read whole by rawText below
       if (textOnly) {
         kids.push(child.text.replace(COLLAPSE, ' '));
         continue;
@@ -607,8 +609,7 @@ function walk(
 
   let children: ContentChild[];
   if (content === 'raw') {
-    const text = kids.join('');
-    const value = input.markup ? dedent(text) : text;
+    const value = rawText(input);
     children = value ? [value] : [];
   } else if (content === 'text') {
     const value = (kids as string[]).join('').replace(COLLAPSE, ' ').trim();

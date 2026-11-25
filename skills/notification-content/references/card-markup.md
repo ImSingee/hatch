@@ -15,7 +15,8 @@ card against it.
 - Write `&amp;` for `&`, `&lt;` for `<`, `&quot;` for `"` inside a
   `"`-quoted value. Only `&amp; &lt; &gt; &quot; &apos;` and numeric
   references (`&#169;`) exist. No DOCTYPE, entity definitions or `<?xml?>`.
-- `<![CDATA[ … ]]>` saves escaping; whitespace rules still apply to it.
+- `<![CDATA[ … ]]>` saves escaping; whitespace rules still apply to it,
+  except inside `<Code>` and `<Markdown>`, where CDATA text is kept exactly.
 - Number lists are comma-separated (`values="210,180,260"`). Times are
   ISO-8601 (`2026-11-25T02:14:00Z`) and show in the reader's time zone.
 
@@ -29,7 +30,9 @@ card against it.
 - `<Code>` and `<Markdown>` keep text as written and are dedented: start the
   text on the line after the opening tag, and the indentation shared by its
   lines is removed. Text that starts right after `<Code>` keeps the next
-  lines' indentation as written.
+  lines' indentation as written. To keep leading indentation or trailing
+  line breaks, wrap the text in `<![CDATA[ … ]]>` (canonical markup from
+  `get` already does).
 - `<Markdown>` inside a card takes Markdown source (headings, emphasis,
   lists, quotes, code, links, tables); input components cannot go in it.
 

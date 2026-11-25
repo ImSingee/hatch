@@ -5,6 +5,7 @@ import {
   compileCard,
   compileCardMarkup,
   ContentError,
+  optionalSummarySchema,
   summarySchema,
 } from './notification-content-schema';
 import { contentToMarkup } from './notification-content-text';
@@ -119,6 +120,37 @@ describe('card markup', () => {
         ],
       },
     ]);
+  });
+
+  it('reads back the exact text of Code and Markdown from canonical markup', () => {
+    const exact = [
+      '    return total;',
+      'line one\n\n',
+      '  indented\n    more\n',
+      'ends with ]]> inside',
+    ];
+    for (const text of exact) {
+      const tree = {
+        type: 'Card',
+        children: [
+          { type: 'Code', children: [text] },
+          { type: 'Markdown', children: [`\`\`\`\n${text}\n\`\`\``] },
+        ],
+      };
+      const { content } = compileCard(tree);
+      const again = compileCardMarkup(contentToMarkup(content)).content;
+      expect(again).toEqual(content);
+      expect(again.children![0]).toEqual({ type: 'Code', children: [text] });
+    }
+    // Ordinary code still reads as plain text in the markup.
+    expect(
+      contentToMarkup(
+        compileCard({
+          type: 'Card',
+          children: [{ type: 'Code', children: ['a\n  b'] }],
+        }).content,
+      ),
+    ).toBe('<Card>\n  <Code>a\n  b</Code>\n</Card>');
   });
 
   it('names what is allowed where a component, prop or value is wrong', () => {
@@ -334,6 +366,11 @@ describe('summary', () => {
       summarySchema.safeParse('two\nlines').error?.issues[0]?.message,
     ).toBe('summary must be one line, without line breaks');
     expect(summarySchema.safeParse('中'.repeat(200)).success).toBe(true);
+    expect(summarySchema.safeParse('   ').error?.issues[0]?.message).toBe(
+      'summary must not be empty',
+    );
+    // As an optional field, blank text means no summary at all.
+    expect(optionalSummarySchema.parse(' \t ')).toBeNull();
     expect(
       summarySchema.safeParse('中'.repeat(201)).error?.issues[0]?.message,
     ).toBe('summary must be at most 200 characters');

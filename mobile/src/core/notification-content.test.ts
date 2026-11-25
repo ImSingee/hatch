@@ -149,6 +149,57 @@ describe('notification content projection', () => {
     });
   });
 
+  it('shows the #319 card of an instance from before formats as a card', () => {
+    const card = {
+      status: { label: 'CI running', tone: 'info' },
+      block: {
+        case: 'progress' as const,
+        value: { label: 'Checks', percent: 21, value: '3 / 14' },
+      },
+    };
+    const expected = {
+      format: 'card',
+      title: null,
+      body: null,
+      summary: 'PR #261',
+      content: {
+        type: 'Card',
+        props: { status: 'CI running', tone: 'info' },
+        children: [
+          { type: 'Title', children: ['PR #261'] },
+          { type: 'Text', children: ['2 commits pushed'] },
+          {
+            type: 'Progress',
+            props: {
+              label: 'Checks',
+              value: '3 / 14',
+              percent: 21,
+              tone: 'info',
+            },
+          },
+        ],
+      },
+    };
+    expect(
+      summary({ title: 'PR #261', body: '2 commits pushed', card }),
+    ).toMatchObject(expected);
+    const page = versionsPageProjection(
+      create(ListNotificationRevisionsResponseSchema, {
+        revisions: [
+          {
+            revision: 1,
+            title: 'PR #261',
+            body: '2 commits pushed',
+            card,
+            activityAt: '2026-11-25T09:00:00Z',
+            replacedAt: '2026-11-25T10:00:00Z',
+          },
+        ],
+      }),
+    );
+    expect(page.versions[0]).toMatchObject(expected);
+  });
+
   it('projects kept versions the same way', () => {
     const page = versionsPageProjection(
       create(ListNotificationRevisionsResponseSchema, {
