@@ -113,6 +113,16 @@ above.
   top-level `version` and `userscripts` fields, and remove
   `capabilities.userscripts`, before targeting a newer compatibility version.
 
+- The status-and-block notification card (`card: { status, block }` with
+  `title` and `body`, the `NotificationCard` type of `@hatch/app/notifications`)
+  will no longer be accepted by `notify` and `updateNotification`, and the
+  envelope's `notification.card` field will be removed. Currently both are
+  supported: the input becomes a card notification whose summary is the
+  title, and the envelope's `card` carries a card's status and first
+  progress, stats or quote block when it has them. To migrate, send the card
+  as markup (the `card` template tag) or a render tree with a `summary`, and
+  read `format`, `summary` and `content` from envelopes instead of `card`.
+
 - `backend.network` will become required. To migrate, add a hostname/IP
   allowlist, `[]`, or `"unrestricted"`, and bind the backend with
   `.listen(port, '127.0.0.1', ...)`. Do not declare the listener or enabled

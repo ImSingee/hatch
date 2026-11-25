@@ -881,6 +881,76 @@ locally (exit 2); an unknown notification id is not found (exit 5); editing a
 recalled notification or sending to a disabled Channel or destination is a
 conflict (exit 6).
 
+### Content: text, Markdown or a card
+
+`send` takes exactly one kind of content, and `update` may switch to any of
+them:
+
+- text: `--title` with an optional `--body`;
+- Markdown: `--markdown <source>` or `--markdown-file <path|->` (headings,
+  emphasis, lists, quotes, code, links, tables; at most 16 KiB);
+- a card: `--card <markup|json>` or `--card-file <path|->`. Text whose first
+  non-space character is `{` is a JSON render tree
+  (`{"type":"Card","props":{…},"children":[…]}`), sent as `card_json`;
+  anything else is card markup, sent as `card_markup`.
+
+`--summary <line>` is one plain line (at most 200 characters, no line breaks)
+that phone pushes and lists show. Markdown and card notifications need it on
+`send`; a text notification may have one, shown in its push instead of the
+body. On `update`, `--markdown`/`--card` keep the current summary unless
+`--summary` replaces it (the platform rejects the edit naming `summary` when
+there is none), and `--clear-summary` removes a text notification's summary.
+`get` prints the format and summary, then the body (text), the Markdown
+source, or a card's plain text and canonical markup, which `--card` takes
+back; `list` shows each format with the title or summary, and `revisions`
+marks Markdown and card versions.
+
+```sh
+hatch notification send --group <group-id> --markdown-file notes.md --summary 'v12 released' --json
+hatch notification send --group <group-id> --summary 'CI failed on PR #261' \
+  --card '<Card icon="pr" status="CI failed" tone="danger"><Title>PR #261</Title><Steps><Step state="failed" detail="2m 14s">e2e/login</Step></Steps></Card>'
+hatch notification update <notification-id> --card-file card.xml --silent
+hatch notification card check --file card.xml
+hatch notification card catalog --json
+```
+
+Everything is checked locally with the platform's compilers before any
+request. `notification card check (<markup|json> | --file <path|->)` runs
+the same check offline, with no login and no request, and prints the plain
+text, the reply form the card's inline inputs make and the canonical markup
+(`--json`: `{ok:true,text,markup,reply,content}`).
+`notification card catalog` lists every component and inline mark with where
+it may go, what it holds and each attribute's type, allowed values, default
+and whether it is required (`--json`: `{root,limits,components}`); it is
+offline too.
+
+Local rejections exit 2. Contradictory or incomplete flags are
+`invalid_arguments`: two kinds of content, `--markdown`/`--card` together
+with `--title`, `--body`, `--clear-body`, `--clear-card` or
+`--clear-summary`, a Markdown or card `send` without `--summary`, a summary
+that is blank, has a line break or is over 200 characters, `--summary` with
+`--clear-summary`, a card with inline inputs (`<Choice>`, `<Buttons>`,
+`<Input>`, which make the reply form) together with `--reply`, or more than one
+input read from stdin. Content the platform would reject is
+`invalid_content`: the message names the flag and lists one
+`line:column: message` per problem (or `path: message` for a JSON tree),
+naming the components or attributes allowed there, and `--json` carries them
+as `error.details.issues` (`[{message,line?,column?,path?}]`). For example:
+
+```text
+--card:
+  1:7: <Card> tone must be one of neutral, info, success, warning, danger, working
+  2:3: <Titel> is not a component; allowed inside <Card>: Column, Row, …
+Components and props: hatch notification card catalog.
+```
+
+Scripts written for the earlier card keep working: `--card` holding a JSON
+object without `"type"` is the `{status,block}` card
+(`{"status":{"label","tone"},"block":{"type":"progress"|"stats"|"quote",…}}`),
+checked as before and sent as the `card` message. On `send` it needs
+`--title` and becomes a card notification whose summary is the title; on
+`update` it replaces such a card, and `--clear-card` removes it, leaving text.
+
 ### Reply forms
 
 `send --reply <json>` (or `--reply-file <path|->`) asks for one answer; the
@@ -895,7 +965,6 @@ hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.
 hatch notification respond <notification-id> --round 1 --answer decision=approve --json
 hatch notification list --reply-state awaiting
 hatch notification list --order activity
-hatch notification update <notification-id> --card '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}'
 hatch notification unread
 hatch notification mark-read --latest
 hatch notification mark-read --through <notification-id> --at <activity-time>

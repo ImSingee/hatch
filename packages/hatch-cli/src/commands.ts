@@ -561,13 +561,13 @@ const definitions: readonly CliCommandDefinition[] = [
     usage:
       'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--order created|activity] [--limit <1-100>] [--cursor <cursor>]',
     description:
-      'List notifications, newest first. --order activity sorts by the last push or edit (the timeline order, so an edited notification comes first) and shows that time; a --cursor continues only the order that printed it. --reply-state lists reply forms awaiting an answer or answered.',
+      "List notifications, newest first, with each one's format (text, markdown or card) and its title (text) or summary. --order activity sorts by the last push or edit (the timeline order, so an edited notification comes first) and shows that time; a --cursor continues only the order that printed it. --reply-state lists reply forms awaiting an answer or answered.",
   },
   {
     path: ['notification', 'get'],
     usage: 'notification get <id>',
     description:
-      'Inspect a notification and every delivery, including App result strings, its reply form, the answer and the answer deliveries.',
+      'Inspect a notification and every delivery, including App result strings, its reply form, the answer and the answer deliveries. Prints the format and summary, then the body (text), the Markdown source (markdown), or the plain text and canonical markup (card) that --card takes back.',
   },
   {
     path: ['notification', 'test'],
@@ -577,16 +577,28 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'send'],
     usage:
-      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--priority <lowest|low|normal|high>] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->] [--card <json> | --card-file <path|->]',
+      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) (--title <title> [--body <text>] | --markdown <source> | --markdown-file <path|-> | --card <markup|json> | --card-file <path|->) [--summary <line>] [--kind <kind>] [--url <url> [--no-auto-open-url]] [--priority <lowest|low|normal|high>] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->]',
     description:
-      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --priority (also -2, -1, 0, 1; write --priority=-1 for negatives) defaults to normal: lowest stays in history and reaches webhooks and Apps without a phone push, low arrives quietly, high is time-sensitive and shows during Focus and Do Not Disturb. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer. --card adds what the web timeline shows besides title and body: {status:{label,tone:neutral|info|success|warning|danger},block:{type:progress,label,percent,value?}|{type:stats,items:[{value,label}] (1-3)}|{type:quote,author,text,location?}}; phones still show title and body.',
+      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --priority (also -2, -1, 0, 1; write --priority=-1 for negatives) defaults to normal: lowest stays in history and reaches webhooks and Apps without a phone push, low arrives quietly, high is time-sensitive and shows during Focus and Do Not Disturb. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer. The content is exactly one of: text (--title, optional --body), Markdown (--markdown or --markdown-file) or a card (--card or --card-file: card markup such as <Card status="Failed" tone="danger"><Title>…</Title></Card>, or a JSON render tree when it starts with "{"; see notification card catalog and check it with notification card check). Markdown and cards need --summary, one plain line of at most 200 characters that pushes and lists show; text takes one optionally. Everything is checked locally before sending; a card with inline inputs (<Choice>, <Buttons>, <Input>) makes the reply form, so it cannot be combined with --reply. Older scripts\' --title with --card {status:{label,tone},block:{type:progress|stats|quote,…}} (a JSON object without "type") still sends a card whose summary is the title.',
   },
   {
     path: ['notification', 'update'],
     usage:
-      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--reply <json> | --reply-file <path|-> | --clear-reply] [--card <json> | --card-file <path|-> | --clear-card] [--silent]',
+      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--markdown <source> | --markdown-file <path|-> | --card <markup|json> | --card-file <path|-> | --clear-card] [--summary <line> | --clear-summary] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--reply <json> | --reply-file <path|-> | --clear-reply] [--silent]',
     description:
-      'Edit any notification by id and alert phones again, even with unchanged content; it moves to the end of the timeline and the replaced version is kept (see notification revisions). Use --silent to only change content. With no fields, repeats the alert. --reply asks a new question (replaces the whole form and starts the next round, which takes its own answer); --clear-reply removes the form. --card replaces the whole timeline card (status and one block); --clear-card removes it. Destinations that take edits receive hatch.notification.updated.',
+      'Edit any notification by id and alert phones again, even with unchanged content; it moves to the end of the timeline and the replaced version is kept (see notification revisions). Use --silent to only change content. With no fields, repeats the alert. --reply asks a new question (replaces the whole form and starts the next round, which takes its own answer); --clear-reply removes the form. --markdown or --card (markup or a JSON tree) replaces the whole content and switches to that format, keeping the current summary unless --summary gives a new one (give --summary when the notification has none yet); they cannot be combined with --title, --body or --clear-body. --title/--body switch a Markdown or free-form card notification back to text and then need --title. --clear-summary removes a text notification\'s summary. A {status, block} --card (JSON without "type") replaces an older card and --clear-card removes it, leaving text. A card with inline inputs starts a new question with its own form; content without them removes an inline form. Destinations that take edits receive hatch.notification.updated.',
+  },
+  {
+    path: ['notification', 'card', 'check'],
+    usage: 'notification card check (<markup|json> | --file <path|->)',
+    description:
+      'Check card markup, or a JSON render tree (text starting with "{"), offline exactly as send and update will: no login and no request. Prints the plain text pushes and lists use, the reply form its inline inputs make and the canonical markup; --json prints {ok:true,text,markup,reply,content}. Problems exit 2 with invalid_content, one line:column: message (or path: message for a tree) per problem, naming the components or attributes allowed there; --json puts them in error.details.issues.',
+  },
+  {
+    path: ['notification', 'card', 'catalog'],
+    usage: 'notification card catalog',
+    description:
+      'List every card component and inline mark offline: its category, where it may go, what it holds, and each attribute with its type, allowed values, default, whether it is required and what it does, plus the size limits. --json prints the catalog as data ({root,limits,components:[{name,category,description,placement,content,cardOnly,props:[{name,type,required,description,…}]}]}).',
   },
   {
     path: ['notification', 'revisions'],
@@ -815,6 +827,7 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'dashboard widget': 'Add, arrange and remove dashboard widgets.',
   preferences: 'Show or change personal preferences.',
   notification: 'Send, inspect and route notifications.',
+  'notification card': 'Check card markup and list its components, offline.',
   'notification destination': 'Manage devices and other delivery targets.',
   'notification webhook': 'Manage webhook destinations.',
   'notification group': 'Manage destination groups.',

@@ -69,8 +69,11 @@ try {
     )
   )
     throw new CliError('unknown_command', 'Unknown command. Use hatch help.');
-  // Every online command accepts Run credentials; only help and version are
-  // offline.
+  // Every online command accepts Run credentials; help, version and
+  // `notification card check|catalog` are offline.
+  const offline =
+    ['version', '--version'].includes(name) ||
+    (name === 'notification' && operation === 'card');
   // Reject bad arguments before a Run credential refresh can mask them.
   if (!showHelp && name === 'preferences')
     parsePreferencesCommand(args, offset);
@@ -81,7 +84,7 @@ try {
     parseTaskCommand(args, offset);
   if (!showHelp && name === 'app' && args[offset + 1] === 'docs')
     parseDocsCommand(args, offset);
-  if (!showHelp && !['version', '--version'].includes(name))
+  if (!showHelp && !offline)
     await refreshRunEnvironment(process.env, controller.signal);
   if (showHelp) {
     const words = args.slice(offset + (name === 'help' ? 1 : 0));

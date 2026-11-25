@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRouterTransport } from '@connectrpc/connect';
 import { describe, expect, it } from 'vitest';
 import {
@@ -16,7 +19,13 @@ import {
   type UpdateRouteRequest,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
+  CARD_EXAMPLES,
+  MARKDOWN_EXAMPLE,
+} from '../../hatch-platform-api/notification-content-examples';
+import { CliError } from './error';
+import {
   executeNotificationCall,
+  parseNotificationCardCommand,
   parseNotificationCommand,
 } from './notifications';
 
@@ -898,23 +907,12 @@ describe('cards', () => {
     );
     expect(received.updateNotification).toMatchObject({ clearCard: true });
 
-    await expect(
-      executeNotificationCall(
-        transport,
-        parse(
-          'update',
-          'notification-1',
-          '--card',
-          '{"block":{"type":"chart"}}',
-        ),
-      ),
-    ).rejects.toThrow(/--card: block/);
-    await expect(
-      executeNotificationCall(
-        transport,
-        parse('update', 'notification-1', '--card', '{}'),
-      ),
-    ).rejects.toThrow('--card: give a status or a block, or use --clear-card.');
+    expect(() =>
+      parse('update', 'notification-1', '--card', '{"block":{"type":"chart"}}'),
+    ).toThrow(/--card: block/);
+    expect(() => parse('update', 'notification-1', '--card', '{}')).toThrow(
+      '--card: give a status or a block, or use --clear-card.',
+    );
     expect(() =>
       parse('update', 'notification-1', '--card', '{}', '--clear-card'),
     ).toThrow('Use either --card/--card-file or --clear-card, not both.');
@@ -985,5 +983,454 @@ describe('response routes to the Agent', () => {
         'x',
       ),
     ).toThrow(/Agent options cannot be combined with --destination/);
+  });
+});
+
+/** The `CliError` a call throws, so tests can check its code and details. */
+function thrown(run: () => unknown): CliError {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof CliError) return error;
+    throw error;
+  }
+  throw new Error('expected a CliError');
+}
+
+const example = (id: string) => {
+  const found = CARD_EXAMPLES.find((entry) => entry.id === id);
+  if (!found?.markup) throw new Error(`no card example ${id}`);
+  return found;
+};
+
+describe('notification content: text, Markdown or a card', () => {
+  const to = ['send', '--group', 'g1'] as const;
+
+  it('maps each content flag onto its own SendNotification field', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse(
+        ...to,
+        '--title',
+        'Backup done',
+        '--body',
+        '14 GB',
+        '--summary',
+        ' Nightly backup ',
+      ),
+    );
+    expect(received.sendNotification).toMatchObject({
+      title: 'Backup done',
+      body: '14 GB',
+      summary: 'Nightly backup',
+    });
+
+    await executeNotificationCall(
+      transport,
+      parse(
+        ...to,
+        '--markdown',
+        MARKDOWN_EXAMPLE.markdown!,
+        '--summary',
+        MARKDOWN_EXAMPLE.summary,
+      ),
+    );
+    expect(received.sendNotification).toMatchObject({
+      title: '',
+      markdown: MARKDOWN_EXAMPLE.markdown,
+      summary: MARKDOWN_EXAMPLE.summary,
+    });
+    expect(received.sendNotification?.cardMarkup).toBeUndefined();
+
+    const card = example('pr261-failed');
+    await executeNotificationCall(
+      transport,
+      parse(...to, '--card', card.markup!, '--summary', card.summary),
+    );
+    expect(received.sendNotification).toMatchObject({
+      cardMarkup: card.markup,
+      summary: card.summary,
+    });
+    expect(received.sendNotification?.cardJson).toBeUndefined();
+
+    // A first character "{" makes it a JSON tree.
+    const tree = JSON.stringify({
+      type: 'Card',
+      props: { status: 'Done', tone: 'success' },
+      children: [{ type: 'Title', children: ['Deployed'] }],
+    });
+    await executeNotificationCall(
+      transport,
+      parse(...to, '--card', `  ${tree}`, '--summary', 'Deployed'),
+    );
+    expect(received.sendNotification).toMatchObject({ cardJson: tree });
+    expect(received.sendNotification?.cardMarkup).toBeUndefined();
+
+    // Older scripts: a {status, block} object with a title.
+    await executeNotificationCall(
+      transport,
+      parse(
+        ...to,
+        '--title',
+        'CI failed',
+        '--card',
+        '{"status":{"label":"Failed","tone":"danger"}}',
+      ),
+    );
+    expect(received.sendNotification).toMatchObject({
+      title: 'CI failed',
+      card: { status: { label: 'Failed', tone: 'danger' } },
+    });
+    expect(received.sendNotification?.cardJson).toBeUndefined();
+  });
+
+  it('reads Markdown and cards from files, checking them before any request', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'hatch-cli-content-'));
+    const markup = join(dir, 'card.xml');
+    const bad = join(dir, 'bad.xml');
+    const notes = join(dir, 'notes.md');
+    await writeFile(markup, example('deploy').markup!);
+    await writeFile(
+      bad,
+      '<Card>\n  <Title>x</Title>\n  <Fields><Bogus /></Fields>\n</Card>',
+    );
+    await writeFile(notes, MARKDOWN_EXAMPLE.markdown!);
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse(...to, '--card-file', markup, '--summary', 'v12 deployed'),
+    );
+    expect(received.sendNotification?.cardMarkup).toBe(
+      example('deploy').markup,
+    );
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--markdown-file', notes, '--silent'),
+    );
+    expect(received.updateNotification).toMatchObject({
+      markdown: MARKDOWN_EXAMPLE.markdown,
+      silent: true,
+    });
+
+    delete received.sendNotification;
+    const failure = await executeNotificationCall(
+      transport,
+      parse(...to, '--card-file', bad, '--summary', 'x'),
+    ).catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      code: 'invalid_content',
+      exitCode: 2,
+      details: { flag: '--card-file', issues: [{ line: 3, column: 11 }] },
+    });
+    expect((failure as Error).message).toMatch(
+      /^--card-file: 3:11: <Bogus> is not a component; allowed inside <Fields>: Field/,
+    );
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse(...to, '--card-file', markup, '--title', 'Deployed'),
+      ),
+    ).rejects.toThrow(/--card-file cannot be combined with --title/);
+    expect(received.sendNotification).toBeUndefined();
+  });
+
+  it('rejects contradictory or incomplete content before any request', () => {
+    const card = example('deploy');
+    expect(() =>
+      parse(
+        ...to,
+        '--markdown',
+        '# Hi',
+        '--card',
+        card.markup!,
+        '--summary',
+        's',
+      ),
+    ).toThrow(/only one kind of content/);
+    expect(() => parse(...to, '--markdown', '# Hi')).toThrow(
+      /--markdown needs --summary/,
+    );
+    expect(() => parse(...to, '--card', card.markup!)).toThrow(
+      /--card needs --summary/,
+    );
+    expect(() => parse(...to, '--card-file', 'card.xml')).toThrow(
+      /--card-file needs --summary/,
+    );
+    expect(() =>
+      parse(...to, '--markdown', '# Hi', '--title', 'Hi', '--summary', 's'),
+    ).toThrow('--markdown cannot be combined with --title');
+    expect(() =>
+      parse(...to, '--card', card.markup!, '--body', 'x', '--summary', 's'),
+    ).toThrow('--card cannot be combined with --body');
+    expect(() => parse(...to, '--body', 'x')).toThrow('--body needs --title.');
+    expect(() =>
+      parse(...to, '--title', 'x', '--summary', 'two\nlines'),
+    ).toThrow('--summary must be one line, without line breaks.');
+    expect(() =>
+      parse(...to, '--title', 'x', '--summary', 'y'.repeat(201)),
+    ).toThrow('--summary must be at most 200 characters.');
+    expect(() => parse(...to, '--title', 'x', '--summary', ' ')).toThrow(
+      '--summary cannot be empty.',
+    );
+    // The {status, block} shape keeps title and body, so it needs a title.
+    expect(() =>
+      parse(...to, '--card', '{"status":{"label":"Failed"}}', '--summary', 's'),
+    ).toThrow(
+      /--card is a JSON object without "type"\. A card tree starts with \{"type":"Card",…\}; the \{status, block\} card of older scripts needs --title\./,
+    );
+    for (const card of [
+      '{"status":{"label":"Failed"}}',
+      example('deploy').markup!,
+    ])
+      expect(() => parse(...to, '--title', ' ', '--card', card)).toThrow(
+        '--title cannot be empty.',
+      );
+    // Inline inputs make the card's own reply form.
+    expect(() =>
+      parse(
+        ...to,
+        '--card',
+        example('pr261-failed').markup!,
+        '--summary',
+        's',
+        '--reply',
+        '{"fields":[{"id":"ok","type":"buttons","label":"OK?","options":[{"id":"yes","label":"Yes"}]}]}',
+      ),
+    ).toThrow(/has inline inputs .* drop --reply/);
+    expect(() =>
+      parse(...to, '--card-file', '-', '--reply-file', '-', '--summary', 's'),
+    ).toThrow(/Only one input can be read from stdin/);
+
+    const error = thrown(() =>
+      parse(
+        ...to,
+        '--card',
+        '<Card tone="red">\n  <Titel>x</Titel>\n</Card>',
+        '--summary',
+        's',
+      ),
+    );
+    expect(error.code).toBe('invalid_content');
+    expect(error.message.split('\n')).toEqual([
+      '--card:',
+      '  1:7: <Card> tone must be one of neutral, info, success, warning, danger, working',
+      expect.stringMatching(
+        /^ {2}2:3: <Titel> is not a component; allowed inside <Card>: .*Title/,
+      ),
+      'Components and props: hatch notification card catalog.',
+    ]);
+  });
+
+  it('maps summary changes on update and keeps content flags apart', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--clear-summary', '--silent'),
+    );
+    expect(received.updateNotification).toMatchObject({ clearSummary: true });
+    expect(received.updateNotification?.summary).toBeUndefined();
+
+    // The platform keeps the current summary when none is given.
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--card', example('deploy').markup!),
+    );
+    expect(received.updateNotification).toMatchObject({
+      cardMarkup: example('deploy').markup,
+      clearSummary: false,
+    });
+    expect(received.updateNotification?.summary).toBeUndefined();
+
+    expect(() =>
+      parse('update', 'notification-1', '--summary', 'x', '--clear-summary'),
+    ).toThrow('Use either --summary or --clear-summary, not both.');
+    expect(() =>
+      parse(
+        'update',
+        'notification-1',
+        '--markdown',
+        '# Hi',
+        '--clear-summary',
+      ),
+    ).toThrow('--markdown cannot be combined with --clear-summary');
+    expect(() =>
+      parse('update', 'notification-1', '--markdown', '# Hi', '--clear-card'),
+    ).toThrow('--markdown cannot be combined with --clear-card');
+    expect(() =>
+      parse(
+        'update',
+        'notification-1',
+        '--card',
+        example('deploy').markup!,
+        '--clear-body',
+      ),
+    ).toThrow('--card cannot be combined with --clear-body');
+    expect(() => parse('update', 'notification-1', '--summary', '')).toThrow(
+      '--summary cannot be empty; use --clear-summary to remove it.',
+    );
+  });
+});
+
+describe('notification card check and catalog (offline)', () => {
+  const run = (...parts: string[]) =>
+    parseNotificationCardCommand(argv('card', ...parts), 0).run(
+      new AbortController().signal,
+    );
+
+  it('prints the plain text, the inline reply form and canonical markup', async () => {
+    const card = example('pr261-failed');
+    const result = await run('check', card.markup!);
+    expect(result.text).toContain('Valid card.');
+    expect(result.text).toContain(
+      'Plain text:\nCI 失败\nframe PATCH bodies when proxying to app backends\n',
+    );
+    expect(result.text).toContain(
+      'Reply form from its inline inputs (submit: Submit):\n  next (buttons) — fix=修复它, skip=先不管',
+    );
+    expect(result.json).toMatchObject({
+      ok: true,
+      reply: { fields: [{ id: 'next', type: 'buttons', required: true }] },
+      content: { type: 'Card', props: { icon: 'pr', status: 'CI 失败' } },
+    });
+    // The canonical markup checks again to the same card.
+    const again = await run(
+      'check',
+      (result.json as { markup: string }).markup,
+    );
+    expect(again.json).toEqual(result.json);
+  });
+
+  it('reports line:column problems as invalid_content', async () => {
+    const failure = await run(
+      'check',
+      '<Card>\n  <Title>x</Title\n</Card>',
+    ).catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      code: 'invalid_content',
+      exitCode: 2,
+      details: { issues: [{ line: 3, column: 1 }] },
+    });
+    expect((failure as Error).message).toMatch(/^3:1: /);
+    await expect(
+      run('check', '{"type":"Card","children":[{"type":"Nope"}]}'),
+    ).rejects.toThrow(/^children\.0: <Nope> is not a component/);
+  });
+
+  it('takes the card from exactly one of an argument or --file', () => {
+    expect(() =>
+      parseNotificationCardCommand(argv('card', 'check'), 0),
+    ).toThrow('Supply the card: <markup> or --file <path|->.');
+    expect(() =>
+      parseNotificationCardCommand(
+        argv('card', 'check', '<Card />', '--file', 'a.xml'),
+        0,
+      ),
+    ).toThrow('Use either <markup> or --file <path|->, not both.');
+    expect(() =>
+      parseNotificationCardCommand(argv('card', 'catalog', 'extra'), 0),
+    ).toThrow('This command takes no positional arguments.');
+  });
+
+  it('lists every card component with its props', async () => {
+    const result = await run('catalog');
+    const catalog = result.json as {
+      components: { name: string; props: { name: string }[] }[];
+    };
+    expect(catalog.components.map((entry) => entry.name)).toContain('Steps');
+    expect(catalog.components.map((entry) => entry.name)).not.toContain(
+      'Document',
+    );
+    expect(
+      catalog.components
+        .find((entry) => entry.name === 'Step')
+        ?.props.map((prop) => prop.name),
+    ).toEqual(expect.arrayContaining(['state', 'detail']));
+    expect(result.text).toMatch(/<Step> .*\n {4}goes: only inside <Steps>/);
+  });
+});
+
+describe('notification get shows the content by format', () => {
+  function getTransport(summary: Record<string, unknown>) {
+    return createRouterTransport(({ service }) => {
+      service(NotificationService, {
+        getNotification: () => ({
+          notification: {
+            summary: {
+              id: 'n-1',
+              sourceType: 'channel',
+              sourceName: 'CI',
+              kind: 'build',
+              kindName: 'Build',
+              status: 'delivered',
+              revision: 1,
+              ...summary,
+            },
+          },
+        }),
+      });
+    });
+  }
+  const get = async (summary: Record<string, unknown>) =>
+    (await executeNotificationCall(getTransport(summary), parse('get', 'n-1')))
+      .text;
+
+  it('prints title and body, with the summary when a text one has it', async () => {
+    const text = await get({
+      format: 'text',
+      title: 'Backup done',
+      body: '14 GB in 3 minutes',
+      summary: 'Nightly backup',
+    });
+    expect(text).toMatch(
+      /^Backup done \(delivered\)\n[^]*Format: text\nSummary: Nightly backup\n\n14 GB in 3 minutes\n/,
+    );
+    // An older server sends no format: it is text.
+    expect(await get({ title: 'Old', body: 'Body' })).toMatch(
+      /Format: text\n\nBody\n/,
+    );
+  });
+
+  it('prints the summary and source of a Markdown notification', async () => {
+    const text = await get({
+      format: 'markdown',
+      title: 'v12 released',
+      summary: 'v12 released',
+      markdown: '## v12\n- fix login',
+      text: 'v12\n- fix login',
+    });
+    expect(text).toMatch(
+      /^v12 released \(delivered\)\n[^]*Format: markdown\nSummary: v12 released\n\nMarkdown:\n## v12\n- fix login\n/,
+    );
+  });
+
+  it('prints the summary, plain text and canonical markup of a card', async () => {
+    const text = await get({
+      format: 'card',
+      title: 'Deployed',
+      summary: 'Deployed',
+      text: 'Live\nv12 deployed',
+      contentJson: JSON.stringify({
+        type: 'Card',
+        // Stored trees come back with their keys reordered.
+        props: { tone: 'success', status: 'Live' },
+        children: [{ type: 'Title', children: ['v12 deployed'] }],
+      }),
+    });
+    expect(text).toContain(
+      [
+        'Format: card',
+        'Summary: Deployed',
+        '',
+        'Text:',
+        'Live',
+        'v12 deployed',
+        '',
+        'Markup:',
+        '<Card status="Live" tone="success">',
+        '  <Title>v12 deployed</Title>',
+        '</Card>',
+      ].join('\n'),
+    );
   });
 });
