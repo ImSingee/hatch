@@ -340,9 +340,18 @@ from the push), even when the new form keeps the old field and option ids.
 Answers that no longer fit the current form are rejected (`400`).
 
 Every edit that changes content or asks a new question keeps the replaced
-version in `notification_revisions`. `ListNotificationRevisions` (`hatch
-notification revisions <id>`) returns them oldest first with every answer;
-the timeline shows them under "Earlier versions". With a form,
+version in `notification_revisions`: title, body, link and `autoOpenUrl`,
+`data`, card, form and round. A recall keeps the notification's content too,
+so nothing a notification ever showed is lost until it is deleted or passes
+retention. Summaries count the kept versions (`earlierVersions`).
+`ListNotificationRevisions` (`hatch notification revisions <id>`) pages them
+newest first with the answers to their rounds. On the web timeline, an edited
+notification's "Edited N times · View history" and a recalled notification's
+line open a side panel listing every version in full, newest first, with the
+answer each question took and what changed from the version before; the
+delivery log's detail page lists the same versions with their `data`. The
+phone app opens them in a sheet from the same two places and from the detail
+screen. With a form,
 `autoOpenUrl` defaults to `false`, so a phone tap opens the form.
 
 Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or

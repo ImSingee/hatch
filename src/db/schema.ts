@@ -1416,6 +1416,7 @@ export const notificationRevisions = snakeCase.table(
     title: text().notNull(),
     body: text(),
     url: text(),
+    autoOpenUrl: boolean('auto_open_url').notNull().default(false),
     data: jsonb().$type<JsonObject>(),
     card: jsonb().$type<NotificationCard>(),
     reply: jsonb().$type<ReplyForm>(),

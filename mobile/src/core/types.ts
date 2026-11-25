@@ -217,6 +217,8 @@ export type NotificationSummary = {
   priority: number;
   /** Set when the source edited the notification. */
   editedAt: string | null;
+  /** Versions an edit replaced; 0 when never edited. */
+  earlierVersions: number;
   /** Set when the source recalled it; phones no longer show it. */
   recalledAt: string | null;
   /** The question it asks now; each round takes one answer. */
@@ -231,6 +233,25 @@ export type NotificationSummary = {
   card: NotificationCard | null;
 };
 /** The answer to one round of a notification's reply form. */
+/** A version an edit replaced, kept in the notification's history. */
+export type NotificationVersion = {
+  revision: number;
+  title: string;
+  body: string | null;
+  url: string | null;
+  card: NotificationCard | null;
+  reply: ReplyForm | null;
+  replyRound: number;
+  /** When it became current, and when an edit replaced it. */
+  activityAt: string;
+  replacedAt: string;
+};
+/** One page of earlier versions, newest first, with their rounds' answers. */
+export type NotificationVersionsPage = {
+  versions: NotificationVersion[];
+  answers: NotificationAnswer[];
+  nextCursor: string | null;
+};
 export type NotificationAnswer = {
   round: number;
   respondedByUserId: string | null;

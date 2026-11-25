@@ -386,9 +386,32 @@ export default function NotificationsScreen() {
               );
             case 'recalled':
               return (
-                <Text key={row.key} style={[type.small, styles.recalled]}>
-                  {row.item.sourceName} recalled “{row.item.title}”
-                </Text>
+                <Link
+                  key={row.key}
+                  href={`/notifications/history/${row.item.id}`}
+                  asChild
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityHint="Shows what it said before it was recalled"
+                    style={({ pressed }) => [
+                      styles.recalled,
+                      pressed && { backgroundColor: c.hover },
+                    ]}
+                  >
+                    <Text style={[type.small, { flex: 1 }]}>
+                      {row.item.sourceName} recalled “{row.item.title}”
+                    </Text>
+                    <Text
+                      style={[
+                        type.caption,
+                        { color: accent.ink, fontWeight: weights.heading },
+                      ]}
+                    >
+                      View original
+                    </Text>
+                  </Pressable>
+                </Link>
               );
             case 'quiet': {
               const open = Boolean(openQuiet[row.key]);
@@ -564,11 +587,6 @@ function TimelineEntry({
                       {VIA[item.response.via] ?? ''}
                     </Text>
                   ) : null}
-                  {item.editedAt ? (
-                    <Text style={[type.caption, { color: accent.ink }]}>
-                      Updated · see earlier versions on the web
-                    </Text>
-                  ) : null}
                 </View>
               )}
             </Pressable>
@@ -579,6 +597,29 @@ function TimelineEntry({
             </Link.MenuAction>
           </Link.Menu>
         </Link>
+        {item.earlierVersions > 0 ? (
+          <Link href={`/notifications/history/${item.id}`} asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Shows every version of this notification"
+              style={({ pressed }) => [
+                styles.historyOpen,
+                pressed && { backgroundColor: accent.ground },
+              ]}
+            >
+              <Glyph name="edit" size={13} color={accent.ink} />
+              <Text
+                style={[
+                  type.caption,
+                  { color: accent.ink, fontWeight: weights.heading },
+                ]}
+              >
+                Edited {item.earlierVersions}{' '}
+                {item.earlierVersions === 1 ? 'time' : 'times'} · View history
+              </Text>
+            </Pressable>
+          </Link>
+        ) : null}
       </View>
     </View>
   );
@@ -605,7 +646,25 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: c.input,
   },
-  recalled: { paddingLeft: 38 },
+  recalled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+    marginLeft: 26,
+    paddingHorizontal: 12,
+    borderRadius: radii.md,
+  },
+  historyOpen: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    marginLeft: -10,
+    borderRadius: radii.md,
+  },
   quiet: {
     borderRadius: radii.lg,
     backgroundColor: c.card,

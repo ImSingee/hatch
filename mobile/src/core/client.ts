@@ -26,6 +26,7 @@ import {
   notificationSummaryProjection,
   readStateProjection,
   sessionProjection,
+  versionsPageProjection,
   summaryProjection,
 } from './rpc-projections';
 import {
@@ -52,6 +53,7 @@ import type {
   NotificationDetail,
   NotificationReadState,
   NotificationSummary,
+  NotificationVersionsPage,
   PendingMessagesResult,
   Pins,
   PushDevice,
@@ -478,6 +480,22 @@ export class HatchApiClient {
         ),
       signal,
     ).then(() => undefined);
+  }
+  /** Earlier versions of a notification, newest first, a page at a time. */
+  async notificationVersions(
+    id: string,
+    cursor: string | null,
+    signal?: AbortSignal,
+  ): Promise<NotificationVersionsPage> {
+    const result = await this.rpcRequest(
+      (signal) =>
+        this.notificationRpc.listNotificationRevisions(
+          { id, cursor: cursor ?? '' },
+          { signal },
+        ),
+      signal,
+    );
+    return versionsPageProjection(result);
   }
   /** How far this user has read the timeline, on every device. */
   async notificationReadState(

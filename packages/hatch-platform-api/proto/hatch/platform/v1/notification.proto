@@ -130,6 +130,8 @@ message NotificationSummary {
   uint32 reply_round = 23;
   // Status and one block the timeline shows; absent without one.
   NotificationCard card = 24;
+  // Versions an edit replaced (ListNotificationRevisions); 0 when never edited.
+  uint32 earlier_versions = 25;
 }
 
 // ---------------------------------------------------------------- replies
@@ -586,6 +588,9 @@ message NotificationRevision {
   NotificationReply reply = 6;
   uint32 reply_round = 7;
   NotificationCard card = 10;
+  // Whether tapping the phone push opened url; false for versions kept
+  // before this was recorded.
+  bool auto_open_url = 11;
   // ISO-8601: when this version became current, and when an edit replaced it.
   string activity_at = 8;
   string replaced_at = 9;
