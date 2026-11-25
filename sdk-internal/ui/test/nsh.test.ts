@@ -67,7 +67,7 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('keeps form drafts in the App storage', () => {
     expect(run(['test', 'app/draft.test.tsx'], fixture('draft'))).toMatch(
-      /^ok\n[\s\S]*18 passed/,
+      /^ok\n[\s\S]*20 passed/,
     );
   }, 240_000);
 

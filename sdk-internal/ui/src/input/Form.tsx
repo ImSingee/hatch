@@ -192,7 +192,9 @@ export function Form(props: FormProps): JSX.Element {
             });
           }
         } catch {
-          void Storage.removeItem(draftKey);
+          // Unreadable: removed, unless a newer form with this id already
+          // owns the key and may have saved its own input there.
+          if (ownsDraft()) void Storage.removeItem(draftKey);
         }
       }
       finishLoading();
@@ -255,6 +257,9 @@ export function Form(props: FormProps): JSX.Element {
       // Values are read once the stored draft is in, so what is sent is
       // what the fields show.
       await loading;
+      // Closed while the draft loaded: its fields are gone, so nothing
+      // is sent.
+      if (draft.gone) return;
       const current = untracked(effectiveValues);
       const found: Record<string, string> = {};
       for (const [name, field] of fields) {
@@ -302,6 +307,11 @@ export function Form(props: FormProps): JSX.Element {
       // The old name leaves the form; its value moves unless the new name
       // already has one, which is kept.
       const { [from]: moved, ...rest } = current;
+      // A password stays one under its new name, shown as text or not.
+      if (secrets.has(from) || fields.get(from)?.secret()) {
+        secrets.add(from);
+        secrets.add(to);
+      }
       values.set(
         current[to] === undefined
           ? { ...rest, [to]: moved as FieldValue }
@@ -311,10 +321,18 @@ export function Form(props: FormProps): JSX.Element {
     error: (name) => errors()[name],
     register: (name, field) => {
       const secret = field.secret ?? (() => false);
-      // A password is remembered as one when it registers, as it changes
-      // (each draft write) and as it goes, so its value never reaches a
-      // draft even after the field is gone or shown as text.
-      if (untracked(secret)) secrets.add(name);
+      // A password is remembered as one as soon as the field is one (when
+      // it registers, or when it becomes one), so its value never reaches a
+      // draft, even after the field is gone or shown as text. A value the
+      // draft already holds is taken out at once.
+      effect(() => {
+        if (!secret()) return;
+        untracked(() => {
+          if (secrets.has(name)) return;
+          secrets.add(name);
+          if (draft.loaded && values()[name] !== undefined) void writeDraft();
+        });
+      });
       fields.set(name, {
         required: field.required,
         secret,

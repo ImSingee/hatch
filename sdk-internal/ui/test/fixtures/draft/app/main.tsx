@@ -23,6 +23,8 @@ function App() {
   const revealPin = signal(false);
   const twinOpen = signal(false);
   const codeSecret = signal(false);
+  const keyShown = signal(false);
+  const keyRenamed = signal(false);
   const nickname = signal(false);
   const memoOpen = signal(true);
   const finishSend: { resolve: () => void } = { resolve: () => undefined };
@@ -105,6 +107,16 @@ function App() {
           <Button label="Send memo" type="submit" />
         </Form>
       </If>
+      <Form id="keys" onSubmit={() => undefined}>
+        <TextField name="owner" label="Owner" />
+        <TextField
+          name={keyRenamed() ? 'accessCode' : 'key'}
+          label="Key"
+          kind={keyShown() ? 'text' : 'password'}
+        />
+        <Button label="Show key" onPress={() => keyShown.set(true)} />
+        <Button label="Rename key" onPress={() => keyRenamed.set(true)} />
+      </Form>
       <If when={twinOpen()}>
         <Form id="memo" onSubmit={() => undefined}>
           <TextField name="memo" label="Twin memo" />
@@ -113,6 +125,14 @@ function App() {
       <Button label="Open twin memo" onPress={() => twinOpen.set(true)} />
       <Button label="Close memo" onPress={() => memoOpen.set(false)} />
       <Button label="Open memo" onPress={() => memoOpen.set(true)} />
+      <Button
+        label="Open, close and reopen memo"
+        onPress={() => {
+          memoOpen.set(true);
+          setTimeout(() => memoOpen.set(false), 30);
+          setTimeout(() => memoOpen.set(true), 60);
+        }}
+      />
       <Button label="Finish sending" onPress={() => finishSend.resolve()} />
       <Button
         label="Finish and reopen"

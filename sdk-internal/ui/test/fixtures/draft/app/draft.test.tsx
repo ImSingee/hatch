@@ -230,9 +230,64 @@ test('a field that becomes a password leaves the draft', async () => {
   const before = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
   expect(before.code).toBe('A1B2');
   await app.press('Treat code as secret');
+  // Taken out at once, before any other edit.
+  await app.wait(200);
+  const masked = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
+  expect(masked.code).toBe(undefined);
   await app.type('label:Nickname', 'Ivy');
   await app.wait(800);
   const after = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
   expect(after.nickname).toBe('Ivy');
   expect(after.code).toBe(undefined);
+});
+
+test('a password shown as text and renamed stays out of the draft', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Key', '4921');
+  await app.press('Show key');
+  await app.press('Rename key');
+  await app.type('label:Owner', 'Ivy');
+  await app.wait(800);
+  const saved = app.storage()['hatch.ui.draft.keys'] ?? '';
+  expect(saved.includes('Ivy')).toBe(true);
+  expect(saved.includes('4921')).toBe(false);
+});
+
+test('an unreadable draft read late by a closed form spares a newer draft', async () => {
+  // Storage stands in for the device's. The first form's read of the memo
+  // draft is held for 200 ms and returns unreadable text; the form closes
+  // and a new one opens and reads the saved draft meanwhile.
+  const store = new Map<string, string>([
+    ['hatch.ui.draft.memo', '{"memo":"Kept memo"}'],
+  ]);
+  const held = { armed: false, released: false };
+  const app = await open('./main.tsx', {
+    modules: {
+      nsh: {
+        'Storage.getItem': (key: string) => {
+          if (!held.armed || key !== 'hatch.ui.draft.memo')
+            return store.get(key) ?? null;
+          held.armed = false;
+          return new Promise((resolve) =>
+            setTimeout(() => {
+              held.released = true;
+              resolve('{unreadable');
+            }, 200),
+          );
+        },
+        'Storage.setItem': (key: string, value: string) => {
+          store.set(key, value);
+        },
+        'Storage.removeItem': (key: string) => {
+          store.delete(key);
+        },
+      },
+    },
+  });
+  await app.press('Close memo');
+  held.armed = true;
+  await app.press('Open, close and reopen memo');
+  await app.waitUntil(() => held.released);
+  await app.wait(100);
+  expect(store.get('hatch.ui.draft.memo')).toBe('{"memo":"Kept memo"}');
 });
