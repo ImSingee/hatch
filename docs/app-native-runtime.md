@@ -180,7 +180,10 @@ own session. The grant is exactly these names (plus, later, the
   Data Table watch backs off before polling again.
 - Events the shell sends (`player.hostEvent` on the web): `hatch.theme`
   `{ theme }`, `hatch.nav` `{ route }`, `hatch.visibility` `{ visible }`,
-  `hatch.update` `{}`.
+  `hatch.update` `{}`. NSH keeps an event (up to 256) until the App
+  registers a listener for it, so one the shell sends while the App starts
+  (an update notice, say) is delivered when the App subscribes; a navigation
+  that arrives before the App starts becomes its start route instead.
 - Start parameters (`host.params`): `{ route }`.
 
 Apps do not call these names directly. `@hatch/app/native` wraps them:
