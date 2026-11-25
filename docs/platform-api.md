@@ -115,8 +115,10 @@ artifact/data fences. Deployment requests include the resource's observed
 Source is not transferred through these RPCs. Clients push and fetch over Git
 smart HTTP at `/api/git/app/<id-or-slug>.git`, authenticated by the
 same credentials (HTTP Basic password, `Authorization: Bearer` or `X-API-Key`;
-never a Cookie). `master` accepts fast-forward pushes only and `deploy/*` tags
-belong to the platform. A Deploy request names the `commit` to release, which
+never a Cookie). Any branch can be pushed; `master` accepts fast-forward pushes
+only and cannot be deleted. Tags cannot be pushed: the platform creates the
+`deploy/*` tags at deploy time, and a push may only delete a tag outside
+`deploy/*` (left over from before tag pushes were rejected). A Deploy request names the `commit` to release, which
 must be on `master`, and defaults to its tip. The Deploy `bundle` field remains
 for older CLIs: an uploaded bundle is fast-forwarded onto `master` and then
 released. There is no RPC that downloads source; read it with Git fetch, whose

@@ -5,7 +5,7 @@
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { devNull, tmpdir } from 'node:os';
@@ -20,6 +20,7 @@ const rows = {
   apps: [
     { id: 'app-1', slug: 'demo' },
     { id: 'app-2', slug: 'nightly' },
+    { id: 'app-3', slug: 'legacy' },
   ],
 };
 const associate = vi.fn<
@@ -60,6 +61,43 @@ vi.mock('./auth/credentials', () => {
 });
 
 const { handleGitHttpRequest } = await import('./source-git-http');
+const { appRepoDir } = await import('~agent/paths');
+
+/** The hook every repository had before tag pushes were rejected. */
+const V3_HOOK = `#!/bin/sh
+# hatch-ref-policy v3
+while read oldrev newrev refname; do
+  case "$refname" in
+    refs/tags/deploy|refs/tags/deploy/*)
+      echo "Hatch owns deploy/* tags; they are created by deploy." >&2
+      exit 1
+      ;;
+    refs/heads/master)
+      case "$newrev" in
+        *[!0]*) ;;
+        *)
+          echo "master cannot be deleted." >&2
+          exit 1
+          ;;
+      esac
+      case "$oldrev" in
+        *[!0]*)
+          if ! git merge-base --is-ancestor "$oldrev" "$newrev"; then
+            echo "master only accepts fast-forward pushes; fetch and rebase first." >&2
+            exit 1
+          fi
+          ;;
+      esac
+      ;;
+    refs/heads/*|refs/tags/*) ;;
+    *)
+      echo "Unsupported ref update: $refname" >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
+`;
 
 let server: Server;
 let origin = '';
@@ -246,11 +284,49 @@ describe('git smart HTTP', () => {
     expect(other.code).not.toBe(0);
     expect(await remoteMaster('app/app-1')).toBe(master);
 
-    // Other branches and tags are ordinary Git refs.
+    // Tags come only from deploy; neither lightweight nor annotated tags land.
+    const light = await git(['push', 'origin', 'HEAD:refs/tags/v1.0.0'], dir);
+    expect(light.code).not.toBe(0);
+    expect(light.stderr).toContain('Tags cannot be pushed');
+    await ok(['tag', '-a', 'v2.0.0', '-m', 'release'], dir);
+    const annotated = await git(['push', 'origin', 'v2.0.0'], dir);
+    expect(annotated.code).not.toBe(0);
+    expect(annotated.stderr).toContain('Tags cannot be pushed');
+    expect(await ok(['ls-remote', '--tags', 'origin'], dir)).toBe('');
+
+    // Any other branch is an ordinary Git ref.
     await ok(['push', 'origin', 'HEAD:refs/heads/topic'], dir);
     await ok(['push', '--force', 'origin', `${master}:refs/heads/topic`], dir);
-    await ok(['push', 'origin', 'HEAD:refs/tags/v1.0.0'], dir);
     await ok(['push', 'origin', ':topic'], dir);
+  });
+
+  it('upgrades an older hook and lets earlier tags be deleted', async () => {
+    const dir = await clone('app/legacy');
+    const head = await commit(dir, 'a.txt', 'one');
+    await ok(['push', 'origin', 'master'], dir);
+
+    // A repository from before v4: the old hook, a tag pushed under it and a
+    // deploy tag the platform wrote.
+    const repo = appRepoDir('app-3');
+    const hook = path.join(repo, 'hooks', 'pre-receive');
+    await writeFile(hook, V3_HOOK, { mode: 0o755 });
+    await ok(['--git-dir', repo, 'tag', 'v0.9', head]);
+    await ok(['--git-dir', repo, 'tag', 'deploy/v1', head]);
+
+    const tagged = await git(['push', 'origin', 'HEAD:refs/tags/v1.0.0'], dir);
+    expect(tagged.code).not.toBe(0);
+    expect(tagged.stderr).toContain('Tags cannot be pushed');
+    expect(await readFile(hook, 'utf8')).toContain('hatch-ref-policy v4');
+
+    await ok(['push', 'origin', ':refs/tags/v0.9'], dir);
+    const deploy = await git(['push', 'origin', ':refs/tags/deploy/v1'], dir);
+    expect(deploy.code).not.toBe(0);
+    expect(deploy.stderr).toContain('Hatch owns deploy/* tags');
+    expect(await ok(['ls-remote', '--tags', 'origin'], dir)).toBe(
+      `${head}\trefs/tags/deploy/v1`,
+    );
+
+    await ok(['push', 'origin', 'HEAD:refs/heads/topic'], dir);
   });
 
   it('streams packs larger than the client post buffer', async () => {
