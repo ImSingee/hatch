@@ -1,4 +1,5 @@
 import {
+  Badge,
   Anchor,
   Button,
   Collapse,
@@ -10,6 +11,7 @@ import {
   Stack,
   Text,
   TextInput,
+  Tooltip,
   UnstyledButton,
   ActionIcon,
 } from '@mantine/core';
@@ -168,6 +170,16 @@ function PickedModelList({
                 {formatTokenCount(model.contextWindow)}
               </span>
             ) : null}
+            {model.catalogRef ? null : (
+              <Tooltip
+                label={t('providers.model.notInCatalogTooltip')}
+                withArrow
+              >
+                <Badge variant="light" size="sm">
+                  {t('providers.model.custom')}
+                </Badge>
+              </Tooltip>
+            )}
           </Group>
           <ActionIcon
             variant="subtle"

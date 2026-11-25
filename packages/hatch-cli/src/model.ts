@@ -4,6 +4,7 @@
  */
 import {
   countFlag,
+  idPositionals,
   invalid,
   onePositional,
   openClient,
@@ -72,6 +73,7 @@ export type ModelCommand =
     } & CatalogLink &
       ChatSpec)
   | { kind: 'remove'; id: string }
+  | { kind: 'reorder'; providerId: string; modelIds: string[] }
   | {
       kind: 'catalog-list';
       providerId?: string;
@@ -432,8 +434,24 @@ export function parseModelCommand(
       throw invalid('Removing a model cannot be undone; pass --yes.');
     return { command: { kind: 'remove', id }, flags };
   }
+  if (operation === 'reorder') {
+    const { flags, positionals } = parseCommandArgs(args, offset, 2, {
+      provider: { type: 'string' },
+    });
+    const providerId = providerIdFlag(flags, 'provider');
+    if (providerId === undefined)
+      throw invalid("Supply --provider <provider-id>, the models' provider.");
+    return {
+      command: {
+        kind: 'reorder',
+        providerId,
+        modelIds: idPositionals(positionals, 'model id'),
+      },
+      flags,
+    };
+  }
   throw invalid(
-    'Use hatch model list, add, update, enable, disable, remove, set-kind or catalog.',
+    'Use hatch model list, add, update, enable, disable, remove, reorder, set-kind or catalog.',
   );
 }
 
@@ -472,6 +490,9 @@ export async function runModel(
     }
     case 'remove':
       result = await client.models.delete({ id: command.id });
+      break;
+    case 'reorder':
+      result = await client.models.reorder(command);
       break;
     case 'catalog-list':
       result = await client.catalog.models({

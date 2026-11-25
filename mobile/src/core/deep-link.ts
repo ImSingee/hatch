@@ -40,6 +40,8 @@ export type LinkTarget =
   | { kind: 'conversation'; id: string }
   | { kind: 'notifications' }
   | { kind: 'notification'; id: string }
+  /** Every version of one notification: the phone's history sheet. */
+  | { kind: 'notificationHistory'; id: string }
   | { kind: 'phone'; page: PhonePage }
   /** An instance page this app has no screen for. */
   | { kind: 'web'; path: string; search?: string; hash?: string };
@@ -123,6 +125,10 @@ export function platformTarget(
       return web();
     case 'more':
       if (count === 1) return { kind: 'tab', tab: 'more' };
+      if (second === 'notification-history')
+        return count === 3 && ID.test(third)
+          ? { kind: 'notificationHistory', id: third }
+          : null;
       return count === 2 && PHONE_PAGES.has(second)
         ? { kind: 'phone', page: second as PhonePage }
         : null;
@@ -240,6 +246,8 @@ function segmentsOf(target: LinkTarget): string[] {
       return ['notifications'];
     case 'notification':
       return ['notifications', 'log', target.id];
+    case 'notificationHistory':
+      return ['more', 'notification-history', target.id];
     case 'phone':
       return ['more', target.page];
     case 'web':

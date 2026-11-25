@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, type Plugin } from 'esbuild';
 import { APP_HATCH_SDK_IMPORTS, hatchImportMapPath } from './agent/hatch-sdk';
+import { AppManifestValidationError } from './server/apps/manifest-validation';
 import { subprocessSandboxEnv } from './server/sandbox-env';
 import { run, type RunOptions, type RunResult } from './server/subprocess';
 
@@ -347,18 +348,31 @@ export async function loadSourceManifest<T>(
       jsxImportSource: steps.jsxImportSource,
       subject: 'manifest',
     });
-    await steps.check(file);
-    const stdout = await steps.evaluate(`${SERIALIZER}\n${source}\n`);
-    const records = stdout
-      .split('\n')
-      .filter((line) => line.startsWith(RESULT));
-    if (records.length !== 1)
-      throw new Error('Manifest evaluation must emit exactly one result.');
-    return {
-      file,
-      manifest: options.parse(JSON.parse(records[0].slice(RESULT.length))),
+    const evaluateAndParse = async () => {
+      const stdout = await steps.evaluate(`${SERIALIZER}\n${source}\n`);
+      const records = stdout
+        .split('\n')
+        .filter((line) => line.startsWith(RESULT));
+      if (records.length !== 1)
+        throw new Error('Manifest evaluation must emit exactly one result.');
+      return options.parse(JSON.parse(records[0].slice(RESULT.length)));
     };
+    try {
+      await steps.check(file);
+    } catch (checkError) {
+      // Manifest types derive from the platform schema, so a type error
+      // usually mirrors a schema rule. Evaluate in the same sandbox to name
+      // the rejected fields; otherwise the type check failure stands.
+      const diagnosis = await evaluateAndParse().then(
+        () => null,
+        (error: unknown) => error,
+      );
+      if (diagnosis instanceof AppManifestValidationError) throw diagnosis;
+      throw checkError;
+    }
+    return { file, manifest: await evaluateAndParse() };
   } catch (error) {
+    if (error instanceof AppManifestValidationError) throw error.inFile(file);
     throw new Error(
       `${file} validation failed: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },

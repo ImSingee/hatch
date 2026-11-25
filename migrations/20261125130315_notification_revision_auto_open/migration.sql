@@ -1,0 +1,1 @@
+ALTER TABLE "notification_revisions" ADD COLUMN "auto_open_url" boolean DEFAULT false NOT NULL;

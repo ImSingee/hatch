@@ -15,6 +15,11 @@ import { useForm } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import {
+  FALLBACK_CONTEXT_WINDOW,
+  resolveLimits,
+  type CatalogLimits,
+} from '~/lib/model-limits';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import {
   agentModelChoicesQueryOptions,
@@ -52,7 +57,9 @@ function reasoningChoice(value: boolean | null): ReasoningChoice {
 
 /**
  * Edit one model. Context window, max output and reasoning follow the
- * catalog while left blank (or "Follow catalog"); a value overrides it.
+ * catalog while left blank (or "Follow catalog"); a value overrides it. The
+ * hints always describe the catalog entry chosen in the form, so linking,
+ * changing or unlinking it shows what the blank fields will use once saved.
  */
 export function ModelFormModal({
   opened,
@@ -71,7 +78,10 @@ export function ModelFormModal({
   const [catalogRef, setCatalogRef] = useState<string | null | undefined>(
     undefined,
   );
-  const [pickedLabel, setPickedLabel] = useState<string | null>(null);
+  const [picked, setPicked] = useState<{
+    label: string;
+    limits: CatalogLimits;
+  } | null>(null);
   const [changingRef, setChangingRef] = useState(false);
   const form = useForm<Values>({
     initialValues: {
@@ -94,7 +104,20 @@ export function ModelFormModal({
   const image = form.values.kind === 'image';
   const ref = catalogRef === undefined ? model.catalogRef : catalogRef;
   const linked = ref !== null && (catalogRef !== undefined || model.inCatalog);
-  const catalogValues = model.chat?.catalogValues ?? {};
+  // The entry the form will save: the stored one until another is chosen.
+  const limits: CatalogLimits =
+    catalogRef === undefined
+      ? (model.chat?.catalogValues ?? {})
+      : catalogRef === null
+        ? {}
+        : (picked?.limits ?? {});
+  const typedContextWindow =
+    form.values.contextWindow === '' ? null : form.values.contextWindow;
+  // What blank fields resolve to with this entry (and the typed context).
+  const blank = resolveLimits(
+    { reasoning: null, contextWindow: typedContextWindow, maxTokens: null },
+    limits,
+  );
 
   const mutation = useMutation({
     mutationFn: (values: Values) =>
@@ -135,9 +158,9 @@ export function ModelFormModal({
     form.setValues({ contextWindow: '', maxTokens: '', reasoning: 'catalog' });
 
   const followLabel =
-    catalogValues.reasoning === undefined
+    limits.reasoning === undefined
       ? t('providers.model.followCatalog')
-      : catalogValues.reasoning
+      : limits.reasoning
         ? t('providers.model.followCatalogOn')
         : t('providers.model.followCatalogOff');
   const number = (value: number) => value.toLocaleString(locale);
@@ -186,7 +209,7 @@ export function ModelFormModal({
                       name:
                         (catalogRef === undefined
                           ? model.catalogLabel
-                          : pickedLabel) ?? ref,
+                          : picked?.label) ?? ref,
                     })
                   : t('providers.model.noCatalog')}
               </Text>
@@ -227,10 +250,10 @@ export function ModelFormModal({
               exclude={new Set()}
               focusOnMount
               placeholder={t('providers.search.catalogPlaceholder')}
-              onPick={(picked) => {
-                if (!picked.catalogRef) return;
-                setCatalogRef(picked.catalogRef);
-                setPickedLabel(picked.name);
+              onPick={(hit) => {
+                if (!hit.catalogRef) return;
+                setCatalogRef(hit.catalogRef);
+                setPicked({ label: hit.name, limits: hit.limits ?? {} });
                 setChangingRef(false);
               }}
             />
@@ -260,17 +283,17 @@ export function ModelFormModal({
                   step={1000}
                   thousandSeparator=","
                   placeholder={
-                    catalogValues.contextWindow
+                    limits.contextWindow
                       ? t('providers.model.followCatalog')
                       : t('providers.model.useDefault')
                   }
                   description={
-                    catalogValues.contextWindow
+                    limits.contextWindow
                       ? t('providers.model.catalogValue', {
-                          value: number(catalogValues.contextWindow),
+                          value: number(limits.contextWindow),
                         })
                       : t('providers.model.blankUses', {
-                          value: number(128000),
+                          value: number(FALLBACK_CONTEXT_WINDOW),
                         })
                   }
                   {...form.getInputProps('contextWindow')}
@@ -281,16 +304,18 @@ export function ModelFormModal({
                   step={256}
                   thousandSeparator=","
                   placeholder={
-                    catalogValues.maxTokens
+                    limits.maxTokens
                       ? t('providers.model.followCatalog')
                       : t('providers.model.useDefault')
                   }
                   description={
-                    catalogValues.maxTokens
+                    limits.maxTokens
                       ? t('providers.model.catalogValue', {
-                          value: number(catalogValues.maxTokens),
+                          value: number(blank.maxTokens),
                         })
-                      : t('providers.model.blankUses', { value: number(8192) })
+                      : t('providers.model.blankUses', {
+                          value: number(blank.maxTokens),
+                        })
                   }
                   {...form.getInputProps('maxTokens')}
                 />

@@ -54,6 +54,15 @@ function Navigation() {
         <Stack.Screen name="notifications/settings" options={{ title: '' }} />
         <Stack.Screen name="notifications/[id]" options={{ title: '' }} />
         <Stack.Screen
+          name="notifications/history/[id]"
+          options={{
+            title: '',
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.75, 1],
+            sheetGrabberVisible: true,
+          }}
+        />
+        <Stack.Screen
           name="settings"
           options={{ title: '', presentation: 'modal' }}
         />

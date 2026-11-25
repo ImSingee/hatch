@@ -4,9 +4,11 @@ import { PublicErrorSchema } from '../../../packages/hatch-platform-api/gen/hatc
 import { AppError } from '~server/errors';
 import { RunTokenError } from '~server/agent-runner/run-auth';
 import { DataMigrationApprovalRequired } from '~server/apps/data-table/migration-errors';
+import { AppManifestValidationError } from '~server/apps/manifest-validation';
 
 const definitions = {
   BAD_REQUEST: [Code.InvalidArgument, 400, 'Invalid request.'],
+  APP_MANIFEST_INVALID: [Code.InvalidArgument, 400, 'App manifest is invalid.'],
   UNAUTHORIZED: [Code.Unauthenticated, 401, 'Authentication required.'],
   INVALID_TOKEN: [Code.Unauthenticated, 401, 'Invalid Run credential.'],
   RUN_ENDED: [Code.Unauthenticated, 401, 'Run is no longer live.'],
@@ -55,6 +57,12 @@ export function publicError(
     return publicApiError(
       'CONFLICT',
       `Destructive Data Table migration requires explicit approval.\nApproval token: ${error.plan.approvalToken}\nInspect schema changes before retrying with --allow-destructive-data-migration and --data-migration-approval-token.`,
+    );
+  // Its message names manifest fields and schema rules, never authored values.
+  if (error instanceof AppManifestValidationError)
+    return publicApiError(
+      'APP_MANIFEST_INVALID',
+      redactDomain ? undefined : error.message,
     );
   if (error instanceof AppError && error.status === 504)
     return publicApiError('GATEWAY_TIMEOUT');

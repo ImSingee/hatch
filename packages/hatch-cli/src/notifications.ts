@@ -673,6 +673,11 @@ const specs: Record<string, Spec> = {
           ...(field(summary, 'editedAt')
             ? [`Edited: ${field(summary, 'editedAt')}`]
             : []),
+          ...(Number(summary?.earlierVersions ?? 0) > 0
+            ? [
+                `Earlier versions: ${field(summary, 'earlierVersions')} (hatch notification revisions ${field(summary, 'id')})`,
+              ]
+            : []),
           ...(field(summary, 'recalledAt')
             ? [`Recalled: ${field(summary, 'recalledAt')}`]
             : []),

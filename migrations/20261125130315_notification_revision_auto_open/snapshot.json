@@ -1,0 +1,42 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "813c740c-2d42-4cfa-8eb1-e96298fe57da",
+  "prevIds": ["8492c805-a0b9-4a03-97a0-348fea2c7e0c"],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_revisions",
+        "auto_open_url"
+      ],
+      "writes": [
+        "s|col|public.notification_revisions.auto_open_url",
+        "n|col|public.notification_revisions.auto_open_url",
+        "e|col|public.notification_revisions.auto_open_url"
+      ],
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_revisions",
+        "name": "auto_open_url",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

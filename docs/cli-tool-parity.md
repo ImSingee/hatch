@@ -255,6 +255,8 @@ so it has no command. Web operation to command:
 | Model enable switch                                | model enable / disable                    | UpdateModel (enabled)                                   |
 | Model Category field                               | model set-kind                            | SetModelKind                                            |
 | Delete model                                       | model remove --yes                        | DeleteModel                                             |
+| Drag providers into order                          | provider reorder                          | ReorderProviders                                        |
+| Drag a provider's models into order                | model reorder --provider                  | ReorderModels                                           |
 | Catalog status, check for updates, update settings | model catalog status / refresh / settings | GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings |
 
 API keys are write-only on every surface: the CLI reads one only from

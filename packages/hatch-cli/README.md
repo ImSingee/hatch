@@ -292,6 +292,17 @@ failure retains the checkout; retry `update` once repaired. Symlink/submodule/
 tracked `.hatch` or `node_modules` source is rejected. No local reset/clean or
 unattended authored commit is performed after scaffold creation.
 
+## Manifest rejections
+
+A deploy whose App manifest the platform rejects fails with
+`APP_MANIFEST_INVALID` (exit 2) before anything is released. The message names
+the manifest file and lists up to 20 fields to fix, one per line as
+`- <path>: <reason>`, for example `- app.routes[1].path: duplicate app route
+path` or `- extra: unknown field; remove it`. Reasons describe the schema rule,
+never the authored value; an object key that is not a plain identifier shows as
+`[…]`. Fix the fields, commit and deploy again. Other build failures
+(dependency install, type checks, bundling) are not covered by this code.
+
 ## Migration approval and uncertain outcomes
 
 A destructive App Data Table preview returns `CONFLICT` and an exact approval
@@ -511,6 +522,7 @@ hatch provider update <provider-id> --api-key-file ./new.key --disable
 hatch provider test <provider-id> --model gpt-5-mini --json
 hatch provider fetch-models <provider-id> --json
 hatch provider remove <provider-id> --yes
+hatch provider reorder <provider-id> <provider-id>...
 hatch model list --provider <provider-id> --kind chat --enabled --json
 hatch model add --provider <provider-id> --model-id openai/gpt-5:free \
   --catalog-ref openrouter/openai/gpt-5 --context-window 200000
@@ -518,6 +530,7 @@ hatch model update <model-id> --reset context-window,max-tokens --no-reasoning
 hatch model update <model-id> --reset-all --clear-description
 hatch model disable <model-id>
 hatch model remove <model-id> --yes
+hatch model reorder --provider <provider-id> <model-id> <model-id>...
 hatch model catalog list --provider anthropic --kind chat --search sonnet --limit 20
 hatch model catalog status --json
 hatch model catalog refresh --json
@@ -548,7 +561,10 @@ short prompt (a few tokens of provider credit) with the stored key and prints
 `ok`, `modelId`, `latencyMs` and `error`; `--model` takes the provider's model
 id of one of its chat models. `provider fetch-models` lists what the
 provider's `/models` endpoint offers, marking `added` models and the
-`catalogRef` the provider's preset knows; it adds nothing.
+`catalogRef` the provider's preset knows; it adds nothing. `provider reorder`
+sets the provider order (the listed providers first, the rest after them in
+their old order) and prints every provider id in the new order; the model
+picker and the first-model fallback for new chats follow it.
 
 `model list` prints every model with `catalogRef`, `inCatalog` (false when the
 catalog dropped the entry) and, for chat models, `chat`: `reasoning`,
@@ -562,6 +578,9 @@ or `--no-catalog` says otherwise; `--context-window`, `--max-tokens` and
 `reasoning`, `context-window`, `max-tokens`) clears overrides so the catalog
 applies again and `--reset-all` clears all three. `model enable` / `disable`
 toggle whether a model is offered; `model remove --yes` deletes one.
+`model reorder --provider <provider-id>` orders that provider's models the
+same way (every listed id must be one of its models) and prints its model
+ids in the new order.
 `model catalog list` prints one page (50 without `--limit`, at most 200), the
 `total` across pages and `nextCursor` while more follow. `model catalog
 refresh` checks the source now and waits: it prints `outcome` `updated` or

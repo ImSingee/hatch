@@ -7,8 +7,15 @@ vi.mock('~/db', async () => {
 
 const { db, schema } = await import('~/db');
 const { bundledCatalog, catalogModel } = await import('~server/model-catalog');
-const { createProvider, getModelView, getProviderView, updateProvider } =
-  await import('./provider-service');
+const {
+  createProvider,
+  getModelView,
+  getProviderView,
+  listProviderViews,
+  reorderModels,
+  reorderProviders,
+  updateProvider,
+} = await import('./provider-service');
 const { createProviderModel, updateProviderModel } =
   await import('./provider-models');
 const { getAgentModelCatalog } = await import('./agent-model-catalog');
@@ -273,5 +280,60 @@ describe('thinking levels and the default model', () => {
       thinkingLevel: (await getProviderView(provider.id)).models[0].chat!
         .defaultThinkingLevel,
     });
+  });
+});
+
+describe('provider and model order', () => {
+  it("reorders providers and one provider's models, which new chats follow", async () => {
+    const first = await createProvider({
+      catalogProviderId: 'anthropic',
+      apiKey: 'k',
+    });
+    const second = await createProvider({
+      catalogProviderId: 'openai',
+      apiKey: 'k',
+    });
+    const other = await createProvider({
+      catalogProviderId: 'deepseek',
+      apiKey: 'k',
+    });
+    expect((await getAgentModelCatalog()).defaultModel?.providerId).toBe(
+      first.id,
+    );
+
+    // Listing only part of the providers keeps the rest after them in order.
+    await expect(reorderProviders([other.id])).resolves.toEqual([
+      other.id,
+      first.id,
+      second.id,
+    ]);
+    expect((await listProviderViews()).map((p) => p.id)).toEqual([
+      other.id,
+      first.id,
+      second.id,
+    ]);
+
+    const models = first.models.map((model) => model.id);
+    await expect(
+      reorderModels(first.id, [...models].reverse()),
+    ).resolves.toEqual([...models].reverse());
+    expect((await getProviderView(first.id)).models.map((m) => m.id)).toEqual(
+      [...models].reverse(),
+    );
+    await reorderProviders([first.id]);
+    expect((await getAgentModelCatalog()).defaultModel?.modelId).toBe(
+      first.models.at(-1)!.modelId,
+    );
+
+    // A model of another provider is not part of this order.
+    await expect(
+      reorderModels(first.id, [second.models[0].id]),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      reorderModels(first.id, [models[0], models[0]]),
+    ).rejects.toMatchObject({ status: 400 });
+    expect((await getProviderView(second.id)).models.map((m) => m.id)).toEqual(
+      second.models.map((m) => m.id),
+    );
   });
 });

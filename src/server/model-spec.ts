@@ -21,9 +21,12 @@ import {
   THINKING_LEVELS,
   type CatalogModel,
 } from '~server/model-catalog';
+import {
+  cappedCatalogMaxTokens,
+  resolveLimits,
+  type CatalogLimits,
+} from '~/lib/model-limits';
 
-export const FALLBACK_CONTEXT_WINDOW = 128000;
-export const FALLBACK_MAX_TOKENS = 8192;
 /** Levels offered for a reasoning model nothing else describes. */
 const FALLBACK_THINKING_LEVELS: AgentThinkingLevel[] = [
   'low',
@@ -59,12 +62,11 @@ export type ModelSpec = {
   cost?: ModelCost;
   /** Fields whose override differs from the catalog value. */
   overridden: Array<'reasoning' | 'contextWindow' | 'maxTokens'>;
-  /** What a field would be without its override (for "Reset"). */
-  catalogValues: {
-    reasoning?: boolean;
-    contextWindow?: number;
-    maxTokens?: number;
-  };
+  /**
+   * The catalog entry's own values, before overrides and before the max
+   * output cap; `resolveLimits` turns them into what a blank field uses.
+   */
+  catalogValues: CatalogLimits;
   /** pi `thinkingLevelMap`: maps or disables levels on the wire. */
   thinkingLevelMap?: Partial<Record<AgentThinkingLevel, string | null>>;
   /** pi `compat` flags for the provider's API. */
@@ -147,27 +149,15 @@ export function resolveModelSpec(
       ? piBuiltin(ref.providerId, ref.modelId, apiType)
       : undefined;
 
-  const catalogValues = {
+  const catalogValues: CatalogLimits = {
     reasoning: catalog?.reasoning,
     contextWindow: catalog?.contextWindow,
     maxTokens: catalog?.maxTokens,
   };
-  const reasoning = row.reasoning ?? catalog?.reasoning ?? false;
-  const contextWindow =
-    row.contextWindow ?? catalog?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
-  // Some catalogs list a max output close to the whole context. Asking for
-  // that leaves no room for the conversation and makes auto-compaction fire
-  // almost at once, so a catalog value is capped at half the context. A
-  // value the user set is only kept within the context.
-  const catalogMaxTokens =
-    catalog?.maxTokens === undefined
-      ? undefined
-      : Math.min(catalog.maxTokens, Math.floor(contextWindow / 2));
-  const maxTokens = Math.min(
-    row.maxTokens ?? catalogMaxTokens ?? FALLBACK_MAX_TOKENS,
-    contextWindow,
+  const { reasoning, contextWindow, maxTokens } = resolveLimits(
+    row,
+    catalogValues,
   );
-  catalogValues.maxTokens = catalogMaxTokens;
 
   let thinkingLevels: AgentThinkingLevel[] = [];
   let thinkingLevelMap: ModelSpec['thinkingLevelMap'];
@@ -205,7 +195,11 @@ export function resolveModelSpec(
     row.contextWindow !== catalogValues.contextWindow
   )
     overridden.push('contextWindow');
-  if (row.maxTokens !== null && row.maxTokens !== catalogValues.maxTokens)
+  if (
+    row.maxTokens !== null &&
+    row.maxTokens !==
+      cappedCatalogMaxTokens(catalogValues.maxTokens, contextWindow)
+  )
     overridden.push('maxTokens');
 
   return {

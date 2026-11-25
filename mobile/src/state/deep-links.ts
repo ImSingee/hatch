@@ -76,6 +76,12 @@ function openTarget(
         params: { id: target.id },
       });
       return;
+    case 'notificationHistory':
+      router.push({
+        pathname: '/notifications/history/[id]',
+        params: { id: target.id },
+      });
+      return;
     case 'phone':
       router.push(
         target.page === 'tabs'

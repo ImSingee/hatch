@@ -1,5 +1,4 @@
 import {
-  Anchor,
   Badge,
   Box,
   Button,
@@ -18,10 +17,6 @@ import {
 } from '@tanstack/react-query';
 import { IconRefresh } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import {
-  hatchLinkWebUrl,
-  isDocumentUrl,
-} from '../../../packages/hatch-platform-api/deep-link';
 import { Field } from '~components/system/field';
 import { useErrorText, useI18n, type PlainTranslationKey } from '~i18n';
 import { formatExact, formatRelativeTime } from '~lib/format';
@@ -41,6 +36,8 @@ import {
   useNotificationKindName,
 } from './status';
 import { CardBlock, CardStatus } from './notification-card-view';
+import { NotificationHistory } from './notification-history';
+import { NotificationLink } from './notification-link';
 import { ReplySection } from './reply-section';
 
 const SOURCE_TYPE_LABEL: Record<
@@ -182,6 +179,24 @@ export function NotificationDetail({ id }: { id: string }) {
           </Stack>
         ) : null}
       </Box>
+
+      {/* Every version an edit replaced, and what it said when recalled. */}
+      {data.earlierVersions > 0 || data.recalledAt ? (
+        <>
+          <Divider />
+          <Box component="section">
+            <Text fw={700} fz="lg" mb="xs">
+              {t('notifications.versions.sectionTitle')}
+            </Text>
+            <NotificationHistory
+              key={data.id}
+              item={data}
+              data={data.data}
+              showData
+            />
+          </Box>
+        </>
+      ) : null}
 
       {data.reply || data.responseDeliveryList.length > 0 ? (
         <>
@@ -480,38 +495,5 @@ function DeliveryOutcome({
         </Tooltip>
       ) : null}
     </Stack>
-  );
-}
-
-/**
- * A notification links to a web page, to another app by its own scheme
- * (`mailto:`, `someapp://…`), or, by `hatch://` deep link, to a Hatch page:
- * that opens on the instance it names, here in this tab when that is this
- * instance. Other web pages open in a new tab; other schemes go to the app
- * the system has for them. A scheme that would run in this document is shown
- * as text only.
- */
-export function NotificationLink({ url }: { url: string }) {
-  if (isDocumentUrl(url))
-    return (
-      <Text size="sm" truncate>
-        {url}
-      </Text>
-    );
-  const page = hatchLinkWebUrl(url, window.location.origin, {
-    allowLoopbackHttp: true,
-  });
-  const href = page ?? url;
-  const web = /^https?:/i.test(href);
-  const here = web && new URL(href).origin === window.location.origin;
-  return (
-    <Anchor
-      href={href}
-      {...(web && !here ? { target: '_blank', rel: 'noreferrer' } : {})}
-      size="sm"
-      truncate
-    >
-      {url}
-    </Anchor>
   );
 }

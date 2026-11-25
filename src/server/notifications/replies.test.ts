@@ -1349,6 +1349,47 @@ describe('new questions on the same notification', () => {
   });
 });
 
+describe('earlier versions', () => {
+  it('keep everything a version showed, the tap-opens-link setting included, and are counted on the notification', async () => {
+    const response = await pushAsChannel({
+      kind: 'deploy',
+      title: 'Deploy #88 queued',
+      url: 'https://deploy.example.test/runs/88',
+      autoOpenUrl: true,
+    });
+    const { id } = (await response.json()) as { id: string };
+    expect((await service.getNotification(id)).earlierVersions).toBe(0);
+
+    const sender = { type: 'channel' as const, channelId };
+    await updateNotification(sender, {
+      id,
+      title: 'Deploy #88 running',
+      autoOpenUrl: false,
+    });
+    await recallNotification(sender, id);
+
+    const detail = await service.getNotification(id);
+    expect(detail).toMatchObject({
+      title: 'Deploy #88 running',
+      autoOpenUrl: false,
+      earlierVersions: 1,
+    });
+    expect(detail.recalledAt).not.toBeNull();
+    expect(
+      (await service.listNotifications({ order: 'activity' })).items.find(
+        (item) => item.id === id,
+      )?.earlierVersions,
+    ).toBe(1);
+    expect((await service.listNotificationRevisions(id)).revisions).toEqual([
+      expect.objectContaining({
+        title: 'Deploy #88 queued',
+        url: 'https://deploy.example.test/runs/88',
+        autoOpenUrl: true,
+      }),
+    ]);
+  });
+});
+
 describe('cards', () => {
   it('are stored with the push, replaced or removed by an edit, and kept in earlier versions', async () => {
     const response = await pushAsChannel({

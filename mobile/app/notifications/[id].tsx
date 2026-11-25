@@ -176,6 +176,16 @@ export default function NotificationScreen() {
             {notificationTime(data.editedAt)}.
           </Text>
         ) : null}
+        {data.earlierVersions > 0 || data.recalledAt ? (
+          <Button
+            label={
+              data.recalledAt ? 'View every version' : 'View earlier versions'
+            }
+            variant="secondary"
+            size="small"
+            onPress={() => router.push(`/notifications/history/${id}`)}
+          />
+        ) : null}
         {data.card ? (
           <Card>
             <View style={{ gap: 12, alignItems: 'flex-start' }}>

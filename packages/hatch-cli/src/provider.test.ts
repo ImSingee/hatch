@@ -50,6 +50,17 @@ describe('provider command arguments', () => {
     ).toBe('invalid_arguments');
   });
 
+  it('orders providers', () => {
+    expect(command('provider', 'reorder', 'p2', 'p1')).toEqual({
+      kind: 'reorder',
+      providerIds: ['p2', 'p1'],
+    });
+    expect(failure('provider', 'reorder').code).toBe('invalid_arguments');
+    expect(failure('provider', 'reorder', 'p1', 'p1').code).toBe(
+      'invalid_arguments',
+    );
+  });
+
   it('maps add from a catalog preset or from explicit fields', () => {
     expect(
       command('provider', 'add', '--catalog', 'openai', '--api-key-file', '-'),

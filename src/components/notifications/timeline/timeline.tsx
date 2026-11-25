@@ -13,6 +13,8 @@ import {
   IconBellOff,
   IconCheck,
   IconChevronRight,
+  IconHistory,
+  IconX,
 } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 import {
@@ -33,12 +35,12 @@ import { useEventCallback } from '~hooks/use-latest-committed';
 import { formatExact } from '~lib/format';
 import {
   notificationReadStateQueryOptions,
-  notificationRevisionsQueryOptions,
   notificationTimelineQueryOptions,
 } from '~queries/notifications';
 import { markNotificationsReadFn } from '~server/notifications';
 import { CardBlock, CardStatus } from '../notification-card-view';
-import { NotificationLink } from '../notification-detail';
+import { NotificationHistory } from '../notification-history';
+import { NotificationLink } from '../notification-link';
 import { ReplySection } from '../reply-section';
 import { useNotificationReadState } from '../use-notification-read-state';
 import {
@@ -113,6 +115,18 @@ export function NotificationTimeline() {
     });
   }
   const [jumped, setJumped] = useState(false);
+  // The notification whose versions the side panel shows.
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const historyItem = historyId
+    ? items.find((item) => item.id === historyId)
+    : undefined;
+  // The button that opened the panel, given focus back when it closes.
+  const historyOpener = useRef<HTMLElement | null>(null);
+  // The opener comes from the click: Safari does not focus a clicked button.
+  const toggleHistory = (id: string, opener: HTMLElement) => {
+    historyOpener.current = opener;
+    setHistoryId((current) => (current === id ? null : id));
+  };
   const firstUnreadId = opened?.firstUnreadId ?? null;
   const rows = useMemo(
     () => buildTimelineRows(items, moved, firstUnreadId),
@@ -182,6 +196,47 @@ export function NotificationTimeline() {
   const newest = items.at(-1);
   const newestId = newest?.id;
   const newestAt = newest?.activityAt;
+  // On a narrow window the versions panel covers the timeline (its CSS
+  // takes it out of the flow); nothing behind it is being read.
+  const panelRef = useRef<HTMLElement>(null);
+  const timelineCovered = () =>
+    panelRef.current !== null &&
+    getComputedStyle(panelRef.current).position === 'absolute';
+  // While the panel covers the timeline, the timeline is inert and focus
+  // moves into the panel; it returns to the opening button on close. Side by
+  // side, both stay in reach.
+  const panelCloseRef = useRef<HTMLButtonElement>(null);
+  const [covered, setCovered] = useState(false);
+  // Open while its notification is still loaded: one deleted elsewhere
+  // closes the panel and gives the timeline back.
+  const historyOpen = historyItem !== undefined;
+  useEffect(() => {
+    if (historyId !== null && !historyItem && !query.isFetching) {
+      setHistoryId(null);
+    }
+  }, [historyId, historyItem, query.isFetching]);
+  useLayoutEffect(() => {
+    if (!historyOpen) {
+      setCovered(false);
+      // Reachable again before the opener inside it takes focus back.
+      if (scrollRef.current) scrollRef.current.inert = false;
+      const opener = historyOpener.current;
+      if (opener?.isConnected) opener.focus();
+      historyOpener.current = null;
+      return;
+    }
+    const update = () => setCovered(timelineCovered());
+    update();
+    const layout = panelRef.current?.parentElement;
+    if (!layout) return;
+    const observer = new ResizeObserver(update);
+    observer.observe(layout);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only
+  }, [historyOpen]);
+  useLayoutEffect(() => {
+    if (covered) panelCloseRef.current?.focus();
+  }, [covered]);
   // Reading means the newest has been on screen for a moment in a visible tab.
   const readNewest = useEventCallback(() => {
     if (
@@ -189,6 +244,7 @@ export function NotificationTimeline() {
       !newestAt ||
       !atEnd.current ||
       document.visibilityState !== 'visible' ||
+      timelineCovered() ||
       markRead.isPending ||
       !readState.data ||
       readState.data.unreadCount === 0
@@ -202,7 +258,8 @@ export function NotificationTimeline() {
     if (!newestId || unreadNow === 0) return;
     const timer = setTimeout(readNewest, READ_AFTER);
     return () => clearTimeout(timer);
-  }, [newestId, newestAt, unreadNow, readNewest]);
+    // Closing the panel shows the timeline again: count from then.
+  }, [newestId, newestAt, unreadNow, readNewest, historyId]);
   useEffect(() => {
     document.addEventListener('visibilitychange', readNewest);
     return () => document.removeEventListener('visibilitychange', readNewest);
@@ -327,86 +384,137 @@ export function NotificationTimeline() {
   }
 
   return (
-    <section
-      ref={scrollRef}
-      className={classes.scroll}
-      onScroll={onScroll}
-      aria-label={t('notifications.timeline.label')}
-    >
-      {opened && opened.count > 0 && !jumped ? (
-        <div className={classes.jump}>
-          <button
-            type="button"
-            className={classes.jumpButton}
-            onClick={() => void jumpToUnread()}
-          >
-            <IconArrowUp size={14} stroke={2.4} aria-hidden />
-            {t('notifications.timeline.unreadJump', { count: opened.count })}
-          </button>
-        </div>
-      ) : null}
-      <div ref={contentRef} className={classes.column}>
-        <p className={classes.edge}>
-          {query.hasNextPage
-            ? t('notifications.timeline.loadingOlder')
-            : t('notifications.timeline.start')}
-        </p>
-        {rows.map((row) => {
-          switch (row.kind) {
-            case 'day':
-              return (
-                <div key={row.key} className={classes.day}>
-                  {dayLabel(row.date, locale, t)}
-                </div>
-              );
-            case 'unread':
-              return (
-                <div key={row.key} ref={unreadRef} className={classes.unread}>
-                  {t('notifications.timeline.unreadDivider', {
-                    count: opened?.count ?? 0,
-                  })}
-                </div>
-              );
-            case 'moved':
-              return (
-                <div key={row.key} className={classes.moved}>
-                  <IconArrowDown size={13} stroke={2.2} aria-hidden />
-                  {row.sourceNames.length === 1
-                    ? t('notifications.timeline.moved', {
-                        source: row.sourceNames[0],
-                      })
-                    : t('notifications.timeline.movedMany', {
-                        count: row.sourceNames.length,
-                      })}
-                </div>
-              );
-            case 'recalled':
-              return (
-                <p key={row.key} className={classes.recalled}>
-                  <IconArrowBackUp size={15} stroke={2} aria-hidden />
-                  <span className={classes.recalledText}>
-                    {t('notifications.timeline.recalled', {
-                      source: row.item.sourceName,
-                      title: row.item.title,
+    <div className={classes.layout}>
+      <section
+        ref={scrollRef}
+        inert={covered}
+        className={classes.scroll}
+        onScroll={onScroll}
+        aria-label={t('notifications.timeline.label')}
+      >
+        {opened && opened.count > 0 && !jumped ? (
+          <div className={classes.jump}>
+            <button
+              type="button"
+              className={classes.jumpButton}
+              onClick={() => void jumpToUnread()}
+            >
+              <IconArrowUp size={14} stroke={2.4} aria-hidden />
+              {t('notifications.timeline.unreadJump', { count: opened.count })}
+            </button>
+          </div>
+        ) : null}
+        <div ref={contentRef} className={classes.column}>
+          <p className={classes.edge}>
+            {query.hasNextPage
+              ? t('notifications.timeline.loadingOlder')
+              : t('notifications.timeline.start')}
+          </p>
+          {rows.map((row) => {
+            switch (row.kind) {
+              case 'day':
+                return (
+                  <div key={row.key} className={classes.day}>
+                    {dayLabel(row.date, locale, t)}
+                  </div>
+                );
+              case 'unread':
+                return (
+                  <div key={row.key} ref={unreadRef} className={classes.unread}>
+                    {t('notifications.timeline.unreadDivider', {
+                      count: opened?.count ?? 0,
                     })}
-                  </span>
-                  <Time iso={row.item.activityAt} />
-                </p>
-              );
-            case 'quiet':
-              return <QuietGroup key={row.key} items={row.items} />;
-            case 'item':
-              return (
-                <TimelineEntry
-                  key={row.key}
-                  item={row.item}
-                  userId={session?.user.id}
-                />
-              );
-          }
-        })}
-      </div>
-    </section>
+                  </div>
+                );
+              case 'moved':
+                return (
+                  <div key={row.key} className={classes.moved}>
+                    <IconArrowDown size={13} stroke={2.2} aria-hidden />
+                    {row.sourceNames.length === 1
+                      ? t('notifications.timeline.moved', {
+                          source: row.sourceNames[0],
+                        })
+                      : t('notifications.timeline.movedMany', {
+                          count: row.sourceNames.length,
+                        })}
+                  </div>
+                );
+              case 'recalled':
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    className={classes.recalled}
+                    aria-pressed={historyId === row.item.id}
+                    onClick={(event) =>
+                      toggleHistory(row.item.id, event.currentTarget)
+                    }
+                  >
+                    <IconArrowBackUp size={15} stroke={2} aria-hidden />
+                    <span className={classes.recalledText}>
+                      {t('notifications.timeline.recalled', {
+                        source: row.item.sourceName,
+                        title: row.item.title,
+                      })}
+                    </span>
+                    <span className={classes.recalledOpen}>
+                      {t('notifications.versions.openRecalled')}
+                    </span>
+                    <Time iso={row.item.activityAt} />
+                  </button>
+                );
+              case 'quiet':
+                return <QuietGroup key={row.key} items={row.items} />;
+              case 'item':
+                return (
+                  <TimelineEntry
+                    key={row.key}
+                    item={row.item}
+                    userId={session?.user.id}
+                    historyOpen={historyId === row.item.id}
+                    onOpenHistory={(opener) =>
+                      toggleHistory(row.item.id, opener)
+                    }
+                  />
+                );
+            }
+          })}
+        </div>
+      </section>
+      {historyItem ? (
+        <aside
+          ref={panelRef}
+          className={classes.panel}
+          aria-label={t('notifications.versions.title')}
+        >
+          <div className={classes.panelHead}>
+            <div className={classes.panelTitle}>
+              <span className={classes.panelEyebrow}>
+                {t('notifications.versions.count', {
+                  count: historyItem.earlierVersions + 1,
+                })}
+              </span>
+              <h2 className={classes.panelName}>{historyItem.title}</h2>
+              <span className={classes.panelSource}>
+                {historyItem.sourceName}
+              </span>
+            </div>
+            <button
+              type="button"
+              ref={panelCloseRef}
+              className={classes.panelClose}
+              aria-label={t('notifications.versions.close')}
+              onClick={() => setHistoryId(null)}
+            >
+              <IconX size={14} stroke={2.2} aria-hidden />
+            </button>
+          </div>
+          <div className={classes.panelBody}>
+            <NotificationHistory key={historyItem.id} item={historyItem} />
+          </div>
+        </aside>
+      ) : null}
+    </div>
   );
 }
 
@@ -466,10 +574,15 @@ function SourceTile({ item }: { item: TimelineItem }) {
 function TimelineEntry({
   item,
   userId,
+  historyOpen,
+  onOpenHistory,
 }: {
   item: TimelineItem;
   userId: string | undefined;
+  historyOpen: boolean;
+  onOpenHistory: (opener: HTMLElement) => void;
 }) {
+  const { t } = useI18n();
   const bubble = item.sourceType === 'user' && !item.reply && !item.url;
   return (
     <article
@@ -494,7 +607,19 @@ function TimelineEntry({
             // A new question is a new form: keyed by round, no draft carries over.
             <Answer key={item.replyRound} item={item} userId={userId} />
           ) : null}
-          {item.editedAt ? <History item={item} /> : null}
+          {item.earlierVersions > 0 ? (
+            <button
+              type="button"
+              className={classes.historyOpen}
+              aria-pressed={historyOpen}
+              onClick={(event) => onOpenHistory(event.currentTarget)}
+            >
+              <IconHistory size={14} stroke={2.2} aria-hidden />
+              {t('notifications.versions.openEdited', {
+                count: item.earlierVersions,
+              })}
+            </button>
+          ) : null}
         </div>
       </div>
     </article>
@@ -539,109 +664,6 @@ function Answer({
             })}
       </span>
     </p>
-  );
-}
-
-/** What the notification said before each edit, with each round's answer. */
-function History({ item }: { item: TimelineItem }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const query = useInfiniteQuery({
-    ...notificationRevisionsQueryOptions(item.id),
-    enabled: open,
-  });
-  const lines = useMemo(() => {
-    if (!query.data) return [];
-    // Pages come newest first; the list reads oldest first. A round that
-    // spans two pages has its answer on both.
-    const revisions = query.data.pages
-      .flatMap((page) => page.revisions)
-      .reverse();
-    const responses = [
-      ...new Map(
-        query.data.pages
-          .flatMap((page) => page.responses)
-          .map((response) => [response.round, response]),
-      ).values(),
-    ];
-    // A round's answer belongs to the last version that asked that question.
-    const lastOfRound = new Map(
-      revisions.map((revision) => [revision.replyRound, revision.revision]),
-    );
-    return revisions.map((revision) => {
-      const response =
-        revision.reply &&
-        lastOfRound.get(revision.replyRound) === revision.revision
-          ? responses.find((entry) => entry.round === revision.replyRound)
-          : undefined;
-      return {
-        key: revision.revision,
-        at: revision.activityAt,
-        title: revision.card?.status
-          ? `${revision.card.status.label} · ${revision.title}`
-          : revision.title,
-        answer:
-          response && revision.reply
-            ? describeAnswers(revision.reply, response.answers)
-                .map((line) => line.value)
-                .join(' · ')
-            : null,
-      };
-    });
-  }, [query.data]);
-  return (
-    <div className={classes.history}>
-      <button
-        type="button"
-        className={classes.historyToggle}
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <IconChevronRight
-          size={13}
-          stroke={2.2}
-          className={classes.chevron}
-          data-open={open || undefined}
-          aria-hidden
-        />
-        {open
-          ? t('notifications.timeline.historyHide')
-          : t('notifications.timeline.history')}
-      </button>
-      {open ? (
-        query.data ? (
-          <ol className={classes.historyList}>
-            {query.hasNextPage ? (
-              <li>
-                <button
-                  type="button"
-                  className={classes.historyToggle}
-                  disabled={query.isFetchingNextPage}
-                  onClick={() => void query.fetchNextPage()}
-                >
-                  {t('notifications.timeline.historyMore')}
-                </button>
-              </li>
-            ) : null}
-            {lines.map((line) => (
-              <li key={line.key} className={classes.historyLine}>
-                <Time iso={line.at} />
-                <span className={classes.historyText}>
-                  {line.title}
-                  {line.answer
-                    ? ` · ${t('notifications.timeline.historyAnswer', {
-                        answer: line.answer,
-                      })}`
-                    : ''}
-                </span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <Loader size="xs" />
-        )
-      ) : null}
-    </div>
   );
 }
 

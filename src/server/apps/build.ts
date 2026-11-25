@@ -52,6 +52,7 @@ import { captureAppDocs, writeAppDocs } from './docs-build';
 import { subprocessSandboxEnv } from '../sandbox-env';
 import { validateSchemaInput } from '../json-schema-input';
 import { validateCron } from './cron-expr';
+import { manifestInvalid } from './manifest-validation';
 import {
   TaskInputSchemaError,
   taskDescriptorRegistry,
@@ -564,8 +565,9 @@ async function describeDataSchema(
 ): Promise<DataSchemaDescriptor> {
   const schemaPath = path.join(src, 'data', 'schema.ts');
   if (!(await pathExists(schemaPath))) {
-    throw new Error(
-      'capabilities.dataTable is true but data/schema.ts does not exist.',
+    throw manifestInvalid(
+      ['capabilities', 'dataTable'],
+      'is true but data/schema.ts does not exist',
     );
   }
   const descriptor = await toolchain.describe();
@@ -594,19 +596,25 @@ function resolveTaskInputs(
   const serviceName = normalized.rpc?.service;
   const service = normalized.api?.services.find((s) => s.name === serviceName);
   if (!service || !descriptors) {
-    throw new Error('Tasks require a compiled RPC service (rpc.service).');
+    throw manifestInvalid(
+      ['rpc', 'service'],
+      'tasks require a compiled RPC service',
+    );
   }
   const registry = taskDescriptorRegistry(descriptors);
-  for (const task of tasks.definitions) {
+  for (const [index, task] of tasks.definitions.entries()) {
+    const at = ['tasks', 'definitions', index] as const;
     const method = service.methods.find((m) => m.name === task.method);
     if (!method) {
-      throw new Error(
-        `Task "${task.name}" names RPC method "${task.method}", which is not defined on ${service.name}.`,
+      throw manifestInvalid(
+        [...at, 'method'],
+        'is not a method of the declared rpc.service',
       );
     }
     if (method.clientStreaming || method.serverStreaming) {
-      throw new Error(
-        `Task "${task.name}" names RPC method "${task.method}", which is a streaming method. A task run sends one unary request.`,
+      throw manifestInvalid(
+        [...at, 'method'],
+        'names a streaming method; a task run sends one unary request',
       );
     }
     try {
@@ -620,17 +628,17 @@ function resolveTaskInputs(
       throw error;
     }
     task.inputType = method.inputType;
-    for (const job of task.cron) {
-      const scheduleError = validateCron(job.schedule);
-      if (scheduleError) {
-        throw new Error(
-          `Task "${task.name}" cron job "${job.name}" has an invalid schedule: ${scheduleError}`,
+    for (const [jobIndex, job] of task.cron.entries()) {
+      if (validateCron(job.schedule)) {
+        throw manifestInvalid(
+          [...at, 'cron', jobIndex, 'schedule'],
+          'is not a valid five-field cron expression',
         );
       }
-      const check = validateSchemaInput(task.inputSchema, job.input);
-      if (!check.success) {
-        throw new Error(
-          `Task "${task.name}" cron job "${job.name}" input does not match the task input: ${check.message}`,
+      if (!validateSchemaInput(task.inputSchema, job.input).success) {
+        throw manifestInvalid(
+          [...at, 'cron', jobIndex, 'input'],
+          `does not match the task input message ${method.inputType}`,
         );
       }
     }
@@ -742,9 +750,8 @@ async function buildAppInner(
     // artifacts and the DB row are keyed by the `id` argument. If they diverge,
     // the deploy "succeeds" with URLs pointing at a different slug. Reject early.
     if (manifest.id !== id) {
-      throw new Error(
-        `manifest.id "${manifest.id}" does not match the app id "${id}". ` +
-          `Fix ${manifestFile} so its id matches the app.`,
+      throw manifestInvalid(['id'], `does not match the App id "${id}"`).inFile(
+        manifestFile,
       );
     }
 
@@ -761,14 +768,15 @@ async function buildAppInner(
         throw error;
       });
       if (!protoEntry) {
-        throw new Error(
-          `RPC proto declared by ${manifestFile} was not found: ${rpc.proto}`,
+        throw manifestInvalid(['rpc', 'proto'], 'file not found').inFile(
+          manifestFile,
         );
       }
       if (!protoEntry.isFile()) {
-        throw new Error(
-          `RPC proto declared by ${manifestFile} must be a regular file: ${rpc.proto}`,
-        );
+        throw manifestInvalid(
+          ['rpc', 'proto'],
+          'must name a regular file',
+        ).inFile(manifestFile);
       }
       // `buf generate` executes the plugins listed in buf.gen.yaml, and `local:`
       // plugins are arbitrary commands. The file ships with the app source, so
@@ -895,7 +903,9 @@ async function buildAppInner(
     if (manifest.capabilities.frontend && manifest.app && !nativeFrontend) {
       const entry = path.join(src, manifest.app.entry);
       if (!(await pathExists(entry))) {
-        throw new Error(`app entry not found: ${manifest.app.entry}`);
+        throw manifestInvalid(['app', 'entry'], 'file not found').inFile(
+          manifestFile,
+        );
       }
       await fs.mkdir(path.join(stage, 'app'), { recursive: true });
       const appBundle = await esbuild.build({
@@ -916,7 +926,9 @@ async function buildAppInner(
       const htmlRel = manifest.app.html ?? 'app/index.html';
       const htmlSrc = path.join(src, htmlRel);
       if (!(await pathExists(htmlSrc))) {
-        throw new Error(`app html not found: ${htmlRel}`);
+        throw manifestInvalid(['app', 'html'], 'file not found').inFile(
+          manifestFile,
+        );
       }
       // Inline the bundle into index.html. The platform serves the app over an
       // extensionless HTML route; inlining avoids a separate .js asset request
@@ -947,10 +959,13 @@ async function buildAppInner(
     // 4) Bundle each widget -> standalone ESM module exporting mount().
     if (manifest.capabilities.widgets && manifest.widgets.length > 0) {
       await fs.mkdir(path.join(stage, 'widgets'), { recursive: true });
-      for (const widget of manifest.widgets) {
+      for (const [index, widget] of manifest.widgets.entries()) {
         const entry = path.join(src, widget.entry);
         if (!(await pathExists(entry))) {
-          throw new Error(`widget entry not found: ${widget.entry}`);
+          throw manifestInvalid(
+            ['widgets', index, 'entry'],
+            'file not found',
+          ).inFile(manifestFile);
         }
         const widgetBundle = await esbuild.build({
           ...esbuildResolve,

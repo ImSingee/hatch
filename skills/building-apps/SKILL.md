@@ -108,6 +108,10 @@ run `hatch app update --directory <path> --json`, which fetches platform
 `origin/master`, resolve conflicts, validate, and deploy again. Nothing ever
 replaces local work silently.
 
+If deploy fails with `APP_MANIFEST_INVALID`, the message lists each manifest
+field to fix as `path: reason` (for example `app.routes[1].path`). Fix those
+fields in the manifest, commit, and deploy again.
+
 A destructive Data Table migration fails deploy with `CONFLICT`; the error
 message lists the preview and includes `Approval token: <token>`. Show the
 user what data is lost and get explicit approval with `ask`, then repeat the
@@ -467,6 +471,10 @@ including `data/schema.ts` and `gen/`. Relative imports keep their `.ts` or
 `.tsx` extension. Types for Node built-ins (`node:*` imports) need
 `@types/node` in `devDependencies`; `@types/*` packages listed in the App's own
 `package.json` are loaded automatically.
+
+End-to-end tests are not supported yet: do not write or run E2E tests. Keep
+unit tests to a minimum, covering only logic that is easy to get wrong, so the
+App's source package stays small.
 
 Run tests and local executions on the Deno runtime. Always pass these three
 flags, and include authorized `backend.extraPermissions` using the merge rules

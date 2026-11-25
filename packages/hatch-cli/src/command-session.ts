@@ -96,6 +96,25 @@ export function onePositional(positionals: string[], label: string): string {
   return positionals[0];
 }
 
+/**
+ * One or more ids given as positionals, in order: none empty, longer than
+ * 200 characters or repeated, and at most `max` of them.
+ */
+export function idPositionals(
+  positionals: string[],
+  label: string,
+  max = 1000,
+): string[] {
+  if (!positionals.length) throw invalid(`Supply at least one ${label}.`);
+  if (positionals.some((id) => !id || id.length > 200 || /\s/.test(id)))
+    throw invalid(`Each ${label} must be 1-200 characters without spaces.`);
+  if (new Set(positionals).size !== positionals.length)
+    throw invalid(`The same ${label} is listed more than once.`);
+  if (positionals.length > max)
+    throw invalid(`At most ${max} ids can be reordered at once.`);
+  return positionals;
+}
+
 /** The flags of a paged list command. */
 export const PAGE_OPTIONS: OptionSpec = {
   limit: { type: 'string' },

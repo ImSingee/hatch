@@ -5,6 +5,7 @@
  */
 import { resolve } from 'node:path';
 import {
+  idPositionals,
   invalid,
   listFlag,
   onePositional,
@@ -62,6 +63,7 @@ export type ProviderCommand =
       clearCatalogProvider?: true;
     } & ProviderFields)
   | { kind: 'remove'; id: string }
+  | { kind: 'reorder'; providerIds: string[] }
   | { kind: 'test'; id: string; modelId?: string }
   | { kind: 'fetch-models'; id: string; page: Page };
 
@@ -270,6 +272,16 @@ export function parseProviderCommand(
       );
     return { command: { kind: 'remove', id }, flags };
   }
+  if (operation === 'reorder') {
+    const { flags, positionals } = parseCommandArgs(args, offset, 2, {});
+    return {
+      command: {
+        kind: 'reorder',
+        providerIds: idPositionals(positionals, 'provider id'),
+      },
+      flags,
+    };
+  }
   if (operation === 'test') {
     const { flags, positionals } = parseCommandArgs(args, offset, 2, {
       model: { type: 'string' },
@@ -282,7 +294,7 @@ export function parseProviderCommand(
     };
   }
   throw invalid(
-    'Use hatch provider list, get, catalog, add, update, remove, test or fetch-models.',
+    'Use hatch provider list, get, catalog, add, update, remove, reorder, test or fetch-models.',
   );
 }
 
@@ -408,6 +420,9 @@ export async function runProvider(
     }
     case 'remove':
       result = await client.providers.delete({ id: command.id });
+      break;
+    case 'reorder':
+      result = await client.providers.reorder(command.providerIds);
       break;
     case 'test': {
       process.stderr.write('Sending one short prompt to the provider.\n');

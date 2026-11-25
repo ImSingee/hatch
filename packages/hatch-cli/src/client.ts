@@ -733,6 +733,10 @@ export function cliClient(transport: Transport) {
         await models.deleteModel(input);
         return { id: input.id, deleted: true };
       },
+      reorder: async (input: { providerId: string; modelIds: string[] }) => ({
+        providerId: input.providerId,
+        modelIds: (await models.reorderModels(input)).modelIds,
+      }),
     },
     providers: {
       list: async (input: { limit: number; cursor?: string }) => {
@@ -767,6 +771,10 @@ export function cliClient(transport: Transport) {
         await providers.deleteProvider(input);
         return { id: input.id, deleted: true };
       },
+      reorder: async (providerIds: string[]) => ({
+        providerIds: (await providers.reorderProviders({ providerIds }))
+          .providerIds,
+      }),
       test: async (input: { id: string; modelId?: string }) => {
         const result = await providers.testProvider(input);
         return {
