@@ -45,6 +45,8 @@ describe('native Data Table watch', () => {
     // about one poll per second.
     await vi.advanceTimersByTimeAsync(3_000);
     expect(polls() - first).toBeLessThanOrEqual(4);
+    // ...and it keeps polling after each backoff.
+    expect(polls() - first).toBeGreaterThanOrEqual(2);
     stop();
   });
 });

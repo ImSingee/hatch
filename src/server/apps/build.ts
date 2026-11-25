@@ -645,6 +645,10 @@ export async function buildApp(
     return await buildAppInner(id, options);
   } catch (error) {
     if (error instanceof AppError) throw error;
+    // A failed system call (disk full, permissions) is the platform's
+    // problem, not the source's: it stays an internal error, and its message
+    // (which names server paths) does not reach the caller.
+    if (isSystemError(error)) throw error;
     throw new AppBuildError(
       error instanceof Error ? error.message : String(error),
       { cause: error },
@@ -1031,14 +1035,62 @@ async function buildAppInner(
   }
 }
 
-/** Replace `target` with the finished `staged` directory. */
-async function replaceDirectory(staged: string, target: string): Promise<void> {
-  await fs.rm(target, { recursive: true, force: true });
-  await fs.mkdir(path.dirname(target), { recursive: true });
+function isSystemError(error: unknown): boolean {
+  const failure = error as NodeJS.ErrnoException | null;
+  return (
+    typeof failure?.code === 'string' &&
+    typeof failure.syscall === 'string' &&
+    typeof failure.errno === 'number'
+  );
+}
+
+type DirectoryIo = Pick<typeof fs, 'cp' | 'mkdir' | 'rename' | 'rm'>;
+
+/**
+ * Replace `target` with the finished `staged` directory. The previous output
+ * stays in place until the new one is complete beside it, and is put back if
+ * the swap fails, so a failure never leaves a partial output.
+ */
+export async function replaceDirectory(
+  staged: string,
+  target: string,
+  io: DirectoryIo = fs,
+): Promise<void> {
+  const code = (error: unknown) => (error as NodeJS.ErrnoException).code;
+  const discard = (dir: string) =>
+    io.rm(dir, { recursive: true, force: true }).catch(() => {});
+  await io.mkdir(path.dirname(target), { recursive: true });
+  // 1) The new output, complete, next to the target (same filesystem).
+  const incoming = `${target}.incoming-${randomUUID()}`;
   try {
-    await fs.rename(staged, target);
+    await io.rename(staged, incoming);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
-    await fs.cp(staged, target, { recursive: true });
+    if (code(error) !== 'EXDEV') throw error;
+    try {
+      await io.cp(staged, incoming, { recursive: true });
+    } catch (copyError) {
+      await discard(incoming);
+      throw copyError;
+    }
   }
+  // 2) Swap, keeping the previous output until the new one is in place.
+  const previous = `${target}.previous-${randomUUID()}`;
+  let hadPrevious = true;
+  try {
+    await io.rename(target, previous);
+  } catch (error) {
+    if (code(error) !== 'ENOENT') {
+      await discard(incoming);
+      throw error;
+    }
+    hadPrevious = false;
+  }
+  try {
+    await io.rename(incoming, target);
+  } catch (error) {
+    if (hadPrevious) await io.rename(previous, target).catch(() => {});
+    await discard(incoming);
+    throw error;
+  }
+  if (hadPrevious) await discard(previous);
 }

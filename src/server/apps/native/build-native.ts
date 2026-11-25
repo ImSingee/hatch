@@ -204,7 +204,7 @@ export function createHost() {
         case "hatch.theme.get": return { ok: true, theme };
         case "hatch.rpc": return { ok: true, message: {}, header: {} };
         case "hatch.data.query":
-          return { ok: true, result: { items: [], revision: 0, nextCursor: null } };
+          return { ok: true, result: { items: [], revision: 0, cursor: null } };
         case "hatch.data.events": return new Promise(() => {});
         case "hatch.nav.setTitle":
         case "hatch.nav.setRoute": return { ok: true };

@@ -93,10 +93,14 @@ backend, widgets and schema). In the disposable build copy it:
    rows, and a 60 s limit.
 6. `nsh package --target web` links the App's module for the web player.
 
-Every failure names App-relative files and lines (`app/main.tsx:12:7`). A
-failed build is an `AppBuildError` (`src/server/apps/build.ts`): the public
+Source diagnostics (types, source rules, unknown classes, a start-up throw)
+name App-relative files and lines (`app/main.tsx:12:7`); other failures name
+the step or rule that failed (an entry outside `app/`, a missing toolchain).
+A failed build is an `AppBuildError` (`src/server/apps/build.ts`): the public
 deploy RPC rejects it as `BAD_REQUEST` with the build output as its message,
-so `hatch app deploy` exits 2 and prints it, and nothing was released.
+so `hatch app deploy` exits 2 and prints it, and nothing was released. A
+failed system call during a build (a full disk, say) stays an internal error
+whose message, which names server paths, is not returned.
 
 Outputs, in the deployment's `app/` directory:
 
@@ -146,9 +150,12 @@ pages to their own origin is later work.
 
 ## Host bridge
 
-A native App holds no credentials and no network grant. It reaches the
-platform only through `host.call(name, args)`, answered by the shell with its
-own session. The grant is exactly these names (plus, later, the
+A native App holds no credentials and no network grant. Its supported way to
+reach the platform is `host.call(name, args)`, answered by the shell with its
+own session. On the web this is not an isolation boundary: the NSH grant
+governs NSH-managed requests, but the App runs in a page that is same-origin
+with the platform (see the trust model above), so shells must not rely on
+the bridge to authorize what web App code can reach. The grant is exactly these names (plus, later, the
 `hatch.native.*` names of granted capabilities):
 
 | Name                    | Arguments                                                                                                         | Answer (`ok: true`)                                               |

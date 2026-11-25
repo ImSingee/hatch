@@ -82,12 +82,19 @@ export function nshBinary(): string {
       encoding: 'utf8',
       timeout: 10_000,
     });
+    if (probe.error || probe.status !== 0) {
+      // A wrapper that prints the right version but fails is not usable.
+      seen.push(
+        `${file} (--version failed: ${probe.error?.message ?? `exit ${probe.status ?? probe.signal}`})`,
+      );
+      continue;
+    }
     const version = /^nsh (\S+)/.exec(probe.stdout ?? '')?.[1];
     if (version === NSH_VERSION) {
       resolved = file;
       return file;
     }
-    seen.push(`${file} (${version ?? 'not runnable'})`);
+    seen.push(`${file} (${version ?? 'not an nsh binary'})`);
   }
   throw new NshToolchainError(
     `Native Apps need nsh ${NSH_VERSION}, ` +

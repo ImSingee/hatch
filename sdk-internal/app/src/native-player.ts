@@ -111,6 +111,8 @@ export function createNativeHost(
     accent(): string;
     /** Resolves true once the App is visible, or false after `ms`. */
     visibleWithin(ms: number): Promise<boolean>;
+    /** Calls `listener` when the App is hidden; returns the unsubscribe. */
+    onHidden(listener: () => void): () => void;
     post(message: PlayerMessage): boolean;
     setTitle(title: string | null): void;
     setRoute(route: string): void;
@@ -249,11 +251,22 @@ export function createNativeHost(
     // usual wait (well inside the App's call timeout) without touching the
     // network, and the App catches up once shown, because the cursor it
     // sends then still names what it last saw.
+    // One deadline for the whole call, the wait to be shown included.
+    const deadline = Date.now() + DATA_EVENTS_WAIT_MS;
     if (!(await shell.visibleWithin(DATA_EVENTS_WAIT_MS))) {
       return { ok: true, events: [] };
     }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return { ok: true, events: [] };
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), DATA_EVENTS_WAIT_MS);
+    const timer = setTimeout(() => abort.abort(), remaining);
+    // Hiding the App ends the poll and drops what it read, so the App's
+    // cursor stays at what it last saw and it catches up when shown.
+    let hidden = false;
+    const stopHidden = shell.onHidden(() => {
+      hidden = true;
+      abort.abort();
+    });
     const found: { revision?: number; reset: boolean }[] = [];
     try {
       const response = await fetchImpl(
@@ -304,9 +317,10 @@ export function createNativeHost(
       if (!abort.signal.aborted) return refuse('unavailable', String(error));
     } finally {
       clearTimeout(timer);
+      stopHidden();
       abort.abort();
     }
-    return { ok: true, events: found };
+    return { ok: true, events: hidden ? [] : found };
   }
 
   return {
@@ -481,6 +495,7 @@ export async function startNativePlayer(): Promise<void> {
   let accent = storedAccent() ?? config.defaultAccent;
   let visible = true;
   const showWaiters: (() => void)[] = [];
+  const hideListeners = new Set<() => void>();
   let player: Player | null = null;
   let port: MessagePort | null = null;
   const pending: SurfaceMessage[] = [];
@@ -500,6 +515,9 @@ export async function startNativePlayer(): Promise<void> {
     }
     switch (message.type) {
       case 'navigate':
+        // The surface sends every navigation (its route may be stale); the
+        // App's live route decides whether it is a change.
+        if (rawHash() === message.route) break;
         history.replaceState(history.state, '', `#${message.route}`);
         player.hostEvent('hatch.nav', { route: message.route });
         break;
@@ -513,6 +531,8 @@ export async function startNativePlayer(): Promise<void> {
         visible = message.visible;
         if (visible) {
           for (const resolve of showWaiters.splice(0)) resolve();
+        } else {
+          for (const listener of hideListeners) listener();
         }
         player.hostEvent('hatch.visibility', { visible });
         break;
@@ -559,6 +579,10 @@ export async function startNativePlayer(): Promise<void> {
             }, ms);
             showWaiters.push(waiter);
           }),
+    onHidden(listener) {
+      hideListeners.add(listener);
+      return () => hideListeners.delete(listener);
+    },
     post,
     setTitle(title) {
       document.title = title ?? config.name;

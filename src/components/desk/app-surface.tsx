@@ -176,10 +176,10 @@ export function AppSurface({
       navigate: (next) => {
         const channel = nativeRef.current;
         if (channel) {
-          if (canonicalRoute(channel.route) !== canonicalRoute(next)) {
-            channel.route = next;
-            channel.send({ type: 'navigate', route: next });
-          }
+          // The cached route may lag the App's (its report can still be on
+          // the way), so always send; the player skips its current route.
+          channel.route = next;
+          channel.send({ type: 'navigate', route: next });
           return;
         }
         const win = winRef.current;

@@ -61,10 +61,15 @@ export async function publishRuntimeFile(
   }
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.${randomUUID()}.tmp`;
-  await fs.copyFile(source, temporary);
-  await fs.chmod(temporary, 0o444);
-  // A concurrent deploy may publish the same name; both hold equal bytes.
-  await fs.rename(temporary, target);
+  try {
+    await fs.copyFile(source, temporary);
+    await fs.chmod(temporary, 0o444);
+    // A concurrent deploy may publish the same name; both hold equal bytes.
+    await fs.rename(temporary, target);
+  } finally {
+    // Gone after a successful rename; a leftover after a failure.
+    await fs.rm(temporary, { force: true }).catch(() => {});
+  }
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -95,7 +100,9 @@ function acceptedCodings(header: string | null): (coding: string) => boolean {
     quality.set(name.trim(), q === undefined ? 1 : Number(q));
   }
   return (coding) => {
-    const q = quality.get(coding) ?? quality.get('*') ?? 0;
+    // `identity` is acceptable unless excluded by name or by `*;q=0`.
+    const fallback = coding === 'identity' ? 1 : 0;
+    const q = quality.get(coding) ?? quality.get('*') ?? fallback;
     return Number.isFinite(q) && q > 0;
   };
 }
@@ -116,7 +123,7 @@ export async function serveNshRuntimeFile(
   const variants: [string, string | null][] = [
     ...(accepts('br') ? [[`${file}.br`, 'br'] as [string, string]] : []),
     ...(accepts('gzip') ? [[`${file}.gz`, 'gzip'] as [string, string]] : []),
-    [file, null],
+    ...(accepts('identity') ? [[file, null] as [string, null]] : []),
   ];
   for (const [candidate, encoding] of variants) {
     let data: Buffer;
@@ -135,5 +142,15 @@ export async function serveNshRuntimeFile(
     if (encoding) headers['content-encoding'] = encoding;
     return new Response(new Uint8Array(data), { headers });
   }
-  return new Response('Not found', { status: 404 });
+  // The file exists, but the client accepts none of its representations.
+  const exists = await fs
+    .access(file)
+    .then(() => true)
+    .catch(() => false);
+  return exists
+    ? new Response('Not acceptable', {
+        status: 406,
+        headers: { vary: 'accept-encoding' },
+      })
+    : new Response('Not found', { status: 404 });
 }

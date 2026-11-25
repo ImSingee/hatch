@@ -237,6 +237,10 @@ describe.skipIf(!nshAvailable())(
         .replace(
           '<Text class="text-foreground">',
           '<Text class="text-foreground" style={{ color: \'#ff0000\' }}>',
+        )
+        .replace(
+          '<Text class="text-primary-foreground">',
+          "<Text\n        class=\"text-primary-foreground\"\n        style={{ ['backgroundColor']: '#00ff00' }}\n      >",
         );
       const message = await buildError({ 'app/custom/ui.tsx': ui });
       expect(message).toContain(
@@ -248,6 +252,10 @@ describe.skipIf(!nshAvailable())(
       );
       expect(message).toContain(
         `app/custom/ui.tsx:${lineOf(ui, "'#ff0000'")}: bare colour "#ff0000" for color`,
+      );
+      // A literal computed key is the same style key.
+      expect(message).toContain(
+        `app/custom/ui.tsx:${lineOf(ui, "'#00ff00'")}: bare colour "#00ff00" for backgroundColor`,
       );
     });
 
@@ -266,6 +274,13 @@ describe.skipIf(!nshAvailable())(
           '  {',
           '    const client = { watch: () => 0 };',
           '    client.watch(); // a local object, not the RPC client',
+          '  }',
+          '  {',
+          '    const createClient = (_: unknown) => ({ watch: () => 0 });',
+          '    const local = createClient(CounterService);',
+          '    local.watch(); // a local factory, not Connect',
+          "    const key = 'getCount' as const;",
+          '    void client[key]({}); // a unary method under a computed key',
           '  }',
           '  const go = (next: string) => {',
         ].join('\n'),
@@ -287,6 +302,12 @@ describe.skipIf(!nshAvailable())(
       );
       expect(message).not.toContain(
         `app/main.tsx:${lineOf(main, 'client.watch(); // a local')}:`,
+      );
+      expect(message).not.toContain(
+        `app/main.tsx:${lineOf(main, 'local.watch(); // a local factory')}:`,
+      );
+      expect(message).not.toContain(
+        `app/main.tsx:${lineOf(main, 'void client[key]')}:`,
       );
     });
 
@@ -371,13 +392,15 @@ describe.skipIf(!nshAvailable())(
         const { port } = server.address() as net.AddressInfo;
         const main = (await fixtureFile('app/main.tsx')).replace(
           '  show(route());',
-          `  show(route());\n  void fetch('http://127.0.0.1:${port}/escape').then(\n    () => error.set('reached'),\n    (cause: unknown) => error.set(String(cause)),\n  );`,
+          `  show(route());\n  void fetch('http://127.0.0.1:${port}/escape').then(\n    () => error.set('reached'),\n    (cause: unknown) => console.log('request denied:', String(cause)),\n  );`,
         );
         const { sourceDir, outputDir } = await nativeSource({
           'app/main.tsx': main,
         });
         const result = await buildApp('demo', { sourceDir, outputDir });
         expect(result.log).toContain('$ nsh test app/main.tsx');
+        // The App saw its request refused (a pending one would not count).
+        expect(result.log).toMatch(/request denied:.*is not granted/);
         expect(requests).toEqual([]);
       } finally {
         server.close();

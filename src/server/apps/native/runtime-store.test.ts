@@ -61,12 +61,28 @@ describe('NSH runtime store', () => {
     );
     expect(refused.headers.get('content-encoding')).toBeNull();
     expect(await refused.text()).toBe('export const runtime = 1;');
+    // Excluding the plain file leaves only Brotli, or nothing at all.
+    const brotliOnly = await store.serveNshRuntimeFile(
+      '0.6.1',
+      'nsh.0123456789.js',
+      'br, identity;q=0',
+    );
+    expect(brotliOnly.headers.get('content-encoding')).toBe('br');
+    for (const header of ['gzip, identity;q=0', 'gzip, *;q=0']) {
+      const none = await store.serveNshRuntimeFile(
+        '0.6.1',
+        'nsh.0123456789.js',
+        header,
+      );
+      expect(none.status).toBe(406);
+    }
   });
 
   it('refuses anything that is not a runtime file of a version', async () => {
     for (const [version, file] of [
-      ['0.6.1', '../../secret.txt'],
-      ['0.6.1', 'browser.0123456789/../../../secret.txt'],
+      // Both would reach `<data>/secret.txt` without the name guard.
+      ['0.6.1', '../../../secret.txt'],
+      ['0.6.1', 'browser.0123456789/../../../../secret.txt'],
       ['..', 'nsh.0123456789.js'],
       ['0.6', 'nsh.0123456789.js'],
       ['0.6.1', 'nsh.0123456789.js.br'],

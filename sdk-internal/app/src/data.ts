@@ -452,8 +452,9 @@ export type DataTransport = {
   ): Promise<T>;
   /**
    * Report changes to `table` after revision `since` until `signal` aborts
-   * or the connection ends (resolve), or fails (reject; a
-   * `DataRequestError` with a 4xx status stops the watch).
+   * or the connection ends (resolve), or fails (reject). A
+   * `DataRequestError` with a 4xx status stops the watch, except 408, 425
+   * and 429, after which it reconnects.
    */
   changes(
     table: string,
@@ -641,6 +642,8 @@ export function createDataClient<TSchema extends DataSchema>(
       let timer: ReturnType<typeof setTimeout> | undefined;
       let timerDeadline: number | undefined;
       let revision = 0;
+      /** Resets seen so far; a query compares it across its run. */
+      let resets = 0;
       let refetching: Promise<'success' | 'retry' | 'permanent'> | undefined;
       let refetchAgain = false;
 
@@ -663,13 +666,19 @@ export function createDataClient<TSchema extends DataSchema>(
           let outcome: 'success' | 'retry' | 'permanent' = 'retry';
           do {
             refetchAgain = false;
+            const startedAfterReset = resets;
             try {
               const result = await rawQuery<DataQueryResult>(
                 { ...input },
                 abort.signal,
               );
               if (abort.signal.aborted) return 'retry';
-              revision = Math.max(revision, result.revision);
+              // A query that began before a reset may carry the old, higher
+              // revision; it must not move the cursor back above the reset.
+              // The reset also asked for another query, which sets it.
+              if (startedAfterReset === resets) {
+                revision = Math.max(revision, result.revision);
+              }
               listener(result as never);
               outcome = 'success';
             } catch (error) {
@@ -751,6 +760,7 @@ export function createDataClient<TSchema extends DataSchema>(
               revision,
               abort.signal,
               (event) => {
+                if (event.reset) resets += 1;
                 if (event.revision !== undefined) {
                   revision = event.reset
                     ? event.revision

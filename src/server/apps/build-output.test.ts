@@ -8,21 +8,35 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const failBundles = { on: false };
+const failBundles: { on: false | 'source' | 'system' } = { on: false };
 
 vi.mock('esbuild', async (importOriginal) => {
   const real = await importOriginal<typeof import('esbuild')>();
   return {
     ...real,
     // Fail only the frontend bundle, which runs after source validation.
-    build: ((options: Parameters<typeof real.build>[0]) =>
-      failBundles.on && options.outfile?.endsWith(path.join('app', 'app.js'))
-        ? Promise.reject(new Error('frontend bundle failed'))
-        : real.build(options)) as typeof real.build,
+    build: ((options: Parameters<typeof real.build>[0]) => {
+      if (
+        !failBundles.on ||
+        !options.outfile?.endsWith(path.join('app', 'app.js'))
+      ) {
+        return real.build(options);
+      }
+      if (failBundles.on === 'system') {
+        return Promise.reject(
+          Object.assign(new Error('ENOSPC: no space left on device, write'), {
+            code: 'ENOSPC',
+            errno: -28,
+            syscall: 'write',
+          }),
+        );
+      }
+      return Promise.reject(new Error('frontend bundle failed'));
+    }) as typeof real.build,
   };
 });
 
-const { buildApp } = await import('./build');
+const { AppBuildError, buildApp, replaceDirectory } = await import('./build');
 
 const tempDirs: string[] = [];
 
@@ -87,7 +101,7 @@ describe('buildApp output replacement', () => {
     );
     await fs.access(path.join(outputDir, 'app', 'app.js'));
 
-    failBundles.on = true;
+    failBundles.on = 'source';
     await expect(buildApp('demo', { sourceDir, outputDir })).rejects.toThrow(
       /frontend bundle failed/,
     );
@@ -98,5 +112,43 @@ describe('buildApp output replacement', () => {
       ),
     ).toBe(before);
     await fs.access(path.join(outputDir, 'app', 'app.js'));
+
+    // A failed system call is not a source error: it stays internal.
+    failBundles.on = 'system';
+    const failure = await buildApp('demo', { sourceDir, outputDir }).catch(
+      (error: unknown) => error,
+    );
+    expect(failure).not.toBeInstanceOf(AppBuildError);
+    expect((failure as NodeJS.ErrnoException).code).toBe('ENOSPC');
   }, 60_000);
+
+  it('keeps the previous output when copying across devices fails', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-swap-'));
+    tempDirs.push(root);
+    const staged = path.join(root, 'staged');
+    const target = path.join(root, 'out');
+    await fs.mkdir(staged);
+    await fs.writeFile(path.join(staged, 'new.txt'), 'new');
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(target, 'old.txt'), 'old');
+    const crossDevice = Object.assign(new Error('EXDEV'), { code: 'EXDEV' });
+    await expect(
+      replaceDirectory(staged, target, {
+        mkdir: fs.mkdir,
+        rm: fs.rm,
+        rename: async (from, to) => {
+          if (String(from) === staged) throw crossDevice;
+          return fs.rename(from, to);
+        },
+        // Writes part of the copy, then fails.
+        cp: async (_from, to) => {
+          await fs.mkdir(String(to), { recursive: true });
+          await fs.writeFile(path.join(String(to), 'partial.txt'), 'x');
+          throw new Error('copy failed');
+        },
+      } as Parameters<typeof replaceDirectory>[2]),
+    ).rejects.toThrow('copy failed');
+    expect(await fs.readdir(target)).toEqual(['old.txt']);
+    expect((await fs.readdir(root)).sort()).toEqual(['out', 'staged']);
+  });
 });

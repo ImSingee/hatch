@@ -29,6 +29,8 @@ import {
   type ImportDeclaration,
   type JsxAttribute,
   type JsxExpression,
+  type NamedImports,
+  type NamespaceImport,
   type Node,
   type PropertyAccessExpression,
   type PropertyAssignment,
@@ -304,21 +306,51 @@ function unwrap(node: Node): Node {
   return current;
 }
 
-/** `createClient(Service, ...)` -> `Service`. */
-function createdClientService(node: Node): string | undefined {
+/** The Connect package whose `createClient` makes an RPC client. */
+const CONNECT_MODULE = '@connectrpc/connect';
+
+/**
+ * A call that may create a Connect client: `factory(Service, ...)` or
+ * `ns.createClient(Service, ...)`. Whether `factory` / `ns` really is the
+ * Connect import is decided later from bindings.
+ */
+type ClientCreation = {
+  service: string;
+  /** The identifier to resolve: the factory, or the namespace. */
+  binding: Node;
+  viaNamespace: boolean;
+};
+
+function clientCreation(node: Node): ClientCreation | undefined {
   const call = unwrap(node) as CallExpression;
   if (call.kind !== SyntaxKind.CallExpression) return undefined;
-  const callee = unwrap(call.expression);
-  if (
-    nameText(callee) !== 'createClient' ||
-    callee.kind !== SyntaxKind.Identifier
-  ) {
-    return undefined;
-  }
   const first = call.arguments[0];
-  return first && first.kind === SyntaxKind.Identifier
-    ? (first as Identifier).text
-    : undefined;
+  if (!first || first.kind !== SyntaxKind.Identifier) return undefined;
+  const service = (first as Identifier).text;
+  const callee = unwrap(call.expression);
+  if (callee.kind === SyntaxKind.Identifier) {
+    return { service, binding: callee, viaNamespace: false };
+  }
+  if (callee.kind === SyntaxKind.PropertyAccessExpression) {
+    const access = callee as PropertyAccessExpression;
+    const target = unwrap(access.expression);
+    if (
+      nameText(access.name) === 'createClient' &&
+      target.kind === SyntaxKind.Identifier
+    ) {
+      return { service, binding: target, viaNamespace: true };
+    }
+  }
+  return undefined;
+}
+
+/** A property or attribute name, a literal computed key (`['color']`) included. */
+function keyText(node: Node | undefined): string | undefined {
+  if (node?.kind === SyntaxKind.ComputedPropertyName) {
+    const expression = unwrap((node as Node & { expression: Node }).expression);
+    return isStringLike(expression) ? expression.text : undefined;
+  }
+  return nameText(node);
 }
 
 /**
@@ -407,7 +439,10 @@ async function fileFindings(
   };
 
   // Client bindings and the member calls whose receiver may be one.
-  const clientDeclarations: { name: Node; service: string }[] = [];
+  const clientDeclarations: { name: Node; creation: ClientCreation }[] = [];
+  // Local names of `createClient` and of namespaces imported from Connect.
+  const connectFactories: Node[] = [];
+  const connectNamespaces: Node[] = [];
   const memberCalls: { receiver: Node; method: string; at: Node }[] = [];
 
   const visit = (node: Node): void => {
@@ -430,6 +465,27 @@ async function fileFindings(
       case SyntaxKind.ImportDeclaration: {
         const declaration = node as ImportDeclaration;
         const specifier = nameText(declaration.moduleSpecifier);
+        const clause = declaration.importClause;
+        if (
+          specifier === CONNECT_MODULE &&
+          clause &&
+          clause.phaseModifier !== SyntaxKind.TypeKeyword
+        ) {
+          const bindings = clause.namedBindings;
+          if (bindings?.kind === SyntaxKind.NamespaceImport) {
+            connectNamespaces.push((bindings as NamespaceImport).name);
+          } else if (bindings?.kind === SyntaxKind.NamedImports) {
+            for (const element of (bindings as NamedImports).elements) {
+              if (
+                !element.isTypeOnly &&
+                nameText(element.propertyName ?? element.name) ===
+                  'createClient'
+              ) {
+                connectFactories.push(element.name);
+              }
+            }
+          }
+        }
         // `import type * as x` is erased and never reaches the linker.
         if (
           specifier &&
@@ -458,7 +514,7 @@ async function fileFindings(
       }
       case SyntaxKind.PropertyAssignment: {
         const property = node as PropertyAssignment;
-        colourValue(nameText(property.name), property.initializer);
+        colourValue(keyText(property.name), property.initializer);
         break;
       }
       case SyntaxKind.JsxAttribute: {
@@ -488,11 +544,10 @@ async function fileFindings(
       }
       case SyntaxKind.VariableDeclaration: {
         const declaration = node as VariableDeclaration;
-        const service =
-          declaration.initializer &&
-          createdClientService(declaration.initializer);
-        if (service && declaration.name.kind === SyntaxKind.Identifier) {
-          clientDeclarations.push({ name: declaration.name, service });
+        const creation =
+          declaration.initializer && clientCreation(declaration.initializer);
+        if (creation && declaration.name.kind === SyntaxKind.Identifier) {
+          clientDeclarations.push({ name: declaration.name, creation });
         }
         break;
       }
@@ -508,7 +563,10 @@ async function fileFindings(
         } else if (callee.kind === SyntaxKind.ElementAccessExpression) {
           const access = callee as ElementAccessExpression;
           receiver = unwrap(access.expression);
-          method = nameText(unwrap(access.argumentExpression));
+          // Only a literal key names the method; `client[key]` is not read
+          // by its spelling.
+          const key = unwrap(access.argumentExpression);
+          method = isStringLike(key) ? key.text : undefined;
         }
         if (receiver && method) {
           memberCalls.push({ receiver, method, at: callee });
@@ -530,27 +588,53 @@ async function fileFindings(
         'supports unary RPC only.',
     );
   };
-  // `createClient(Service, t).watch(...)`
-  const byName = memberCalls.filter(({ receiver, method, at }) => {
-    const inline = createdClientService(receiver);
-    if (inline) reportStreaming(inline, method, at);
-    return !inline && receiver.kind === SyntaxKind.Identifier;
+  if (connectFactories.length + connectNamespaces.length === 0) {
+    return findings;
+  }
+  // `createClient(Service, t).watch(...)`, and `client.watch(...)` where
+  // `client` is declared from one; the factory must resolve to Connect's.
+  const inline = memberCalls.flatMap((call) => {
+    const creation = clientCreation(call.receiver);
+    return creation ? [{ ...call, creation }] : [];
   });
-  if (clientDeclarations.length === 0 || byName.length === 0) return findings;
-  // `client.watch(...)` where `client` resolves to a client declaration.
-  const symbols = await checker.getSymbolAtLocation([
-    ...clientDeclarations.map(({ name }) => name),
+  const byName = memberCalls.filter(
+    ({ receiver }) => receiver.kind === SyntaxKind.Identifier,
+  );
+  const nodes = [
+    ...connectFactories,
+    ...connectNamespaces,
+    ...clientDeclarations.flatMap(({ name, creation }) => [
+      name,
+      creation.binding,
+    ]),
+    ...inline.map(({ creation }) => creation.binding),
     ...byName.map(({ receiver }) => receiver),
-  ]);
+  ];
+  const symbols = await checker.getSymbolAtLocation(nodes);
+  let at = 0;
+  const next = () => symbols[at++]?.id;
+  const factories = new Set(connectFactories.map(next));
+  const namespaces = new Set(connectNamespaces.map(next));
+  const isConnect = (creation: ClientCreation, id: number | undefined) =>
+    id !== undefined &&
+    (creation.viaNamespace ? namespaces : factories).has(id);
   const services = new Map<number, string>();
-  clientDeclarations.forEach(({ service }, index) => {
-    const symbol = symbols[index];
-    if (symbol) services.set(symbol.id, service);
-  });
-  byName.forEach(({ method, at }, index) => {
-    const symbol = symbols[clientDeclarations.length + index];
-    const service = symbol && services.get(symbol.id);
-    if (service) reportStreaming(service, method, at);
-  });
+  for (const { creation } of clientDeclarations) {
+    const name = next();
+    const binding = next();
+    if (name !== undefined && isConnect(creation, binding)) {
+      services.set(name, creation.service);
+    }
+  }
+  for (const { creation, method, at: node } of inline) {
+    if (isConnect(creation, next())) {
+      reportStreaming(creation.service, method, node);
+    }
+  }
+  for (const { method, at: node } of byName) {
+    const id = next();
+    const service = id === undefined ? undefined : services.get(id);
+    if (service) reportStreaming(service, method, node);
+  }
   return findings;
 }
