@@ -1,9 +1,10 @@
 /**
  * Rules checked with NSH itself: the catalogue's types reject `class` and
  * `style`, forms keep drafts through the App's storage, tabs keep a selection
- * while their items change, the library follows the shell's theme, and the
+ * while their items change, list pages open any item and survive resizes, the library follows the shell's theme, and the
  * gallery builds for release with every class resolved. Skipped where `nsh`
- * is not installed (it is not in CI yet); set `NSH_BIN` to use another binary.
+ * is not installed (not on `PATH`, `~/.local/bin` or `~/.nsh/bin`); set
+ * `NSH_BIN` to use another binary.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -12,12 +13,24 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { prepareAppRoot } from '../gallery/prepare.ts';
 
+/** `NSH_BIN`, else `nsh` on `PATH`, else the install script's places. */
 const nsh =
   process.env.NSH_BIN ??
   [
+    ...(process.env.PATH ?? '')
+      .split(path.delimiter)
+      .filter(Boolean)
+      .map((directory) => path.join(directory, 'nsh')),
     path.join(os.homedir(), '.local/bin/nsh'),
     path.join(os.homedir(), '.nsh/bin/nsh'),
-  ].find((candidate) => fs.existsSync(candidate));
+  ].find((candidate) => {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return fs.statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  });
 
 const UI = path.resolve(import.meta.dirname, '..');
 
@@ -52,12 +65,18 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('keeps form drafts in the App storage', () => {
     expect(run(['test', 'app/draft.test.tsx'], fixture('draft'))).toMatch(
-      /^ok\n[\s\S]*6 passed/,
+      /^ok\n[\s\S]*8 passed/,
     );
   }, 240_000);
 
   it('keeps a tab selected while the items change', () => {
     expect(run(['test', 'app/tabs.test.tsx'], fixture('tabs'))).toMatch(
+      /^ok\n[\s\S]*2 passed/,
+    );
+  }, 240_000);
+
+  it('opens list items and keeps the list across resizes', () => {
+    expect(run(['test', 'app/patterns.test.tsx'], fixture('patterns'))).toMatch(
       /^ok\n[\s\S]*2 passed/,
     );
   }, 240_000);

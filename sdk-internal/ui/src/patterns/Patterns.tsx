@@ -1,6 +1,6 @@
 import { Scroll, Text, View, signal } from 'nsh';
 import type { JSX } from 'nsh';
-import { Each } from '../core/control';
+import { Each, If } from '../core/control';
 import { WIDE_MIN, paneWidth } from '../core/env';
 import { EmptyState, Stat } from '../display/Display';
 import type { EmptyStateProps, StatProps } from '../display/Display';
@@ -63,47 +63,93 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
   const wide = () => paneWidth() >= WIDE_MIN;
   const nav = PageNavContext();
 
+  // `If`, not ternaries: the App passes a new `search` object and a new
+  // `items` array as they change, and a ternary would rebuild the search
+  // field (losing what is typed) and the list (losing its scroll) each time.
   const list = (inColumn: boolean) => (
     <>
-      {props.search ? (
+      <If when={props.search !== undefined}>
         <TextField
           label={`Search ${props.title.toLowerCase()}`}
           labelHidden
           kind="search"
           icon={IconSearch}
-          value={props.search.value}
-          onChange={props.search.onChange}
+          value={props.search?.value ?? ''}
+          onChange={(value) => props.search?.onChange(value)}
           placeholder={
-            props.search.placeholder ?? `Search ${props.title.toLowerCase()}`
+            props.search?.placeholder ?? `Search ${props.title.toLowerCase()}`
           }
         />
-      ) : null}
-      {!props.loading && props.items.length === 0 && props.empty ? (
-        <EmptyState {...props.empty} />
-      ) : (
-        <List
-          items={props.items}
-          getKey={props.getKey}
-          loading={props.loading}
-          renderItem={(item) => (
-            <ListItem
-              {...props.renderItem(item())}
-              selected={inColumn && selectedKey() === props.getKey(item())}
-              onPress={() => select(props.getKey(item()))}
-            />
-          )}
-        />
-      )}
+      </If>
+      <If
+        when={
+          !props.loading &&
+          props.items.length === 0 &&
+          props.empty !== undefined
+        }
+        else={
+          <List
+            items={props.items}
+            getKey={props.getKey}
+            loading={props.loading}
+            renderItem={(item) => (
+              <ListItem
+                {...props.renderItem(item())}
+                selected={inColumn && selectedKey() === props.getKey(item())}
+                onPress={() => select(props.getKey(item()))}
+              />
+            )}
+          />
+        }
+      >
+        <EmptyState {...(props.empty as EmptyStateProps)} />
+      </If>
     </>
   );
 
-  const detail = (item: T) => (
-    <Page title={props.detailTitle(item)}>{props.renderDetail(item)}</Page>
+  // The selected item's page, built again only when the selection moves to
+  // another item, not on every change the selection reads.
+  const detail = () => (
+    <Each
+      of={selected() === null ? [] : [selected() as T]}
+      key={(item) => props.getKey(item)}
+    >
+      {(item) => (
+        <Page title={props.detailTitle(item())}>
+          {props.renderDetail(item())}
+        </Page>
+      )}
+    </Each>
   );
 
+  // `If`, not a ternary: a ternary would rebuild the layout (and lose the
+  // search text, focus and scroll) on every pane resize, `If` only when it
+  // crosses `WIDE_MIN`.
   return (
     <View class="flex-1 self-stretch">
-      {wide() ? (
+      <If
+        when={wide()}
+        else={
+          <If
+            when={selected() !== null}
+            else={
+              <Page
+                title={props.title}
+                description={props.description}
+                actions={props.actions}
+              >
+                {list(false)}
+              </Page>
+            }
+          >
+            <PageNavContext.Provider
+              value={{ canGoBack: () => true, back: () => select(null) }}
+            >
+              {detail()}
+            </PageNavContext.Provider>
+          </If>
+        }
+      >
         <View class="flex-1 flex-row">
           <View class="w-90 border-r border-hairline">
             <Scroll class="flex-1" contentClass="pt-[env(safe-area-inset-top)]">
@@ -135,34 +181,23 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
             </Scroll>
           </View>
           <View class="flex-1">
-            {selected() ? (
-              detail(selected() as T)
-            ) : (
-              <View class="flex-1 items-center justify-center">
-                <EmptyState
-                  title="Nothing selected"
-                  description="Choose an item to see it here."
-                  compact
-                />
-              </View>
-            )}
+            <If
+              when={selected() !== null}
+              else={
+                <View class="flex-1 items-center justify-center">
+                  <EmptyState
+                    title="Nothing selected"
+                    description="Choose an item to see it here."
+                    compact
+                  />
+                </View>
+              }
+            >
+              {detail()}
+            </If>
           </View>
         </View>
-      ) : selected() ? (
-        <PageNavContext.Provider
-          value={{ canGoBack: () => true, back: () => select(null) }}
-        >
-          {detail(selected() as T)}
-        </PageNavContext.Provider>
-      ) : (
-        <Page
-          title={props.title}
-          description={props.description}
-          actions={props.actions}
-        >
-          {list(false)}
-        </Page>
-      )}
+      </If>
     </View>
   );
 }

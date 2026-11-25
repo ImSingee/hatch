@@ -153,6 +153,7 @@ function ToastCard(props: { entry: () => ToastEntry }): JSX.Element {
           label={(value().action as Action).label}
           kind="subtle"
           size="sm"
+          disabled={(value().action as Action).disabled}
           onPress={() => {
             (value().action as Action).onPress();
             dismiss(props.entry().id);

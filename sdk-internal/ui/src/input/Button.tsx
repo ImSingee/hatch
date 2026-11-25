@@ -92,9 +92,6 @@ export type ButtonProps = {
   fullWidth?: boolean;
   /** `submit` submits the `Form` the button is in. */
   type?: 'button' | 'submit';
-  /** Read by screen readers after the label, for a result that is not
-   * obvious from it. */
-  hint?: string;
   onPress?: () => void;
 };
 

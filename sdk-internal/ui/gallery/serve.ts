@@ -17,19 +17,24 @@ const repo = path.resolve(gallery, '../../..');
 const fonts = (pkg: string) =>
   path.join(repo, 'node_modules/@fontsource-variable', pkg, 'files');
 
-const routes: [prefix: string, resolve: (rest: string) => string][] = [
-  ['/runtime/', (rest) => path.join(os.homedir(), '.nsh/runtime/web', rest)],
-  ['/bundle/', (rest) => path.join(gallery, '.nsh/out', rest)],
+/** Each route serves files below its own root, and nothing outside it. */
+const routes: [prefix: string, root: (rest: string) => string][] = [
+  ['/runtime/', () => path.join(os.homedir(), '.nsh/runtime/web')],
+  ['/bundle/', () => path.join(gallery, '.nsh/out')],
   [
     '/fonts/',
-    (rest) =>
-      path.join(
-        fonts(rest.startsWith('nunito') ? 'nunito' : 'jetbrains-mono'),
-        rest,
-      ),
+    (rest) => fonts(rest.startsWith('nunito') ? 'nunito' : 'jetbrains-mono'),
   ],
-  ['/', (rest) => path.join(gallery, 'web', rest || 'index.html')],
+  ['/', () => path.join(gallery, 'web')],
 ];
+
+/** The file a request names below `root`, or null when its path leaves the
+ * root (`..`, encoded separators) or is not a file. */
+function fileBelow(root: string, rest: string): string | null {
+  const file = path.resolve(root, rest || 'index.html');
+  if (!file.startsWith(root + path.sep)) return null;
+  return fs.existsSync(file) && fs.statSync(file).isFile() ? file : null;
+}
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -43,12 +48,17 @@ const port = Number(process.argv[2] ?? 8791);
 http
   .createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
-    for (const [prefix, resolve] of routes) {
+    for (const [prefix, root] of routes) {
       if (!url.pathname.startsWith(prefix)) continue;
-      const file = resolve(
-        decodeURIComponent(url.pathname.slice(prefix.length)),
-      );
-      if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) continue;
+      let rest: string;
+      try {
+        rest = decodeURIComponent(url.pathname.slice(prefix.length));
+      } catch {
+        response.writeHead(400).end();
+        return;
+      }
+      const file = fileBelow(path.resolve(root(rest)), rest);
+      if (!file) continue;
       response.writeHead(200, {
         'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream',
         'cache-control': 'no-store',

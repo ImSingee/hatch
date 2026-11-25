@@ -43,6 +43,12 @@ const TAGS = [
 
 export function Inputs() {
   const starred = signal(false);
+  // The controls shown with a starting value hold it here, as an App would.
+  const reminder = signal(true);
+  const frostAlerts = signal(true);
+  const units = signal('metric');
+  const shade = signal(40);
+  const nextWatering = signal<string | null>('2026-04-12T07:30');
   return (
     <Page
       title="Inputs"
@@ -138,14 +144,16 @@ export function Inputs() {
           <Checkbox
             label="Send a reminder"
             description="A notification at 7:00 on watering days."
-            checked
+            checked={reminder()}
+            onChange={(value) => reminder.set(value)}
           />
           <Checkbox label="All beds" indeterminate />
           <Checkbox label="Locked option" disabled />
           <Switch
             label="Frost alerts"
             description="Warn when the night drops below 2 °C."
-            checked
+            checked={frostAlerts()}
+            onChange={(value) => frostAlerts.set(value)}
           />
           <Switch label="Weekly summary" />
           <Switch label="Unavailable" disabled />
@@ -164,7 +172,8 @@ export function Inputs() {
               },
               { value: 'mixed', label: 'Mixed', disabled: true },
             ]}
-            value="metric"
+            value={units()}
+            onChange={(value) => units.set(value)}
           />
           <RadioGroup
             label="Week starts on"
@@ -176,12 +185,18 @@ export function Inputs() {
           />
           <Slider
             label="Shade"
-            value={40}
+            value={shade()}
+            onChange={(value) => shade.set(value)}
             formatValue={(value) => `${value} %`}
           />
           <Slider label="Disabled" value={70} disabled />
           <DatePicker label="Sown on" placeholder="Pick a date" clearable />
-          <DatePicker label="Next watering" withTime value="2026-04-12T07:30" />
+          <DatePicker
+            label="Next watering"
+            withTime
+            value={nextWatering()}
+            onChange={(value) => nextWatering.set(value)}
+          />
         </Stack>
       </Card>
 

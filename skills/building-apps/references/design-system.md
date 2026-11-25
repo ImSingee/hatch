@@ -284,19 +284,18 @@ A segmented control that switches between views of the same content. With `conte
 
 A button that runs an action of the App.
 
-| Prop               | Type                   | Description                                                                       |
-| ------------------ | ---------------------- | --------------------------------------------------------------------------------- |
-| `label` (required) | `string`               | The button's text, in sentence case: a verb for what it does.                     |
-| `kind`             | `ButtonKind`           | Its emphasis.                                                                     |
-| `size`             | `ControlSize`          | `sm` 30, `md` 36 (default), `lg` 46 points tall; taller on touch.                 |
-| `icon`             | `IconData`             | An icon before the label.                                                         |
-| `iconEnd`          | `IconData`             | An icon after the label, such as a chevron for a menu.                            |
-| `loading`          | `boolean`              | Shows a spinner in place of the label and ignores presses.                        |
-| `disabled`         | `boolean`              | Turns it off: it shows dimmed and takes no input.                                 |
-| `fullWidth`        | `boolean`              | Fills the width of its container.                                                 |
-| `type`             | `'button' \| 'submit'` | `submit` submits the `Form` the button is in.                                     |
-| `hint`             | `string`               | Read by screen readers after the label, for a result that is not obvious from it. |
-| `onPress`          | `() => void`           | Called when it is pressed.                                                        |
+| Prop               | Type                   | Description                                                       |
+| ------------------ | ---------------------- | ----------------------------------------------------------------- |
+| `label` (required) | `string`               | The button's text, in sentence case: a verb for what it does.     |
+| `kind`             | `ButtonKind`           | Its emphasis.                                                     |
+| `size`             | `ControlSize`          | `sm` 30, `md` 36 (default), `lg` 46 points tall; taller on touch. |
+| `icon`             | `IconData`             | An icon before the label.                                         |
+| `iconEnd`          | `IconData`             | An icon after the label, such as a chevron for a menu.            |
+| `loading`          | `boolean`              | Shows a spinner in place of the label and ignores presses.        |
+| `disabled`         | `boolean`              | Turns it off: it shows dimmed and takes no input.                 |
+| `fullWidth`        | `boolean`              | Fills the width of its container.                                 |
+| `type`             | `'button' \| 'submit'` | `submit` submits the `Form` the button is in.                     |
+| `onPress`          | `() => void`           | Called when it is pressed.                                        |
 
 #### IconButton
 

@@ -53,9 +53,29 @@ test('keeps clearing a value as a draft and restores it', async () => {
   expect(again.value('label:Plant')).toBe('');
 });
 
-test('sends and checks the value of a field the App controls', async () => {
+test('sends what every field shows: controlled values and defaults', async () => {
   const app = await open('./main.tsx');
   await app.press('Save');
-  await app.waitFor('text:Saved plant=Fern bed=North bed');
+  await app.waitFor('text:Saved plant=Fern bed=North bed mulch=false');
   expect(app.shows('text:Fill in this field.')).toBe(false);
+});
+
+test('keeps a password out of the draft after its field goes', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:PIN', '4921');
+  await app.press('Hide PIN');
+  await app.type('label:Nickname', 'Ivy');
+  await app.wait(800);
+  const saved = JSON.parse(app.storage()['hatch.ui.draft.account'] ?? '{}');
+  expect(saved.nickname).toBe('Ivy');
+  expect(saved.pin).toBe(undefined);
+});
+
+test('shows a switch error from the form', async () => {
+  const app = await open('./main.tsx');
+  await app.press('Continue');
+  await app.waitFor('text:Agree to continue.');
+  await app.press('label:I agree');
+  await app.press('Continue');
+  await app.waitFor('text:Agreed');
 });

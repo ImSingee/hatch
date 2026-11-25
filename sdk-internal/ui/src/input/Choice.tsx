@@ -11,7 +11,7 @@ import { Each } from '../core/control';
 import { FOCUS_RING } from '../core/styles';
 import { Glyph } from '../icons/Icon';
 import { IconCheck, IconMinus } from '../icons/icons.gen';
-import { Field, fieldError } from './Field';
+import { Field, FieldErrorLine, fieldError } from './Field';
 import type { FieldProps } from './Field';
 import { FormContext, bindField } from './form-context';
 
@@ -83,11 +83,7 @@ export function Checkbox(props: CheckboxProps): JSX.Element {
       >
         <ChoiceLabel label={props.label} description={props.description} />
       </BaseCheckbox>
-      {error() ? (
-        <Text class="pl-7.5 text-caption font-strong text-danger-strong">
-          {error() ?? ''}
-        </Text>
-      ) : null}
+      <FieldErrorLine error={error()} inset />
     </View>
   );
 }
@@ -116,20 +112,24 @@ export function Switch(props: SwitchProps): JSX.Element {
     },
     false,
   );
+  const error = fieldError(props);
   return (
-    <BaseSwitch
-      checked={field.get()}
-      disabled={props.disabled || form?.disabled()}
-      onChange={(event) => field.set(event.checked)}
-      accessibilityLabel={props.label}
-      class={`${CHOICE_ROW} flex-row-reverse gap-3 ${FOCUS_RING}`}
-      trackClass="mt-0.5 h-5.5 w-9.5 justify-center rounded-full bg-track p-0.5 transition-colors checked:bg-primary pointer-coarse:mt-0"
-      thumbClass="size-4.5 rounded-full bg-card shadow-card transition-transform checked:translate-x-4"
-    >
-      {props.labelHidden ? null : (
-        <ChoiceLabel label={props.label} description={props.description} />
-      )}
-    </BaseSwitch>
+    <View class="self-stretch gap-1">
+      <BaseSwitch
+        checked={field.get()}
+        disabled={props.disabled || form?.disabled()}
+        onChange={(event) => field.set(event.checked)}
+        accessibilityLabel={props.label}
+        class={`${CHOICE_ROW} flex-row-reverse gap-3 ${FOCUS_RING}`}
+        trackClass="mt-0.5 h-5.5 w-9.5 justify-center rounded-full bg-track p-0.5 transition-colors checked:bg-primary pointer-coarse:mt-0"
+        thumbClass="size-4.5 rounded-full bg-card shadow-card transition-transform checked:translate-x-4"
+      >
+        {props.labelHidden ? null : (
+          <ChoiceLabel label={props.label} description={props.description} />
+        )}
+      </BaseSwitch>
+      <FieldErrorLine error={error()} />
+    </View>
   );
 }
 
@@ -227,6 +227,7 @@ export function Slider(props: SliderProps): JSX.Element {
   const form = FormContext();
   const min = () => props.min ?? 0;
   const field = bindField<number>(form, props, props.min ?? 0);
+  const error = fieldError(props);
   const shown = () =>
     props.formatValue ? props.formatValue(field.get()) : String(field.get());
   return (
@@ -249,6 +250,7 @@ export function Slider(props: SliderProps): JSX.Element {
         rangeClass="rounded-full bg-primary"
         thumbClass={`size-4.5 rounded-full border-2 border-primary bg-card shadow-card transition-transform active:scale-110 motion-reduce:transition-none ${FOCUS_RING}`}
       />
+      <FieldErrorLine error={error()} />
     </View>
   );
 }

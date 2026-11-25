@@ -67,8 +67,24 @@ export function Field(
         </View>
       )}
       {props.children}
+      <FieldErrorLine error={props.error} />
+    </View>
+  );
+}
+
+/** A field's error under its control, announced when it appears; nothing
+ * without one. `inset` lines it up with the label of a checkbox. */
+export function FieldErrorLine(props: {
+  error?: string;
+  inset?: boolean;
+}): JSX.Element {
+  return (
+    <>
       {props.error ? (
-        <View class="flex-row items-start gap-1.5" role="alert">
+        <View
+          class={`flex-row items-start gap-1.5 ${props.inset ? 'pl-7.5' : ''}`}
+          role="alert"
+        >
           <View class="pt-0.5">
             <Glyph icon={IconAlertCircle} size="sm" color="danger-strong" />
           </View>
@@ -77,7 +93,7 @@ export function Field(
           </Text>
         </View>
       ) : null}
-    </View>
+    </>
   );
 }
 

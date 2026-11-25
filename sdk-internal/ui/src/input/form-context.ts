@@ -14,13 +14,15 @@ export type FormApi = {
   /** The field's error from the last submit (reactive). */
   error: (name: string) => string | undefined;
   /** Registers a field so the form checks `required` on submit and sends
-   * `controlled()` when the App controls the field's value; `keep: false`
-   * leaves its value out of the draft (passwords). */
+   * `controlled()` when the App controls the field's value, else the value
+   * the field shows (`initial` until the user changes it); `keep: false`
+   * leaves its value out of the draft (passwords) for the form's lifetime. */
   register: (
     name: string,
     field: {
       required: () => boolean;
       keep?: boolean;
+      initial: FieldValue;
       controlled: () => FieldValue | undefined;
     },
   ) => () => void;
@@ -58,6 +60,7 @@ export function bindField<T extends FieldValue>(
       form.register(props.name, {
         required: () => props.required === true,
         keep: options.keep,
+        initial,
         controlled: () => props.value,
       }),
     );

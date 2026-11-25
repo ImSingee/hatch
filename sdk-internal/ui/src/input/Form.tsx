@@ -20,7 +20,7 @@ import type { FieldValue, FormApi, FormValues } from './form-context';
 
 type FormField = {
   required: () => boolean;
-  keep: boolean;
+  initial: FieldValue;
   controlled: () => FieldValue | undefined;
 };
 
@@ -84,6 +84,12 @@ export function Form(props: FormProps): JSX.Element {
   const failure = signal<string | null>(null);
   const restored = signal(false);
   const fields = new Map<string, FormField>();
+  // Names never kept in a draft (passwords), remembered after their field
+  // goes so its value cannot reach a later draft.
+  const secrets = new Set<string>();
+  // Names the user changed before the draft finished loading: the draft
+  // does not overwrite them.
+  const changedWhileLoading = new Set<string>();
   const draftKey = DRAFT_PREFIX + props.id;
   const saveDraft = () => props.saveDraft !== false;
 
@@ -99,13 +105,15 @@ export function Form(props: FormProps): JSX.Element {
     clearTimeout(draft.timer);
     draft.timer = undefined;
   };
-  // What the form sends: its own values, with a controlled field's value
-  // (the App's `value`) in place of the one the form holds for it.
+  // What the form sends: what each field shows. That is the App's `value`
+  // for a controlled field, else the form's value, else the field's starting
+  // value (a slider's minimum, an unchecked box).
   const effectiveValues = (): FormValues => {
     const current = { ...values() };
     for (const [name, field] of fields) {
       const controlled = field.controlled();
       if (controlled !== undefined) current[name] = controlled;
+      else if (current[name] === undefined) current[name] = field.initial;
     }
     return current;
   };
@@ -113,10 +121,10 @@ export function Form(props: FormProps): JSX.Element {
   // latter itself, and the field shows the App's value, not a restored one.
   const keptValues = (): FormValues =>
     Object.fromEntries(
-      Object.entries(values()).filter(([name]) => {
-        const field = fields.get(name);
-        return !field || (field.keep && field.controlled() === undefined);
-      }),
+      Object.entries(values()).filter(
+        ([name]) =>
+          !secrets.has(name) && fields.get(name)?.controlled() === undefined,
+      ),
     );
   const writeDraft = async (): Promise<void> => {
     stopTimer();
@@ -133,26 +141,32 @@ export function Form(props: FormProps): JSX.Element {
       // A full store keeps the previous draft; typing goes on.
     });
   };
+  // Input typed while the draft loaded is saved once it has.
+  const finishLoading = () => {
+    draft.loaded = true;
+    if (changedWhileLoading.size > 0) void writeDraft();
+  };
   if (saveDraft()) {
-    Storage.getItem(draftKey).then(
-      (text) => {
-        if (text) {
-          try {
-            const saved = JSON.parse(text) as FormValues;
+    Storage.getItem(draftKey).then((text) => {
+      if (text) {
+        try {
+          const saved = Object.fromEntries(
+            Object.entries(JSON.parse(text) as FormValues).filter(
+              ([name]) => !changedWhileLoading.has(name),
+            ),
+          );
+          if (Object.keys(saved).length > 0) {
             batch(() => {
               values.set({ ...untracked(values), ...saved });
               restored.set(true);
             });
-          } catch {
-            void Storage.removeItem(draftKey);
           }
+        } catch {
+          void Storage.removeItem(draftKey);
         }
-        draft.loaded = true;
-      },
-      () => {
-        draft.loaded = true;
-      },
-    );
+      }
+      finishLoading();
+    }, finishLoading);
   } else {
     draft.loaded = true;
   }
@@ -212,6 +226,7 @@ export function Form(props: FormProps): JSX.Element {
   const api: FormApi = {
     value: (name) => values()[name],
     setValue: (name, value) => {
+      if (!draft.loaded) changedWhileLoading.add(name);
       batch(() => {
         values.set({ ...untracked(values), [name]: value });
         if (untracked(errors)[name]) {
@@ -222,9 +237,10 @@ export function Form(props: FormProps): JSX.Element {
     },
     error: (name) => errors()[name],
     register: (name, field) => {
+      if (field.keep === false) secrets.add(name);
       fields.set(name, {
         required: field.required,
-        keep: field.keep ?? true,
+        initial: field.initial,
         controlled: field.controlled,
       });
       return () => fields.delete(name);
