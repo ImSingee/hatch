@@ -21,6 +21,7 @@ import {
   loadSessionDetail,
   insertAgentSession,
 } from './agent-session-store';
+import { thinkingLevelSchema } from '~agent/protocol';
 
 const listSessionsSchema = z.object({
   appId: z.string().min(1).optional(),
@@ -42,6 +43,7 @@ const createSchema = z.object({
   title: z.string().optional(),
   providerId: z.string().nullish(),
   modelId: z.string().nullish(),
+  thinkingLevel: thinkingLevelSchema.nullish(),
 });
 
 export const createSession = createServerFn({ method: 'POST' })

@@ -1,12 +1,36 @@
+import type { AgentThinkingLevel } from '~/db/schema';
+import type { ModelOption } from './model-picker';
+
+/** What the composer runs with: a model and its thinking level. */
+export type ModelChoice = { value: string; thinkingLevel: AgentThinkingLevel };
+
+/**
+ * The model and level a send uses: the composer's pick, else the chat's last
+ * model and level, else the user's default — each only while the model is
+ * still available. A level the model no longer offers becomes its default.
+ */
 export function resolveEffectiveModel(
-  selected: string | null,
-  sessionModel: string | null,
-  available: ReadonlySet<string>,
-  first: string | null,
-): string | null {
-  if (selected && available.has(selected)) return selected;
-  if (sessionModel && available.has(sessionModel)) return sessionModel;
-  return first;
+  options: ReadonlyMap<string, ModelOption>,
+  ...candidates: Array<
+    | { value: string | null; thinkingLevel?: AgentThinkingLevel | null }
+    | null
+    | undefined
+  >
+): ModelChoice | null {
+  for (const candidate of candidates) {
+    const option = candidate?.value ? options.get(candidate.value) : undefined;
+    if (!option) continue;
+    const level = candidate?.thinkingLevel;
+    return {
+      value: option.value,
+      thinkingLevel: !option.thinkingLevels.length
+        ? 'off'
+        : level && option.thinkingLevels.includes(level)
+          ? level
+          : option.defaultThinkingLevel,
+    };
+  }
+  return null;
 }
 
 /**

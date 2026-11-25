@@ -18,7 +18,11 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, schema, type DB, type TX } from '~/db';
-import type { AgentMessageMode, JsonValue } from '~/db/schema';
+import type {
+  AgentMessageMode,
+  AgentThinkingLevel,
+  JsonValue,
+} from '~/db/schema';
 import type { AgentAttachmentRef } from '~agent/attachments';
 import {
   hasComposerText,
@@ -150,6 +154,8 @@ export async function enqueuePendingMessage(input: {
   userId: string;
   providerId: string;
   modelId: string;
+  /** Level to run with; null uses the chat's level or the model default. */
+  thinkingLevel?: AgentThinkingLevel | null;
   message: PendingMessageInput;
   mode?: AgentMessageMode;
   clientMessageId?: string;
@@ -181,7 +187,11 @@ export async function enqueuePendingMessage(input: {
       );
       if (receipt) return replay(receipt.runId);
     }
-    await assertAgentModelAvailable(input.providerId, input.modelId);
+    await assertAgentModelAvailable(
+      input.providerId,
+      input.modelId,
+      input.thinkingLevel,
+    );
     const mode =
       input.mode ?? (await readAgentPreferences(input.userId)).messageMode;
     const replayed = await db.transaction(async (tx) => {
@@ -249,6 +259,7 @@ export async function enqueuePendingMessage(input: {
           attachments: attachments as unknown as JsonValue[],
           providerId: input.providerId,
           modelId: input.modelId,
+          thinkingLevel: input.thinkingLevel ?? null,
         })
         .returning({ id: schema.agentPendingMessages.id });
       if (receiptKey) {
@@ -400,6 +411,7 @@ export async function sendPendingMessageNow(input: {
         pendingMessageIds: [input.messageId],
         providerId: row.providerId,
         modelId: row.modelId,
+        thinkingLevel: row.thinkingLevel,
         userId: input.userId,
       });
       return result(input.sessionId, runId);

@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('~server/agent-runner-status', () => ({
   getAgentRunnerStatusFn: vi.fn<() => unknown>(),
 }));
-vi.mock('~server/providers', () => ({ listProviders: vi.fn<() => unknown>() }));
+vi.mock('~server/providers', () => ({
+  getAgentModelChoices: vi.fn<() => unknown>(),
+  getModelCatalogStatus: vi.fn<() => unknown>(),
+  listCatalogProviders: vi.fn<() => unknown>(),
+  listProviders: vi.fn<() => unknown>(),
+}));
 vi.mock('~server/agent-sessions', () => ({
   getSession: vi.fn<() => unknown>(),
   listSessions: vi.fn<() => unknown>(),

@@ -69,6 +69,7 @@ describe('POST /api/agent/runs', () => {
       expect(forwarded).toEqual({
         ...baseBody,
         userId: 'user-1',
+        strictThinkingLevel: true,
         content: [{ type: 'text', text: 'Keep these instructions' }],
         ...extra,
       });
@@ -88,6 +89,7 @@ describe('POST /api/agent/runs', () => {
     expect(mocks.startAgentRun).toHaveBeenCalledWith({
       ...baseBody,
       userId: 'user-1',
+      strictThinkingLevel: true,
       content: [{ type: 'text', text: 'Legacy instructions' }],
     });
   });

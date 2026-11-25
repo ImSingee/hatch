@@ -14,11 +14,13 @@ import {
 } from '~server/agent-pending-messages';
 import { authenticateSessionRequest } from '~server/session-http-auth';
 import { AppError, errorResponse } from '~server/errors';
+import { thinkingLevelSchema } from '~agent/protocol';
 
 const enqueueBodySchema = refineAgentMessage(
   z.object({
     providerId: z.string().min(1),
     modelId: z.string().min(1),
+    thinkingLevel: thinkingLevelSchema.optional(),
     /** Reused when resending the same draft; see agent-message-receipts. */
     clientMessageId: clientMessageIdSchema.optional(),
     /** Delivery for this message; the sender's preference when omitted. */
@@ -82,13 +84,21 @@ export async function postAgentPendingMessage({
   }
 
   try {
-    const { providerId, modelId, clientMessageId, mode, ...message } = parsed;
+    const {
+      providerId,
+      modelId,
+      thinkingLevel,
+      clientMessageId,
+      mode,
+      ...message
+    } = parsed;
     return Response.json(
       await enqueuePendingMessage({
         sessionId,
         userId: session.user.id,
         providerId,
         modelId,
+        thinkingLevel,
         message,
         mode,
         clientMessageId,

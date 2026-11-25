@@ -137,6 +137,8 @@ describe('generated Connect mobile boundary', () => {
               reasoning: false,
               contextWindow: 0,
               maxTokens: 0,
+              thinkingLevels: [],
+              defaultThinkingLevel: '',
             },
           ],
         },

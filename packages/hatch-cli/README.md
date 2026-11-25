@@ -491,6 +491,105 @@ See [the 9-tool comparison](../../../docs/cli-tool-parity.md). Platform and CLI
 contracts/SDKs are built and released together; strict DTO validation does not
 promise compatibility with older CLI binaries.
 
+## Providers and models
+
+```sh
+hatch provider catalog --search openrouter --json
+hatch provider add --catalog openai --api-key-file ./openai.key --json
+printf '%s' "$KEY" | hatch provider add --name 'Local' \
+  --api-type openai-completions --base-url http://localhost:11434/v1 \
+  --api-key-file - --model llama3.3:70b
+hatch provider list --json
+hatch provider get <provider-id> --json
+hatch provider update <provider-id> --api-key-file ./new.key --disable
+hatch provider test <provider-id> --model gpt-5-mini --json
+hatch provider fetch-models <provider-id> --json
+hatch provider remove <provider-id> --yes
+hatch model list --provider <provider-id> --kind chat --enabled --json
+hatch model add --provider <provider-id> --model-id openai/gpt-5:free \
+  --catalog-ref openrouter/openai/gpt-5 --context-window 200000
+hatch model update <model-id> --reset context-window,max-tokens --no-reasoning
+hatch model update <model-id> --reset-all --clear-description
+hatch model disable <model-id>
+hatch model remove <model-id> --yes
+hatch model catalog list --provider anthropic --kind chat --search sonnet --limit 20
+hatch model catalog status --json
+hatch model catalog refresh --json
+hatch model catalog settings --no-auto-update --source-url https://mirror.example/models.json
+```
+
+Providers hold the endpoint and API key the Agent and image generation call.
+`provider catalog` lists the presets of the built-in model catalog (from
+aidy-models) with the `apiKeyUrl` where a key is created and the
+`recommendedModels`, a page at a time (`--limit`, `--cursor`). `provider add --catalog <id>` takes the name, API type
+and base URL from the preset unless `--name`, `--api-type` or `--base-url`
+override them; without `--catalog` all three are required. Without `--model`
+or `--image-model` the preset's recommended models are added; `--model` and
+`--image-model` (both repeatable) choose the chat and image models instead
+and `--no-models` adds none. The API key is read only from
+`--api-key-file` (a file, or `-` for stdin), trimmed, and must be at most 4096
+characters with no whitespace inside; there is deliberately no flag that takes the
+key itself, because shell history and process lists would record it. Keys are
+never printed: providers report `hasApiKey`. `provider list` prints each
+provider with `modelCount`; `provider get` adds its models. `provider update`
+changes only the given fields; changing `--base-url` or `--api-type` also
+needs `--api-key-file`, so a stored key never goes to a new endpoint
+(`BAD_REQUEST` otherwise); `--catalog` links a preset (used by
+`model add` and `fetch-models` to match catalog metadata by model id) and
+`--clear-catalog` unlinks it. `provider remove --yes` deletes the provider,
+its key and all its models and cannot be undone. `provider test` sends one
+short prompt (a few tokens of provider credit) with the stored key and prints
+`ok`, `modelId`, `latencyMs` and `error`; `--model` takes the provider's model
+id of one of its chat models. `provider fetch-models` lists what the
+provider's `/models` endpoint offers, marking `added` models and the
+`catalogRef` the provider's preset knows; it adds nothing.
+
+`model list` prints every model with `catalogRef`, `inCatalog` (false when the
+catalog dropped the entry) and, for chat models, `chat`: `reasoning`,
+`thinkingLevels`, `defaultThinkingLevel`, `contextWindow`, `maxTokens`, the
+`overridden` fields and the stored `*Override` values (null follows the
+catalog). `model add` matches a catalog entry by model id under the
+provider's preset unless `--catalog-ref` (a `ref` from `model catalog list`)
+or `--no-catalog` says otherwise; `--context-window`, `--max-tokens` and
+`--reasoning`/`--no-reasoning` override catalog metadata of a chat model.
+`model update` keeps omitted fields; `--reset` (comma-separated or repeated:
+`reasoning`, `context-window`, `max-tokens`) clears overrides so the catalog
+applies again and `--reset-all` clears all three. `model enable` / `disable`
+toggle whether a model is offered; `model remove --yes` deletes one.
+`model catalog list` prints one page (50 without `--limit`, at most 200), the
+`total` across pages and `nextCursor` while more follow. `model catalog
+refresh` checks the source now and waits: it prints `outcome` `updated` or
+`unchanged` with the status. `model catalog settings` changes the background
+update (`--auto-update` / `--no-auto-update`) and the source
+(`--source-url`, an https mirror of aidy-models' `models.json`, or
+`--clear-source-url` for the default) for the whole instance.
+
+Local rejections exit 2 with `invalid_arguments`: `--api-key` in any
+spelling, a missing `--api-key-file`, `provider add` without `--catalog` and
+without all of `--name`, `--api-type` and `--base-url`, an unknown
+`--api-type`, a non-http(s) `--base-url`, `--model` or `--image-model` with
+`--no-models`, a repeated `--model` or `--image-model`, a model id with spaces, `--enable` with `--disable`,
+`--catalog` with `--clear-catalog`, `--catalog-ref` with `--no-catalog` or not
+shaped `<catalog-provider>/<model-id>`, chat metadata flags with `--kind
+image`, `--context-window` or `--max-tokens` outside 1 to 4294967295,
+`--reasoning` with `--no-reasoning`, an unknown or repeated `--reset` field,
+`--reset` with `--reset-all`, a field that is both set and reset, an update
+with nothing to change, `remove` without `--yes`, a catalog `--limit` outside
+1 to 200, a `--cursor` that is not a printed `nextCursor`, and a
+`--source-url` that is not https or comes with `--clear-source-url`.
+Reading the key fails with `input_unreadable`, `input_too_large`,
+`invalid_input` (empty, not UTF-8, or whitespace inside the key) or `stdin_required`
+(exit 2). Platform errors: `NOT_FOUND` (5) for an unknown provider, model or
+`provider test --model`; `BAD_REQUEST` (2) for an unknown catalog preset or
+entry, a catalog entry of the other kind, an image model on a provider that
+cannot generate images, or a `provider fetch-models` the provider could not
+answer (unreachable, refused, or not a JSON model list; the message says
+which); `CONFLICT` (6) for a duplicate model id or
+`provider test` on a provider without a key or chat model;
+`provider_test_failed` (7) when the provider answered the test with an error
+and `catalog_refresh_failed` (7) when the catalog check failed (the catalog in
+use is kept). Both print the normal result as `error.details` with `--json`.
+
 ## App docs
 
 ```sh

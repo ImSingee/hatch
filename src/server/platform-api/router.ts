@@ -98,11 +98,7 @@ import {
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import { buildInfo } from '~/build-info';
-import { ModelService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/model_pb';
-import {
-  listProviderModels,
-  setProviderModelKind,
-} from '~server/provider-models';
+import { registerModelServices } from './model-rpc';
 import { getThemeState, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
@@ -508,7 +504,13 @@ export function registerPlatformApi(
     {
       getModelCatalog: async () => {
         const catalog = await getAgentModelCatalog();
-        return { ...catalog, defaultModel: catalog.defaultModel ?? undefined };
+        return {
+          providers: catalog.providers.map((provider) => ({
+            ...provider,
+            catalogProviderId: provider.catalogProviderId ?? undefined,
+          })),
+          defaultModel: catalog.defaultModel ?? undefined,
+        };
       },
       listSessions: async (input) => ({
         sessions: (await listSessionSummaries(input)).map((session) => ({
@@ -853,21 +855,7 @@ export function registerPlatformApi(
       };
     },
   });
-  router.service(ModelService, {
-    listModels: async (input) => {
-      const page = listPage(
-        await listProviderModels(input.kind as 'chat' | 'image' | undefined),
-        input,
-      );
-      return { models: page.items, nextCursor: page.nextCursor };
-    },
-    setModelKind: async (input) => ({
-      model: await setProviderModelKind(
-        input.id,
-        input.kind as 'chat' | 'image',
-      ),
-    }),
-  });
+  registerModelServices(router);
   router.service(ThemeService, {
     getTheme: async () => ({ theme: await getThemeState() }),
     setTheme: async (input) => ({

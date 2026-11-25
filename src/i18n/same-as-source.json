@@ -22,6 +22,7 @@
     "agentRunner.runners.id",
     "agentRunner.runs.runner",
     "homepage.page.agent",
-    "backends.column.app"
+    "backends.column.app",
+    "agent.model.withLevel"
   ]
 }

@@ -14,13 +14,12 @@ const {
   resolveImageModel,
   updateImageModel,
 } = await import('./model');
-const {
-  assertApiTypeKeepsModels,
-  createProviderModel,
-  listProviderModels,
-  setProviderModelKind,
-  updateProviderModel,
-} = await import('~server/provider-models');
+const { assertApiTypeKeepsModels, createProviderModel, updateProviderModel } =
+  await import('~server/provider-models');
+const { listModelViews, setProviderModelKind } =
+  await import('~server/provider-service');
+const listProviderModels = (kind?: 'chat' | 'image') =>
+  listModelViews({ kind });
 const { getAgentModelCatalog } = await import('~server/agent-model-catalog');
 
 const FIRST = '01JZZZZZZZZZZZZZZZZZZZZZZA';

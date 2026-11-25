@@ -5,6 +5,20 @@ import { render } from 'vitest-browser-react';
 import { Chat } from './chat';
 import { LAST_SELECTED_MODEL_STORAGE_KEY } from './model-preference';
 
+// The model menu links to settings; these tests render without a router.
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  Link: ({
+    to,
+    children,
+    ...props
+  }: { to: string; children?: React.ReactNode } & Record<string, unknown>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 const FAILED_MESSAGES = [
   {
     role: 'user',
@@ -122,26 +136,29 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-  sessionQueryOptions: (sessionId: string) => ({
-    queryKey: ['test-agent-session', sessionId],
-    queryFn: async () => {
-      fixtures.sessionFetchCount += 1;
-      if (fixtures.failSessionFetch) {
-        throw new Error('Session refetch failed');
-      }
-      return structuredClone(fixtures.session);
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () => choicesFrom(fixtures.providers),
     },
-  }),
-}));
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+    sessionQueryOptions: (sessionId: string) => ({
+      queryKey: ['test-agent-session', sessionId],
+      queryFn: async () => {
+        fixtures.sessionFetchCount += 1;
+        if (fixtures.failSessionFetch) {
+          throw new Error('Session refetch failed');
+        }
+        return structuredClone(fixtures.session);
+      },
+    }),
+  };
+});
 
 vi.mock('~queries/agent-preferences', () => ({
   agentPreferencesQueryOptions: (userId: string) => ({
@@ -200,14 +217,16 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  localStorage.removeItem(LAST_SELECTED_MODEL_STORAGE_KEY);
   vi.unstubAllGlobals();
 });
 
 test('keeps the conversation model when another model was selected elsewhere', async () => {
   localStorage.setItem(
     LAST_SELECTED_MODEL_STORAGE_KEY,
-    JSON.stringify('provider-latest:model-latest'),
+    JSON.stringify({
+      value: 'provider-latest:model-latest',
+      thinkingLevel: 'off',
+    }),
   );
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -402,7 +421,7 @@ test('retries once with the selected model, hides stale error, and allows a same
   await screen.getByRole('menuitem', { name: 'Latest model' }).click();
   expect(
     JSON.parse(localStorage.getItem(LAST_SELECTED_MODEL_STORAGE_KEY)!),
-  ).toBe('provider-latest:model-latest');
+  ).toEqual({ value: 'provider-latest:model-latest', thinkingLevel: 'off' });
   const latestModelPicker = screen.getByRole('button', {
     name: 'Latest model',
   });
@@ -422,6 +441,7 @@ test('retries once with the selected model, hides stale error, and allows a same
     expectedSessionUpdatedAt: '2026-07-11T12:00:00.000Z',
     providerId: 'provider-latest',
     modelId: 'model-latest',
+    thinkingLevel: 'off',
   });
 
   resolveStart?.();
@@ -506,6 +526,7 @@ test('refreshes a stale error after another tab has consumed its Retry', async (
     expectedSessionUpdatedAt: '2026-07-11T12:00:00.000Z',
     providerId: 'provider-original',
     modelId: 'model:with-colon',
+    thinkingLevel: 'off',
   });
   await expect.element(retry).not.toBeInTheDocument();
   expect(
@@ -586,6 +607,7 @@ test('sends a new message with the model currently shown in the picker', async (
     attachmentIds: [],
     providerId: 'provider-latest',
     modelId: 'model-latest',
+    thinkingLevel: 'off',
     clientMessageId: expect.any(String),
   });
   expect(
@@ -757,6 +779,7 @@ test('starts a scheduled retry immediately with Retry now', async () => {
       expectedSessionUpdatedAt: '2026-07-11T12:00:00.000Z',
       providerId: 'provider-original',
       modelId: 'model:with-colon',
+      thinkingLevel: 'off',
     });
   });
   await expect

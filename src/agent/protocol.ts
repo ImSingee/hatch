@@ -17,7 +17,7 @@ import { isReservedEnvKey } from './env-keys';
 
 export { DEFAULT_INTERNAL_PORT, RUNNER_WS_PATH } from './runner-constants';
 
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /** How long a run lease stays valid without renewal (heartbeat/events renew). */
 export const RUN_LEASE_TTL_MS = 90_000;
@@ -183,6 +183,16 @@ export const agentStreamEventSchema = z
 
 /** ================== run model config ================== */
 
+export const thinkingLevelSchema = z.enum([
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+
 /**
  * Everything the Runner needs to call the model for one run. Resolved by the
  * platform from the provider tables; the Runner never reads the database. The
@@ -207,7 +217,24 @@ export const runModelConfigSchema = z.object({
     input: z.array(z.enum(['text', 'image'])),
     contextWindow: z.number().int().positive(),
     maxTokens: z.number().int().positive(),
+    /** pi `thinkingLevelMap`: provider values per level; null disables one. */
+    thinkingLevelMap: z
+      .partialRecord(thinkingLevelSchema, z.string().nullable())
+      .optional(),
+    /** pi `compat` request-format flags for the provider's API. */
+    compat: z.record(z.string(), z.unknown()).optional(),
+    /** USD per million tokens, so recorded usage carries a cost. */
+    cost: z
+      .object({
+        input: z.number().nonnegative(),
+        output: z.number().nonnegative(),
+        cacheRead: z.number().nonnegative(),
+        cacheWrite: z.number().nonnegative(),
+      })
+      .optional(),
   }),
+  /** Thinking level the run uses; `off` for models that do not reason. */
+  thinkingLevel: thinkingLevelSchema,
 });
 export type RunModelConfig = z.infer<typeof runModelConfigSchema>;
 

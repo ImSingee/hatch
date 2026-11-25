@@ -633,7 +633,12 @@ export class HatchApiClient {
     }
   }
   async createSession(
-    input: { title?: string; providerId?: string; modelId?: string } = {},
+    input: {
+      title?: string;
+      providerId?: string;
+      modelId?: string;
+      thinkingLevel?: string;
+    } = {},
     signal?: AbortSignal,
   ): Promise<{ id: string }> {
     const response = await this.rpcRequest(

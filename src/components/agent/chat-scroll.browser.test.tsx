@@ -9,63 +9,69 @@ const fixtures = vi.hoisted(() => ({
   streaming: false,
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['scroll-test-providers'],
-    queryFn: async () => [],
-  },
-  sessionsQueryOptions: {
-    queryKey: ['scroll-test-sessions'],
-    queryFn: async () => [],
-  },
-  sessionQueryOptions: (id: string) => ({
-    queryKey: ['scroll-test-session', id],
-    queryFn: async () => ({
-      id,
-      title: id,
-      appIds: [],
-      providerId: null,
-      modelId: null,
-      updatedAt: '2026-10-11T12:00:00.000Z',
-      // Equal message counts ensure only the session identity resets scrolling.
-      // Each reply answers its own prompt: consecutive assistant messages are
-      // one reply, whose earlier messages fold into its work process.
-      messages: Array.from({ length: id === 'empty' ? 0 : 12 }, (_, index) => [
-        { role: 'user', content: `${id} prompt ${index}` },
-        {
-          role: 'assistant',
-          content: [
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () => choicesFrom([]),
+    },
+    sessionsQueryOptions: {
+      queryKey: ['scroll-test-sessions'],
+      queryFn: async () => [],
+    },
+    sessionQueryOptions: (id: string) => ({
+      queryKey: ['scroll-test-session', id],
+      queryFn: async () => ({
+        id,
+        title: id,
+        appIds: [],
+        providerId: null,
+        modelId: null,
+        updatedAt: '2026-10-11T12:00:00.000Z',
+        // Equal message counts ensure only the session identity resets scrolling.
+        // Each reply answers its own prompt: consecutive assistant messages are
+        // one reply, whose earlier messages fold into its work process.
+        messages: Array.from(
+          { length: id === 'empty' ? 0 : 12 },
+          (_, index) => [
+            { role: 'user', content: `${id} prompt ${index}` },
             {
-              type: 'text',
-              text: `${id} reply ${index}\n\n${'A paragraph of conversation history.\n\n'.repeat(id === 'long' ? 18 : 2)}`,
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: `${id} reply ${index}\n\n${'A paragraph of conversation history.\n\n'.repeat(id === 'long' ? 18 : 2)}`,
+                },
+                ...(id === 'nested' && index === 11
+                  ? [
+                      {
+                        type: 'thinking',
+                        thinking: 'Nested thinking line.\n'.repeat(100),
+                      },
+                    ]
+                  : []),
+              ],
             },
-            ...(id === 'nested' && index === 11
-              ? [
-                  {
-                    type: 'thinking',
-                    thinking: 'Nested thinking line.\n'.repeat(100),
-                  },
-                ]
-              : []),
           ],
-        },
-      ]).flat(),
-      activeRun: fixtures.streaming
-        ? {
-            id: 'scroll-run',
-            status: 'running',
-            startedAt: '2026-10-11T12:00:00.000Z',
-            userTurn: null,
-            pendingAsk: null,
-            pendingEnvRequest: null,
-          }
-        : null,
-      runs: [],
-      serverTime: '2026-10-11T12:00:00.000Z',
-      clockOffsetMs: 0,
+        ).flat(),
+        activeRun: fixtures.streaming
+          ? {
+              id: 'scroll-run',
+              status: 'running',
+              startedAt: '2026-10-11T12:00:00.000Z',
+              userTurn: null,
+              pendingAsk: null,
+              pendingEnvRequest: null,
+            }
+          : null,
+        runs: [],
+        serverTime: '2026-10-11T12:00:00.000Z',
+        clockOffsetMs: 0,
+      }),
     }),
-  }),
-}));
+  };
+});
 
 vi.mock('~queries/agent-preferences', () => ({
   agentPreferencesQueryOptions: (userId: string) => ({
@@ -83,7 +89,7 @@ vi.mock('~/routeTree.gen', async () => {
   const { createRootRouteWithContext, createRoute, Outlet } =
     await import('@tanstack/react-router');
   const { Chat } = await import('./chat');
-  const { sessionQueryOptions, providersQueryOptions } =
+  const { sessionQueryOptions, agentModelChoicesQueryOptions } =
     await import('~queries/agent');
   const root = createRootRouteWithContext<{
     queryClient: import('@tanstack/react-query').QueryClient;
@@ -102,7 +108,7 @@ vi.mock('~/routeTree.gen', async () => {
         context.queryClient.ensureQueryData(
           sessionQueryOptions(params.threadId),
         ),
-        context.queryClient.ensureQueryData(providersQueryOptions),
+        context.queryClient.ensureQueryData(agentModelChoicesQueryOptions),
       ]);
     },
     component: () => {

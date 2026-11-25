@@ -113,6 +113,7 @@ async function runWithResponses(
     providerName: 'Runtime Test',
     apiType: 'openai-responses',
     model: faux.getModel() as ResolvedModel['model'],
+    thinkingLevel: 'medium',
   };
 
   return runAgentTurn({
@@ -1149,6 +1150,7 @@ describe('runAgentTurn steer messages', () => {
         providerName: 'Runtime Test',
         apiType: 'openai-responses',
         model: faux.getModel() as ResolvedModel['model'],
+        thinkingLevel: 'medium',
       },
       platform: stubPlatform,
       signal: new AbortController().signal,

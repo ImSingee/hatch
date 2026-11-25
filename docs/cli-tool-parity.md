@@ -43,7 +43,9 @@ The capabilities below never had an Agent Tool.
 | App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown       |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
 | Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed  |
-| Model category   | model list / set-kind                                                                               | ModelService/ListModels, SetModelKind; every provider model with its kind, moved like the Web Category field     |
+| Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt    |
+| Models           | model list / add / update / enable / disable / remove / set-kind                                    | ModelService; chat and image models, catalog link, chat metadata overrides and resets, kind like the Web field   |
+| Model catalog    | model catalog list / status / refresh / settings                                                    | CatalogService/ListCatalogModels, GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings                        |
 | Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap      |
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                      |
@@ -51,13 +53,10 @@ The capabilities below never had an Agent Tool.
 | Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
 | Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
 
-Not covered by the CLI: providers and their chat models (create, edit, API
-keys) remain Web-only. Image models are the provider models of kind `image`;
-the CLI covers every field the Web form sets for them (model id, name,
-description) but only on providers that already exist, and cannot create
-one. `model list` shows every provider model (chat and image) and
-`model set-kind` moves one between the two kinds, as the Web Category field
-does; the other chat model settings stay Web-only. See [App icons](app-icons.md).
+Image models are the provider models of kind `image`; `image-model` keeps
+its own commands (backed by `ImageService`), and `model add --kind image`,
+`model update` and `model remove` reach the same rows through `ModelService`.
+See [App icons](app-icons.md) and the section below.
 
 The Web UI language (Settings → Appearance → Language) is a display preference
 of one browser, kept in its local storage and never sent to the server. It is
@@ -219,6 +218,51 @@ rejects a size the widget does not declare and names the sizes it does.
 device- or browser-bound operation, so there is no CLI exception.
 `WorkspaceService.SetDashboardAutoRefresh` stays for the mobile client and
 calls the same service.
+
+## Providers, models and the model catalog: CLI only, no Agent Tool
+
+`hatch provider ...`, `hatch model ...` and `hatch model catalog ...` call
+`ProviderService`, `ModelService` and `CatalogService`
+(`src/server/platform-api/model-rpc.ts`), which use the same
+`src/server/provider-service.ts`, `src/server/provider-models.ts` and
+`src/server/model-catalog/` services as the Settings → Providers page
+(Server Functions in `src/server/providers.ts`). The chat model picker
+remembers the last picked model and thinking level in that browser only, as
+it did before the catalog; it is per-browser state, not a platform setting,
+so it has no command. Web operation to command:
+
+| Web UI                                             | CLI                                       | RPC                                                     |
+| -------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------- |
+| Providers list                                     | provider list                             | ListProviders                                           |
+| Provider page with its models                      | provider get / model list --provider      | GetProvider / ListModels                                |
+| Add provider gallery (presets, key link)           | provider catalog                          | ListCatalogProviders                                    |
+| Add provider (preset or custom, key, models)       | provider add                              | CreateProvider                                          |
+| Edit provider, replace key, enable switch, preset  | provider update                           | UpdateProvider                                          |
+| Delete provider                                    | provider remove --yes                     | DeleteProvider                                          |
+| Test connection                                    | provider test                             | TestProvider                                            |
+| Fetch models from the provider                     | provider fetch-models                     | ListRemoteModels                                        |
+| Add model (catalog search, metadata)               | model add, model catalog list             | CreateModel, ListCatalogModels                          |
+| Edit model, metadata overrides, reset to catalog   | model update (--reset / --reset-all)      | UpdateModel                                             |
+| Model enable switch                                | model enable / disable                    | UpdateModel (enabled)                                   |
+| Model Category field                               | model set-kind                            | SetModelKind                                            |
+| Delete model                                       | model remove --yes                        | DeleteModel                                             |
+| Catalog status, check for updates, update settings | model catalog status / refresh / settings | GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings |
+
+API keys are write-only on every surface: the CLI reads one only from
+`--api-key-file <path|->`, never from an argument value, and responses carry
+`hasApiKey` instead. The services accept sessions, API keys and Run JWTs
+alike and have no device- or browser-bound operation, so there is no CLI
+exception. `AgentService/GetModelCatalog`, the per-chat model picker data,
+stays session-only (see Known gaps). No Agent Tool is added.
+
+`provider list`, `provider catalog`, `provider fetch-models` and
+`model catalog list` all page with `--limit`/`--cursor`.
+
+A provider that cannot be reached, refuses the model list or answers
+something other than JSON is reported as `BAD_REQUEST` with the provider's
+message (exit 2), because the fix is in the provider's settings. Changing a
+provider's base URL or API type requires the API key again, so a stored key
+never follows the provider to a new endpoint.
 
 ## App backend runtime: CLI only, no Agent Tool
 

@@ -369,7 +369,7 @@ export async function runAgentTurn(
     }
   }
 
-  const thinkingLevel = picked.model.reasoning ? 'medium' : 'off';
+  const thinkingLevel = picked.model.reasoning ? picked.thinkingLevel : 'off';
   const systemPrompt = buildSystemPrompt(opts.appUrl, skills);
   // The prompt and the tool declarations travel as the leading system message
   // of every request. It is rebuilt for each run and never stored.

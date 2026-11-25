@@ -1,425 +1,300 @@
 import {
   ActionIcon,
-  Autocomplete,
   Badge,
   Button,
   Group,
   Menu,
-  Modal,
-  NumberInput,
-  Select,
+  Popover,
   Stack,
   Switch,
   Text,
-  Textarea,
   TextInput,
   ThemeIcon,
   Tooltip,
 } from '@mantine/core';
-import { Claude, OpenAI } from '@lobehub/icons';
-import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
-import { useState } from 'react';
-import { Trans } from 'react-i18next';
+import { useMemo, useState } from 'react';
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
 import {
+  IconAdjustments,
   IconDotsVertical,
   IconPencil,
+  IconPlugConnected,
   IconPlus,
+  IconRefresh,
   IconRobot,
   IconTrash,
 } from '@tabler/icons-react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
-import { type PlainTranslationKey, useI18n } from '~i18n';
-import { providersQueryOptions } from '~queries/agent';
+import { useErrorText, useI18n } from '~i18n';
+import { ProviderAvatar } from '~components/providers/provider-avatar';
+import { formatExact, formatRelativeTime } from '~/lib/format';
+import {
+  agentModelChoicesQueryOptions,
+  catalogStatusQueryOptions,
+  providersQueryOptions,
+} from '~queries/agent';
 import {
   createModel,
-  createProvider,
   deleteModel,
   deleteProvider,
+  refreshCatalog,
+  testProvider,
   updateModel,
+  updateModelCatalogSettings,
   updateProvider,
   type ProviderModel,
   type ProviderWithModels,
 } from '~server/providers';
+import { ModelFormModal } from './model-form-modal';
+import { ModelSearchInput } from './model-search-input';
+import { ProviderFormModal } from './provider-form-modal';
+import { formatTokenCount } from './token-count';
 import classes from './providers-panel.module.css';
 
-const API_TYPE_OPTIONS = [
-  { value: 'anthropic-messages', label: 'Anthropic Messages' },
-  { value: 'openai-responses', label: 'OpenAI Responses' },
-  { value: 'openai-completions', label: 'OpenAI Completions' },
-];
+export { ProviderFormModal };
 
-const PROVIDER_AVATAR_SIZE = 40;
-
-/** Official brand avatar chosen by API protocol: OpenAI for openai-*, Claude
- * for anthropic-messages, a neutral fallback otherwise. */
-function ProviderAvatar({ apiType }: { apiType: string }) {
-  if (apiType === 'anthropic-messages') {
-    return <Claude.Avatar size={PROVIDER_AVATAR_SIZE} />;
-  }
-  if (apiType.startsWith('openai')) {
-    return <OpenAI.Avatar size={PROVIDER_AVATAR_SIZE} type="gpt5" />;
-  }
-  return (
-    <ThemeIcon
-      size={PROVIDER_AVATAR_SIZE}
-      radius="xl"
-      variant="light"
-      color="primary"
-    >
-      <IconRobot size={22} stroke={1.5} />
-    </ThemeIcon>
-  );
-}
-
-const BASE_URL_HINTS: Record<string, PlainTranslationKey> = {
-  'anthropic-messages': 'providers.form.baseUrlHint.anthropicMessages',
-  'openai-responses': 'providers.form.baseUrlHint.openaiResponses',
-  'openai-completions': 'providers.form.baseUrlHint.openaiCompletions',
-};
-
-type ProviderFormValues = {
-  name: string;
-  apiType: string;
-  baseUrl: string;
-  apiKey: string;
-};
-
-export function ProviderFormModal({
-  opened,
-  onClose,
-  provider,
-}: {
-  opened: boolean;
-  onClose: () => void;
-  provider?: ProviderWithModels;
-}) {
-  const { t } = useI18n();
+function useInvalidateProviders() {
   const qc = useQueryClient();
-  const editing = Boolean(provider);
-  const form = useForm<ProviderFormValues>({
-    initialValues: {
-      name: provider?.name ?? '',
-      apiType: provider?.apiType ?? 'anthropic-messages',
-      baseUrl: provider?.baseUrl ?? '',
-      apiKey: '',
-    },
-    validate: {
-      // Validation stores catalog keys; fieldError translates them on render.
-      name: (v) => (v.trim() ? null : 'providers.form.required'),
-      baseUrl: (v) => (v.trim() ? null : 'providers.form.required'),
-      apiKey: (v) => (editing || v.trim() ? null : 'providers.form.required'),
-    },
-  });
-
-  const mutation = useMutation({
-    mutationFn: async (values: ProviderFormValues) => {
-      if (provider) {
-        await updateProvider({
-          data: {
-            id: provider.id,
-            name: values.name,
-            apiType: values.apiType as ProviderWithModels['apiType'],
-            baseUrl: values.baseUrl,
-            apiKey: values.apiKey || undefined,
-          },
-        });
-      } else {
-        await createProvider({
-          data: {
-            name: values.name,
-            apiType: values.apiType as ProviderWithModels['apiType'],
-            baseUrl: values.baseUrl,
-            apiKey: values.apiKey,
-          },
-        });
-      }
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: providersQueryOptions.queryKey });
-      toast.success(
-        t(
-          editing
-            ? 'providers.toast.providerUpdated'
-            : 'providers.toast.providerAdded',
-        ),
-      );
-      form.reset();
-      onClose();
-    },
-  });
-
-  return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={t(editing ? 'providers.editProvider' : 'providers.addProvider')}
-      centered
-    >
-      <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
-        <Stack gap="sm">
-          <TextInput
-            label={t('common.name')}
-            placeholder={t('providers.form.namePlaceholder')}
-            {...form.getInputProps('name')}
-            error={fieldError(t, form.errors.name)}
-          />
-          <Select
-            label={t('providers.form.apiType')}
-            data={API_TYPE_OPTIONS}
-            allowDeselect={false}
-            {...form.getInputProps('apiType')}
-          />
-          <TextInput
-            label={t('providers.form.baseUrl')}
-            placeholder="https://api.example.com"
-            description={
-              form.values.apiType in BASE_URL_HINTS
-                ? t(BASE_URL_HINTS[form.values.apiType])
-                : ''
-            }
-            {...form.getInputProps('baseUrl')}
-            error={fieldError(t, form.errors.baseUrl)}
-          />
-          <TextInput
-            label={t('providers.form.apiKey')}
-            type="password"
-            placeholder={
-              editing ? t('providers.form.apiKeyKeepCurrent') : 'sk-...'
-            }
-            {...form.getInputProps('apiKey')}
-            error={fieldError(t, form.errors.apiKey)}
-          />
-          <Group justify="flex-end" mt="xs">
-            <Button type="button" variant="default" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" loading={mutation.isPending}>
-              {editing ? t('common.save') : t('providers.addProvider')}
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Modal>
-  );
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: providersQueryOptions.queryKey }),
+      qc.invalidateQueries({
+        queryKey: agentModelChoicesQueryOptions.queryKey,
+      }),
+    ]);
 }
 
-type ModelFormValues = {
-  kind: ProviderModel['kind'];
-  modelId: string;
-  name: string;
-  description: string;
-  reasoning: boolean;
-  contextWindow: number;
-  maxTokens: number;
-};
-
-const MODEL_KIND_LABELS: Record<ProviderModel['kind'], PlainTranslationKey> = {
-  chat: 'providers.model.kind.chat',
-  image: 'providers.model.kind.image',
-};
-
-type Translate = ReturnType<typeof useI18n>['t'];
-
-/** Form validation stores a catalog key; translate it when rendering. */
-function fieldError(t: Translate, error: unknown) {
-  return typeof error === 'string' && error
-    ? t(error as PlainTranslationKey)
-    : undefined;
-}
-
-function ModelFormModal({
-  opened,
-  onClose,
+function ModelRow({
   provider,
   model,
+  onEdit,
 }: {
-  opened: boolean;
-  onClose: () => void;
   provider: ProviderWithModels;
-  model?: ProviderModel;
+  model: ProviderModel;
+  onEdit: () => void;
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const editing = Boolean(model);
-  const canMakeImages = provider.imageModelSuggestions.length > 0;
-  const form = useForm<ModelFormValues>({
-    initialValues: {
-      kind: model?.kind ?? 'chat',
-      modelId: model?.modelId ?? '',
-      name: model?.name ?? '',
-      description: model?.description ?? '',
-      reasoning: model?.reasoning ?? false,
-      contextWindow: model?.contextWindow ?? 128000,
-      maxTokens: model?.maxTokens ?? 8192,
+  const invalidate = useInvalidateProviders();
+  const toggle = useMutation({
+    mutationKey: ['model-enabled', model.id],
+    mutationFn: (enabled: boolean) =>
+      updateModel({ data: { id: model.id, enabled } }),
+    onMutate: async (enabled) => {
+      await qc.cancelQueries({ queryKey: providersQueryOptions.queryKey });
+      const previous = qc.getQueryData<ProviderWithModels[]>(
+        providersQueryOptions.queryKey,
+      );
+      qc.setQueryData<ProviderWithModels[]>(
+        providersQueryOptions.queryKey,
+        (old) =>
+          old?.map((p) =>
+            p.id === provider.id
+              ? {
+                  ...p,
+                  models: p.models.map((m) =>
+                    m.id === model.id ? { ...m, enabled } : m,
+                  ),
+                }
+              : p,
+          ),
+      );
+      return { previous };
     },
-    validate: {
-      modelId: (v) => (v.trim() ? null : 'providers.form.required'),
-      description: (v) =>
-        Array.from(v.trim()).length > 200
-          ? 'providers.model.descriptionTooLong'
-          : null,
+    onError: (_error, _enabled, context) => {
+      if (context?.previous)
+        qc.setQueryData(providersQueryOptions.queryKey, context.previous);
+    },
+    onSettled: () => {
+      if (qc.isMutating({ mutationKey: ['model-enabled', model.id] }) === 1)
+        void invalidate();
     },
   });
-  const image = form.values.kind === 'image';
-
-  const mutation = useMutation({
-    mutationFn: async ({ kind, ...values }: ModelFormValues) => {
-      // Display name is optional: fall back to the model ID when left blank.
-      const name = values.name.trim() || values.modelId.trim();
-      const fields =
-        kind === 'image'
-          ? {
-              modelId: values.modelId,
-              name,
-              description: values.description,
-            }
-          : { ...values, name };
-      if (model) {
-        await updateModel({ data: { id: model.id, kind, ...fields } });
-        return;
-      }
-      await createModel({
-        data: { providerId: provider.id, kind, ...fields },
-      });
-    },
+  const remove = useMutation({
+    mutationFn: () => deleteModel({ data: { id: model.id } }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: providersQueryOptions.queryKey });
-      toast.success(
-        t(
-          editing
-            ? 'providers.toast.modelUpdated'
-            : 'providers.toast.modelAdded',
-        ),
-      );
-      form.reset();
-      onClose();
+      await invalidate();
+      toast.success(t('providers.toast.modelRemoved'));
     },
   });
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={t(editing ? 'providers.model.edit' : 'providers.model.add')}
-      centered
+    <div
+      className={classes.modelRow}
+      data-disabled={!model.enabled || undefined}
     >
-      <form onSubmit={form.onSubmit((values) => mutation.mutate(values))}>
-        <Stack gap="sm">
-          <Select
-            label={t('providers.model.category')}
-            description={t(
-              canMakeImages
-                ? image
-                  ? 'providers.model.categoryImage'
-                  : 'providers.model.categoryChat'
-                : 'providers.model.categoryNoImages',
-            )}
-            allowDeselect={false}
-            data={[
-              { value: 'chat', label: t(MODEL_KIND_LABELS.chat) },
-              {
-                value: 'image',
-                label: t(MODEL_KIND_LABELS.image),
-                disabled: !canMakeImages,
+      <Group gap="sm" wrap="nowrap" className={classes.modelMain}>
+        <Text size="sm" fw={600} className={classes.modelName}>
+          {model.name}
+        </Text>
+        <Text
+          size="xs"
+          c="dimmed"
+          ff="monospace"
+          truncate
+          visibleFrom="xs"
+          className={classes.modelId}
+        >
+          {model.modelId}
+        </Text>
+        {model.chat ? (
+          <span className={classes.chip}>
+            {formatTokenCount(model.chat.contextWindow)}
+          </span>
+        ) : null}
+        {model.chat?.overridden.length ? (
+          <Tooltip label={t('providers.model.customTooltip')} withArrow>
+            <Badge variant="light" size="sm">
+              {t('providers.model.custom')}
+            </Badge>
+          </Tooltip>
+        ) : null}
+      </Group>
+      <Group gap={2} wrap="nowrap" className={classes.modelActions}>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          size="sm"
+          aria-label={t('providers.model.editNamed', { name: model.name })}
+          onClick={onEdit}
+        >
+          <IconPencil size={15} stroke={1.6} />
+        </ActionIcon>
+        <ActionIcon
+          variant="subtle"
+          color="red"
+          size="sm"
+          aria-label={t('providers.model.removeNamed', { name: model.name })}
+          onClick={() =>
+            modals.openConfirmModal({
+              title: t('providers.model.remove'),
+              centered: true,
+              children: (
+                <Text size="sm">
+                  <Trans
+                    t={t}
+                    i18nKey="providers.model.removeBody"
+                    values={{ name: model.name }}
+                    components={{ b: <b /> }}
+                  />
+                </Text>
+              ),
+              labels: {
+                confirm: t('common.remove'),
+                cancel: t('common.cancel'),
               },
-            ]}
-            {...form.getInputProps('kind')}
-          />
-          {image ? (
-            <Autocomplete
-              label={t('providers.model.modelId')}
-              placeholder={provider.imageModelSuggestions[0]}
-              description={t('providers.model.modelIdDescription')}
-              data={provider.imageModelSuggestions}
-              {...form.getInputProps('modelId')}
-              error={fieldError(t, form.errors.modelId)}
-            />
-          ) : (
-            <TextInput
-              label={t('providers.model.modelId')}
-              placeholder="gpt-5.5"
-              description={t('providers.model.modelIdDescription')}
-              {...form.getInputProps('modelId')}
-              error={fieldError(t, form.errors.modelId)}
-            />
-          )}
-          <TextInput
-            label={t('providers.model.displayName')}
-            description={t('providers.model.displayNameDescription')}
-            placeholder={
-              form.values.modelId.trim() || (image ? 'GPT Image' : 'GPT-5.5')
-            }
-            {...form.getInputProps('name')}
-          />
-          {image ? (
-            <Textarea
-              label={t('providers.model.bestFor')}
-              description={t('providers.model.bestForDescription')}
-              placeholder={t('providers.model.bestForPlaceholder')}
-              autosize
-              minRows={2}
-              maxRows={4}
-              {...form.getInputProps('description')}
-              error={fieldError(t, form.errors.description)}
-            />
-          ) : null}
-          {image ? null : (
-            <>
-              <Group grow>
-                <NumberInput
-                  label={t('providers.model.contextWindow')}
-                  min={1000}
-                  step={1000}
-                  thousandSeparator=","
-                  {...form.getInputProps('contextWindow')}
-                />
-                <NumberInput
-                  label={t('providers.model.maxTokens')}
-                  min={256}
-                  step={256}
-                  thousandSeparator=","
-                  {...form.getInputProps('maxTokens')}
-                />
-              </Group>
-              <Switch
-                label={t('providers.model.reasoning')}
-                description={t('providers.model.reasoningDescription')}
-                {...form.getInputProps('reasoning', { type: 'checkbox' })}
-              />
-            </>
-          )}
-          <Group justify="flex-end" mt="xs">
-            <Button type="button" variant="default" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" loading={mutation.isPending}>
-              {editing ? t('common.save') : t('providers.model.add')}
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Modal>
+              confirmProps: { color: 'red' },
+              onConfirm: () => remove.mutate(),
+            })
+          }
+        >
+          <IconTrash size={15} stroke={1.6} />
+        </ActionIcon>
+      </Group>
+      <Switch
+        size="xs"
+        checked={model.enabled}
+        onChange={(event) => toggle.mutate(event.currentTarget.checked)}
+        aria-label={t(
+          model.enabled
+            ? 'providers.model.disableNamed'
+            : 'providers.model.enableNamed',
+          { name: model.name },
+        )}
+      />
+    </div>
+  );
+}
+
+function AddModel({ provider }: { provider: ProviderWithModels }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const invalidate = useInvalidateProviders();
+  const add = useMutation({
+    mutationFn: (input: {
+      modelId: string;
+      kind: 'chat' | 'image';
+      catalogRef: string | null;
+    }) =>
+      createModel({
+        data: {
+          providerId: provider.id,
+          kind: input.kind,
+          modelId: input.modelId,
+          // A catalog pick names its entry; anything else is matched by id.
+          ...(input.catalogRef ? { catalogRef: input.catalogRef } : {}),
+        },
+      }),
+    onSuccess: async () => {
+      await invalidate();
+    },
+  });
+  const exclude = useMemo(
+    () => new Set(provider.models.map((model) => model.modelId)),
+    [provider.models],
+  );
+
+  if (!open)
+    return (
+      <Button
+        type="button"
+        size="xs"
+        variant="subtle"
+        color="gray"
+        leftSection={<IconPlus size={14} stroke={2} />}
+        onClick={() => setOpen(true)}
+      >
+        {t('providers.model.add')}
+      </Button>
+    );
+  return (
+    <Group gap="xs" wrap="nowrap" className={classes.addModel}>
+      <div className={classes.addModelInput}>
+        <ModelSearchInput
+          catalogProviderId={provider.catalogProviderId}
+          providerId={provider.hasApiKey ? provider.id : undefined}
+          exclude={exclude}
+          focusOnMount
+          onPick={(model) =>
+            add.mutate({
+              modelId: model.modelId,
+              // Image ids only fit providers that can make images.
+              kind:
+                model.kind === 'image' && provider.canGenerateImages
+                  ? 'image'
+                  : 'chat',
+              catalogRef: model.catalogRef,
+            })
+          }
+        />
+      </div>
+      <Button
+        type="button"
+        size="xs"
+        variant="subtle"
+        color="gray"
+        onClick={() => setOpen(false)}
+      >
+        {t('common.done')}
+      </Button>
+    </Group>
   );
 }
 
 function ProviderCard({ provider }: { provider: ProviderWithModels }) {
   const { t } = useI18n();
   const qc = useQueryClient();
+  const invalidate = useInvalidateProviders();
   const [editOpen, editHandlers] = useDisclosure(false);
-  // null = closed, 'new' = add model, ProviderModel = edit that model.
-  const [modelTarget, setModelTarget] = useState<ProviderModel | 'new' | null>(
-    null,
-  );
-
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: providersQueryOptions.queryKey });
+  const [editing, setEditing] = useState<ProviderModel | null>(null);
 
   const toggleEnabled = useMutation({
     mutationKey: ['provider-enabled', provider.id],
@@ -463,11 +338,23 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     },
   });
 
-  const removeModel = useMutation({
-    mutationFn: (id: string) => deleteModel({ data: { id } }),
-    onSuccess: async () => {
-      await invalidate();
-      toast.success(t('providers.toast.modelRemoved'));
+  const test = useMutation({
+    mutationFn: () => testProvider({ data: { id: provider.id } }),
+    onSuccess: (result) => {
+      if (result.ok)
+        toast.success(
+          t('providers.test.ok', {
+            name: provider.name,
+            seconds: (result.latencyMs / 1000).toFixed(1),
+          }),
+        );
+      else
+        toast.error(
+          t('providers.test.failed', {
+            name: provider.name,
+            error: result.error ?? t('providers.test.noDetails'),
+          }),
+        );
     },
   });
 
@@ -475,7 +362,10 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
     <div className={classes.provider}>
       <div className={classes.providerHead}>
         <Group className={classes.providerInfo} wrap="nowrap" gap="sm">
-          <ProviderAvatar apiType={provider.apiType} />
+          <ProviderAvatar
+            catalogProviderId={provider.catalogProviderId}
+            apiType={provider.apiType}
+          />
           <Stack gap={3} style={{ minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap">
               <Text fw={700} truncate>
@@ -486,6 +376,11 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                   {t('providers.card.off')}
                 </Badge>
               )}
+              {provider.hasApiKey ? null : (
+                <Badge variant="light" color="yellow" size="sm">
+                  {t('providers.card.noApiKey')}
+                </Badge>
+              )}
             </Group>
             <Text size="xs" c="dimmed" truncate>
               {provider.baseUrl}
@@ -494,7 +389,9 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
         </Group>
         <Group gap="xs" wrap="nowrap">
           <Tooltip
-            label={t(provider.enabled ? 'common.enabled' : 'common.disabled')}
+            label={
+              provider.enabled ? t('common.enabled') : t('common.disabled')
+            }
             withArrow
             position="left"
           >
@@ -502,6 +399,12 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
               checked={provider.enabled}
               onChange={(e) => toggleEnabled.mutate(e.currentTarget.checked)}
               size="sm"
+              aria-label={t(
+                provider.enabled
+                  ? 'providers.card.disableNamed'
+                  : 'providers.card.enableNamed',
+                { name: provider.name },
+              )}
             />
           </Tooltip>
           <Menu position="bottom-end" withArrow shadow="md">
@@ -510,14 +413,26 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
                 variant="subtle"
                 color="gray"
                 aria-label={t('providers.card.menu')}
+                loading={test.isPending}
               >
                 <IconDotsVertical size={18} stroke={1.6} />
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item onClick={editHandlers.open}>
+              <Menu.Item
+                leftSection={<IconPencil size={15} stroke={1.6} />}
+                onClick={editHandlers.open}
+              >
                 {t('providers.editProvider')}
               </Menu.Item>
+              <Menu.Item
+                leftSection={<IconPlugConnected size={15} stroke={1.6} />}
+                disabled={!provider.hasApiKey || test.isPending}
+                onClick={() => test.mutate()}
+              >
+                {t('providers.card.test')}
+              </Menu.Item>
+              <Menu.Divider />
               <Menu.Item
                 color="red"
                 leftSection={<IconTrash size={15} stroke={1.6} />}
@@ -555,64 +470,12 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
         {provider.models.length > 0 ? (
           <Stack gap={2}>
             {provider.models.map((m) => (
-              <div key={m.id} className={classes.modelRow}>
-                <Group gap="sm" wrap="nowrap" className={classes.modelMain}>
-                  <Text size="sm" fw={600} className={classes.modelName}>
-                    {m.name}
-                  </Text>
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                    ff="monospace"
-                    truncate
-                    visibleFrom="xs"
-                    className={classes.modelId}
-                  >
-                    {m.modelId}
-                  </Text>
-                </Group>
-                <Group gap={2} wrap="nowrap" className={classes.modelActions}>
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    size="sm"
-                    aria-label={t('providers.model.edit')}
-                    onClick={() => setModelTarget(m)}
-                  >
-                    <IconPencil size={15} stroke={1.6} />
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    size="sm"
-                    aria-label={t('providers.model.remove')}
-                    onClick={() =>
-                      modals.openConfirmModal({
-                        title: t('providers.model.remove'),
-                        centered: true,
-                        children: (
-                          <Text size="sm">
-                            <Trans
-                              t={t}
-                              i18nKey="providers.model.removeBody"
-                              values={{ name: m.name }}
-                              components={{ b: <b /> }}
-                            />
-                          </Text>
-                        ),
-                        labels: {
-                          confirm: t('common.remove'),
-                          cancel: t('common.cancel'),
-                        },
-                        confirmProps: { color: 'red' },
-                        onConfirm: () => removeModel.mutate(m.id),
-                      })
-                    }
-                  >
-                    <IconTrash size={15} stroke={1.6} />
-                  </ActionIcon>
-                </Group>
-              </div>
+              <ModelRow
+                key={m.id}
+                provider={provider}
+                model={m}
+                onEdit={() => setEditing(m)}
+              />
             ))}
           </Stack>
         ) : (
@@ -620,18 +483,9 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
             {t('providers.card.noModels')}
           </Text>
         )}
-        <Group mt="xs">
-          <Button
-            type="button"
-            size="xs"
-            variant="subtle"
-            color="gray"
-            leftSection={<IconPlus size={14} stroke={2} />}
-            onClick={() => setModelTarget('new')}
-          >
-            {t('providers.model.add')}
-          </Button>
-        </Group>
+        <div className={classes.providerFoot}>
+          <AddModel provider={provider} />
+        </div>
       </div>
 
       {editOpen && (
@@ -641,13 +495,147 @@ function ProviderCard({ provider }: { provider: ProviderWithModels }) {
           provider={provider}
         />
       )}
-      <ModelFormModal
-        key={modelTarget && modelTarget !== 'new' ? modelTarget.id : 'new'}
-        opened={modelTarget !== null}
-        onClose={() => setModelTarget(null)}
-        provider={provider}
-        model={modelTarget && modelTarget !== 'new' ? modelTarget : undefined}
-      />
+      {editing ? (
+        <ModelFormModal
+          key={editing.id}
+          opened
+          onClose={() => setEditing(null)}
+          provider={provider}
+          model={editing}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Where the model catalog comes from and when it last changed. */
+function CatalogStatus() {
+  const { t, locale } = useI18n();
+  const errorText = useErrorText();
+  const qc = useQueryClient();
+  const status = useQuery(catalogStatusQueryOptions);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const setStatus = (next: NonNullable<typeof status.data>) =>
+    qc.setQueryData(catalogStatusQueryOptions.queryKey, next);
+  const refresh = useMutation({
+    mutationFn: () => refreshCatalog(),
+    meta: { errorToast: false },
+    onSuccess: async (result) => {
+      setStatus(result.status);
+      if (result.outcome === 'updated') {
+        toast.success(t('providers.catalog.updated'));
+        await qc.invalidateQueries({ queryKey: ['agent'] });
+      } else if (result.outcome === 'unchanged')
+        toast.info(t('providers.catalog.upToDate'));
+      else
+        toast.error(
+          result.status.lastError ?? t('providers.catalog.updateFailed'),
+        );
+    },
+    onError: (error) =>
+      toast.error(errorText(error, 'providers.catalog.updateFailed')),
+  });
+  const save = useMutation({
+    mutationFn: (input: { autoUpdate?: boolean; sourceUrl?: string | null }) =>
+      updateModelCatalogSettings({ data: input }),
+    onSuccess: (next) => {
+      setStatus(next);
+      toast.success(t('providers.catalog.saved'));
+    },
+  });
+  if (!status.data) return null;
+  const data = status.data;
+  const changed = data.lastUpdatedAt ?? data.generatedAt;
+
+  return (
+    <div className={classes.catalogBar}>
+      <div className={classes.catalogText}>
+        <Tooltip label={formatExact(changed)} withArrow>
+          <Text size="sm" fw={700}>
+            {t('providers.catalog.title', {
+              time: formatRelativeTime(changed, locale),
+            })}
+          </Text>
+        </Tooltip>
+        <Text size="xs" c={data.lastError ? 'red' : 'dimmed'}>
+          {data.lastError
+            ? t('providers.catalog.lastError', { error: data.lastError })
+            : [
+                t('providers.catalog.models', { count: data.modelCount }),
+                data.lastCheckedAt
+                  ? t('providers.catalog.checked', {
+                      time: formatRelativeTime(data.lastCheckedAt, locale),
+                    })
+                  : null,
+                data.autoUpdate
+                  ? t('providers.catalog.autoOn')
+                  : t('providers.catalog.autoOff'),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+        </Text>
+      </div>
+      <Group gap={4} wrap="nowrap">
+        <Button
+          type="button"
+          size="xs"
+          variant="subtle"
+          leftSection={<IconRefresh size={14} stroke={1.8} />}
+          loading={refresh.isPending}
+          onClick={() => refresh.mutate()}
+        >
+          {t('providers.catalog.checkNow')}
+        </Button>
+        <Popover
+          position="bottom-end"
+          shadow="md"
+          width={320}
+          withArrow
+          onOpen={() => setSourceUrl(data.sourceUrl ?? '')}
+        >
+          <Popover.Target>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              aria-label={t('providers.catalog.settings')}
+            >
+              <IconAdjustments size={17} stroke={1.6} />
+            </ActionIcon>
+          </Popover.Target>
+          <Popover.Dropdown>
+            <Stack gap="sm">
+              <Switch
+                label={t('providers.catalog.autoUpdate')}
+                description={t('providers.catalog.autoUpdateDescription')}
+                checked={data.autoUpdate}
+                onChange={(event) =>
+                  save.mutate({ autoUpdate: event.currentTarget.checked })
+                }
+              />
+              <TextInput
+                label={t('providers.catalog.sourceUrl')}
+                description={t('providers.catalog.sourceUrlDescription')}
+                placeholder={data.effectiveSourceUrl}
+                value={sourceUrl ?? ''}
+                onChange={(event) => setSourceUrl(event.currentTarget.value)}
+              />
+              <Group justify="flex-end">
+                <Button
+                  type="button"
+                  size="xs"
+                  loading={save.isPending}
+                  disabled={(sourceUrl ?? '') === (data.sourceUrl ?? '')}
+                  onClick={() =>
+                    save.mutate({ sourceUrl: sourceUrl?.trim() || null })
+                  }
+                >
+                  {t('providers.catalog.saveSource')}
+                </Button>
+              </Group>
+            </Stack>
+          </Popover.Dropdown>
+        </Popover>
+      </Group>
     </div>
   );
 }
@@ -660,35 +648,36 @@ export function ProvidersPanel({
   const { t } = useI18n();
   const { data: providers } = useSuspenseQuery(providersQueryOptions);
 
-  if (providers.length === 0) {
-    return (
-      <Stack align="center" gap="xs" py={64} px="md">
-        <ThemeIcon size={52} radius="xl" variant="light" color="primary">
-          <IconRobot size={26} stroke={1.5} />
-        </ThemeIcon>
-        <Text fw={700} mt="xs">
-          {t('providers.empty.title')}
-        </Text>
-        <Text size="sm" c="dimmed" ta="center" maw={420}>
-          {t('providers.empty.body')}
-        </Text>
-        <Button
-          type="button"
-          mt="md"
-          leftSection={<IconPlus size={16} stroke={1.8} />}
-          onClick={onAddProvider}
-        >
-          {t('providers.addProvider')}
-        </Button>
-      </Stack>
-    );
-  }
-
   return (
-    <div className={classes.providerList}>
-      {providers.map((p) => (
-        <ProviderCard key={p.id} provider={p} />
-      ))}
-    </div>
+    <Stack gap="md">
+      <CatalogStatus />
+      {providers.length === 0 ? (
+        <Stack align="center" gap="xs" py={64} px="md">
+          <ThemeIcon size={52} radius="xl" variant="light" color="primary">
+            <IconRobot size={26} stroke={1.5} />
+          </ThemeIcon>
+          <Text fw={700} mt="xs">
+            {t('providers.empty.title')}
+          </Text>
+          <Text size="sm" c="dimmed" ta="center" maw={420}>
+            {t('providers.empty.body')}
+          </Text>
+          <Button
+            type="button"
+            mt="md"
+            leftSection={<IconPlus size={16} stroke={1.8} />}
+            onClick={onAddProvider}
+          >
+            {t('providers.addProvider')}
+          </Button>
+        </Stack>
+      ) : (
+        <div className={classes.providerList}>
+          {providers.map((p) => (
+            <ProviderCard key={p.id} provider={p} />
+          ))}
+        </div>
+      )}
+    </Stack>
   );
 }
