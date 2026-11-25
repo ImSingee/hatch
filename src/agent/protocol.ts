@@ -1,20 +1,15 @@
 /**
  * Wire protocol between the Platform (control plane) and the Agent Runner
  * (execution plane). The Runner is the only side that opens connections:
- * a WebSocket control channel for run dispatch/events plus REST calls for
- * App operations. Both sides validate every message against these
- * schemas.
+ * a WebSocket control channel for run dispatch/events plus a few REST calls
+ * (Run credentials, chat attachments). Platform capabilities are public RPCs
+ * the Agent reaches through the `hatch` CLI, not part of this protocol. Both
+ * sides validate every message against these schemas.
  *
  * This module must stay dependency-free of `~server/*` and `~/db` (types
  * excepted) so the Runner bundle never pulls in platform-only code.
  */
 import { z } from 'zod';
-import { createAppRequestSchema } from '~/platform-api/lifecycle-schemas';
-export {
-  createAppRequestSchema,
-  deploySourceRequestSchema,
-  rollbackRequestSchema,
-} from '~/platform-api/lifecycle-schemas';
 import type { AgentStreamEvent } from './events';
 import type { AgentAttachmentRef } from './attachments';
 import { agentComposerContentSchema } from './composer-content';
@@ -22,7 +17,7 @@ import { isReservedEnvKey } from './env-keys';
 
 export { DEFAULT_INTERNAL_PORT, RUNNER_WS_PATH } from './runner-constants';
 
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /** How long a run lease stays valid without renewal (heartbeat/events renew). */
 export const RUN_LEASE_TTL_MS = 90_000;
@@ -506,66 +501,6 @@ export const hubMessageSchema = z.union([
   workspaceCleanupSchema,
 ]);
 export type HubMessage = z.infer<typeof hubMessageSchema>;
-
-/** ================== scaffold file transfer ================== */
-
-/**
- * Reject anything that could escape the target directory when joined: absolute
- * paths, `..`/`.` segments, backslashes, and empty segments. Paths are always
- * exchanged with `/` separators.
- */
-export function isSafeRelativePath(p: string): boolean {
-  if (!p || p.startsWith('/') || p.includes('\\') || p.includes('\0')) {
-    return false;
-  }
-  return p
-    .split('/')
-    .every((seg) => seg.length > 0 && seg !== '.' && seg !== '..');
-}
-
-export const scaffoldFileSchema = z.object({
-  path: z.string().refine(isSafeRelativePath, {
-    message: 'Unsafe scaffold file path.',
-  }),
-  /** File contents, base64-encoded (uniform for text and binary). */
-  contentBase64: z.string(),
-});
-export type ScaffoldFile = z.infer<typeof scaffoldFileSchema>;
-
-/** ================== internal REST payloads ================== */
-
-/** Runner-only create payload; session identity never comes from the model. */
-export const createAppForSessionRequestSchema = createAppRequestSchema.extend({
-  sessionId: z.string().min(1),
-});
-
-export {
-  queryAppDbRequestSchema,
-  queryAppKvCursorSchema,
-  queryAppKvRequestSchema,
-  QUERY_APP_DATA_TABLE_CURSOR_MAX_LENGTH,
-  queryAppDataTableCursorSchema,
-  queryAppDataTableRequestSchema,
-} from '~/platform-api/data-schemas';
-export type {
-  QueryAppKvRequest,
-  ParsedQueryAppKvRequest,
-  QueryAppKvRecord,
-  QueryAppKvResponse,
-  QueryAppDataTableJsonValue,
-  QueryAppDataTableRequest,
-  ParsedQueryAppDataTableRequest,
-  QueryAppDataTableSchema,
-  QueryAppDataTableResponse,
-} from '~/platform-api/data-schemas';
-
-/** Response of GET .../source: the canonical repo master as a git bundle. */
-export type SourceBundleResponse = {
-  id: string;
-  masterCommit: string | null;
-  /** Null when the repo has no commits yet (nothing to bundle). */
-  bundleBase64: string | null;
-};
 
 export function parseRunnerMessage(raw: unknown): RunnerMessage {
   return runnerMessageSchema.parse(raw);

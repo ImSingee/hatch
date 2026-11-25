@@ -137,10 +137,11 @@ weaker than the Web UI.
   its reason in the plan, the PR and `docs/cli-tool-parity.md`.
 - Every command must work inside an Agent Run with the injected Run
   credential, exactly as with a user login (see Public Platform API).
-- Agent Tools for platform capabilities are frozen: the CLI is the Agent's
-  interface. Keep existing Tools working, but do not add Tools or MCP tools
-  for new capabilities, and do not extend existing Tools with new ones. Record
-  CLI coverage in `docs/cli-tool-parity.md`.
+- The CLI is the Agent's only interface to platform capabilities. Do not add
+  Agent Tools or MCP tools for them. The remaining Tools serve the Run itself
+  (files, shell, chat attachments, questions, environment values, web access)
+  or the chat transcript (`report_deployed_apps`). Record CLI coverage in
+  `docs/cli-tool-parity.md`.
 
 Design commands for an agent that cannot see the screen or answer prompts:
 

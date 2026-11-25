@@ -1,0 +1,5 @@
+#!/bin/sh
+# Development shim for this checkout's CLI build (`pnpm build:cli`). The Agent
+# Runner puts this directory on the Agent's PATH when the build exists;
+# production images install the same build as /usr/local/bin/hatch.
+exec node "$(dirname "$0")/../dist/main.mjs" "$@"

@@ -1,6 +1,11 @@
 /** Connect adapter for the notification center management API. */
 import type { ConnectRouter, HandlerContext } from '@connectrpc/connect';
+import { AppError } from '~server/errors';
 import { NotificationService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
+import {
+  cardInputFromMessage,
+  cardToMessage,
+} from '../../../packages/hatch-platform-api/notification-card-proto';
 import {
   answersFromMessages,
   answersToMessages,
@@ -47,12 +52,14 @@ import {
   updateChannel,
   updateDestination,
   updateGroup,
+  listNotificationRevisions,
   updateResponseRoute,
   updateRoute,
   type ChannelView,
   type DeliveryView,
   type DestinationView,
   type DirectSender,
+  type NotificationListOrder,
   type NotificationReplyState,
   type NotificationStatus,
   type NotificationSummaryView,
@@ -63,6 +70,12 @@ import {
   type NotificationResponseView,
 } from '~server/notifications/responses';
 import { MAX_NOTIFICATION_BODY_BYTES } from '~server/notifications/contract';
+import {
+  getReadState,
+  markNotificationsRead,
+  type NotificationReadState,
+  type NotificationReader,
+} from '~server/notifications/read-state';
 import { publicApiError } from './errors';
 import { publicApiContext } from './context';
 
@@ -106,6 +119,8 @@ function summary(view: NotificationSummaryView) {
     recalledAt: none(view.recalledAt),
     reply: view.reply ? replyToMessage(view.reply) : undefined,
     respondedAt: none(view.respondedAt),
+    response: view.response ? response(view.response) : undefined,
+    card: view.card ? cardToMessage(view.card) : undefined,
   };
 }
 
@@ -130,6 +145,7 @@ function response(view: NotificationResponseView) {
     via: view.via,
     destinationId: none(view.destinationId),
     respondedAt: view.respondedAt,
+    round: view.round,
   };
 }
 
@@ -139,6 +155,41 @@ function responseRoute(view: ResponseRouteView) {
     name: none(view.name),
     sourceId: none(view.sourceId),
     kind: none(view.kind),
+    destinationId: none(view.destinationId),
+    agentSessionId: none(view.agentSessionId),
+    agentInstructions: none(view.agentInstructions),
+  };
+}
+
+/**
+ * The target an UpdateResponseRoute names: a destination, the Agent (unset
+ * chat or instructions keep theirs; an empty string clears them), or none.
+ */
+function agentOrDestination(input: {
+  destinationId?: string;
+  agent: boolean;
+  agentSessionId?: string;
+  agentInstructions?: string;
+}) {
+  if (input.destinationId && input.agent) {
+    throw publicApiError(
+      'BAD_REQUEST',
+      'Set either destination_id or agent, not both.',
+    );
+  }
+  if (input.destinationId) return { destinationId: input.destinationId };
+  const agentChange =
+    input.agentSessionId !== undefined || input.agentInstructions !== undefined;
+  if (!input.agent && !agentChange) return undefined;
+  return {
+    agent: {
+      ...(input.agentSessionId !== undefined
+        ? { sessionId: input.agentSessionId || null }
+        : {}),
+      ...(input.agentInstructions !== undefined
+        ? { instructions: input.agentInstructions || null }
+        : {}),
+    },
   };
 }
 
@@ -183,6 +234,22 @@ function senderOf(context: HandlerContext): DirectSender {
   return AGENT_SENDER;
 }
 
+/** Whose read position a call uses: the caller, or the platform Agent for a Run. */
+function readerOf(context: HandlerContext): NotificationReader {
+  const sender = senderOf(context);
+  return sender.type === 'user'
+    ? { type: 'user', userId: sender.userId }
+    : { type: 'agent' };
+}
+
+function readState(state: NotificationReadState) {
+  return {
+    ...state,
+    readThroughId: none(state.readThroughId),
+    firstUnreadId: none(state.firstUnreadId),
+  };
+}
+
 /** A device destination belongs to the native login session that registered it. */
 function sessionOf(context: HandlerContext) {
   const auth = context.values.get(publicApiContext);
@@ -211,6 +278,7 @@ export function registerNotificationApi(router: ConnectRouter) {
           kind: input.kind || undefined,
           status: input.status as NotificationStatus | undefined,
           replyState: input.replyState as NotificationReplyState | undefined,
+          order: input.order as NotificationListOrder | undefined,
           cursor: input.cursor || undefined,
           limit: input.limit || undefined,
         });
@@ -246,9 +314,15 @@ export function registerNotificationApi(router: ConnectRouter) {
           : input.groupId
             ? { type: 'group' as const, id: input.groupId }
             : { type: 'destination' as const, id: input.destinationId };
+        const sender = senderOf(context);
+        const run = context.values.get(publicApiContext).run;
         const result = await sendNotification({
           to,
-          sender: senderOf(context),
+          // A Run's send remembers its chat, so answers come back to it.
+          sender:
+            sender.type === 'platform' && run
+              ? { ...sender, agentSessionId: run.sessionId }
+              : sender,
           body: {
             kind: input.kind || undefined,
             title: input.title,
@@ -260,6 +334,7 @@ export function registerNotificationApi(router: ConnectRouter) {
             dedupeKey: input.dedupeKey,
             occurredAt: input.occurredAt,
             reply: input.reply ? replyInputFromMessage(input.reply) : undefined,
+            card: input.card ? cardInputFromMessage(input.card) : undefined,
           },
         });
         return {
@@ -269,6 +344,18 @@ export function registerNotificationApi(router: ConnectRouter) {
         };
       },
       updateNotification: async (input) => {
+        if (input.reply && input.clearReply) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set either reply or clear_reply, not both.',
+          );
+        }
+        if (input.card && input.clearCard) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set either card or clear_card, not both.',
+          );
+        }
         const result = await updateNotificationAsMember({
           id: input.id,
           title: input.title,
@@ -283,6 +370,16 @@ export function registerNotificationApi(router: ConnectRouter) {
               : input.dataJson === ''
                 ? null
                 : dataObject(input.dataJson),
+          reply: input.clearReply
+            ? null
+            : input.reply
+              ? replyInputFromMessage(input.reply)
+              : undefined,
+          card: input.clearCard
+            ? null
+            : input.card
+              ? cardInputFromMessage(input.card)
+              : undefined,
         });
         return { revision: result.revision, changed: result.changed };
       },
@@ -301,12 +398,54 @@ export function registerNotificationApi(router: ConnectRouter) {
             name: sender.name,
             via: input.via === 'mobile' ? 'mobile' : 'cli',
           },
+          input.round > 0 ? { round: input.round } : undefined,
         );
         return { response: response(answered) };
       },
       deleteNotification: async (input) => {
         await deleteNotification(input.id);
         return {};
+      },
+      listNotificationRevisions: async (input) => {
+        const history = await listNotificationRevisions(input.id, {
+          cursor: input.cursor || undefined,
+          limit: input.limit || undefined,
+        });
+        return {
+          nextCursor: history.nextCursor ?? undefined,
+          revisions: history.revisions.map((revision) => ({
+            ...revision,
+            body: none(revision.body),
+            url: none(revision.url),
+            dataJson: revision.data ? JSON.stringify(revision.data) : undefined,
+            reply: revision.reply ? replyToMessage(revision.reply) : undefined,
+            card: revision.card ? cardToMessage(revision.card) : undefined,
+          })),
+          responses: history.responses.map(response),
+        };
+      },
+      getNotificationReadState: async (_input, context) => ({
+        state: readState(await getReadState(readerOf(context))),
+      }),
+      markNotificationsRead: async (input, context) => {
+        const activityAt = input.activityAt
+          ? new Date(input.activityAt)
+          : undefined;
+        if (activityAt && Number.isNaN(activityAt.getTime())) {
+          throw new AppError('activity_at must be an RFC 3339 time.', 400);
+        }
+        if (activityAt && input.through.case !== 'notificationId') {
+          throw new AppError('activity_at needs notification_id.', 400);
+        }
+        const through =
+          input.through.case === 'notificationId'
+            ? { notificationId: input.through.value, activityAt }
+            : { latest: true as const };
+        return {
+          state: readState(
+            await markNotificationsRead(readerOf(context), through),
+          ),
+        };
       },
       listNotificationSources: async () => {
         const sources = await listNotificationSources();
@@ -482,18 +621,39 @@ export function registerNotificationApi(router: ConnectRouter) {
           nextCursor: none(page.nextCursor),
         };
       },
-      createResponseRoute: async (input) => ({
-        route: responseRoute(
-          await createResponseRoute({
-            name: input.name,
-            sourceType: input.sourceType as NotificationRouteSourceType,
-            sourceId: input.sourceId,
-            kind: input.kind,
-            destinationId: input.destinationId,
-            enabled: input.enabled,
-          }),
-        ),
-      }),
+      createResponseRoute: async (input) => {
+        if (Boolean(input.destinationId) === input.agent) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'Set exactly one of destination_id and agent.',
+          );
+        }
+        if (!input.agent && (input.agentSessionId || input.agentInstructions)) {
+          throw publicApiError(
+            'BAD_REQUEST',
+            'agent_session_id and agent_instructions need agent.',
+          );
+        }
+        return {
+          route: responseRoute(
+            await createResponseRoute({
+              name: input.name,
+              sourceType: input.sourceType as NotificationRouteSourceType,
+              sourceId: input.sourceId,
+              kind: input.kind,
+              target: input.agent
+                ? {
+                    agent: {
+                      sessionId: input.agentSessionId || null,
+                      instructions: input.agentInstructions || null,
+                    },
+                  }
+                : { destinationId: input.destinationId! },
+              enabled: input.enabled,
+            }),
+          ),
+        };
+      },
       updateResponseRoute: async (input) => ({
         route: responseRoute(
           await updateResponseRoute({
@@ -504,7 +664,7 @@ export function registerNotificationApi(router: ConnectRouter) {
               | undefined,
             sourceId: input.sourceId,
             kind: input.kind,
-            destinationId: input.destinationId,
+            target: agentOrDestination(input),
             enabled: input.enabled,
           }),
         ),

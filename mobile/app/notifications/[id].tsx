@@ -19,6 +19,7 @@ import {
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
 import { Button } from '../../src/ui/button';
 import { glyphs } from '../../src/ui/glyph.types';
+import { CardBlock, CardStatus } from '../../src/ui/notification-card';
 import {
   Busy,
   Card,
@@ -44,6 +45,7 @@ const destinationLabels: Record<string, string> = {
   device: 'Device',
   webhook: 'Webhook',
   app: 'App',
+  agent: 'Agent chat',
 };
 
 export default function NotificationScreen() {
@@ -60,13 +62,15 @@ export default function NotificationScreen() {
   const pull = usePullToRefresh(useIsFocused(), () => query.refetch());
   const queryClient = useQueryClient();
   const respond = useMutation({
-    mutationFn: (answers: ReplyAnswers) =>
-      api!.respondToNotification(id, answers),
+    // The round on screen, so a question an edit replaced meanwhile is
+    // refused rather than answered with this form.
+    mutationFn: (input: { round: number; answers: ReplyAnswers }) =>
+      api!.respondToNotification(id, input.round, input.answers),
     onError: (error) =>
       Alert.alert(
         'Answer not sent',
         error instanceof MobileError && error.status === 409
-          ? 'Someone already answered, or the sender recalled it.'
+          ? 'Someone already answered, the sender recalled it, or it now asks something else.'
           : errorText(error),
       ),
     onSettled: () =>
@@ -172,6 +176,16 @@ export default function NotificationScreen() {
             {notificationTime(data.editedAt)}.
           </Text>
         ) : null}
+        {data.card ? (
+          <Card>
+            <View style={{ gap: 12, alignItems: 'flex-start' }}>
+              <CardStatus card={data.card} />
+              <View style={{ alignSelf: 'stretch' }}>
+                <CardBlock card={data.card} />
+              </View>
+            </View>
+          </Card>
+        ) : null}
         {data.body ? (
           <Card>
             <Text selectable style={type.body}>
@@ -183,9 +197,13 @@ export default function NotificationScreen() {
           <AnswerCard reply={data.reply} answer={data.response} />
         ) : data.reply && !data.recalledAt ? (
           <ReplyFormCard
+            // A new question starts a fresh draft.
+            key={`${id}:${data.replyRound}`}
             reply={data.reply}
             busy={respond.isPending}
-            onSubmit={(answers) => respond.mutate(answers)}
+            onSubmit={(answers) =>
+              respond.mutate({ round: data.replyRound, answers })
+            }
           />
         ) : null}
         {data.url ? (

@@ -31,7 +31,7 @@ import {
 } from '~queries/notifications';
 import { retryDeliveryFn, type DeliveryView } from '~server/notifications';
 import {
-  DESTINATION_TYPE_LABEL,
+  DELIVERY_TARGET_LABEL,
   DeliveryStatusBadge,
   DestinationTypeIcon,
   NotificationReplyBadge,
@@ -40,6 +40,7 @@ import {
   notificationPriorityLabelKey,
   useNotificationKindName,
 } from './status';
+import { CardBlock, CardStatus } from './notification-card-view';
 import { ReplySection } from './reply-section';
 
 const SOURCE_TYPE_LABEL: Record<
@@ -155,6 +156,16 @@ export function NotificationDetail({ id }: { id: string }) {
             </Group>
           ) : null}
         </Stack>
+        {data.card ? (
+          <Stack gap="sm" mt="lg" align="flex-start">
+            {data.card.status ? <CardStatus card={data.card} /> : null}
+            {data.card.block ? (
+              <Box w="100%">
+                <CardBlock card={data.card} />
+              </Box>
+            ) : null}
+          </Stack>
+        ) : null}
         {data.body ? (
           <Text size="sm" mt="lg" style={{ whiteSpace: 'pre-wrap' }}>
             {data.body}
@@ -172,24 +183,37 @@ export function NotificationDetail({ id }: { id: string }) {
         ) : null}
       </Box>
 
-      {data.reply ? (
+      {data.reply || data.responseDeliveryList.length > 0 ? (
         <>
           <Divider />
           <Box component="section">
+            {/* Without a form, only earlier rounds' deliveries are left. */}
             <Text fw={700} fz="lg" mb="xs">
-              {t('notifications.detail.reply')}
+              {t(
+                data.reply
+                  ? 'notifications.detail.reply'
+                  : 'notifications.detail.answerDeliveries',
+              )}
             </Text>
-            <ReplySection
-              notificationId={id}
-              reply={data.reply}
-              response={data.response}
-              recalledAt={data.recalledAt}
-            />
-            {data.response ? (
-              <Box mt="lg">
-                <Text fw={700} size="sm" mb="xs">
-                  {t('notifications.detail.answerDeliveries')}
-                </Text>
+            {data.reply ? (
+              <ReplySection
+                notificationId={id}
+                reply={data.reply}
+                round={data.replyRound}
+                response={data.response}
+                recalledAt={data.recalledAt}
+              />
+            ) : null}
+            {/* Every round's answer deliveries, also after a later edit asked
+                a new question or removed the form, so a failed one can still
+                be retried. */}
+            {data.response || data.responseDeliveryList.length > 0 ? (
+              <Box mt={data.reply ? 'lg' : 0}>
+                {data.reply ? (
+                  <Text fw={700} size="sm" mb="xs">
+                    {t('notifications.detail.answerDeliveries')}
+                  </Text>
+                ) : null}
                 {data.responseDeliveryList.length === 0 ? (
                   <Text size="sm" c="dimmed">
                     {t('notifications.detail.noResponseRoute')}
@@ -310,10 +334,10 @@ function DeliveryRow({
               {delivery.destinationName}
             </Text>
             <Text size="xs" c="dimmed">
-              {delivery.destinationId
-                ? t(DESTINATION_TYPE_LABEL[delivery.destinationType])
+              {delivery.destinationId || delivery.destinationType === 'agent'
+                ? t(DELIVERY_TARGET_LABEL[delivery.destinationType])
                 : t('notifications.detail.destinationRemoved', {
-                    type: t(DESTINATION_TYPE_LABEL[delivery.destinationType]),
+                    type: t(DELIVERY_TARGET_LABEL[delivery.destinationType]),
                   })}
             </Text>
           </Stack>
@@ -331,7 +355,9 @@ function DeliveryRow({
         <DeliveryOutcome delivery={delivery} revision={revision} />
       </Table.Td>
       <Table.Td>
-        {delivery.status === 'failed' && delivery.destinationId ? (
+        {/* An Agent chat has no destination record to lose. */}
+        {delivery.status === 'failed' &&
+        (delivery.destinationId || delivery.destinationType === 'agent') ? (
           <Button
             size="xs"
             variant="default"
@@ -465,7 +491,7 @@ function DeliveryOutcome({
  * the system has for them. A scheme that would run in this document is shown
  * as text only.
  */
-function NotificationLink({ url }: { url: string }) {
+export function NotificationLink({ url }: { url: string }) {
   if (isDocumentUrl(url))
     return (
       <Text size="sm" truncate>

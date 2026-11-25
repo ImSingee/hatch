@@ -68,12 +68,10 @@ export async function adopt(
       'Checkout must remain inside its Agent session work directory.',
       6,
     );
-  if (current && !bundleEntry)
-    throw new CliError(
-      'origin_mismatch',
-      'Committed Agent checkout origin bundle is missing.',
-      6,
-    );
+  // The origin bundle file proves nothing on its own: the removed
+  // `create_app` Tool pointed origin at a bundle it never wrote, and deploys
+  // uploaded a separate one. Identity rests on the origin path, the session
+  // work directory, the manifest id and the history checks below.
   const head = await git(root, signal, ['rev-parse', '--verify', 'HEAD'], true);
   if (current) {
     await safeTree(root, signal);

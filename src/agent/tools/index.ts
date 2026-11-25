@@ -6,10 +6,10 @@
 import type { CommandCredentials } from '../command-credentials';
 import type { ExecutionEnv } from '../execution-env';
 import type { PlatformClient } from '../platform-client';
-import { createAppTools } from './apps';
 import { createAttachmentTool } from './attachments';
 import { createAskTool, type AskBridge } from './ask';
 import { createCommandTool } from './command';
+import { createDeployedAppsTool } from './deployed-apps';
 import { createFileTools } from './files';
 import { createRequestEnvTool, type EnvBridge } from './request-env';
 import type { AgentToolWithStreamDetails } from './shared';
@@ -42,7 +42,7 @@ export function createTools(
     ),
     createCommandTool(env, options.sessionId, options.commandCredentials),
     createAttachmentTool(shared),
-    ...createAppTools(shared),
+    createDeployedAppsTool(),
     ...createWebTools(
       options.tavilyApiKey ? { tavilyApiKey: options.tavilyApiKey } : {},
     ),

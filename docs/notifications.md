@@ -29,12 +29,56 @@ signed-in user can see and change it.
   Platform and user notifications are never routed: they name their
   recipient, and their deliveries record no routes.
 - **Reply form**: an optional form a notification asks people to answer
-  (`buttons`, `single`, `multiple` and `text` fields). It takes one answer,
-  from whoever answers first, and the answer never changes.
-- **Response route**: `(sourceType, sourceId?, kind?) → destination`, where the
-  destination is a webhook or an App that accepts responses. Every matching
-  response route receives the answer once. An App may receive answers to its
-  own notifications.
+  (`buttons`, `single`, `multiple` and `text` fields). An edit may ask a
+  new question by replacing or removing the form, which starts the next
+  round (`replyRound`). Each round takes one answer, from whoever answers
+  first, and the answer never changes.
+- **Card**: an optional `card` the web timeline shows besides the title and
+  body: a `status` (`label`, `tone` neutral|info|success|warning|danger) and at
+  most one `block` (`progress` with `label`, `percent`, `value?`; `stats` with
+  one to three `{ value, label }`; `quote` with `author`, `text`,
+  `location?`). Phones and destinations keep showing the title and body, so a
+  card only adds to them; envelopes carry it as `notification.card`. Pushes
+  set it and edits replace or remove it (`card: null`); empty spellings mean
+  no card. The rules live in `packages/hatch-platform-api/notification-card*.ts`.
+- **Response route**: `(sourceType, sourceId?, kind?) → target`, where the
+  target is a webhook, an App that accepts responses, or the Agent. Every
+  matching response route receives the answer once. An App may receive answers
+  to its own notifications.
+
+### Answers the Agent acts on
+
+An answer reaches the Agent as a message in an Agent chat, queued like a
+message a person sends (it starts a run when the chat is idle) and sent as the
+person who answered (`src/server/notifications/agent-answers.ts`). The message
+holds only what Hatch or a member wrote: who answered, the notification id,
+round and source type, each answer by position in the form (`field 2: option
+1`) or the typed text as a quoted string, and the routes' instructions.
+Everything the sender chose, including field and option ids (any text can
+spell out an instruction), stays out of the turn (for a Channel, anyone holding
+its token is the sender). Only the chat whose Run sent the notification is
+pointed at `hatch notification get`, since it wrote that content; a chat an
+Agent route picked is told to act only as the route's instructions say, which
+is where a member maps positions to actions.
+
+- A notification the Agent sent with its Run credential keeps that chat
+  (`notifications.agent_session_id`); answers go back there.
+- A response route with an `agent` target sends answers to a fixed chat
+  (`agent_session_id`; deleting that chat deletes the route, as deleting a
+  destination does), or opens one chat per notification on its first
+  answer, which later questions on the same notification reuse. Its optional
+  `agent_instructions` follow the answer in the message.
+- Creating or retargeting an Agent route needs a model to run the answers:
+  the fixed chat's model or a configured AI provider, else `409`.
+- An answer the Agent gave itself (a Run has no user) is never sent back.
+- Each chat an answer goes to is an answer delivery of its own
+  (`notification_response_deliveries` with `destination_type = agent`, the
+  chat in `agent_session_id` or null for the notification's own chat, and
+  the routes' `agent_instructions`). The dispatcher queues the message, so
+  one chat that fails (a model since disabled) retries with backoff and shows
+  in the delivery log without holding back the others; a removed chat or no
+  configured model fails it. The message names the notification and the
+  round, so retries never queue it twice.
 
 Code: `src/server/notifications/` (`ingest.ts`, `dispatcher.ts`, `service.ts`,
 `adapters/*`, `apns/*`). Tables: `notifications`, `notification_deliveries`,
@@ -158,6 +202,10 @@ notification:
 ```
 
 An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
+
+An edit that changes the content or alerts again also sets `activityAt`, so
+the notification moves to the end of the timeline. Answers and recalls leave
+`activityAt` unchanged.
 By default it also alerts phones again, replacing the notification with the
 same id. Pass `silent: true` to only change content without another alert.
 An update with only `id` repeats the alert with the current content.
@@ -266,11 +314,35 @@ The rules live in `packages/hatch-platform-api/notification-reply*.ts`, shared
 by ingress, the CLI and the mobile app. Empty values (`null`, `""`, `[]`, `0`)
 mean "omitted"; settings that do not apply to a field type are rejected. The
 stored form is normalized with every default filled in, and a `400` names the
-field to fix (`reply.fields.0.options: …`). The form is fixed once sent: edits
-cannot change it, and recalling the notification closes it. Once answered, the
-notification's `data` cannot change either (`409`), because answers are
-delivered with it and receivers use it to tell what was answered; its other
-content may still be edited. With a form,
+field to fix (`reply.fields.0.options: …`). An edit with `reply` asks a new
+question: a form replaces the current one and `null` removes it, either way
+starting the next round (`replyRound` + 1, `respondedAt` cleared), which takes
+its own answer; the same form again changes nothing. Recalling the
+notification closes the form. Once the current round is answered, the
+notification's `data` cannot change (`409`) unless the same edit asks a new
+question, because answers are delivered with it and receivers use it to tell
+what was answered; its other content may still be edited. Answers are stored
+per round (`notification_responses` keyed by notification and round), each
+`hatch.notification.responded` names its `response.round`, and receivers
+identify an answer by `(notification.id, response.round)`. An answer to an
+earlier round that is still being delivered goes out with that round's last
+version (its title, body, `data`, card and form, from
+`notification_revisions`), never with what a later question changed.
+
+An answer names the round it was given on: the web and the phone app send
+the round they show (`RespondToNotification.round`, `hatch notification
+respond --round`, required there), and an answer from the push sends the
+revision its notification showed (an app build without that answers only
+the first question: after a new one its push answers are refused and the
+person answers in the app). When an edit has asked a new question since, the answer is
+refused (`409`, code `notifications.replyRoundChanged`; `QUESTION_CHANGED`
+from the push), even when the new form keeps the old field and option ids.
+Answers that no longer fit the current form are rejected (`400`).
+
+Every edit that changes content or asks a new question keeps the replaced
+version in `notification_revisions`. `ListNotificationRevisions` (`hatch
+notification revisions <id>`) returns them oldest first with every answer;
+the timeline shows them under "Earlier versions". With a form,
 `autoOpenUrl` defaults to `false`, so a phone tap opens the form.
 
 Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or
@@ -278,10 +350,13 @@ Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or
 a `text` field the trimmed text. Unanswered optional fields are left out.
 `respondToNotification` (`responses.ts`) runs in one transaction:
 
-1. It locks the notification. A notification without a form answers `400`, a
-   recalled one `409`, and one already answered `409` with the existing answer
-   (`ALREADY_RESPONDED`). Concurrent answers serialize on the row lock, and
-   `notification_responses` has the notification id as primary key.
+1. It locks the notification. An answer to a form an edit has since replaced
+   or removed answers `409` (`notifications.replyRoundChanged`), a
+   notification without a form `400`, a recalled one `409`, and a round
+   already answered `409` with the existing answer (`ALREADY_RESPONDED`).
+   Concurrent answers serialize on the row lock, and `notification_responses`
+   has `(notification_id, round)` as primary key: a second answer to the same
+   round is refused, while a later round takes its own.
 2. It stores the answer with the user, a name snapshot, where it was given
    (`via`: `push`, `mobile`, `web`, `cli`) and, from a push, the device. It
    sets `responded_at` and increments the revision, recording the new value
@@ -326,6 +401,7 @@ route selects it.
     "id": "…",
     "reply": { "fields": ["…"], "submitLabel": "Submit" },
     "response": {
+      "round": 1,
       "answers": { "decision": "approve" },
       "respondedBy": { "userId": "…", "name": "Ada" },
       "via": "push",
@@ -338,8 +414,10 @@ route selects it.
 `notification.data` passes through unchanged, so the sender can correlate the
 answer with its own records. The envelope's top-level `revision` is the revision the answer
 created (`response_revision`), on every attempt, even if the notification is
-edited or recalled before the answer is delivered; `notification` itself shows
-the current state. No other event carries that revision: notification, edit
+edited or recalled before the answer is delivered. `notification` itself shows
+the current state of the answered round: an answer still being delivered when
+an edit asks a new question goes out with its own round's last version
+(title, body, `data`, card and `reply`), never with the new round's. No other event carries that revision: notification, edit
 and recall events use the content revision (`contentRevision`), which skips
 the answer's, so `(notification.id, revision)` stays unique per event. The
 dispatcher alternates which queue claims first, so a backlog of notification
@@ -643,6 +721,43 @@ notification saying so. The JavaScript tap handler ignores these actions and
 opens the notification for "Answer…". Once answered, the next device delivery
 replaces the shown notification passively, without its actions.
 
+## Web UI
+
+`/notifications` is the timeline: every notification as one stream ordered by
+`activityAt` (`ListNotifications` with `order: "activity"`), oldest at the
+top. It opens at the newest, follows new notifications while the reader stays
+at the end, and loads older pages on scroll. A person's message shows as a
+bubble, everything else as a card with its reply form until someone answers;
+low-priority notifications without a form share one collapsed row, and a
+recalled notification becomes one line. When a source edits a notification
+while the page is open, a marker stays where it was.
+
+Each user has one read position in timeline order, shared by all their
+devices (`notification_read_cursors`; the platform Agent has one of its own,
+since Runs have no user). Everything after it is unread, except recalled
+notifications and the reader's own sends; a notification its source moves past
+the position by editing it is unread again. The position only moves forward.
+The timeline marks read once the newest notification has been on screen in a
+visible tab, keeps the divider and the "N unread · jump" prompt from when it
+opened, and the menu bar bell shows a dot while anything is unread. Users who
+existed when the position shipped start with everything read; a new user starts
+from when they joined. `GetNotificationReadState` and `MarkNotificationsRead`
+expose it (`hatch notification unread`, `hatch notification mark-read`).
+Marking read names the newest notification on screen and the activity time it
+was shown with (`activity_at`, `mark-read --at`); when an edit has moved it
+since, the position stops at the version shown, so the edit and whatever
+arrived in between stay unread on every device.
+
+The phone app's Notifications screen is the same timeline (shared layout in
+`packages/hatch-platform-api/notification-timeline.ts`): activity order, cards,
+the unread divider and jump, and reading at the end moves the same read
+position. Answering opens the notification's page, and the app icon's badge
+shows the unread count.
+
+`/notifications/log` is
+the delivery log (filters, deliveries, answer deliveries), and
+`/notifications/log/<id>` opens one notification there.
+
 ## Management API
 
 Web UI: Server Functions in `src/server/notifications.ts`. Native clients and
@@ -674,3 +789,16 @@ manifest schema is strict, so Platform and Runner must ship the same build.
 The `user` source type is an additive envelope value: App destinations built
 against the earlier `app | channel | platform` set receive it as a plain
 string, so no compatibility version change is needed either.
+
+The timeline additions are additive too. `notification.card` and
+`notification.response.round` are new envelope fields, which
+`verifyNotificationRequest` ignores (it checks only `type`). A second
+`hatch.notification.responded` for the same notification arrives only after an
+edit asked a new question: the source itself with an SDK that has `reply` on
+`updateNotification`, or a member through `hatch notification update --reply`.
+Receivers that keyed answers by notification id should key them by
+`(notification.id, response.round)`. Until then, a receiver that overwrites by
+notification id shows the later answer as the latest one, but one that ignores
+a notification id after its first answer drops every later round: update such
+receivers before a source starts asking new questions. `activity_at`, read positions and revisions are platform
+data and never reach Apps.

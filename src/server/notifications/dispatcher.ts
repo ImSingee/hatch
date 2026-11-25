@@ -13,6 +13,7 @@ import type {
   NotificationRecord,
   NotificationResponseRecord,
 } from './contract';
+import { deliverAnswerToAgent } from './agent-answers';
 import { MAX_DELIVERY_RESULT } from './contract';
 import type {
   DeliveryAdapter,
@@ -378,12 +379,13 @@ export async function recordOutcome(
   }
 }
 
-/** The answer to a notification, when it has one. */
+/** The answer to one round of a notification, when it has one. */
 export async function loadResponse(
   notificationId: string,
+  round: number,
 ): Promise<NotificationResponseRecord | null> {
   const row = await db.query.notificationResponses.findFirst({
-    where: { notificationId },
+    where: { notificationId, round },
   });
   return row ?? null;
 }
@@ -454,7 +456,7 @@ export async function runClaimedDelivery(
         // response routes, never with the notification itself.
         response:
           destination.type === 'device' && notification.respondedAt
-            ? await loadResponse(notification.id)
+            ? await loadResponse(notification.id, notification.replyRound)
             : null,
         destination,
         sourceSlug: await sourceSlugOf(notification.appId),
@@ -533,6 +535,36 @@ export async function recordResponseOutcome(
   }
 }
 
+/**
+ * The notification as it read when this answer was given. An edit that asks
+ * a new question may change the data and the form, so an answer to an
+ * earlier round goes out with the last version of that round, kept when the
+ * edit replaced it; receivers tell what was answered from that content.
+ */
+async function asAnswered(
+  notification: NotificationRecord,
+  response: NotificationResponseRecord,
+): Promise<NotificationRecord> {
+  if (response.round === notification.replyRound) return notification;
+  const kept = await db.query.notificationRevisions.findFirst({
+    where: { notificationId: notification.id, replyRound: response.round },
+    orderBy: { revision: 'desc' },
+  });
+  if (!kept) return notification;
+  return {
+    ...notification,
+    title: kept.title,
+    body: kept.body,
+    url: kept.url,
+    data: kept.data,
+    card: kept.card,
+    reply: kept.reply,
+    replyRound: kept.replyRound,
+    revision: kept.revision,
+    responseRevision: response.revision,
+  };
+}
+
 /** Send one answer to a response route's destination. */
 export async function runClaimedResponseDelivery(
   claimed: ClaimedDelivery,
@@ -548,7 +580,7 @@ export async function runClaimedResponseDelivery(
       db.query.notifications.findFirst({
         where: { id: delivery.notificationId },
       }),
-      loadResponse(delivery.notificationId),
+      loadResponse(delivery.notificationId, delivery.round),
       delivery.destinationId
         ? db.query.notificationDestinations.findFirst({
             where: { id: delivery.destinationId },
@@ -563,6 +595,16 @@ export async function runClaimedResponseDelivery(
       };
     } else if (!response) {
       outcome = { kind: 'fail', error: 'The notification has no answer.' };
+    } else if (delivery.destinationType === 'agent') {
+      outcome = await deliverAnswerToAgent({
+        notification: {
+          ...notification,
+          ...(await asAnswered(notification as NotificationRecord, response)),
+        },
+        response,
+        agentSessionId: delivery.agentSessionId,
+        instructions: delivery.agentInstructions ?? [],
+      });
     } else if (!destination) {
       outcome = { kind: 'fail', error: 'Destination was removed.' };
     } else if (!destination.enabled) {
@@ -574,7 +616,10 @@ export async function runClaimedResponseDelivery(
         deliveryId: delivery.id,
         attempt: claimed.attempts,
         event: 'responded',
-        notification: notification as NotificationRecord,
+        notification: await asAnswered(
+          notification as NotificationRecord,
+          response,
+        ),
         response,
         destination,
         sourceSlug: await sourceSlugOf(notification.appId),

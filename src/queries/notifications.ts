@@ -3,6 +3,8 @@ import type { NotificationSourceType } from '~/db/schema';
 import {
   getApnsStatusFn,
   getNotificationFn,
+  getNotificationReadStateFn,
+  listNotificationRevisionsFn,
   listChannelsFn,
   listDestinationsFn,
   listGroupsFn,
@@ -76,3 +78,35 @@ export const apnsStatusQueryOptions = queryOptions({
   queryKey: [...NOTIFICATIONS_KEY, 'apns'],
   queryFn: () => getApnsStatusFn(),
 });
+
+/**
+ * The timeline: newest activity first, so an edited notification comes back
+ * at the top of the first page. The page shows it reversed, newest at the end.
+ */
+export const notificationTimelineQueryOptions = infiniteQueryOptions({
+  queryKey: [...NOTIFICATIONS_KEY, 'timeline'],
+  queryFn: ({ pageParam }) =>
+    listNotificationsFn({
+      data: { order: 'activity', cursor: pageParam ?? undefined, limit: 50 },
+    }),
+  initialPageParam: null as string | null,
+  getNextPageParam: (page) => page.nextCursor,
+});
+
+/** How far the signed-in user has read the timeline, on every device. */
+export const notificationReadStateQueryOptions = queryOptions({
+  queryKey: [...NOTIFICATIONS_KEY, 'read-state'],
+  queryFn: () => getNotificationReadStateFn(),
+});
+
+/** What a notification said before each edit, and every answer it took. */
+export const notificationRevisionsQueryOptions = (id: string) =>
+  infiniteQueryOptions({
+    queryKey: [...NOTIFICATIONS_KEY, 'revisions', id],
+    queryFn: ({ pageParam }) =>
+      listNotificationRevisionsFn({
+        data: { id, cursor: pageParam ?? undefined },
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
+  });

@@ -10,6 +10,7 @@ import {
   Table,
   Text,
   TextInput,
+  Textarea,
   Tooltip,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
@@ -34,6 +35,7 @@ import { SectionTitle } from './section-title';
 import { useNotificationMutation } from './use-notification-mutation';
 
 type SourceType = 'any' | 'app' | 'channel';
+type TargetType = 'destination' | 'agent';
 const ANY = '__any__';
 
 function ResponseRouteModal({ onClose }: { onClose: () => void }) {
@@ -46,7 +48,10 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
   const [sourceType, setSourceType] = useState<SourceType>('any');
   const [sourceId, setSourceId] = useState<string>(ANY);
   const [kind, setKind] = useState<string>(ANY);
+  const [targetType, setTargetType] = useState<TargetType>('destination');
   const [destinationId, setDestinationId] = useState<string | null>(null);
+  const [instructions, setInstructions] = useState('');
+  const ready = targetType === 'agent' || Boolean(destinationId);
 
   const create = useNotificationMutation(
     (input: Parameters<typeof createResponseRouteFn>[0]['data']) =>
@@ -85,13 +90,21 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!destinationId) return;
+    if (!ready) return;
     create.mutate({
       name: name.trim() || null,
       sourceType,
       sourceId: sourceType === 'any' || sourceId === ANY ? null : sourceId,
       kind: kind === ANY ? null : kind,
-      destinationId,
+      target:
+        targetType === 'agent'
+          ? {
+              agent: {
+                sessionId: null,
+                instructions: instructions.trim() || null,
+              },
+            }
+          : { destinationId: destinationId! },
     });
   };
 
@@ -150,17 +163,54 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
             allowDeselect={false}
             searchable
           />
-          <Select
-            label={t('notifications.responseRoutes.sendTo')}
-            description={t('notifications.responseRoutes.sendToDescription')}
-            placeholder={t('notifications.responseRoutes.chooseDestination')}
-            data={targets}
-            value={destinationId}
-            onChange={setDestinationId}
-            required
-            searchable
-            nothingFoundMessage={t('notifications.responseRoutes.noTargets')}
-          />
+          <Stack gap={6}>
+            <Text size="sm" fw={600}>
+              {t('notifications.responseRoutes.sendTo')}
+            </Text>
+            <SegmentedControl
+              value={targetType}
+              onChange={(value) => setTargetType(value as TargetType)}
+              data={[
+                {
+                  value: 'destination',
+                  label: t('notifications.responseRoutes.target.destination'),
+                },
+                {
+                  value: 'agent',
+                  label: t('notifications.responseRoutes.target.agent'),
+                },
+              ]}
+            />
+          </Stack>
+          {targetType === 'agent' ? (
+            <Textarea
+              label={t('notifications.responseRoutes.agentInstructions')}
+              description={t(
+                'notifications.responseRoutes.agentInstructionsDescription',
+              )}
+              placeholder={t(
+                'notifications.responseRoutes.agentInstructionsPlaceholder',
+              )}
+              value={instructions}
+              onChange={(event) => setInstructions(event.currentTarget.value)}
+              autosize
+              minRows={2}
+              maxRows={8}
+              maxLength={2000}
+            />
+          ) : (
+            <Select
+              label={t('notifications.responseRoutes.destination')}
+              description={t('notifications.responseRoutes.sendToDescription')}
+              placeholder={t('notifications.responseRoutes.chooseDestination')}
+              data={targets}
+              value={destinationId}
+              onChange={setDestinationId}
+              required
+              searchable
+              nothingFoundMessage={t('notifications.responseRoutes.noTargets')}
+            />
+          )}
           <TextInput
             label={t('common.name')}
             description={t('notifications.responseRoutes.nameDescription')}
@@ -172,11 +222,7 @@ function ResponseRouteModal({ onClose }: { onClose: () => void }) {
             <Button variant="default" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button
-              type="submit"
-              loading={create.isPending}
-              disabled={!destinationId}
-            >
+            <Button type="submit" loading={create.isPending} disabled={!ready}>
               {t('notifications.responseRoutes.create')}
             </Button>
           </Group>
@@ -247,6 +293,12 @@ export function ResponseRoutesSection() {
   };
   const target = (route: ResponseRouteView) =>
     destinations.find((destination) => destination.id === route.destinationId);
+  const targetLabel = (route: ResponseRouteView) =>
+    route.targetType === 'agent'
+      ? route.agentSessionId
+        ? t('notifications.responseRoutes.agentFixed')
+        : t('notifications.responseRoutes.agentPerNotification')
+      : (target(route)?.name ?? t('notifications.routes.removedDestination'));
 
   const confirmDelete = (route: ResponseRouteView) => {
     const destination = target(route);
@@ -255,11 +307,13 @@ export function ResponseRoutesSection() {
       centered: true,
       children: (
         <Text size="sm">
-          {destination
-            ? t('notifications.responseRoutes.deleteBody', {
-                name: destination.name,
-              })
-            : t('notifications.responseRoutes.deleteBodyRemoved')}
+          {route.targetType === 'agent'
+            ? t('notifications.responseRoutes.deleteBodyAgent')
+            : destination
+              ? t('notifications.responseRoutes.deleteBody', {
+                  name: destination.name,
+                })
+              : t('notifications.responseRoutes.deleteBodyRemoved')}
         </Text>
       ),
       labels: {
@@ -334,9 +388,13 @@ export function ResponseRoutesSection() {
                         />
                         <Stack gap={0} miw={0}>
                           <Text size="sm" truncate>
-                            {destination?.name ??
-                              t('notifications.routes.removedDestination')}
+                            {targetLabel(route)}
                           </Text>
+                          {route.agentInstructions ? (
+                            <Text size="xs" c="dimmed" truncate>
+                              {route.agentInstructions}
+                            </Text>
+                          ) : null}
                           {stale ? (
                             <Text size="xs" c="red.8">
                               {t('notifications.responseRoutes.stale')}

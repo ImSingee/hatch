@@ -5,12 +5,11 @@ description: Implement or review Hatch Agent tool declarations and execution con
 
 # Tool call contracts
 
-Agent Tools for platform capabilities are frozen. The platform Agent reaches
-new capabilities through the `hatch` CLI with its Run credential, so do not
-add Tools or MCP tools for them or extend existing Tools with new
+The platform Agent reaches every platform capability through the `hatch` CLI
+with its Run credential, so do not add Tools or MCP tools for platform
 capabilities; ship a CLI command instead (see "CLI Coverage for Platform
-Capabilities" in `AGENTS.md`). This skill governs maintaining the existing
-Tools.
+Capabilities" in `AGENTS.md`). This skill governs the remaining Tools, which
+serve the Run itself and the chat transcript.
 
 Do not assume a model can omit fields from a tool call. Every schema-optional
 control field must accept `null`, `""`, `[]`, `{}` and numeric `0` as the

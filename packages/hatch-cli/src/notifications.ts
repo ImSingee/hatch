@@ -15,6 +15,8 @@ import {
   describeIssue,
   notificationReplySchema,
 } from '../../hatch-platform-api/notification-reply-schema';
+import { notificationCardSchema } from '../../hatch-platform-api/notification-card-schema';
+import { cardToMessage } from '../../hatch-platform-api/notification-card-proto';
 import { configPath, resolveCredential } from './config';
 import { platformTransport } from './client';
 import { CliError } from './error';
@@ -223,6 +225,31 @@ export function parseReplyForm(value: unknown, flag = 'reply') {
   return parsed.data;
 }
 
+/** Validate a card exactly as the platform does; an empty card is rejected. */
+export function parseCard(value: unknown, flag = 'card') {
+  const parsed = notificationCardSchema.safeParse(value);
+  if (!parsed.success) invalid(`--${flag}: ${describeIssue(parsed.error)}`);
+  if (!parsed.data)
+    invalid(`--${flag}: give a status or a block, or use --clear-card.`);
+  return parsed.data;
+}
+
+/** Load and check `--card`/`--card-file` before any request is made. */
+function cardPreparation(
+  values: Values,
+):
+  | ((
+      signal: AbortSignal,
+    ) => Promise<{ card: ReturnType<typeof cardToMessage> }>)
+  | undefined {
+  const card = jsonInput(values, 'card');
+  if (!card) return undefined;
+  const flag = values.card === undefined ? 'card-file' : 'card';
+  return async (signal) => ({
+    card: cardToMessage(parseCard(await card(signal), flag)),
+  });
+}
+
 /**
  * Answers from `--answers <json>`/`--answers-file`, or from repeated
  * `--answer <field>=<value>`; repeating a field makes a list (a multiple
@@ -330,7 +357,9 @@ function responseRouteLine(row: Row) {
     field(row, 'id'),
     row.enabled === false ? 'disabled' : 'enabled',
     `${source} / ${field(row, 'kind') || '*'}`,
-    `→ destination:${field(row, 'destinationId')}`,
+    field(row, 'targetType') === 'agent'
+      ? `→ agent:${field(row, 'agentSessionId') || 'chat per notification'}`
+      : `→ destination:${field(row, 'destinationId')}`,
     field(row, 'name'),
   ];
 }
@@ -481,6 +510,22 @@ const page = (lines: string, response: Row) => {
   return next ? `${lines}\nMore: --cursor ${next}` : lines;
 };
 
+/** The caller's read position: what is unread and where reading stopped. */
+function readStateText(response: Row): string {
+  const state = response.state as Row | undefined;
+  const count = Number(state?.unreadCount ?? 0);
+  const through = field(state, 'readThroughId');
+  const first = field(state, 'firstUnreadId');
+  return [
+    count === 0
+      ? 'No unread notifications.'
+      : `${count} unread; the oldest is ${first}.`,
+    through
+      ? `Read through ${through} (${field(state, 'readThroughAt')}).`
+      : `Read through ${field(state, 'readThroughAt')}.`,
+  ].join('\n');
+}
+
 const specs: Record<string, Spec> = {
   list: {
     positionals: [],
@@ -490,10 +535,15 @@ const specs: Record<string, Spec> = {
       kind: { type: 'string' },
       status: { type: 'string' },
       'reply-state': { type: 'string' },
+      order: { type: 'string' },
       limit: { type: 'string' },
       cursor: { type: 'string' },
     },
     build: (_positionals, values) => {
+      const order = str(values, 'order');
+      if (order !== undefined && !['created', 'activity'].includes(order))
+        invalid('--order must be created or activity.');
+      const byActivity = order === 'activity';
       const replyState = str(values, 'reply-state');
       if (
         replyState !== undefined &&
@@ -523,6 +573,7 @@ const specs: Record<string, Spec> = {
           kind: str(values, 'kind'),
           status,
           replyState,
+          order,
           cursor: str(values, 'cursor'),
           limit: pageLimit(values),
         },
@@ -531,7 +582,7 @@ const specs: Record<string, Spec> = {
             table(
               rows(response.notifications).map((row) => [
                 field(row, 'id'),
-                field(row, 'createdAt'),
+                field(row, byActivity ? 'activityAt' : 'createdAt'),
                 [revisionLabel(row), replyLabel(row)]
                   .filter(Boolean)
                   .join(', '),
@@ -570,7 +621,7 @@ const specs: Record<string, Spec> = {
         const replySection = reply
           ? [
               '',
-              'Reply form:',
+              `Reply form (round ${field(summary, 'replyRound') || 1}):`,
               ...replyLines(reply),
               ...(answered
                 ? [
@@ -583,7 +634,7 @@ const specs: Record<string, Spec> = {
                 : field(summary, 'recalledAt')
                   ? ['Not answered; recalled.']
                   : [
-                      `Not answered yet. Answer with: hatch notification respond ${field(summary, 'id')} --answer <field-id>=<value>`,
+                      `Not answered yet. Answer with: hatch notification respond ${field(summary, 'id')} --round ${field(summary, 'replyRound') || 1} --answer <field-id>=<value>`,
                     ]),
             ]
           : [];
@@ -667,9 +718,12 @@ const specs: Record<string, Spec> = {
       'occurred-at': { type: 'string' },
       reply: { type: 'string' },
       'reply-file': { type: 'string' },
+      card: { type: 'string' },
+      'card-file': { type: 'string' },
     },
     build: (_positionals, values) => {
       const to = oneOf(values, ['channel', 'group', 'destination']);
+      const card = cardPreparation(values);
       if (!to) invalid('Supply one of --channel, --group or --destination.');
       const reply = jsonInput(values, 'reply');
       const kind = str(values, 'kind');
@@ -700,15 +754,20 @@ const specs: Record<string, Spec> = {
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
         },
-        ...(reply
+        ...(reply || card
           ? {
               prepare: async (signal: AbortSignal) => ({
-                reply: replyToMessage(
-                  parseReplyForm(
-                    await reply(signal),
-                    values.reply === undefined ? 'reply-file' : 'reply',
-                  ),
-                ),
+                ...(reply
+                  ? {
+                      reply: replyToMessage(
+                        parseReplyForm(
+                          await reply(signal),
+                          values.reply === undefined ? 'reply-file' : 'reply',
+                        ),
+                      ),
+                    }
+                  : {}),
+                ...(card ? await card(signal) : {}),
               }),
             }
           : {}),
@@ -745,9 +804,23 @@ const specs: Record<string, Spec> = {
       'no-auto-open-url': { type: 'boolean' },
       data: { type: 'string' },
       'clear-data': { type: 'boolean' },
+      reply: { type: 'string' },
+      'reply-file': { type: 'string' },
+      'clear-reply': { type: 'boolean' },
+      card: { type: 'string' },
+      'card-file': { type: 'string' },
+      'clear-card': { type: 'boolean' },
     },
     build: ([id], values) => {
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
+      const reply = jsonInput(values, 'reply');
+      const clearReply = values['clear-reply'] === true;
+      if (reply && clearReply)
+        invalid('Use either --reply/--reply-file or --clear-reply, not both.');
+      const card = cardPreparation(values);
+      const clearCard = values['clear-card'] === true;
+      if (card && clearCard)
+        invalid('Use either --card/--card-file or --clear-card, not both.');
       const title = str(values, 'title');
       if (title !== undefined && !title.trim())
         invalid('--title cannot be empty.');
@@ -764,18 +837,39 @@ const specs: Record<string, Spec> = {
             ? false
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
+        clearReply: clearReply || undefined,
+        clearCard: clearCard || undefined,
       };
       const { id: _, silent, ...changes } = request;
       if (
         silent &&
+        !reply &&
+        !card &&
         Object.values(changes).every((value) => value === undefined)
       )
         invalid(
-          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url or --[clear-]data.',
+          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url, --[clear-]data, --reply/--clear-reply or --card/--clear-card.',
         );
       return {
         method: 'updateNotification',
         request,
+        ...(reply || card
+          ? {
+              prepare: async (signal: AbortSignal) => ({
+                ...(reply
+                  ? {
+                      reply: replyToMessage(
+                        parseReplyForm(
+                          await reply(signal),
+                          values.reply === undefined ? 'reply-file' : 'reply',
+                        ),
+                      ),
+                    }
+                  : {}),
+                ...(card ? await card(signal) : {}),
+              }),
+            }
+          : {}),
         text: (response) =>
           response.changed === true
             ? `Updated notification ${id} (revision ${field(response, 'revision')}). ${silent ? 'Content changes without another phone alert.' : 'Phones alert again with the latest content.'} Destinations that take edits receive the update.`
@@ -800,8 +894,20 @@ const specs: Record<string, Spec> = {
       answer: { type: 'string', multiple: true },
       answers: { type: 'string' },
       'answers-file': { type: 'string' },
+      round: { type: 'string' },
     },
     build: ([notificationId], values) => {
+      // Required: an answer without the round read could land on a newer
+      // question that reuses the same field and option ids.
+      const roundFlag = str(values, 'round');
+      const round = Number(roundFlag);
+      if (
+        roundFlag !== undefined &&
+        (!Number.isInteger(round) || round < 1 || round > 2 ** 31 - 1)
+      )
+        invalid(
+          '--round must be a positive integer (the reply round from get).',
+        );
       const shorthand = list(values, 'answer');
       const loader = jsonInput(values, 'answers');
       if (shorthand && loader)
@@ -810,11 +916,15 @@ const specs: Record<string, Spec> = {
         invalid(
           'Supply --answer <field-id>=<value>... or --answers <json> / --answers-file <path|->.',
         );
+      if (roundFlag === undefined)
+        invalid(
+          'Supply --round <n>, the reply round get printed for the form you answer.',
+        );
       const flag = values.answers !== undefined ? 'answers' : 'answers-file';
       const pairs = shorthand ? parseAnswerFlags(shorthand) : undefined;
       return {
         method: 'respondToNotification',
-        request: { id: notificationId, via: 'cli' },
+        request: { id: notificationId, via: 'cli', round },
         prepare: async (signal) => ({
           answers: answersToMessages(
             pairs ?? checkAnswersObject(await loader!(signal), flag),
@@ -824,6 +934,84 @@ const specs: Record<string, Spec> = {
           const answered = response.response as Row | undefined;
           return `Answered notification ${notificationId} as ${field(answered, 'respondedByName')}. Response routes deliver the answer; see hatch notification get ${notificationId}.`;
         },
+      };
+    },
+  },
+  revisions: {
+    ...id,
+    options: { limit: { type: 'string' }, cursor: { type: 'string' } },
+    build: ([notificationId], values) => ({
+      method: 'listNotificationRevisions',
+      request: {
+        id: notificationId,
+        cursor: str(values, 'cursor'),
+        limit: pageLimit(values),
+      },
+      text: (response) => {
+        const revisions = rows(response.revisions);
+        const answers = rows(response.responses);
+        const lines = revisions.map(
+          (row) =>
+            `revision ${field(row, 'revision')} (${field(row, 'activityAt')} → ${field(row, 'replacedAt')}, round ${field(row, 'replyRound')}): ${field(row, 'title')}`,
+        );
+        const answered = answers.map(
+          (row) =>
+            `round ${field(row, 'round')}: answered by ${field(row, 'respondedByName')} via ${field(row, 'via')} at ${field(row, 'respondedAt')}`,
+        );
+        return page(
+          [
+            revisions.length
+              ? 'Earlier versions, newest first:'
+              : 'No earlier versions: it was never edited.',
+            ...lines,
+            ...(answered.length ? ['', 'Answers:', ...answered] : []),
+          ].join('\n'),
+          response,
+        );
+      },
+    }),
+  },
+  unread: {
+    positionals: [],
+    build: () => ({
+      method: 'getNotificationReadState',
+      request: {},
+      text: readStateText,
+    }),
+  },
+  'mark-read': {
+    positionals: [],
+    options: {
+      through: { type: 'string' },
+      at: { type: 'string' },
+      latest: { type: 'boolean' },
+    },
+    build: (_positionals, values) => {
+      const through = str(values, 'through');
+      const at = str(values, 'at');
+      const latest = values.latest === true;
+      if (at !== undefined && through === undefined)
+        invalid('--at needs --through <notification-id>.');
+      if (at !== undefined && Number.isNaN(new Date(at).getTime()))
+        invalid(
+          '--at must be an ISO 8601 time, the activity time list --order activity printed.',
+        );
+      if (through !== undefined && latest)
+        invalid(
+          'Use either --through <notification-id> or --latest, not both.',
+        );
+      if (through === undefined && !latest)
+        invalid('Supply --through <notification-id> or --latest.');
+      return {
+        method: 'markNotificationsRead',
+        request: {
+          through:
+            through !== undefined
+              ? { case: 'notificationId', value: through }
+              : { case: 'latest', value: true },
+          activityAt: at === undefined ? '' : new Date(at).toISOString(),
+        },
+        text: readStateText,
       };
     },
   },
@@ -1235,10 +1423,14 @@ const specs: Record<string, Spec> = {
       source: { type: 'string' },
       kind: { type: 'string' },
       destination: { type: 'string' },
+      agent: { type: 'boolean' },
+      'agent-session': { type: 'string' },
+      'agent-instructions': { type: 'string' },
       name: { type: 'string' },
       disabled: { type: 'boolean' },
     },
     build: (_positionals, values) => {
+      const agent = values.agent === true;
       const type = sourceType(str(values, 'source-type'), [
         'app',
         'channel',
@@ -1248,7 +1440,17 @@ const specs: Record<string, Spec> = {
       if (type === 'any' && values.source !== undefined)
         invalid('--source cannot be combined with --source-type any.');
       const destinationId = str(values, 'destination');
-      if (!destinationId) invalid('Supply --destination <id>.');
+      if (destinationId && agent)
+        invalid('Use either --destination <id> or --agent, not both.');
+      if (!destinationId && !agent)
+        invalid('Supply --destination <id> or --agent.');
+      const agentSessionId = str(values, 'agent-session');
+      const agentInstructions = str(values, 'agent-instructions');
+      if (
+        !agent &&
+        (agentSessionId !== undefined || agentInstructions !== undefined)
+      )
+        invalid('--agent-session and --agent-instructions need --agent.');
       return {
         method: 'createResponseRoute',
         request: {
@@ -1257,6 +1459,9 @@ const specs: Record<string, Spec> = {
           sourceId: str(values, 'source'),
           kind: str(values, 'kind'),
           destinationId,
+          agent,
+          agentSessionId,
+          agentInstructions,
           enabled: values.disabled ? false : undefined,
         },
         text: (response) =>
@@ -1273,6 +1478,11 @@ const specs: Record<string, Spec> = {
       kind: { type: 'string' },
       'any-kind': { type: 'boolean' },
       destination: { type: 'string' },
+      agent: { type: 'boolean' },
+      'agent-session': { type: 'string' },
+      'chat-per-notification': { type: 'boolean' },
+      'agent-instructions': { type: 'string' },
+      'clear-agent-instructions': { type: 'boolean' },
       name: { type: 'string' },
       enable: { type: 'boolean' },
       disable: { type: 'boolean' },
@@ -1280,6 +1490,24 @@ const specs: Record<string, Spec> = {
     build: ([routeId], values) => {
       exclusive(values, 'source', 'any-source');
       exclusive(values, 'kind', 'any-kind');
+      exclusive(values, 'agent-session', 'chat-per-notification');
+      exclusive(values, 'agent-instructions', 'clear-agent-instructions');
+      const agent = values.agent === true;
+      if (agent && values.destination !== undefined)
+        invalid('Use either --destination <id> or --agent, not both.');
+      const agentSessionId = values['chat-per-notification']
+        ? ''
+        : str(values, 'agent-session');
+      const agentInstructions = values['clear-agent-instructions']
+        ? ''
+        : str(values, 'agent-instructions');
+      if (
+        values.destination !== undefined &&
+        (agentSessionId !== undefined || agentInstructions !== undefined)
+      )
+        invalid(
+          'Agent options cannot be combined with --destination; the route would go to the destination.',
+        );
       const request = {
         id: routeId,
         name: str(values, 'name'),
@@ -1292,6 +1520,9 @@ const specs: Record<string, Spec> = {
         sourceId: values['any-source'] ? '' : str(values, 'source'),
         kind: values['any-kind'] ? '' : str(values, 'kind'),
         destinationId: str(values, 'destination'),
+        agent: agent || undefined,
+        agentSessionId,
+        agentInstructions,
         enabled: enabledFlag(values),
       };
       if (

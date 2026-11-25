@@ -547,9 +547,9 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'list'],
     usage:
-      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--limit <1-100>] [--cursor <id>]',
+      'notification list [--source-type app|channel|platform|user] [--source <id>] [--kind <kind>] [--status unrouted|pending|delivered|partial|failed] [--reply-state awaiting|answered] [--order created|activity] [--limit <1-100>] [--cursor <cursor>]',
     description:
-      'List notifications, newest first; --reply-state lists reply forms awaiting an answer or answered.',
+      'List notifications, newest first. --order activity sorts by the last push or edit (the timeline order, so an edited notification comes first) and shows that time; a --cursor continues only the order that printed it. --reply-state lists reply forms awaiting an answer or answered.',
   },
   {
     path: ['notification', 'get'],
@@ -565,16 +565,23 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'send'],
     usage:
-      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--priority <lowest|low|normal|high>] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->]',
+      'notification send (--channel <id> --kind <kind> | --group <id> | --destination <id>) --title <title> [--kind <kind>] [--body <text>] [--url <url> [--no-auto-open-url]] [--priority <lowest|low|normal|high>] [--data <json-object>] [--dedupe-key <key>] [--occurred-at <iso-8601>] [--reply <json> | --reply-file <path|->] [--card <json> | --card-file <path|->]',
     description:
-      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --priority (also -2, -1, 0, 1; write --priority=-1 for negatives) defaults to normal: lowest stays in history and reaches webhooks and Apps without a phone push, low arrives quietly, high is time-sensitive and shows during Focus and Do Not Disturb. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer.',
+      'Send a notification. --channel sends as that Channel and its routes decide where it goes; --group or --destination (a device, webhook or App from destination list) delivers straight there from you, with --kind optional. Tapping it on a phone opens --url unless --no-auto-open-url is set or it has a reply form. --priority (also -2, -1, 0, 1; write --priority=-1 for negatives) defaults to normal: lowest stays in history and reaches webhooks and Apps without a phone push, low arrives quietly, high is time-sensitive and shows during Focus and Do Not Disturb. --reply asks for one answer ({fields:[{id,type:buttons|single|multiple|text,label,options:[{id,label}]}]}); response routes deliver the answer. --card adds what the web timeline shows besides title and body: {status:{label,tone:neutral|info|success|warning|danger},block:{type:progress,label,percent,value?}|{type:stats,items:[{value,label}] (1-3)}|{type:quote,author,text,location?}}; phones still show title and body.',
   },
   {
     path: ['notification', 'update'],
     usage:
-      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--silent]',
+      'notification update <notification-id> [--title <title>] [--body <text> | --clear-body] [--url <url> | --clear-url] [--auto-open-url | --no-auto-open-url] [--data <json-object> | --clear-data] [--reply <json> | --reply-file <path|-> | --clear-reply] [--card <json> | --card-file <path|-> | --clear-card] [--silent]',
     description:
-      'Edit any notification by id and alert phones again, even with unchanged content. Use --silent to only change content. With no fields, repeats the alert. Destinations that take edits receive hatch.notification.updated.',
+      'Edit any notification by id and alert phones again, even with unchanged content; it moves to the end of the timeline and the replaced version is kept (see notification revisions). Use --silent to only change content. With no fields, repeats the alert. --reply asks a new question (replaces the whole form and starts the next round, which takes its own answer); --clear-reply removes the form. --card replaces the whole timeline card (status and one block); --clear-card removes it. Destinations that take edits receive hatch.notification.updated.',
+  },
+  {
+    path: ['notification', 'revisions'],
+    usage:
+      'notification revisions <notification-id> [--limit <1-100>] [--cursor <cursor>]',
+    description:
+      'List what a notification said before each edit, newest first, a page at a time (default 20; the next cursor is printed), with the answers to the rounds the page covers (the first page also has the current round). A round that spans two pages shows its answer on both.',
   },
   {
     path: ['notification', 'recall'],
@@ -585,9 +592,22 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'respond'],
     usage:
-      'notification respond <notification-id> (--answer <field-id>=<value>... | --answers <json> | --answers-file <path|->)',
+      'notification respond <notification-id> --round <n> (--answer <field-id>=<value>... | --answers <json> | --answers-file <path|->)',
     description:
-      'Answer a notification reply form as the signed-in user; one answer per notification, final once sent. Repeat --answer for each option of a multiple field. Sends the answer to matching response routes.',
+      'Answer a notification reply form as the signed-in user; one answer per round of the form, final once sent. Repeat --answer for each option of a multiple field. --round (required) is the round you read (reply round in get); if an edit has asked a new question since, the answer is refused as a conflict instead of answering the new one. Sends the answer to matching response routes.',
+  },
+  {
+    path: ['notification', 'unread'],
+    usage: 'notification unread',
+    description:
+      "Show how many notifications are unread for the caller (the signed-in user, or the platform Agent in a Run), the oldest unread one and where reading stopped. The position is shared by all of a user's devices.",
+  },
+  {
+    path: ['notification', 'mark-read'],
+    usage:
+      'notification mark-read (--through <notification-id> [--at <activity-time>] | --latest)',
+    description:
+      "Mark notifications read up to and including one notification in timeline order, or all of them with --latest. --at is the activity time list --order activity printed for it; if the notification was edited since, the edit and anything that arrived in between stay unread. The position only moves forward: an older one changes nothing. Changes the caller's position on every device.",
   },
   {
     path: ['notification', 'delete'],
@@ -707,15 +727,16 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['notification', 'response-route', 'create'],
     usage:
-      'notification response-route create --source-type app|channel|any [--source <id>] [--kind <kind>] --destination <id> [--name <name>] [--disabled]',
+      'notification response-route create --source-type app|channel|any [--source <id>] [--kind <kind>] (--destination <id> | --agent [--agent-session <id>] [--agent-instructions <text>]) [--name <name>] [--disabled]',
     description:
-      'Send answers to matching notifications to a webhook, or to an App whose manifest sets notifications.destination.responses. Omit --source/--kind to match any.',
+      'Send answers to matching notifications to a webhook, to an App whose manifest sets notifications.destination.responses, or with --agent to the Agent: each answer becomes a message (sent as the person who answered) that starts a run in a chat, the --agent-session chat or else one chat per notification, reused by later questions on it. --agent-instructions tells the Agent what to do with each answer. Omit --source/--kind to match any.',
   },
   {
     path: ['notification', 'response-route', 'update'],
     usage:
-      'notification response-route update <id> [--source-type app|channel|any] [--source <id> | --any-source] [--kind <kind> | --any-kind] [--destination <id>] [--name <name>] [--enable | --disable]',
-    description: 'Change a response route.',
+      'notification response-route update <id> [--source-type app|channel|any] [--source <id> | --any-source] [--kind <kind> | --any-kind] [--destination <id> | --agent] [--agent-session <id> | --chat-per-notification] [--agent-instructions <text> | --clear-agent-instructions] [--name <name>] [--enable | --disable]',
+    description:
+      'Change a response route. --destination or --agent switches where answers go; the agent options also switch a destination route to the Agent and otherwise keep the current chat and instructions.',
   },
   {
     path: ['notification', 'response-route', 'delete'],
