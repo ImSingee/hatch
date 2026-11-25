@@ -1,17 +1,24 @@
 import { describeAnswers, type ReplyForm } from '@hatch/platform-api';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import {
   buildVersionList,
   type VersionChange,
 } from '../../../../packages/hatch-platform-api/notification-versions';
 import type { NotificationAnswer } from '../../../src/core/types';
+import { MobileError } from '../../../src/core';
 import { useSession } from '../../../src/state/session';
+import { useNotificationDeleted } from '../../../src/state/use-delete-notification';
 import { Button } from '../../../src/ui/button';
 import { CardBlock, CardStatus } from '../../../src/ui/notification-card';
 import { notificationTime } from '../../../src/ui/notification-status';
-import { Busy, Notice, errorText } from '../../../src/ui/primitives';
+import {
+  Busy,
+  EmptyState,
+  Notice,
+  errorText,
+} from '../../../src/ui/primitives';
 import { ScrollScreen } from '../../../src/ui/screen';
 import { Text, type } from '../../../src/ui/text';
 import {
@@ -48,10 +55,11 @@ const VIA: Record<string, string> = {
 export default function NotificationHistoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { api, origin } = useSession();
+  const deleted = useNotificationDeleted(id);
   const current = useQuery({
     queryKey: [origin, 'notification', id],
     queryFn: ({ signal }) => api!.notification(id, signal),
-    enabled: Boolean(api),
+    enabled: Boolean(api) && !deleted,
   });
   const earlier = useInfiniteQuery({
     queryKey: [origin, 'notification', id, 'versions'],
@@ -59,10 +67,30 @@ export default function NotificationHistoryScreen() {
       api!.notificationVersions(id, pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
-    enabled: Boolean(api),
+    enabled: Boolean(api) && !deleted,
   });
 
   const error = current.error ?? earlier.error;
+  // Deleted (here, elsewhere, or expired): never show a cached copy.
+  if (
+    deleted ||
+    [current.error, earlier.error].some(
+      (failure) => failure instanceof MobileError && failure.status === 404,
+    )
+  ) {
+    return (
+      <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>
+        <EmptyState
+          title="Notification not found"
+          detail="It was deleted or has expired from history on this instance."
+          action={{
+            label: 'All notifications',
+            onPress: () => router.replace('/notifications'),
+          }}
+        />
+      </View>
+    );
+  }
   if (error && !(current.data && earlier.data)) {
     return (
       <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>

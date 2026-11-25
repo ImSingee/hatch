@@ -149,7 +149,7 @@ beforeEach(() => {
   fixtures.revisions = {};
 });
 
-async function renderTimeline(height = 600) {
+async function renderTimeline(height = 600, width?: number) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -159,7 +159,9 @@ async function renderTimeline(height = 600) {
       cssVariablesResolver={appCssVariablesResolver}
     >
       <QueryClientProvider client={queryClient}>
-        <div style={{ height, display: 'flex', flexDirection: 'column' }}>
+        <div
+          style={{ height, width, display: 'flex', flexDirection: 'column' }}
+        >
           <NotificationTimeline />
         </div>
       </QueryClientProvider>
@@ -173,7 +175,7 @@ async function renderTimeline(height = 600) {
     document.querySelector<HTMLElement>(
       `article[aria-label="GitHub: Notification ${index}"]`,
     );
-  return { screen, scroller, article };
+  return { screen, scroller, article, queryClient };
 }
 
 test('opens at the newest and marks it read, and holds the view while older pages load', async () => {
@@ -296,4 +298,28 @@ test('opens every version of an edited or recalled notification beside the timel
 
   await screen.getByRole('button', { name: 'Close earlier versions' }).click();
   await expect.element(panel).not.toBeInTheDocument();
+});
+
+test('reads nothing while the versions panel covers the timeline on a narrow window', async () => {
+  fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
+  fixtures.items[2]!.earlierVersions = 1;
+  const { screen, queryClient } = await renderTimeline(600, 600);
+  await screen
+    .getByRole('button', { name: 'Edited 1 time · View history' })
+    .click();
+  await expect
+    .element(screen.getByRole('complementary', { name: 'Earlier versions' }))
+    .toBeVisible();
+
+  // Something new arrives while the panel hides the timeline.
+  queryClient.setQueryData(['notifications', 'read-state'], {
+    ...fixtures.readState,
+    unreadCount: 1,
+    firstUnreadId: fixtures.items[2]!.id,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(fixtures.markRead).toEqual([]);
+
+  await screen.getByRole('button', { name: 'Close earlier versions' }).click();
+  await vi.waitFor(() => expect(fixtures.markRead).toEqual(['n002']));
 });

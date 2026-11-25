@@ -191,6 +191,12 @@ export function NotificationTimeline() {
   const newest = items.at(-1);
   const newestId = newest?.id;
   const newestAt = newest?.activityAt;
+  // On a narrow window the versions panel covers the timeline (its CSS
+  // takes it out of the flow); nothing behind it is being read.
+  const panelRef = useRef<HTMLElement>(null);
+  const timelineCovered = () =>
+    panelRef.current !== null &&
+    getComputedStyle(panelRef.current).position === 'absolute';
   // Reading means the newest has been on screen for a moment in a visible tab.
   const readNewest = useEventCallback(() => {
     if (
@@ -198,6 +204,7 @@ export function NotificationTimeline() {
       !newestAt ||
       !atEnd.current ||
       document.visibilityState !== 'visible' ||
+      timelineCovered() ||
       markRead.isPending ||
       !readState.data ||
       readState.data.unreadCount === 0
@@ -211,7 +218,8 @@ export function NotificationTimeline() {
     if (!newestId || unreadNow === 0) return;
     const timer = setTimeout(readNewest, READ_AFTER);
     return () => clearTimeout(timer);
-  }, [newestId, newestAt, unreadNow, readNewest]);
+    // Closing the panel shows the timeline again: count from then.
+  }, [newestId, newestAt, unreadNow, readNewest, historyId]);
   useEffect(() => {
     document.addEventListener('visibilitychange', readNewest);
     return () => document.removeEventListener('visibilitychange', readNewest);
@@ -430,6 +438,7 @@ export function NotificationTimeline() {
       </section>
       {historyItem ? (
         <aside
+          ref={panelRef}
           className={classes.panel}
           aria-label={t('notifications.versions.title')}
         >
