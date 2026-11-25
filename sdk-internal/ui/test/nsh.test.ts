@@ -71,7 +71,7 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('keeps a tab selected while the items change', () => {
     expect(run(['test', 'app/tabs.test.tsx'], fixture('tabs'))).toMatch(
-      /^ok\n[\s\S]*2 passed/,
+      /^ok\n[\s\S]*4 passed/,
     );
   }, 240_000);
 

@@ -21,9 +21,11 @@ export type TabItem = {
 };
 
 /** The selected id: the App's, else the one the user chose (at first
- * `defaultValue`) while it is among the items, else the first enabled item.
- * So items that arrive later, or the removal of the selected one, never leave
- * the content area empty. */
+ * `defaultValue`) while it is an enabled item, else the first enabled item,
+ * which then stays selected while the items change around it. So items that
+ * arrive later, or the removal or disabling of the selected one, never leave
+ * the content area empty. With no enabled item, a selected item that still
+ * exists stays shown. */
 export function selection(props: {
   items: readonly TabItem[];
   value?: string;
@@ -33,9 +35,20 @@ export function selection(props: {
   const own = signal(props.defaultValue);
   const uncontrolled = (): string => {
     const chosen = own();
-    if (props.items.some((item) => item.id === chosen)) return chosen ?? '';
-    return props.items.find((item) => !item.disabled)?.id ?? '';
+    const enabled = props.items.filter((item) => !item.disabled);
+    if (enabled.some((item) => item.id === chosen)) return chosen as string;
+    if (enabled[0]) return enabled[0].id;
+    return props.items.some((item) => item.id === chosen)
+      ? (chosen as string)
+      : '';
   };
+  // Remember a fallback once it is shown, so items added before it later do
+  // not move the selection.
+  effect(() => {
+    if (props.value !== undefined) return;
+    const shown = uncontrolled();
+    if (shown !== '' && shown !== untracked(own)) own.set(shown);
+  });
   return {
     get: () => props.value ?? uncontrolled(),
     set: (id) => {

@@ -18,6 +18,29 @@ function App() {
             items.set(items().filter((item) => item.id !== 'north'))
           }
         />
+        <Button
+          label="Add west first"
+          onPress={() =>
+            items.set([
+              {
+                id: 'west',
+                label: 'West',
+                content: () => <Text>West bed</Text>,
+              },
+              ...items(),
+            ])
+          }
+        />
+        <Button
+          label="Close north"
+          onPress={() =>
+            items.set(
+              items().map((item) =>
+                item.id === 'north' ? { ...item, disabled: true } : item,
+              ),
+            )
+          }
+        />
         <Tabs label="Beds" items={items()} />
       </Stack>
     </Page>
