@@ -13,6 +13,7 @@ import {
 } from '~agent/paths';
 import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
+import { manifestInvalid } from './manifest-validation';
 import type { JsonObject } from '~/db/schema';
 import { workspaceRelative } from '~server/deploy-lock';
 import { appDeployLock } from './deploy-lock';
@@ -570,14 +571,15 @@ async function deployAppInner(
     // only when the scheduler / "Run now" later invokes it. Legacy `path` jobs
     // need no API. (Jobs only run when the cron capability is on, so we validate
     // the effective normalized list.)
-    const methodCronJobs = (build.normalized.cron ?? []).filter(
-      (j) => j.method,
+    const methodCronJobs = (build.normalized.cron ?? []).flatMap((job, index) =>
+      job.method ? [{ job, index }] : [],
     );
     if (methodCronJobs.length > 0) {
       if (!build.source.capabilities.backend || !build.source.backend) {
-        throw new Error(
-          'Cron jobs that call an RPC method require a backend: set ' +
-            'capabilities.backend and define backend.entry.',
+        throw manifestInvalid(
+          ['cron', methodCronJobs[0].index, 'method'],
+          'cron jobs that call an RPC method require capabilities.backend ' +
+            'and backend.entry',
         );
       }
       const service = build.normalized.rpc?.service;
@@ -587,20 +589,19 @@ async function deployAppInner(
           .flatMap((s) => s.methods)
           .map((m) => [m.name, m] as const),
       );
-      for (const job of methodCronJobs) {
+      for (const { job, index } of methodCronJobs) {
         const method = service ? methods.get(job.method as string) : undefined;
         if (!method) {
-          throw new Error(
-            `Cron job "${job.name}" targets RPC method "${job.method}", which ` +
-              "is not defined in the app's proto service. Add the method to the " +
-              'proto (and declare an rpc service), then redeploy.',
+          throw manifestInvalid(
+            ['cron', index, 'method'],
+            "is not defined in the App's proto service; add the method to " +
+              'the proto and declare rpc.service',
           );
         }
         if (method.clientStreaming || method.serverStreaming) {
-          throw new Error(
-            `Cron job "${job.name}" targets RPC method "${job.method}", which ` +
-              'is a streaming method. Cron invokes a single unary request, so ' +
-              'the target must be a unary RPC method.',
+          throw manifestInvalid(
+            ['cron', index, 'method'],
+            'names a streaming method; cron invokes a single unary request',
           );
         }
       }
@@ -614,9 +615,10 @@ async function deployAppInner(
       build.source.capabilities.webhook &&
       (!build.source.capabilities.backend || !build.source.backend)
     ) {
-      throw new Error(
-        'Inbound webhooks require a backend: set capabilities.backend and ' +
-          'define backend.entry (verified webhooks are forwarded to /__webhook).',
+      throw manifestInvalid(
+        ['capabilities', 'webhook'],
+        'inbound webhooks require capabilities.backend and backend.entry ' +
+          '(verified webhooks are forwarded to /__webhook)',
       );
     }
 

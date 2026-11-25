@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { materializeAppHatchSdk } from './agent/hatch-sdk';
 import { loadSourceManifest, manifestRunner } from './source-manifest';
 import { parseSourceManifest } from './server/apps/manifest';
+import { AppManifestValidationError } from './server/apps/manifest-validation';
 import { createManifestFixtureRoot } from './test-manifest-fixture';
 
 let root: string;
@@ -78,8 +79,18 @@ describe('source manifest contract', { concurrent: false }, () => {
       `import type { AppManifestInput } from '@hatch/app';\nimport { name } from './constants.ts';\nexport default { id: 'demo', name, capabilities: {} } satisfies AppManifestInput;`,
     );
     expect((await loadApp()).manifest.name).toBe('Shared name');
-    await write(defined({ ...app, name: 42 }));
+    // A type error the platform schema does not see keeps the checker output.
+    await write(
+      "const unused: number = 'text';\nexport default { id: 'demo', name: 'Demo', capabilities: {} };",
+    );
     await expect(loadApp()).rejects.toThrow(/not assignable/);
+    // A type error that mirrors a schema rule names the fields to fix.
+    await write(defined({ ...app, name: 42, extra: true }));
+    const rejected = await loadApp().catch((error: unknown) => error);
+    expect(rejected).toBeInstanceOf(AppManifestValidationError);
+    expect((rejected as Error).message).toMatch(
+      /^manifest\.ts is invalid\.[\s\S]*- name: Invalid input[\s\S]*- extra: unknown field/,
+    );
   });
 
   it('rejects ambiguous files before executing TS and never falls back from a broken TS manifest', async () => {
@@ -94,7 +105,11 @@ describe('source manifest contract', { concurrent: false }, () => {
     await write(
       "export default { id: 'demo', name: 'Demo', capabilities: { frontend: true } };",
     );
-    await expect(loadApp()).rejects.toThrow(/app.entry/);
+    await expect(loadApp()).rejects.toThrow(
+      'manifest.ts is invalid. Fix these fields and deploy again:\n' +
+        '- app: capabilities.frontend is true but app.entry is not declared',
+    );
+    await expect(loadApp()).rejects.toBeInstanceOf(AppManifestValidationError);
   });
 
   it('rejects values that JSON.stringify would discard or transform', async () => {

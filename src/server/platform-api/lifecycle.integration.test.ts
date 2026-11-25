@@ -1297,6 +1297,82 @@ describe.runIf(Boolean(databaseUrl))(
       ).toBe(5);
     }, 240000);
 
+    it('rejects an invalid manifest naming its fields, without echoing values', async () => {
+      const [, apiKey] = credentials;
+      const directory = path.join(root, `manifest-${randomUUID()}`);
+      const file = `${directory}.json`;
+      await writeFile(
+        file,
+        JSON.stringify({
+          slug: `manifest-${randomUUID()}`,
+          name: 'Manifest',
+          pin: false,
+        }),
+      );
+      const created = await cliInvoke(
+        ['app', 'create', '--file', file, '--directory', directory],
+        apiKey,
+      );
+      assert.equal(created.code, 0, JSON.stringify(created));
+      const manifestFile = path.join(directory, 'manifest.ts');
+      const template = await readFile(manifestFile, 'utf8');
+      const sentinel = 'leaked-sentinel-value';
+      await writeFile(
+        manifestFile,
+        template
+          .replace("backendMode: 'serverless'", `backendMode: '${sentinel}'`)
+          .replace("{ path: '/about',", "{ path: '/',")
+          .replace(/\n\}\);\s*$/, `\n  extraField: '${sentinel}',\n});\n`),
+      );
+      git(directory, 'add', '.');
+      git(
+        directory,
+        '-c',
+        'user.name=Manifest integration',
+        '-c',
+        'user.email=fixture@example.test',
+        'commit',
+        '-m',
+        'Invalid manifest',
+      );
+      const rejected = await cliInvoke(
+        ['app', 'deploy', '--directory', directory, '--message', 'Invalid'],
+        apiKey,
+      );
+      expect(rejected.code).toBe(2);
+      expect(rejected.data).toMatchObject({
+        ok: false,
+        error: { code: 'APP_MANIFEST_INVALID' },
+      });
+      const message = rejected.data.error.message as string;
+      expect(message).toMatch(/^manifest\.ts is invalid\./);
+      expect(message).toContain('- backendMode: Invalid option');
+      expect(message).toContain(
+        '- app.routes[1].path: duplicate app route path',
+      );
+      expect(message).toContain('- extraField: unknown field; remove it');
+      expect(message).not.toContain(sentinel);
+
+      // A definite rejection clears the pending marker: the fixed source deploys.
+      await writeFile(manifestFile, template);
+      git(directory, 'add', '.');
+      git(
+        directory,
+        '-c',
+        'user.name=Manifest integration',
+        '-c',
+        'user.email=fixture@example.test',
+        'commit',
+        '-m',
+        'Fix manifest',
+      );
+      const deployed = await cliInvoke(
+        ['app', 'deploy', '--directory', directory, '--message', 'Fixed'],
+        apiKey,
+      );
+      assert.equal(deployed.code, 0, JSON.stringify(deployed));
+    }, 240000);
+
     it.each([
       ['checkout_app', true],
       // create_app pointed origin at a bundle it never wrote.

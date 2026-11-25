@@ -938,7 +938,7 @@ describe('buildApp source validation', () => {
     await fs.writeFile(path.join(outputDir, 'keep.txt'), 'existing', 'utf8');
 
     await expect(buildApp('demo', { sourceDir, outputDir })).rejects.toThrow(
-      'RPC proto declared by manifest.json was not found: proto/service.proto',
+      'manifest.json is invalid. Fix these fields and deploy again:\n- rpc.proto: file not found',
     );
     await expect(
       fs.readFile(path.join(outputDir, 'keep.txt'), 'utf8'),
@@ -964,7 +964,7 @@ describe('buildApp source validation', () => {
     });
 
     await expect(buildApp('demo', { sourceDir, outputDir })).rejects.toThrow(
-      'RPC proto declared by manifest.json must be a regular file: proto/service.proto',
+      'manifest.json is invalid. Fix these fields and deploy again:\n- rpc.proto: must name a regular file',
     );
   });
 

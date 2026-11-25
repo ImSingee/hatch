@@ -117,7 +117,7 @@ const appRoutesSchema = z
       if (seen.has(route.path)) {
         ctx.addIssue({
           code: 'custom',
-          message: `duplicate app route path "${route.path}"`,
+          message: 'duplicate app route path',
           path: [index, 'path'],
         });
       }
@@ -250,7 +250,7 @@ export const tasksConfigSchema = z
       if (names.has(task.name)) {
         ctx.addIssue({
           code: 'custom',
-          message: `duplicate task name "${task.name}"`,
+          message: 'duplicate task name',
           path: ['definitions', index, 'name'],
         });
       }
@@ -261,7 +261,7 @@ export const tasksConfigSchema = z
       ) {
         ctx.addIssue({
           code: 'custom',
-          message: `task "${task.name}" concurrency ${task.concurrency} exceeds tasks.concurrency ${config.concurrency}`,
+          message: 'task concurrency exceeds tasks.concurrency',
           path: ['definitions', index, 'concurrency'],
         });
       }
@@ -270,7 +270,7 @@ export const tasksConfigSchema = z
         if (cronNames.has(job.name)) {
           ctx.addIssue({
             code: 'custom',
-            message: `duplicate cron job name "${job.name}" in task "${task.name}"`,
+            message: 'duplicate cron job name in this task',
             path: ['definitions', index, 'cron', jobIndex, 'name'],
           });
         }
@@ -399,7 +399,7 @@ export const notificationsConfigSchema = z
       if (seen.has(entry.kind)) {
         ctx.addIssue({
           code: 'custom',
-          message: `duplicate notification kind "${entry.kind}"`,
+          message: 'duplicate notification kind',
           path: ['kinds', index, 'kind'],
         });
       }
@@ -470,7 +470,7 @@ const appDocsSchema = z
       if (ids.has(doc.id)) {
         ctx.addIssue({
           code: 'custom',
-          message: `duplicate doc id "${doc.id}"`,
+          message: 'duplicate doc id',
           path: [index, 'id'],
         });
       }
@@ -478,7 +478,7 @@ const appDocsSchema = z
       if (paths.has(doc.path)) {
         ctx.addIssue({
           code: 'custom',
-          message: `duplicate doc path "${doc.path}"`,
+          message: 'duplicate doc path',
           path: [index, 'path'],
         });
       }
