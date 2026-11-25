@@ -331,7 +331,9 @@ await notify({
 
 `notify` POSTs to `HATCH_NOTIFICATIONS_URL`, signed with
 `HATCH_SIGNING_SECRET`; both are injected only when the capability and backend
-are enabled. Title is required (≤200 characters); body ≤4000; `url` must be
+are enabled. That is a text notification: `title` (≤200 characters) and an
+optional `body` (≤4000); see [Content formats](#content-formats) for Markdown
+and cards. `url` must be
 an absolute URL a device can open: a web page, another app by its own scheme
 (`mailto:`, `tel:`, `slack://…`), or a Hatch deep link such as
 `hatch://app/<slug>#/orders/42` (the instance web path after `hatch://`),
@@ -362,6 +364,65 @@ destinations receive every priority:
 Any other value, including Pushover's emergency `2`, is rejected with 400.
 Priority cannot be changed by `updateNotification`.
 
+### Content formats
+
+Give exactly one kind of content:
+
+- **Text**: `title` and `body`, for short messages that read fine as a push
+  banner. `summary` is optional; when set, phones show it instead of the
+  body.
+- **Markdown**: `markdown` (≤16 KiB), for structured prose such as release
+  notes or a report. Images become links and raw HTML shows as text.
+- **Card**: `card`, card markup (or a JSON tree) composed from the platform's
+  components, for a state that changes (an order, a build, an incident) or a
+  question asked inside the card.
+
+Markdown and cards have no `title` or `body` and require `summary`: one line
+of plain text, at most 200 characters, no line breaks. It is what phones show
+as the push body (with the App's name as the title and the kind as the
+subtitle), what lists and the delivery log call the notification, and the
+`title` of envelopes; it never appears next to the content in the timeline.
+Make it specific: `Order 42 shipped, arrives Thursday`, not `Update`.
+
+Build card markup with the `card` template tag. It escapes every
+interpolated value, so customer names, order notes or log lines can never
+add or close an element or attribute. Never concatenate strings into markup.
+
+```ts
+import { card, notify } from '@hatch/app/notifications';
+
+const { id } = await notify({
+  kind: 'order.shipped',
+  summary: `Order ${order.id} shipped, arrives ${order.eta}`,
+  card: card`<Card icon="package" status="Shipped" tone="info">
+  <Title>Order ${order.id} is on its way</Title>
+  <Fields>
+    <Field label="Customer">${order.customerName}</Field>
+    <Field label="Arrives">${order.eta}</Field>
+  </Fields>
+  <Progress label="Route" value="3 / 5 stops" percent="60" tone="info" />
+</Card>`,
+  data: { orderId: order.id },
+});
+```
+
+Interpolate only into text and quoted attribute values, never into a tag or
+attribute name. Numbers and booleans are written as is, dates as ISO-8601 (for
+`<time datetime>`), `null` and `undefined` as nothing (so `status="${null}"`
+is left out), and an array of numbers as a comma-separated list (for
+`<Trend values>`). To repeat elements, interpolate an array of
+`cardFragment` results:
+`` card`<Steps>${steps.map((step) => cardFragment`<Step state="${step.state}">${step.name}</Step>`)}</Steps>` ``
+(inside a `<Card>`).
+
+The `notification-content` Skill has the markup rules, the full component
+catalog and an example for every design card; run
+`hatch notification card check --file <path>` on a sample card while
+developing (it runs offline). Invalid content throws `NotificationError`
+(400) with the line and column, or naming `summary` when it is missing. The
+#319 shape `card: { status, block }` next to `title` and `body` still works
+and becomes a card, but write markup in new code.
+
 ### Editing and recalling
 
 Keep the `id` that `notify` returns when the App may later correct or
@@ -379,15 +440,25 @@ await updateNotification(id, { title: 'Order delivered', body: null });
 await recallNotification(id);
 ```
 
-Add a `card` to show progress, figures or a quoted comment in the user's
-timeline: `{ status: { label: 'Out for delivery', tone: 'info' }, block: {
-type: 'progress', label: 'Route', percent: 60, value: '3 / 5 stops' } }`. Keep
-the essentials in `title` and `body` too: phones only show those.
+`updateNotification` changes any of `title`, `body`, `summary`, `markdown`,
+`card`, `url`, `autoOpenUrl`, `data` and `reply`, and may switch the format.
+Markdown and cards keep the current `summary` unless the update gives a new
+one; pass a new one whenever the meaning changes (shipped becomes delivered).
+Use one notification per thing the user follows (an order, a pull request)
+and update the same card for each event about it, instead of pushing a new
+notification: it moves to the end of the user's timeline, phones replace it
+in place, and the earlier versions stay visible there:
 
-`updateNotification` changes any of `title`, `body`, `url`, `autoOpenUrl`,
-`data`, `reply` and `card`. Use one notification per thing the user follows (an order,
-a pull request) and update it as it changes: it moves to the end of the user's
-timeline, and the earlier versions stay visible there. `reply` asks a new
+```ts
+await updateNotification(id, {
+  summary: `Order ${order.id} delivered`,
+  card: card`<Card icon="package" status="Delivered" tone="success">
+  <Title>Order ${order.id} was delivered</Title>
+</Card>`,
+});
+```
+
+`reply` asks a new
 question (for example "Merge?" after "Fix the failing check?"): a form replaces
 the current one and `null` removes it, starting the next round, which takes its
 own answer. Omitted fields keep their value; `null` clears `body`, `url` or
@@ -430,14 +501,24 @@ const { id } = await notify({
 ```
 
 Field types: `buttons` (a single choice shown as buttons, 1-4 options, labels
-≤32 characters), `single` and `multiple` (2-50 options; `multiple` takes
-`minSelected`/`maxSelected`), and `text` (`placeholder`, `multiline`,
-`maxLength` ≤4000). Use up to 10 fields with unique lowercase ids (letters,
+≤32 characters; options may be `primary` or `destructive`), `single` and
+`multiple` (2-50 options with optional `note` and `badge`, and a `default`;
+`multiple` takes `minSelected`/`maxSelected`), and `text` (`placeholder`,
+`multiline`, `maxLength` ≤4000). When the last field is a required `buttons`
+field, its buttons submit the whole form. Use up to 10 fields with unique lowercase ids (letters,
 digits, `_`); `required` defaults to `true`. An invalid form throws
 `NotificationError` (400) naming the field, for example
 `reply.fields.0.options: buttons fields need 1-4 options`. The form cannot be
 edited later; recall the notification to close it. With a form, a phone tap
 opens the form unless `autoOpenUrl: true`.
+
+A card can ask inside itself instead: `<Buttons id="decision">` with
+`<Button id="approve" primary>` children, `<Choice>` with `<Option>`s, and
+`<Input>` compile in document order into the same form and arrive as the
+same answers (keyed by those ids). Such a card cannot also pass `reply`.
+In markup, `Choice` and `Input` are optional unless marked `required`;
+`Buttons` always is. Updating the card with different inputs asks a new
+question; removing them closes it.
 
 The App does not pick where answers go. Users add response routes (Settings →
 Notifications, or `hatch notification response-route create`) that send
@@ -452,7 +533,12 @@ Declaring `destination` adds the App to the notification destinations users
 can select. Routed notifications, and ones a user sends straight to the App,
 arrive as `POST /__notification` with a JSON envelope that includes the source
 (`type` `app`, `channel`, `platform` or `user`, with its id, slug and name), kind,
-title, body, url, `autoOpenUrl`, `priority`, data, dedupe key and timestamps. The handler may do anything
+title, body, url, `autoOpenUrl`, `priority`, data, dedupe key and timestamps,
+plus the content: `format` (`text`, `markdown` or `card`), `summary`,
+`markdown` (the source, Markdown only) and `content` (the render tree, or
+null for text). `title` is always a string (the summary for Markdown and
+cards) and `body` the plain-text version, so a forwarder that only reads
+`title` and `body` keeps working. The handler may do anything
 with it (ignore it, forward it to another service, store it). Return 2xx when
 handled; optionally return a free-form `result` string (≤2000 characters) that
 users see in the notification history. Non-2xx, timeouts (30 s) and network

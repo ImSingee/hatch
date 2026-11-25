@@ -457,6 +457,11 @@ function walk(
   const props: Record<string, ContentPropValue> = {};
   const given = new Set<string>();
   for (const prop of input.props) {
+    // A stored tree keeps a Markdown element's source as a prop (handled
+    // below); markup writes it as the element's text.
+    if (spec.name === 'Markdown' && prop.name === 'source' && !input.markup) {
+      continue;
+    }
     const propSpec = Object.hasOwn(spec.props, prop.name)
       ? spec.props[prop.name]
       : undefined;
@@ -514,16 +519,30 @@ function walk(
   const textOnly = content === 'text' || content === 'raw';
 
   if (spec.name === 'Markdown') {
-    const source = input.markup
-      ? dedent(
-          input.children
-            .map((child) => (child.kind === 'text' ? child.text : ''))
-            .join(''),
-        )
-      : input.children
-          .map((child) => (child.kind === 'text' ? child.text : ''))
-          .join('');
-    if (input.children.some((child) => child.kind === 'node')) {
+    // A tree read back from storage carries the source and its compiled
+    // children; the children are compiled again from the source.
+    const stored = input.markup
+      ? undefined
+      : input.props.find((prop) => prop.name === 'source')?.value;
+    if (stored !== undefined && typeof stored !== 'string') {
+      issue(`${tag('Markdown')} source must be text`);
+    }
+    const source =
+      typeof stored === 'string'
+        ? stored
+        : input.markup
+          ? dedent(
+              input.children
+                .map((child) => (child.kind === 'text' ? child.text : ''))
+                .join(''),
+            )
+          : input.children
+              .map((child) => (child.kind === 'text' ? child.text : ''))
+              .join('');
+    if (
+      stored === undefined &&
+      input.children.some((child) => child.kind === 'node')
+    ) {
       issue(`${tag('Markdown')} takes Markdown text, not elements`);
     }
     node.props = { source };

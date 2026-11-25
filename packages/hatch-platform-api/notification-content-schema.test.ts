@@ -206,6 +206,17 @@ describe('card markup', () => {
   });
 });
 
+describe('a stored tree', () => {
+  it('is accepted back as a JSON tree, Markdown inside a card included', () => {
+    const { content } = compileCardMarkup(
+      '<Card><Markdown>- **one**\n- two</Markdown><Text>end</Text></Card>',
+    );
+    // As envelopes and `get --json` hand it out.
+    const stored = JSON.parse(JSON.stringify(content));
+    expect(compileCard(stored).content).toEqual(content);
+  });
+});
+
 describe('inline inputs', () => {
   it('compile into the same reply form as the one written by hand', () => {
     const { reply } = compileCardMarkup(`<Card status="Alert" tone="danger">

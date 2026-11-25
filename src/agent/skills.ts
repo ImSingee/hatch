@@ -44,6 +44,7 @@ const REQUIRED_SKILL_NAMES = [
   'building-apps',
   'importing-apps',
   'app-compatibility',
+  'notification-content',
 ] as const;
 
 /** File or directory behind `info`, following a symlink once. */
