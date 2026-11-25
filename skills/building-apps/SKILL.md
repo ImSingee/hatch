@@ -468,6 +468,10 @@ including `data/schema.ts` and `gen/`. Relative imports keep their `.ts` or
 `@types/node` in `devDependencies`; `@types/*` packages listed in the App's own
 `package.json` are loaded automatically.
 
+End-to-end tests are not supported yet: do not write or run E2E tests. Keep
+unit tests to a minimum, covering only logic that is easy to get wrong, so the
+App's source package stays small.
+
 Run tests and local executions on the Deno runtime. Always pass these three
 flags, and include authorized `backend.extraPermissions` using the merge rules
 above rather than appending conflicting flags:
