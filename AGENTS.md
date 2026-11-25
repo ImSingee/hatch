@@ -497,7 +497,6 @@ a stored wall-clock time comes back with the same digits.
 Commands:
 
 - `pnpm migrations:generate` - Generate migrations from schema changes
-- `pnpm db:seed` - Seed the database
 - `pnpm drizzle:studio` - Open Drizzle Studio
 
 Example usage with TanStack Start server functions is available at `src/routes/dynamic.tsx`.

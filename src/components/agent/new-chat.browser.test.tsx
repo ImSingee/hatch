@@ -2,8 +2,22 @@ import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { LAST_SELECTED_MODEL_STORAGE_KEY } from './model-preference';
 import { NewChat } from './new-chat';
+import { LAST_SELECTED_MODEL_STORAGE_KEY } from './model-preference';
+
+// The model menu links to settings; these tests render without a router.
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  Link: ({
+    to,
+    children,
+    ...props
+  }: { to: string; children?: React.ReactNode } & Record<string, unknown>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 const fixtures = vi.hoisted(() => ({
   createSession: vi.fn<() => Promise<{ id: string }>>(async () => ({
@@ -39,16 +53,19 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-}));
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () => choicesFrom(fixtures.providers),
+    },
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+  };
+});
 
 vi.mock('~queries/apps', () => ({
   appsQueryOptions: {
@@ -88,7 +105,7 @@ test('records an explicit model choice before the model is used', async () => {
 
   expect(
     JSON.parse(localStorage.getItem(LAST_SELECTED_MODEL_STORAGE_KEY)!),
-  ).toBe('provider-b:model-b');
+  ).toEqual({ value: 'provider-b:model-b', thinkingLevel: 'off' });
   expect(fixtures.createSession).not.toHaveBeenCalled();
 });
 
@@ -239,6 +256,7 @@ test('reuses its unbound session when the first run start fails', async () => {
       attachmentIds: [],
       providerId: 'provider-b',
       modelId: 'model-b',
+      thinkingLevel: 'off',
       clientMessageId: expect.any(String),
     },
     {
@@ -248,6 +266,7 @@ test('reuses its unbound session when the first run start fails', async () => {
       attachmentIds: [],
       providerId: 'provider-b',
       modelId: 'model-b',
+      thinkingLevel: 'off',
       clientMessageId: expect.any(String),
     },
   ]);
@@ -341,6 +360,7 @@ test('uploads a non-image file first and retains the draft when upload fails', a
     attachmentIds: [uploadedIds[0]],
     providerId: 'provider-a',
     modelId: 'model-a',
+    thinkingLevel: 'off',
     clientMessageId: expect.any(String),
   });
 });

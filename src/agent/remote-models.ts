@@ -23,6 +23,7 @@ export type ResolvedModel = {
   providerName: string;
   apiType: ProviderApiType;
   model: Model<ProviderApiType>;
+  thinkingLevel: RunModelConfig['thinkingLevel'];
 };
 
 function apiImpl(apiType: ProviderApiType) {
@@ -48,9 +49,21 @@ export function buildRunModels(config: RunModelConfig): {
     baseUrl: config.baseUrl,
     reasoning: config.model.reasoning,
     input: ['text', 'image'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    cost: config.model.cost ?? {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
     contextWindow: config.model.contextWindow,
     maxTokens: config.model.maxTokens,
+    ...(config.model.thinkingLevelMap
+      ? { thinkingLevelMap: config.model.thinkingLevelMap }
+      : {}),
+    // The platform sends only flags pi defines for this API type.
+    ...(config.model.compat
+      ? { compat: config.model.compat as Model<ProviderApiType>['compat'] }
+      : {}),
   };
 
   const models = createModels();
@@ -80,6 +93,7 @@ export function buildRunModels(config: RunModelConfig): {
       providerName: config.providerName,
       apiType: config.apiType,
       model,
+      thinkingLevel: config.thinkingLevel,
     },
   };
 }

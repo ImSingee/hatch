@@ -3,8 +3,9 @@
  *
  * Apps store canonical source the same way: a bare repo per
  * entity, deploy tags owned by the Platform, and temporary deploy checkouts.
- * Clients push and fetch over Git smart HTTP (source-git-http.ts); Agent Tool
- * worktrees on the Runner still exchange source bundles. Pushing source and
+ * Clients push and fetch over Git smart HTTP (source-git-http.ts); the
+ * deprecated Deploy bundle upload is the only other way in, and source never
+ * leaves as a bundle. Pushing source and
  * deploying it are separate steps: a deploy releases a commit that is already
  * on master.
  */
@@ -306,34 +307,6 @@ export function createGitSource(cfg: GitSourceConfig) {
   }
 
   /**
-   * Export canonical master plus platform-owned deployment tags as a git bundle
-   * for the Agent Runner. Tags keep historical source recoverable after an App
-   * database deletion blocks direct rollback; checkout still lands on master.
-   * Returns null when the repo has no commits yet.
-   */
-  async function exportMasterBundle(id: string): Promise<Buffer | null> {
-    const repoDir = await ensureRepo(id);
-    const master = await masterCommit(id);
-    if (!master) return null;
-    const tmp = await mkdtemp(path.join(os.tmpdir(), 'hatch-bundle-'));
-    const bundleFile = path.join(tmp, 'source.bundle');
-    try {
-      await runGit([
-        '--git-dir',
-        repoDir,
-        'bundle',
-        'create',
-        bundleFile,
-        SOURCE_BRANCH,
-        '--tags',
-      ]);
-      return await readFile(bundleFile);
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  }
-
-  /**
    * Push an uploaded bundle's HEAD to master, as a fast-forward only. This is
    * the bundle transport's equivalent of `git push`, used by Agent Tool
    * deploys and by CLI versions that predate the Git endpoint. Returns the
@@ -438,7 +411,6 @@ export function createGitSource(cfg: GitSourceConfig) {
     publishDeploymentSource,
     deleteDeploymentTag,
     moveMasterToDeploymentTag,
-    exportMasterBundle,
     importBundleToMaster,
   };
 }

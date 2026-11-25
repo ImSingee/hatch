@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+package hatch.platform.v1;
+
+import "buf/validate/validate.proto";
+
+// The built-in model catalog: provider presets and model metadata from
+// aidy-models. The platform ships a snapshot and refreshes it in the
+// background unless automatic updates are turned off.
+service CatalogService {
+  rpc ListCatalogProviders(ListCatalogProvidersRequest) returns (ListCatalogProvidersResponse);
+  rpc ListCatalogModels(ListCatalogModelsRequest) returns (ListCatalogModelsResponse);
+  rpc GetCatalogStatus(GetCatalogStatusRequest) returns (GetCatalogStatusResponse);
+  // Checks for an update now and waits for the result.
+  rpc RefreshCatalog(RefreshCatalogRequest) returns (RefreshCatalogResponse);
+  rpc UpdateCatalogSettings(UpdateCatalogSettingsRequest) returns (UpdateCatalogSettingsResponse);
+}
+
+message CatalogProvider {
+  string id = 1;
+  string name = 2;
+  string api_type = 3;
+  string base_url = 4;
+  optional string description = 5;
+  optional string url = 6;
+  // Where to create an API key.
+  optional string api_key_url = 7;
+  bool featured = 8;
+  // Model ids added by default, best first.
+  repeated string recommended_models = 9;
+}
+
+message CatalogModel {
+  // Catalog reference: "<catalog provider>/<model id>".
+  string ref = 1;
+  string provider_id = 2;
+  string model_id = 3;
+  string name = 4;
+  // "chat" or "image".
+  string kind = 5;
+  optional string description = 6;
+  optional string released_at = 7;
+  bool reasoning = 8;
+  repeated string thinking_levels = 9;
+  optional string default_thinking_level = 10;
+  optional uint32 context_window = 11;
+  optional uint32 max_tokens = 12;
+}
+
+message ListCatalogProvidersRequest {
+  // Keeps presets whose id, name or description contain every word.
+  optional string query = 1 [(buf.validate.field).string.max_len = 200];
+  // The next_cursor of the previous page.
+  optional string cursor = 2 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Presets per page; 0 returns every one.
+  uint32 limit = 3 [(buf.validate.field).uint32.lte = 100];
+}
+
+message ListCatalogProvidersResponse {
+  // Gallery order: featured first.
+  repeated CatalogProvider providers = 1;
+  // Set when more presets follow this page.
+  optional string next_cursor = 2;
+}
+
+message ListCatalogModelsRequest {
+  optional string provider_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 80
+  }];
+  // Matches names and ids; every word must match.
+  optional string query = 2 [(buf.validate.field).string.max_len = 200];
+  optional string kind = 3 [(buf.validate.field).string = {
+    in: [
+      "chat",
+      "image"
+    ]
+  }];
+  // The next_cursor of the previous page.
+  optional string cursor = 4 [(buf.validate.field).string.pattern = "^[0-9]{1,9}$"];
+  // Models per page, default 50.
+  uint32 limit = 5 [(buf.validate.field).uint32.lte = 200];
+}
+
+message ListCatalogModelsResponse {
+  repeated CatalogModel models = 1;
+  // Matches across all pages.
+  uint32 total = 2;
+  optional string next_cursor = 3;
+}
+
+message CatalogStatus {
+  // "bundled" or "downloaded".
+  string source = 1;
+  // When aidy-models generated the data in use.
+  string generated_at = 2;
+  uint32 provider_count = 3;
+  uint32 model_count = 4;
+  bool auto_update = 5;
+  // Mirror of aidy-models' models.json; unset uses the default.
+  optional string source_url = 6;
+  // URL actually fetched.
+  string effective_source_url = 7;
+  optional string last_checked_at = 8;
+  optional string last_updated_at = 9;
+  // Why the last check failed; unset after a successful check.
+  optional string last_error = 10;
+}
+
+message GetCatalogStatusRequest {}
+
+message GetCatalogStatusResponse {
+  CatalogStatus status = 1;
+}
+
+message RefreshCatalogRequest {}
+
+message RefreshCatalogResponse {
+  // "updated", "unchanged" or "failed".
+  string outcome = 1;
+  CatalogStatus status = 2;
+}
+
+// Unset fields stay unchanged.
+message UpdateCatalogSettingsRequest {
+  optional bool auto_update = 1;
+  // An https URL serving aidy-models' models.json.
+  optional string source_url = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+    pattern: "^https://"
+  }];
+  // Returns to the default source. Excludes source_url.
+  bool clear_source_url = 3;
+}
+
+message UpdateCatalogSettingsResponse {
+  CatalogStatus status = 1;
+}

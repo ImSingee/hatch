@@ -16,7 +16,8 @@ import { runNotification } from './notifications';
 import { runImage } from './image';
 import { runTheme } from './theme';
 import { runServer } from './server';
-import { runModel } from './model';
+import { parseModelCommand, runModel } from './model';
+import { parseProviderCommand, runProvider } from './provider';
 import { runDashboard } from './dashboard';
 import { runPin } from './pin';
 import { publicError } from './client';
@@ -73,6 +74,8 @@ try {
   // Reject bad arguments before a Run credential refresh can mask them.
   if (!showHelp && name === 'preferences')
     parsePreferencesCommand(args, offset);
+  if (!showHelp && name === 'model') parseModelCommand(args, offset);
+  if (!showHelp && name === 'provider') parseProviderCommand(args, offset);
   // Reject malformed task arguments locally, before any network request.
   if (!showHelp && name === 'app' && args[offset + 1] === 'task')
     parseTaskCommand(args, offset);
@@ -135,6 +138,8 @@ try {
   else if (name === 'theme') await runTheme(args, offset, controller.signal);
   else if (name === 'server') await runServer(args, offset, controller.signal);
   else if (name === 'model') await runModel(args, offset, controller.signal);
+  else if (name === 'provider')
+    await runProvider(args, offset, controller.signal);
   else if (name === 'pin') await runPin(args, offset, controller.signal);
   else if (name === 'dashboard')
     await runDashboard(args, offset, controller.signal);

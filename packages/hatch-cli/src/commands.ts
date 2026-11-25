@@ -102,7 +102,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['app', 'adopt'],
     usage: 'app adopt <id> --directory <path>',
     description:
-      'Attach a verified Agent checkout without discarding source or history.',
+      'Attach a verified Agent checkout without discarding source or history. Fetches platform master over Git into origin/master and the deploy/* tags; the checkout keeps its own origin.',
   },
   {
     path: ['app', 'invoke', 'webhook'],
@@ -275,16 +275,127 @@ const definitions: readonly CliCommandDefinition[] = [
       'Delete the App icon so the App shows its monogram again. Succeeds when there is none.',
   },
   {
-    path: ['model', 'list'],
-    usage: 'model list [--kind chat|image] [--limit <n>] [--cursor <cursor>]',
+    path: ['provider', 'list'],
+    usage: 'provider list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List the models under every provider in provider order: id, provider, provider model id, name, kind (chat runs the Agent, image generates images), description and enabled. --kind keeps one kind. --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys.',
+      'List AI providers in display order: id, name, apiType, baseUrl, enabled, catalogProviderId (the catalog preset it is linked to, or null), hasApiKey, canGenerateImages and modelCount. Without --limit, lists every provider; --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys. provider get and model list --provider show the models.',
+  },
+  {
+    path: ['provider', 'get'],
+    usage: 'provider get <provider-id>',
+    description:
+      'Show one provider with every model under it, each with its kind, enabled flag, catalog link and, for chat models, thinking levels, context window and max tokens. Never prints the API key.',
+  },
+  {
+    path: ['provider', 'catalog'],
+    usage:
+      'provider catalog [--search <text>] [--limit <n>] [--cursor <cursor>]',
+    description:
+      'List the provider presets of the built-in model catalog, featured first: id (for provider add --catalog), name, apiType, baseUrl, description, apiKeyUrl (where to create a key) and recommendedModels (added by default). --search keeps presets whose id, name or description contain every word. Without --limit, lists every match; --limit (1-100) prints one page and a nextCursor to pass as --cursor.',
+  },
+  {
+    path: ['provider', 'add'],
+    usage:
+      'provider add (--catalog <catalog-provider-id> | --name <text> --api-type anthropic-messages|openai-responses|openai-completions --base-url <url>) --api-key-file <path|-> [--model <model-id>]... [--image-model <model-id>]... [--no-models]',
+    description:
+      "Create a provider. --catalog starts from a preset of provider catalog, which supplies name, API type and base URL unless those flags override them; without it all three are required. The API key is read only from --api-key-file (a file, or - for stdin) and trimmed; it is never taken as an argument and never printed. --model and --image-model (both repeatable) choose the chat and image models to add; without either the preset's recommended models are added, and --no-models adds none. Only providers whose API can generate images accept --image-model. Prints the provider and its models.",
+  },
+  {
+    path: ['provider', 'update'],
+    usage:
+      'provider update <provider-id> [--name <text>] [--api-type <type>] [--base-url <url>] [--api-key-file <path|->] [--enable | --disable] [--catalog <catalog-provider-id> | --clear-catalog]',
+    description:
+      'Change a provider; omitted fields stay unchanged and at least one is required. --api-key-file replaces the API key (read from the file or stdin, never printed); a change of --base-url or --api-type also needs --api-key-file, so a stored key never goes to a new endpoint. --disable hides all its models from the Agent and image generation. --catalog links it to a catalog preset, which model add and provider fetch-models use to match catalog metadata by model id (models without a catalog entry, or with one from the old link, are matched again); --clear-catalog unlinks it. Prints the provider.',
+  },
+  {
+    path: ['provider', 'remove'],
+    usage: 'provider remove <provider-id> --yes',
+    description:
+      'Permanently delete a provider, its API key and every model under it, chat and image; cannot be undone, so --yes is required.',
+  },
+  {
+    path: ['provider', 'test'],
+    usage: 'provider test <provider-id> [--model <model-id>]',
+    description:
+      "Send one short prompt through the provider with its stored key and print ok, the modelId asked, latencyMs and the provider's error. Costs a few tokens. --model picks the chat model (the provider's model id); without it the first enabled chat model is used. A failed test exits 7 with provider_test_failed and the result in error.details.",
+  },
+  {
+    path: ['provider', 'fetch-models'],
+    usage:
+      'provider fetch-models <provider-id> [--limit <n>] [--cursor <cursor>]',
+    description:
+      "List the models the provider itself offers (its /models endpoint), sorted by id, with modelId, name, catalogRef when the provider's catalog preset knows the model, and added when the provider already has it. Without --limit, lists every one; --limit (1-100) prints one page and a nextCursor to pass as --cursor. The platform reads at most 2,000 ids; truncated is true when the provider listed more. Adds nothing; use model add.",
+  },
+  {
+    path: ['model', 'list'],
+    usage:
+      'model list [--kind chat|image] [--provider <provider-id>] [--enabled | --disabled] [--limit <n>] [--cursor <cursor>]',
+    description:
+      'List the models under every provider in provider order: id, provider, provider model id, name, kind (chat runs the Agent, image generates images), description, enabled, catalogRef, inCatalog and, for chat models, chat with reasoning, thinkingLevels, defaultThinkingLevel, contextWindow, maxTokens and the overrides that differ from the catalog. --kind, --provider and --enabled/--disabled filter. --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys.',
+  },
+  {
+    path: ['model', 'add'],
+    usage:
+      'model add --provider <provider-id> --model-id <model-id> [--kind chat|image] [--name <text>] [--description <text>] [--catalog-ref <catalog-provider-id>/<model-id> | --no-catalog] [--context-window <n>] [--max-tokens <n>] [--reasoning | --no-reasoning]',
+    description:
+      "Add a model to a provider; its API key is used. --model-id is what is sent to the provider. --kind defaults to chat. Metadata comes from the catalog entry with the same model id under the provider's catalog preset unless --catalog-ref names another entry (from model catalog list) or --no-catalog takes none. --context-window, --max-tokens and --reasoning/--no-reasoning override the catalog for a chat model. --name defaults to the catalog name, then the model id. Prints the model with its id.",
+  },
+  {
+    path: ['model', 'update'],
+    usage:
+      'model update <model-id> [--model-id <model-id>] [--name <text>] [--description <text> | --clear-description] [--catalog-ref <ref> | --no-catalog] [--context-window <n>] [--max-tokens <n>] [--reasoning | --no-reasoning] [--reset reasoning,context-window,max-tokens | --reset-all] [--enable | --disable]',
+    description:
+      'Change a model; omitted fields stay unchanged and at least one is required. <model-id> is the id model list prints; --model-id changes the id sent to the provider. --no-catalog detaches it from the catalog. --reset clears the listed overrides (repeatable or comma-separated) so the catalog value applies again, --reset-all clears all three; a field cannot be both set and reset. Prints the model.',
+  },
+  {
+    path: ['model', 'enable'],
+    usage: 'model enable <model-id>',
+    description:
+      'Offer the model again: chat models to the Agent model picker, image models to image generate. Prints the model.',
+  },
+  {
+    path: ['model', 'disable'],
+    usage: 'model disable <model-id>',
+    description:
+      'Stop offering the model without deleting it or its settings. Prints the model.',
+  },
+  {
+    path: ['model', 'remove'],
+    usage: 'model remove <model-id> --yes',
+    description:
+      'Permanently delete a model of either kind; cannot be undone, so --yes is required.',
   },
   {
     path: ['model', 'set-kind'],
     usage: 'model set-kind <model-id> --kind chat|image',
     description:
       'Move a model between chat and image, like the Category field of the Web model form. A model made image leaves the Agent model picker and becomes available to image generate; only providers whose API can generate images accept image. Prints the model.',
+  },
+  {
+    path: ['model', 'catalog', 'list'],
+    usage:
+      'model catalog list [--provider <catalog-provider-id>] [--kind chat|image] [--search <text>] [--limit <1-200>] [--cursor <cursor>]',
+    description:
+      'Search the built-in model catalog: ref (for model add --catalog-ref), provider, model id, name, kind, description, release date, reasoning, thinking levels, context window and max tokens. --search matches names and ids; every word must match. Prints total matches across pages; without --limit one page of 50, and a nextCursor to pass as --cursor while more follow.',
+  },
+  {
+    path: ['model', 'catalog', 'status'],
+    usage: 'model catalog status',
+    description:
+      'Show the catalog in use: source (bundled or downloaded), generatedAt, provider and model counts, autoUpdate, sourceUrl (null for the default) and the effective URL, and when it was last checked and updated with the last error.',
+  },
+  {
+    path: ['model', 'catalog', 'refresh'],
+    usage: 'model catalog refresh',
+    description:
+      'Check the catalog source for an update now and wait for it. Prints outcome (updated or unchanged) and the status. A failed check keeps the catalog in use and exits 7 with catalog_refresh_failed and the result in error.details.',
+  },
+  {
+    path: ['model', 'catalog', 'settings'],
+    usage:
+      'model catalog settings [--auto-update | --no-auto-update] [--source-url <https-url> | --clear-source-url]',
+    description:
+      "Change how the catalog updates, for the whole instance; omitted settings stay unchanged and at least one is required. --no-auto-update stops the background refresh. --source-url fetches aidy-models' models.json from a mirror; --clear-source-url returns to the default source. Prints the status.",
   },
   {
     path: ['image-model', 'list'],
@@ -681,7 +792,9 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'app data-table': 'Inspect and change App data tables.',
   'app db': 'Query App databases.',
   'app icon': 'Show, set or clear an App icon.',
-  model: 'List models and choose the model for each kind.',
+  provider: 'Manage AI providers, their API keys and connection tests.',
+  model: 'Manage provider models and browse the built-in model catalog.',
+  'model catalog': 'Search the built-in model catalog and control its updates.',
   'image-model': 'Manage image generation models.',
   image: 'Generate images.',
   theme: 'Show or change the instance theme.',

@@ -146,6 +146,16 @@ export type AgentWorkspaceAffinityState = 'uninitialized' | 'claimed';
  */
 export type AgentMessageMode = 'queue' | 'steer';
 
+/** Thinking effort for a reasoning model; `off` answers without thinking. */
+export type AgentThinkingLevel =
+  | 'off'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
+
 /**
  * `pending` is editable; `claimed` was handed to a running run's Runner for
  * injection and `injected` is in that run's context, kept until its
@@ -449,6 +459,11 @@ export const agentProviders = snakeCase.table('agent_providers', {
   apiType: text().$type<ProviderApiType>().notNull(),
   baseUrl: text().notNull(),
   apiKey: text().notNull(),
+  /**
+   * Built-in catalog provider this provider is (or proxies). Drives the icon,
+   * the recommended models and catalog matching. Null for unlinked ones.
+   */
+  catalogProviderId: text(),
   enabled: boolean().notNull().default(true),
   sortOrder: integer().notNull().default(0),
   createdAt,
@@ -466,9 +481,18 @@ export const agentModels = snakeCase.table('agent_models', {
   kind: text().$type<AgentModelKind>().notNull().default('chat'),
   /** What the model is good at, so the Agent can pick between models. */
   description: text().notNull().default(''),
-  reasoning: boolean().notNull().default(false),
-  contextWindow: integer().notNull().default(128000),
-  maxTokens: integer().notNull().default(8192),
+  /**
+   * Catalog entry supplying this model's metadata
+   * (`<catalog provider>/<model id>`), or null for a model without one.
+   */
+  catalogRef: text(),
+  /**
+   * Overrides of the catalog metadata. Null follows the catalog (or the
+   * built-in fallback when the model has no catalog entry).
+   */
+  reasoning: boolean(),
+  contextWindow: integer(),
+  maxTokens: integer(),
   enabled: boolean().notNull().default(true),
   sortOrder: integer().notNull().default(0),
   createdAt,
@@ -483,6 +507,8 @@ export const agentSessions = snakeCase.table(
     title: text().notNull().default('New chat'),
     providerId: ulid(),
     modelId: text(),
+    /** Thinking level picked for this chat; null uses the model default. */
+    thinkingLevel: text('thinking_level').$type<AgentThinkingLevel>(),
     /** Persisted pi `AgentMessage[]` (stored as JSON). */
     messages: jsonb().$type<JsonValue[]>().notNull().default([]),
     /** Runner whose local volume owns this session workspace and its `.env`. */
@@ -505,6 +531,10 @@ export const agentSessions = snakeCase.table(
     updatedAt,
   },
   () => [
+    check(
+      'agent_sessions_thinking_level_check',
+      sql`"agent_sessions"."thinking_level" in ('off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')`,
+    ),
     // Converted v2 snapshots retain explicit table qualification.
     check(
       'agent_sessions_workspace_affinity_check',
@@ -563,6 +593,8 @@ export const agentRuns = snakeCase.table(
       .references(() => agentSessions.id, { onDelete: 'cascade' }),
     providerId: ulid('provider_id').notNull(),
     modelId: text('model_id').notNull(),
+    /** Thinking level the run used; null for runs recorded before it was. */
+    thinkingLevel: text('thinking_level').$type<AgentThinkingLevel>(),
     status: text().$type<AgentRunStatus>().notNull().default('running'),
     /**
      * User who sent the prompt this run answers (an automatic retry keeps the
@@ -631,6 +663,10 @@ export const agentRuns = snakeCase.table(
     index('agent_runs_auto_retry_at_idx')
       .on(table.autoRetryAt)
       .where(sql`"agent_runs"."auto_retry_at" is not null`),
+    check(
+      'agent_runs_thinking_level_check',
+      sql`"agent_runs"."thinking_level" in ('off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')`,
+    ),
   ],
 );
 
@@ -670,11 +706,17 @@ export const agentPendingMessages = snakeCase.table(
     attachments: jsonb().$type<JsonValue[]>().notNull().default([]),
     providerId: ulid('provider_id').notNull(),
     modelId: text('model_id').notNull(),
+    /** Thinking level to send with; null uses the model default. */
+    thinkingLevel: text('thinking_level').$type<AgentThinkingLevel>(),
     createdAt,
     updatedAt,
   },
   (table) => [
     index('agent_pending_messages_session_idx').on(table.sessionId, table.id),
+    check(
+      'agent_pending_messages_thinking_level_check',
+      sql`"agent_pending_messages"."thinking_level" in ('off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')`,
+    ),
     check(
       'agent_pending_messages_mode_check',
       sql`"agent_pending_messages"."mode" in ('queue', 'steer')`,
@@ -886,6 +928,26 @@ export const platformConfig = snakeCase.table('platform_config', {
   value: jsonb().$type<JsonValue>().notNull(),
   updatedAt,
 });
+
+/**
+ * Model catalogs fetched by the background refresh (`~server/model-catalog`),
+ * already trimmed and validated. The newest row is the candidate; the
+ * bundled snapshot is used instead when it has newer data.
+ */
+export const modelCatalogSnapshots = snakeCase.table(
+  'model_catalog_snapshots',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    sourceUrl: text().notNull(),
+    /** When the upstream data was generated (`catalog.source.generatedAt`). */
+    generatedAt: timestamp('generated_at').notNull(),
+    /** Trimmed `Catalog`, validated before it was stored. */
+    data: jsonb().$type<JsonValue>().notNull(),
+    providerCount: integer().notNull(),
+    modelCount: integer().notNull(),
+    createdAt,
+  },
+);
 
 /** Personal account preferences; platform resources remain shared. */
 export const userPreferences = snakeCase.table(

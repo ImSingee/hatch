@@ -1,6 +1,11 @@
 import { queryOptions } from '@tanstack/react-query';
 import { getAgentRunnerStatusFn } from '~server/agent-runner-status';
-import { listProviders } from '~server/providers';
+import {
+  getAgentModelChoices,
+  getModelCatalogStatus,
+  listCatalogProviders,
+  listProviders,
+} from '~server/providers';
 import {
   getSession,
   listSessions,
@@ -10,6 +15,24 @@ import {
 export const providersQueryOptions = queryOptions({
   queryKey: ['agent', 'providers'],
   queryFn: () => listProviders(),
+});
+
+/** Chat models the signed-in user can pick, with their default. */
+export const agentModelChoicesQueryOptions = queryOptions({
+  queryKey: ['agent', 'model-choices'],
+  queryFn: () => getAgentModelChoices(),
+});
+
+/** Provider presets of the built-in model catalog. */
+export const catalogProvidersQueryOptions = queryOptions({
+  queryKey: ['agent', 'catalog', 'providers'],
+  queryFn: () => listCatalogProviders(),
+  staleTime: 5 * 60 * 1000,
+});
+
+export const catalogStatusQueryOptions = queryOptions({
+  queryKey: ['agent', 'catalog', 'status'],
+  queryFn: () => getModelCatalogStatus(),
 });
 
 export const agentRunnerStatusQueryOptions = queryOptions({

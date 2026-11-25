@@ -27,7 +27,13 @@ import {
 } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { db, schema, type DB, type TX } from '~/db';
-import type { AgentRunStatus, JsonObject, JsonValue } from '~/db/schema';
+import type {
+  AgentRunStatus,
+  AgentThinkingLevel,
+  JsonObject,
+  JsonValue,
+} from '~/db/schema';
+import { effectiveThinkingLevel, resolveModelSpec } from '~server/model-spec';
 import type { StopReason } from '@earendil-works/pi-ai';
 import type {
   AgentRunStreamEvent,
@@ -134,8 +140,15 @@ export type AgentRunInput =
       retry: true;
       /** Revision of the session snapshot whose failure the user retried. */
       expectedSessionUpdatedAt: string;
+      /** The client chose `thinkingLevel`: reject one the model lacks. */
+      strictThinkingLevel?: boolean;
       providerId: string;
       modelId: string;
+      /**
+       * Thinking level to run with. Null or unset reuses the chat's level
+       * while it still suits the model, else the model default.
+       */
+      thinkingLevel?: AgentThinkingLevel | null;
       /** User who asked for the run (see `agentRuns.userId`). */
       userId?: string | null;
     }
@@ -146,6 +159,11 @@ export type AgentRunInput =
       autoRetryOfRunId: string;
       providerId: string;
       modelId: string;
+      /**
+       * Thinking level to run with. Null or unset reuses the chat's level
+       * while it still suits the model, else the model default.
+       */
+      thinkingLevel?: AgentThinkingLevel | null;
     }
   | {
       sessionId: string;
@@ -155,12 +173,19 @@ export type AgentRunInput =
       attachmentIds?: string[];
       providerId: string;
       modelId: string;
+      /**
+       * Thinking level to run with. Null or unset reuses the chat's level
+       * while it still suits the model, else the model default.
+       */
+      thinkingLevel?: AgentThinkingLevel | null;
       userId?: string | null;
       /**
        * Names the message for safe resends: a start that repeats an earlier
        * one returns that run (see `~server/agent-message-receipts`).
        */
       clientMessageId?: string;
+      /** The client chose `thinkingLevel`: reject one the model lacks. */
+      strictThinkingLevel?: boolean;
       pendingMessageIds?: never;
     }
   | {
@@ -174,6 +199,11 @@ export type AgentRunInput =
       pendingMessageIds: string[];
       providerId: string;
       modelId: string;
+      /**
+       * Thinking level to run with. Null or unset reuses the chat's level
+       * while it still suits the model, else the model default.
+       */
+      thinkingLevel?: AgentThinkingLevel | null;
       userId?: string | null;
       /**
        * Automatic delivery (not Send now): defers, under the session lock,
@@ -800,10 +830,16 @@ export function subscribeToAgentRun(
 /**
  * Resolve the model for a run into the self-contained config the runner
  * needs (including the provider API key, scoped to just this provider).
+ *
+ * `thinkingLevel` is a level carried over from earlier (the chat, a failed
+ * run, a waiting message); one the model no longer offers falls back to the
+ * model default. A level the user just chose is checked first by
+ * `assertAgentModelAvailable`, so it is never silently replaced.
  */
 async function resolveRunModelConfig(
   providerId: string,
   modelId: string,
+  thinkingLevel: AgentThinkingLevel | null | undefined,
 ): Promise<RunModelConfig> {
   const provider = await db.query.agentProviders.findFirst({
     where: { id: providerId, enabled: true },
@@ -822,6 +858,7 @@ async function resolveRunModelConfig(
       code: 'agent.modelUnavailable',
     });
   }
+  const spec = resolveModelSpec(model, provider.apiType);
 
   return {
     providerId: provider.id,
@@ -829,26 +866,47 @@ async function resolveRunModelConfig(
     apiType: provider.apiType,
     baseUrl: provider.baseUrl,
     apiKey: provider.apiKey,
+    thinkingLevel: effectiveThinkingLevel(spec, thinkingLevel),
     model: {
       id: model.modelId,
       name: model.name,
-      reasoning: model.reasoning,
+      reasoning: spec.reasoning,
       // Keep the wire field for existing Runners; it is not configurable.
       input: ['text', 'image'],
-      contextWindow: model.contextWindow,
-      maxTokens: model.maxTokens,
+      contextWindow: spec.contextWindow,
+      maxTokens: spec.maxTokens,
+      thinkingLevelMap: spec.thinkingLevelMap,
+      compat: spec.compat,
+      cost: spec.cost,
     },
   };
 }
 
 /** ================== start / dispatch ================== */
 
-/** Reject a provider/model pair no run could start with. */
+/**
+ * Reject a provider/model pair no run could start with, and a thinking
+ * level the model does not offer.
+ */
 export async function assertAgentModelAvailable(
   providerId: string,
   modelId: string,
+  thinkingLevel?: AgentThinkingLevel | null,
 ): Promise<void> {
-  await resolveRunModelConfig(providerId, modelId);
+  const config = await resolveRunModelConfig(
+    providerId,
+    modelId,
+    thinkingLevel,
+  );
+  if (thinkingLevel && config.thinkingLevel !== thinkingLevel)
+    throw new AppError(
+      `The selected model does not support thinking level "${thinkingLevel}".`,
+      400,
+      {
+        code: 'agent.thinkingLevelUnsupported',
+        params: { level: thinkingLevel },
+      },
+    );
 }
 
 /** Images and attachments one message (and so one delivered run) carries. */
@@ -997,7 +1055,28 @@ export async function startAgentRun(
     }
   }
 
-  const model = await resolveRunModelConfig(input.providerId, input.modelId);
+  // A level the user just chose is never silently replaced. Checked only
+  // for a new run: a resend replayed above keeps its original outcome.
+  if (
+    'strictThinkingLevel' in input &&
+    input.strictThinkingLevel &&
+    input.thinkingLevel
+  )
+    await assertAgentModelAvailable(
+      input.providerId,
+      input.modelId,
+      input.thinkingLevel,
+    );
+  // Unset reuses the chat's level while the chat stays on the same model.
+  const model = await resolveRunModelConfig(
+    input.providerId,
+    input.modelId,
+    input.thinkingLevel ??
+      (sessionRow.providerId === input.providerId &&
+      sessionRow.modelId === input.modelId
+        ? sessionRow.thinkingLevel
+        : null),
+  );
 
   // An automatic retry still creates its run without a Runner: the dispatch
   // failure below counts as another consecutive failure and backs off again,
@@ -1193,6 +1272,7 @@ export async function startAgentRun(
               attachments: restored.attachments as unknown as JsonValue[],
               providerId: model.providerId,
               modelId: model.model.id,
+              thinkingLevel: model.thinkingLevel,
             })
             .onConflictDoNothing();
         }
@@ -1211,7 +1291,8 @@ export async function startAgentRun(
             !row ||
             (status !== 'pending' && status !== 'sending') ||
             row.providerId !== input.providerId ||
-            row.modelId !== input.modelId
+            row.modelId !== input.modelId ||
+            row.thinkingLevel !== (input.thinkingLevel ?? null)
           ) {
             throw new PendingMessagesChangedError();
           }
@@ -1228,9 +1309,15 @@ export async function startAgentRun(
               title: lockedSession.title,
               providerId: lockedSession.providerId,
               modelId: lockedSession.modelId,
+              thinkingLevel: lockedSession.thinkingLevel,
             },
             // Filled in once this start has set them (below).
-            after: { title: '', providerId: null, modelId: null },
+            after: {
+              title: '',
+              providerId: null,
+              modelId: null,
+              thinkingLevel: null,
+            },
           };
         }
         const content = combinePendingContent(taken.map((row) => row.content));
@@ -1336,6 +1423,7 @@ export async function startAgentRun(
           userId,
           providerId: model.providerId,
           modelId: model.model.id,
+          thinkingLevel: model.thinkingLevel,
           status: 'running',
           // Covers the dispatch window; the accepting runner renews from here.
           leaseExpiresAt: leaseDeadline(),
@@ -1384,6 +1472,7 @@ export async function startAgentRun(
           title,
           providerId: model.providerId,
           modelId: model.model.id,
+          thinkingLevel: model.thinkingLevel,
         })
         .where(eq(schema.agentSessions.id, input.sessionId));
 
@@ -1411,6 +1500,7 @@ export async function startAgentRun(
           title,
           providerId: model.providerId,
           modelId: model.model.id,
+          thinkingLevel: model.thinkingLevel,
         };
       }
       return {
@@ -1521,6 +1611,7 @@ type SessionSettings = {
   title: string;
   providerId: string | null;
   modelId: string | null;
+  thinkingLevel: AgentThinkingLevel | null;
 };
 
 /** Pending rows an automatic delivery consumed, to restore if it fails. */
@@ -1552,6 +1643,7 @@ async function undoUndispatchedDelivery(
           title: schema.agentSessions.title,
           providerId: schema.agentSessions.providerId,
           modelId: schema.agentSessions.modelId,
+          thinkingLevel: schema.agentSessions.thinkingLevel,
         })
         .from(schema.agentSessions)
         .where(eq(schema.agentSessions.id, run.sessionId))
@@ -1590,10 +1682,12 @@ async function undoUndispatchedDelivery(
             ? { title: consumed.before.title }
             : {}),
           ...(session.providerId === consumed.after.providerId &&
-          session.modelId === consumed.after.modelId
+          session.modelId === consumed.after.modelId &&
+          session.thinkingLevel === consumed.after.thinkingLevel
             ? {
                 providerId: consumed.before.providerId,
                 modelId: consumed.before.modelId,
+                thinkingLevel: consumed.before.thinkingLevel,
               }
             : {}),
         })
@@ -2885,7 +2979,11 @@ export async function dispatchPendingMessages(
     // messages that fit. Steer messages left over are injected into that run.
     const sameModel: typeof batch = [];
     for (const row of batch) {
-      if (row.providerId !== first.providerId || row.modelId !== first.modelId)
+      if (
+        row.providerId !== first.providerId ||
+        row.modelId !== first.modelId ||
+        row.thinkingLevel !== first.thinkingLevel
+      )
         break;
       const candidate = [...sameModel, row];
       const content = combinePendingContent(
@@ -2919,6 +3017,7 @@ export async function dispatchPendingMessages(
         pendingMessageIds: sameModel.map((row) => row.id),
         providerId: first.providerId,
         modelId: first.modelId,
+        thinkingLevel: first.thinkingLevel,
         userId: first.userId,
         automatic: true,
       });

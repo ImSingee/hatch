@@ -1,27 +1,32 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { providersQueryOptions } from '~queries/agent';
-import type { ModelGroup } from './model-picker';
+import { agentModelChoicesQueryOptions } from '~queries/agent';
+import type { ModelGroup, ModelOption } from './model-picker';
 
+/** The chat models the user can pick, grouped by provider, and the first one. */
 export function useModelOptions() {
-  const { data: providers } = useSuspenseQuery(providersQueryOptions);
+  const { data } = useSuspenseQuery(agentModelChoicesQueryOptions);
   return useMemo(() => {
-    const groups: ModelGroup[] = providers
-      .filter((provider) => provider.enabled)
-      .map((provider) => ({
-        group: provider.name,
-        items: provider.models
-          .filter((model) => model.enabled && model.kind === 'chat')
-          .map((model) => ({
-            value: `${provider.id}:${model.modelId}`,
-            label: model.name,
-          })),
-      }))
-      .filter((group) => group.items.length > 0);
-    const first = groups[0]?.items[0]?.value ?? null;
-    const available = new Set(
-      groups.flatMap((group) => group.items.map((item) => item.value)),
+    const groups: ModelGroup[] = data.providers.map((provider) => ({
+      id: provider.id,
+      group: provider.name,
+      catalogProviderId: provider.catalogProviderId,
+      items: provider.models.map((model) => ({
+        value: `${provider.id}:${model.modelId}`,
+        label: model.name,
+        thinkingLevels: model.thinkingLevels,
+        defaultThinkingLevel: model.defaultThinkingLevel,
+      })),
+    }));
+    const options = new Map<string, ModelOption>(
+      groups.flatMap((group) => group.items.map((item) => [item.value, item])),
     );
-    return { groups, first, available };
-  }, [providers]);
+    const fallback = data.defaultModel
+      ? {
+          value: `${data.defaultModel.providerId}:${data.defaultModel.modelId}`,
+          thinkingLevel: data.defaultModel.thinkingLevel,
+        }
+      : null;
+    return { groups, options, fallback };
+  }, [data]);
 }

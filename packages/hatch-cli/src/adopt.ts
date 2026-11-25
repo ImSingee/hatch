@@ -5,8 +5,8 @@ import type { PlatformClient } from './client';
 import type { Profile } from './config';
 import { CliError } from './error';
 import {
+  fetchRemote,
   git,
-  importBundle,
   saveWorkspace,
   safeTree,
   type Workspace,
@@ -18,6 +18,7 @@ export async function adopt(
   id: string,
   credential: Profile,
   client: PlatformClient,
+  timeoutMs: number,
   signal: AbortSignal,
 ): Promise<Workspace> {
   const detail = await client.apps.get({ id });
@@ -57,10 +58,15 @@ export async function adopt(
       'Agent bundle origin traverses a symlink.',
       6,
     );
-  const source = await client.apps.source({ id: detail.id });
-  if (source.id !== detail.id)
-    throw new CliError('resource_changed', 'Resource identity changed.', 6);
-  const current = await importBundle(root, source, signal);
+  // Fetch platform master over Git, like update does: the commit returned is
+  // the one actually fetched, so it cannot disagree with the fetched history.
+  const current = await fetchRemote(
+    root,
+    credential,
+    detail.id,
+    timeoutMs,
+    signal,
+  );
   const ownedPath = relative(dirname(dirname(origin)), root);
   if (!ownedPath.startsWith(`work${sep}`) || isAbsolute(ownedPath))
     throw new CliError(

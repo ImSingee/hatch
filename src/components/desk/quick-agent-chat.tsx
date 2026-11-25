@@ -39,14 +39,14 @@ export function QuickAgentChat() {
   const navigate = useNavigate();
   const sessions = useQuery(sessionsQueryOptions);
   const apps = useQuery(appsQueryOptions);
-  const { groups, first, available } = useModelOptions();
-  const [model, setModel] = useLastSelectedModel();
+  const { groups, options, fallback } = useModelOptions();
+  const [picked, remember] = useLastSelectedModel();
   const [starting, setStarting] = useState(false);
   // A failed first send keeps its session so a retry does not leave empty
   // sessions behind.
   const createdSession = useRef<string | null>(null);
   const [draftSends] = useState(createDraftSendTracker);
-  const effectiveModel = resolveEffectiveModel(model, null, available, first);
+  const effectiveModel = resolveEffectiveModel(options, picked, fallback);
   const recent = (sessions.data ?? []).slice(0, 3);
 
   const start = async ({
@@ -55,7 +55,7 @@ export function QuickAgentChat() {
     files,
   }: ComposerSubmit): Promise<boolean> => {
     if (starting || !effectiveModel) return false;
-    const parsed = splitModelValue(effectiveModel);
+    const parsed = splitModelValue(effectiveModel.value);
     if (!parsed) return false;
     setStarting(true);
     try {
@@ -71,6 +71,7 @@ export function QuickAgentChat() {
         attachmentIds: attachments.map((attachment) => attachment.id),
         providerId: parsed.providerId,
         modelId: parsed.modelId,
+        thinkingLevel: effectiveModel.thinkingLevel,
       });
       draftSends.settle(draft);
       await queryClient.invalidateQueries({
@@ -162,7 +163,7 @@ export function QuickAgentChat() {
       </div>
 
       <div className={classes.composer}>
-        {first === null ? (
+        {groups.length === 0 ? (
           <div className={classes.guard}>
             <IconPlugConnected size={18} stroke={1.8} aria-hidden />
             <Text size="sm" fw={700}>
@@ -188,8 +189,11 @@ export function QuickAgentChat() {
             modelControl={
               <ModelPicker
                 groups={groups}
-                value={effectiveModel}
-                onChange={setModel}
+                value={effectiveModel?.value ?? null}
+                thinkingLevel={effectiveModel?.thinkingLevel ?? null}
+                onChange={(value, thinkingLevel) => {
+                  remember({ value, thinkingLevel });
+                }}
                 disabled={starting}
               />
             }

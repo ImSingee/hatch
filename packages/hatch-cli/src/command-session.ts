@@ -60,6 +60,42 @@ export function listFlag(flags: Flags, name: string): string[] | undefined {
   return value;
 }
 
+/**
+ * A `--name` / `--no-name` style pair: true, false, or undefined when neither
+ * is given. Both together are contradictory.
+ */
+export function switchFlag(
+  flags: Flags,
+  on: string,
+  off: string,
+): boolean | undefined {
+  const yes = flags[on] === true;
+  const no = flags[off] === true;
+  if (yes && no) throw invalid(`Supply at most one of --${on} and --${off}.`);
+  return yes ? true : no ? false : undefined;
+}
+
+/** A whole-number flag from 1 to `max`. */
+export function countFlag(
+  flags: Flags,
+  name: string,
+  max = 4_294_967_295,
+): number | undefined {
+  const value = textFlag(flags, name);
+  if (value === undefined) return undefined;
+  const count = Number(value);
+  if (!/^\d+$/.test(value) || count < 1 || count > max)
+    throw invalid(`--${name} must be a whole number from 1 to ${max}.`);
+  return count;
+}
+
+/** The single positional id a command takes. */
+export function onePositional(positionals: string[], label: string): string {
+  if (positionals.length !== 1 || !positionals[0])
+    throw invalid(`Supply exactly one ${label}.`);
+  return positionals[0];
+}
+
 /** The flags of a paged list command. */
 export const PAGE_OPTIONS: OptionSpec = {
   limit: { type: 'string' },

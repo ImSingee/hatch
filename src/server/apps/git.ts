@@ -24,5 +24,4 @@ export const resolveDeployCommit = core.resolveDeployCommit;
 export const publishDeploymentSource = core.publishDeploymentSource;
 export const deleteDeploymentTag = core.deleteDeploymentTag;
 export const moveMasterToDeploymentTag = core.moveMasterToDeploymentTag;
-export const exportAppMasterBundle = core.exportMasterBundle;
 export const importAppBundleToMaster = core.importBundleToMaster;

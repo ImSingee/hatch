@@ -13,6 +13,7 @@ import { warmLongRunningBackends } from '~server/apps/runtime';
 import { ensureScheduler } from '~server/apps/scheduler';
 import { recoverTaskRuns } from '~server/apps/tasks/service';
 import { ensureRetentionSweep } from '~server/retention';
+import { ensureModelCatalogRefresh } from '~server/model-catalog/refresh';
 import { startNotificationDelivery } from '~server/notifications/adapters';
 import { getTailscaleManager } from '~server/tailscale-manager';
 
@@ -65,6 +66,8 @@ export default definePlugin(async () => {
   // Trim unbounded history tables (logs, cron runs, App task runs, agent
   // run events) daily so a long-lived install doesn't grow without bound.
   ensureRetentionSweep();
+  // Use the newest downloaded model catalog and keep checking for updates.
+  ensureModelCatalogRefresh();
   // Deliveries are durable rows; resume pending and lease-expired ones.
   startNotificationDelivery();
 });

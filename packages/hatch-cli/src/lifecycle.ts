@@ -185,6 +185,7 @@ export async function runLifecycle(
         positional[0],
         credential,
         client,
+        transferTimeout,
         signal,
       );
       output(await checkoutView(root, metadata, signal, { adopted: true }));

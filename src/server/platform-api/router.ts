@@ -37,11 +37,7 @@ import { publicApiError, publicError } from './errors';
 import { AppError } from '~server/errors';
 import { db } from '~/db';
 import { deployApp } from '~server/apps/deploy';
-import {
-  appMasterCommit,
-  exportAppMasterBundle,
-  importAppBundleToMaster,
-} from '~server/apps/git';
+import { importAppBundleToMaster } from '~server/apps/git';
 import { rollbackAppToVersion } from '~server/apps/manage';
 import {
   type AppBackendView,
@@ -98,11 +94,7 @@ import {
 import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import { buildInfo } from '~/build-info';
-import { ModelService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/model_pb';
-import {
-  listProviderModels,
-  setProviderModelKind,
-} from '~server/provider-models';
+import { registerModelServices } from './model-rpc';
 import { getThemeState, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
@@ -363,15 +355,6 @@ async function find(id: string) {
   if (!row) throw publicApiError('NOT_FOUND');
   return row;
 }
-async function source(id: string) {
-  const row = await find(id);
-  const bundle = await exportAppMasterBundle(row.id);
-  return {
-    id: row.id,
-    masterCommit: (await appMasterCommit(row.id)) ?? undefined,
-    bundle: bundle ?? undefined,
-  };
-}
 
 function files(value: { files: { path: string; contentBase64: string }[] }) {
   return value.files.map((file) => ({
@@ -413,9 +396,6 @@ const apps = {
       },
     };
   },
-  source: async (input: { id: string }) => ({
-    source: await source(input.id),
-  }),
   deploy: async (
     input: {
       id: string;
@@ -508,7 +488,13 @@ export function registerPlatformApi(
     {
       getModelCatalog: async () => {
         const catalog = await getAgentModelCatalog();
-        return { ...catalog, defaultModel: catalog.defaultModel ?? undefined };
+        return {
+          providers: catalog.providers.map((provider) => ({
+            ...provider,
+            catalogProviderId: provider.catalogProviderId ?? undefined,
+          })),
+          defaultModel: catalog.defaultModel ?? undefined,
+        };
       },
       listSessions: async (input) => ({
         sessions: (await listSessionSummaries(input)).map((session) => ({
@@ -853,21 +839,7 @@ export function registerPlatformApi(
       };
     },
   });
-  router.service(ModelService, {
-    listModels: async (input) => {
-      const page = listPage(
-        await listProviderModels(input.kind as 'chat' | 'image' | undefined),
-        input,
-      );
-      return { models: page.items, nextCursor: page.nextCursor };
-    },
-    setModelKind: async (input) => ({
-      model: await setProviderModelKind(
-        input.id,
-        input.kind as 'chat' | 'image',
-      ),
-    }),
-  });
+  registerModelServices(router);
   router.service(ThemeService, {
     getTheme: async () => ({ theme: await getThemeState() }),
     setTheme: async (input) => ({
@@ -1010,7 +982,6 @@ export function registerPlatformApi(
   router.rpc(AppService.method.listApps, apps.list);
   router.rpc(AppService.method.createApp, apps.create);
   router.rpc(AppService.method.getApp, apps.get);
-  router.rpc(AppService.method.getAppSource, apps.source);
   router.rpc(AppService.method.rollbackApp, apps.rollback);
   router.rpc(AppService.method.deployApp, apps.deploy, {
     readMaxBytes: deployBodyLimit,

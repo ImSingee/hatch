@@ -61,20 +61,23 @@ const fixtures = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('~queries/agent', () => ({
-  providersQueryOptions: {
-    queryKey: ['test-agent-providers'],
-    queryFn: async () => fixtures.providers,
-  },
-  sessionsQueryOptions: {
-    queryKey: ['test-agent-sessions'],
-    queryFn: async () => [],
-  },
-  sessionQueryOptions: (sessionId: string) => ({
-    queryKey: ['test-agent-session', sessionId],
-    queryFn: async () => structuredClone(fixtures.session),
-  }),
-}));
+vi.mock('~queries/agent', async () => {
+  const { choicesFrom } = await import('./model-choices.fixture');
+  return {
+    agentModelChoicesQueryOptions: {
+      queryKey: ['test-agent-model-choices'],
+      queryFn: async () => choicesFrom(fixtures.providers),
+    },
+    sessionsQueryOptions: {
+      queryKey: ['test-agent-sessions'],
+      queryFn: async () => [],
+    },
+    sessionQueryOptions: (sessionId: string) => ({
+      queryKey: ['test-agent-session', sessionId],
+      queryFn: async () => structuredClone(fixtures.session),
+    }),
+  };
+});
 
 vi.mock('~auth/client', () => ({
   authClient: { useSession: () => ({ data: { user: { id: 'user-1' } } }) },
@@ -232,6 +235,7 @@ test('sends a message while the Agent works to the pending tray', async () => {
         attachmentIds: [],
         providerId: 'provider-1',
         modelId: 'model-1',
+        thinkingLevel: 'off',
         clientMessageId: expect.any(String),
       },
     },

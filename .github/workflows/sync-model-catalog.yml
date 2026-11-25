@@ -1,0 +1,50 @@
+name: Sync model catalog
+
+# Keeps the bundled model catalog close to aidy-models so fresh and offline
+# installs start current. Running platforms also refresh on their own.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26.x
+      - uses: pnpm/action-setup@v6
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Sync catalog
+        id: sync
+        run: |
+          {
+            echo 'summary<<EOF'
+            pnpm --silent catalog:sync
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY: ${{ steps.sync.outputs.summary }}
+        run: |
+          if git diff --quiet -- src/server/model-catalog/catalog.json; then
+            echo 'Catalog unchanged.'
+            exit 0
+          fi
+          branch="chore/sync-model-catalog-$(date -u +%Y%m%d)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add src/server/model-catalog/catalog.json
+          git commit -m 'sync model catalog from aidy-models'
+          git push origin "$branch"
+          printf 'Weekly sync of the bundled model catalog.\n\n```\n%s\n```\n\nReview compat and base URL changes before merging.\n' "$SUMMARY" > body.md
+          gh pr create --title 'Sync model catalog from aidy-models' --body-file body.md

@@ -16,7 +16,7 @@ import type {
 import { useEventCallback } from '~hooks/use-latest-committed';
 import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
 import { errorFromResponse } from '~lib/error-codes';
-import type { JsonValue } from '~/db/schema';
+import type { AgentThinkingLevel, JsonValue } from '~/db/schema';
 import { isIncompleteStopReason } from './chat-turns';
 import type { EnvEntry } from './env-form';
 
@@ -585,6 +585,7 @@ export type SendParams = {
   attachmentIds?: string[];
   providerId: string;
   modelId: string;
+  thinkingLevel?: AgentThinkingLevel;
   /** Reused when resending the same draft (see `./draft-send`). */
   clientMessageId?: string;
 };
@@ -594,6 +595,7 @@ export type RetryParams = {
   expectedSessionUpdatedAt: string;
   providerId: string;
   modelId: string;
+  thinkingLevel?: AgentThinkingLevel;
 };
 
 type StartParams = SendParams | (RetryParams & { retry: true });
