@@ -143,6 +143,13 @@ and `appId: dev.hatch.app.<app id>` (which scopes NSH storage per App; `x` and
 `-` in the Hatch id are escaped as `x` plus two hex digits, so distinct ids
 never share storage).
 
+The App's module, chunks and assets are loaded from
+`/app/<slug>/embed/_deployments/<deployment id>/…`, which serves the page's
+own deployment from its immutable artifact (`private, max-age=31536000,
+immutable`, with the native CSP). A deployment activated while a player
+starts or runs therefore cannot take those files away from it; the player
+learns of the new deployment as "update available".
+
 Trust model: NSH does not isolate an App from its page on the web, and the
 page is same-origin with the platform, as a `web` App's page is. The CSP
 narrows what the App can load or reach to the platform origin. Moving App

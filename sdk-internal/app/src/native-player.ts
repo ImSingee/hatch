@@ -599,7 +599,15 @@ export async function startNativePlayer(): Promise<void> {
 
   const runtimeUrl = (file: string) =>
     new URL(file, new URL(config.runtime.base, location.href)).href;
-  const appUrl = (file: string) => new URL(file, location.href).href;
+  // Module, chunks and assets come from this page's own deployment, so an
+  // activation while the App starts or runs cannot remove them.
+  const appBase = config.deploymentId
+    ? new URL(
+        `_deployments/${encodeURIComponent(config.deploymentId)}/`,
+        location.href,
+      )
+    : new URL(location.href);
+  const appUrl = (file: string) => new URL(file, appBase).href;
   const fonts = new Map<string, Uint8Array>();
   const mapValues = (
     record: Record<string, string>,
