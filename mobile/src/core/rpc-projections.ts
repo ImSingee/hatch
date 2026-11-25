@@ -205,6 +205,7 @@ export function notificationSummaryProjection(
     status: value.status,
     priority: value.priority,
     editedAt: value.editedAt ?? null,
+    revision: value.revision,
     earlierVersions: value.earlierVersions,
     recalledAt: value.recalledAt ?? null,
     reply: value.reply ? replyFromMessage(value.reply) : null,

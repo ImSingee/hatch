@@ -217,6 +217,8 @@ export type NotificationSummary = {
   priority: number;
   /** Set when the source edited the notification. */
   editedAt: string | null;
+  /** 1 for the original; every edit and the recall increment it. */
+  revision: number;
   /** Versions an edit replaced; 0 when never edited. */
   earlierVersions: number;
   /** Set when the source recalled it; phones no longer show it. */

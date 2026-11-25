@@ -351,7 +351,7 @@ line open a side panel listing every version in full, newest first, with the
 answer each question took and what changed from the version before; the
 delivery log's detail page lists the same versions with their `data`. The
 phone app opens them in a sheet from the same two places and from the detail
-screen. With a form,
+screen; `hatch://more/notification-history/<id>` opens that sheet directly. With a form,
 `autoOpenUrl` defaults to `false`, so a phone tap opens the form.
 
 Answers are keyed by field id: `{ "decision": "approve" }`. A `buttons` or

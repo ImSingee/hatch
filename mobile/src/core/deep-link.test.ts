@@ -36,6 +36,10 @@ describe('deep links', () => {
       ['hatch://more/instance', { kind: 'phone', page: 'instance' }],
       ['hatch://more/notifications', { kind: 'phone', page: 'notifications' }],
       ['hatch://more/pin-app', { kind: 'phone', page: 'pin-app' }],
+      [
+        'hatch://more/notification-history/n1',
+        { kind: 'notificationHistory', id: 'n1' },
+      ],
     ];
     for (const [link, page] of pages) {
       expect({ link, page: target(link) }).toEqual({ link, page });
@@ -114,6 +118,9 @@ describe('deep links', () => {
       'hatch://app/sa les',
       'hatch://app/sales\u0000',
       'hatch://more/settings',
+      'hatch://more/notification-history',
+      'hatch://more/notification-history/n1/extra',
+      'hatch://more/notification-history/..%2Fsettings',
       'hatch://mobile/settings',
       `hatch://app/sales#${'x'.repeat(2049)}`,
       `hatch://${'a/'.repeat(2100)}`,
@@ -242,6 +249,7 @@ describe('deep links', () => {
       { kind: 'conversation', id: 's1' },
       { kind: 'notifications' },
       { kind: 'notification', id: 'n1' },
+      { kind: 'notificationHistory', id: 'n1' },
       { kind: 'appPage', slug: 'sales' },
       { kind: 'phone', page: 'instance' },
       { kind: 'phone', page: 'pin-app' },

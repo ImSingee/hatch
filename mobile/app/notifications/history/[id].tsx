@@ -62,12 +62,14 @@ export default function NotificationHistoryScreen() {
     enabled: Boolean(api) && !deleted,
   });
   const earlier = useInfiniteQuery({
-    queryKey: [origin, 'notification', id, 'versions'],
+    // Keyed by the revision shown: after another edit the kept versions are
+    // fetched again, never paired with the newer notification from cache.
+    queryKey: [origin, 'notification', id, 'versions', current.data?.revision],
     queryFn: ({ pageParam, signal }) =>
       api!.notificationVersions(id, pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
-    enabled: Boolean(api) && !deleted,
+    enabled: Boolean(api) && !deleted && current.data !== undefined,
   });
 
   const error = current.error ?? earlier.error;
