@@ -3,11 +3,7 @@
  * outbound delivery (webhook and App destinations).
  */
 import { z } from 'zod';
-import {
-  DEEP_LINK_SCHEME,
-  DOCUMENT_URL_SCHEMES,
-  parseHatchLink,
-} from '../../../packages/hatch-platform-api/deep-link';
+import { isNotificationUrl } from '../../../packages/hatch-platform-api/notification-url';
 import {
   NOTIFICATION_KIND_RE,
   notificationKindSchema,
@@ -29,7 +25,7 @@ import type {
   NotificationSourceType,
 } from '~/db/schema';
 
-export { NOTIFICATION_KIND_RE, notificationKindSchema };
+export { NOTIFICATION_KIND_RE, notificationKindSchema, isNotificationUrl };
 
 /** Largest accepted push request body. */
 export const MAX_NOTIFICATION_BODY_BYTES = 64 * 1024;
@@ -245,29 +241,6 @@ export const channelKindsSchema = z
       seen.add(entry.kind);
     });
   });
-
-/**
- * A notification links to anything a device can open: a web page, another
- * app by its own scheme (`mailto:`, `tel:`, `someapp://…`), or a Hatch page by
- * deep link (`hatch://app/<slug>#/route`), which phones open natively and the
- * web opens on the instance. A `hatch:` link must name a page. Schemes that
- * only run inside the current document (`javascript:`, `data:`, …) open
- * nothing and are rejected. Development loopback instances are accepted in
- * deep links; the phone decides whether it may open them.
- */
-export function isNotificationUrl(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (DOCUMENT_URL_SCHEMES.has(url.protocol)) return false;
-  return (
-    url.protocol !== `${DEEP_LINK_SCHEME}:` ||
-    parseHatchLink(value, { allowLoopbackHttp: true }) !== null
-  );
-}
 
 export function isHttpUrl(value: string): boolean {
   try {

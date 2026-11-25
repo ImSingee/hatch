@@ -1,0 +1,326 @@
+/**
+ * The card markup parser: a strict XML subset with no dependencies. It reads
+ * elements, attributes, text, comments, CDATA, the five predefined entities
+ * and numeric character references. Document types, entity definitions and
+ * processing instructions are rejected, so no input can expand or fetch
+ * anything. Attributes may be written bare (`mono`), meaning true.
+ *
+ * The parser only builds the element tree with positions; whitespace rules
+ * and the component catalog are applied by `notification-content-schema`.
+ */
+
+export type MarkupPosition = { line: number; column: number };
+
+export type MarkupAttribute = MarkupPosition & {
+  name: string;
+  /** `true` for a bare attribute. */
+  value: string | true;
+};
+
+export type MarkupText = MarkupPosition & {
+  kind: 'text';
+  text: string;
+  /** Written as CDATA. */
+  cdata: boolean;
+};
+
+export type MarkupElement = MarkupPosition & {
+  kind: 'element';
+  name: string;
+  attributes: MarkupAttribute[];
+  children: (MarkupElement | MarkupText)[];
+};
+
+export class MarkupSyntaxError extends Error {
+  readonly line: number;
+  readonly column: number;
+
+  constructor(message: string, position: MarkupPosition) {
+    super(`${position.line}:${position.column}: ${message}`);
+    this.name = 'MarkupSyntaxError';
+    this.line = position.line;
+    this.column = position.column;
+  }
+}
+
+const NAME_START = /[A-Za-z_]/;
+const NAME_CHAR = /[A-Za-z0-9_.-]/;
+const WHITESPACE = /[ \t\r\n]/;
+const ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/**
+ * Parse one root element. Whitespace and comments may surround it; anything
+ * else outside it is an error.
+ */
+export function parseMarkup(source: string): MarkupElement {
+  let index = 0;
+  let line = 1;
+  let column = 1;
+
+  const here = (): MarkupPosition => ({ line, column });
+  const fail = (message: string, at: MarkupPosition = here()): never => {
+    throw new MarkupSyntaxError(message, at);
+  };
+  const peek = (offset = 0) => source[index + offset];
+  const startsWith = (text: string) => source.startsWith(text, index);
+  const advance = (count = 1) => {
+    for (let i = 0; i < count && index < source.length; i += 1) {
+      if (source[index] === '\n') {
+        line += 1;
+        column = 1;
+      } else {
+        column += 1;
+      }
+      index += 1;
+    }
+  };
+  const skipWhitespace = () => {
+    while (index < source.length && WHITESPACE.test(source[index]!)) advance();
+  };
+
+  const readName = (what: string): string => {
+    const start = index;
+    if (!NAME_START.test(peek() ?? '')) {
+      fail(
+        peek() === undefined
+          ? `expected ${what}, found the end of the markup`
+          : `expected ${what}, found "${peek()}"`,
+      );
+    }
+    while (index < source.length && NAME_CHAR.test(source[index]!)) advance();
+    return source.slice(start, index);
+  };
+
+  const readReference = (): string => {
+    const at = here();
+    const end = source.indexOf(';', index);
+    if (end === -1 || end - index > 12) {
+      fail('"&" starts an entity: write &amp; for a literal "&"', at);
+    }
+    const body = source.slice(index + 1, end);
+    let text: string | undefined;
+    if (body.startsWith('#x') || body.startsWith('#X')) {
+      const code = /^[0-9a-fA-F]+$/.test(body.slice(2))
+        ? Number.parseInt(body.slice(2), 16)
+        : NaN;
+      text = validCodePoint(code) ? String.fromCodePoint(code) : undefined;
+    } else if (body.startsWith('#')) {
+      const code = /^[0-9]+$/.test(body.slice(1))
+        ? Number.parseInt(body.slice(1), 10)
+        : NaN;
+      text = validCodePoint(code) ? String.fromCodePoint(code) : undefined;
+    } else {
+      text = Object.hasOwn(ENTITIES, body) ? ENTITIES[body] : undefined;
+    }
+    if (text === undefined) {
+      fail(
+        `unknown entity "&${body};": use &amp; &lt; &gt; &quot; &apos; or a numeric reference`,
+        at,
+      );
+    }
+    advance(end - index + 1);
+    return text!;
+  };
+
+  const skipComment = () => {
+    const at = here();
+    const end = source.indexOf('-->', index + 4);
+    if (end === -1) fail('comment is not closed with "-->"', at);
+    advance(end + 3 - index);
+  };
+
+  const skipMisc = () => {
+    for (;;) {
+      skipWhitespace();
+      if (startsWith('<!--')) {
+        skipComment();
+        continue;
+      }
+      if (startsWith('<?')) {
+        fail('processing instructions and XML declarations are not allowed');
+      }
+      if (startsWith('<!')) {
+        fail('document types and entity definitions are not allowed');
+      }
+      return;
+    }
+  };
+
+  const readAttributeValue = (): string => {
+    const quote = peek();
+    if (quote !== '"' && quote !== "'") {
+      fail('attribute values must be quoted');
+    }
+    const at = here();
+    advance();
+    let value = '';
+    for (;;) {
+      const char = peek();
+      if (char === undefined) fail('attribute value is not closed', at);
+      if (char === quote) {
+        advance();
+        return value;
+      }
+      if (char === '<')
+        fail('"<" is not allowed in attribute values: use &lt;');
+      if (char === '&') {
+        value += readReference();
+        continue;
+      }
+      value += char;
+      advance();
+    }
+  };
+
+  const readElement = (depth: number): MarkupElement => {
+    const at = here();
+    if (depth > 64) fail('elements are nested too deeply', at);
+    advance(); // <
+    const name = readName('an element name');
+    const attributes: MarkupAttribute[] = [];
+    // A bare attribute already consumed the whitespace after it.
+    let spaced = false;
+    for (;;) {
+      const hadSpace =
+        spaced || (index < source.length && WHITESPACE.test(peek()!));
+      spaced = false;
+      skipWhitespace();
+      const char = peek();
+      if (char === undefined) {
+        fail(`<${name}> is not closed`, at);
+      }
+      if (char === '/' || char === '>') break;
+      if (!hadSpace) fail('attributes must be separated by whitespace');
+      const attrAt = here();
+      const attrName = readName('an attribute name');
+      if (attributes.some((attribute) => attribute.name === attrName)) {
+        fail(`attribute "${attrName}" is given twice`, attrAt);
+      }
+      const before = index;
+      skipWhitespace();
+      let value: string | true = true;
+      if (peek() === '=') {
+        advance();
+        skipWhitespace();
+        value = readAttributeValue();
+      } else {
+        spaced = index > before;
+      }
+      attributes.push({ ...attrAt, name: attrName, value });
+    }
+    const element: MarkupElement = {
+      ...at,
+      kind: 'element',
+      name,
+      attributes,
+      children: [],
+    };
+    if (peek() === '/') {
+      advance();
+      if (peek() !== '>') fail('expected ">" after "/"');
+      advance();
+      return element;
+    }
+    advance(); // >
+
+    let text = '';
+    let textAt: MarkupPosition | null = null;
+    const flush = () => {
+      if (textAt && text) {
+        element.children.push({ ...textAt, kind: 'text', text, cdata: false });
+      }
+      text = '';
+      textAt = null;
+    };
+    for (;;) {
+      const char = peek();
+      if (char === undefined) fail(`<${name}> is not closed`, at);
+      if (char === '<') {
+        if (startsWith('</')) {
+          flush();
+          const closeAt = here();
+          advance(2);
+          const closing = readName('an element name');
+          skipWhitespace();
+          if (peek() !== '>') fail('expected ">" to close the tag');
+          if (closing !== name) {
+            fail(
+              `</${closing}> does not match <${name}> opened at ${at.line}:${at.column}`,
+              closeAt,
+            );
+          }
+          advance();
+          return element;
+        }
+        if (startsWith('<!--')) {
+          flush();
+          skipComment();
+          continue;
+        }
+        if (startsWith('<![CDATA[')) {
+          flush();
+          const cdataAt = here();
+          const end = source.indexOf(']]>', index + 9);
+          if (end === -1) fail('CDATA section is not closed with "]]>"');
+          const content = source.slice(index + 9, end);
+          advance(end + 3 - index);
+          element.children.push({
+            ...cdataAt,
+            kind: 'text',
+            text: content,
+            cdata: true,
+          });
+          continue;
+        }
+        if (startsWith('<?')) fail('processing instructions are not allowed');
+        if (startsWith('<!')) {
+          fail('document types and entity definitions are not allowed');
+        }
+        flush();
+        element.children.push(readElement(depth + 1));
+        continue;
+      }
+      textAt ??= here();
+      if (char === '&') {
+        text += readReference();
+        continue;
+      }
+      if (char === '>' && startsWith(']]>')) {
+        fail('"]]>" is not allowed in text');
+      }
+      text += char;
+      advance();
+    }
+  };
+
+  skipMisc();
+  if (peek() !== '<') {
+    fail(
+      peek() === undefined
+        ? 'the markup is empty'
+        : 'the markup must start with an element such as <Card>',
+    );
+  }
+  const root = readElement(0);
+  skipMisc();
+  if (index < source.length) {
+    fail('only one root element is allowed');
+  }
+  return root;
+}
+
+function validCodePoint(code: number): boolean {
+  return (
+    Number.isInteger(code) &&
+    code > 0 &&
+    code <= 0x10ffff &&
+    !(code >= 0xd800 && code <= 0xdfff) &&
+    (code >= 0x20 || code === 0x09 || code === 0x0a || code === 0x0d)
+  );
+}

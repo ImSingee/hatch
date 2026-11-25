@@ -4,15 +4,23 @@
  * edit replaced. Pure, so both clients number them, place each round's
  * answer and name what changed the same way.
  */
-import type { NotificationCard } from './notification-card';
+import {
+  cardHead,
+  type ContentNode,
+  type NotificationFormat,
+} from './notification-content';
 import type { ReplyForm } from './notification-reply';
 
 /** One version's content, from the notification or a kept revision. */
 export type VersionContent = {
-  title: string;
+  format: NotificationFormat;
+  /** Text notifications only. */
+  title: string | null;
   body: string | null;
+  summary: string | null;
+  /** The tree of a Markdown or card version. */
+  content: ContentNode | null;
   url: string | null;
-  card: NotificationCard | null;
   reply: ReplyForm | null;
   replyRound: number;
   data?: unknown;
@@ -21,10 +29,12 @@ export type VersionContent = {
 /** What changed from one version to the next, in the order people scan. */
 export type VersionChange =
   | 'status'
+  | 'format'
   | 'title'
+  | 'summary'
   | 'body'
+  | 'content'
   | 'link'
-  | 'card'
   | 'data'
   | 'question'
   | 'questionRemoved';
@@ -42,8 +52,40 @@ export type VersionEntry<T extends VersionContent> = T & {
   changes: VersionChange[];
 };
 
-const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** Equal JSON whatever the key order (stored trees come back reordered). */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined || b === null || b === undefined) {
+    return (a ?? null) === (b ?? null);
+  }
+  if (typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const other = b as unknown[];
+    return a.length === other.length && a.every((v, i) => same(v, other[i]));
+  }
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every(
+      (key) => Object.hasOwn(right, key) && same(left[key], right[key]),
+    )
+  );
+}
+
+/** A tree without the status and flag the card shows in its fixed place. */
+function body(content: ContentNode | null): unknown {
+  if (!content) return null;
+  const {
+    status: _status,
+    tone: _tone,
+    flag: _flag,
+    ...props
+  } = content.props ?? {};
+  return { ...content, props };
+}
 
 export function versionChanges(
   newer: VersionContent,
@@ -51,11 +93,22 @@ export function versionChanges(
   options: { compareData: boolean },
 ): VersionChange[] {
   const changes: VersionChange[] = [];
-  if (!same(newer.card?.status, older.card?.status)) changes.push('status');
-  if (newer.title !== older.title) changes.push('title');
+  const newerHead = cardHead(newer.content);
+  const olderHead = cardHead(older.content);
+  if (
+    !same(newerHead.status, olderHead.status) ||
+    newerHead.flag !== olderHead.flag
+  ) {
+    changes.push('status');
+  }
+  if (newer.format !== older.format) changes.push('format');
+  if ((newer.title ?? null) !== (older.title ?? null)) changes.push('title');
+  if ((newer.summary ?? null) !== (older.summary ?? null)) {
+    changes.push('summary');
+  }
   if (newer.body !== older.body) changes.push('body');
+  if (!same(body(newer.content), body(older.content))) changes.push('content');
   if (newer.url !== older.url) changes.push('link');
-  if (!same(newer.card?.block, older.card?.block)) changes.push('card');
   if (options.compareData && !same(newer.data, older.data)) {
     changes.push('data');
   }

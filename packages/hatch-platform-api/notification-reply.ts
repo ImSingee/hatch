@@ -23,6 +23,8 @@ export const MAX_PLACEHOLDER = 100;
 export const DEFAULT_TEXT_MAX_LENGTH = 1000;
 export const MAX_TEXT_LENGTH = 4000;
 export const DEFAULT_SUBMIT_LABEL = 'Submit';
+export const MAX_OPTION_NOTE = 40;
+export const MAX_OPTION_BADGE = 16;
 
 export const REPLY_FIELD_ID_RE = /^[a-z][a-z0-9_]{0,39}$/;
 export const REPLY_OPTION_ID_RE = /^[a-z0-9][a-z0-9_.-]{0,39}$/;
@@ -40,10 +42,17 @@ export type ReplyOption = {
   label: string;
   /** Buttons only: shown as a destructive action. */
   destructive?: true;
+  /** Buttons only: the main action, drawn filled. */
+  primary?: true;
+  /** Single and multiple only: shown beside the label, such as "1 min". */
+  note?: string;
+  /** Single and multiple only: a small tag, such as "breaking". */
+  badge?: string;
 };
 
 type FieldBase = {
   id: string;
+  /** May be empty for a buttons field: the buttons say it all. */
   label: string;
   description?: string;
   /** A required field must be answered before the form can be submitted. */
@@ -54,6 +63,8 @@ type FieldBase = {
 export type ReplyChoiceField = FieldBase & {
   type: 'buttons' | 'single';
   options: ReplyOption[];
+  /** Single only: the option chosen to begin with. */
+  default?: string;
 };
 
 export type ReplyMultipleField = FieldBase & {
@@ -62,6 +73,8 @@ export type ReplyMultipleField = FieldBase & {
   /** At least this many options when answered (1 or more). */
   minSelected: number;
   maxSelected: number;
+  /** Options chosen to begin with. */
+  default?: string[];
 };
 
 export type ReplyTextField = FieldBase & {
@@ -211,6 +224,28 @@ export function validateAnswers(
  */
 export type ReplyPushMode = 'buttons' | 'text' | 'form';
 
+/**
+ * Whether the form ends in a required buttons field, whose buttons then
+ * submit the whole form in place of a submit button.
+ */
+export function submitsWithButtons(reply: ReplyForm): boolean {
+  const last = reply.fields.at(-1);
+  return last?.type === 'buttons' && last.required;
+}
+
+/** The answers a form starts with: its fields' defaults. */
+export function defaultAnswers(reply: ReplyForm): ReplyAnswers {
+  const answers: ReplyAnswers = {};
+  for (const field of reply.fields) {
+    if (field.type === 'single' && field.default) {
+      answers[field.id] = field.default;
+    } else if (field.type === 'multiple' && field.default?.length) {
+      answers[field.id] = [...field.default];
+    }
+  }
+  return answers;
+}
+
 export function replyPushMode(reply: ReplyForm): ReplyPushMode {
   if (reply.fields.length !== 1) return 'form';
   const [field] = reply.fields;
@@ -255,5 +290,7 @@ export function summarizeAnswers(
 ): string {
   const lines = describeAnswers(reply, answers);
   if (reply.fields.length === 1) return lines[0]?.value ?? '';
-  return lines.map((line) => `${line.label}: ${line.value}`).join('; ');
+  return lines
+    .map((line) => (line.label ? `${line.label}: ${line.value}` : line.value))
+    .join('; ');
 }

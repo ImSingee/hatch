@@ -128,10 +128,28 @@ message NotificationSummary {
   // Which question reply is: 1 for the form it was sent with, one more for
   // each edit that replaced or removed it.
   uint32 reply_round = 23;
-  // Status and one block the timeline shows; absent without one.
+  // The #319 card shape, for builds that predate format: the card's status
+  // and its first progress, stats or quote block; absent without one.
   NotificationCard card = 24;
   // Versions an edit replaced (ListNotificationRevisions); 0 when never edited.
   uint32 earlier_versions = 25;
+  // text | markdown | card. For markdown and card, title holds the summary
+  // and body the plain text, so builds that predate format still show them.
+  string format = 26;
+  // One plain line for push and lists; always set for markdown and card.
+  optional string summary = 27;
+  // The Markdown source of a markdown notification.
+  optional string markdown = 28;
+  // The render tree of a markdown or card notification, as JSON:
+  // { "type", "props"?, "children"? } nodes with string text leaves.
+  optional string content_json = 29;
+  // The content as plain text (markdown and card).
+  optional string text = 30;
+  // A card's flag (urgent marker) and icon name.
+  optional string flag = 31;
+  optional string icon = 32;
+  // A card's status; absent without one.
+  NotificationCardStatus card_status = 33;
 }
 
 // ---------------------------------------------------------------- replies
@@ -141,6 +159,12 @@ message NotificationReplyOption {
   string label = 2 [(buf.validate.field).string.max_len = 100];
   // Buttons only: shown as a destructive action.
   bool destructive = 3;
+  // Buttons only: the main action.
+  bool primary = 4;
+  // Single and multiple only: shown beside the label, such as "1 min".
+  optional string note = 5 [(buf.validate.field).string.max_len = 40];
+  // Single and multiple only: a small tag, such as "breaking".
+  optional string badge = 6 [(buf.validate.field).string.max_len = 16];
 }
 
 // One question. Limits beyond the field lengths (option counts, which
@@ -159,6 +183,7 @@ message NotificationReplyField {
       "text"
     ]
   }];
+  // Required except on buttons fields.
   string label = 3 [(buf.validate.field).string.max_len = 100];
   optional string description = 4 [(buf.validate.field).string.max_len = 300];
   // Unset defaults to true.
@@ -172,6 +197,8 @@ message NotificationReplyField {
   optional bool multiline = 10;
   // text only; defaults to 1000, at most 4000.
   optional uint32 max_length = 11;
+  // Options chosen to begin with: one for single, any for multiple.
+  repeated string defaults = 12 [(buf.validate.field).repeated.max_items = 50];
 }
 
 // A reply form. Read APIs return it normalized, with every default set.
@@ -367,9 +394,11 @@ message SendNotificationRequest {
     (buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$",
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
   ];
-  // At most 200 characters after trimming, checked by the shared Channel
-  // push rules so both paths accept the same titles.
-  string title = 3 [(buf.validate.field).string.min_len = 1];
+  // The content is exactly one of: title (with body), markdown, card_markup
+  // or card_json. A text notification's title: at most 200 characters after
+  // trimming, checked by the shared Channel push rules so both paths accept
+  // the same titles.
+  string title = 3 [(buf.validate.field).string.max_len = 1000];
   optional string body = 4 [(buf.validate.field).string.max_len = 4000];
   // Absolute URL a device can open: a web page, another app's scheme
   // (mailto:, slack://...) or a hatch:// deep link. javascript:, data:, blob:,
@@ -388,8 +417,18 @@ message SendNotificationRequest {
   optional bool auto_open_url = 9;
   // Form people answer once; answers go to response routes.
   NotificationReply reply = 12;
-  // Status and one block the timeline shows; phones show title and body.
+  // The #319 card shape, with title and body: sent as a card notification
+  // whose summary is the title.
   NotificationCard card = 15;
+  // One plain line (at most 200 characters, no line breaks) for push and
+  // lists. Optional for text, required for markdown and card.
+  optional string summary = 16 [(buf.validate.field).string.max_len = 1000];
+  // A Markdown notification: the source, at most 16 KiB.
+  optional string markdown = 17 [(buf.validate.field).string.max_len = 65536];
+  // A card notification in card markup (`<Card>…</Card>`), at most 16 KiB.
+  optional string card_markup = 18 [(buf.validate.field).string.max_len = 65536];
+  // A card notification as a render tree in JSON, at most 16 KiB.
+  optional string card_json = 19 [(buf.validate.field).string.max_len = 65536];
 
   // From the sending user, never routed: the group's enabled members.
   string group_id = 10 [
@@ -423,6 +462,11 @@ message SendNotificationRequest {
     id: "send_notification.recipient"
     message: "set exactly one of channel_id, group_id or destination_id"
     expression: "[this.channel_id, this.group_id, this.destination_id].filter(id, id != '').size() == 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "send_notification.content"
+    message: "set exactly one of title, markdown, card_markup or card_json"
+    expression: "[this.title != '', has(this.markdown), has(this.card_markup), has(this.card_json)].filter(set, set).size() == 1"
   };
   option (buf.validate.message).cel = {
     id: "send_notification.channel_kind"
@@ -465,10 +509,20 @@ message UpdateNotificationRequest {
   NotificationReply reply = 9;
   // Remove the reply form (also starts the next round). Not with reply.
   bool clear_reply = 10;
-  // Replace the card (the whole card). Not with clear_card.
+  // The #319 card shape: replaces the whole card of a text notification or
+  // of a card sent in that shape. Not with clear_card.
   NotificationCard card = 11;
-  // Remove the card.
+  // Remove a #319 card, leaving a text notification.
   bool clear_card = 12;
+  // Replace the summary. Not with clear_summary.
+  optional string summary = 13 [(buf.validate.field).string.max_len = 1000];
+  // Remove the summary of a text notification.
+  bool clear_summary = 14;
+  // Switch to (or replace) Markdown content. Not with title, body or a card.
+  optional string markdown = 15 [(buf.validate.field).string.max_len = 65536];
+  // Switch to (or replace) card content, in markup or as a JSON tree.
+  optional string card_markup = 16 [(buf.validate.field).string.max_len = 65536];
+  optional string card_json = 17 [(buf.validate.field).string.max_len = 65536];
 }
 message UpdateNotificationResponse {
   // 1 for the original; every edit and the recall increment it.
@@ -507,7 +561,8 @@ message NotificationCardStatus {
     min_len: 1
     max_len: 24
   }];
-  // neutral | info | success | warning | danger; empty means neutral.
+  // neutral | info | success | warning | danger | working; empty means
+  // neutral. working is only read back, from a card's status.
   string tone = 2 [(buf.validate.field).string = {
     in: [
       "",
@@ -515,7 +570,8 @@ message NotificationCardStatus {
       "info",
       "success",
       "warning",
-      "danger"
+      "danger",
+      "working"
     ]
   }];
 }
@@ -587,10 +643,20 @@ message NotificationRevision {
   // The question it asked then; absent when it asked nothing.
   NotificationReply reply = 6;
   uint32 reply_round = 7;
+  // As on NotificationSummary.
   NotificationCard card = 10;
   // Whether tapping the phone push opened url; false for versions kept
   // before this was recorded.
   bool auto_open_url = 11;
+  // As on NotificationSummary: title holds the summary for markdown and card.
+  string format = 12;
+  optional string summary = 13;
+  optional string markdown = 14;
+  optional string content_json = 15;
+  optional string text = 16;
+  optional string flag = 17;
+  optional string icon = 18;
+  NotificationCardStatus card_status = 19;
   // ISO-8601: when this version became current, and when an edit replaced it.
   string activity_at = 8;
   string replaced_at = 9;
