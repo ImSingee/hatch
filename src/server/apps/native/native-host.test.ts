@@ -243,9 +243,14 @@ describe('native App host', () => {
       ['hatch.nav.setRoute', { route: 7 }],
       ['hatch.nav.setTitle', { title: 'x'.repeat(300) }],
       ['hatch.nav.open', { slug: '../admin' }],
+      ['hatch.nav.open', { slug: 'a'.repeat(65) }],
     ] as const) {
       expect((await host.call(name, args)).ok).toBe(false);
     }
+    // Every slug the platform accepts (up to 64 characters) can be opened.
+    await expect(
+      host.call('hatch.nav.open', { slug: 'a'.repeat(64) }),
+    ).resolves.toEqual({ ok: true });
     await expect(host.call('hatch.native.camera.open', {})).resolves.toEqual({
       ok: false,
       code: 'unimplemented',

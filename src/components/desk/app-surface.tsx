@@ -14,7 +14,6 @@ import {
   parsePlayerMessage,
   type SurfaceMessage,
 } from '../../../sdk-internal/app/src/native-surface';
-import { useOptionalPlatformEvent } from '~components/system/platform-events-context';
 import { useAccent } from '~/ui/theme';
 import { appSurfaceSource } from './app-surface-source';
 import classes from './app-surface.module.css';
@@ -44,6 +43,13 @@ export type AppSurfaceProps = {
   onRouteChange?: (route: string) => void;
   /** The App's own title changed; `null` when it has none. */
   onTitleChange?: (title: string | null) => void;
+  /**
+   * The App's live deployment as the host knows it (kept current from
+   * platform events and re-read after the event stream reconnects). A
+   * native App whose player runs another deployment is told an update is
+   * available. A `web` App does not use it.
+   */
+  latestDeployment?: string | null;
 };
 
 /** The still percent-encoded fragment of an href, without '#'. */
@@ -82,11 +88,10 @@ type NativeChannel = {
   port: MessagePort;
   /** The route the App last reported, to skip echoing it back. */
   route: string;
-  /** The App and deployment the player runs, from its `hello`. */
-  appId: string | null;
+  /** The deployment the player runs, from its `hello`. */
   deploymentId: string | null;
-  /** Activations (App id -> deployment) seen before `hello` named the App. */
-  early: Map<string, string>;
+  /** The deployment the App was last told about, to say it once. */
+  notified: string | null;
   send: (message: SurfaceMessage) => void;
 };
 
@@ -110,6 +115,7 @@ export function AppSurface({
   visible = true,
   onRouteChange,
   onTitleChange,
+  latestDeployment,
 }: AppSurfaceProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   // The live App window, kept so `navigate` can reach the loaded App.
@@ -150,24 +156,23 @@ export function AppSurface({
   useEffect(() => {
     nativeRef.current?.send({ type: 'visibility', visible });
   }, [visible]);
-  useOptionalPlatformEvent('app.deployment.activated', (event) => {
-    const channel = nativeRef.current;
-    if (!channel) return;
-    if (!channel.deploymentId) {
-      // The player has not said which App it runs yet; decide at `hello`.
-      channel.early.set(event.appId, event.deploymentRevision);
-      return;
-    }
-    // Every App's activations reach every surface; only this App's newer
-    // deployment is an update for it.
+  // "Update available" once the host's live deployment and the player's
+  // differ: on a change of either, and at the player's `hello`.
+  const notifyIfBehind = useEffectEvent((channel: NativeChannel) => {
     if (
-      event.appId === channel.appId &&
-      event.deploymentRevision !== channel.deploymentId &&
+      latestDeployment &&
+      channel.deploymentId &&
+      latestDeployment !== channel.deploymentId &&
+      channel.notified !== latestDeployment &&
       winRef.current
     ) {
+      channel.notified = latestDeployment;
       channel.send({ type: 'update-available' });
     }
   });
+  useEffect(() => {
+    if (nativeRef.current) notifyIfBehind(nativeRef.current);
+  }, [latestDeployment]);
 
   useImperativeHandle(
     ref,
@@ -266,9 +271,8 @@ export function AppSurface({
       const channel: NativeChannel = {
         port: port1,
         route: seedRoute(),
-        appId: null,
         deploymentId: null,
-        early: new Map(),
+        notified: null,
         send: (message) => port1.postMessage(message),
       };
       nativeRef.current = channel;
@@ -276,16 +280,10 @@ export function AppSurface({
         const message = parsePlayerMessage(event.data);
         if (!message || nativeRef.current !== channel) return;
         switch (message.type) {
-          case 'hello': {
-            channel.appId = message.appId;
+          case 'hello':
             channel.deploymentId = message.deploymentId;
-            const early = channel.early.get(message.appId);
-            channel.early.clear();
-            if (early !== undefined && early !== message.deploymentId) {
-              channel.send({ type: 'update-available' });
-            }
+            notifyIfBehind(channel);
             break;
-          }
           case 'route':
             channel.route = message.route;
             reportRoute(message.route);

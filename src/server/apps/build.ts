@@ -1094,8 +1094,24 @@ export async function replaceDirectory(
   try {
     await io.rename(incoming, target);
   } catch (error) {
-    if (hadPrevious) await io.rename(previous, target).catch(() => {});
     await discard(incoming);
+    if (!hadPrevious) throw error;
+    try {
+      await io.rename(previous, target);
+    } catch (restoreError) {
+      // Neither output is in place: say where the previous one was kept.
+      // It stays a system error, so it is reported as an internal failure.
+      const failure = error as NodeJS.ErrnoException;
+      throw Object.assign(
+        new Error(
+          `Could not install the new build output (${failure.message}) ` +
+            `or restore the previous one (${(restoreError as Error).message}); ` +
+            `the previous output is kept at ${previous}.`,
+          { cause: restoreError },
+        ),
+        { code: failure.code, errno: failure.errno, syscall: failure.syscall },
+      );
+    }
     throw error;
   }
   if (hadPrevious) await discard(previous);

@@ -73,7 +73,8 @@ const MAX_ROUTE_LENGTH = 4_096;
 const MAX_TITLE_LENGTH = 256;
 const SERVICE_NAME = /^[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*$/;
 const METHOD_NAME = /^[A-Za-z_]\w*$/;
-const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
+// APP_SLUG_RE with APP_SLUG_MAX_LENGTH (64) in @hatch/manifest.
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ACCENT_STORAGE_KEY = 'hatch.accent';
 /** The faces the player page declares (fonts.css) and the theme names. */
 const PLAYER_FONT_FAMILIES = ['Nunito', 'JetBrains Mono'];

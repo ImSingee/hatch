@@ -151,6 +151,41 @@ describe('buildApp output replacement', () => {
     }
   });
 
+  it('names where the previous output is when the swap and its undo fail', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-undo-'));
+    tempDirs.push(root);
+    const staged = path.join(root, 'staged');
+    const target = path.join(root, 'out');
+    await fs.mkdir(staged);
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(target, 'old.txt'), 'old');
+    const denied = () =>
+      Object.assign(new Error('EACCES: permission denied, rename'), {
+        code: 'EACCES',
+        errno: -13,
+        syscall: 'rename',
+      });
+    const failure = (await replaceDirectory(staged, target, {
+      mkdir: fs.mkdir,
+      rm: fs.rm,
+      cp: fs.cp,
+      rename: async (from, to) => {
+        // Moving the new output in, and moving the old one back, both fail.
+        if (String(to) === target) throw denied();
+        return fs.rename(from, to);
+      },
+    } as Parameters<typeof replaceDirectory>[2]).catch(
+      (error: unknown) => error,
+    )) as NodeJS.ErrnoException;
+    const kept = (await fs.readdir(root)).find((name) =>
+      name.startsWith('out.previous-'),
+    );
+    expect(kept).toBeDefined();
+    expect(failure.message).toContain(path.join(root, kept!));
+    expect(failure.code).toBe('EACCES');
+    expect(await fs.readdir(path.join(root, kept!))).toEqual(['old.txt']);
+  });
+
   it('keeps the previous output when copying across devices fails', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hatch-build-swap-'));
     tempDirs.push(root);
