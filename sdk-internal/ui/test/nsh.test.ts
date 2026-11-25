@@ -13,24 +13,25 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { prepareAppRoot } from '../gallery/prepare.ts';
 
-/** `NSH_BIN`, else `nsh` on `PATH`, else the install script's places. */
-const nsh =
-  process.env.NSH_BIN ??
-  [
-    ...(process.env.PATH ?? '')
-      .split(path.delimiter)
-      .filter(Boolean)
-      .map((directory) => path.join(directory, 'nsh')),
-    path.join(os.homedir(), '.local/bin/nsh'),
-    path.join(os.homedir(), '.nsh/bin/nsh'),
-  ].find((candidate) => {
-    try {
-      fs.accessSync(candidate, fs.constants.X_OK);
-      return fs.statSync(candidate).isFile();
-    } catch {
-      return false;
-    }
-  });
+/** `NSH_BIN`, else `nsh` on `PATH` (an empty entry is the current
+ * directory), else the install script's places. Absolute, because the tests
+ * run it from each fixture's directory. */
+const nsh = process.env.NSH_BIN
+  ? path.resolve(process.env.NSH_BIN)
+  : [
+      ...(process.env.PATH ?? '')
+        .split(path.delimiter)
+        .map((directory) => path.resolve(directory || '.', 'nsh')),
+      path.join(os.homedir(), '.local/bin/nsh'),
+      path.join(os.homedir(), '.nsh/bin/nsh'),
+    ].find((candidate) => {
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return fs.statSync(candidate).isFile();
+      } catch {
+        return false;
+      }
+    });
 
 const UI = path.resolve(import.meta.dirname, '..');
 
