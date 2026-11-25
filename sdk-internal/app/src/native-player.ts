@@ -632,7 +632,18 @@ export async function startNativePlayer(): Promise<void> {
     document.getElementById('status')?.setAttribute('hidden', '');
     created.hostEvent('hatch.theme', { theme: theme() });
     player = created;
-    for (const message of pending.splice(0)) apply(message);
+    for (const message of pending.splice(0)) {
+      // The App has not started: a navigation before it does is where it
+      // starts (`initialRoute()`), not an event it would get first.
+      if (message.type === 'navigate') {
+        route = message.route;
+        if (rawHash() !== route) {
+          history.replaceState(history.state, '', `#${route}`);
+        }
+        continue;
+      }
+      apply(message);
+    }
     await created.runModule(appUrl(config.app.code), {
       capabilities: config.grant,
       appId: config.nshAppId,
