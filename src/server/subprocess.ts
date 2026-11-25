@@ -126,7 +126,17 @@ export function run(
       finish(1);
     });
     child.on('exit', () => killProcessTree(child.pid));
-    child.on('close', (code) => finish(code ?? 0));
+    child.on('close', (code, signal) => {
+      if (code !== null) {
+        finish(code);
+        return;
+      }
+      // Killed by a signal: never a success, whatever the tool printed.
+      const note = `\n${cmd} was terminated by ${signal ?? 'a signal'}`;
+      stderr = appendCapped(stderr, note);
+      output = appendCapped(output, note);
+      finish(1);
+    });
     // Early process termination can close stdin before a bundle finishes writing.
     child.stdin.on('error', () => {
       /* The process result reports the failure. */

@@ -5,14 +5,37 @@
  *
  * - Outside `app/custom/`, App files take their UI from `@hatch/ui` and may
  *   not import `nsh` or `nsh/*` directly.
+ * - `nsh` modules are imported by name: the web player links each import,
+ *   and a namespace import or `export *` of one cannot start there.
  * - No bare colours: arbitrary Tailwind colour values (`bg-[#f00]`) and
  *   Tailwind palette classes (`bg-red-500`), which NSH accepts silently,
  *   and colour literals given to colour style keys.
  * - No calls to streaming RPC methods: the host bridge carries unary calls.
+ *
+ * The files are parsed with the platform's TypeScript (JSX-aware, with
+ * bindings resolved), not scanned as text.
  */
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
+import {
+  SyntaxKind,
+  type BinaryExpression,
+  type CallExpression,
+  type ElementAccessExpression,
+  type ExportDeclaration,
+  type Identifier,
+  type ImportDeclaration,
+  type JsxAttribute,
+  type JsxExpression,
+  type Node,
+  type PropertyAccessExpression,
+  type PropertyAssignment,
+  type SourceFile,
+  type VariableDeclaration,
+} from 'typescript/unstable/ast';
+import { API, type Checker } from 'typescript/unstable/async';
 import { sourceBoundaryPlugin } from '../../../toolchain/esbuild-plugins';
 import type { RpcServiceApi } from '../manifest';
 
@@ -154,62 +177,6 @@ export async function nativeModuleGraph(options: {
     .sort();
 }
 
-type Token =
-  | { kind: 'string'; value: string; line: number }
-  | { kind: 'word'; value: string; line: number }
-  | { kind: 'punct'; value: string; line: number };
-
-/**
- * A small lexer: string and template literal contents, identifiers and
- * punctuation, with comments skipped. Quoted strings end at a newline, so an
- * apostrophe in JSX text cannot swallow more than its own line.
- */
-function tokens(source: string): Token[] {
-  const out: Token[] = [];
-  let line = 1;
-  let index = 0;
-  while (index < source.length) {
-    const char = source[index];
-    if (char === '\n') {
-      line += 1;
-      index += 1;
-    } else if (char === '/' && source[index + 1] === '/') {
-      while (index < source.length && source[index] !== '\n') index += 1;
-    } else if (char === '/' && source[index + 1] === '*') {
-      const end = source.indexOf('*/', index + 2);
-      const stop = end < 0 ? source.length : end + 2;
-      for (; index < stop; index += 1) if (source[index] === '\n') line += 1;
-    } else if (char === '"' || char === "'" || char === '`') {
-      const start = line;
-      let value = '';
-      index += 1;
-      while (index < source.length && source[index] !== char) {
-        if (char !== '`' && source[index] === '\n') break;
-        if (source[index] === '\\') {
-          value += source[index + 1] ?? '';
-          index += 2;
-          continue;
-        }
-        if (source[index] === '\n') line += 1;
-        value += source[index];
-        index += 1;
-      }
-      index += 1;
-      out.push({ kind: 'string', value, line: start });
-    } else if (/[A-Za-z_$]/.test(char)) {
-      const match = /^[\w$]+/.exec(source.slice(index))!;
-      out.push({ kind: 'word', value: match[0], line });
-      index += match[0].length;
-    } else if (/\s/.test(char)) {
-      index += 1;
-    } else {
-      out.push({ kind: 'punct', value: char, line });
-      index += 1;
-    }
-  }
-  return out;
-}
-
 const COLOR_FUNCTION = '(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\(';
 const ARBITRARY_COLOR = new RegExp(
   `(?:^|[\\s:!])[a-z][\\w-]*-\\[(?:color:)?(?:#[0-9a-fA-F]{3,8}|${COLOR_FUNCTION}[^\\]]*\\))\\]`,
@@ -266,83 +233,21 @@ function isColorLiteral(value: string): boolean {
   );
 }
 
-/** Bare colours in one file's source. */
-export function bareColorFindings(
-  file: string,
-  source: string,
-): SourceFinding[] {
-  const findings: SourceFinding[] = [];
-  const list = tokens(source);
-  for (let index = 0; index < list.length; index += 1) {
-    const token = list[index];
-    if (
-      token.kind === 'string' &&
-      (ARBITRARY_COLOR.test(token.value) || PALETTE_COLOR.test(token.value))
-    ) {
-      findings.push({
-        file,
-        line: token.line,
-        message:
-          'bare colour in a class; use a theme token class such as ' +
-          '`bg-primary` or `text-muted-foreground`.',
-      });
-      continue;
-    }
-    // `color: '#fff'`, `backgroundColor: "red"`, `color="#fff"`,
-    // `cx.fillStyle = '#B4472A'`.
-    if (
-      (token.kind === 'word' || token.kind === 'string') &&
-      COLOR_KEY.test(token.value)
-    ) {
-      const separator = list[index + 1];
-      const value = list[index + 2];
-      if (
-        separator?.kind === 'punct' &&
-        (separator.value === ':' || separator.value === '=') &&
-        value?.kind === 'string' &&
-        isColorLiteral(value.value)
-      ) {
-        findings.push({
-          file,
-          line: value.line,
-          message:
-            `bare colour "${value.value.trim()}" for ${token.value}; use a ` +
-            'theme token (a class, or `token(name)` in app/custom/).',
-        });
-      }
-    }
-  }
-  return findings;
-}
-
 /** protobuf-es names a method's client function in lowerCamelCase. */
 function localMethodName(name: string): string {
   const camel = name.replace(/_([a-z\d])/gi, (_, c: string) => c.toUpperCase());
   return camel.charAt(0).toLowerCase() + camel.slice(1);
 }
 
-/**
- * Calls to streaming RPC methods in one file's source. A call counts only
- * when its receiver is a Connect client of the service that declares the
- * method: `const client = createClient(CounterService, transport)` then
- * `client.watchCount(...)`, or `createClient(CounterService, t).watchCount(...)`.
- * A same-named method on anything else (`data.watch(...)`, a unary method of
- * another service) is not a finding. A client passed around under another
- * name is not followed; the bridge still refuses its streaming calls at run
- * time.
- */
-export function streamingCallFindings(
-  file: string,
-  source: string,
+type StreamingMethod = { label: string; kind: string };
+
+/** Streaming methods by service descriptor name, then by client method. */
+function streamingMethods(
   services: readonly RpcServiceApi[],
-): SourceFinding[] {
-  // Generated code exports each service descriptor under its proto name.
-  const streamingByService = new Map<
-    string,
-    Map<string, { label: string; kind: string }>
-  >();
+): Map<string, Map<string, StreamingMethod>> {
+  const byService = new Map<string, Map<string, StreamingMethod>>();
   for (const service of services) {
-    const methods = new Map<string, { label: string; kind: string }>();
+    const methods = new Map<string, StreamingMethod>();
     for (const method of service.methods) {
       if (!method.clientStreaming && !method.serverStreaming) continue;
       methods.set(localMethodName(method.name), {
@@ -355,90 +260,294 @@ export function streamingCallFindings(
               : 'server-streaming',
       });
     }
-    if (methods.size) {
-      streamingByService.set(service.name.split('.').at(-1)!, methods);
-    }
+    // Generated code exports each service descriptor under its proto name.
+    if (methods.size) byService.set(service.name.split('.').at(-1)!, methods);
   }
-  if (streamingByService.size === 0) return [];
-  const list = tokens(source);
-  const isPunct = (index: number, value: string) =>
-    list[index]?.kind === 'punct' && list[index].value === value;
-  /** The service of a `createClient(Service` starting at `index`. */
-  const createdClient = (index: number) =>
-    list[index]?.kind === 'word' &&
-    list[index].value === 'createClient' &&
-    isPunct(index + 1, '(') &&
-    list[index + 2]?.kind === 'word'
-      ? list[index + 2].value
-      : null;
-  /** Skip a balanced `( ... )` starting at `index`; returns the index after. */
-  const afterParens = (index: number) => {
-    let depth = 0;
-    for (let at = index; at < list.length; at += 1) {
-      if (isPunct(at, '(')) depth += 1;
-      else if (isPunct(at, ')') && --depth === 0) return at + 1;
-    }
-    return list.length;
-  };
-  // Client variables: `<name> = createClient(<Service>, ...)`.
-  const clients = new Map<string, string>();
-  for (let index = 0; index + 2 < list.length; index += 1) {
-    const service = createdClient(index + 2);
-    if (service && list[index].kind === 'word' && isPunct(index + 1, '=')) {
-      clients.set(list[index].value, service);
-    }
-  }
-  const findings: SourceFinding[] = [];
-  const report = (service: string, methodIndex: number) => {
-    const name = list[methodIndex];
-    if (name?.kind !== 'word' || !isPunct(methodIndex + 1, '(')) return;
-    const method = streamingByService.get(service)?.get(name.value);
-    if (!method) return;
-    findings.push({
-      file,
-      line: name.line,
-      message:
-        `${method.label} is a ${method.kind} RPC; the native runtime ` +
-        'supports unary RPC only.',
-    });
-  };
-  for (let index = 0; index < list.length; index += 1) {
-    const token = list[index];
-    if (token.kind !== 'word') continue;
-    // `client.watchCount(`, unless `client` is a property (`x.client`).
-    const service = clients.get(token.value);
-    if (service && !isPunct(index - 1, '.') && isPunct(index + 1, '.')) {
-      report(service, index + 2);
-      continue;
-    }
-    // `createClient(Service, transport).watchCount(`
-    const inline = createdClient(index);
-    if (inline) {
-      const after = afterParens(index + 1);
-      if (isPunct(after, '.')) report(inline, after + 1);
-    }
-  }
-  return findings;
+  return byService;
 }
 
-/** Run the lexical rules over the App-authored files of the module graph. */
+const isNshModule = (specifier: string) => /^nsh(?:\/|$)/.test(specifier);
+
+const NSH_NAMESPACE_MESSAGE =
+  'the web player links `nsh` imports by name; a namespace import or ' +
+  '`export *` of an `nsh` module cannot start there. Import the names ' +
+  'you use (`import { Canvas } from "nsh"`).';
+
+function isStringLike(node: Node): node is Node & { text: string } {
+  return (
+    node.kind === SyntaxKind.StringLiteral ||
+    node.kind === SyntaxKind.NoSubstitutionTemplateLiteral
+  );
+}
+
+/** The text of an identifier, string or numeric literal name, if any. */
+function nameText(node: Node | undefined): string | undefined {
+  if (!node) return undefined;
+  if (node.kind === SyntaxKind.Identifier || isStringLike(node)) {
+    return (node as Node & { text: string }).text;
+  }
+  return undefined;
+}
+
+/** Skip parentheses, `!`, `as` and `satisfies` around an expression. */
+function unwrap(node: Node): Node {
+  let current = node as Node & { expression?: Node };
+  while (
+    (current.kind === SyntaxKind.ParenthesizedExpression ||
+      current.kind === SyntaxKind.NonNullExpression ||
+      current.kind === SyntaxKind.AsExpression ||
+      current.kind === SyntaxKind.SatisfiesExpression) &&
+    current.expression
+  ) {
+    current = current.expression as Node & { expression?: Node };
+  }
+  return current;
+}
+
+/** `createClient(Service, ...)` -> `Service`. */
+function createdClientService(node: Node): string | undefined {
+  const call = unwrap(node) as CallExpression;
+  if (call.kind !== SyntaxKind.CallExpression) return undefined;
+  const callee = unwrap(call.expression);
+  if (
+    nameText(callee) !== 'createClient' ||
+    callee.kind !== SyntaxKind.Identifier
+  ) {
+    return undefined;
+  }
+  const first = call.arguments[0];
+  return first && first.kind === SyntaxKind.Identifier
+    ? (first as Identifier).text
+    : undefined;
+}
+
+/**
+ * Run the source rules over the App-authored files of the module graph. The
+ * files are parsed by the platform's TypeScript (JSX-aware), and a call is a
+ * streaming RPC only when its receiver binds to a Connect client of the
+ * service that declares the method.
+ */
 export async function checkNativeSourceRules(options: {
   root: string;
   files: readonly string[];
   services: readonly RpcServiceApi[];
 }): Promise<void> {
+  const files = options.files.filter((file) => /\.[cm]?[jt]sx?$/.test(file));
+  if (files.length === 0) return;
+  const streaming = streamingMethods(options.services);
   const findings: SourceFinding[] = [];
-  for (const file of options.files) {
-    const source = await fs.readFile(path.join(options.root, file), 'utf8');
-    findings.push(
-      ...bareColorFindings(file, source),
-      ...streamingCallFindings(file, source, options.services),
+  const project = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'hatch-native-rules-'),
+  );
+  const api = new API({ cwd: project });
+  try {
+    const tsconfig = path.join(project, 'tsconfig.json');
+    await fs.writeFile(
+      tsconfig,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: 'preserve',
+          allowJs: true,
+          noEmit: true,
+          noLib: true,
+          noResolve: true,
+          types: [],
+        },
+        files: files.map((file) => path.join(options.root, file)),
+      }),
+      'utf8',
     );
+    const snapshot = await api.updateSnapshot({ openProjects: [tsconfig] });
+    const [tsProject] = snapshot.getProjects();
+    if (!tsProject)
+      throw new Error('Could not load the App source for its rules.');
+    for (const file of files) {
+      const source = await tsProject.program.getSourceFile(
+        path.join(options.root, file),
+      );
+      if (!source) continue;
+      findings.push(
+        ...(await fileFindings(file, source, tsProject.checker, streaming)),
+      );
+    }
+  } finally {
+    await api.close();
+    await fs.rm(project, { recursive: true, force: true });
   }
   if (findings.length) {
+    findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
     throw new NativeSourceError(
       findings,
       'Native App source validation failed:',
     );
   }
+}
+
+async function fileFindings(
+  file: string,
+  source: SourceFile,
+  checker: Checker,
+  streaming: Map<string, Map<string, StreamingMethod>>,
+): Promise<SourceFinding[]> {
+  const findings: SourceFinding[] = [];
+  const lineOf = (node: Node) =>
+    source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const report = (node: Node, message: string) =>
+    findings.push({ file, line: lineOf(node), message });
+  const colourValue = (key: string | undefined, value: Node | undefined) => {
+    if (!key || !COLOR_KEY.test(key) || !value) return;
+    const literal = unwrap(value);
+    if (isStringLike(literal) && isColorLiteral(literal.text)) {
+      report(
+        literal,
+        `bare colour "${literal.text.trim()}" for ${key}; use a theme token ` +
+          '(a class, or `token(name)` in app/custom/).',
+      );
+    }
+  };
+
+  // Client bindings and the member calls whose receiver may be one.
+  const clientDeclarations: { name: Node; service: string }[] = [];
+  const memberCalls: { receiver: Node; method: string; at: Node }[] = [];
+
+  const visit = (node: Node): void => {
+    switch (node.kind) {
+      case SyntaxKind.StringLiteral:
+      case SyntaxKind.NoSubstitutionTemplateLiteral:
+      case SyntaxKind.TemplateHead:
+      case SyntaxKind.TemplateMiddle:
+      case SyntaxKind.TemplateTail: {
+        const text = (node as Node & { text: string }).text;
+        if (ARBITRARY_COLOR.test(text) || PALETTE_COLOR.test(text)) {
+          report(
+            node,
+            'bare colour in a class; use a theme token class such as ' +
+              '`bg-primary` or `text-muted-foreground`.',
+          );
+        }
+        break;
+      }
+      case SyntaxKind.ImportDeclaration: {
+        const declaration = node as ImportDeclaration;
+        const specifier = nameText(declaration.moduleSpecifier);
+        if (
+          specifier &&
+          isNshModule(specifier) &&
+          declaration.importClause?.namedBindings?.kind ===
+            SyntaxKind.NamespaceImport
+        ) {
+          report(node, `"${specifier}": ${NSH_NAMESPACE_MESSAGE}`);
+        }
+        break;
+      }
+      case SyntaxKind.ExportDeclaration: {
+        const declaration = node as ExportDeclaration;
+        const specifier = nameText(declaration.moduleSpecifier);
+        if (
+          specifier &&
+          isNshModule(specifier) &&
+          (!declaration.exportClause ||
+            declaration.exportClause.kind === SyntaxKind.NamespaceExport)
+        ) {
+          report(node, `"${specifier}": ${NSH_NAMESPACE_MESSAGE}`);
+        }
+        break;
+      }
+      case SyntaxKind.PropertyAssignment: {
+        const property = node as PropertyAssignment;
+        colourValue(nameText(property.name), property.initializer);
+        break;
+      }
+      case SyntaxKind.JsxAttribute: {
+        const attribute = node as JsxAttribute;
+        const value = attribute.initializer;
+        colourValue(
+          nameText(attribute.name),
+          value?.kind === SyntaxKind.JsxExpression
+            ? (value as JsxExpression).expression
+            : value,
+        );
+        break;
+      }
+      case SyntaxKind.BinaryExpression: {
+        const binary = node as BinaryExpression;
+        const left = unwrap(binary.left);
+        if (
+          binary.operatorToken.kind === SyntaxKind.EqualsToken &&
+          left.kind === SyntaxKind.PropertyAccessExpression
+        ) {
+          colourValue(
+            nameText((left as PropertyAccessExpression).name),
+            binary.right,
+          );
+        }
+        break;
+      }
+      case SyntaxKind.VariableDeclaration: {
+        const declaration = node as VariableDeclaration;
+        const service =
+          declaration.initializer &&
+          createdClientService(declaration.initializer);
+        if (service && declaration.name.kind === SyntaxKind.Identifier) {
+          clientDeclarations.push({ name: declaration.name, service });
+        }
+        break;
+      }
+      case SyntaxKind.CallExpression: {
+        const call = node as CallExpression;
+        const callee = unwrap(call.expression);
+        let receiver: Node | undefined;
+        let method: string | undefined;
+        if (callee.kind === SyntaxKind.PropertyAccessExpression) {
+          const access = callee as PropertyAccessExpression;
+          receiver = unwrap(access.expression);
+          method = nameText(access.name);
+        } else if (callee.kind === SyntaxKind.ElementAccessExpression) {
+          const access = callee as ElementAccessExpression;
+          receiver = unwrap(access.expression);
+          method = nameText(unwrap(access.argumentExpression));
+        }
+        if (receiver && method) {
+          memberCalls.push({ receiver, method, at: callee });
+        }
+        break;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(source);
+
+  if (streaming.size === 0 || memberCalls.length === 0) return findings;
+  const reportStreaming = (service: string, method: string, at: Node) => {
+    const found = streaming.get(service)?.get(method);
+    if (!found) return;
+    report(
+      at,
+      `${found.label} is a ${found.kind} RPC; the native runtime ` +
+        'supports unary RPC only.',
+    );
+  };
+  // `createClient(Service, t).watch(...)`
+  const byName = memberCalls.filter(({ receiver, method, at }) => {
+    const inline = createdClientService(receiver);
+    if (inline) reportStreaming(inline, method, at);
+    return !inline && receiver.kind === SyntaxKind.Identifier;
+  });
+  if (clientDeclarations.length === 0 || byName.length === 0) return findings;
+  // `client.watch(...)` where `client` resolves to a client declaration.
+  const symbols = await checker.getSymbolAtLocation([
+    ...clientDeclarations.map(({ name }) => name),
+    ...byName.map(({ receiver }) => receiver),
+  ]);
+  const services = new Map<number, string>();
+  clientDeclarations.forEach(({ service }, index) => {
+    const symbol = symbols[index];
+    if (symbol) services.set(symbol.id, service);
+  });
+  byName.forEach(({ method, at }, index) => {
+    const symbol = symbols[clientDeclarations.length + index];
+    const service = symbol && services.get(symbol.id);
+    if (service) reportStreaming(service, method, at);
+  });
+  return findings;
 }

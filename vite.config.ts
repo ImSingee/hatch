@@ -97,8 +97,9 @@ const config = defineConfig(({ mode, isPreview }) => ({
       // __filename/__dirname globals it relies on, so keep this one runtime
       // dependency external. The production image already ships node_modules.
       // sharp loads a prebuilt native addon the same way and stays external
-      // for the same reason.
-      rollupConfig: { external: ['esbuild', 'sharp'] },
+      // for the same reason, as does TypeScript's API (native App source
+      // rules), which finds its compiler binary from its own module URL.
+      rollupConfig: { external: ['esbuild', 'sharp', /^typescript(?:\/|$)/] },
     }),
     viteReact(),
   ],

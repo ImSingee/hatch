@@ -85,6 +85,8 @@ type NativeChannel = {
   /** The App and deployment the player runs, from its `hello`. */
   appId: string | null;
   deploymentId: string | null;
+  /** Activations (App id -> deployment) seen before `hello` named the App. */
+  early: Map<string, string>;
   send: (message: SurfaceMessage) => void;
 };
 
@@ -150,10 +152,15 @@ export function AppSurface({
   }, [visible]);
   useOptionalPlatformEvent('app.deployment.activated', (event) => {
     const channel = nativeRef.current;
+    if (!channel) return;
+    if (!channel.deploymentId) {
+      // The player has not said which App it runs yet; decide at `hello`.
+      channel.early.set(event.appId, event.deploymentRevision);
+      return;
+    }
     // Every App's activations reach every surface; only this App's newer
     // deployment is an update for it.
     if (
-      channel?.deploymentId &&
       event.appId === channel.appId &&
       event.deploymentRevision !== channel.deploymentId &&
       winRef.current
@@ -261,6 +268,7 @@ export function AppSurface({
         route: seedRoute(),
         appId: null,
         deploymentId: null,
+        early: new Map(),
         send: (message) => port1.postMessage(message),
       };
       nativeRef.current = channel;
@@ -268,10 +276,16 @@ export function AppSurface({
         const message = parsePlayerMessage(event.data);
         if (!message || nativeRef.current !== channel) return;
         switch (message.type) {
-          case 'hello':
+          case 'hello': {
             channel.appId = message.appId;
             channel.deploymentId = message.deploymentId;
+            const early = channel.early.get(message.appId);
+            channel.early.clear();
+            if (early !== undefined && early !== message.deploymentId) {
+              channel.send({ type: 'update-available' });
+            }
             break;
+          }
           case 'route':
             channel.route = message.route;
             reportRoute(message.route);

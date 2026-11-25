@@ -55,7 +55,9 @@ function candidates(): string[] {
   const fromPath = (process.env.PATH ?? '')
     .split(path.delimiter)
     .filter(Boolean)
-    .map((dir) => path.join(dir, 'nsh'));
+    // A relative PATH entry is read against this process's directory once,
+    // so the cached binary path stays valid for builds run elsewhere.
+    .map((dir) => path.resolve(dir, 'nsh'));
   const home = os.homedir();
   return [
     ...fromPath,

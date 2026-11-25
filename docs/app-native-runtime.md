@@ -62,19 +62,25 @@ backend, widgets and schema). In the disposable build copy it:
    UI library contributes one, its `tailwind` extension.
 2. `nsh check app/main.tsx`: types, including token names.
 3. Source rules NSH does not enforce (`source-rules.ts`), over the App files
-   the entry reaches:
+   the entry reaches, parsed by the platform's TypeScript (JSX-aware, with
+   bindings resolved):
    - outside `app/custom/`, no import of `nsh` or `nsh/*`;
+   - no namespace import (`import * as base from 'nsh/base'`) or `export *`
+     of an `nsh` module, `app/custom/` included: the web player links `nsh`
+     imports by name, and such a module deploys but cannot start there;
    - no bare colours: arbitrary Tailwind colour values (`bg-[#f00]`) and
-     Tailwind palette classes (`bg-red-500`, `text-white/80`) in any string,
-     and colour literals given to colour style keys (`color`,
-     `*Color`, `fill`, `stroke`, `fillStyle`, `strokeStyle`);
-   - no call of a streaming RPC method on a Connect client of the service
-     that declares it (`client.watchThings(...)` after
-     `const client = createClient(ThingsService, transport)`, or
-     `createClient(ThingsService, t).watchThings(...)`): the bridge carries
-     unary calls. A same-named method on anything else is not a finding; a
-     client passed on under another name is not followed, and its streaming
-     calls fail at run time with `unimplemented`.
+     Tailwind palette classes (`bg-red-500`, `text-white/80`) in any string
+     or template literal (JSX text is not a string), and colour literals
+     given to colour style keys (`color`, `*Color`, `fill`, `stroke`,
+     `fillStyle`, `strokeStyle`) in objects, JSX attributes and assignments;
+   - no call of a streaming RPC method, optional calls included, on a
+     Connect client of the service that declares it: a call whose receiver
+     binds to `const client = createClient(ThingsService, transport)`, or
+     `createClient(ThingsService, t).watchThings(...)`. The bridge carries
+     unary calls. A same-named method on anything else, a shadowing local
+     included, is not a finding; a client passed on under another name is
+     not followed, and its streaming calls fail at run time with
+     `unimplemented`.
 4. `nsh build --release`; a warning about an unknown class fails the deploy.
 5. Start-up check: `nsh test app/main.tsx --web-host <canned host>`. NSH opens
    the App headless for about 1.2 s; a throw while rendering or starting fails
@@ -127,7 +133,9 @@ The player script loads the runtime from `/api/app-runtime/nsh/<version>/`
 (no session needed: it is NSH's open-source runtime; `cache-control: public,
 max-age=31536000, immutable`, precompressed when accepted), creates the
 player, and runs the App's module with `linked: true`, the grant as JSON text
-and `appId: dev.hatch.app.<app id>` (which scopes NSH storage per App).
+and `appId: dev.hatch.app.<app id>` (which scopes NSH storage per App; `x` and
+`-` in the Hatch id are escaped as `x` plus two hex digits, so distinct ids
+never share storage).
 
 Trust model: NSH does not isolate an App from its page on the web, and the
 page is same-origin with the platform, as a `web` App's page is. The CSP

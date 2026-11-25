@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AppBuildError, buildApp } from '../build';
-import { NATIVE_HOST_CALLS } from './build-native';
+import { NATIVE_HOST_CALLS, nshAppId } from './build-native';
 import { nshBinary, NSH_RELEASE_SHA256, NSH_VERSION } from './nsh-toolchain';
 import { nshRuntimeDir } from './runtime-store';
 
@@ -86,10 +86,16 @@ function lineOf(source: string, needle: string): number {
 
 async function buildError(edit: Record<string, string | null>) {
   const { sourceDir, outputDir } = await nativeSource(edit);
+  // A previous output survives a build whose source fails a check.
+  await fs.mkdir(outputDir, { recursive: true });
+  await fs.writeFile(path.join(outputDir, 'previous.txt'), 'kept', 'utf8');
   const error = await buildApp('demo', { sourceDir, outputDir }).then(
     () => null,
     (cause: unknown) => cause,
   );
+  await expect(
+    fs.readFile(path.join(outputDir, 'previous.txt'), 'utf8'),
+  ).resolves.toBe('kept');
   // A failed check is a definite rejection whose message reaches the CLI
   // and the Agent, not an internal failure with an unknown outcome.
   // (The public API maps a 4xx AppError to BAD_REQUEST with its message.)
@@ -111,6 +117,21 @@ describe('the pinned NSH release', () => {
       NSH_RELEASE_SHA256['nsh-linux-arm64.tar.gz'],
     );
     expect(arg('NSH_WEB_SHA256')).toBe(NSH_RELEASE_SHA256['nsh-web.tar.gz']);
+  });
+});
+
+describe('the NSH app id', () => {
+  it('keeps distinct Hatch App ids in distinct NSH storage namespaces', () => {
+    const ids = [
+      'habit-tracker',
+      'habittracker',
+      'habitx2dtracker',
+      'x',
+      'x78',
+    ];
+    const mapped = ids.map(nshAppId);
+    expect(new Set(mapped).size).toBe(ids.length);
+    for (const id of mapped) expect(id).toMatch(/^dev\.hatch\.app\.[a-z0-9]+$/);
   });
 });
 
@@ -208,7 +229,11 @@ describe.skipIf(!nshAvailable())(
     it('fails on a bare colour in a class or a colour style', async () => {
       const ui = (await fixtureFile('app/custom/ui.tsx'))
         .replace('bg-background', 'bg-[#f5f5f5]')
-        .replace('font-bold text-foreground', 'font-bold text-red-500/80')
+        // JSX text with an apostrophe must not hide the class after it.
+        .replace(
+          '<Text class="text-2xl font-bold text-foreground">',
+          '<Text>Don\'t wait</Text><Text class="text-2xl font-bold text-red-500/80">',
+        )
         .replace(
           '<Text class="text-foreground">',
           '<Text class="text-foreground" style={{ color: \'#ff0000\' }}>',
@@ -235,7 +260,15 @@ describe.skipIf(!nshAvailable())(
       );
       const main = (await fixtureFile('app/main.tsx')).replace(
         '  const go = (next: string) => {',
-        '  void client.watch({});\n  const go = (next: string) => {',
+        [
+          '  void client.watch({});',
+          '  void client.watch?.({});',
+          '  {',
+          '    const client = { watch: () => 0 };',
+          '    client.watch(); // a local object, not the RPC client',
+          '  }',
+          '  const go = (next: string) => {',
+        ].join('\n'),
       );
       const message = await buildError({
         'proto/service.proto': proto,
@@ -244,9 +277,38 @@ describe.skipIf(!nshAvailable())(
       expect(message).toContain(
         `app/main.tsx:${lineOf(main, 'client.watch(')}: app.v1.CounterService/Watch is a server-streaming RPC`,
       );
-      // The Data Table's own `data.watch(...)` is not a call of that RPC.
+      expect(message).toContain(
+        `app/main.tsx:${lineOf(main, 'client.watch?.(')}: app.v1.CounterService/Watch`,
+      );
+      // Neither the Data Table's own `data.watch(...)` nor a local object
+      // that shadows the client name is a call of that RPC.
       expect(message).not.toContain(
         `app/main.tsx:${lineOf(main, 'data.watch(')}:`,
+      );
+      expect(message).not.toContain(
+        `app/main.tsx:${lineOf(main, 'client.watch(); // a local')}:`,
+      );
+    });
+
+    it('fails on a namespace import or export * of an nsh module', async () => {
+      const ui = (await fixtureFile('app/custom/ui.tsx')).replace(
+        "import { Button as BaseButton } from 'nsh/base';",
+        [
+          "import { Button as BaseButton } from 'nsh/base';",
+          "import * as base from 'nsh/base';",
+          "export { Button as ReexportedButton } from './reexport';",
+          'export const baseModule = base;',
+        ].join('\n'),
+      );
+      const message = await buildError({
+        'app/custom/ui.tsx': ui,
+        'app/custom/reexport.ts': "export * from 'nsh/base';\n",
+      });
+      expect(message).toContain(
+        `app/custom/ui.tsx:${lineOf(ui, 'import * as base')}: "nsh/base": the web player links`,
+      );
+      expect(message).toContain(
+        'app/custom/reexport.ts:1: "nsh/base": the web player links',
       );
     });
 

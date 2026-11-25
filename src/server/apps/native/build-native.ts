@@ -13,7 +13,7 @@
  * then `nsh package --target web` produces the linked module the player runs.
  */
 import { randomUUID } from 'node:crypto';
-import { existsSync, promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
 import { BUILD_WORK_DIR, REPO_ROOT } from '~agent/paths';
@@ -64,9 +64,18 @@ export function nativeGrant(): string {
   return JSON.stringify({ host: [...NATIVE_HOST_CALLS] });
 }
 
-/** The NSH app id of a Hatch App. */
+/**
+ * The NSH app id of a Hatch App: NSH scopes an App's storage by it, so the
+ * mapping is reversible. Hatch ids are `[a-z0-9-]`; `x` and `-` are escaped
+ * as `x` plus two hex digits (`habit-tracker` -> `habitx2dtracker`), so
+ * `habit-tracker` and `habittracker` never share a namespace.
+ */
 export function nshAppId(appId: string): string {
-  return `dev.hatch.app.${appId.replace(/[^a-z0-9]/gi, '').toLowerCase()}`;
+  const encoded = appId.replace(
+    /[^a-wyz0-9]/g,
+    (char) => `x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
+  );
+  return `dev.hatch.app.${encoded}`;
 }
 
 /** Exact `nsh.json` aliases: one per entry of every native SDK, App-root relative. */
@@ -123,24 +132,16 @@ export function nativeEntryTsconfig(): string {
 }
 
 /**
- * Rewrite the paths NSH prints to App-root paths. `nsh build` and `nsh test`
- * print them relative to the entry's directory (`main.tsx:4:2`,
- * `../gen/x.ts`); TypeScript in `nsh check` prints them relative to the App
- * root (`app/main.tsx(4,2)`). A path is read against the entry's directory
- * when a file exists there, else kept as an App-root path.
+ * Rewrite the paths NSH prints to App-root paths. `nsh build`, `nsh test` and
+ * `nsh package` print them relative to the entry's directory (`main.tsx:4:2`,
+ * `../gen/x.ts`): pass that directory as `base`. TypeScript in `nsh check`
+ * prints them relative to the App root (`app/main.tsx(4,2)`): pass `''`.
  */
-export function appRelativeDiagnostics(
-  output: string,
-  entryDir: string,
-  exists: (appRelative: string) => boolean,
-): string {
+export function appRelativeDiagnostics(output: string, base: string): string {
   return output.replace(
     /(^|[\s('"`])((?:\.\.?\/)*[\w@][\w@./-]*\.(?:tsx|ts|jsx|js|mts|cts))(?=[:(]\d)/gm,
-    (_match, lead: string, file: string) => {
-      const fromEntry = path.posix.normalize(path.posix.join(entryDir, file));
-      const fromRoot = path.posix.normalize(file);
-      return `${lead}${exists(fromEntry) || !exists(fromRoot) ? fromEntry : fromRoot}`;
-    },
+    (_match, lead: string, file: string) =>
+      `${lead}${path.posix.normalize(path.posix.join(base, file))}`,
   );
 }
 
@@ -385,8 +386,7 @@ export async function buildNativeFrontend(
       });
       const output = appRelativeDiagnostics(
         result.output.trim(),
-        entryDir,
-        (file) => existsSync(path.join(src, ...file.split('/'))),
+        args[0] === 'check' ? '' : entryDir,
       );
       logs.push(`$ nsh ${args.join(' ')}\n${output}`);
       if (result.code !== 0) {

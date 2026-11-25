@@ -430,8 +430,15 @@ function connectSurface(onMessage: (message: SurfaceMessage) => void): {
       resolve({ port: null, init: null });
       return;
     }
+    let accepted: MessagePort | null = null;
     const timer = setTimeout(() => {
       removeEventListener('message', onConnect);
+      // A port that never sent `init` is dropped, so the page runs
+      // standalone and no late message reaches a half-started player.
+      if (accepted) {
+        accepted.onmessage = null;
+        accepted.close();
+      }
       resolve({ port: null, init: null });
     }, SURFACE_WAIT_MS);
     function onConnect(event: MessageEvent) {
@@ -448,6 +455,7 @@ function connectSurface(onMessage: (message: SurfaceMessage) => void): {
       event.stopImmediatePropagation();
       removeEventListener('message', onConnect);
       const port = event.ports[0];
+      accepted = port;
       let started = false;
       port.onmessage = (message) => {
         const parsed = parseSurfaceMessage(message.data);
@@ -568,16 +576,6 @@ export async function startNativePlayer(): Promise<void> {
     new URL(file, new URL(config.runtime.base, location.href)).href;
   const appUrl = (file: string) => new URL(file, location.href).href;
   const fonts = new Map<string, Uint8Array>();
-  await Promise.all(
-    config.app.fonts.map(async (font) => {
-      const url = config.app.assets[font];
-      if (!url) return;
-      const response = await fetch(appUrl(url));
-      if (response.ok) {
-        fonts.set(font, new Uint8Array(await response.arrayBuffer()));
-      }
-    }),
-  );
   const mapValues = (
     record: Record<string, string>,
     resolve: (file: string) => string,
@@ -587,6 +585,16 @@ export async function startNativePlayer(): Promise<void> {
     );
 
   try {
+    await Promise.all(
+      config.app.fonts.map(async (font) => {
+        const url = config.app.assets[font];
+        if (!url) return;
+        const response = await fetch(appUrl(url));
+        if (response.ok) {
+          fonts.set(font, new Uint8Array(await response.arrayBuffer()));
+        }
+      }),
+    );
     // The shared runtime's URL is known only from the page's config.
     // oxlint-disable-next-line local/no-dynamic-import
     const { createPlayer } = (await import(

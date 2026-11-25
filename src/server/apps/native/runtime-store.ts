@@ -80,6 +80,26 @@ const CONTENT_TYPES: Record<string, string> = {
  * for every viewer, so it needs no session; names change with content, so
  * responses are immutable. Precompressed copies are used when accepted.
  */
+/**
+ * Whether an `Accept-Encoding` header accepts a content coding: listed by
+ * name or `*`, with a quality above zero (RFC 9110, section 12.5.3).
+ */
+function acceptedCodings(header: string | null): (coding: string) => boolean {
+  const quality = new Map<string, number>();
+  for (const part of (header ?? '').split(',')) {
+    const [name, ...params] = part.trim().toLowerCase().split(';');
+    if (!name) continue;
+    const q = params
+      .map((param) => /^\s*q\s*=\s*([0-9.]+)\s*$/.exec(param)?.[1])
+      .find((value) => value !== undefined);
+    quality.set(name.trim(), q === undefined ? 1 : Number(q));
+  }
+  return (coding) => {
+    const q = quality.get(coding) ?? quality.get('*') ?? 0;
+    return Number.isFinite(q) && q > 0;
+  };
+}
+
 export async function serveNshRuntimeFile(
   version: string,
   relative: string,
@@ -92,14 +112,10 @@ export async function serveNshRuntimeFile(
     return new Response('Not found', { status: 404 });
   }
   const file = path.join(nshRuntimeDir(version), ...relative.split('/'));
-  const accepts = (acceptEncoding ?? '').toLowerCase();
+  const accepts = acceptedCodings(acceptEncoding);
   const variants: [string, string | null][] = [
-    ...(accepts.includes('br')
-      ? [[`${file}.br`, 'br'] as [string, string]]
-      : []),
-    ...(accepts.includes('gzip')
-      ? [[`${file}.gz`, 'gzip'] as [string, string]]
-      : []),
+    ...(accepts('br') ? [[`${file}.br`, 'br'] as [string, string]] : []),
+    ...(accepts('gzip') ? [[`${file}.gz`, 'gzip'] as [string, string]] : []),
     [file, null],
   ];
   for (const [candidate, encoding] of variants) {

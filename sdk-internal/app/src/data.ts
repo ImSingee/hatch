@@ -553,34 +553,40 @@ function httpDataTransport(options: HttpDataOptions): DataTransport {
 }
 
 export function createDataClient<TSchema extends DataSchema>(
-  options: (
-    | HttpDataOptions
+  options:
+    | (HttpDataOptions & {
+        /** Overrides the framework-cache namespace when one endpoint has partitions. */
+        cacheNamespace?: string;
+      })
     | {
         /** Reach the Data API another way (the native host bridge). */
         transport: DataTransport;
+        /**
+         * The framework-cache namespace of this transport's data. Required:
+         * nothing else tells two custom transports' cached queries apart.
+         */
+        cacheNamespace: string;
         baseUrl?: never;
         signingSecret?: never;
         deploymentId?: never;
-      }
-  ) & {
-    /** Overrides the framework-cache namespace when one endpoint has partitions. */
-    cacheNamespace?: string;
-  },
+      },
 ): DataClient<TSchema> {
+  const custom = 'transport' in options && options.transport ? options : null;
   const transport =
-    'transport' in options && options.transport
-      ? options.transport
-      : httpDataTransport(options as HttpDataOptions);
+    custom?.transport ?? httpDataTransport(options as HttpDataOptions);
   const cacheNamespace =
     options.cacheNamespace ??
-    ('transport' in options && options.transport
-      ? JSON.stringify(['transport'])
-      : JSON.stringify([
-          (options as HttpDataOptions).baseUrl.replace(/\/+$/, ''),
-          (options as HttpDataOptions).deploymentId ??
-            runtimeDeploymentId() ??
-            null,
-        ]));
+    JSON.stringify([
+      (options as HttpDataOptions).baseUrl.replace(/\/+$/, ''),
+      (options as HttpDataOptions).deploymentId ??
+        runtimeDeploymentId() ??
+        null,
+    ]);
+  if (custom && !custom.cacheNamespace) {
+    throw new Error(
+      'createDataClient: a custom transport needs a cacheNamespace.',
+    );
+  }
 
   const rawQuery = <TResult extends DataQueryResult>(
     input: DataQuery,

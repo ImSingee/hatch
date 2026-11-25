@@ -53,6 +53,14 @@ describe('NSH runtime store', () => {
     expect(brotli.headers.get('content-type')).toBe(
       'text/javascript; charset=utf-8',
     );
+    // Quality zero excludes a coding.
+    const refused = await store.serveNshRuntimeFile(
+      '0.6.1',
+      'nsh.0123456789.js',
+      'gzip, br;q=0',
+    );
+    expect(refused.headers.get('content-encoding')).toBeNull();
+    expect(await refused.text()).toBe('export const runtime = 1;');
   });
 
   it('refuses anything that is not a runtime file of a version', async () => {

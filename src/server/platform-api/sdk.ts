@@ -68,8 +68,18 @@ export async function sdkPayload() {
     const entries = Object.entries(builtFiles).filter(([file]) =>
       file.startsWith(prefix),
     );
-    if (!entries.some(([file]) => /\/dist\/[^/]+\.[jt]sx?$/.test(file)))
-      throw new Error('Built SDK artifacts are missing.');
+    // Every export's runtime and type targets must ship, or the import map
+    // would point a source at files it does not have.
+    const shipped = new Set(entries.map(([file]) => file.slice(prefix.length)));
+    for (const entry of Object.values(definition.manifest.exports)) {
+      for (const target of [entry.default, entry.types]) {
+        if (!shipped.has(target.replace(/^\.\//, ''))) {
+          throw new Error(
+            `Built SDK artifacts are missing: ${definition.manifest.name} ${target}.`,
+          );
+        }
+      }
+    }
     for (const [file, contents] of entries)
       files.push({
         path: `sdk/${definition.manifest.name}/${file.slice(prefix.length)}`,

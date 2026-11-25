@@ -817,12 +817,6 @@ async function buildAppInner(
       logs.push(`captured ${docs.length} external doc(s)`);
     }
 
-    // Only start replacing the requested output after every source validation
-    // step has passed. Deploy builds use a fresh path, while direct callers do
-    // not lose a prior output merely because new source fails validation.
-    await fs.rm(out, { recursive: true, force: true });
-    await fs.mkdir(out, { recursive: true });
-
     // Browser bundles may resolve only modules materialized inside this build's
     // disposable App root. The install above put every declared npm dependency there;
     // falling back to the platform repository would make builds non-hermetic.
@@ -865,11 +859,13 @@ async function buildAppInner(
     let nshVersion: string | undefined;
 
     // 3a) A native frontend: NSH deploy checks, the linked web module, the
-    // player page and the bundle native shells load.
+    // player page and the bundle native shells load. Its checks are source
+    // validation too, so it builds into a staging directory first.
+    const nativeStage = `${tempSrc}-native-out`;
     if (nativeFrontend && manifest.app) {
       ({ nshVersion } = await buildNativeFrontend({
         src,
-        out,
+        out: nativeStage,
         app: { id, name: manifest.name, entry: manifest.app.entry },
         api,
         dataTable: manifest.capabilities.dataTable,
@@ -877,6 +873,17 @@ async function buildAppInner(
         esbuildResolve,
         logs,
       }));
+    }
+
+    // Only start replacing the requested output after every source validation
+    // step has passed. Deploy builds use a fresh path, while direct callers do
+    // not lose a prior output merely because new source fails validation.
+    await fs.rm(out, { recursive: true, force: true });
+    await fs.mkdir(out, { recursive: true });
+    if (nshVersion) {
+      await fs.cp(path.join(nativeStage, 'app'), path.join(out, 'app'), {
+        recursive: true,
+      });
     }
 
     // 3) Bundle the frontend SPA -> static app/app.js + index.html.
@@ -1023,5 +1030,6 @@ async function buildAppInner(
     };
   } finally {
     await fs.rm(tempSrc, { recursive: true, force: true });
+    await fs.rm(`${tempSrc}-native-out`, { recursive: true, force: true });
   }
 }
