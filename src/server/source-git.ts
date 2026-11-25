@@ -58,11 +58,15 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
- * Ref policy for pushes. The Platform's own local fetch/update-ref/tag calls
- * do not run hooks, so deploy and rollback are unaffected.
+ * Ref policy for pushes: any branch may be pushed, master only fast-forwards
+ * and cannot be deleted, and tags cannot be created or moved because the
+ * Platform tags each deployment itself. Deleting a tag outside the deploy
+ * namespace stays allowed so tags pushed under earlier policies can be cleaned
+ * up. The Platform's own local fetch/update-ref/tag calls do not run hooks, so
+ * deploy and rollback are unaffected.
  */
 const PRE_RECEIVE_HOOK = `#!/bin/sh
-# hatch-ref-policy v3
+# hatch-ref-policy v4
 while read oldrev newrev refname; do
   case "$refname" in
     refs/tags/${DEPLOY_TAG_PREFIX.slice(0, -1)}|refs/tags/${DEPLOY_TAG_PREFIX}*)
@@ -86,7 +90,15 @@ while read oldrev newrev refname; do
           ;;
       esac
       ;;
-    refs/heads/*|refs/tags/*) ;;
+    refs/tags/*)
+      case "$newrev" in
+        *[!0]*)
+          echo "Tags cannot be pushed; Hatch creates ${DEPLOY_TAG_PREFIX}* tags when you deploy. Push a branch instead." >&2
+          exit 1
+          ;;
+      esac
+      ;;
+    refs/heads/*) ;;
     *)
       echo "Unsupported ref update: $refname" >&2
       exit 1

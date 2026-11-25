@@ -76,7 +76,8 @@ Do not import generated files or execution modules from the manifest.
    Follow Local validation: check `manifest.ts` when selected, generate RPC
    code, type-check the source, and run relevant tests.
 5. In the checkout, inspect `git status`, stage only intended authored files,
-   and commit. Never create `deploy/*` tags; the platform owns them.
+   and commit. Do not push Git tags: the platform rejects tag pushes and
+   creates the `deploy/*` tags itself when it deploys.
 6. Release with `timeout_seconds: 900`:
 
    ```bash
