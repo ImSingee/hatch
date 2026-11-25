@@ -37,7 +37,7 @@
 
 - 用默认模板创建的新 App 能通过部署；同一次部署能在 Web 界面、iOS 应用、Android 应用和 macOS 应用里打开，内容相同，并使用实例的强调色。
 - `hatch theme set --accent teal` 让每个壳里已打开的原生 App 换色，不需要重新部署。
-- `hatch theme set --mode dark --appearance dark --preset desk-dark` 和 `hatch theme set --appearance light --file <path>` 让 Web、Mobile 和 macOS 上的平台界面和所有已打开的 App 换肤，不需要重新部署，也不需要发新壳；文字会看不清的主题会被拒绝，并指出是哪一对颜色不合格。
+- `hatch theme set --mode dark --appearance dark --preset desk-dark` 和 `hatch theme set --mode light --appearance light --file <path>` 让 Web、Mobile 和 macOS 上的平台界面和所有已打开的 App 换肤，不需要重新部署，也不需要发新壳；文字会看不清的主题会被拒绝，并指出是哪一对颜色不合格。
 - 源码里使用了目录之外的颜色、尺寸或组件的部署会失败，错误信息指出文件和行号。
 - 在 Web、macOS 应用和平板上，两个 App 可以并排显示并且都能操作；在每个壳上，只要运行中的 App 没有超出上限，从一个 App 切走再切回来，会回到同一个界面，未保存的输入还在；超出上限被停掉的 App 按 3.6 节的规则处理。
 - 被授予某项原生能力的 App，能在一个早于该 App 构建的壳上使用这项能力；没有授权时，同样的调用会被拒绝；撤销授权在 App 下次加载时生效。
@@ -324,7 +324,7 @@ app/custom/      可选的逃生口（3.3 节）
 
 **保存主题时的校验。** 拒绝未知的键和无法解析的颜色。对每一对前景和背景检查文字对比度（`foreground` 在 `background` 和 `card` 上、`muted-foreground` 在 `background` 上、推导出的文字颜色在 `primary` 上）；低于 4.5:1 的主题会被拒绝，并指出不合格的那一对颜色和它的比值。不在打包字体列表里的字体会被拒绝。
 
-**谁来编辑主题。** 外观设置页提供模式、预设和强调色。自定义主题通过 `hatch theme set --file` 设置，Agent 根据描述生成主题也走这个入口。本方案不做逐项调整的可视化编辑器。
+**谁来编辑主题。** 外观设置页提供模式、预设和强调色。自定义主题通过 `hatch theme set --appearance <light|dark> --file <path>` 设置，Agent 根据描述生成主题也走这个入口。本方案不做逐项调整的可视化编辑器。
 
 ### 3.8 原生能力
 
