@@ -31,6 +31,7 @@ import {
   dashboardWidgetKey,
 } from '~/lib/dashboard-widget';
 import { liveAppManifests } from './apps/access';
+import { reservedShortcuts } from './apps/manifest';
 import { AppError } from './errors';
 import { publishPlatformEvent } from './platform-events';
 import { readDashboards, type Dashboard } from './workspace-read';
@@ -194,6 +195,8 @@ export type DashboardItem = {
   defaultSize: { w: number; h: number };
   /** Discrete footprints the widget supports; empty means free-form resizing. */
   supportedSizes: { w: number; h: number }[];
+  /** Chords the App handles itself; see `keyboard.reserve` in the manifest. */
+  reservedShortcuts: string[];
 };
 
 export type DashboardData = {
@@ -300,6 +303,7 @@ async function readDashboardData(
       // Deployments made before widget supportedSizes existed have no such
       // field in their stored manifest; default to free-form ([]) for them.
       supportedSizes: widget.supportedSizes ?? [],
+      reservedShortcuts: reservedShortcuts(manifest),
     });
   }
 
@@ -350,6 +354,7 @@ export type AvailableWidget = {
   url: string;
   defaultSize: { w: number; h: number };
   supportedSizes: { w: number; h: number }[];
+  reservedShortcuts: string[];
 };
 
 /** Every widget a deployed App offers, whether or not it is placed. */
@@ -379,6 +384,7 @@ export async function listAvailableWidgets(
         url: widget.url,
         defaultSize: widget.defaultSize,
         supportedSizes: widget.supportedSizes ?? [],
+        reservedShortcuts: reservedShortcuts(manifest),
       });
     }
   }
@@ -479,6 +485,7 @@ async function commitDraft(
       url: widget.url,
       defaultSize: widget.defaultSize,
       supportedSizes: widget.supportedSizes ?? [],
+      reservedShortcuts: reservedShortcuts(manifest),
     });
   }
 

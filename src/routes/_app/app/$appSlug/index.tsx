@@ -295,6 +295,7 @@ function AppView() {
           ref={surface}
           app={app}
           route={seedRoute}
+          reservedShortcuts={app.reservedShortcuts}
           onRouteChange={mirrorRoute}
           onTitleChange={mirrorTitle}
           latestDeployment={

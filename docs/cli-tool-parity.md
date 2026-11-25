@@ -297,6 +297,13 @@ Sessions, API keys and Run JWTs have the same authority, and no operation is
 bound to a device or browser. `app get` also lists the doc index under
 `manifest.docs`. No Agent Tool is added.
 
+## Reserved keyboard shortcuts: manifest only
+
+An App reserves platform shortcut chords with `keyboard.reserve` in its source
+manifest and changes them by deploying. `hatch app get` shows the live
+deployment's chords under `manifest.keyboard.reserve`, which the Web UI reads
+from the same normalized manifest. There is no separate command or Agent Tool.
+
 ## Device login approval: browser only
 
 The `/cli/authorize` page approves a CLI or mobile device login for the

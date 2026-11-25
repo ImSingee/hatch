@@ -70,7 +70,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::paste(app, None)?,
             &PredefinedMenuItem::select_all(app, None)?,
             &separator()?,
-            &item("search", "Search Apps", Some("CmdOrCtrl+K"))?,
+            // No accelerator: ⌘K is a platform shortcut the page owns, so an
+            // App that reserves it receives the key instead of this menu.
+            &item("search", "Search Apps", None)?,
         ],
     )?;
     let view = Submenu::with_items(

@@ -73,6 +73,7 @@ const widgets: DashboardItem[] = ['a', 'b'].map((id, sortOrder) => ({
           { w: 6, h: 3 },
         ]
       : [],
+  reservedShortcuts: [],
 }));
 
 const layouts: DashboardLayouts = {

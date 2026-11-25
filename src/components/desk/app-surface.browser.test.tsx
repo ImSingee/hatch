@@ -1,9 +1,11 @@
 import { MantineProvider } from '@mantine/core';
 import { createRef } from 'react';
 import { expect, test, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { applyAccent } from '~/ui/theme';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
+import { usePlatformShortcut } from './platform-shortcuts';
 
 // Browser Mode serves a blank same-origin document titled "Embedded app" at
 // `/app/<slug>/embed/` (see vitest.config.ts).
@@ -149,4 +151,73 @@ test('runs a native App over the player channel instead of reading its frame', a
   await screen.rerender(surface(true, 'd2'));
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(updates()).toHaveLength(1);
+});
+
+const MOD = /mac/i.test(navigator.platform) ? 'Meta' : 'Control';
+
+function PaletteShortcut({ onRun }: { onRun: () => void }) {
+  usePlatformShortcut('palette.open', onRun);
+  return null;
+}
+
+async function renderWithShortcut(
+  reservedShortcuts?: string[],
+  slug = 'notes',
+) {
+  const onRun = vi.fn<() => void>();
+  const onTitleChange = vi.fn<(title: string | null) => void>();
+  const screen = await render(
+    <MantineProvider>
+      <PaletteShortcut onRun={onRun} />
+      <AppSurface
+        app={{ slug, name: 'Notes' }}
+        route=""
+        reservedShortcuts={reservedShortcuts}
+        onTitleChange={onTitleChange}
+      />
+    </MantineProvider>,
+  );
+  await vi.waitFor(() => expect(onTitleChange).toHaveBeenCalled());
+  const frame = screen.container.querySelector('iframe')!;
+  const doc = frame.contentDocument!;
+  // A field inside the App: platform shortcuts work while typing too.
+  const field = doc.createElement('input');
+  doc.body.append(field);
+  field.focus();
+  const appKeys: KeyboardEvent[] = [];
+  doc.addEventListener('keydown', (event) => appKeys.push(event));
+  return { onRun, appKeys };
+}
+
+test('platform shortcuts work while focus is inside the App', async () => {
+  const { onRun, appKeys } = await renderWithShortcut();
+
+  await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
+
+  expect(onRun).toHaveBeenCalledOnce();
+  expect(appKeys.filter((event) => event.key === 'k')).toEqual([]);
+});
+
+test('an App that reserves a chord receives it instead of the platform', async () => {
+  const { onRun, appKeys } = await renderWithShortcut(['mod+K']);
+
+  await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
+
+  const pressed = appKeys.filter((event) => event.key === 'k');
+  expect(pressed).toHaveLength(1);
+  expect(pressed[0].defaultPrevented).toBe(false);
+  expect(onRun).not.toHaveBeenCalled();
+});
+
+test('platform shortcuts also work inside a native App', async () => {
+  // `native-*` slugs get the stand-in player page (vitest.config.ts).
+  const { onRun, appKeys } = await renderWithShortcut(
+    undefined,
+    'native-notes',
+  );
+
+  await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
+
+  expect(onRun).toHaveBeenCalledOnce();
+  expect(appKeys.filter((event) => event.key === 'k')).toEqual([]);
 });

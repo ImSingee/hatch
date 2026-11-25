@@ -168,6 +168,7 @@ export function useDashboardDraft({
             Math.max(-1, ...current.widgets.map((item) => item.sortOrder)) + 1,
           defaultSize: widget.defaultSize,
           supportedSizes: widget.supportedSizes,
+          reservedShortcuts: widget.reservedShortcuts,
         };
         const size = fitWidgetSize(
           nextWidget,
