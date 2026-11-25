@@ -122,8 +122,9 @@ export function NotificationTimeline() {
     : undefined;
   // The button that opened the panel, given focus back when it closes.
   const historyOpener = useRef<HTMLElement | null>(null);
-  const toggleHistory = (id: string) => {
-    historyOpener.current = document.activeElement as HTMLElement | null;
+  // The opener comes from the click: Safari does not focus a clicked button.
+  const toggleHistory = (id: string, opener: HTMLElement) => {
+    historyOpener.current = opener;
     setHistoryId((current) => (current === id ? null : id));
   };
   const firstUnreadId = opened?.firstUnreadId ?? null;
@@ -206,7 +207,14 @@ export function NotificationTimeline() {
   // side, both stay in reach.
   const panelCloseRef = useRef<HTMLButtonElement>(null);
   const [covered, setCovered] = useState(false);
-  const historyOpen = historyId !== null;
+  // Open while its notification is still loaded: one deleted elsewhere
+  // closes the panel and gives the timeline back.
+  const historyOpen = historyItem !== undefined;
+  useEffect(() => {
+    if (historyId !== null && !historyItem && !query.isFetching) {
+      setHistoryId(null);
+    }
+  }, [historyId, historyItem, query.isFetching]);
   useLayoutEffect(() => {
     if (!historyOpen) {
       setCovered(false);
@@ -438,7 +446,9 @@ export function NotificationTimeline() {
                     type="button"
                     className={classes.recalled}
                     aria-pressed={historyId === row.item.id}
-                    onClick={() => toggleHistory(row.item.id)}
+                    onClick={(event) =>
+                      toggleHistory(row.item.id, event.currentTarget)
+                    }
                   >
                     <IconArrowBackUp size={15} stroke={2} aria-hidden />
                     <span className={classes.recalledText}>
@@ -462,7 +472,9 @@ export function NotificationTimeline() {
                     item={row.item}
                     userId={session?.user.id}
                     historyOpen={historyId === row.item.id}
-                    onOpenHistory={() => toggleHistory(row.item.id)}
+                    onOpenHistory={(opener) =>
+                      toggleHistory(row.item.id, opener)
+                    }
                   />
                 );
             }
@@ -568,7 +580,7 @@ function TimelineEntry({
   item: TimelineItem;
   userId: string | undefined;
   historyOpen: boolean;
-  onOpenHistory: () => void;
+  onOpenHistory: (opener: HTMLElement) => void;
 }) {
   const { t } = useI18n();
   const bubble = item.sourceType === 'user' && !item.reply && !item.url;
@@ -600,7 +612,7 @@ function TimelineEntry({
               type="button"
               className={classes.historyOpen}
               aria-pressed={historyOpen}
-              onClick={onOpenHistory}
+              onClick={(event) => onOpenHistory(event.currentTarget)}
             >
               <IconHistory size={14} stroke={2.2} aria-hidden />
               {t('notifications.versions.openEdited', {

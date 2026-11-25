@@ -331,3 +331,32 @@ test('covers the timeline with the versions panel on a narrow window, reading no
   await expect.element(opener).toHaveFocus();
   await vi.waitFor(() => expect(fixtures.markRead).toEqual(['n002']));
 });
+
+test('gives the timeline back when the shown notification goes away, and focus to a button clicked without focusing it', async () => {
+  fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
+  fixtures.items[2]!.earlierVersions = 1;
+  const { screen, scroller, queryClient } = await renderTimeline(600, 600);
+  const opener = screen.getByRole('button', {
+    name: 'Edited 1 time · View history',
+  });
+  await expect.element(opener).toBeVisible();
+
+  // Safari leaves focus where it was when a button is clicked.
+  (document.activeElement as HTMLElement | null)?.blur();
+  opener.element().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const close = screen.getByRole('button', { name: 'Close earlier versions' });
+  await expect.element(close).toHaveFocus();
+  await close.click();
+  await expect.element(opener).toHaveFocus();
+
+  await opener.click();
+  await expect.element(close).toHaveFocus();
+  expect(scroller().inert).toBe(true);
+  // Deleted from another client: the timeline refreshes without it.
+  fixtures.items = fixtures.items.slice(0, 2);
+  await queryClient.refetchQueries({ queryKey: ['notifications', 'timeline'] });
+  await expect
+    .element(screen.getByRole('complementary', { name: 'Earlier versions' }))
+    .not.toBeInTheDocument();
+  await vi.waitFor(() => expect(scroller().inert).toBe(false));
+});
