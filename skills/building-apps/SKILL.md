@@ -108,6 +108,10 @@ run `hatch app update --directory <path> --json`, which fetches platform
 `origin/master`, resolve conflicts, validate, and deploy again. Nothing ever
 replaces local work silently.
 
+If deploy fails with `APP_MANIFEST_INVALID`, the message lists each manifest
+field to fix as `path: reason` (for example `app.routes[1].path`). Fix those
+fields in the manifest, commit, and deploy again.
+
 A destructive Data Table migration fails deploy with `CONFLICT`; the error
 message lists the preview and includes `Approval token: <token>`. Show the
 user what data is lost and get explicit approval with `ask`, then repeat the

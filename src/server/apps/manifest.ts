@@ -11,6 +11,10 @@ import {
   type NotificationsConfig,
 } from '../../../packages/hatch-manifest/src/app-schema.js';
 import type { JsonObject } from '~/db/schema';
+import {
+  AppManifestValidationError,
+  manifestIssuesFromZod,
+} from './manifest-validation';
 export * from '../../../packages/hatch-manifest/src/app-schema.js';
 
 /** A grid footprint in dashboard column/row units. */
@@ -315,7 +319,10 @@ export function taskEnqueueUrl(id: string): string {
 
 /** Parse + validate raw manifest JSON authored by the Agent. */
 export function parseSourceManifest(raw: unknown): SourceManifest {
-  return sourceManifestSchema.parse(raw);
+  const parsed = sourceManifestSchema.safeParse(raw);
+  if (!parsed.success)
+    throw new AppManifestValidationError(manifestIssuesFromZod(parsed.error));
+  return parsed.data;
 }
 
 /** Resolve a source widget into its deploy-time shape (URL + sized footprints). */

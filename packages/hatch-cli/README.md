@@ -292,6 +292,17 @@ failure retains the checkout; retry `update` once repaired. Symlink/submodule/
 tracked `.hatch` or `node_modules` source is rejected. No local reset/clean or
 unattended authored commit is performed after scaffold creation.
 
+## Manifest rejections
+
+A deploy whose App manifest the platform rejects fails with
+`APP_MANIFEST_INVALID` (exit 2) before anything is released. The message names
+the manifest file and lists up to 20 fields to fix, one per line as
+`- <path>: <reason>`, for example `- app.routes[1].path: duplicate app route
+path` or `- extra: unknown field; remove it`. Reasons describe the schema rule,
+never the authored value; an object key that is not a plain identifier shows as
+`[…]`. Fix the fields, commit and deploy again. Other build failures
+(dependency install, type checks, bundling) are not covered by this code.
+
 ## Migration approval and uncertain outcomes
 
 A destructive App Data Table preview returns `CONFLICT` and an exact approval
