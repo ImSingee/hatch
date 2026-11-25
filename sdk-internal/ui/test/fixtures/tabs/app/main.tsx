@@ -1,13 +1,39 @@
-import { Button, Page, Stack, Tabs, Text, mount, signal } from '@hatch/ui';
+import {
+  Button,
+  List,
+  ListItem,
+  Page,
+  Stack,
+  Tabs,
+  Text,
+  TextField,
+  mount,
+  signal,
+} from '@hatch/ui';
 import type { TabItem } from '@hatch/ui';
 
 const beds: TabItem[] = [
   { id: 'north', label: 'North', content: () => <Text>North bed</Text> },
-  { id: 'south', label: 'South', content: () => <Text>South bed</Text> },
+  {
+    id: 'south',
+    label: 'South',
+    content: () => (
+      <Stack>
+        <Text>South bed</Text>
+        <TextField label="South notes" />
+      </Stack>
+    ),
+  },
+];
+
+const ROWS = [
+  { id: 'row-1', name: 'Bed 1' },
+  { id: 'row-2', name: 'Bed 2' },
 ];
 
 function App() {
   const items = signal<TabItem[]>([]);
+  const rows = signal(ROWS);
   return (
     <Page title="Beds">
       <Stack>
@@ -42,6 +68,25 @@ function App() {
           }
         />
         <Tabs label="Beds" items={items()} />
+        <Button
+          label="Refresh beds"
+          onPress={() => {
+            rows.set(rows().map((row) => ({ ...row })));
+            items.set(items().map((item) => ({ ...item })));
+          }}
+        />
+        <List
+          items={rows()}
+          getKey={(row) => row.id}
+          renderItem={(row) => (
+            <ListItem
+              title={row().name}
+              control={
+                <TextField label={`Note for ${row().name}`} labelHidden />
+              }
+            />
+          )}
+        />
       </Stack>
     </Page>
   );

@@ -16,7 +16,8 @@ export type IfProps<T> = {
   when: T;
   /** Shown while `when` is falsy. */
   else?: JSX.Element;
-  /** The content, or a function of an accessor of `when`'s value. */
+  /** The content, or a function of an accessor of `when`'s value, written
+   * with that parameter: `{(user) => <Text>{user().name}</Text>}`. */
   children?: JSX.Element | ((value: () => NonNullable<T>) => JSX.Element);
 };
 
@@ -26,9 +27,13 @@ function HatchIf<T>(props: IfProps<T>): JSX.Element {
     <If when={props.when} else={props.else}>
       {(value) => {
         const children = props.children;
-        return typeof children === 'function'
+        // Only a callback that takes the value is called. Content can be a
+        // function too: what `Each` and other live content return for the
+        // runtime to keep updating. Calling that here would freeze it, so it
+        // is passed on as it is, as NSH's own `If` does.
+        return typeof children === 'function' && children.length > 0
           ? (children as (value: () => NonNullable<T>) => JSX.Element)(value)
-          : children;
+          : (children as JSX.Element);
       }}
     </If>
   );

@@ -835,11 +835,11 @@ Loads a value asynchronously: `const notes = resource(() => client.listNotes({})
 
 Renders its children while `when` is truthy, else `else`.
 
-| Prop              | Type                                                            | Description                                                  |
-| ----------------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
-| `when` (required) | `T`                                                             | Shows the children while this is truthy.                     |
-| `else`            | `JSX.Element`                                                   | Shown while `when` is falsy.                                 |
-| `children`        | `JSX.Element \| ((value: () => NonNullable<T>) => JSX.Element)` | The content, or a function of an accessor of `when`'s value. |
+| Prop              | Type                                                            | Description                                                                                                                         |
+| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `when` (required) | `T`                                                             | Shows the children while this is truthy.                                                                                            |
+| `else`            | `JSX.Element`                                                   | Shown while `when` is falsy.                                                                                                        |
+| `children`        | `JSX.Element \| ((value: () => NonNullable<T>) => JSX.Element)` | The content, or a function of an accessor of `when`'s value, written with that parameter: `{(user) => <Text>{user().name}</Text>}`. |
 
 #### Each
 

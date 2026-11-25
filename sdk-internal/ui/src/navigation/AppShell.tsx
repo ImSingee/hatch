@@ -1,7 +1,7 @@
 import { Scroll, Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
-import { Each } from '../core/control';
+import { Each, If } from '../core/control';
 import { SIDEBAR_MIN, paneWidth, touch } from '../core/env';
 import { FOCUS_RING, FOCUS_RING_INSET } from '../core/styles';
 import type { IconData } from '../core/types';
@@ -205,14 +205,19 @@ export function AppShell(props: AppShellProps): JSX.Element {
     <View
       class={`flex-1 self-stretch bg-surface-window ${layout() === 'sidebar' ? 'flex-row' : 'flex-col'}`}
     >
-      {layout() === 'sidebar' ? (
+      {/* `If`, not ternaries: `layout()` reads the pane width, and a
+          ternary would rebuild the navigation (losing its focus) on every
+          resize instead of only when the layout changes. */}
+      <If when={layout() === 'sidebar'}>
         <Sidebar {...props} selected={selected} />
-      ) : null}
-      {layout() === 'top' ? <TopTabs {...props} selected={selected} /> : null}
+      </If>
+      <If when={layout() === 'top'}>
+        <TopTabs {...props} selected={selected} />
+      </If>
       <View class="flex-1 self-stretch">{panels}</View>
-      {layout() === 'bottom' ? (
+      <If when={layout() === 'bottom'}>
         <BottomBar {...props} selected={selected} />
-      ) : null}
+      </If>
     </View>
   );
 }

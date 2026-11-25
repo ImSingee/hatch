@@ -35,3 +35,15 @@ test('moves off a chosen item that becomes disabled', async () => {
   await app.waitFor('text:South bed');
   expect(app.shows('text:North bed')).toBe(false);
 });
+
+test('keeps rows and visited tabs when the App passes new arrays', async () => {
+  const app = await open('./main.tsx');
+  await app.press('Load beds');
+  await app.press('label:South');
+  await app.type('label:South notes', 'Mulch in May');
+  await app.type('label:Note for Bed 1', 'Shady corner');
+  await app.press('Refresh beds');
+  await app.wait(100);
+  expect(app.value('label:Note for Bed 1')).toBe('Shady corner');
+  expect(app.value('label:South notes')).toBe('Mulch in May');
+});

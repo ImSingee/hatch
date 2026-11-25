@@ -1,7 +1,7 @@
 /**
  * Rules checked with NSH itself: the catalogue's types reject `class` and
  * `style`, forms keep drafts through the App's storage, tabs keep a selection
- * while their items change, list pages open any item and survive resizes, the library follows the shell's theme, and the
+ * while their items change, list pages open any item, follow their items and survive resizes, the library follows the shell's theme, and the
  * gallery builds for release with every class resolved. Skipped where `nsh`
  * is not installed (not on `PATH`, `~/.local/bin` or `~/.nsh/bin`); set
  * `NSH_BIN` to use another binary.
@@ -72,13 +72,13 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('keeps a tab selected while the items change', () => {
     expect(run(['test', 'app/tabs.test.tsx'], fixture('tabs'))).toMatch(
-      /^ok\n[\s\S]*4 passed/,
+      /^ok\n[\s\S]*5 passed/,
     );
   }, 240_000);
 
-  it('opens list items and keeps the list across resizes', () => {
+  it('opens list items, follows their changes and keeps them across resizes', () => {
     expect(run(['test', 'app/patterns.test.tsx'], fixture('patterns'))).toMatch(
-      /^ok\n[\s\S]*2 passed/,
+      /^ok\n[\s\S]*4 passed/,
     );
   }, 240_000);
 

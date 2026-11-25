@@ -1,4 +1,4 @@
-import { Scroll, Text, View, effect, signal, untracked } from 'nsh';
+import { Scroll, Text, View, computed, effect, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
 import { Each, If } from '../core/control';
@@ -76,11 +76,14 @@ export function Panels(props: {
     <Each of={props.items} key={(item) => item.id}>
       {(item) => {
         const shown = () => props.selected() === item().id;
+        // The content function, followed by identity: the App may pass new
+        // item objects with the same `content`, and rebuilding the panel for
+        // each would lose its input and scroll position.
+        const content = computed(() => item().content);
         return (
           <If
             when={
-              item().content !== undefined &&
-              (shown() || visited().has(item().id))
+              content() !== undefined && (shown() || visited().has(item().id))
             }
           >
             <View
@@ -90,7 +93,7 @@ export function Panels(props: {
               classList={{ hidden: !shown(), invisible: !shown() }}
               accessibilityElementsHidden={!shown()}
             >
-              {item().content?.()}
+              {content()?.()}
             </View>
           </If>
         );
@@ -169,9 +172,11 @@ export function Tabs(props: TabsProps): JSX.Element {
           {list}
         </Scroll>
       )}
-      {hasPanels() ? (
+      {/* `If`: a ternary reading `items` would rebuild the panels, and
+          lose the visited ones, whenever the App passes a new array. */}
+      <If when={hasPanels()}>
         <Panels items={props.items} selected={selected.get} />
-      ) : null}
+      </If>
     </View>
   );
 }

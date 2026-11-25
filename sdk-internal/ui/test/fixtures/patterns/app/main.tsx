@@ -7,7 +7,7 @@ function App() {
   return (
     <ListDetailPage
       title="Beds"
-      items={BEDS}
+      items={BEDS.filter((bed) => `Bed ${bed}`.includes(search()))}
       getKey={String}
       renderItem={(bed) => ({ title: `Bed ${bed}` })}
       detailTitle={(bed) => `Bed ${bed}`}

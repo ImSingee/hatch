@@ -1,7 +1,7 @@
 import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Button as BaseButton } from 'nsh/base';
-import { Each } from '../core/control';
+import { Each, If } from '../core/control';
 import { FOCUS_RING_INSET } from '../core/styles';
 import type { Action, IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
@@ -45,24 +45,40 @@ export function List<T>(props: ListProps<T>): JSX.Element {
         accessibilityLabel={props.title}
         class="self-stretch overflow-hidden rounded-(--radius-lg) border border-hairline bg-card"
       >
-        {props.loading ? (
+        {/* `If` on booleans, not ternaries over `items`: a ternary would
+            rebuild every row (losing focus and row state) whenever the App
+            passes a new array; `Each` keeps the rows by key instead. */}
+        <If
+          when={props.loading === true}
+          else={
+            <If
+              when={empty()}
+              else={
+                <If
+                  when={
+                    props.items !== undefined && props.renderItem !== undefined
+                  }
+                  else={props.children}
+                >
+                  <Each of={props.items} key={props.getKey}>
+                    {(item) => props.renderItem?.(item)}
+                  </Each>
+                </If>
+              }
+            >
+              <View class="items-center px-4 py-6">
+                <Text class="text-center text-body text-muted-foreground">
+                  {props.empty ?? 'Nothing here yet.'}
+                </Text>
+              </View>
+            </If>
+          }
+        >
           <View class="gap-4 p-4">
             <Skeleton lines={2} />
             <Skeleton lines={2} />
           </View>
-        ) : empty() ? (
-          <View class="items-center px-4 py-6">
-            <Text class="text-center text-body text-muted-foreground">
-              {props.empty ?? 'Nothing here yet.'}
-            </Text>
-          </View>
-        ) : props.items && props.renderItem ? (
-          <Each of={props.items} key={props.getKey}>
-            {(item) => props.renderItem?.(item)}
-          </Each>
-        ) : (
-          props.children
-        )}
+        </If>
       </View>
     </View>
   );
