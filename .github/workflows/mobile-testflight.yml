@@ -9,10 +9,23 @@ name: Mobile TestFlight
 # The iOS distribution credentials and an App Store Connect API key must
 # already be stored on EAS (`pnpm --dir mobile eas credentials --platform ios`), so
 # the non-interactive build and submission never prompt for Apple sign-in.
+#
+# Every v* release tag builds automatically. The Release workflow starts this
+# workflow on the tag it creates, because a tag pushed with GITHUB_TOKEN does
+# not fire the push trigger; the push trigger covers tags pushed by people.
+# The marketing version comes from mobile/app.config.ts on that tag and EAS
+# increments the build number.
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
+      ref:
+        description: Branch, tag or commit SHA to build
+        required: false
+        default: master
+        type: string
       what_to_test:
         description: 'TestFlight "What to Test" notes (optional)'
         required: false
@@ -43,7 +56,13 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
+
+      - name: Describe build
+        env:
+          REF_NAME: ${{ inputs.ref || github.ref_name }}
+        run: echo "BUILD_MESSAGE=$REF_NAME@$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v6
 
@@ -58,7 +77,6 @@ jobs:
       - name: Build on EAS and submit to TestFlight
         working-directory: mobile
         env:
-          BUILD_MESSAGE: ${{ github.ref_name }}@${{ github.sha }}
           WHAT_TO_TEST: ${{ inputs.what_to_test }}
         run: |
           args=(
