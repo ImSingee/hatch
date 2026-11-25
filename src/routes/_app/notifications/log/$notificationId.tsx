@@ -16,21 +16,23 @@ import { useI18n } from '~i18n';
 import { notificationDetailQueryOptions } from '~queries/notifications';
 import { useNotificationKindName } from '~components/notifications/status';
 
-export const Route = createFileRoute('/_app/notifications/$notificationId')({
-  loader: async ({ context, params }) => {
-    try {
-      return await context.queryClient.ensureQueryData(
-        notificationDetailQueryOptions(params.notificationId),
-      );
-    } catch (error) {
-      if (error instanceof Error && /not found/i.test(error.message)) {
-        throw notFound();
+export const Route = createFileRoute('/_app/notifications/log/$notificationId')(
+  {
+    loader: async ({ context, params }) => {
+      try {
+        return await context.queryClient.ensureQueryData(
+          notificationDetailQueryOptions(params.notificationId),
+        );
+      } catch (error) {
+        if (error instanceof Error && /not found/i.test(error.message)) {
+          throw notFound();
+        }
+        throw error;
       }
-      throw error;
-    }
+    },
+    component: NotificationDetailPage,
   },
-  component: NotificationDetailPage,
-});
+);
 
 function NotificationDetailPage() {
   const { t } = useI18n();
@@ -47,7 +49,8 @@ function NotificationDetailPage() {
   useEffect(() => {
     shownId.current = notificationId;
   }, [notificationId]);
-  const leave = () => void navigate({ to: '/notifications', replace: true });
+  const leave = () =>
+    void navigate({ to: '/notifications/log', replace: true });
   const { confirmDelete, isPending } = useDeleteNotification({
     onDeleted: (id) => {
       if (id === shownId.current) leave();

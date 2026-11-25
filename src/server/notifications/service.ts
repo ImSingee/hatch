@@ -17,16 +17,19 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
+import { EmptyFilter } from 'drizzle-orm/relations';
 import { db, schema, type TX } from '~/db';
 import type {
   NotificationDeliveryStatus,
   NotificationDestinationType,
   NotificationKindDeclaration,
   NotificationRouteSourceType,
+  NotificationResponseTargetType,
   NotificationSourceType,
 } from '~/db/schema';
 import { getPlatformEnv } from '~/env';
 import type { NormalizedManifest } from '~server/apps/manifest';
+import { getAgentModelCatalog } from '~server/agent-model-catalog';
 import { AppError } from '~server/errors';
 import { publishPlatformEvent } from '~server/platform-events';
 import { describeApnsCredentials } from './apns/credentials';
@@ -44,6 +47,7 @@ import {
 } from './contract';
 import { ingestChannelPush } from './channel-ingress';
 import type { ReplyForm } from '../../../packages/hatch-platform-api/notification-reply';
+import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
 import {
   ingestNotification,
   newNotificationId,
@@ -58,7 +62,12 @@ import {
   updateNotification,
   type LifecycleResult,
 } from './lifecycle';
-import { loadResponseView, type NotificationResponseView } from './responses';
+import {
+  loadResponseHistory,
+  loadResponseView,
+  loadResponseViews,
+  type NotificationResponseView,
+} from './responses';
 import {
   encryptDeviceKey,
   encryptWebhookSecret,
@@ -139,6 +148,7 @@ const NOT_FOUND_CODES = {
   Channel: 'notifications.channelNotFound',
   Route: 'notifications.routeNotFound',
   'Response route': 'notifications.responseRouteNotFound',
+  'Agent chat': 'notifications.agentChatNotFound',
 } as const;
 
 function notFound(what: keyof typeof NOT_FOUND_CODES): never {
@@ -179,13 +189,27 @@ export type NotificationSummaryView = {
   priority: number;
   occurredAt: string;
   createdAt: string;
+  /**
+   * When the source last pushed or edited it; the timeline's order. Answers
+   * and recalls leave it unchanged.
+   */
+  activityAt: string;
   /** 1 for the original; every edit and the recall increment it. */
   revision: number;
   editedAt: string | null;
   recalledAt: string | null;
-  /** Form people answer once; null when the notification asks nothing. */
+  /** Status and one block the timeline shows; null without one. */
+  card: NotificationCard | null;
+  /**
+   * The question the notification asks now; null when it asks nothing. Each
+   * round takes one answer.
+   */
   reply: ReplyForm | null;
+  /** Which question `reply` is: 1 for the form it was sent with. */
+  replyRound: number;
   respondedAt: string | null;
+  /** The answer to the current round; null until someone answers. */
+  response: NotificationResponseView | null;
   status: NotificationStatus;
   deliveries: DeliveryCounts;
 };
@@ -198,8 +222,10 @@ export type NotificationReplyState = 'awaiting' | 'answered';
 
 export type DeliveryView = {
   id: string;
+  /** Null for an Agent chat, and once the destination is removed. */
   destinationId: string | null;
-  destinationType: NotificationDestinationType;
+  /** `agent`: an answer queued in an Agent chat. */
+  destinationType: NotificationDestinationType | 'agent';
   destinationName: string;
   status: NotificationDeliveryStatus;
   attempts: number;
@@ -219,7 +245,6 @@ export type NotificationDetailView = NotificationSummaryView & {
   data: Record<string, unknown> | null;
   dedupeKey: string | null;
   deliveryList: DeliveryView[];
-  response: NotificationResponseView | null;
   /** Deliveries of the answer to response route destinations. */
   responseDeliveryList: DeliveryView[];
 };
@@ -285,7 +310,14 @@ export type ResponseRouteView = {
   sourceType: NotificationRouteSourceType;
   sourceId: string | null;
   kind: string | null;
-  destinationId: string;
+  /** `destination`: a webhook or App. `agent`: a message in an Agent chat. */
+  targetType: NotificationResponseTargetType;
+  /** The webhook or App, for a `destination` target. */
+  destinationId: string | null;
+  /** For an `agent` target: its chat, or null for one chat per notification. */
+  agentSessionId: string | null;
+  /** For an `agent` target: what the Agent should do with each answer. */
+  agentInstructions: string | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -376,6 +408,7 @@ type NotificationRow = typeof schema.notifications.$inferSelect;
 function summaryView(
   row: NotificationRow,
   counts: DeliveryCounts | undefined,
+  response: NotificationResponseView | null,
 ): NotificationSummaryView {
   const deliveries = counts ?? {
     pending: 0,
@@ -397,11 +430,15 @@ function summaryView(
     priority: row.priority,
     occurredAt: iso(row.occurredAt),
     createdAt: iso(row.createdAt),
+    activityAt: iso(row.activityAt),
     revision: row.revision,
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
+    card: row.card,
     reply: row.reply,
+    replyRound: row.replyRound,
     respondedAt: isoOrNull(row.respondedAt),
+    response,
     status: deliveryStatus(deliveries),
     deliveries,
   };
@@ -415,10 +452,31 @@ export type ListNotificationsInput = {
   kind?: string;
   status?: NotificationStatus;
   replyState?: NotificationReplyState;
-  /** Return notifications older than this id (ids are time-ordered ULIDs). */
+  /**
+   * `created` (default): newest pushed first. `activity`: most recently
+   * pushed or edited first, the timeline's order.
+   */
+  order?: NotificationListOrder;
+  /** The `nextCursor` of the previous page, for the same `order`. */
   cursor?: string;
   limit?: number;
 };
+
+export type NotificationListOrder = 'created' | 'activity';
+
+/**
+ * An `activity` cursor names the last row of a page by its activity time and
+ * id, since several notifications can share one activity time.
+ */
+function activityCursor(row: NotificationRow): string {
+  return `${row.activityAt.getTime()}.${row.id}`;
+}
+
+function parseActivityCursor(cursor: string): { at: Date; id: string } {
+  const match = /^(\d{1,15})\.([0-9A-Za-z]{26})$/.exec(cursor);
+  if (!match) throw new AppError('Invalid cursor for activity order.', 400);
+  return { at: new Date(Number(match[1])), id: match[2]! };
+}
 
 function statusFilter(status: NotificationStatus): SQL {
   const d = schema.notificationDeliveries;
@@ -464,13 +522,20 @@ export async function listNotifications(
 ): Promise<{ items: NotificationSummaryView[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(input.limit || 50, 1), LIST_LIMIT_MAX);
   const n = schema.notifications;
+  const byActivity = input.order === 'activity';
+  const after =
+    byActivity && input.cursor ? parseActivityCursor(input.cursor) : null;
   const conditions: (SQL | undefined)[] = [
     input.sourceType ? eq(n.sourceType, input.sourceType) : undefined,
     input.sourceId
       ? sql`coalesce(${n.appId}, ${n.channelId}, ${n.userId}) = ${input.sourceId}`
       : undefined,
     input.kind ? eq(n.kind, input.kind) : undefined,
-    input.cursor ? lt(n.id, input.cursor) : undefined,
+    after
+      ? sql`(${n.activityAt}, ${n.id}) < (${after.at}, ${after.id})`
+      : !byActivity && input.cursor
+        ? lt(n.id, input.cursor)
+        : undefined,
     input.status ? statusFilter(input.status) : undefined,
     input.replyState === 'awaiting'
       ? and(isNotNull(n.reply), isNull(n.respondedAt), isNull(n.recalledAt))
@@ -482,21 +547,36 @@ export async function listNotifications(
     .select()
     .from(n)
     .where(and(...conditions))
-    .orderBy(desc(n.id))
+    .orderBy(...(byActivity ? [desc(n.activityAt), desc(n.id)] : [desc(n.id)]))
     .limit(limit + 1);
   const page = rows.slice(0, limit);
-  const counts = await deliveryCounts(page.map((row) => row.id));
+  const ids = page.map((row) => row.id);
+  const [counts, responses] = await Promise.all([
+    deliveryCounts(ids),
+    loadResponseViews(page),
+  ]);
+  const last = page.at(-1);
   return {
-    items: page.map((row) => summaryView(row, counts.get(row.id))),
-    nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+    items: page.map((row) =>
+      summaryView(row, counts.get(row.id), responses.get(row.id) ?? null),
+    ),
+    nextCursor:
+      rows.length > limit && last
+        ? byActivity
+          ? activityCursor(last)
+          : last.id
+        : null,
   };
 }
 
 function deliveryView(
   row: Omit<
     typeof schema.notificationDeliveries.$inferSelect,
-    'deliveredRevision'
-  > & { deliveredRevision?: number | null },
+    'deliveredRevision' | 'destinationType'
+  > & {
+    deliveredRevision?: number | null;
+    destinationType: DeliveryView['destinationType'];
+  },
 ): DeliveryView {
   return {
     id: row.id,
@@ -534,16 +614,103 @@ export async function getNotification(
       where: { notificationId: id },
       orderBy: { createdAt: 'asc' },
     }),
-    row.respondedAt ? loadResponseView(id) : Promise.resolve(null),
+    row.respondedAt
+      ? loadResponseView(id, row.replyRound)
+      : Promise.resolve(null),
   ]);
   const counts = (await deliveryCounts([id])).get(id);
   return {
-    ...summaryView(row, counts),
+    ...summaryView(row, counts, response),
     data: row.data,
     dedupeKey: row.dedupeKey,
     deliveryList: deliveries.map(deliveryView),
-    response,
     responseDeliveryList: responseDeliveries.map(deliveryView),
+  };
+}
+
+export type NotificationRevisionView = {
+  /** The revision while this version was current. */
+  revision: number;
+  title: string;
+  body: string | null;
+  url: string | null;
+  data: Record<string, unknown> | null;
+  card: NotificationCard | null;
+  reply: ReplyForm | null;
+  replyRound: number;
+  /** When this version became current. */
+  activityAt: string;
+  /** When an edit replaced it. */
+  replacedAt: string;
+};
+
+/**
+ * What a notification said before each edit, oldest first, and every answer
+ * it took (one per round).
+ */
+const REVISIONS_PAGE = 20;
+const MAX_REVISIONS_PAGE = 100;
+
+/**
+ * Earlier versions of a notification, newest first, one page at a time
+ * (`cursor` is the `nextCursor` of the page before), with the answers to
+ * the rounds the page covers; the first page also has the current round's.
+ * A round that spans two pages has its answer on both.
+ */
+export async function listNotificationRevisions(
+  id: string,
+  page: { cursor?: string; limit?: number } = {},
+): Promise<{
+  revisions: NotificationRevisionView[];
+  responses: NotificationResponseView[];
+  nextCursor: string | null;
+}> {
+  const row = await db.query.notifications.findFirst({
+    where: { id },
+    columns: { id: true },
+  });
+  if (!row) notFound('Notification');
+  const before = page.cursor ? Number(page.cursor) : null;
+  if (before !== null && !(Number.isInteger(before) && before > 0)) {
+    throw new AppError('Invalid cursor.', 400);
+  }
+  const limit = Math.min(
+    Math.max(page.limit || REVISIONS_PAGE, 1),
+    MAX_REVISIONS_PAGE,
+  );
+  const fetched = await db.query.notificationRevisions.findMany({
+    where: {
+      notificationId: id,
+      revision: before === null ? EmptyFilter : { lt: before },
+    },
+    orderBy: { revision: 'desc' },
+    limit: limit + 1,
+  });
+  const revisions = fetched.slice(0, limit);
+  const more = fetched.length > limit;
+  const rounds = revisions.map((revision) => revision.replyRound);
+  // From the oldest round on this page (round 1 on the last page) up to its
+  // newest round, or every later one on the first page.
+  const lowest = more ? Math.min(...rounds) : 1;
+  const responses = await loadResponseHistory(id, {
+    from: lowest,
+    to: before === null ? undefined : Math.max(...rounds, 0),
+  });
+  return {
+    nextCursor: more ? String(revisions.at(-1)!.revision) : null,
+    revisions: revisions.map((revision) => ({
+      revision: revision.revision,
+      title: revision.title,
+      body: revision.body,
+      url: revision.url,
+      data: revision.data,
+      card: revision.card,
+      reply: revision.reply,
+      replyRound: revision.replyRound,
+      activityAt: iso(revision.activityAt),
+      replacedAt: iso(revision.replacedAt),
+    })),
+    responses,
   };
 }
 
@@ -552,11 +719,11 @@ export async function retryDelivery(deliveryId: string): Promise<void> {
   const delivery =
     (await db.query.notificationDeliveries.findFirst({
       where: { id: deliveryId },
-      columns: { status: true, destinationId: true },
+      columns: { status: true, destinationId: true, destinationType: true },
     })) ??
     (await db.query.notificationResponseDeliveries.findFirst({
       where: { id: deliveryId },
-      columns: { status: true, destinationId: true },
+      columns: { status: true, destinationId: true, destinationType: true },
     }));
   if (!delivery) notFound('Delivery');
   if (delivery.status !== 'failed') {
@@ -564,7 +731,8 @@ export async function retryDelivery(deliveryId: string): Promise<void> {
       code: 'notifications.retryNotFailed',
     });
   }
-  if (!delivery.destinationId) {
+  // An Agent chat is no destination: it has none to lose.
+  if (!delivery.destinationId && delivery.destinationType !== 'agent') {
     throw new AppError('The destination of this delivery was removed.', 409, {
       code: 'notifications.retryDestinationRemoved',
     });
@@ -1332,12 +1500,23 @@ export async function deleteRoute(id: string): Promise<void> {
 
 /** ================== response routes ================== */
 
+/** Longest instructions an Agent response route gives with each answer. */
+export const MAX_AGENT_INSTRUCTIONS = 2000;
+
+/**
+ * Where a response route sends answers: a webhook or App destination, or the
+ * Agent (a fixed chat, or with `sessionId: null` one chat per notification).
+ */
+export type ResponseRouteTarget =
+  | { destinationId: string }
+  | { agent: { sessionId: string | null; instructions: string | null } };
+
 export type ResponseRouteInput = {
   name?: string | null;
   sourceType: NotificationRouteSourceType;
   sourceId?: string | null;
   kind?: string | null;
-  destinationId: string;
+  target: ResponseRouteTarget;
   enabled?: boolean;
 };
 
@@ -1350,7 +1529,10 @@ function responseRouteView(row: ResponseRouteRow): ResponseRouteView {
     sourceType: row.sourceType,
     sourceId: row.appId ?? row.channelId,
     kind: row.kind,
+    targetType: row.targetType,
     destinationId: row.targetDestinationId,
+    agentSessionId: row.agentSessionId,
+    agentInstructions: row.agentInstructions,
     enabled: row.enabled,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
@@ -1365,9 +1547,68 @@ async function responseRouteValues(
   },
 ) {
   const source = await routeSource(input, checks.source);
+  const name = input.name?.trim() ? cleanName(input.name, 'Route name') : null;
+  const enabled = input.enabled ?? true;
+  if ('agent' in input.target) {
+    const { sessionId } = input.target.agent;
+    const instructions = input.target.agent.instructions?.trim() || null;
+    if (instructions && instructions.length > MAX_AGENT_INSTRUCTIONS) {
+      throw new AppError(
+        `Agent instructions must be at most ${MAX_AGENT_INSTRUCTIONS} characters.`,
+        400,
+      );
+    }
+    if (checks.target) {
+      const session = sessionId
+        ? await db.query.agentSessions.findFirst({
+            where: { id: sessionId },
+            columns: { providerId: true, modelId: true },
+          })
+        : null;
+      if (sessionId && !session) notFound('Agent chat');
+      // Answers would fail every delivery without a model that can run: the
+      // chat's own model when it has one (as delivery uses it), else the
+      // first configured one.
+      const catalog = await getAgentModelCatalog();
+      const runnable =
+        session?.providerId && session.modelId
+          ? catalog.providers.some(
+              (provider) =>
+                provider.id === session.providerId &&
+                provider.models.some(
+                  (model) => model.modelId === session.modelId,
+                ),
+            )
+          : catalog.defaultModel !== null;
+      if (!runnable) {
+        throw new AppError(
+          session?.providerId && session.modelId
+            ? "The chat's AI model is unavailable. Pick a model in the chat before sending answers to it."
+            : 'Add an AI provider with a model before sending answers to the Agent.',
+          409,
+          {
+            code:
+              session?.providerId && session.modelId
+                ? 'notifications.agentChatModelUnavailable'
+                : 'notifications.agentNoModel',
+          },
+        );
+      }
+    }
+    return {
+      name,
+      ...source,
+      targetType: 'agent' as const,
+      targetDestinationId: null,
+      agentSessionId: sessionId || null,
+      agentInstructions: instructions,
+      enabled,
+    };
+  }
+  const { destinationId } = input.target;
   if (checks.target) {
     const destination = await db.query.notificationDestinations.findFirst({
-      where: { id: input.destinationId },
+      where: { id: destinationId },
       columns: { id: true, type: true, acceptsResponses: true },
     });
     if (!destination) notFound('Destination');
@@ -1383,10 +1624,13 @@ async function responseRouteValues(
     }
   }
   return {
-    name: input.name?.trim() ? cleanName(input.name, 'Route name') : null,
+    name,
     ...source,
-    targetDestinationId: input.destinationId,
-    enabled: input.enabled ?? true,
+    targetType: 'destination' as const,
+    targetDestinationId: destinationId,
+    agentSessionId: null,
+    agentInstructions: null,
+    enabled,
   };
 }
 
@@ -1427,8 +1671,23 @@ export async function createResponseRoute(
   return responseRouteView(row!);
 }
 
+/**
+ * Change a response route. Omitted fields keep their value. A target replaces
+ * the current one; for an Agent target, an omitted `sessionId` or
+ * `instructions` keeps the current one when the route already goes to the
+ * Agent.
+ */
 export async function updateResponseRoute(
-  input: { id: string } & Partial<ResponseRouteInput>,
+  input: { id: string } & Partial<Omit<ResponseRouteInput, 'target'>> & {
+      target?:
+        | { destinationId: string }
+        | {
+            agent: {
+              sessionId?: string | null;
+              instructions?: string | null;
+            };
+          };
+    },
 ): Promise<ResponseRouteView> {
   // Lock the row: fields left out keep their current value, never one read
   // before a concurrent change (such as a disable) committed.
@@ -1446,9 +1705,37 @@ export async function updateResponseRoute(
 async function writeResponseRoute(
   tx: TX,
   existing: ResponseRouteRow,
-  input: { id: string } & Partial<ResponseRouteInput>,
+  input: Parameters<typeof updateResponseRoute>[0],
 ): Promise<ResponseRouteView> {
   const current = responseRouteView(existing);
+  const wasAgent = current.targetType === 'agent';
+  const target: ResponseRouteTarget = !input.target
+    ? wasAgent
+      ? {
+          agent: {
+            sessionId: current.agentSessionId,
+            instructions: current.agentInstructions,
+          },
+        }
+      : { destinationId: current.destinationId! }
+    : 'destinationId' in input.target
+      ? { destinationId: input.target.destinationId }
+      : {
+          agent: {
+            sessionId:
+              input.target.agent.sessionId !== undefined
+                ? input.target.agent.sessionId
+                : wasAgent
+                  ? current.agentSessionId
+                  : null,
+            instructions:
+              input.target.agent.instructions !== undefined
+                ? input.target.agent.instructions
+                : wasAgent
+                  ? current.agentInstructions
+                  : null,
+          },
+        };
   const merged: ResponseRouteInput = {
     name: input.name !== undefined ? input.name : current.name,
     sourceType: input.sourceType ?? current.sourceType,
@@ -1459,7 +1746,7 @@ async function writeResponseRoute(
           ? null
           : current.sourceId,
     kind: input.kind !== undefined ? input.kind : current.kind,
-    destinationId: input.destinationId ?? current.destinationId,
+    target,
     enabled: input.enabled ?? current.enabled,
   };
   const checks = {
@@ -1467,7 +1754,11 @@ async function writeResponseRoute(
       merged.sourceType !== current.sourceType ||
       (merged.sourceId || null) !== current.sourceId ||
       (merged.kind || null) !== current.kind,
-    target: merged.destinationId !== current.destinationId,
+    target:
+      'agent' in target
+        ? !wasAgent ||
+          (target.agent.sessionId || null) !== current.agentSessionId
+        : target.destinationId !== current.destinationId,
   };
   const [row] = await tx
     .update(schema.notificationResponseRoutes)
@@ -1615,6 +1906,7 @@ export async function sendTestNotification(
     priority: DEFAULT_NOTIFICATION_PRIORITY,
     data: null,
     reply: null,
+    card: null,
     dedupeKey: null,
     occurredAt: null,
   };
@@ -1672,7 +1964,11 @@ export async function sendNotification(input: {
     if (!channel.enabled) {
       throw new AppError('Enable the channel before sending to it.', 409);
     }
-    const result = await ingestChannelPush(channel, body);
+    const result = await ingestChannelPush(
+      channel,
+      body,
+      sender.type === 'platform' ? sender.agentSessionId : undefined,
+    );
     if (!result.ok) throw new AppError(`${result.message}.`, 400);
     return {
       id: result.id,
@@ -1737,10 +2033,8 @@ export async function updateNotificationAsMember(
 ): Promise<LifecycleResult> {
   const update = notificationUpdateSchema.safeParse(body);
   if (!update.success) {
-    throw new AppError(
-      `${update.error.issues[0]?.message ?? 'Invalid request'}.`,
-      400,
-    );
+    // Reply form issues name the field to fix (`reply.fields.0: …`).
+    throw new AppError(`${pushIssueMessage(update.error)}.`, 400);
   }
   return asAppError(() => updateNotification({ type: 'member' }, update.data));
 }

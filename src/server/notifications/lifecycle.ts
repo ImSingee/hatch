@@ -172,20 +172,30 @@ export async function updateNotification(
   sender: NotificationSender,
   update: NotificationUpdate,
 ): Promise<LifecycleResult> {
-  const now = new Date();
   const outcome = await db.transaction(async (tx) => {
     const current = await lockOwnNotification(tx, sender, update.id);
+    // Taken under the lock and always after the version it replaces: an edit
+    // that waited for the lock must not land behind the one that held it,
+    // where a read position may already have passed it.
+    const now = new Date(
+      Math.max(Date.now(), current.activityAt.getTime() + 1),
+    );
     if (current.recalledAt) {
       throw new NotificationLifecycleError(
         'A recalled notification cannot be edited',
         409,
       );
     }
+    // A new question starts the next round; asking the same one again
+    // changes nothing.
+    const newRound =
+      update.reply !== undefined && !sameJson(update.reply, current.reply);
     // Answers are delivered with `data`, which receivers use to tell what
     // was answered; changing it afterwards would pin the answer on something
-    // else.
+    // else, unless the edit asks a new question for the new data.
     if (
       current.respondedAt &&
+      !newRound &&
       update.data !== undefined &&
       !sameJson(update.data, current.data)
     ) {
@@ -203,6 +213,7 @@ export async function updateNotification(
           ? current.autoOpenUrl
           : update.autoOpenUrl,
       data: update.data === undefined ? current.data : update.data,
+      card: update.card === undefined ? current.card : update.card,
     };
     // Without an explicit choice, a link follows the push default: a new
     // link opens on tap, a cleared one stops, a replaced one keeps the setting.
@@ -214,13 +225,34 @@ export async function updateNotification(
       throw new NotificationLifecycleError('autoOpenUrl requires url', 400);
     }
     const changed =
+      newRound ||
       next.title !== current.title ||
       next.body !== current.body ||
       next.url !== current.url ||
       next.autoOpenUrl !== current.autoOpenUrl ||
-      !sameJson(next.data, current.data);
+      !sameJson(next.data, current.data) ||
+      !sameJson(next.card, current.card);
     if (!changed && update.silent === true) {
       return { id: current.id, revision: current.revision, changed: false };
+    }
+    // Keep what the edit replaces, so the timeline can show how it got here.
+    if (changed) {
+      await tx
+        .insert(schema.notificationRevisions)
+        .values({
+          notificationId: current.id,
+          revision: current.revision,
+          title: current.title,
+          body: current.body,
+          url: current.url,
+          data: current.data,
+          card: current.card,
+          reply: current.reply,
+          replyRound: current.replyRound,
+          activityAt: current.activityAt,
+          replacedAt: now,
+        })
+        .onConflictDoNothing();
     }
     const [row] = await tx
       .update(schema.notifications)
@@ -231,6 +263,16 @@ export async function updateNotification(
           ? {}
           : { alertRevision: current.revision + 1 }),
         ...(changed ? { editedAt: now } : {}),
+        ...(newRound
+          ? {
+              reply: update.reply ?? null,
+              replyRound: current.replyRound + 1,
+              respondedAt: null,
+            }
+          : {}),
+        // Only a changed or re-alerting edit gets here; either one moves the
+        // notification to the end of the timeline.
+        activityAt: now,
       })
       .where(eq(schema.notifications.id, current.id))
       .returning({ revision: schema.notifications.revision });

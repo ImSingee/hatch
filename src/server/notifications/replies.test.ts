@@ -43,6 +43,7 @@ const { deliverToWebhook } = await import('./adapters/webhook');
 const { deliverToApp } = await import('./adapters/app');
 const { pushPlaintext } = await import('./adapters/device');
 const { recallNotification, updateNotification } = await import('./lifecycle');
+const { notificationUpdateSchema } = await import('./contract');
 const { pruneHistory } = await import('~server/retention');
 const { syncAppNotificationDestination } = await import('./app-destinations');
 const {
@@ -296,7 +297,7 @@ describe('answering', () => {
       sourceType: 'channel',
       sourceId: channelId,
       kind: 'deploy',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     received.length = 0;
@@ -467,7 +468,7 @@ describe('direct notifications from a member', () => {
   it('take answers but are never sent along response routes', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const sent = await service.sendNotification({
       to: { type: 'destination', id: deviceId },
@@ -544,7 +545,7 @@ describe('answer events', () => {
   it('keep the revision the answer created, even after a later edit', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     await respondToNotification(
@@ -572,7 +573,7 @@ describe('answer events', () => {
   it('never share a revision with notification events', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const events = async (body: Record<string, unknown>, edit: boolean) => {
       // Answered (and maybe edited) before anything was delivered.
@@ -616,7 +617,7 @@ describe('answer events', () => {
   it('survive history retention until they are delivered', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     await respondToNotification(
@@ -650,7 +651,7 @@ describe('dispatching answers under load', () => {
   it('claims answer deliveries even while notifications are backed up', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const answered = await sendForm();
     await respondToNotification(
@@ -720,7 +721,7 @@ describe('answered notifications', () => {
   it('let response route edits keep a concurrent disable', async () => {
     const route = await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     await Promise.all([
       service.updateResponseRoute({ id: route.id, enabled: false }),
@@ -739,7 +740,7 @@ describe('answered notifications', () => {
         await service.createResponseRoute({
           name,
           sourceType: 'any',
-          destinationId: webhookId,
+          target: { destinationId: webhookId },
         }),
       );
     // ULIDs created in the same millisecond have random suffixes.
@@ -938,14 +939,14 @@ describe('response routes', () => {
     await expect(
       service.createResponseRoute({
         sourceType: 'any',
-        destinationId: deviceId,
+        target: { destinationId: deviceId },
       }),
     ).rejects.toMatchObject({ status: 400 });
     const appDestination = await seedApp(false);
     await expect(
       service.createResponseRoute({
         sourceType: 'any',
-        destinationId: appDestination,
+        target: { destinationId: appDestination },
       }),
     ).rejects.toMatchObject({ status: 400 });
     const views = await service.listDestinations();
@@ -962,7 +963,7 @@ describe('response routes', () => {
     await service.createResponseRoute({
       sourceType: 'any',
       kind: 'deploy',
-      destinationId: appDestination,
+      target: { destinationId: appDestination },
     });
     vi.mocked(callAppBackend).mockResolvedValue({
       status: 200,
@@ -1016,7 +1017,7 @@ describe('response routes', () => {
   it('retries a failed answer delivery', async () => {
     await service.createResponseRoute({
       sourceType: 'any',
-      destinationId: webhookId,
+      target: { destinationId: webhookId },
     });
     const id = await sendForm();
     webhookStatus = 400;
@@ -1035,5 +1036,365 @@ describe('response routes', () => {
     expect(
       (await service.getNotification(id)).responseDeliveryList,
     ).toMatchObject([{ status: 'succeeded' }]);
+  });
+});
+
+describe('timeline order', () => {
+  const sender = () => ({ type: 'channel' as const, channelId });
+  const activityIds = async (limit?: number, cursor?: string) =>
+    service.listNotifications({ order: 'activity', limit, cursor });
+
+  it('moves a notification to the end when its source edits it, but not when someone answers or it is recalled', async () => {
+    const first = await sendForm();
+    const second = await sendForm();
+    // Known activity times a minute apart, both before the edit below, so the
+    // order never rests on two pushes landing in the same millisecond.
+    for (const [id, minutesAgo] of [
+      [first, 2],
+      [second, 1],
+    ] as const) {
+      await db
+        .update(schema.notifications)
+        .set({ activityAt: new Date(Date.now() - minutesAgo * 60_000) })
+        .where(eq(schema.notifications.id, id));
+    }
+    const idsOf = async () =>
+      (await activityIds()).items.map((item) => item.id);
+    expect(await idsOf()).toEqual([second, first]);
+
+    await updateNotification(sender(), { id: first, title: 'Deploy v2?' });
+    expect(await idsOf()).toEqual([first, second]);
+    // The push order stays the creation order.
+    expect(
+      (await service.listNotifications()).items.map((item) => item.id),
+    ).toEqual([second, first]);
+
+    await respondToNotification(
+      second,
+      { decision: 'approve' },
+      { userId: 'user-1', via: 'web' },
+    );
+    await recallNotification(sender(), first);
+    await updateNotification(sender(), { id: second, silent: true });
+    expect(await idsOf()).toEqual([first, second]);
+
+    const answered = (await activityIds()).items.find(
+      (item) => item.id === second,
+    );
+    expect(answered?.response).toMatchObject({
+      answers: { decision: 'approve' },
+      via: 'web',
+    });
+  });
+
+  it('pages every notification once, also when several share one activity time', async () => {
+    const ids = [await sendForm(), await sendForm(), await sendForm()];
+    await db
+      .update(schema.notifications)
+      .set({ activityAt: new Date('2026-11-25T10:00:00Z') });
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await activityIds(1, cursor);
+      seen.push(...page.items.map((item) => item.id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    expect(seen).toEqual([...ids].reverse());
+    await expect(activityIds(1, ids[0])).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+});
+
+describe('new questions on the same notification', () => {
+  const MERGE_FORM = {
+    fields: [
+      {
+        id: 'merge',
+        type: 'buttons',
+        label: 'Merge now?',
+        options: [
+          { id: 'merge', label: 'Merge' },
+          { id: 'hold', label: 'Hold' },
+        ],
+      },
+    ],
+  };
+  const answer = (id: string, answers: Record<string, string>) =>
+    respondToNotification(id, answers, { userId: 'user-1', via: 'web' });
+
+  it('takes one answer per round, sends each one along response routes, and keeps what each edit replaced', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      target: { destinationId: webhookId },
+    });
+    const id = await sendForm();
+    await answer(id, { decision: 'approve' });
+    await runAll();
+
+    // The next question may come with data for it, even though the first
+    // round was answered.
+    // Through the same schema an App or Channel edit is parsed with.
+    await updateNotification(
+      { type: 'channel', channelId },
+      notificationUpdateSchema.parse({
+        id,
+        title: 'CI passed',
+        data: { pr: 261 },
+        reply: MERGE_FORM,
+      }),
+    );
+    let summary = (await service.listNotifications()).items[0]!;
+    expect(summary).toMatchObject({
+      replyRound: 2,
+      respondedAt: null,
+      response: null,
+    });
+    expect(summary.reply?.fields[0]?.id).toBe('merge');
+
+    // The old question is gone: its answers no longer fit.
+    await expect(answer(id, { decision: 'approve' })).rejects.toMatchObject({
+      status: 400,
+    });
+    received.length = 0;
+    await answer(id, { merge: 'merge' });
+    await expect(answer(id, { merge: 'hold' })).rejects.toBeInstanceOf(
+      AlreadyRespondedError,
+    );
+    await runAll();
+
+    const envelopes = received
+      .filter(
+        (entry) =>
+          entry.headers['x-hatch-event'] === 'hatch.notification.responded',
+      )
+      .map((entry) => JSON.parse(entry.body));
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0].notification.response).toMatchObject({
+      round: 2,
+      answers: { merge: 'merge' },
+    });
+    summary = (await service.listNotifications()).items[0]!;
+    expect(summary.response).toMatchObject({ round: 2 });
+    expect(
+      (await service.getNotification(id)).responseDeliveryList,
+    ).toHaveLength(2);
+
+    const history = await service.listNotificationRevisions(id);
+    expect(history.revisions).toMatchObject([
+      { title: 'Deploy?', replyRound: 1 },
+    ]);
+    expect(history.responses.map((response) => response.round)).toEqual([1, 2]);
+  });
+
+  it('pages earlier versions newest first, each page with the answers to its rounds', async () => {
+    const id = await sendForm();
+    // Four answered rounds, each replaced by a new question: rounds 1-5,
+    // with round 5 still open.
+    for (let round = 1; round <= 4; round += 1) {
+      await answer(id, { decision: 'approve' });
+      const next = structuredClone(APPROVE_FORM);
+      next.fields[0]!.label = `Question ${round + 1}`;
+      await updateNotification(
+        { type: 'channel', channelId },
+        notificationUpdateSchema.parse({ id, reply: next }),
+      );
+    }
+    const first = await service.listNotificationRevisions(id, { limit: 2 });
+    expect(first.revisions.map((revision) => revision.replyRound)).toEqual([
+      4, 3,
+    ]);
+    expect(first.responses.map((response) => response.round)).toEqual([3, 4]);
+    expect(first.nextCursor).not.toBeNull();
+
+    const last = await service.listNotificationRevisions(id, {
+      limit: 2,
+      cursor: first.nextCursor!,
+    });
+    expect(last.revisions.map((revision) => revision.replyRound)).toEqual([
+      2, 1,
+    ]);
+    expect(last.responses.map((response) => response.round)).toEqual([1, 2]);
+    expect(last.nextCursor).toBeNull();
+    await expect(
+      service.listNotificationRevisions(id, { cursor: 'nope' }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('delivers the answer to an earlier round with what it answered, after a new question changed the data', async () => {
+    await service.createResponseRoute({
+      sourceType: 'any',
+      target: { destinationId: webhookId },
+    });
+    const response = await pushAsChannel({
+      kind: 'deploy',
+      title: 'Deploy A?',
+      data: { deployment: 'A' },
+      reply: APPROVE_FORM,
+    });
+    const { id } = (await response.json()) as { id: string };
+    await runAll();
+    // The receiver is down when the answer is given.
+    webhookStatus = 503;
+    await answer(id, { decision: 'approve' });
+    await runAll();
+    webhookStatus = 200;
+    await updateNotification(
+      { type: 'channel', channelId },
+      notificationUpdateSchema.parse({
+        id,
+        title: 'Deploy B?',
+        data: { deployment: 'B' },
+        reply: MERGE_FORM,
+      }),
+    );
+    received.length = 0;
+    await db
+      .update(schema.notificationResponseDeliveries)
+      .set({ nextAttemptAt: new Date(0) });
+    await runAll();
+
+    const [envelope] = received
+      .filter(
+        (entry) =>
+          entry.headers['x-hatch-event'] === 'hatch.notification.responded',
+      )
+      .map((entry) => JSON.parse(entry.body));
+    expect(envelope.notification).toMatchObject({
+      title: 'Deploy A?',
+      data: { deployment: 'A' },
+      reply: { fields: [{ id: 'decision' }] },
+      response: { round: 1, answers: { decision: 'approve' } },
+    });
+  });
+
+  it('refuses an answer to a question an edit has since replaced, on the web and from the push', async () => {
+    const id = await sendForm();
+    const firstShown = (await service.getNotification(id)).revision;
+    // Same field and option ids, a different question.
+    const renamed = structuredClone(APPROVE_FORM);
+    renamed.fields[0]!.label = 'Roll back the deploy?';
+    await updateNotification(
+      { type: 'channel', channelId },
+      notificationUpdateSchema.parse({ id, reply: renamed }),
+    );
+
+    await expect(
+      respondToNotification(
+        id,
+        { decision: 'approve' },
+        { userId: 'user-1', via: 'web' },
+        { round: 1 },
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'notifications.replyRoundChanged',
+    });
+    // The phone still shows the first question until the edit reaches it.
+    const stale = await handleDeviceResponse(
+      deviceRequest({ notificationId: id, answers: { decision: 'approve' } }),
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: 'QUESTION_CHANGED' },
+    });
+    expect((await service.getNotification(id)).response).toBeNull();
+
+    await runAll();
+    // A tap on the first question arriving after the phone got the second:
+    // it names the revision its notification showed.
+    const late = await handleDeviceResponse(
+      deviceRequest({
+        notificationId: id,
+        answers: { decision: 'approve' },
+        revision: firstShown,
+      }),
+    );
+    expect(late.status).toBe(409);
+    expect(await late.json()).toMatchObject({
+      error: { code: 'QUESTION_CHANGED' },
+    });
+    // An app build that sends no revision answers only the first question.
+    const unbound = await handleDeviceResponse(
+      deviceRequest({ notificationId: id, answers: { decision: 'approve' } }),
+    );
+    expect(unbound.status).toBe(409);
+    const current = await handleDeviceResponse(
+      deviceRequest({
+        notificationId: id,
+        answers: { decision: 'reject' },
+        revision: (await service.getNotification(id)).revision,
+      }),
+    );
+    expect(current.status).toBe(200);
+    expect((await service.getNotification(id)).response).toMatchObject({
+      round: 2,
+      answers: { decision: 'reject' },
+    });
+  });
+
+  it('asks nothing after the form is removed, and repeating the same form starts no round', async () => {
+    const id = await sendForm();
+    const sender = { type: 'channel' as const, channelId };
+    const form = (await service.getNotification(id)).reply!;
+    await updateNotification(sender, { id, reply: form, silent: true });
+    expect((await service.getNotification(id)).replyRound).toBe(1);
+
+    await updateNotification(sender, { id, reply: null });
+    const detail = await service.getNotification(id);
+    expect(detail).toMatchObject({ reply: null, replyRound: 2 });
+    await expect(answer(id, { decision: 'approve' })).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+});
+
+describe('cards', () => {
+  it('are stored with the push, replaced or removed by an edit, and kept in earlier versions', async () => {
+    const response = await pushAsChannel({
+      kind: 'deploy',
+      title: 'CI running',
+      card: {
+        status: { label: 'Running', tone: 'info' },
+        block: {
+          type: 'progress',
+          label: 'Checks',
+          percent: 21,
+          value: '3 / 14',
+        },
+      },
+    });
+    const { id } = (await response.json()) as { id: string };
+    expect((await service.getNotification(id)).card).toEqual({
+      status: { label: 'Running', tone: 'info' },
+      block: {
+        type: 'progress',
+        label: 'Checks',
+        percent: 21,
+        value: '3 / 14',
+      },
+    });
+
+    const sender = { type: 'channel' as const, channelId };
+    await updateNotification(
+      sender,
+      notificationUpdateSchema.parse({
+        id,
+        card: { status: { label: 'Passed', tone: 'success' } },
+      }),
+    );
+    expect((await service.getNotification(id)).card).toEqual({
+      status: { label: 'Passed', tone: 'success' },
+    });
+    await updateNotification(
+      sender,
+      notificationUpdateSchema.parse({ id, card: null }),
+    );
+    expect((await service.getNotification(id)).card).toBeNull();
+
+    const history = await service.listNotificationRevisions(id);
+    expect(
+      history.revisions.map((revision) => revision.card?.status?.label),
+    ).toEqual(['Passed', 'Running']);
   });
 });

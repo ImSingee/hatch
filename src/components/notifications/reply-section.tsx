@@ -90,16 +90,19 @@ function answerProblem(
 
 /**
  * The notification's reply form: answer it here, or see who answered and
- * what. A notification takes one answer, from whoever answers first.
+ * what. Each round of the form takes one answer, from whoever answers first.
  */
 export function ReplySection({
   notificationId,
   reply,
+  round,
   response,
   recalledAt,
 }: {
   notificationId: string;
   reply: ReplyForm;
+  /** The round of `reply`, sent with the answer. */
+  round: number;
   response: NotificationResponseView | null;
   recalledAt: string | null;
 }) {
@@ -112,12 +115,14 @@ export function ReplySection({
       </Text>
     );
   }
-  // Keyed so a draft never carries over to another notification.
+  // Keyed so a draft never carries over to another notification or to a
+  // new question on this one.
   return (
     <ReplyFormView
-      key={notificationId}
+      key={`${notificationId}:${round}`}
       notificationId={notificationId}
       reply={reply}
+      round={round}
     />
   );
 }
@@ -175,9 +180,11 @@ function AnswerSummary({
 function ReplyFormView({
   notificationId,
   reply,
+  round,
 }: {
   notificationId: string;
   reply: ReplyForm;
+  round: number;
 }) {
   const { t, locale } = useI18n();
   const [answers, setAnswers] = useState<ReplyAnswers>({});
@@ -187,7 +194,9 @@ function ReplyFormView({
   } | null>(null);
   const respond = useNotificationMutation(
     (input: ReplyAnswers) =>
-      respondToNotificationFn({ data: { id: notificationId, answers: input } }),
+      respondToNotificationFn({
+        data: { id: notificationId, round, answers: input },
+      }),
     { success: t('notifications.reply.sent') },
   );
   const problemText = (problem: AnswerProblem) => {

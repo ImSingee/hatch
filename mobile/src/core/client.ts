@@ -24,6 +24,7 @@ import {
   catalogProjection,
   notificationDetailProjection,
   notificationSummaryProjection,
+  readStateProjection,
   sessionProjection,
   summaryProjection,
 } from './rpc-projections';
@@ -49,6 +50,7 @@ import type {
   CreateRunInput,
   AgentModelCatalog,
   NotificationDetail,
+  NotificationReadState,
   NotificationSummary,
   PendingMessagesResult,
   Pins,
@@ -430,8 +432,9 @@ export class HatchApiClient {
   ): Promise<{ items: NotificationSummary[]; nextCursor: string | null }> {
     const result = await this.rpcRequest(
       (signal) =>
+        // The timeline order: most recently pushed or edited first.
         this.notificationRpc.listNotifications(
-          { cursor, limit: 50 },
+          { cursor, limit: 50, order: 'activity' },
           { signal },
         ),
       signal,
@@ -458,21 +461,55 @@ export class HatchApiClient {
   }
   /**
    * Answer a notification's reply form as the signed-in user. A notification
-   * takes one answer; a later one fails with a conflict (409).
+   * takes one answer per round; a later one, or one to a question an edit
+   * has since replaced, fails with a conflict (409).
    */
   respondToNotification(
     id: string,
+    round: number,
     answers: ReplyAnswers,
     signal?: AbortSignal,
   ) {
     return this.rpcRequest(
       (signal) =>
         this.notificationRpc.respondToNotification(
-          { id, answers: answersToMessages(answers), via: 'mobile' },
+          { id, round, answers: answersToMessages(answers), via: 'mobile' },
           { signal },
         ),
       signal,
     ).then(() => undefined);
+  }
+  /** How far this user has read the timeline, on every device. */
+  async notificationReadState(
+    signal?: AbortSignal,
+  ): Promise<NotificationReadState> {
+    const result = await this.rpcRequest(
+      (signal) => this.notificationRpc.getNotificationReadState({}, { signal }),
+      signal,
+    );
+    return readStateProjection(result.state);
+  }
+  /**
+   * Mark the timeline read up to and including one notification, as of the
+   * activity time it was shown with.
+   */
+  async markNotificationsRead(
+    notificationId: string,
+    activityAt: string,
+    signal?: AbortSignal,
+  ): Promise<NotificationReadState> {
+    const result = await this.rpcRequest(
+      (signal) =>
+        this.notificationRpc.markNotificationsRead(
+          {
+            through: { case: 'notificationId', value: notificationId },
+            activityAt,
+          },
+          { signal },
+        ),
+      signal,
+    );
+    return readStateProjection(result.state);
   }
   /** Delete a notification and its delivery history for the whole workspace. */
   deleteNotification(id: string, signal?: AbortSignal) {

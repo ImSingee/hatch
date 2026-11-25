@@ -245,7 +245,7 @@ export function NotificationHistory({
                   data-current={item.id === selected || undefined}
                 >
                   <Link
-                    to="/notifications/$notificationId"
+                    to="/notifications/log/$notificationId"
                     params={{ notificationId: item.id }}
                     className={classes.link}
                     aria-current={item.id === selected ? 'page' : undefined}

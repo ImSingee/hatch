@@ -11,6 +11,7 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '@hatch/platform-api';
+import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
 
 /** Remove Protobuf runtime metadata without duplicating the shared contract. */
 type Plain<T> = T extends (infer Item)[]
@@ -202,6 +203,8 @@ export type RunStreamEvent = { seq: number; event: AgentStreamEvent };
 export type NotificationSummary = {
   id: string;
   sourceType: string;
+  /** The App, Channel or sending user; null for the platform. */
+  sourceId: string | null;
   sourceName: string;
   kind: string;
   kindName: string;
@@ -216,12 +219,21 @@ export type NotificationSummary = {
   editedAt: string | null;
   /** Set when the source recalled it; phones no longer show it. */
   recalledAt: string | null;
-  /** Form the notification asks people to answer once. */
+  /** The question it asks now; each round takes one answer. */
   reply: ReplyForm | null;
+  replyRound: number;
   respondedAt: string | null;
+  /** The answer to the current round, once given. */
+  response: NotificationAnswer | null;
+  /** When its source last pushed or edited it: the timeline order. */
+  activityAt: string;
+  /** Status and one block the timeline shows. */
+  card: NotificationCard | null;
 };
-/** The one answer to a notification's reply form. */
+/** The answer to one round of a notification's reply form. */
 export type NotificationAnswer = {
+  round: number;
+  respondedByUserId: string | null;
   answers: ReplyAnswers;
   respondedByName: string;
   /** push | mobile | web | cli */
@@ -270,4 +282,11 @@ export type AppPin = {
 };
 export type Pins = {
   apps: AppPin[];
+};
+
+/** How far this user has read the notification timeline, on every device. */
+export type NotificationReadState = {
+  readThroughId: string | null;
+  unreadCount: number;
+  firstUnreadId: string | null;
 };

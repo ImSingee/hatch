@@ -95,6 +95,8 @@ export async function handleChannelPush(
 export async function ingestChannelPush(
   channel: Pick<NotificationChannel, 'id' | 'name' | 'kinds'>,
   body: unknown,
+  /** The chat of the Run sending as the Channel; answers go back there. */
+  agentSessionId?: string,
 ): Promise<
   | ({ ok: true } & IngestResult)
   | { ok: false; status: 400 | 422; message: string }
@@ -116,7 +118,12 @@ export async function ingestChannelPush(
     };
   }
   const result = await ingestNotification({
-    source: { type: 'channel', channelId: channel.id, name: channel.name },
+    source: {
+      type: 'channel',
+      channelId: channel.id,
+      name: channel.name,
+      agentSessionId,
+    },
     kind,
     push: push.data,
   });

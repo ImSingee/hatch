@@ -313,6 +313,17 @@ export const DESTINATION_TYPE_LABEL: Record<
   app: 'notifications.destinationType.app',
 };
 
+/** What a delivery went to: a destination, or (for an answer) an Agent chat. */
+export type DeliveryTargetType = DestinationType | 'agent';
+
+export const DELIVERY_TARGET_LABEL: Record<
+  DeliveryTargetType,
+  PlainTranslationKey
+> = {
+  ...DESTINATION_TYPE_LABEL,
+  agent: 'notifications.destinationType.agent',
+};
+
 /** Plural destination type names, for option group headings. */
 export const DESTINATION_TYPE_PLURAL: Record<
   DestinationType,
@@ -327,9 +338,10 @@ export function DestinationTypeIcon({
   type,
   size = 16,
 }: {
-  type: DestinationType;
+  type: DeliveryTargetType;
   size?: number;
 }) {
+  if (type === 'agent') return <IconSparkles size={size} stroke={1.6} />;
   if (type === 'device') return <IconDeviceMobile size={size} stroke={1.6} />;
   if (type === 'webhook') return <IconWebhook size={size} stroke={1.6} />;
   return <IconAppWindow size={size} stroke={1.6} />;

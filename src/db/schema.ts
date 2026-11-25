@@ -21,6 +21,7 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../packages/hatch-platform-api/notification-reply';
+import type { NotificationCard } from '../../packages/hatch-platform-api/notification-card';
 
 export * from './auth-schema';
 
@@ -30,6 +31,16 @@ function timestamp(name?: string) {
     return _timestamp({ withTimezone: true, mode: 'date' });
   }
   return _timestamp(name, { withTimezone: true, mode: 'date' });
+}
+
+/**
+ * A timestamp kept to the millisecond, like a JavaScript `Date`. Use it for
+ * values code compares or writes back (positions and cursors): a microsecond
+ * `now()` read into a `Date` loses its last digits and no longer equals
+ * itself in SQL.
+ */
+function msTimestamp(name: string) {
+  return _timestamp(name, { withTimezone: true, mode: 'date', precision: 3 });
 }
 
 // Monotonic within a process, so ids also order rows created in the same
@@ -914,6 +925,8 @@ export type NotificationKindDeclaration = {
 export type NotificationSourceType = 'app' | 'channel' | 'platform' | 'user';
 export type NotificationRouteSourceType = 'app' | 'channel' | 'any';
 export type NotificationDestinationType = 'device' | 'webhook' | 'app';
+/** Where an answer goes: a webhook or App destination, or an Agent chat. */
+export type NotificationResponseDeliveryType = 'webhook' | 'app' | 'agent';
 export type NotificationApnsEnvironment = 'sandbox' | 'production';
 /**
  * Why a destination is disabled: `user` in settings (only settings re-enable
@@ -968,6 +981,19 @@ export const notifications = snakeCase.table(
     }),
     /** Sender of a `user` notification; cleared when the user is deleted. */
     userId: text().references(() => user.id, { onDelete: 'set null' }),
+    /**
+     * The Agent chat answers continue: the one whose Run sent it, or the one
+     * an Agent response route opened for it. Cleared with the chat.
+     */
+    agentSessionId: ulid('agent_session_id').references(
+      () => agentSessions.id,
+      { onDelete: 'set null' },
+    ),
+    /**
+     * A Run sent it (directly or as a Channel), so every answer goes back to
+     * its chat. A chat a route opened gets answers only while a route picks it.
+     */
+    agentAsked: boolean('agent_asked').notNull().default(false),
     sourceName: text().notNull(),
     kind: text().notNull(),
     kindName: text().notNull(),
@@ -982,6 +1008,8 @@ export const notifications = snakeCase.table(
      */
     priority: smallint().notNull().default(0),
     data: jsonb().$type<JsonObject>(),
+    /** Status and one block shown in the timeline; see notification-card.ts. */
+    card: jsonb().$type<NotificationCard>(),
     dedupeKey: text(),
     occurredAt: timestamp('occurred_at').notNull(),
     /**
@@ -993,21 +1021,33 @@ export const notifications = snakeCase.table(
     alertRevision: integer('alert_revision').notNull().default(0),
     /** Last time the source edited the content. */
     editedAt: timestamp('edited_at'),
+    /**
+     * When the source last pushed or edited it, with an edit that changed the
+     * content or asked to alert again. Orders the timeline, so an update moves
+     * the notification to the end; answers and recalls leave it in place.
+     */
+    activityAt: msTimestamp('activity_at').notNull().defaultNow(),
     /** Set once when the source recalls the notification. */
     recalledAt: timestamp('recalled_at'),
-    /** Form the notification asks people to answer; fixed once sent. */
+    /**
+     * Form the notification asks people to answer now. An edit may replace or
+     * clear it, which starts the next round; each round takes one answer.
+     */
     reply: jsonb().$type<ReplyForm>(),
-    /** Set once when someone answers `reply` (one answer per notification). */
+    /** Which question `reply` is: 1 for the form it was sent with. */
+    replyRound: integer('reply_round').notNull().default(1),
+    /** Set when someone answers the current round; cleared by a new round. */
     respondedAt: timestamp('responded_at'),
     /**
-     * The revision the answer created. Only phones are told about it, so
-     * webhooks and Apps do not count it as a change they missed.
+     * The revision the latest answer created. Only phones are told about it,
+     * so webhooks and Apps do not count it as a change they missed.
      */
     responseRevision: integer(),
     createdAt,
   },
   (table) => [
     index('notifications_created_idx').on(table.createdAt),
+    index('notifications_activity_idx').on(table.activityAt, table.id),
     index('notifications_app_created_idx').on(table.appId, table.createdAt),
     index('notifications_channel_created_idx').on(
       table.channelId,
@@ -1046,6 +1086,31 @@ export const notifications = snakeCase.table(
         or ("notifications"."source_type" = 'platform' and "notifications"."app_id" is null and "notifications"."channel_id" is null and "notifications"."user_id" is null)
         or ("notifications"."source_type" = 'user' and "notifications"."app_id" is null and "notifications"."channel_id" is null)
       )`,
+    ),
+  ],
+);
+
+/**
+ * How far each reader has read the timeline: everything at or before
+ * (`activityAt`, `notificationId`) in timeline order is read. One row per
+ * user, shared by all their devices, and one for the platform Agent (Runs have
+ * no user of their own). The position only moves forward.
+ */
+export const notificationReadCursors = snakeCase.table(
+  'notification_read_cursors',
+  {
+    /** `user:<id>` or `agent`. */
+    reader: text().primaryKey(),
+    userId: text().references(() => user.id, { onDelete: 'cascade' }),
+    activityAt: msTimestamp('activity_at').notNull(),
+    /** Breaks ties between notifications with one activity time; "" before any. */
+    notificationId: text().notNull().default(''),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  () => [
+    check(
+      'notification_read_cursors_reader_check',
+      sql`("notification_read_cursors"."reader" = 'agent' and "notification_read_cursors"."user_id" is null) or ("notification_read_cursors"."user_id" is not null and "notification_read_cursors"."reader" = 'user:' || "notification_read_cursors"."user_id")`,
     ),
   ],
 );
@@ -1244,29 +1309,69 @@ export const notificationDeliveries = snakeCase.table(
 
 export type NotificationResponseVia = 'push' | 'mobile' | 'web' | 'cli';
 
-/** The one answer to a notification's reply form. Never changes. */
-export const notificationResponses = snakeCase.table('notification_responses', {
-  notificationId: ulid()
-    .primaryKey()
-    .references(() => notifications.id, { onDelete: 'cascade' }),
-  answers: jsonb().$type<ReplyAnswers>().notNull(),
-  respondedByUserId: text().references(() => user.id, {
-    onDelete: 'set null',
-  }),
-  /** Snapshot so the answer stays attributed after the user is removed. */
-  respondedByName: text().notNull(),
-  via: text().$type<NotificationResponseVia>().notNull(),
-  /** Device that answered from the push itself. */
-  destinationId: ulid().references(() => notificationDestinations.id, {
-    onDelete: 'set null',
-  }),
-  createdAt,
-});
+/**
+ * The answer to one round of a notification's reply form: one per round,
+ * never changed.
+ */
+export const notificationResponses = snakeCase.table(
+  'notification_responses',
+  {
+    notificationId: ulid()
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    /** The `replyRound` this answers. */
+    round: integer().notNull().default(1),
+    /** The notification revision this answer created. */
+    revision: integer(),
+    answers: jsonb().$type<ReplyAnswers>().notNull(),
+    respondedByUserId: text().references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    /** Snapshot so the answer stays attributed after the user is removed. */
+    respondedByName: text().notNull(),
+    via: text().$type<NotificationResponseVia>().notNull(),
+    /** Device that answered from the push itself. */
+    destinationId: ulid().references(() => notificationDestinations.id, {
+      onDelete: 'set null',
+    }),
+    createdAt,
+  },
+  (table) => [primaryKey({ columns: [table.notificationId, table.round] })],
+);
+
+/**
+ * What a notification said before an edit changed it: one row per replaced
+ * version, so the timeline can show how it got here.
+ */
+export const notificationRevisions = snakeCase.table(
+  'notification_revisions',
+  {
+    notificationId: ulid()
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    /** The notification's revision while this version was current. */
+    revision: integer().notNull(),
+    title: text().notNull(),
+    body: text(),
+    url: text(),
+    data: jsonb().$type<JsonObject>(),
+    card: jsonb().$type<NotificationCard>(),
+    reply: jsonb().$type<ReplyForm>(),
+    replyRound: integer('reply_round').notNull(),
+    /** When this version became current (its activity time). */
+    activityAt: msTimestamp('activity_at').notNull(),
+    /** When an edit replaced it. */
+    replacedAt: timestamp('replaced_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.notificationId, table.revision] })],
+);
+
+export type NotificationResponseTargetType = 'destination' | 'agent';
 
 /**
  * Where answers go: answers to notifications matching (source, kind) are
- * sent to one webhook or App destination. A null sourceId/kind matches any
- * value.
+ * sent to one webhook or App destination, or to the Agent as a message in a
+ * chat. A null sourceId/kind matches any value.
  */
 export const notificationResponseRoutes = snakeCase.table(
   'notification_response_routes',
@@ -1279,14 +1384,38 @@ export const notificationResponseRoutes = snakeCase.table(
       onDelete: 'cascade',
     }),
     kind: text(),
-    targetDestinationId: ulid()
+    targetType: text('target_type')
+      .$type<NotificationResponseTargetType>()
       .notNull()
-      .references(() => notificationDestinations.id, { onDelete: 'cascade' }),
+      .default('destination'),
+    /** The webhook or App, for a `destination` target. */
+    targetDestinationId: ulid().references(() => notificationDestinations.id, {
+      onDelete: 'cascade',
+    }),
+    /**
+     * For an `agent` target: the chat every answer goes to, or null for one
+     * chat per notification (opened by its first answer). Deleting that chat
+     * deletes the route, like deleting a destination does; it never turns
+     * into the other mode.
+     */
+    agentSessionId: ulid('agent_session_id').references(
+      () => agentSessions.id,
+      { onDelete: 'cascade' },
+    ),
+    /** For an `agent` target: what the Agent should do with the answer. */
+    agentInstructions: text('agent_instructions'),
     enabled: boolean().notNull().default(true),
     createdAt,
     updatedAt,
   },
   () => [
+    check(
+      'notification_response_routes_target_check',
+      sql`(
+        ("notification_response_routes"."target_type" = 'destination' and "notification_response_routes"."target_destination_id" is not null and "notification_response_routes"."agent_session_id" is null and "notification_response_routes"."agent_instructions" is null)
+        or ("notification_response_routes"."target_type" = 'agent' and "notification_response_routes"."target_destination_id" is null)
+      )`,
+    ),
     check(
       'notification_response_routes_source_check',
       sql`(
@@ -1298,7 +1427,7 @@ export const notificationResponseRoutes = snakeCase.table(
   ],
 );
 
-/** One answer delivery per (notification, destination), retried like any. */
+/** One answer delivery per (notification, round, destination), retried like any. */
 export const notificationResponseDeliveries = snakeCase.table(
   'notification_response_deliveries',
   {
@@ -1306,11 +1435,22 @@ export const notificationResponseDeliveries = snakeCase.table(
     notificationId: ulid()
       .notNull()
       .references(() => notifications.id, { onDelete: 'cascade' }),
+    /** The round whose answer this delivers. */
+    round: integer().notNull().default(1),
+    /** Null for an Agent chat, and once the destination is removed. */
     destinationId: ulid().references(() => notificationDestinations.id, {
       onDelete: 'set null',
     }),
-    destinationType: text().$type<NotificationDestinationType>().notNull(),
+    destinationType: text().$type<NotificationResponseDeliveryType>().notNull(),
     destinationName: text().notNull(),
+    /**
+     * The Agent chat an `agent` delivery queues the answer in; null for the
+     * notification's own chat (the one whose Run asked, or the one its first
+     * answer opens).
+     */
+    agentSessionId: text('agent_session_id'),
+    /** What the Agent routes that picked this chat ask the Agent to do. */
+    agentInstructions: jsonb('agent_instructions').$type<string[]>(),
     status: text()
       .$type<NotificationDeliveryStatus>()
       .notNull()
@@ -1330,7 +1470,7 @@ export const notificationResponseDeliveries = snakeCase.table(
   (table) => [
     uniqueIndex(
       'notification_response_deliveries_notification_destination_idx',
-    ).on(table.notificationId, table.destinationId),
+    ).on(table.notificationId, table.round, table.destinationId),
     index('notification_response_deliveries_due_idx')
       .on(table.status, table.nextAttemptAt)
       .where(

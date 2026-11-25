@@ -104,8 +104,37 @@ named `Hatch Agent`. Device registration is bound to a native login session,
 is mobile-only and has no CLI command. Answering from the notification itself
 (`POST /api/notifications/device-response`, signed with the phone's push key)
 is bound to the device as well; the CLI answers the same forms with
-`hatch notification respond`, and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
+`hatch notification respond` (the required `--round <n>` binds the answer to the question read, as the
+web and the phone app do), and a Run answers as `Hatch Agent`. Secrets (webhook signing secrets, channel
 tokens) are printed only by the create/rotate commands that mint them.
+
+`notification list --order activity` lists in the web timeline's order (last
+push or content/alerting edit first) and prints that time; it uses the same
+`ListNotifications` RPC and cursor rules as the timeline.
+
+`notification update <id> --reply <json> | --reply-file <path|-> | --clear-reply`
+asks a new question on the same notification (`UpdateNotification.reply` /
+`clear_reply`), and `notification revisions <id>` lists earlier versions and
+every answer (`ListNotificationRevisions`), matching the timeline's "Earlier
+versions".
+
+`notification send|update --card <json> | --card-file <path|->` (and
+`update --clear-card`) set the timeline card (`SendNotification.card`,
+`UpdateNotification.card` / `clear_card`), checked locally with the platform's
+card schema before any request.
+
+`notification response-route create|update --agent [--agent-session <id> |
+--chat-per-notification] [--agent-instructions <text> |
+--clear-agent-instructions]` sends answers to the Agent (`agent`,
+`agent_session_id`, `agent_instructions` on the response route RPCs); the
+settings page offers the per-notification chat with instructions, and the CLI
+also a fixed chat. A Run's `notification send` remembers its chat, so answers
+come back to the Agent there.
+
+`notification unread` and `notification mark-read (--through <id> [--at <time>] | --latest)`
+read and move the caller's timeline read position (`GetNotificationReadState`,
+`MarkNotificationsRead`), the same domain service as the web timeline. A Run
+has no user, so in a Run they act on the platform Agent's own position.
 
 `notification update <id>` updates content and alerts phones again by default,
 including when the content is unchanged or no content flags are supplied.

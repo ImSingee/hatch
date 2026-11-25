@@ -114,18 +114,23 @@ final class HatchReplyDelegate: NotificationDelegate {
     let value = isOption
       ? String(action.dropFirst(Self.optionPrefix.count))
       : (response as? UNTextInputNotificationResponse)?.userText ?? ""
+    // The revision this notification showed: the server refuses the answer
+    // if the sender has asked a new question since, even with the same ids.
+    let revision = (data["hatchRevision"] as? NSNumber)?.intValue
     send(
       origin: base, id: id, kid: kid, key: key,
-      answers: [field: value], thread: content.threadIdentifier)
+      answers: [field: value], revision: revision, thread: content.threadIdentifier)
     return true
   }
 
   private func send(
     origin: URL, id: String, kid: String, key: SymmetricKey,
-    answers: [String: String], thread: String
+    answers: [String: String], revision: Int?, thread: String
   ) {
+    var payload: [String: Any] = ["notificationId": id, "answers": answers]
+    if let revision { payload["revision"] = revision }
     guard let body = try? JSONSerialization.data(
-      withJSONObject: ["notificationId": id, "answers": answers], options: [.sortedKeys])
+      withJSONObject: payload, options: [.sortedKeys])
     else { return }
     let timestamp = String(Int64(Date().timeIntervalSince1970 * 1000))
     var request = URLRequest(url: origin.appendingPathComponent("api/notifications/device-response"))
