@@ -3,9 +3,7 @@
   "version": "10",
   "dialect": "postgres",
   "id": "180a32b9-2ce8-4d77-b3e3-7748d5917356",
-  "prevIds": [
-    "813c740c-2d42-4cfa-8eb1-e96298fe57da"
-  ],
+  "prevIds": ["813c740c-2d42-4cfa-8eb1-e96298fe57da"],
   "footprints": [
     {
       "statementType": "add_column",
@@ -20,10 +18,7 @@
         "n|col|public.notification_revisions.format",
         "e|col|public.notification_revisions.format"
       ],
-      "reads": [
-        "n|tbl|public.notification_revisions",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
     },
     {
       "statementType": "add_column",
@@ -38,10 +33,7 @@
         "n|col|public.notification_revisions.summary",
         "e|col|public.notification_revisions.summary"
       ],
-      "reads": [
-        "n|tbl|public.notification_revisions",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
     },
     {
       "statementType": "add_column",
@@ -56,10 +48,7 @@
         "n|col|public.notification_revisions.markdown",
         "e|col|public.notification_revisions.markdown"
       ],
-      "reads": [
-        "n|tbl|public.notification_revisions",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
     },
     {
       "statementType": "add_column",
@@ -74,130 +63,72 @@
         "n|col|public.notification_revisions.content",
         "e|col|public.notification_revisions.content"
       ],
-      "reads": [
-        "n|tbl|public.notification_revisions",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
     },
     {
       "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notifications",
-        "format"
-      ],
+      "statementTarget": ["column", "public", "notifications", "format"],
       "writes": [
         "s|col|public.notifications.format",
         "n|col|public.notifications.format",
         "e|col|public.notifications.format"
       ],
-      "reads": [
-        "n|tbl|public.notifications",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
     },
     {
       "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notifications",
-        "summary"
-      ],
+      "statementTarget": ["column", "public", "notifications", "summary"],
       "writes": [
         "s|col|public.notifications.summary",
         "n|col|public.notifications.summary",
         "e|col|public.notifications.summary"
       ],
-      "reads": [
-        "n|tbl|public.notifications",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
     },
     {
       "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notifications",
-        "markdown"
-      ],
+      "statementTarget": ["column", "public", "notifications", "markdown"],
       "writes": [
         "s|col|public.notifications.markdown",
         "n|col|public.notifications.markdown",
         "e|col|public.notifications.markdown"
       ],
-      "reads": [
-        "n|tbl|public.notifications",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
     },
     {
       "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notifications",
-        "content"
-      ],
+      "statementTarget": ["column", "public", "notifications", "content"],
       "writes": [
         "s|col|public.notifications.content",
         "n|col|public.notifications.content",
         "e|col|public.notifications.content"
       ],
-      "reads": [
-        "n|tbl|public.notifications",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
     },
     {
       "statementType": "drop_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notification_revisions",
-        "card"
-      ],
+      "statementTarget": ["column", "public", "notification_revisions", "card"],
       "writes": [
         "s|col|public.notification_revisions.card",
         "n|col|public.notification_revisions.card",
         "e|col|public.notification_revisions.card"
       ],
-      "reads": [
-        "n|tbl|public.notification_revisions",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
     },
     {
       "statementType": "drop_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notifications",
-        "card"
-      ],
+      "statementTarget": ["column", "public", "notifications", "card"],
       "writes": [
         "s|col|public.notifications.card",
         "n|col|public.notifications.card",
         "e|col|public.notifications.card"
       ],
-      "reads": [
-        "n|tbl|public.notifications",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
     },
     {
       "statementType": "alter_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "notifications",
-        "title"
-      ],
-      "writes": [
-        "s|colprop|public.notifications.title.notNull"
-      ],
+      "statementTarget": ["column", "public", "notifications", "title"],
+      "writes": ["s|colprop|public.notifications.title.notNull"],
       "reads": [
         "n|tbl|public.notifications",
         "n|sch|public",
@@ -213,9 +144,7 @@
         "notification_revisions",
         "title"
       ],
-      "writes": [
-        "s|colprop|public.notification_revisions.title.notNull"
-      ],
+      "writes": ["s|colprop|public.notification_revisions.title.notNull"],
       "reads": [
         "n|tbl|public.notification_revisions",
         "n|sch|public",
@@ -225,11 +154,7 @@
     },
     {
       "statementType": "add_check",
-      "statementTarget": [
-        "table",
-        "public",
-        "notification_revisions"
-      ],
+      "statementTarget": ["table", "public", "notification_revisions"],
       "writes": [
         "s|ck|public.notification_revisions.notification_revisions_content_check",
         "n|ck|public.notification_revisions.notification_revisions_content_check",
@@ -249,11 +174,7 @@
     },
     {
       "statementType": "add_check",
-      "statementTarget": [
-        "table",
-        "public",
-        "notifications"
-      ],
+      "statementTarget": ["table", "public", "notifications"],
       "writes": [
         "s|ck|public.notifications.notifications_content_check",
         "n|ck|public.notifications.notifications_content_check",
