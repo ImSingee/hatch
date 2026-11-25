@@ -459,7 +459,15 @@ describe('keyboard manifest', () => {
   };
 
   it('rejects chords a platform shortcut could never use', () => {
-    const invalid = ['K', 'shift+K', 'mod+', 'mod+hyper+K', 'mod+ä'];
+    const invalid = [
+      'K',
+      'shift+K',
+      'mod+',
+      'mod+hyper+K',
+      'mod+ä',
+      'mod+__proto__+k',
+      'mod+constructor',
+    ];
     expect(invalid.map((chord) => issues({ reserve: [chord] }))).toEqual(
       invalid.map(() => [
         { path: ['keyboard', 'reserve', 0], message: expect.any(String) },

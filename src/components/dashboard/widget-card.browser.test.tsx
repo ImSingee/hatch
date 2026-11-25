@@ -570,12 +570,20 @@ test('platform shortcuts work inside a widget unless its App reserves them', asy
     const doc = frame.contentDocument!;
     const field = doc.createElement('input');
     doc.body.append(field);
+    const received: KeyboardEvent[] = [];
+    field.addEventListener('keydown', (event) => {
+      if (event.key === 'k') received.push(event);
+    });
     field.focus();
     await userEvent.keyboard(`{${MOD}>}k{/${MOD}}`);
+    return received;
   };
 
-  await pressInside(frames[1]);
+  // The reserving App gets the chord untouched.
+  const reservedKeys = await pressInside(frames[1]);
   expect(onRun).not.toHaveBeenCalled();
+  expect(reservedKeys).toHaveLength(1);
+  expect(reservedKeys[0].defaultPrevented).toBe(false);
 
   await pressInside(frames[0]);
   expect(onRun).toHaveBeenCalledOnce();

@@ -61,6 +61,11 @@ const KEY_ALIASES: Record<string, string> = {
   right: 'arrowright',
 };
 
+/** Own entries only, so names like `__proto__` never match. */
+function lookup<T>(table: Record<string, T>, name: string): T | undefined {
+  return Object.hasOwn(table, name) ? table[name] : undefined;
+}
+
 const NAMED_KEYS = new Set([
   ...Object.values(CODE_KEYS),
   ...Array.from({ length: 12 }, (_, index) => `f${index + 1}`),
@@ -91,7 +96,7 @@ export function parseKeyboardChord(
   }
   const modifiers = new Set<Modifier>();
   for (const part of parts.slice(0, -1)) {
-    const modifier = MODIFIER_ALIASES[part];
+    const modifier = lookup(MODIFIER_ALIASES, part);
     if (!modifier) {
       return {
         ok: false,
@@ -104,10 +109,10 @@ export function parseKeyboardChord(
     modifiers.add(modifier);
   }
   const last = parts.at(-1) ?? '';
-  if (MODIFIER_ALIASES[last]) {
+  if (lookup(MODIFIER_ALIASES, last)) {
     return { ok: false, error: `"${text}" names no key after its modifiers` };
   }
-  const key = KEY_ALIASES[last] ?? last;
+  const key = lookup(KEY_ALIASES, last) ?? last;
   if (!/^[a-z0-9]$/.test(key) && !NAMED_KEYS.has(key)) {
     return {
       ok: false,
@@ -174,7 +179,7 @@ export function keyboardEventChord(event: KeyboardChordEvent): string | null {
     key = event.code.slice(3).toLowerCase();
   else if (/^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
   else if (/^F([1-9]|1[0-2])$/.test(event.code)) key = event.code.toLowerCase();
-  else key = CODE_KEYS[event.code];
+  else key = lookup(CODE_KEYS, event.code);
   if (!key) return null;
   const modifiers = new Set<Modifier>();
   if (event.ctrlKey) modifiers.add('ctrl');
