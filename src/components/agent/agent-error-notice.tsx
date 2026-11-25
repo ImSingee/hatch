@@ -7,9 +7,8 @@ import {
   IconRefresh,
 } from '@tabler/icons-react';
 import { useState } from 'react';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import classes from './chat.module.css';
-
-const FALLBACK_ERROR = 'The model provider returned an unknown error.';
 
 /** The failed turn's automatic retry, on this browser's clock. */
 export type AutoRetryStatus = {
@@ -34,25 +33,29 @@ function AutoRetryLine({
   status: AutoRetryStatus;
   scheduledAt: number | null;
 }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(Date.now);
   useInterval(() => setNow(Date.now()), 1000, {
     autoInvoke: scheduledAt !== null,
   });
 
   let text: string;
-  const progress = `attempt ${status.attempt} of ${status.maxAttempts}`;
+  const progress = { attempt: status.attempt, max: status.maxAttempts };
   if (scheduledAt !== null) {
     const remaining = scheduledAt - now;
     text =
       remaining > 0
-        ? `Retrying automatically in ${formatRemaining(remaining)} · ${progress}`
-        : `Retrying now · ${progress}`;
+        ? t('agent.autoRetry.in', {
+            ...progress,
+            remaining: formatRemaining(remaining),
+          })
+        : t('agent.autoRetry.now', progress);
   } else if (status.waitingForRunner) {
-    text = `Retrying automatically once the Agent Runner reconnects · ${progress}`;
+    text = t('agent.autoRetry.waitingForRunner', progress);
   } else if (status.attempt > status.maxAttempts) {
-    text = `Stopped after ${status.maxAttempts} automatic retries.`;
+    text = t('agent.autoRetry.exhausted', { count: status.maxAttempts });
   } else {
-    text = 'Automatic retry stopped.';
+    text = t('agent.autoRetry.stopped');
   }
   return (
     <Text size="xs" c="dimmed" data-testid="agent-auto-retry-status">
@@ -71,6 +74,25 @@ export type RetryControls = {
   stoppingAutoRetry?: boolean;
 };
 
+/**
+ * Failure sentences the platform itself stores on interrupted or failed runs
+ * (`src/server/agent-runs.ts`, the run events route). They are persisted as
+ * English text, so the notice recognises them and shows the translation;
+ * provider and model errors stay as they arrived.
+ */
+const PLATFORM_RUN_ERRORS: Record<string, PlainTranslationKey> = {
+  'Agent run was interrupted because its Agent Runner stayed disconnected past the lease window.':
+    'agent.error.platform.leaseExpired',
+  'Agent run was interrupted because the Agent Runner restarted.':
+    'agent.error.platform.runnerRestarted',
+  'Agent run was interrupted because its Agent Runner went away.':
+    'agent.error.platform.runnerGone',
+  'Agent run was interrupted.': 'agent.error.platform.interrupted',
+  'Agent run is no longer active (its runner went away).':
+    'agent.error.platform.noLongerActive',
+  'Agent run failed.': 'agent.error.platform.failed',
+};
+
 export function AgentErrorNotice({
   message,
   live = false,
@@ -85,6 +107,7 @@ export function AgentErrorNotice({
   /** Announce a newly arrived live error; persisted history stays quiet. */
   live?: boolean;
 }) {
+  const { t } = useI18n();
   const scheduledAt =
     autoRetry && autoRetry.attempt > 0 ? autoRetry.nextRetryAt : null;
   // An automatic retry is pending, with or without a known time.
@@ -99,12 +122,19 @@ export function AgentErrorNotice({
       color="red"
       variant="light"
       icon={<IconAlertTriangle size={18} stroke={1.7} aria-hidden />}
-      title="The Agent couldn't complete this reply"
+      title={t('agent.error.title')}
       role={live ? 'alert' : 'note'}
     >
       <Stack gap="xs" align="flex-start" className={classes.agentErrorBody}>
         <Text component="div" size="sm" className={classes.agentErrorDetail}>
-          {message?.trim() || FALLBACK_ERROR}
+          {(() => {
+            const text = message?.trim();
+            if (!text) return t('agent.error.unknown');
+            const key = Object.hasOwn(PLATFORM_RUN_ERRORS, text)
+              ? PLATFORM_RUN_ERRORS[text]
+              : undefined;
+            return key ? t(key) : text;
+          })()}
         </Text>
         {autoRetry && autoRetry.attempt > 0 ? (
           // Remount per schedule: the ticking interval starts on mount.
@@ -126,7 +156,7 @@ export function AgentErrorNotice({
               disabled={retrying || retryDisabled}
               aria-busy={retrying || undefined}
             >
-              {retryPending ? 'Retry now' : 'Retry'}
+              {retryPending ? t('agent.error.retryNow') : t('common.retry')}
             </Button>
             {retryPending && onStopAutoRetry ? (
               <Button
@@ -141,7 +171,7 @@ export function AgentErrorNotice({
                 loading={stoppingAutoRetry}
                 disabled={stoppingAutoRetry || retrying}
               >
-                Stop retrying
+                {t('agent.error.stopRetrying')}
               </Button>
             ) : null}
           </Group>
@@ -152,14 +182,16 @@ export function AgentErrorNotice({
 }
 
 /** What the terminal stop reason says about why the reply ended early. */
-function endedEarlyText(stopReason: StopReason | undefined): string {
+function endedEarlyKey(
+  stopReason: StopReason | undefined,
+): PlainTranslationKey {
   switch (stopReason) {
     case 'length':
-      return 'The model reached its output limit, so the answer above may be cut off.';
+      return 'agent.endedEarly.length';
     case 'toolUse':
-      return 'The model asked to run more tools, but the reply ended first.';
+      return 'agent.endedEarly.toolUse';
     default:
-      return 'The model stopped before finishing the reply.';
+      return 'agent.endedEarly.stopped';
   }
 }
 
@@ -176,17 +208,18 @@ export function EndedEarlyNotice({
   /** Announce a newly arrived live end; persisted history stays quiet. */
   live?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <Alert
       className={classes.agentErrorNotice}
       color="yellow"
       variant="light"
       icon={<IconAlertTriangle size={18} stroke={1.7} aria-hidden />}
-      title="The reply ended early"
+      title={t('agent.endedEarly.title')}
       role={live ? 'alert' : 'note'}
     >
       <Text component="div" size="sm" className={classes.agentErrorDetail}>
-        {endedEarlyText(stopReason)}
+        {t(endedEarlyKey(stopReason))}
       </Text>
     </Alert>
   );

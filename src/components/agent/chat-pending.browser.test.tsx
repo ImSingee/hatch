@@ -10,6 +10,7 @@ import type {
 } from './pending-api';
 
 const fixtures = vi.hoisted(() => ({
+  messageMode: 'steer' as 'queue' | 'steer',
   session: {
     id: 'session-1',
     title: 'Tracker',
@@ -72,6 +73,17 @@ vi.mock('~queries/agent', () => ({
   sessionQueryOptions: (sessionId: string) => ({
     queryKey: ['test-agent-session', sessionId],
     queryFn: async () => structuredClone(fixtures.session),
+  }),
+}));
+
+vi.mock('~auth/client', () => ({
+  authClient: { useSession: () => ({ data: { user: { id: 'user-1' } } }) },
+}));
+
+vi.mock('~queries/agent-preferences', () => ({
+  agentPreferencesQueryOptions: (userId: string) => ({
+    queryKey: ['test-agent-preferences', userId],
+    queryFn: async () => ({ userId, messageMode: fixtures.messageMode }),
   }),
 }));
 
@@ -185,6 +197,7 @@ beforeEach(() => {
     pendingEnvRequest: null,
   };
   fixtures.session.pending = { paused: false, messages: [] };
+  fixtures.messageMode = 'steer';
 });
 
 test('sends a message while the Agent works to the pending tray', async () => {
@@ -227,6 +240,80 @@ test('sends a message while the Agent works to the pending tray', async () => {
   await expect
     .element(screen.getByRole('button', { name: 'Stop' }))
     .toBeVisible();
+});
+
+test('sends with Ctrl/⌘+Enter in the other mode than the default', async () => {
+  fixtures.messageMode = 'queue';
+  const { calls } = stubFetch((call) => {
+    const body = call.body as { content: { text: string }[]; mode?: string };
+    return {
+      paused: false,
+      messages: [
+        pendingMessage(
+          `pending-${calls.length}`,
+          body.content[0].text,
+          body.mode === 'steer' ? 'steer' : 'queue',
+        ),
+      ],
+    };
+  });
+  const screen = await renderChat();
+  const input = screen.getByRole('textbox', { name: 'Message the Agent…' });
+  await input.click();
+  await userEvent.keyboard('Use blue');
+  await userEvent.keyboard('{Control>}{Enter}{/Control}');
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0].body).toMatchObject({ mode: 'steer' });
+  const tray = screen.getByRole('region', { name: 'Pending messages' });
+  await expect
+    .element(tray.getByRole('button', { name: 'Steer. Switch to queue' }))
+    .toBeVisible();
+
+  // Plain Enter leaves the mode to the user's preference.
+  await input.click();
+  await userEvent.keyboard('And dark');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => calls.length).toBe(2);
+  expect(calls[1].body).not.toHaveProperty('mode');
+});
+
+test('switches a waiting message between queue and steer from its badge', async () => {
+  fixtures.session.pending = {
+    paused: false,
+    messages: [pendingMessage('pending-1', 'Use blue', 'queue')],
+  };
+  const { calls } = stubFetch((call) => ({
+    paused: false,
+    messages: [
+      pendingMessage(
+        'pending-1',
+        'Use blue',
+        (call.body as { mode: 'queue' | 'steer' }).mode,
+      ),
+    ],
+  }));
+  const screen = await renderChat();
+  const tray = screen.getByRole('region', { name: 'Pending messages' });
+  await tray.getByRole('button', { name: 'Queued. Switch to steer' }).click();
+  await expect
+    .element(tray.getByRole('button', { name: 'Steer. Switch to queue' }))
+    .toBeVisible();
+  await tray.getByRole('button', { name: 'Steer. Switch to queue' }).click();
+  await expect
+    .element(tray.getByRole('button', { name: 'Queued. Switch to steer' }))
+    .toBeVisible();
+  expect(calls).toEqual([
+    {
+      method: 'PATCH',
+      path: '/api/agent/sessions/session-1/pending/pending-1',
+      body: { mode: 'steer' },
+    },
+    {
+      method: 'PATCH',
+      path: '/api/agent/sessions/session-1/pending/pending-1',
+      body: { mode: 'queue' },
+    },
+  ]);
 });
 
 test('resends a draft whose response was lost as the same message', async () => {

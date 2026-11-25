@@ -26,8 +26,11 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
-import { formatRelative } from '~lib/format';
+import { useErrorText, useI18n, type PlainTranslationKey } from '~i18n';
+import { CodedError } from '~lib/error-codes';
+import { formatRelativeTime } from '~lib/format';
 import { appDataTablesQueryOptions } from '~queries/apps';
 import { mutateAppDataTableFn, queryAppDataTableFn } from '~server/apps';
 import { SectionHeader } from './section-header';
@@ -40,6 +43,19 @@ type TableViewState = {
   cursor: string | null;
   history: string[];
 };
+
+/** A row value the form rejects before saving, shown with its own fallback. */
+class RowInputError extends Error {
+  readonly reason: unknown;
+  readonly fallback: PlainTranslationKey;
+
+  constructor(reason: unknown, fallback: PlainTranslationKey) {
+    super(reason instanceof Error ? reason.message : String(reason));
+    this.name = 'RowInputError';
+    this.reason = reason;
+    this.fallback = fallback;
+  }
+}
 
 function jsonValuesEqual(left: unknown, right: unknown): boolean {
   if (left === right) return true;
@@ -90,12 +106,18 @@ function changedRowFields(
   for (const key of unset) {
     const field = fields[key];
     if (!field) {
-      throw new Error(
+      throw new CodedError(
         `Field "${key}" is no longer in the Data Table schema. Reload and retry.`,
+        'ops.dataTable.fieldRemoved',
+        { name: key },
       );
     }
     if (!field.optional) {
-      throw new Error(`Required field "${key}" cannot be removed.`);
+      throw new CodedError(
+        `Required field "${key}" cannot be removed.`,
+        'ops.dataTable.requiredRemoved',
+        { name: key },
+      );
     }
   }
   return { value, unset };
@@ -110,10 +132,12 @@ function QueryFailure({
   retrying: boolean;
   onRetry: () => void;
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   return (
     <Group gap="xs" justify="space-between" wrap="nowrap">
       <Text size="xs" c="red">
-        {error instanceof Error ? error.message : 'Failed to load Data Tables.'}
+        {errorText(error, 'ops.dataTable.loadFailed')}
       </Text>
       <Button
         type="button"
@@ -123,7 +147,7 @@ function QueryFailure({
         loading={retrying}
         onClick={onRetry}
       >
-        Retry
+        {t('common.retry')}
       </Button>
     </Group>
   );
@@ -141,6 +165,8 @@ function RowForm({
   row?: Row;
 }) {
   const qc = useQueryClient();
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const editable = row
     ? Object.fromEntries(
         Object.entries(row).filter(
@@ -149,19 +175,23 @@ function RowForm({
       )
     : {};
   const [value, setValue] = useState(JSON.stringify(editable, null, 2));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    cause: unknown;
+    fallback: PlainTranslationKey;
+  } | null>(null);
   const save = useMutation({
     mutationFn: async () => {
       let parsed: Record<string, unknown>;
       try {
         parsed = JSON.parse(value) as Record<string, unknown>;
         if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-          throw new Error('Row value must be a JSON object.');
+          throw new CodedError(
+            'Row value must be a JSON object.',
+            'ops.dataTable.rowNotObject',
+          );
         }
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Invalid JSON';
-        setError(message);
-        throw cause;
+        throw new RowInputError(cause, 'ops.dataTable.invalidJson');
       }
       let operation:
         | {
@@ -185,7 +215,10 @@ function RowForm({
             Object.keys(patch.value).length === 0 &&
             patch.unset.length === 0
           ) {
-            throw new Error('No changes to save.');
+            throw new CodedError(
+              'No changes to save.',
+              'ops.dataTable.noChanges',
+            );
           }
           operation = {
             type: 'patch',
@@ -196,9 +229,7 @@ function RowForm({
           };
         }
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Invalid row';
-        setError(message);
-        throw cause;
+        throw new RowInputError(cause, 'ops.dataTable.invalidRow');
       }
       return mutateAppDataTableFn({
         data: {
@@ -208,7 +239,9 @@ function RowForm({
       });
     },
     onSuccess: () => {
-      toast.success(row ? 'Updated row' : 'Added row');
+      toast.success(
+        row ? t('ops.dataTable.rowUpdated') : t('ops.dataTable.rowAdded'),
+      );
       void qc.invalidateQueries({
         queryKey: ['apps', appId, 'data-table-rows'],
       });
@@ -216,22 +249,28 @@ function RowForm({
       modals.closeAll();
     },
     onError: (cause) => {
-      setError(cause instanceof Error ? cause.message : 'Failed to save row.');
+      setError(
+        cause instanceof RowInputError
+          ? { cause: cause.reason, fallback: cause.fallback }
+          : { cause, fallback: 'ops.dataTable.saveFailed' },
+      );
     },
+    // Every failure is shown inline on the row value.
+    meta: { errorToast: false },
   });
 
   return (
     <Stack gap="sm">
       <JsonInput
-        label="Row value"
-        description="System fields are managed by the platform. Remove optional fields to clear them."
+        label={t('ops.dataTable.rowValue')}
+        description={t('ops.dataTable.rowValueDescription')}
         value={value}
         onChange={(next) => {
           setValue(next);
           setError(null);
         }}
-        error={error}
-        validationError="Invalid JSON"
+        error={error ? errorText(error.cause, error.fallback) : null}
+        validationError={t('ops.dataTable.invalidJson')}
         formatOnBlur
         autosize
         minRows={8}
@@ -244,14 +283,14 @@ function RowForm({
           variant="default"
           onClick={() => modals.closeAll()}
         >
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button
           type="button"
           loading={save.isPending}
           onClick={() => save.mutate()}
         >
-          {row ? 'Save' : 'Add'}
+          {row ? t('common.save') : t('common.add')}
         </Button>
       </Group>
     </Stack>
@@ -260,6 +299,8 @@ function RowForm({
 
 export function DataTableSection({ appId }: { appId: string }) {
   const qc = useQueryClient();
+  const { t, locale } = useI18n();
+  const errorText = useErrorText();
   const info = useQuery(appDataTablesQueryOptions(appId));
   const tables = useMemo(() => info.data?.tables ?? [], [info.data?.tables]);
   const [tableState, setTableState] = useState<TableViewState>({
@@ -305,17 +346,17 @@ export function DataTableSection({ appId }: { appId: string }) {
         },
       }),
     onSuccess: () => {
-      toast.success('Deleted row');
+      toast.success(t('ops.dataTable.rowDeleted'));
       void qc.invalidateQueries({
         queryKey: ['apps', appId, 'data-table-rows'],
       });
       void qc.invalidateQueries(appDataTablesQueryOptions(appId));
     },
     onError: (cause) => {
-      toast.error(
-        cause instanceof Error ? cause.message : 'Failed to delete row.',
-      );
+      toast.error(errorText(cause, 'ops.dataTable.deleteFailed'));
     },
+    // The toast above reports the failure.
+    meta: { errorToast: false },
   });
 
   const openEditor = (row?: Row) => {
@@ -323,7 +364,9 @@ export function DataTableSection({ appId }: { appId: string }) {
     const descriptor = info.data.schema.tables[table];
     if (!descriptor) return;
     modals.open({
-      title: row ? `Edit ${table} row` : `Add ${table} row`,
+      title: row
+        ? t('ops.dataTable.editRowTitle', { table })
+        : t('ops.dataTable.addRowTitle', { table }),
       size: 'lg',
       children: (
         <RowForm
@@ -339,13 +382,18 @@ export function DataTableSection({ appId }: { appId: string }) {
   const confirmDelete = (row: Row) => {
     if (!row.id) return;
     modals.openConfirmModal({
-      title: 'Delete row?',
+      title: t('ops.dataTable.deleteRowTitle'),
       children: (
         <Text size="sm">
-          Permanently delete <Code>{row.id}</Code> from <Code>{table}</Code>?
+          <Trans
+            t={t}
+            i18nKey="ops.dataTable.deleteRowBody"
+            values={{ id: row.id, table: table ?? '' }}
+            components={{ id: <Code />, table: <Code /> }}
+          />
         </Text>
       ),
-      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      labels: { confirm: t('common.delete'), cancel: t('common.cancel') },
       confirmProps: { color: 'red' },
       onConfirm: () => remove.mutate(row.id as string),
     });
@@ -356,7 +404,7 @@ export function DataTableSection({ appId }: { appId: string }) {
       <Group justify="space-between" wrap="nowrap">
         <SectionHeader
           icon={<IconTable size={16} stroke={1.8} />}
-          title="Data Tables"
+          title={t('ops.dataTable.title')}
           meta={
             info.data ? (
               <Text size="xs" c="dimmed" ff="monospace">
@@ -372,7 +420,7 @@ export function DataTableSection({ appId }: { appId: string }) {
           disabled={!table}
           onClick={() => openEditor()}
         >
-          Add row
+          {t('ops.dataTable.addRow')}
         </Button>
       </Group>
 
@@ -391,14 +439,14 @@ export function DataTableSection({ appId }: { appId: string }) {
       ) : !info.data ? (
         info.isError ? null : (
           <Text size="xs" c="dimmed">
-            No Data Table schema has been deployed.
+            {t('ops.dataTable.noSchema')}
           </Text>
         )
       ) : (
         <>
           <Group align="end">
             <Select
-              label="Table"
+              label={t('ops.dataTable.table')}
               data={tables.map((item) => ({
                 value: item.name,
                 label: `${item.name} (~${item.rowCount})`,
@@ -417,8 +465,9 @@ export function DataTableSection({ appId }: { appId: string }) {
               rightSection={<IconChevronDown size={14} />}
               onClick={() => setShowMigrations((value) => !value)}
             >
-              {info.data.migrations.length} migration
-              {info.data.migrations.length === 1 ? '' : 's'}
+              {t('ops.dataTable.migrations', {
+                count: info.data.migrations.length,
+              })}
             </Button>
           </Group>
           <Collapse expanded={showMigrations}>
@@ -431,15 +480,17 @@ export function DataTableSection({ appId }: { appId: string }) {
                     </Text>
                     {migration.destructive ? (
                       <Badge size="xs" color="orange" variant="light">
-                        destructive
+                        {t('ops.dataTable.destructive')}
                       </Badge>
                     ) : null}
                     <Text size="xs" c="dimmed">
-                      {formatRelative(migration.appliedAt)} ·{' '}
+                      {formatRelativeTime(migration.appliedAt, locale)} ·{' '}
                       {migration.schemaHash.slice(0, 10)}
                     </Text>
                   </Group>
-                  <Code block>{migration.sql || '-- schema unchanged'}</Code>
+                  <Code block>
+                    {migration.sql || t('ops.dataTable.schemaUnchanged')}
+                  </Code>
                 </Stack>
               ))}
             </Stack>
@@ -459,7 +510,7 @@ export function DataTableSection({ appId }: { appId: string }) {
             </Center>
           ) : !rows.data ? null : rows.data.items.length === 0 ? (
             <Text size="xs" c="dimmed">
-              No rows yet.
+              {t('ops.dataTable.noRows')}
             </Text>
           ) : (
             <Table.ScrollContainer minWidth={700}>
@@ -486,21 +537,25 @@ export function DataTableSection({ appId }: { appId: string }) {
                       ))}
                       <Table.Td>
                         <Group gap={2} wrap="nowrap">
-                          <Tooltip label="Edit" withArrow>
+                          <Tooltip label={t('common.edit')} withArrow>
                             <ActionIcon
                               variant="subtle"
                               color="gray"
-                              aria-label={`Edit ${row.id}`}
+                              aria-label={t('ops.dataTable.editRowLabel', {
+                                id: String(row.id),
+                              })}
                               onClick={() => openEditor(row)}
                             >
                               <IconPencil size={14} />
                             </ActionIcon>
                           </Tooltip>
-                          <Tooltip label="Delete" withArrow>
+                          <Tooltip label={t('common.delete')} withArrow>
                             <ActionIcon
                               variant="subtle"
                               color="red"
-                              aria-label={`Delete ${row.id}`}
+                              aria-label={t('ops.dataTable.deleteRowLabel', {
+                                id: String(row.id),
+                              })}
                               onClick={() => confirmDelete(row)}
                             >
                               <IconTrash size={14} />
@@ -518,7 +573,7 @@ export function DataTableSection({ appId }: { appId: string }) {
             <Group justify="flex-end">
               <ActionIcon
                 variant="default"
-                aria-label="Previous page"
+                aria-label={t('ops.dataTable.previousPage')}
                 disabled={cursorHistory.length === 0}
                 onClick={() => {
                   const history = [...cursorHistory];
@@ -533,7 +588,7 @@ export function DataTableSection({ appId }: { appId: string }) {
               </ActionIcon>
               <ActionIcon
                 variant="default"
-                aria-label="Next page"
+                aria-label={t('ops.dataTable.nextPage')}
                 disabled={!rows.data.cursor}
                 onClick={() => {
                   setTableState({

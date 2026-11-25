@@ -12,8 +12,14 @@ import { wakeNotificationDispatcher } from './dispatcher';
 
 export type NotificationSource =
   | { type: 'app'; appId: string; name: string }
-  | { type: 'channel'; channelId: string; name: string }
-  | { type: 'platform'; name: string }
+  /** `agentSessionId`: the chat of the Run that sent it; answers go back there. */
+  | {
+      type: 'channel';
+      channelId: string;
+      name: string;
+      agentSessionId?: string;
+    }
+  | { type: 'platform'; name: string; agentSessionId?: string }
   | { type: 'user'; userId: string; name: string };
 
 /** `deliveries` counts the deliveries queued now; 0 for a duplicate. */
@@ -197,6 +203,10 @@ export async function ingestNotification(args: {
   target?: NotificationTarget;
 }): Promise<IngestResult> {
   const { source, kind, push } = args;
+  const askedBy =
+    source.type === 'platform' || source.type === 'channel'
+      ? (source.agentSessionId ?? null)
+      : null;
   const id = newNotificationId();
   const now = new Date();
 
@@ -209,6 +219,8 @@ export async function ingestNotification(args: {
         appId: source.type === 'app' ? source.appId : null,
         channelId: source.type === 'channel' ? source.channelId : null,
         userId: source.type === 'user' ? source.userId : null,
+        agentSessionId: askedBy,
+        agentAsked: askedBy !== null,
         sourceName: source.name,
         kind: kind.kind,
         kindName: kind.name,
@@ -219,6 +231,7 @@ export async function ingestNotification(args: {
         priority: push.priority,
         data: push.data,
         reply: push.reply,
+        card: push.card,
         dedupeKey: push.dedupeKey,
         occurredAt: push.occurredAt ? new Date(push.occurredAt) : now,
         createdAt: now,

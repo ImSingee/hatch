@@ -282,7 +282,8 @@ export const ComposerEditor = forwardRef<
     seedContent?: ComposerInputPart[];
     onChange: (content: ComposerInputPart[]) => void;
     onMentionLookupPendingChange: (pending: boolean) => void;
-    onSubmit: () => void;
+    /** `switchMode`: sent with ⌘/Ctrl held, to flip the busy delivery mode. */
+    onSubmit: (options: { switchMode: boolean }) => void;
     onPasteFiles: (files: File[]) => void;
   }
 >(function ComposerEditor(
@@ -488,7 +489,7 @@ export const ComposerEditor = forwardRef<
         ) {
           if (menuOpenRef.current && menuHasItemsRef.current) return false;
           event.preventDefault();
-          emitSubmit();
+          emitSubmit({ switchMode: event.metaKey || event.ctrlKey });
           return true;
         }
         return false;

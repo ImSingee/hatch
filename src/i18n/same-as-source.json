@@ -9,6 +9,19 @@
     "runTrigger.app",
     "runTrigger.webhook",
     "settings.agentRunner.label",
-    "settings.tailscale.label"
+    "settings.tailscale.label",
+    "agent.tool.input.url",
+    "agent.header.apps_one",
+    "appManage.appId",
+    "appManage.slug",
+    "notifications.destinationType.app",
+    "notifications.destinationType.webhook",
+    "notifications.detail.id",
+    "notifications.outcome.http",
+    "notifications.webhook.url",
+    "agentRunner.runners.id",
+    "agentRunner.runs.runner",
+    "homepage.page.agent",
+    "backends.column.app"
   ]
 }

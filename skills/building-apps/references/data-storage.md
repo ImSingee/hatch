@@ -33,8 +33,8 @@ modules share the emitted bundle URL.
 
 Enable `database` and deploy successfully to provision the database. The backend
 receives `DATABASE_URL` only while the capability is enabled; create required
-tables idempotently on startup so a fresh deployment works. `query_app_db` can
-inspect or initialize an already-provisioned database and can query it while
+tables idempotently on startup so a fresh deployment works.
+`hatch app db query <id> --file <query.sql|-> --json` can inspect or initialize an already-provisioned database and can query it while
 retained after capability disable, but never provisions or recreates one. Each
 App database is isolated.
 
@@ -56,17 +56,57 @@ and mutation behavior:
 - A backend creates the same typed client with `HATCH_DATA_URL` and
   `HATCH_SIGNING_SECRET`.
 
-After deployment, use `query_app_data_table` for live data operations.
+After deployment, use `hatch app data-table` for live data operations. The
+input file for `query` and `mutate` is JSON without an `action` field; the
+subcommand selects it.
 
-- `inspect` reports the live schema, defaults, indexes, schema hash, and row
-  estimates. Inspect before querying when the live schema is unknown.
-- `query` supports up to 16 AND-combined filters, ordering, and cursor
-  pagination, returning at most 200 rows per page. Omit `cursor` or pass `''`
-  for the first page; continue with the exact returned nonempty cursor.
-  For `inspect`, omit `table` or pass `''` to inspect the whole schema.
-- `mutate` atomically applies up to 100 insert, patch, increment, or exact-id
-  delete operations. One failed operation rolls back the batch.
-- `raw_sql` is only for joins, aggregates, or complex repair that structured
+- `hatch app data-table inspect <id> [--table <name>] --json` reports the live
+  schema, defaults, indexes, schema hash, and row estimates. Omit `--table` to
+  inspect the whole schema. Inspect before querying when the live schema is
+  unknown.
+- `hatch app data-table query <id> --file <path|-> --json` supports up to 16
+  AND-combined filters, ordering, and cursor pagination, returning at most 200
+  rows per page (default 50):
+
+  ```json
+  {
+    "table": "todos",
+    "where": [{ "field": "done", "op": "eq", "value": false }],
+    "orderBy": { "field": "createdAt", "direction": "desc" },
+    "limit": 50
+  }
+  ```
+
+  `op` is one of `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`. Omit `cursor` for
+  the first page; continue with the exact returned nonempty cursor.
+
+- `hatch app data-table mutate <id> --file <path|-> --json` atomically applies
+  up to 100 operations. One failed operation rolls back the batch:
+
+  ```json
+  {
+    "operations": [
+      { "type": "insert", "table": "todos", "value": { "title": "Buy milk" } },
+      {
+        "type": "patch",
+        "table": "todos",
+        "id": "<id>",
+        "value": { "done": true },
+        "unset": ["note"]
+      },
+      {
+        "type": "increment",
+        "table": "counters",
+        "id": "<id>",
+        "field": "count",
+        "amount": 1
+      },
+      { "type": "delete", "table": "todos", "id": "<id>" }
+    ]
+  }
+  ```
+
+- `hatch app data-table sql <id> --file <query.sql|-> --json` is only for joins, aggregates, or complex repair that structured
   operations cannot express. It may use data-oriented SELECT, INSERT, UPDATE,
   DELETE, MERGE, CTE, join, aggregate, and upsert statements against existing
   `data` tables. Do not use DDL, TRUNCATE, maintenance, transaction-control,
@@ -79,7 +119,7 @@ schema but revokes all access. Operations can permanently delete that retained
 data; the next Data Table-capable release provisions an empty database and
 applies its schema.
 
-Use `data/schema.ts` plus `deploy_app` for every schema change.
+Use `data/schema.ts` plus `hatch app deploy` for every schema change.
 
 ## Storage
 
@@ -108,14 +148,26 @@ Enable both `kv` and `backend`. KV is kept in the platform database and is
 suited to small text values, not blobs. Limits are 512 characters per key,
 64 KB per value, and 1000 keys per App.
 
-After the first KV-capable deploy, use `query_app_kv` to inspect or initialize
-entries. Secret values are masked unless `reveal_secrets: true` is explicitly
-needed; revealed values enter model context. Deletion is permanent.
+After the first KV-capable deploy, use `hatch app kv` to inspect or initialize
+entries:
 
-For `action: 'list'`, omit `cursor` or pass an empty value on the first tool
-call. If the response has a non-null
-`nextCursor`, pass that exact value as `cursor` on the next call. Stop when
-`nextCursor` is null. A nonempty continuation cursor must be a string of at most 512 characters.
+```bash
+hatch app kv list <id> --limit 100 --json
+hatch app kv get <id> <key> --json
+printf '%s' 'value' | hatch app kv set <id> <key> --file - --json
+hatch app kv delete <id> <key> --json
+```
+
+`kv set` stores the file bytes exactly as UTF-8 text, so use `printf '%s'`
+rather than `echo` to avoid a trailing newline. `--secret` marks the value
+secret, `--no-secret` clears the mark, and omitting both keeps the existing
+flag (new keys default to nonsecret). Secret values are masked unless
+`--reveal-secrets` is explicitly needed; revealed values enter model context.
+Deletion is permanent.
+
+For `kv list`, omit `--cursor` on the first call. If the response has a
+non-null `nextCursor`, pass that exact value as `--cursor` on the next call.
+Stop when `nextCursor` is null.
 
 The backend uses `HATCH_KV_URL` and signs each request with
 `HATCH_SIGNING_SECRET`. The signature is HMAC-SHA256 over
@@ -164,5 +216,5 @@ Agent reveal, nor older backups.
 Re-enabling Database or Data Tables after a capability disable reuses the retained
 database, schema, and rows. Only explicit permanent deletion causes a later
 enabled deployment to create an empty database. Before initializing data after
-a deployment, inspect the existing schema and rows with `query_app_db` or
-`query_app_data_table`; never assume the database is empty.
+a deployment, inspect the existing schema and rows with `hatch app db query` or
+`hatch app data-table`; never assume the database is empty.

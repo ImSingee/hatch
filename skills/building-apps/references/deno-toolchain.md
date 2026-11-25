@@ -124,7 +124,7 @@ deno cache --config=deno.json --no-remote --node-modules-dir=auto \
   --lock=deno.lock --frozen <entries...>
 ```
 
-`deploy_app` performs the same source check before schema evaluation, production
+`hatch app deploy` performs the same source check before schema evaluation, production
 bundling, database migration, artifact persistence, or live-release activation.
 Its later bundle check verifies the emitted artifact and does not replace the
 source check. A failed source check must be fixed in authored source and

@@ -25,6 +25,7 @@ import {
   listChannels,
   listDestinations,
   listGroups,
+  listNotificationRevisions,
   listNotificationSources,
   listNotifications,
   listResponseRoutes,
@@ -39,6 +40,10 @@ import {
   updateResponseRoute,
   updateRoute,
 } from './notifications/service';
+import {
+  getReadState,
+  markNotificationsRead,
+} from './notifications/read-state';
 import { respondToNotification } from './notifications/responses';
 import { idSchema } from './validation';
 import type { JsonObject } from '~/db/schema';
@@ -64,6 +69,7 @@ export type {
   RouteView,
 } from './notifications/service';
 export type { NotificationResponseView } from './notifications/responses';
+export type { NotificationReadState } from './notifications/read-state';
 
 const shortText = z.string().max(200);
 const kindsSchema = z
@@ -84,6 +90,7 @@ const listInputSchema = z.object({
     .enum(['unrouted', 'pending', 'delivered', 'partial', 'failed'])
     .optional(),
   replyState: z.enum(['awaiting', 'answered']).optional(),
+  order: z.enum(['created', 'activity']).optional(),
   cursor: z.string().max(64).optional(),
   limit: z.number().int().min(1).max(100).optional(),
 });
@@ -114,6 +121,8 @@ export const retryDeliveryFn = createServerFn({ method: 'POST' })
 
 const answerSchema = z.object({
   id: idSchema,
+  // The round of the form on screen; a new question since then refuses it.
+  round: z.number().int().min(1),
   // Checked against the notification's form by the domain service.
   answers: z.record(
     z.string().max(64),
@@ -127,10 +136,63 @@ export const respondToNotificationFn = createServerFn({ method: 'POST' })
   .validator((input: z.input<typeof answerSchema>) => answerSchema.parse(input))
   .handler(async ({ data }) => {
     const { user } = await requireSession();
-    return respondToNotification(data.id, data.answers, {
-      userId: user.id,
-      via: 'web',
+    return respondToNotification(
+      data.id,
+      data.answers,
+      { userId: user.id, via: 'web' },
+      { round: data.round },
+    );
+  });
+
+/** What a notification said before each edit, and every answer it took. */
+const revisionsPageSchema = z.object({
+  id: idSchema,
+  cursor: z.string().max(64).optional(),
+});
+
+export const listNotificationRevisionsFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((input: z.input<typeof revisionsPageSchema>) =>
+    revisionsPageSchema.parse(input),
+  )
+  .handler(async ({ data }) => {
+    const history = await listNotificationRevisions(data.id, {
+      cursor: data.cursor,
     });
+    return {
+      ...history,
+      // Stored notification data is always a JSON object.
+      revisions: history.revisions.map((revision) => ({
+        ...revision,
+        data: revision.data as JsonObject | null,
+      })),
+    };
+  });
+
+/** How far the signed-in user has read the timeline. */
+export const getNotificationReadStateFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const { user } = await requireSession();
+    return getReadState({ type: 'user', userId: user.id });
+  });
+
+const markReadSchema = z.union([
+  // The activity time of the version on screen, so an edit that arrived
+  // since stays unread.
+  z.object({ notificationId: idSchema, activityAt: z.coerce.date() }),
+  z.object({ latest: z.literal(true) }),
+]);
+
+/** Move the signed-in user's read position forward. */
+export const markNotificationsReadFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: z.input<typeof markReadSchema>) =>
+    markReadSchema.parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { user } = await requireSession();
+    return markNotificationsRead({ type: 'user', userId: user.id }, data);
   });
 
 export const deleteNotificationFn = createServerFn({ method: 'POST' })
@@ -280,12 +342,22 @@ export const listResponseRoutesFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .handler(async () => (await listResponseRoutes()).routes);
 
+const agentTargetSchema = z.object({
+  sessionId: idSchema.nullable().optional(),
+  instructions: z.string().max(2000).nullable().optional(),
+});
+
+const responseRouteTargetSchema = z.union([
+  z.object({ destinationId: idSchema }),
+  z.object({ agent: agentTargetSchema }),
+]);
+
 const responseRouteSchema = z.object({
   name: shortText.nullable().optional(),
   sourceType: z.enum(['app', 'channel', 'any']),
   sourceId: idSchema.nullable().optional(),
   kind: z.string().max(64).nullable().optional(),
-  destinationId: idSchema,
+  target: responseRouteTargetSchema,
   enabled: z.boolean().optional(),
 });
 
@@ -294,7 +366,20 @@ export const createResponseRouteFn = createServerFn({ method: 'POST' })
   .validator((input: z.input<typeof responseRouteSchema>) =>
     responseRouteSchema.parse(input),
   )
-  .handler(({ data }) => createResponseRoute(data));
+  .handler(({ data }) =>
+    createResponseRoute({
+      ...data,
+      target:
+        'agent' in data.target
+          ? {
+              agent: {
+                sessionId: data.target.agent.sessionId ?? null,
+                instructions: data.target.agent.instructions ?? null,
+              },
+            }
+          : data.target,
+    }),
+  );
 
 const updateResponseRouteSchema = responseRouteSchema
   .partial()

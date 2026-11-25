@@ -111,6 +111,7 @@ test('lists every App at a bare @ and wraps keyboard navigation', async () => {
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 
@@ -187,6 +188,7 @@ test('inserts an App mention inline and submits ordered content', async () => {
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 
@@ -221,6 +223,7 @@ test('searches the full App list with a multi-word query', async () => {
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 
@@ -246,6 +249,7 @@ test('submits literal text when the resource menu has no matches', async () => {
     content: [{ type: 'text', text: 'Summarize @missing' }],
     images: [],
     files: [],
+    switchMode: false,
   });
   await expect.element(input).toHaveTextContent('');
 });
@@ -295,6 +299,7 @@ test('waits for resource lookup before submitting an unresolved mention', async 
     ],
     images: [],
     files: [],
+    switchMode: false,
   });
 });
 

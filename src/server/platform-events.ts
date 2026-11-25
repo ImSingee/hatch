@@ -10,6 +10,8 @@ export type PlatformEvent =
   | { type: 'notification.updated'; notificationId: string }
   /** A member deleted the notification from history. */
   | { type: 'notification.deleted'; notificationId: string }
+  /** A reader (`user:<id>` or `agent`) moved their timeline read position. */
+  | { type: 'notification.read'; reader: string }
   | {
       type: 'notification.delivery.updated';
       notificationId: string;

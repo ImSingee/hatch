@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { appIconsQueryOptions } from '~components/apps/use-app-icon';
+import { useI18n } from '~i18n';
+import { CodedError } from '~lib/error-codes';
 import { clearAppIconFn, uploadAppIconFn } from '~server/app-icons';
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -13,7 +15,8 @@ function toBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
-    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.onerror = () =>
+      reject(new CodedError('Could not read the file.', 'app.icon.readFailed'));
     reader.readAsDataURL(file);
   });
 }
@@ -26,6 +29,7 @@ export function AppIconSettings({
   appId: string;
   appName: string;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: icons } = useQuery(appIconsQueryOptions);
   const hasIcon = Boolean(icons?.[appId]);
@@ -34,21 +38,23 @@ export function AppIconSettings({
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
-      if (file.size > MAX_BYTES) throw new Error('Icon image exceeds 4 MB.');
+      if (file.size > MAX_BYTES) {
+        throw new CodedError('Icon image exceeds 4 MB.', 'app.icon.tooLarge');
+      }
       return uploadAppIconFn({
         data: { id: appId, imageBase64: await toBase64(file) },
       });
     },
     onSuccess: async () => {
       await refresh();
-      toast.success('Icon updated');
+      toast.success(t('appIcon.updated'));
     },
   });
   const remove = useMutation({
     mutationFn: () => clearAppIconFn({ data: appId }),
     onSuccess: async () => {
       await refresh();
-      toast.success('Icon removed');
+      toast.success(t('appIcon.removed'));
     },
   });
 
@@ -69,7 +75,7 @@ export function AppIconSettings({
                 loading={upload.isPending}
                 leftSection={<IconPhotoUp size={14} stroke={1.8} />}
               >
-                Upload image
+                {t('appIcon.upload')}
               </Button>
             )}
           </FileButton>
@@ -82,13 +88,12 @@ export function AppIconSettings({
               leftSection={<IconTrash size={14} stroke={1.8} />}
               onClick={() => remove.mutate()}
             >
-              Remove
+              {t('common.remove')}
             </Button>
           ) : null}
         </Group>
         <Text size="xs" c="dimmed">
-          PNG, JPEG or WebP up to 4 MB, cropped to a square. Or ask the Agent to
-          design an icon for this app.
+          {t('appIcon.hint')}
         </Text>
       </Stack>
     </Group>

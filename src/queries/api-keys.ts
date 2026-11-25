@@ -1,3 +1,4 @@
+import { CodedError } from '~lib/error-codes';
 import { queryOptions } from '@tanstack/react-query';
 import { authClient } from '~auth/client';
 
@@ -16,11 +17,15 @@ function requireData<T>(result: {
   error: { status: number } | null;
 }): T {
   if (result.error || !result.data)
-    throw new Error(
-      result.error?.status === 401
-        ? 'Your session expired. Sign in again.'
-        : 'Unable to manage API keys. Please try again.',
-    );
+    throw result.error?.status === 401
+      ? new CodedError(
+          'Your session expired. Sign in again.',
+          'apiKeys.sessionExpired',
+        )
+      : new CodedError(
+          'Unable to manage API keys. Please try again.',
+          'apiKeys.unavailable',
+        );
   return result.data;
 }
 

@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { ComponentRef, PropsWithChildren, ReactNode, Ref } from 'react';
 import { Platform, ScrollView, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ground } from './ground';
@@ -92,6 +92,8 @@ export function ScrollScreen({
   readable: narrow = false,
   children,
   contentContainerStyle,
+  scrollRef,
+  overlay,
   ...scrollProps
 }: PropsWithChildren<
   {
@@ -101,11 +103,16 @@ export function ScrollScreen({
     nested?: boolean;
     /** Keep the content to the reading width (see `readable`). */
     readable?: boolean;
+    /** The page's scroll view, for pages that scroll themselves. */
+    scrollRef?: Ref<ComponentRef<typeof ScrollView>>;
+    /** Floats over the page, above the scroll view. */
+    overlay?: ReactNode;
   } & Omit<ScrollViewProps, 'children'>
 >) {
   return (
     <PageRoot nested={nested}>
       <ScrollView
+        ref={scrollRef}
         {...pageScrollProps}
         {...scrollProps}
         style={{ flex: 1 }}
@@ -123,6 +130,7 @@ export function ScrollScreen({
         />
         {children}
       </ScrollView>
+      {overlay}
     </PageRoot>
   );
 }

@@ -1,6 +1,7 @@
 import { VisuallyHidden } from '@mantine/core';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Brand } from '~components/desk/brand';
+import { useI18n } from '~i18n';
 import { DeskStandalone } from '~components/desk/desk-standalone';
 import {
   StandaloneWindow,
@@ -10,9 +11,12 @@ import { USER_CODE_LENGTH } from './device-api';
 import classes from './device-approval.module.css';
 
 export function DeviceLayout({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   return (
     <DeskStandalone align="start">
-      <StandaloneWindow title="Approve a device">{children}</StandaloneWindow>
+      <StandaloneWindow title={t('cliAuth.windowTitle')}>
+        {children}
+      </StandaloneWindow>
     </DeskStandalone>
   );
 }

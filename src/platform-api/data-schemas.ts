@@ -1,17 +1,11 @@
-/** Shared strict data contracts for public API, internal API and Tools. */
+/** Shared strict App data contracts for the public API and the CLI. */
 import { z } from 'zod';
 
-/** Same streamed-byte ceiling as the internal data-call transport. */
+/** Streamed-byte ceiling for one App data call. */
 export const DATA_CALL_BODY_LIMIT = 256 * 1024 * 1024;
 
-// Keep the existing internal REST unknown-field behavior. The public API
-// explicitly closes this same object schema at its transport boundary.
-export const queryAppDbRequestSchema = z.object({
-  sql: z.string().min(1),
-});
-
 /** Empty means the first page; a continuation is a server-returned key. */
-export const queryAppKvCursorSchema = z.string().max(512);
+const queryAppKvCursorSchema = z.string().max(512);
 
 const queryAppKvListRequestSchema = z
   .object({
@@ -79,7 +73,7 @@ export type QueryAppKvResponse =
   | { action: 'set'; record: QueryAppKvRecord }
   | { action: 'delete'; ok: boolean };
 
-export type QueryAppDataTableJsonValue =
+type QueryAppDataTableJsonValue =
   | string
   | number
   | boolean
@@ -88,7 +82,7 @@ export type QueryAppDataTableJsonValue =
   | { [key: string]: QueryAppDataTableJsonValue };
 
 export const QUERY_APP_DATA_TABLE_CURSOR_MAX_LENGTH = 60_000;
-export const queryAppDataTableCursorSchema = z
+const queryAppDataTableCursorSchema = z
   .string()
   .max(QUERY_APP_DATA_TABLE_CURSOR_MAX_LENGTH);
 
@@ -212,7 +206,7 @@ export type ParsedQueryAppDataTableRequest = z.output<
   typeof queryAppDataTableRequestSchema
 >;
 
-export type QueryAppDataTableSchema = {
+type QueryAppDataTableSchema = {
   version: 1;
   tables: Record<
     string,

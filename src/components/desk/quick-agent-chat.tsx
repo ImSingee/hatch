@@ -22,10 +22,11 @@ import {
 } from '~components/agent/model-value';
 import { createEmptyAgentSession } from '~components/agent/new-chat-api';
 import { startAgentRunRequest } from '~components/agent/use-agent-stream';
-import { useI18n } from '~i18n';
+import { translateError, useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
 import { sessionsQueryOptions } from '~queries/agent';
 import classes from './quick-agent-chat.module.css';
+import { displaySessionTitle } from '~components/agent/session-title';
 
 /**
  * The ultrawide desk's companion column: recent Agent sessions and a
@@ -78,9 +79,7 @@ export function QuickAgentChat() {
       await navigate({ to: '/agent/$threadId', params: { threadId: id } });
       return true;
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t('quickChat.startFailed'),
-      );
+      toast.error(translateError(t, locale, error, 'quickChat.startFailed'));
       setStarting(false);
       return false;
     }
@@ -133,7 +132,11 @@ export function QuickAgentChat() {
               params={{ threadId: session.id }}
               className={classes.session}
             >
-              <strong>{session.title || t('quickChat.newChat')}</strong>
+              <strong>
+                {session.title
+                  ? displaySessionTitle(session.title, t)
+                  : t('quickChat.newChat')}
+              </strong>
               <span>
                 {new Intl.DateTimeFormat(locale, {
                   month: 'short',

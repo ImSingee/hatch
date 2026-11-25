@@ -36,18 +36,37 @@ function isAcceptedFormat(bytes: Buffer): boolean {
 
 /**
  * Validate an image and return one centre-cropped square PNG per size.
- * `noun` names the image in error messages ("Icon", "Avatar").
+ * `noun` names the image in error messages ("Icon", "Avatar"); `codePrefix`,
+ * when given, gives each validation error a stable code under it
+ * (`<prefix>.empty`, `.tooLarge`, `.unsupportedFormat`, `.badSize`,
+ * `.undecodable`) for the Web UI to translate.
  */
 export async function encodeSquareImage<S extends number>(
   bytes: Buffer,
   noun: string,
   sizes: readonly S[],
+  codePrefix?: string,
 ): Promise<Map<S, Buffer>> {
-  if (!bytes.byteLength) throw new AppError(`${noun} image is empty.`, 400);
+  const fail = (
+    message: string,
+    status: number,
+    reason: string,
+    params?: Record<string, number>,
+  ) =>
+    new AppError(
+      message,
+      status,
+      codePrefix ? { code: `${codePrefix}.${reason}`, params } : {},
+    );
+  if (!bytes.byteLength) throw fail(`${noun} image is empty.`, 400, 'empty');
   if (bytes.byteLength > MAX_SQUARE_IMAGE_BYTES)
-    throw new AppError(`${noun} image exceeds 4 MB.`, 413);
+    throw fail(`${noun} image exceeds 4 MB.`, 413, 'tooLarge');
   if (!isAcceptedFormat(bytes))
-    throw new AppError(`${noun} must be a PNG, JPEG or WebP image.`, 415);
+    throw fail(
+      `${noun} must be a PNG, JPEG or WebP image.`,
+      415,
+      'unsupportedFormat',
+    );
   try {
     const options = { limitInputPixels: MAX_SIDE * MAX_SIDE };
     const meta = await sharp(bytes, options).metadata();
@@ -57,9 +76,11 @@ export async function encodeSquareImage<S extends number>(
       Math.min(meta.width, meta.height) < MIN_SIDE ||
       Math.max(meta.width, meta.height) > MAX_SIDE
     )
-      throw new AppError(
+      throw fail(
         `${noun} sides must be ${MIN_SIDE} to ${MAX_SIDE} pixels.`,
         400,
+        'badSize',
+        { min: MIN_SIDE, max: MAX_SIDE },
       );
     const encoded = new Map<S, Buffer>();
     for (const size of sizes)
@@ -74,7 +95,7 @@ export async function encodeSquareImage<S extends number>(
     return encoded;
   } catch (error) {
     if (error instanceof AppError) throw error;
-    throw new AppError(`${noun} image could not be decoded.`, 400);
+    throw fail(`${noun} image could not be decoded.`, 400, 'undecodable');
   }
 }
 

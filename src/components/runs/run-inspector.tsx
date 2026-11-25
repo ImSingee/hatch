@@ -1,5 +1,6 @@
 import { Badge, Code, Group, Text, Timeline } from '@mantine/core';
 import type { ReactNode } from 'react';
+import { useI18n } from '~i18n';
 import {
   Column,
   Columns,
@@ -14,10 +15,17 @@ import {
   type RunDetailView,
   type RunStepView,
 } from '~lib/runs';
-import { RunStatusBadge, RunStatusBullet } from './run-status';
+import {
+  RunStatusBadge,
+  RunStatusBullet,
+  RunTriggerLabel,
+  useRunErrorText,
+} from './run-status';
 import classes from './run-inspector.module.css';
 
 function StepItem({ step }: { step: RunStepView }) {
+  const { t } = useI18n();
+  const runErrorText = useRunErrorText();
   return (
     <Timeline.Item
       lineVariant={step.status === 'failed' ? 'dashed' : 'solid'}
@@ -29,7 +37,7 @@ function StepItem({ step }: { step: RunStepView }) {
         </Text>
         {step.attempt > 1 ? (
           <Badge size="xs" variant="light" color="gray" radius="sm">
-            attempt {step.attempt}
+            {t('runs.steps.attempt', { attempt: step.attempt })}
           </Badge>
         ) : null}
         <Text size="xs" c="dimmed">
@@ -45,7 +53,7 @@ function StepItem({ step }: { step: RunStepView }) {
             color: 'var(--mantine-color-red-7)',
           }}
         >
-          {step.error}
+          {runErrorText(step.error)}
         </Code>
       ) : null}
       {step.output != null && step.output !== '' ? (
@@ -58,28 +66,42 @@ function StepItem({ step }: { step: RunStepView }) {
 }
 
 /**
- * The body of a run inspector: step timeline, error and log beside the
- * summary, output and input of an App task run; extra summary rows come
- * first (e.g. the task a run belongs to).
+ * The body of an App task run inspector: what the run produced (error or
+ * output) above its step timeline, beside the summary, input and log. Extra
+ * summary rows come first (e.g. the task a run belongs to).
  */
 export function RunInspector({
   run,
   summaryRows,
-  emptyStepsText = 'This run recorded no steps.',
 }: {
   run: RunDetailView;
   summaryRows?: ReactNode;
-  emptyStepsText?: string;
 }) {
+  const { t } = useI18n();
+  const runErrorText = useRunErrorText();
   const active = isActiveRun(run.status);
   return (
     <Columns>
       <Column grow basis={420}>
-        <Section title="Steps" meta={`${run.steps.length}`}>
+        {run.error ? (
+          <Section title={t('runs.inspector.error')}>
+            <Code block className={classes.error}>
+              {runErrorText(run.error)}
+            </Code>
+          </Section>
+        ) : null}
+        {run.output != null ? (
+          <Section title={t('runs.inspector.output')}>
+            <Code block className={classes.code}>
+              {prettyRunValue(run.output)}
+            </Code>
+          </Section>
+        ) : null}
+        <Section title={t('runs.inspector.steps')} meta={`${run.steps.length}`}>
           <GroupCard padded>
             {run.steps.length === 0 ? (
               <Text size="sm" c="dimmed">
-                {active ? 'Waiting for the first step…' : emptyStepsText}
+                {active ? t('runs.steps.waiting') : t('runs.steps.empty')}
               </Text>
             ) : (
               <Timeline
@@ -98,52 +120,40 @@ export function RunInspector({
             )}
           </GroupCard>
         </Section>
-        {run.error ? (
-          <Section title="Error">
-            <Code block className={classes.error}>
-              {run.error}
-            </Code>
-          </Section>
-        ) : null}
+      </Column>
+      <Column basis={340}>
+        <Section title={t('runs.inspector.summary')}>
+          <GroupCard>
+            {summaryRows}
+            <Row label={t('runs.inspector.status')}>
+              <RunStatusBadge status={run.status} />
+            </Row>
+            <Row label={t('runs.inspector.trigger')}>
+              <RunTriggerLabel trigger={run.trigger} />
+            </Row>
+            {run.version != null ? (
+              <Row label={t('runs.inspector.version')}>v{run.version}</Row>
+            ) : null}
+            <Row label={t('runs.inspector.started')}>
+              {formatExact(run.startedAt ?? run.createdAt)}
+            </Row>
+            <Row label={t('runs.inspector.duration')}>
+              {formatDuration(run.durationMs)}
+            </Row>
+          </GroupCard>
+        </Section>
+        <Section title={t('runs.inspector.input')}>
+          <Code block className={classes.code}>
+            {prettyRunValue(run.input ?? {})}
+          </Code>
+        </Section>
         {run.log ? (
-          <Section title="Log">
+          <Section title={t('runs.inspector.log')}>
             <Code block className={classes.log}>
               {run.log}
             </Code>
           </Section>
         ) : null}
-      </Column>
-      <Column basis={340}>
-        <Section title="Summary">
-          <GroupCard>
-            {summaryRows}
-            <Row label="Status">
-              <RunStatusBadge status={run.status} />
-            </Row>
-            <Row label="Trigger">
-              <span className={classes.capitalize}>{run.trigger}</span>
-            </Row>
-            {run.version != null ? (
-              <Row label="Version">v{run.version}</Row>
-            ) : null}
-            <Row label="Started">
-              {formatExact(run.startedAt ?? run.createdAt)}
-            </Row>
-            <Row label="Duration">{formatDuration(run.durationMs)}</Row>
-          </GroupCard>
-        </Section>
-        {run.output != null ? (
-          <Section title="Output">
-            <Code block className={classes.code}>
-              {prettyRunValue(run.output)}
-            </Code>
-          </Section>
-        ) : null}
-        <Section title="Input">
-          <Code block className={classes.code}>
-            {prettyRunValue(run.input ?? {})}
-          </Code>
-        </Section>
       </Column>
     </Columns>
   );

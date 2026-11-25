@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { Buffer } from 'node:buffer';
-import { validateToolCall } from '@earendil-works/pi-ai';
+import { validateToolCall, type JsonObject } from '@earendil-works/pi-ai';
 import {
   mkdtemp,
   mkdir,
@@ -266,7 +266,7 @@ describe('agent file tools', () => {
         type: 'toolCall',
         id: 'read',
         name: 'read_file',
-        arguments: arguments_,
+        arguments: arguments_ as JsonObject,
       });
 
     expect(validate({ path: 'app.ts' })).toEqual({ path: 'app.ts' });
@@ -747,7 +747,7 @@ describe('run_command sandbox', () => {
         type: 'toolCall',
         id: 'command',
         name: 'run_command',
-        arguments: arguments_,
+        arguments: arguments_ as JsonObject,
       });
 
     expect(

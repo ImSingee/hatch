@@ -1,6 +1,7 @@
 import { Badge, Loader, ThemeIcon } from '@mantine/core';
 import { IconCheck, IconClock, IconHandStop, IconX } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
+import { useI18n, type PlainTranslationKey } from '~i18n';
 import type { RunStatus, RunStepStatus } from '~lib/runs';
 
 /**
@@ -10,40 +11,55 @@ import type { RunStatus, RunStepStatus } from '~lib/runs';
  */
 const RUN_META: Record<
   RunStatus,
-  { label: string; color: string; icon: ReactNode }
+  { label: PlainTranslationKey; color: string; icon: ReactNode }
 > = {
   queued: {
-    label: 'Queued',
+    label: 'runStatus.queued',
     color: 'gray',
     icon: <IconClock size={11} stroke={2.5} />,
   },
   running: {
-    label: 'Running',
+    label: 'runStatus.running',
     color: 'primary',
     icon: <Loader size={9} color="primary" />,
   },
   succeeded: {
-    label: 'Succeeded',
+    label: 'runStatus.succeeded',
     color: 'primary',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   failed: {
-    label: 'Failed',
+    label: 'runStatus.failed',
     color: 'red',
     icon: <IconX size={11} stroke={2.5} />,
   },
   canceled: {
-    label: 'Canceled',
+    label: 'runStatus.canceled',
     color: 'gray',
     icon: <IconHandStop size={11} stroke={2.5} />,
   },
 };
+
+const TRIGGER_LABELS: Record<string, PlainTranslationKey> = {
+  manual: 'runTrigger.manual',
+  cron: 'runTrigger.cron',
+  webhook: 'runTrigger.webhook',
+  app: 'runTrigger.app',
+};
+
+/** How a run started, translated; an unknown trigger shows as recorded. */
+export function RunTriggerLabel({ trigger }: { trigger: string }) {
+  const { t } = useI18n();
+  const key = TRIGGER_LABELS[trigger];
+  return key ? t(key) : trigger;
+}
 
 export function runStatusColor(status: RunStatus): string {
   return RUN_META[status].color;
 }
 
 export function RunStatusBadge({ status }: { status: RunStatus }) {
+  const { t } = useI18n();
   const meta = RUN_META[status];
   return (
     <Badge
@@ -56,7 +72,7 @@ export function RunStatusBadge({ status }: { status: RunStatus }) {
         )
       }
     >
-      {meta.label}
+      {t(meta.label)}
     </Badge>
   );
 }
@@ -89,4 +105,28 @@ export function RunStatusBullet({
       {icon}
     </ThemeIcon>
   );
+}
+
+/**
+ * Error text the platform itself writes on task runs and steps
+ * (`src/server/apps/tasks/service.ts`). It is stored as English, so known
+ * sentences are shown translated; App and adapter errors stay as written.
+ */
+export function useRunErrorText() {
+  const { t } = useI18n();
+  return (error: string): string => {
+    if (error === 'Canceled') return t('runs.platformError.canceled');
+    if (error === 'Run failed') return t('runs.platformError.runFailed');
+    if (error === 'Platform restarted') {
+      return t('runs.platformError.platformRestarted');
+    }
+    if (error === 'Task run was interrupted because the platform restarted.') {
+      return t('runs.platformError.interrupted');
+    }
+    const timedOut = /^Run timed out after (\d+) minutes?$/.exec(error);
+    if (timedOut) {
+      return t('runs.platformError.timedOut', { count: Number(timedOut[1]) });
+    }
+    return error;
+  };
 }

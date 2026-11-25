@@ -1,6 +1,7 @@
 import { Box, Button, Center, Loader, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useI18n } from '~i18n';
 import { dashboardQueryOptions } from '~queries/dashboards';
 import { DashboardGrid } from './dashboard-grid';
 
@@ -60,6 +61,7 @@ export function MobileDashboardCanvas({
   dashboardId: string;
   peek?: boolean;
 }) {
+  const { t } = useI18n();
   const peekRef = usePeek(peek);
   const data = useQuery(dashboardQueryOptions(dashboardId));
   const [refreshSignal, setRefreshSignal] = useState(0);
@@ -88,29 +90,38 @@ export function MobileDashboardCanvas({
 
   if (data.isPending)
     return (
-      <Center mih="60dvh" component="output" aria-label="Loading dashboard">
+      <Center
+        mih="60dvh"
+        component="output"
+        aria-label={t('dashboard.mobile.loading')}
+      >
         <Loader size="sm" />
       </Center>
     );
   if (data.isError)
     return (
       <Stack p="lg" role="alert">
-        <Text>Couldn’t load this dashboard.</Text>
+        <Text>{t('dashboard.mobile.loadFailed')}</Text>
         <Button type="button" onClick={refresh}>
-          Try again
+          {t('common.tryAgain')}
         </Button>
       </Stack>
     );
 
   return (
-    <Box ref={peekRef} p="sm" component="main" aria-label="Dashboard canvas">
+    <Box
+      ref={peekRef}
+      p="sm"
+      component="main"
+      aria-label={t('dashboard.mobile.canvas')}
+    >
       {data.data.widgets.length === 0 ? (
         <Stack align="center" justify="center" p="xl" mih="60dvh" gap="sm">
           <Text size="xl" fw={700}>
-            No widgets yet
+            {t('dashboard.mobile.emptyTitle')}
           </Text>
           <Text c="dimmed" ta="center">
-            Add widgets to this dashboard from Hatch on the web.
+            {t('dashboard.mobile.emptyBody')}
           </Text>
         </Stack>
       ) : (

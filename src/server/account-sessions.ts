@@ -3,6 +3,7 @@ import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { auth } from '~auth/server';
 import { requireSession } from './auth';
+import { AppError } from './errors';
 
 /** Session credentials stay on the server; the browser manages opaque IDs. */
 export const listAccountSessions = createServerFn({ method: 'GET' }).handler(
@@ -36,7 +37,13 @@ export const revokeAccountSession = createServerFn({ method: 'POST' })
   .handler(async ({ data: { sessionId } }) => {
     const current = await requireSession();
     if (sessionId === current.session.id) {
-      throw new Error('The current session cannot be signed out here.');
+      throw new AppError(
+        'The current session cannot be signed out here.',
+        400,
+        {
+          code: 'account.currentSessionRevoke',
+        },
+      );
     }
     const sessions = await auth.api.listSessions({
       headers: getRequest().headers,

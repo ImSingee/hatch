@@ -43,8 +43,8 @@ import type {
   CreatedApiKey,
   CreateApiKeyInput,
 } from '~queries/api-keys';
-import { type Locale, useI18n } from '~i18n';
-import { formatRelative } from '~lib/format';
+import { type Locale, useErrorText, useI18n } from '~i18n';
+import { formatRelativeTime } from '~lib/format';
 import {
   apiKeysQueryOptions,
   createApiKey,
@@ -82,6 +82,7 @@ type CreatePhase = 'editing' | 'creating' | 'created';
 
 export function ApiKeysPanel() {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const keys = useQuery(apiKeysQueryOptions);
   const [createOpened, setCreateOpened] = useState(false);
@@ -180,7 +181,9 @@ export function ApiKeysPanel() {
           color="red"
         >
           <Stack gap="xs" align="flex-start">
-            <Text size="sm">{keys.error.message}</Text>
+            <Text size="sm">
+              {errorText(keys.error, 'apiKeys.unavailable')}
+            </Text>
             <Button
               type="button"
               size="xs"
@@ -307,7 +310,7 @@ function ApiKeyRow({
               <span>
                 {apiKey.lastRequest
                   ? t('apiKeys.lastUsed', {
-                      when: formatRelative(apiKey.lastRequest),
+                      when: formatRelativeTime(apiKey.lastRequest, locale),
                     })
                   : t('apiKeys.neverUsed')}
               </span>
@@ -342,6 +345,7 @@ function CreateApiKeyFlow({
   onDone: () => void;
 }) {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [expiration, setExpiration] = useState(DEFAULT_EXPIRATION);
@@ -461,7 +465,9 @@ function CreateApiKeyFlow({
             title={t('apiKeys.createUnconfirmed')}
           >
             <Stack gap="xs">
-              <Text size="sm">{create.error.message}</Text>
+              <Text size="sm">
+                {errorText(create.error, 'apiKeys.unavailable')}
+              </Text>
               <Text size="sm">{t('apiKeys.createUnconfirmedBody')}</Text>
             </Stack>
           </Alert>

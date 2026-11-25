@@ -221,3 +221,19 @@
     display: none;
   }
 }
+
+.bell {
+  position: relative;
+}
+
+/* Something unread: an accent dot ringed in the bar's own surface. */
+.unreadDot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mantine-primary-color-filled);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}

@@ -15,6 +15,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { openTextPromptModal } from '~components/system/text-prompt-modal';
+import { useI18n } from '~i18n';
 import { dashboardsQueryOptions } from '~queries/dashboards';
 import {
   createDashboard,
@@ -23,14 +24,18 @@ import {
   setDashboardDescription,
   type Dashboard,
 } from '~server/dashboards';
-import { formatInterval } from './refresh-presets';
+import { formatIntervalLabel } from './refresh-presets';
 import classes from './desk-toolbar.module.css';
 
 /** "Refreshes every 10s", or that automatic refresh is off. */
-export function refreshText(seconds: number): string {
-  return seconds > 0
-    ? `Refreshes every ${formatInterval(seconds)}`
-    : 'Auto refresh off';
+export function useRefreshText(): (seconds: number) => string {
+  const { t, locale } = useI18n();
+  return (seconds) =>
+    seconds > 0
+      ? t('dashboard.refresh.every', {
+          interval: formatIntervalLabel(seconds, locale),
+        })
+      : t('dashboard.refresh.off');
 }
 
 /**
@@ -43,6 +48,7 @@ export function DashboardSwitcher({
 }: {
   current: Pick<Dashboard, 'id' | 'name'> | undefined;
 }) {
+  const { t } = useI18n();
   const { data: dashboards } = useQuery(dashboardsQueryOptions);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -56,7 +62,7 @@ export function DashboardSwitcher({
         to: '/dashboard/$dashboardId',
         params: { dashboardId: dashboard.id },
       });
-      toast.success('Dashboard created');
+      toast.success(t('dashboard.toast.created'));
     },
   });
 
@@ -65,16 +71,18 @@ export function DashboardSwitcher({
       <Menu.Target>
         <UnstyledButton
           className={classes.switcher}
-          aria-label={`${current?.name ?? 'Dashboard'}, switch dashboard`}
+          aria-label={t('dashboard.switcher.label', {
+            name: current?.name ?? t('dashboard.fallbackName'),
+          })}
         >
           <span className={classes.switcherName}>
-            {current?.name ?? 'Dashboard'}
+            {current?.name ?? t('dashboard.fallbackName')}
           </span>
           <IconChevronDown size={14} stroke={2.4} aria-hidden />
         </UnstyledButton>
       </Menu.Target>
       <Menu.Dropdown>
-        <Menu.Label>Dashboards</Menu.Label>
+        <Menu.Label>{t('dashboard.switcher.heading')}</Menu.Label>
         {(dashboards ?? []).map((dashboard) => (
           <Menu.Item
             key={dashboard.id}
@@ -100,20 +108,20 @@ export function DashboardSwitcher({
           leftSection={<IconPlus size={16} stroke={1.8} />}
           onClick={() =>
             openTextPromptModal({
-              title: 'New dashboard',
-              label: 'Name',
+              title: t('dashboard.new'),
+              label: t('common.name'),
               initialValue: '',
               onSubmit: (name) => create.mutateAsync(name),
             })
           }
         >
-          New dashboard
+          {t('dashboard.new')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconLayoutDashboard size={16} stroke={1.6} />}
           renderRoot={(props) => <Link to="/dashboards" {...props} />}
         >
-          Manage dashboards
+          {t('dashboard.manage')}
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>
@@ -134,6 +142,8 @@ export function DeskToolbar({
   onEdit: () => void;
   onRefresh: () => void;
 }) {
+  const { t } = useI18n();
+  const refreshText = useRefreshText();
   return (
     <div className={classes.toolbar}>
       <div className={classes.meta}>
@@ -150,7 +160,7 @@ export function DeskToolbar({
           onClick={onEdit}
           data-toolbar-edit
         >
-          Edit widgets
+          {t('dashboard.toolbar.editWidgets')}
         </Button>
         <DashboardMenu
           dashboard={dashboard}
@@ -163,7 +173,7 @@ export function DeskToolbar({
           leftSection={<IconPlus size={15} stroke={2.2} />}
           data-toolbar-new-app
         >
-          New app
+          {t('dashboard.toolbar.newApp')}
         </Button>
       </div>
     </div>
@@ -179,6 +189,7 @@ function DashboardMenu({
   onEdit: () => void;
   onRefresh: () => void;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: dashboards = [] } = useQuery(dashboardsQueryOptions);
@@ -192,7 +203,7 @@ function DashboardMenu({
       renameDashboard({ data: { id: dashboard.id, name } }),
     onSuccess: async () => {
       await invalidate();
-      toast.success('Dashboard renamed');
+      toast.success(t('dashboard.toast.renamed'));
     },
   });
   const saveDescription = useMutation({
@@ -200,7 +211,7 @@ function DashboardMenu({
       setDashboardDescription({ data: { id: dashboard.id, description } }),
     onSuccess: async () => {
       await invalidate();
-      toast.success('Description updated');
+      toast.success(t('dashboard.toast.descriptionUpdated'));
     },
   });
   const remove = useMutation({
@@ -213,7 +224,7 @@ function DashboardMenu({
           params: { dashboardId: next.id },
         });
       await invalidate();
-      toast.success('Dashboard deleted');
+      toast.success(t('dashboard.toast.deleted'));
     },
   });
 
@@ -223,7 +234,7 @@ function DashboardMenu({
         <ActionIcon
           variant="default"
           size="input-sm"
-          aria-label="Dashboard options"
+          aria-label={t('dashboard.menu.options')}
         >
           <IconDots size={18} stroke={1.8} />
         </ActionIcon>
@@ -233,35 +244,35 @@ function DashboardMenu({
           leftSection={<IconRefresh size={15} stroke={1.8} />}
           onClick={onRefresh}
         >
-          Refresh all widgets
+          {t('dashboard.menu.refreshAll')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconPencil size={15} stroke={1.8} />}
           onClick={onEdit}
         >
-          Edit widgets
+          {t('dashboard.toolbar.editWidgets')}
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
           leftSection={<IconPencil size={15} stroke={1.8} />}
           onClick={() =>
             openTextPromptModal({
-              title: 'Rename dashboard',
-              label: 'Name',
+              title: t('dashboard.rename.title'),
+              label: t('common.name'),
               initialValue: dashboard.name,
               onSubmit: (name) => rename.mutateAsync(name),
             })
           }
         >
-          Rename
+          {t('common.rename')}
         </Menu.Item>
         <Menu.Item
           leftSection={<IconFileText size={15} stroke={1.8} />}
           onClick={() =>
             openTextPromptModal({
-              title: 'Edit description',
-              label: 'Description',
-              placeholder: 'What this dashboard is for',
+              title: t('dashboard.description.title'),
+              label: t('dashboard.description.label'),
+              placeholder: t('dashboard.description.placeholder'),
               initialValue: dashboard.description ?? '',
               multiline: true,
               allowEmpty: true,
@@ -270,7 +281,7 @@ function DashboardMenu({
             })
           }
         >
-          Edit description
+          {t('dashboard.description.title')}
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item
@@ -279,21 +290,23 @@ function DashboardMenu({
           disabled={dashboards.length <= 1}
           onClick={() =>
             modals.openConfirmModal({
-              title: 'Delete dashboard',
+              title: t('dashboard.delete.title'),
               centered: true,
               children: (
                 <Text size="sm">
-                  Delete “{dashboard.name}”? Its widget layout is removed; the
-                  Apps and their widgets stay.
+                  {t('dashboard.delete.deskBody', { name: dashboard.name })}
                 </Text>
               ),
-              labels: { confirm: 'Delete', cancel: 'Cancel' },
+              labels: {
+                confirm: t('common.delete'),
+                cancel: t('common.cancel'),
+              },
               confirmProps: { color: 'red' },
               onConfirm: () => remove.mutate(),
             })
           }
         >
-          Delete
+          {t('common.delete')}
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>

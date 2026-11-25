@@ -17,15 +17,20 @@ import {
   useRef,
 } from 'react';
 import { isEditFileDetails } from '~agent/edit-file-details';
-import { askCancellationMessage } from '~agent/ask-cancellation';
+import {
+  askCancellationMessage,
+  USER_CANCELLED_ASK_MESSAGE,
+} from '~agent/ask-cancellation';
 import {
   filePathDisplayLabel,
   isFilePathDetails,
   isFilePathTool,
 } from '~agent/file-path-details';
+import { useI18n } from '~i18n';
 import { EditDiff } from './edit-diff';
 import type { StreamTool } from './use-agent-stream';
 import {
+  FILE_PATH_INPUT,
   listFilesPathArgument,
   type ToolDetail,
   type ToolInputDetail,
@@ -38,6 +43,8 @@ import {
 import classes from './chat.module.css';
 
 export type ToolStatus = 'running' | 'done' | 'error';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 type ToolResult = { text: string; details?: unknown; isError?: boolean };
 
@@ -81,11 +88,12 @@ function resolvedToolDetail(
 }
 
 function resolvedToolInputs(
+  t: Translate,
   name: string,
   args: unknown,
   result?: ToolResult,
 ): ToolInputDetail[] | undefined {
-  const inputs = toolInputDetails(name, args) ?? [];
+  const inputs = toolInputDetails(t, name, args) ?? [];
   if (!isFilePathTool(name)) {
     return inputs.length > 0 ? inputs : undefined;
   }
@@ -106,9 +114,11 @@ function resolvedToolInputs(
     return inputs.length > 0 ? inputs : undefined;
   }
 
-  const pathIndex = inputs.findIndex((input) => input.label === 'File path');
+  const pathIndex = inputs.findIndex(
+    (input) => input.label === FILE_PATH_INPUT.label,
+  );
   if (pathIndex === -1) {
-    return [{ label: 'File path', value: displayedPath }, ...inputs];
+    return [{ ...FILE_PATH_INPUT, value: displayedPath }, ...inputs];
   }
   return inputs.map((input, index) =>
     index === pathIndex ? { ...input, value: displayedPath } : input,
@@ -116,6 +126,7 @@ function resolvedToolInputs(
 }
 
 function outputPresentation(
+  t: Translate,
   name: string,
   isError: boolean,
   args: unknown,
@@ -127,13 +138,21 @@ function outputPresentation(
       : undefined;
   if (cancelledMessage) {
     return {
-      label: 'Canceled',
+      label: t('agent.tool.output.canceled'),
       emptyText: '',
       cancelled: true,
-      text: cancelledMessage,
+      text:
+        cancelledMessage === USER_CANCELLED_ASK_MESSAGE
+          ? t('agent.tool.output.askCanceledByUser')
+          : t('agent.tool.output.askCanceled'),
     };
   }
-  if (isError) return { label: 'Error', emptyText: '(no error details)' };
+  if (isError) {
+    return {
+      label: t('agent.tool.output.error'),
+      emptyText: t('agent.tool.output.errorEmpty'),
+    };
+  }
   if (name === 'read_file') {
     const resultDetails = detailsRecord(result?.details);
     const offset = [
@@ -144,17 +163,23 @@ function outputPresentation(
         typeof value === 'number' && Number.isSafeInteger(value) && value >= 0,
     );
     return {
-      label: 'File contents',
+      label: t('agent.tool.input.fileContents'),
       emptyText:
         offset && offset > 0
-          ? `(no content at offset ${offset})`
-          : '(empty file)',
+          ? t('agent.tool.output.noContentAtOffset', { offset })
+          : t('agent.tool.input.fileContentsEmpty'),
     };
   }
   if (name === 'list_files') {
-    return { label: 'Directory contents', emptyText: '(empty directory)' };
+    return {
+      label: t('agent.tool.output.directory'),
+      emptyText: t('agent.tool.output.directoryEmpty'),
+    };
   }
-  return { label: 'Output', emptyText: '(no output)' };
+  return {
+    label: t('agent.tool.output.output'),
+    emptyText: t('agent.tool.output.outputEmpty'),
+  };
 }
 
 function hasCompleteWriteInput(name: string, args: unknown): boolean {
@@ -264,14 +289,15 @@ function ToolBodySection({
  * diagnosable. Secret KV write values remain masked in both render paths.
  */
 function ToolRequestSection({ name, args }: { name: string; args: unknown }) {
+  const { t } = useI18n();
   const json = useMemo(() => toolRequestJson(name, args), [name, args]);
   return (
-    <ToolBodySection label="Request">
+    <ToolBodySection label={t('agent.tool.request')}>
       <Box className={classes.stepInputCode}>
         {json ??
           (args === undefined
-            ? '(request arguments unavailable)'
-            : '(request arguments cannot be shown as JSON)')}
+            ? t('agent.tool.requestUnavailable')
+            : t('agent.tool.requestNotJson'))}
       </Box>
     </ToolBodySection>
   );
@@ -296,14 +322,13 @@ function ToolStepBody({
   outputLabel: string;
   outputEmptyText: string;
 }) {
+  const { t } = useI18n();
   return (
     <Box className={classes.stepBody}>
       {inputs?.map((input) => (
-        <ToolBodySection key={input.label} label={input.label}>
+        <ToolBodySection key={input.label} label={t(input.label)}>
           <Box className={classes.stepInputCode}>
-            {input.value === ''
-              ? (input.emptyText ?? `(empty ${input.label.toLowerCase()})`)
-              : input.value}
+            {input.value === '' ? t(input.emptyText) : input.value}
           </Box>
         </ToolBodySection>
       ))}
@@ -323,10 +348,6 @@ function ToolStepBody({
   );
 }
 
-const compactTokenCount = new Intl.NumberFormat('en', {
-  notation: 'compact',
-});
-
 /**
  * Auto-compaction marker, shared by the live stream (start/done/failed as
  * events arrive) and the persisted `compactionSummary` transcript boundary.
@@ -343,6 +364,10 @@ export function CompactionStep({
   tokensAfter?: number;
   summary?: string;
 }) {
+  const { t, locale } = useI18n();
+  const compactTokenCount = new Intl.NumberFormat(locale, {
+    notation: 'compact',
+  });
   const icon =
     status === 'running' ? (
       <Loader size={11} color="gray" />
@@ -353,15 +378,20 @@ export function CompactionStep({
     );
   const label =
     status === 'running'
-      ? 'Compacting context…'
+      ? t('agent.compaction.running')
       : status === 'error'
-        ? 'Context compaction failed'
-        : 'Context compacted';
+        ? t('agent.compaction.failed')
+        : t('agent.compaction.done');
   const detailValue =
     tokensBefore !== undefined && tokensAfter !== undefined
-      ? `~${compactTokenCount.format(tokensBefore)} → ~${compactTokenCount.format(tokensAfter)} tokens`
+      ? t('agent.compaction.tokensRange', {
+          before: compactTokenCount.format(tokensBefore),
+          after: compactTokenCount.format(tokensAfter),
+        })
       : tokensBefore !== undefined
-        ? `~${compactTokenCount.format(tokensBefore)} tokens`
+        ? t('agent.compaction.tokens', {
+            before: compactTokenCount.format(tokensBefore),
+          })
         : undefined;
   return (
     <StepRow
@@ -384,9 +414,13 @@ export function CompactionStep({
 }
 
 export function ThinkingStep({ text }: { text: string }) {
+  const { t } = useI18n();
   if (!text.trim()) return null;
   return (
-    <StepRow icon={<IconSparkles size={13} stroke={1.6} />} label="Thinking">
+    <StepRow
+      icon={<IconSparkles size={13} stroke={1.6} />}
+      label={t('agent.thinking.done')}
+    >
       <Box className={classes.stepBody}>
         <Box className={classes.stepBodyText}>{text}</Box>
       </Box>
@@ -407,10 +441,11 @@ export function ToolStep({
   status: ToolStatus;
   result?: ToolResult;
 }) {
+  const { t } = useI18n();
   const isError = status === 'error' || result?.isError === true;
   const editDetails = successfulEditDetails(name, result);
-  const inputs = resolvedToolInputs(name, args, result);
-  const output = outputPresentation(name, isError, args, result);
+  const inputs = resolvedToolInputs(t, name, args, result);
+  const output = outputPresentation(t, name, isError, args, result);
   const hideSuccessfulWriteOutput =
     status === 'done' &&
     result !== undefined &&
@@ -429,7 +464,7 @@ export function ToolStep({
   return (
     <StepRow
       icon={icon}
-      label={toolDisplayLabel(name, args)}
+      label={toolDisplayLabel(t, name, args)}
       detail={resolvedToolDetail(name, args, result?.details, isError, detail)}
       error={isError && !output.cancelled}
     >
@@ -460,6 +495,7 @@ export function StreamingThinkingStep({
   text: string;
   active: boolean;
 }) {
+  const { t } = useI18n();
   const [open, handlers] = useDisclosure(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const bodyId = useId();
@@ -483,7 +519,7 @@ export function StreamingThinkingStep({
         )}
       </span>
       <span className={classes.stepLabel}>
-        {active ? 'Thinking…' : 'Thinking'}
+        {active ? t('agent.thinking.active') : t('agent.thinking.done')}
       </span>
       {expandable ? (
         <IconChevronRight
@@ -525,6 +561,7 @@ export function StreamingThinkingStep({
  * re-expandable row, matching the persisted timeline.
  */
 export function StreamingToolStep({ tool }: { tool: StreamTool }) {
+  const { t } = useI18n();
   const [open, handlers] = useDisclosure(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const bodyId = useId();
@@ -537,8 +574,9 @@ export function StreamingToolStep({ tool }: { tool: StreamTool }) {
     isError: tool.isError,
   };
   const editDetails = successfulEditDetails(tool.name, result);
-  const inputs = resolvedToolInputs(tool.name, tool.args, result);
+  const inputs = resolvedToolInputs(t, tool.name, tool.args, result);
   const outputPresentationDetails = outputPresentation(
+    t,
     tool.name,
     isError,
     tool.args,
@@ -580,7 +618,7 @@ export function StreamingToolStep({ tool }: { tool: StreamTool }) {
     tool.details,
     isError,
   );
-  const label = toolDisplayLabel(tool.name, tool.args, tool.label);
+  const label = toolDisplayLabel(t, tool.name, tool.args, tool.label);
   const header = (
     <>
       <span

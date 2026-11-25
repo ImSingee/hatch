@@ -1,0 +1,168 @@
+/* Card status: a tinted pill with a dot, coloured by tone. */
+.status {
+  --tone: var(--mantine-color-gray-6);
+  --tone-fill: var(--surface-hover);
+  --tone-text: var(--mantine-color-gray-7);
+
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--tone-fill);
+  color: var(--tone-text);
+  font-size: 12px;
+  font-weight: var(--font-weight-label);
+}
+
+.status[data-tone='info'],
+.progressTrack[data-tone='info'] {
+  --tone: var(--mantine-color-blue-6);
+  --tone-fill: var(--mantine-color-blue-1);
+  --tone-text: var(--mantine-color-blue-8);
+}
+
+.status[data-tone='success'],
+.progressTrack[data-tone='success'] {
+  --tone: var(--mantine-color-green-6);
+  --tone-fill: var(--mantine-color-green-1);
+  --tone-text: var(--mantine-color-green-8);
+}
+
+.status[data-tone='warning'],
+.progressTrack[data-tone='warning'] {
+  --tone: var(--mantine-color-yellow-6);
+  --tone-fill: var(--mantine-color-yellow-1);
+  --tone-text: var(--mantine-color-yellow-8);
+}
+
+.status[data-tone='danger'],
+.progressTrack[data-tone='danger'] {
+  --tone: var(--mantine-color-red-6);
+  --tone-fill: var(--mantine-color-red-1);
+  --tone-text: var(--mantine-color-red-8);
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progressHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  font-weight: var(--font-weight-strong);
+}
+
+.progressValue {
+  color: var(--mantine-color-text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+}
+
+.progressTrack {
+  --tone: var(--mantine-primary-color-filled);
+
+  display: block;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mantine-color-gray-2);
+  appearance: none;
+}
+
+.progressTrack::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--mantine-color-gray-2);
+}
+
+.progressTrack::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--tone);
+  transition: width var(--transition-base);
+}
+
+.progressTrack::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--tone);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-muted);
+}
+
+.statValue {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--font-weight-heading);
+  line-height: 28px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.statLabel {
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+  font-weight: var(--font-weight-strong);
+}
+
+.quote {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--surface-muted);
+}
+
+.quoteMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--mantine-color-dimmed);
+  font-size: 12px;
+}
+
+.quoteAuthor {
+  color: var(--mantine-color-text);
+  font-weight: var(--font-weight-label);
+}
+
+.quoteLocation {
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.quoteText {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

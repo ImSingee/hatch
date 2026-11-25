@@ -10,9 +10,9 @@ import {
   WindowBody,
 } from '~components/page/page';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { RunStatusBadge } from '~components/runs/run-status';
-import { type PlainTranslationKey, useI18n } from '~i18n';
-import { formatDuration, formatRelative } from '~lib/format';
+import { RunStatusBadge, RunTriggerLabel } from '~components/runs/run-status';
+import { useI18n } from '~i18n';
+import { formatDuration, formatRelativeTime } from '~lib/format';
 import { isActiveRun, type RunListItem } from '~lib/runs';
 import { recentTaskRunsQueryOptions } from '~queries/app-tasks';
 import { listRecentTaskRunsFn } from '~server/app-tasks';
@@ -22,19 +22,12 @@ export const Route = createFileRoute('/_app/executions')({
   component: ExecutionsPage,
 });
 
-const TRIGGER_LABEL: Record<string, PlainTranslationKey> = {
-  manual: 'runTrigger.manual',
-  cron: 'runTrigger.cron',
-  webhook: 'runTrigger.webhook',
-  app: 'runTrigger.app',
-};
-
 /** Fast refresh while a run is in flight; slow idle poll picks up new ones. */
 const pollActive = (runs: { status: RunListItem['status'] }[] | undefined) =>
   (runs ?? []).some((run) => isActiveRun(run.status)) ? 1500 : 15_000;
 
 function ExecutionsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const initial = Route.useLoaderData();
   const navigate = useNavigate();
   const taskQuery = useQuery({
@@ -130,9 +123,7 @@ function ExecutionsPage() {
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">
-                      {TRIGGER_LABEL[run.trigger]
-                        ? t(TRIGGER_LABEL[run.trigger])
-                        : run.trigger}
+                      <RunTriggerLabel trigger={run.trigger} />
                     </Text>
                   </Table.Td>
                   <Table.Td>
@@ -147,7 +138,10 @@ function ExecutionsPage() {
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">
-                      {formatRelative(run.startedAt ?? run.createdAt)}
+                      {formatRelativeTime(
+                        run.startedAt ?? run.createdAt,
+                        locale,
+                      )}
                     </Text>
                   </Table.Td>
                 </Table.Tr>

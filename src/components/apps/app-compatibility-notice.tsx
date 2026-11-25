@@ -6,7 +6,5 @@ export function AppCompatibilityNotice({
 }: {
   compatibility: AppCompatibility | null;
 }) {
-  return (
-    <CompatibilityNotice resourceName="App" compatibility={compatibility} />
-  );
+  return <CompatibilityNotice compatibility={compatibility} />;
 }

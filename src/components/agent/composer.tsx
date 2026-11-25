@@ -15,10 +15,12 @@ import {
 } from '@tabler/icons-react';
 import { type ReactNode, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import type { AgentMessageMode } from '~/db/schema';
 import {
   hasComposerText,
   type ComposerInputPart,
 } from '~agent/composer-content';
+import { useI18n } from '~i18n';
 import type { AppListItem } from '~server/apps';
 import { ComposerEditor, type ComposerEditorHandle } from './composer-editor';
 import classes from './chat.module.css';
@@ -35,7 +37,20 @@ export type ComposerSubmit = {
   content: ComposerInputPart[];
   images: ComposerImage[];
   files: ComposerFile[];
+  /**
+   * Sent with ⌘/Ctrl held: while the Agent works, deliver it in the other
+   * mode than the user's default (queue ↔ steer).
+   */
+  switchMode: boolean;
 };
+
+/** The keys that send in the other delivery mode, as this platform names them. */
+function switchModeShortcut(): string {
+  return typeof navigator !== 'undefined' &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+    ? '⌘↵'
+    : 'Ctrl+Enter';
+}
 
 type ImageAttachment = {
   kind: 'image';
@@ -133,10 +148,11 @@ export function Composer({
   onStop,
   disabled = false,
   focusOnMount = false,
-  placeholder = 'Message the Agent…',
+  placeholder,
   seedText,
   seedNonce,
   modelControl,
+  messageMode,
   apps,
   appsLoading = false,
   appsError = false,
@@ -164,11 +180,17 @@ export function Composer({
   seedNonce?: number;
   /** Control rendered in the action bar, left of Send (e.g. ModelPicker). */
   modelControl?: ReactNode;
+  /**
+   * The user's default delivery for a message sent while busy, named in the
+   * Send hint with the shortcut that switches it.
+   */
+  messageMode?: AgentMessageMode;
   /** Apps available to the inline @ mention menu. */
   apps?: AppListItem[];
   appsLoading?: boolean;
   appsError?: boolean;
 }) {
+  const { t } = useI18n();
   const [content, setContent] = useState<ComposerInputPart[]>(() =>
     seedText ? [{ type: 'text', text: seedText }] : [],
   );
@@ -185,12 +207,12 @@ export function Composer({
     const all = Array.from(files);
     const nonEmpty = all.filter((file) => file.size > 0);
     if (nonEmpty.length !== all.length) {
-      toast.error('Empty files cannot be attached.');
+      toast.error(t('agent.composer.emptyFile'));
     }
     if (nonEmpty.length === 0) return;
     const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
-      toast.error(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+      toast.error(t('agent.composer.tooManyFiles', { count: MAX_ATTACHMENTS }));
       return;
     }
     try {
@@ -205,7 +227,7 @@ export function Composer({
       );
       setAttachments((p) => [...p, ...read]);
     } catch {
-      toast.error('Could not read that file.');
+      toast.error(t('agent.composer.readFailed'));
     }
   };
 
@@ -218,7 +240,7 @@ export function Composer({
     !mentionLookupPending &&
     !submitting;
 
-  const submit = async () => {
+  const submit = async (switchMode = false) => {
     if (
       (busy && !queueWhileBusy) ||
       disabled ||
@@ -266,6 +288,7 @@ export function Composer({
           content: submittedDraft.content,
           images,
           files,
+          switchMode,
         })) !== false;
     } catch {
       accepted = false;
@@ -342,7 +365,7 @@ export function Composer({
                     ? classes.thumbRemove
                     : classes.fileAttachmentRemove
                 }
-                aria-label={`Remove ${a.name}`}
+                aria-label={t('agent.composer.removeFile', { name: a.name })}
                 onClick={() => removeAttachment(a.id)}
               />
             </Box>
@@ -368,12 +391,12 @@ export function Composer({
         appsError={appsError}
         disabled={disabled}
         focusOnMount={focusOnMount}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('agent.composer.placeholder')}
         seedText={seedText}
         seedNonce={seedNonce}
         onChange={setContent}
         onMentionLookupPendingChange={setMentionLookupPending}
-        onSubmit={() => void submit()}
+        onSubmit={({ switchMode }) => void submit(switchMode)}
         onPasteFiles={(files) => void addFiles(files)}
       />
 
@@ -388,7 +411,7 @@ export function Composer({
             color="gray"
             size={28}
             radius="md"
-            aria-label="Attach files"
+            aria-label={t('agent.composer.attach')}
             onClick={() => fileInputRef.current?.click()}
           >
             <IconPaperclip size={16} stroke={1.8} />
@@ -398,13 +421,13 @@ export function Composer({
 
         <Group gap={6} wrap="nowrap">
           {busy ? (
-            <Tooltip label="Stop" withArrow>
+            <Tooltip label={t('agent.composer.stop')} withArrow>
               <ActionIcon
                 color="red"
                 variant={queueWhileBusy ? 'light' : 'filled'}
                 size={30}
                 radius="xl"
-                aria-label="Stop"
+                aria-label={t('agent.composer.stop')}
                 onClick={onStop}
               >
                 <IconPlayerStopFilled size={13} />
@@ -413,16 +436,28 @@ export function Composer({
           ) : null}
           {!busy || queueWhileBusy ? (
             <Tooltip
-              label="Send while the Agent works"
+              label={
+                messageMode === 'steer'
+                  ? t('agent.composer.sendBusy.steer', {
+                      shortcut: switchModeShortcut(),
+                    })
+                  : messageMode === 'queue'
+                    ? t('agent.composer.sendBusy.queue', {
+                        shortcut: switchModeShortcut(),
+                      })
+                    : t('agent.composer.sendBusy.default')
+              }
               withArrow
+              multiline
+              maw={260}
               disabled={!busy}
             >
               <ActionIcon
                 size={30}
                 radius="xl"
-                aria-label="Send"
+                aria-label={t('agent.composer.send')}
                 disabled={!canSend}
-                onClick={() => void submit()}
+                onClick={(event) => void submit(event.metaKey || event.ctrlKey)}
               >
                 <IconArrowUp size={16} stroke={2.2} />
               </ActionIcon>

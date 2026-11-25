@@ -1,5 +1,7 @@
 /** Browser requests for messages sent while an Agent run works. */
+import type { AgentMessageMode } from '~/db/schema';
 import type { ComposerInputPart } from '~agent/composer-content';
+import { errorFromResponse } from '~lib/error-codes';
 import type {
   AgentPendingMessage,
   SessionPendingMessages,
@@ -28,7 +30,10 @@ async function request(
         }),
   });
   if (!res.ok) {
-    throw new Error((await res.text()) || `Request failed (${res.status})`);
+    throw errorFromResponse(
+      res,
+      (await res.text()) || `Request failed (${res.status})`,
+    );
   }
   return (await res.json()) as PendingMessagesResult;
 }
@@ -39,7 +44,10 @@ const base = (sessionId: string) =>
 const item = (sessionId: string, messageId: string) =>
   `${base(sessionId)}/${encodeURIComponent(messageId)}`;
 
-/** Send a message while the run works, in the user's queue/steer mode. */
+/**
+ * Send a message while the run works, in `mode` or (omitted) the user's
+ * preferred queue/steer mode.
+ */
 export function enqueuePendingMessage(
   sessionId: string,
   message: {
@@ -48,6 +56,7 @@ export function enqueuePendingMessage(
     attachmentIds: string[];
     providerId: string;
     modelId: string;
+    mode?: AgentMessageMode;
     /** Reused when resending the same draft (see `./draft-send`). */
     clientMessageId: string;
   },
@@ -63,6 +72,7 @@ export function updatePendingMessage(
     content?: ComposerInputPart[];
     images?: SendImage[];
     attachmentIds?: string[];
+    mode?: AgentMessageMode;
   },
 ) {
   return request(item(sessionId, messageId), {

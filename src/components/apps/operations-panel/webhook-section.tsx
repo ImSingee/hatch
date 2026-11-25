@@ -9,26 +9,31 @@ import {
 } from '@mantine/core';
 import { IconCopy, IconWebhook } from '@tabler/icons-react';
 import copy from 'copy-to-clipboard';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
+import { useI18n } from '~i18n';
 import type { AppOps } from '~server/apps';
 import { SectionHeader } from './section-header';
 
 /** Inbound webhook URL (with platform-auth secret when applicable). */
 export function WebhookSection({ webhook }: { webhook: AppOps['webhook'] }) {
+  const { t } = useI18n();
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
 
   return (
     <Stack gap={6}>
       <SectionHeader
         icon={<IconWebhook size={16} stroke={1.8} />}
-        title="Inbound webhook"
+        title={t('ops.webhook.title')}
         meta={
           <Badge
             size="xs"
             variant="light"
             color={webhook.auth === 'platform' ? 'teal' : 'gray'}
           >
-            {webhook.auth === 'platform' ? 'platform auth' : 'no platform auth'}
+            {webhook.auth === 'platform'
+              ? t('ops.webhook.platformAuth')
+              : t('ops.webhook.noPlatformAuth')}
           </Badge>
         }
       />
@@ -47,7 +52,9 @@ export function WebhookSection({ webhook }: { webhook: AppOps['webhook'] }) {
         </Code>
         <Tooltip
           label={
-            webhook.auth === 'platform' ? 'Copy URL with secret' : 'Copy URL'
+            webhook.auth === 'platform'
+              ? t('ops.webhook.copyWithSecret')
+              : t('ops.webhook.copy')
           }
           withArrow
           position="left"
@@ -55,7 +62,7 @@ export function WebhookSection({ webhook }: { webhook: AppOps['webhook'] }) {
           <ActionIcon
             variant="subtle"
             color="gray"
-            aria-label="Copy webhook URL"
+            aria-label={t('ops.webhook.copyLabel')}
             onClick={() => {
               const url =
                 webhook.auth === 'platform'
@@ -64,7 +71,7 @@ export function WebhookSection({ webhook }: { webhook: AppOps['webhook'] }) {
                     }`
                   : `${origin}${webhook.url ?? ''}`;
               copy(url);
-              toast.success('Webhook URL copied');
+              toast.success(t('ops.webhook.copied'));
             }}
           >
             <IconCopy size={15} />
@@ -72,19 +79,15 @@ export function WebhookSection({ webhook }: { webhook: AppOps['webhook'] }) {
         </Tooltip>
       </Group>
       <Text size="xs" c="dimmed">
-        {webhook.auth === 'platform' ? (
-          <>
-            POST here from external services. The platform verifies the secret,
-            strips it, and forwards an HMAC-signed request to your backend at{' '}
-            <Code>/__webhook</Code>.
-          </>
-        ) : (
-          <>
-            Unauthenticated passthrough: the platform forwards requests as-is to
-            your backend at <Code>/__webhook</Code>. Your backend must verify
-            the caller itself.
-          </>
-        )}
+        <Trans
+          t={t}
+          i18nKey={
+            webhook.auth === 'platform'
+              ? 'ops.webhook.platformNote'
+              : 'ops.webhook.passthroughNote'
+          }
+          components={{ code: <Code /> }}
+        />
       </Text>
     </Stack>
   );

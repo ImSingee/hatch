@@ -687,10 +687,13 @@ describe('notification reply commands', () => {
         'who=bob',
         '--answer',
         'note=a=b',
+        '--round',
+        '3',
       ),
     );
     const answers = received.respondToNotification?.answers ?? {};
     expect(received.respondToNotification?.via).toBe('cli');
+    expect(received.respondToNotification?.round).toBe(3);
     expect(answers.when?.answer).toEqual({ case: 'value', value: 'am' });
     expect(answers.note?.answer).toEqual({ case: 'value', value: 'a=b' });
     expect(answers.who?.answer).toMatchObject({
@@ -705,14 +708,22 @@ describe('notification reply commands', () => {
     expect(() =>
       parse('respond', 'n', '--answer', 'a=b', '--answers', '{}'),
     ).toThrow(/either --answer or --answers/);
-    expect(() => parse('respond', 'n', '--answer', 'novalue')).toThrow(
-      /must be <field-id>=<value>/,
+    expect(() => parse('respond', 'n', '--answer', 'a=b')).toThrow(
+      /Supply --round <n>/,
     );
+    expect(() =>
+      parse('respond', 'n', '--round', '1', '--answer', 'novalue'),
+    ).toThrow(/must be <field-id>=<value>/);
+    for (const round of ['0', '1.5', 'two']) {
+      expect(() =>
+        parse('respond', 'n', '--answer', 'a=b', '--round', round),
+      ).toThrow(/--round must be a positive integer/);
+    }
     const { transport, received } = replyTransport();
     await expect(
       executeNotificationCall(
         transport,
-        parse('respond', 'n', '--answers', '{"a":1}'),
+        parse('respond', 'n', '--round', '1', '--answers', '{"a":1}'),
       ),
     ).rejects.toThrow(/answer "a" must be a string or a list/);
     expect(received.respondToNotification).toBeUndefined();
@@ -752,7 +763,7 @@ describe('notification reply commands', () => {
     });
     expect(() =>
       parse('response-route', 'create', '--source-type', 'any'),
-    ).toThrow('Supply --destination <id>.');
+    ).toThrow('Supply --destination <id> or --agent.');
     expect(() => parse('response-route', 'update', 'route-1')).toThrow(
       'Supply at least one response route change.',
     );
@@ -771,5 +782,208 @@ describe('notification reply commands', () => {
     expect(() => parse('response-route', 'list', '--limit', '0')).toThrow(
       '--limit must be an integer between 1 and 100.',
     );
+  });
+
+  it('lists in timeline order with --order activity and rejects other orders', () => {
+    expect(
+      parse('list', '--order', 'activity', '--cursor', '1764000000000.X')
+        .request,
+    ).toMatchObject({ order: 'activity', cursor: '1764000000000.X' });
+    expect(parse('list').request).toMatchObject({ order: undefined });
+    expect(() => parse('list', '--order', 'updated')).toThrow(
+      '--order must be created or activity.',
+    );
+  });
+});
+
+describe('earlier versions', () => {
+  it('pages with --limit and --cursor and rejects an unusable limit', () => {
+    expect(
+      parse('revisions', 'n-1', '--limit', '5', '--cursor', '12').request,
+    ).toMatchObject({ id: 'n-1', limit: 5, cursor: '12' });
+    expect(parse('revisions', 'n-1').request).toMatchObject({
+      id: 'n-1',
+      limit: 0,
+    });
+    expect(() => parse('revisions', 'n-1', '--limit', '500')).toThrow(
+      '--limit must be an integer between 1 and 100.',
+    );
+  });
+});
+
+describe('read position commands', () => {
+  it('marks through one notification or all of them, and needs exactly one', () => {
+    expect(parse('mark-read', '--through', 'n-1').request).toMatchObject({
+      through: { case: 'notificationId', value: 'n-1' },
+    });
+    expect(parse('mark-read', '--latest').request).toMatchObject({
+      through: { case: 'latest', value: true },
+    });
+    expect(() => parse('mark-read')).toThrow(
+      'Supply --through <notification-id> or --latest.',
+    );
+    expect(() => parse('mark-read', '--through', 'n-1', '--latest')).toThrow(
+      'Use either --through <notification-id> or --latest, not both.',
+    );
+    expect(
+      parse('mark-read', '--through', 'n-1', '--at', '2026-11-25T01:02:03.456Z')
+        .request,
+    ).toMatchObject({
+      through: { case: 'notificationId', value: 'n-1' },
+      activityAt: '2026-11-25T01:02:03.456Z',
+    });
+    expect(() => parse('mark-read', '--latest', '--at', '2026-11-25')).toThrow(
+      '--at needs --through <notification-id>.',
+    );
+    expect(() =>
+      parse('mark-read', '--through', 'n-1', '--at', 'yesterday'),
+    ).toThrow(/--at must be an ISO 8601 time/);
+    expect(parse('unread').method).toBe('getNotificationReadState');
+  });
+});
+
+describe('asking a new question in an edit', () => {
+  const form =
+    '{"fields":[{"id":"merge","type":"buttons","label":"Merge?","options":[{"id":"merge","label":"Merge"},{"id":"hold","label":"Hold"}]}]}';
+
+  it('sends the whole new form, or clears it, and rejects both at once', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--reply', form, '--silent'),
+    );
+    expect(received.updateNotification?.reply?.fields[0]).toMatchObject({
+      id: 'merge',
+    });
+    expect(received.updateNotification?.clearReply).toBe(false);
+
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--clear-reply'),
+    );
+    expect(received.updateNotification).toMatchObject({ clearReply: true });
+    expect(received.updateNotification?.reply).toBeUndefined();
+
+    expect(() =>
+      parse('update', 'notification-1', '--reply', form, '--clear-reply'),
+    ).toThrow('Use either --reply/--reply-file or --clear-reply, not both.');
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse('update', 'notification-1', '--reply', '{"fields":[]}'),
+      ),
+    ).rejects.toThrow(/--reply/);
+  });
+});
+
+describe('cards', () => {
+  it('sends a checked card, clears it, and rejects invalid or conflicting input before any request', async () => {
+    const { transport, received } = recordingTransport();
+    await executeNotificationCall(
+      transport,
+      parse(
+        'update',
+        'notification-1',
+        '--card',
+        '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}',
+      ),
+    );
+    expect(received.updateNotification?.card).toMatchObject({
+      status: { label: 'CI failed', tone: 'danger' },
+      block: { case: 'progress', value: { percent: 86, value: '12 / 14' } },
+    });
+    await executeNotificationCall(
+      transport,
+      parse('update', 'notification-1', '--clear-card'),
+    );
+    expect(received.updateNotification).toMatchObject({ clearCard: true });
+
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse(
+          'update',
+          'notification-1',
+          '--card',
+          '{"block":{"type":"chart"}}',
+        ),
+      ),
+    ).rejects.toThrow(/--card: block/);
+    await expect(
+      executeNotificationCall(
+        transport,
+        parse('update', 'notification-1', '--card', '{}'),
+      ),
+    ).rejects.toThrow('--card: give a status or a block, or use --clear-card.');
+    expect(() =>
+      parse('update', 'notification-1', '--card', '{}', '--clear-card'),
+    ).toThrow('Use either --card/--card-file or --clear-card, not both.');
+  });
+});
+
+describe('response routes to the Agent', () => {
+  it('maps the agent target and rejects contradictory or orphaned options', () => {
+    expect(
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'channel',
+        '--agent',
+        '--agent-instructions',
+        'Fix the failing check.',
+      ).request,
+    ).toMatchObject({
+      agent: true,
+      destinationId: undefined,
+      agentInstructions: 'Fix the failing check.',
+    });
+    expect(() =>
+      parse('response-route', 'create', '--source-type', 'any'),
+    ).toThrow('Supply --destination <id> or --agent.');
+    expect(() =>
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'any',
+        '--destination',
+        'd-1',
+        '--agent',
+      ),
+    ).toThrow('Use either --destination <id> or --agent, not both.');
+    expect(() =>
+      parse(
+        'response-route',
+        'create',
+        '--source-type',
+        'any',
+        '--destination',
+        'd-1',
+        '--agent-session',
+        's-1',
+      ),
+    ).toThrow('--agent-session and --agent-instructions need --agent.');
+
+    expect(
+      parse(
+        'response-route',
+        'update',
+        'route-1',
+        '--chat-per-notification',
+        '--clear-agent-instructions',
+      ).request,
+    ).toMatchObject({ agentSessionId: '', agentInstructions: '' });
+    expect(() =>
+      parse(
+        'response-route',
+        'update',
+        'route-1',
+        '--destination',
+        'd-1',
+        '--agent-instructions',
+        'x',
+      ),
+    ).toThrow(/Agent options cannot be combined with --destination/);
   });
 });

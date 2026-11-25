@@ -133,6 +133,7 @@ export type TagTone =
   | 'accent'
   | 'fill'
   | 'quiet'
+  | 'info'
   | 'success'
   | 'warning'
   | 'danger'
@@ -166,6 +167,7 @@ export function Tag({
       border: accent.fill,
     },
     quiet: { bg: c.hover, fg: c.inkSoft, mark: c.inkSoft, border: c.hover },
+    info: tint(status.info),
     success: tint(status.success),
     warning: tint(status.warning),
     danger: tint(status.danger),

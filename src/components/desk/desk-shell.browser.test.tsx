@@ -27,6 +27,7 @@ const fixtures = vi.hoisted(() => ({
   pins: [] as Pin[],
   runnerState: 'connected' as string,
   dockLabels: false,
+  unread: 0,
   apps: [] as {
     id: string;
     slug: string;
@@ -83,6 +84,11 @@ vi.mock('~auth/client', () => ({
       data: { user: { name: 'Test owner', email: 'owner@example.test' } },
     }),
   },
+}));
+vi.mock('~components/notifications/use-notification-read-state', () => ({
+  useNotificationReadState: () => ({
+    data: { unreadCount: fixtures.unread },
+  }),
 }));
 vi.mock('~components/apps/use-app-icon', () => ({
   appIconUrl: () => '',
@@ -202,6 +208,7 @@ beforeEach(() => {
   fixtures.apps = [];
   fixtures.runnerState = 'connected';
   fixtures.dockLabels = false;
+  fixtures.unread = 0;
 });
 
 test('every destination of the shell is reachable from the menu bar', async () => {
@@ -696,4 +703,12 @@ test('a maximized window fills the screen, the menu bar waits at the top edge, a
   await userEvent.hover(screen.getByRole('heading', { name: 'Apps' }));
   await vi.waitFor(() => expect(menuBarShown()).toBe(true));
   expect(localStorage.getItem('hatch.desk.windowMaximized')).toBeNull();
+});
+
+test('the bell says how many notifications are unread', async () => {
+  fixtures.unread = 3;
+  const { screen } = await renderDesk('/');
+  await expect
+    .element(screen.getByRole('link', { name: 'Notifications, 3 unread' }))
+    .toBeVisible();
 });

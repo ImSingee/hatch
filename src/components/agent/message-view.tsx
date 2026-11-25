@@ -17,6 +17,7 @@ import {
   composerModelText,
   type AgentComposerContentPart,
 } from '~agent/composer-content';
+import { useI18n } from '~i18n';
 import { formatBytes } from '~lib/format';
 import type { AppListItem } from '~server/apps';
 import {
@@ -94,6 +95,7 @@ function UserMessageBubble({
   fallback: string;
   onToggle?: UserMessageToggle;
 }) {
+  const { t } = useI18n();
   // Local state survives session refetches (the turn key is stable) but resets
   // when the chat remounts, so every visit starts with long prompts collapsed.
   const [expanded, setExpanded] = useState(false);
@@ -120,8 +122,8 @@ function UserMessageBubble({
         maxHeight={USER_MESSAGE_MAX_HEIGHT}
         showLabel={<IconChevronDown size={16} stroke={1.7} aria-hidden />}
         hideLabel={<IconChevronUp size={16} stroke={1.7} aria-hidden />}
-        showAriaLabel="Expand message"
-        hideAriaLabel="Collapse message"
+        showAriaLabel={t('agent.message.expand')}
+        hideAriaLabel={t('agent.message.collapse')}
         expanded={expanded}
         onExpandedChange={(next) => {
           toggledRef.current = true;
@@ -151,6 +153,7 @@ export function UserMessage({
   message: Extract<ChatMessage, { role: 'user' }>;
   onToggle?: UserMessageToggle;
 }) {
+  const { t } = useI18n();
   const text = partsToText(
     message.content,
     message.attachments,
@@ -167,7 +170,7 @@ export function UserMessage({
               <Image
                 key={i}
                 src={src}
-                alt="Attached image"
+                alt={t('agent.message.attachedImage')}
                 radius="md"
                 w="auto"
                 mah={260}

@@ -1,6 +1,7 @@
 import { Box } from '@mantine/core';
 import dayjs from 'dayjs';
 import { type ReactNode, useEffect, useRef } from 'react';
+import { useI18n } from '~i18n';
 import classes from './desk-home.module.css';
 
 type DeskHomeProps = {
@@ -52,6 +53,7 @@ export function DeskHome({
   companion,
   children,
 }: DeskHomeProps) {
+  const { t, locale } = useI18n();
   const root = useRef<HTMLDivElement>(null);
 
   // Arriving at the desk (a window was closed) starts keyboard users here
@@ -79,7 +81,12 @@ export function DeskHome({
           <>
             <header className={classes.heading}>
               <span className={classes.eyebrow}>
-                {eyebrow ?? dayjs().format('dddd, MMMM D')}
+                {eyebrow ??
+                  new Intl.DateTimeFormat(locale, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  }).format(dayjs().toDate())}
               </span>
               <h1 className={classes.title}>{title}</h1>
               {description ? (
@@ -93,7 +100,7 @@ export function DeskHome({
             {today ? <div className={classes.today}>{today}</div> : null}
           </>
         )}
-        <section aria-label="Widgets" className={classes.widgets}>
+        <section aria-label={t('shell.widgets')} className={classes.widgets}>
           {children}
         </section>
         {!editing && companion ? (

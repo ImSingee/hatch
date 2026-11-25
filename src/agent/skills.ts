@@ -44,7 +44,6 @@ const REQUIRED_SKILL_NAMES = [
   'building-apps',
   'importing-apps',
   'app-compatibility',
-  'app-icon',
 ] as const;
 
 /** File or directory behind `info`, following a symlink once. */

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { authClient } from '~auth/client';
 import { AppRouteAutocomplete } from '~components/apps/app-route-autocomplete';
 import { HOMEPAGE_PAGES, type HomepageTarget } from '~/homepage';
+import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
 import { normalizedManifestQueryOptions } from '~queries/apps';
 import { dashboardsQueryOptions } from '~queries/dashboards';
 import { homepageSettingsQueryOptions } from '~queries/homepage';
@@ -21,6 +22,18 @@ import {
   type HomepageSettings,
 } from '~server/homepage';
 
+const PAGE_LABELS: Record<
+  (typeof HOMEPAGE_PAGES)[number]['value'],
+  PlainTranslationKey
+> = {
+  dashboard: 'homepage.page.dashboard',
+  agent: 'homepage.page.agent',
+  apps: 'homepage.page.apps',
+  dashboards: 'homepage.page.dashboards',
+  executions: 'homepage.page.executions',
+  settings: 'homepage.page.settings',
+};
+
 function targetValue(target: HomepageTarget): string {
   if (target.kind === 'page') return `page:${target.page}`;
   if (target.kind === 'dashboard') return `dashboard:${target.dashboardId}`;
@@ -28,17 +41,18 @@ function targetValue(target: HomepageTarget): string {
 }
 
 export function HomepagePanel() {
+  const { t } = useI18n();
   const session = authClient.useSession();
   if (session.isPending) return <Skeleton height={120} />;
   if (!session.data || session.error) {
     return (
-      <Alert color="red" title="Homepage could not be loaded">
+      <Alert color="red" title={t('homepage.loadFailed')}>
         <Button
           type="button"
           variant="subtle"
           onClick={() => void session.refetch()}
         >
-          Try again
+          {t('common.tryAgain')}
         </Button>
       </Alert>
     );
@@ -49,13 +63,15 @@ export function HomepagePanel() {
 }
 
 function AccountHomepage({ userId }: { userId: string }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const settings = useQuery(homepageSettingsQueryOptions(userId));
   const dashboards = useQuery(dashboardsQueryOptions);
   const error = settings.error ?? dashboards.error;
   if (error) {
     return (
-      <Alert color="red" title="Homepage could not be loaded">
-        <Text size="sm">{error.message}</Text>
+      <Alert color="red" title={t('homepage.loadFailed')}>
+        <Text size="sm">{errorText(error, 'homepage.loadFailedBody')}</Text>
         <Button
           type="button"
           variant="subtle"
@@ -64,7 +80,7 @@ function AccountHomepage({ userId }: { userId: string }) {
             void dashboards.refetch();
           }}
         >
-          Try again
+          {t('common.tryAgain')}
         </Button>
       </Alert>
     );
@@ -73,15 +89,15 @@ function AccountHomepage({ userId }: { userId: string }) {
 
   const options = [
     {
-      group: 'Platform pages',
+      group: t('homepage.group.pages'),
       items: HOMEPAGE_PAGES.map((page) => ({
         value: `page:${page.value}`,
-        label: page.label,
+        label: t(PAGE_LABELS[page.value]),
         target: { kind: 'page', page: page.value } satisfies HomepageTarget,
       })),
     },
     {
-      group: 'Dashboards',
+      group: t('homepage.group.dashboards'),
       items: dashboards.data.map((dashboard) => ({
         value: `dashboard:${dashboard.id}`,
         label: dashboard.name,
@@ -92,7 +108,7 @@ function AccountHomepage({ userId }: { userId: string }) {
       })),
     },
     {
-      group: 'Apps',
+      group: t('homepage.group.apps'),
       items: settings.data.apps.map((app) => ({
         value: `app:${app.id}`,
         label: app.name,
@@ -111,11 +127,11 @@ function AccountHomepage({ userId }: { userId: string }) {
   const data: HomepageOptionGroup[] = options;
   if (missing)
     data.push({
-      group: 'Unavailable',
+      group: t('homepage.group.unavailable'),
       items: [
         {
           value: savedValue,
-          label: 'Previously selected homepage (unavailable)',
+          label: t('homepage.previousUnavailable'),
           target: settings.data.homepage,
           disabled: true,
         },
@@ -148,6 +164,8 @@ function HomepageForm({
   settings: HomepageSettings;
   options: HomepageOptionGroup[];
 }) {
+  const { t } = useI18n();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const [target, setTarget] = useState(settings.homepage);
   const appId = target.kind === 'app' ? target.appId : '';
@@ -166,7 +184,7 @@ function HomepageForm({
         homepageSettingsQueryOptions(saved.userId).queryKey,
         saved,
       );
-      toast.success('Homepage updated');
+      toast.success(t('homepage.saved'));
     },
   });
   const value = targetValue(target);
@@ -185,24 +203,22 @@ function HomepageForm({
     >
       <Stack gap="md">
         <Stack gap={2}>
-          <Text fw={700}>Homepage</Text>
+          <Text fw={700}>{t('homepage.title')}</Text>
           <Text size="sm" c="dimmed">
-            Choose where Hatch opens for your account. Your homepage follows you
-            across devices.
+            {t('homepage.description')}
           </Text>
         </Stack>
         {!settings.available && (
-          <Alert color="yellow" title="Your saved homepage is unavailable">
-            Hatch opens the default Dashboard until this page becomes available
-            or you choose another homepage.
+          <Alert color="yellow" title={t('homepage.savedUnavailable.title')}>
+            {t('homepage.savedUnavailable.body')}
           </Alert>
         )}
         <Select
-          label="Open Hatch to"
+          label={t('homepage.select.label')}
           data={options}
           value={value}
           searchable
-          nothingFoundMessage="No matching homepages"
+          nothingFoundMessage={t('homepage.select.nothingFound')}
           allowDeselect={false}
           disabled={save.isPending}
           onChange={(next) => {
@@ -214,8 +230,8 @@ function HomepageForm({
         />
         {target.kind === 'app' && (
           <AppRouteAutocomplete
-            label="App entry point"
-            description="Leave blank for the app home."
+            label={t('homepage.entry.label')}
+            description={t('homepage.entry.description')}
             placeholder="/settings"
             routes={manifest.data?.app?.routes ?? []}
             value={target.entryHash ?? ''}
@@ -226,23 +242,20 @@ function HomepageForm({
           />
         )}
         {target.kind === 'app' && manifest.error && (
-          <Alert
-            color="yellow"
-            title="App page suggestions could not be loaded"
-          >
-            You can still enter an app page manually.
+          <Alert color="yellow" title={t('homepage.entry.suggestionsFailed')}>
+            {t('homepage.entry.suggestionsFailedBody')}
             <Button
               type="button"
               variant="subtle"
               onClick={() => void manifest.refetch()}
             >
-              Try again
+              {t('common.tryAgain')}
             </Button>
           </Alert>
         )}
         {save.error && (
-          <Alert color="red" title="Homepage could not be saved" role="alert">
-            {save.error.message}
+          <Alert color="red" title={t('homepage.saveFailed')} role="alert">
+            {errorText(save.error, 'homepage.saveFailedBody')}
           </Alert>
         )}
         <Group justify="flex-start">
@@ -251,7 +264,7 @@ function HomepageForm({
             loading={save.isPending}
             disabled={!changed || !selected || selected.disabled}
           >
-            Save homepage
+            {t('homepage.save')}
           </Button>
         </Group>
       </Stack>

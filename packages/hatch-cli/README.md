@@ -162,9 +162,10 @@ is rejected with `workspace_instance_mismatch`.
   symlink traversal and nested checkouts, and prepares before replacing. On
   preparation failure the old directory remains intact; on swap failure it is
   restored. Recoverable preparation work remains at the reported path.
-- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`),
-  immutable ID, manifest, current platform generation and source history before
-  adding CLI metadata. Local HEAD must contain platform master; dirty work and origin are
+- **Adopt:** validate the existing Agent origin bundle path (`app-<id>.bundle`;
+  the file itself may be absent, as `create_app` never wrote it), immutable ID,
+  manifest, current platform generation and source history before adding CLI
+  metadata. Local HEAD must contain platform master; dirty work and origin are
   preserved. Empty canonical source is ambiguous unless an uncommitted checkout
   belongs to the verified Run's session. Adoption never resets local history.
 - **Update:** require clean source; fetch platform `master` and the platform's
@@ -371,9 +372,9 @@ exit 7 except `http_error`, which maps 401/403/404 to 3/4/5); see
 | 8    | Explicitly unsupported command                       |
 | 130  | Cancellation; inspect any in-flight mutation         |
 
-Operation commands and API key management remain unsupported. Platform Agent
-Tools remain usable. Run credentials come from the caller; host injection and
-renewal are outside this feature.
+Operation commands and API key management remain unsupported. The platform
+Agent uses these commands for every platform capability. Run credentials come
+from the caller; host injection and renewal are outside this feature.
 
 ## Complete views and App data
 
@@ -773,17 +774,28 @@ signed-in user with `respond`; repeat `--answer` for each option of a
 ```sh
 hatch notification send --channel <channel-id> --kind deploy --title 'Deploy v2.4?' \
   --reply '{"fields":[{"id":"decision","type":"buttons","label":"Approve?","options":[{"id":"approve","label":"Approve"},{"id":"reject","label":"Reject"}]}]}'
-hatch notification respond <notification-id> --answer decision=approve --json
+hatch notification respond <notification-id> --round 1 --answer decision=approve --json
 hatch notification list --reply-state awaiting
+hatch notification list --order activity
+hatch notification update <notification-id> --card '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}'
+hatch notification unread
+hatch notification mark-read --latest
+hatch notification mark-read --through <notification-id> --at <activity-time>
 ```
 
-A notification takes one answer and it is final: answering again, or answering
-a recalled notification, is a conflict (exit 6), and an answer that does not
-fit the form is `BAD_REQUEST` (exit 2) naming the field. `get` shows the form,
+Each question takes one answer and it is final: answering again, or answering
+a recalled notification, is a conflict (exit 6), and so is an answer with
+`--round <n>` after an edit asked a new question (round from `get`), so an
+answer meant for an earlier question never lands on a new one. An answer that does not
+fit the form is `BAD_REQUEST` (exit 2) naming the field. To ask a new
+question on the same notification, edit it with
+`update <id> --reply <json>` (or `--clear-reply`); the new round takes its own
+answer, and `revisions <id>` lists earlier versions and every answer. `get` shows the form,
 the answer and its deliveries. Answers go where response routes send them:
 
 ```sh
 hatch notification response-route create --source-type channel --source <channel-id> --destination <webhook-id>
+hatch notification response-route create --source-type channel --source <channel-id> --agent --agent-instructions 'When the answer is Fix it, fix the failing check.'
 ```
 
 A response route targets a webhook, or an App whose manifest sets

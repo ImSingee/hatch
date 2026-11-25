@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { GroupCard } from '~components/page/page';
 import { AgentRunnerPanel } from '~components/settings/agent-runner-panel';
 import { SectionHead } from '~components/settings/section-head';
+import { useI18n } from '~i18n';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
 
 export const Route = createFileRoute('/_app/settings/agent-runner')({
@@ -16,12 +17,13 @@ export const Route = createFileRoute('/_app/settings/agent-runner')({
 });
 
 function AgentRunnerRoute() {
+  const { t } = useI18n();
   const query = useQuery(agentRunnerStatusQueryOptions);
   return (
     <>
       <SectionHead
-        title="Agent Runner"
-        description="Whether the Agent Runner service is online, which runners are connected, and the agent runs they are carrying. Refreshes every 5 seconds while open."
+        title={t('settings.agentRunner.label')}
+        description={t('settings.agentRunner.description')}
       />
       <GroupCard padded>
         <AgentRunnerPanel

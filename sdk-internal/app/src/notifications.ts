@@ -78,6 +78,12 @@ export type NotificationReply = {
 export type NotificationAnswers = { [fieldId: string]: string | string[] };
 
 export type NotificationResponse = {
+  /**
+   * The round of the reply form this answers: 1 for the form it was sent
+   * with, one more for each new question an edit asked. A notification takes
+   * one answer per round, so `(notification.id, round)` identifies an answer.
+   */
+  round: number;
   answers: NotificationAnswers;
   respondedBy: { userId: string | null; name: string };
   /** Where it was answered. */
@@ -87,6 +93,39 @@ export type NotificationResponse = {
 
 /** `-2` lowest, `-1` low, `0` normal, `1` high. */
 export type NotificationPriority = -2 | -1 | 0 | 1;
+
+/**
+ * What the Hatch timeline shows besides the title and body: a short status
+ * with a tone, and at most one block. Phones and destinations keep showing the
+ * title and body, so put the essentials there too. Empty parts are left out.
+ */
+export type NotificationCard = {
+  /** At most 24 characters, such as "CI failed". Tone defaults to neutral. */
+  status?: {
+    label: string;
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+  };
+  block?:
+    | {
+        /** A bar filled to `percent` (0-100), with an optional "3 / 14". */
+        type: 'progress';
+        label: string;
+        percent: number;
+        value?: string;
+      }
+    | {
+        /** One to three figures side by side. */
+        type: 'stats';
+        items: { value: string; label: string }[];
+      }
+    | {
+        /** A comment someone made, such as a review note. */
+        type: 'quote';
+        author: string;
+        text: string;
+        location?: string;
+      };
+};
 
 /** A notification of a kind declared in `notifications.kinds`. */
 export type NotificationInput = {
@@ -120,10 +159,12 @@ export type NotificationInput = {
   /** Extra structured data delivered to webhook and App destinations. */
   data?: { [key: string]: NotificationJson };
   /**
-   * Ask people to answer: one answer per notification, from whoever answers
-   * first. It cannot be edited after sending.
+   * Ask people to answer: one answer, from whoever answers first. Ask a later
+   * question with `updateNotification(id, { reply })`.
    */
   reply?: NotificationReplyInput;
+  /** Status and one block shown in the Hatch timeline. */
+  card?: NotificationCard;
   /** Repeated pushes with the same key are stored once. */
   dedupeKey?: string;
   /** When the event happened; defaults to the time the platform accepts it. */
@@ -206,7 +247,13 @@ export async function notify(
  * New content for a notification this App sent. Omitted fields keep their
  * value; `null` clears `body`, `url` or `data`. Without `autoOpenUrl`, adding
  * a `url` opens it on tap (as when pushing), clearing it turns that off, and
- * replacing it keeps the current setting.
+ * replacing it keeps the current setting. `reply` asks a new question: a
+ * form replaces the current one and `null` removes it, either way starting
+ * the next round, which takes its own answer (`response.round`). Forms are
+ * compared by content: sending the same form again (even with a new title or
+ * `data`) starts no round, and once the round is answered such a `data`
+ * change fails with 409. To ask the same question again about something new,
+ * change the form too (for example its field label or `submitLabel`).
  */
 export type NotificationUpdateInput = {
   /** Only change content, without another alert. Defaults to false. */
@@ -216,6 +263,9 @@ export type NotificationUpdateInput = {
   url?: string | null;
   autoOpenUrl?: boolean;
   data?: { [key: string]: NotificationJson } | null;
+  reply?: NotificationReplyInput | null;
+  /** A new card (replaces the whole card), or null to remove it. */
+  card?: NotificationCard | null;
 };
 
 /**
@@ -237,7 +287,7 @@ export type NotificationChangeResult = {
  * the alert. Destinations that take edit events receive
  * `hatch.notification.updated`. A recalled notification cannot be edited
  * (409), and an answered one cannot change its `data` (409), which its answer
- * is delivered with.
+ * is delivered with, unless the same edit asks a new question.
  */
 export async function updateNotification(
   id: string,
@@ -319,6 +369,8 @@ export type HatchNotificationEnvelope = {
     recalledAt: string | null;
     /** The form to answer, or null. */
     reply: NotificationReply | null;
+    /** The timeline card, or null; tones are always filled in. */
+    card: NotificationCard | null;
     /**
      * The answer, only in `hatch.notification.responded` (sent by a response
      * route); null in every other event.

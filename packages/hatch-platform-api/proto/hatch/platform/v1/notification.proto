@@ -29,6 +29,15 @@ service NotificationService {
   // destinations already received stay there and nothing is sent; recall
   // first to remove it from phones.
   rpc DeleteNotification(DeleteNotificationRequest) returns (DeleteNotificationResponse);
+  // How far the caller has read the timeline, shared by all their devices:
+  // the calling user, or the platform Agent for a Run (Runs have no user).
+  // What a notification said before each edit, oldest first, and every
+  // answer it took (one per round of its reply form).
+  rpc ListNotificationRevisions(ListNotificationRevisionsRequest) returns (ListNotificationRevisionsResponse);
+  rpc GetNotificationReadState(GetNotificationReadStateRequest) returns (GetNotificationReadStateResponse);
+  // Move the caller's read position forward to one notification, or to the
+  // newest. A position behind the current one changes nothing.
+  rpc MarkNotificationsRead(MarkNotificationsReadRequest) returns (MarkNotificationsReadResponse);
   rpc ListNotificationSources(ListNotificationSourcesRequest) returns (ListNotificationSourcesResponse);
   rpc GetApnsStatus(GetApnsStatusRequest) returns (GetApnsStatusResponse);
 
@@ -110,6 +119,17 @@ message NotificationSummary {
   // -2 lowest (history only, never pushed to phones), -1 low (quiet on
   // phones), 0 normal, 1 high (time-sensitive on phones). Never changes.
   int32 priority = 20;
+  // ISO-8601; when the source last pushed or edited it, with an edit that
+  // changed the content or asked to alert again. Answers and recalls leave it
+  // unchanged. The order of ListNotifications with order "activity".
+  string activity_at = 21;
+  // The answer to the current round of the reply form, once given.
+  NotificationResponse response = 22;
+  // Which question reply is: 1 for the form it was sent with, one more for
+  // each edit that replaced or removed it.
+  uint32 reply_round = 23;
+  // Status and one block the timeline shows; absent without one.
+  NotificationCard card = 24;
 }
 
 // ---------------------------------------------------------------- replies
@@ -188,6 +208,9 @@ message NotificationResponse {
   optional string destination_id = 5;
   // ISO-8601.
   string responded_at = 6;
+  // The round of the reply form this answers: 1 for the form the
+  // notification was sent with, one more for each new question an edit asked.
+  uint32 round = 7;
 }
 
 message RespondToNotificationRequest {
@@ -204,6 +227,11 @@ message RespondToNotificationRequest {
       "cli"
     ]
   }];
+  // The round of the reply form the answer was given on (the notification's
+  // reply_round when it was read). When set and an edit has since asked a
+  // new question, the answer fails with a conflict instead of answering the
+  // new one. 0 or unset answers the current round.
+  uint32 round = 4;
 }
 message RespondToNotificationResponse {
   NotificationResponse response = 1;
@@ -212,7 +240,8 @@ message RespondToNotificationResponse {
 message NotificationDelivery {
   string id = 1;
   optional string destination_id = 2;
-  // device | webhook | app
+  // device | webhook | app, or agent for an answer queued in an Agent chat
+  // (which has no destination_id)
   string destination_type = 3;
   string destination_name = 4;
   // pending | in_progress | succeeded | failed | canceled
@@ -274,6 +303,15 @@ message ListNotificationsRequest {
     in: [
       "awaiting",
       "answered"
+    ]
+  }];
+  // created (default): newest pushed first. activity: most recently pushed
+  // or edited first, the timeline order. A cursor only continues the order
+  // that produced it.
+  optional string order = 8 [(buf.validate.field).string = {
+    in: [
+      "created",
+      "activity"
     ]
   }];
 }
@@ -348,6 +386,8 @@ message SendNotificationRequest {
   optional bool auto_open_url = 9;
   // Form people answer once; answers go to response routes.
   NotificationReply reply = 12;
+  // Status and one block the timeline shows; phones show title and body.
+  NotificationCard card = 15;
 
   // From the sending user, never routed: the group's enabled members.
   string group_id = 10 [
@@ -418,6 +458,15 @@ message UpdateNotificationRequest {
   // Update without another phone alert. Unset/false alerts again, even when
   // content is unchanged. With no content fields, this repeats the alert.
   bool silent = 8;
+  // Ask a new question: replaces the reply form and starts the next round,
+  // which takes its own answer. The same form again changes nothing.
+  NotificationReply reply = 9;
+  // Remove the reply form (also starts the next round). Not with reply.
+  bool clear_reply = 10;
+  // Replace the card (the whole card). Not with clear_card.
+  NotificationCard card = 11;
+  // Remove the card.
+  bool clear_card = 12;
 }
 message UpdateNotificationResponse {
   // 1 for the original; every edit and the recall increment it.
@@ -448,6 +497,157 @@ message DeleteNotificationRequest {
   }];
 }
 message DeleteNotificationResponse {}
+
+// ---------------------------------------------------------------- cards
+
+message NotificationCardStatus {
+  string label = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 24
+  }];
+  // neutral | info | success | warning | danger; empty means neutral.
+  string tone = 2 [(buf.validate.field).string = {
+    in: [
+      "",
+      "neutral",
+      "info",
+      "success",
+      "warning",
+      "danger"
+    ]
+  }];
+}
+
+// A bar filled to percent (0-100), with an optional value such as "3 / 14".
+message NotificationCardProgress {
+  string label = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  // Required; 0 is a valid value.
+  optional double percent = 2 [(buf.validate.field).double = {
+    gte: 0
+    lte: 100
+  }];
+  optional string value = 3 [(buf.validate.field).string.max_len = 24];
+}
+
+message NotificationCardStat {
+  string value = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 24
+  }];
+  string label = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+}
+
+// One to three figures side by side.
+message NotificationCardStats {
+  repeated NotificationCardStat items = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 3
+  }];
+}
+
+// A comment someone made, such as a review note.
+message NotificationCardQuote {
+  string author = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 40
+  }];
+  string text = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 500
+  }];
+  optional string location = 3 [(buf.validate.field).string.max_len = 80];
+}
+
+// What a notification shows in the timeline besides its title and body.
+message NotificationCard {
+  NotificationCardStatus status = 1;
+  oneof block {
+    NotificationCardProgress progress = 2;
+    NotificationCardStats stats = 3;
+    NotificationCardQuote quote = 4;
+  }
+}
+
+message NotificationRevision {
+  // The notification revision while this version was current.
+  uint32 revision = 1;
+  string title = 2;
+  optional string body = 3;
+  optional string url = 4;
+  // JSON object.
+  optional string data_json = 5;
+  // The question it asked then; absent when it asked nothing.
+  NotificationReply reply = 6;
+  uint32 reply_round = 7;
+  NotificationCard card = 10;
+  // ISO-8601: when this version became current, and when an edit replaced it.
+  string activity_at = 8;
+  string replaced_at = 9;
+}
+
+message ListNotificationRevisionsRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // Page size, 1-100; 0 or unset means 20.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 100];
+  // next_cursor of the page before; empty for the newest versions.
+  string cursor = 3 [(buf.validate.field).string.max_len = 64];
+}
+message ListNotificationRevisionsResponse {
+  // Newest first.
+  repeated NotificationRevision revisions = 1;
+  // The answers to the rounds this page covers (the first page also has the
+  // current round's); a round that spans two pages is on both.
+  repeated NotificationResponse responses = 2;
+  // Set while older versions remain.
+  optional string next_cursor = 3;
+}
+
+message NotificationReadState {
+  // The last notification read; absent before the reader read any.
+  optional string read_through_id = 1;
+  // ISO-8601 activity time of the read position.
+  string read_through_at = 2;
+  // Notifications after the position in timeline order, leaving out
+  // recalled ones and the caller's own sends.
+  uint32 unread_count = 3;
+  // The oldest unread notification in timeline order.
+  optional string first_unread_id = 4;
+}
+
+message GetNotificationReadStateRequest {}
+message GetNotificationReadStateResponse {
+  NotificationReadState state = 1;
+}
+
+message MarkNotificationsReadRequest {
+  oneof through {
+    option (buf.validate.oneof).required = true;
+    // Everything up to and including this notification is read.
+    string notification_id = 1 [(buf.validate.field).string = {
+      min_len: 1
+      max_len: 64
+    }];
+    // Everything so far is read.
+    bool latest = 2 [(buf.validate.field).bool.const = true];
+  }
+  // With notification_id: its activity_at in the version the caller read
+  // (RFC 3339). An edit since then moves it later, and the edit and anything
+  // that arrived in between stay unread. Empty uses its current activity_at.
+  // Not allowed with latest.
+  string activity_at = 3 [(buf.validate.field).string.max_len = 64];
+}
+message MarkNotificationsReadResponse {
+  NotificationReadState state = 1;
+}
 
 message NotificationKind {
   string kind = 1 [(buf.validate.field).string.pattern = "^[a-z0-9][a-z0-9._-]{0,63}$"];
@@ -808,10 +1008,19 @@ message NotificationResponseRoute {
   optional string source_id = 4;
   // Absent: any kind.
   optional string kind = 5;
-  string destination_id = 6;
+  // The webhook or App answers go to; absent for an agent target.
+  optional string destination_id = 6;
   bool enabled = 7;
   string created_at = 8;
   string updated_at = 9;
+  // destination: a webhook or App. agent: each answer becomes a message in an
+  // Agent chat, which starts a run.
+  string target_type = 10;
+  // Agent target: the chat every answer goes to; absent for one chat per
+  // notification (opened by its first answer, reused by later questions).
+  optional string agent_session_id = 11;
+  // Agent target: what the Agent should do with each answer.
+  optional string agent_instructions = 12;
 }
 
 message ListResponseRoutesRequest {
@@ -836,11 +1045,20 @@ message CreateResponseRouteRequest {
   }];
   optional string source_id = 3 [(buf.validate.field).string.max_len = 191];
   optional string kind = 4 [(buf.validate.field).string.max_len = 64];
-  string destination_id = 5 [(buf.validate.field).string = {
+  // Send answers to this webhook or App. Set exactly one of destination_id
+  // and agent.
+  optional string destination_id = 5 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
   }];
   optional bool enabled = 6;
+  // Send answers to the Agent as a message in a chat.
+  bool agent = 7;
+  // With agent: the chat every answer goes to; unset for one chat per
+  // notification.
+  optional string agent_session_id = 8 [(buf.validate.field).string.max_len = 64];
+  // With agent: what the Agent should do with each answer.
+  optional string agent_instructions = 9 [(buf.validate.field).string.max_len = 2000];
 }
 message CreateResponseRouteResponse {
   NotificationResponseRoute route = 1;
@@ -863,11 +1081,19 @@ message UpdateResponseRouteRequest {
   optional string source_id = 4 [(buf.validate.field).string.max_len = 191];
   // Empty string clears the kind (any kind).
   optional string kind = 5 [(buf.validate.field).string.max_len = 64];
+  // Send answers to this webhook or App instead. Not with agent.
   optional string destination_id = 6 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
   }];
   optional bool enabled = 7;
+  // Send answers to the Agent instead. Not with destination_id.
+  bool agent = 8;
+  // Agent target: the chat every answer goes to; empty string for one chat
+  // per notification. Unset keeps the current chat.
+  optional string agent_session_id = 9 [(buf.validate.field).string.max_len = 64];
+  // Agent target: empty string removes them. Unset keeps them.
+  optional string agent_instructions = 10 [(buf.validate.field).string.max_len = 2000];
 }
 message UpdateResponseRouteResponse {
   NotificationResponseRoute route = 1;

@@ -16,6 +16,8 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
+import { optionalCardSchema } from '../../../packages/hatch-platform-api/notification-card-schema';
+import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
 import {
   describeIssue,
   optionalReplySchema,
@@ -131,6 +133,8 @@ export const notificationPushSchema = z
     data: dataField,
     /** Form people answer once; the answer goes to response routes. */
     reply: optionalReplySchema.optional().transform((value) => value ?? null),
+    /** Status and one block for the timeline; phones show title and body. */
+    card: optionalCardSchema.optional().transform((value) => value ?? null),
     dedupeKey: optionalText(MAX_NOTIFICATION_DEDUPE_KEY),
     occurredAt: z
       .string()
@@ -171,10 +175,12 @@ export function pushIssueMessage(error: z.ZodError): string {
  * Edit of a notification the caller sent. An omitted field keeps its value;
  * `null` (or an empty value) clears `body`, `url` and `data`. Without
  * `autoOpenUrl`, a new `url` opens on tap like a push, a cleared one stops and
- * a replaced one keeps the setting. `kind`, `priority`, `dedupeKey` and
- * `occurredAt` never change. Updates alert again at the original priority
- * by default; `silent: true` only changes content. The id is part of the
- * signed body.
+ * a replaced one keeps the setting. `reply` asks a new question: a form
+ * replaces the current one and `null` removes it, either way starting the
+ * next round, which takes its own answer. `kind`, `priority`, `dedupeKey`
+ * and `occurredAt` never change. Updates alert again at the original
+ * priority by default; `silent: true` only changes content. The id is part
+ * of the signed body.
  */
 export const notificationUpdateSchema = z
   .object({
@@ -193,6 +199,10 @@ export const notificationUpdateSchema = z
       .transform((value) => value === true)
       .optional(),
     data: dataField.optional(),
+    /** A new question (starting the next round), or null to ask none. */
+    reply: optionalReplySchema.optional(),
+    /** A new card, or null to remove it. */
+    card: optionalCardSchema.optional(),
     /** Only replace content without alerting again. Defaults to false. */
     silent: z.boolean().optional(),
   })
@@ -200,6 +210,8 @@ export const notificationUpdateSchema = z
   .refine(
     (update) =>
       update.title !== undefined ||
+      update.reply !== undefined ||
+      update.card !== undefined ||
       update.body !== undefined ||
       update.url !== undefined ||
       update.autoOpenUrl !== undefined ||
@@ -289,20 +301,26 @@ export type NotificationRecord = {
   autoOpenUrl: boolean;
   priority: number;
   data: JsonObject | null;
+  card: NotificationCard | null;
   dedupeKey: string | null;
   occurredAt: Date;
   revision: number;
   editedAt: Date | null;
   recalledAt: Date | null;
   reply: ReplyForm | null;
+  /** Which question `reply` is; each round takes one answer. */
+  replyRound: number;
   respondedAt: Date | null;
-  /** Revision the answer created; null until answered. */
+  /** Revision the latest answer created; null until answered. */
   responseRevision: number | null;
   createdAt: Date;
 };
 
-/** The answer to a notification's reply form. */
+/** The answer to one round of a notification's reply form. */
 export type NotificationResponseRecord = {
+  round: number;
+  /** The notification revision the answer created. */
+  revision: number | null;
   answers: ReplyAnswers;
   respondedByUserId: string | null;
   respondedByName: string;
@@ -356,6 +374,8 @@ export type NotificationEnvelope = {
     /** -2 lowest, -1 low, 0 normal, 1 high. */
     priority: number;
     data: JsonObject | null;
+    /** Status and one block the timeline shows; null without one. */
+    card: NotificationCard | null;
     dedupeKey: string | null;
     occurredAt: string;
     revision: number;
@@ -386,6 +406,12 @@ export function notificationSourceId(
 }
 
 export type NotificationResponseEnvelope = {
+  /**
+   * The round of the reply form this answers: 1 for the form the
+   * notification was sent with, one more for each new question an edit asked.
+   * `(notification.id, round)` identifies one answer.
+   */
+  round: number;
   answers: ReplyAnswers;
   respondedBy: { userId: string | null; name: string };
   /** Where it was answered: `push`, `mobile`, `web` or `cli`. */
@@ -397,6 +423,7 @@ export function responseEnvelope(
   response: NotificationResponseRecord,
 ): NotificationResponseEnvelope {
   return {
+    round: response.round,
     answers: response.answers,
     respondedBy: {
       userId: response.respondedByUserId,
@@ -441,8 +468,10 @@ export function buildEnvelope(args: {
     // the revision it created on every attempt, whatever happens to the
     // notification later; every other event uses the content revision.
     revision:
-      args.event === 'responded' && notification.responseRevision !== null
-        ? notification.responseRevision
+      args.event === 'responded'
+        ? (args.response?.revision ??
+          notification.responseRevision ??
+          contentRevision(notification))
         : contentRevision(notification),
     silent:
       args.event === 'recalled' ||
@@ -458,6 +487,7 @@ export function buildEnvelope(args: {
       autoOpenUrl: notification.autoOpenUrl,
       priority: notification.priority,
       data: notification.data,
+      card: notification.card,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),
       revision: contentRevision(notification),

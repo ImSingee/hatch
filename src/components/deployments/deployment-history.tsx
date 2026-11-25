@@ -28,8 +28,10 @@ import {
 import copy from 'copy-to-clipboard';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
-import { formatRelative } from '~lib/format';
+import { type PlainTranslationKey, useI18n } from '~i18n';
+import { formatRelativeTime } from '~lib/format';
 import { GroupCard, Section } from '~components/page/page';
+import type { RollbackBlockedCode } from '~server/apps/rollback-policy';
 import classes from './deployment-history.module.css';
 
 /** Structural shape of an App `DeploymentSummary` the timeline renders. */
@@ -42,7 +44,8 @@ export type DeploymentLike = {
   createdAt: string;
   isCurrent: boolean;
   canRollback: boolean;
-  rollbackBlockedReason?: string | null;
+  /** Why a deployed version cannot be restored, if a resource is gone. */
+  rollbackBlockedCode?: RollbackBlockedCode | null;
   sourceCommit: string | null;
   sourceTag: string | null;
   hasArtifact: boolean;
@@ -51,23 +54,29 @@ export type DeploymentLike = {
 
 const STATUS_META: Record<
   DeploymentLike['status'],
-  { color: string; label: string; icon: ReactNode }
+  { color: string; label: PlainTranslationKey; icon: ReactNode }
 > = {
   building: {
     color: 'primary',
-    label: 'Building',
+    label: 'deployments.status.building',
     icon: <IconLoader size={11} stroke={2.5} />,
   },
   deployed: {
     color: 'primary',
-    label: 'Deployed',
+    label: 'deployments.status.deployed',
     icon: <IconCheck size={11} stroke={2.5} />,
   },
   failed: {
     color: 'red',
-    label: 'Failed',
+    label: 'deployments.status.failed',
     icon: <IconX size={11} stroke={2.5} />,
   },
+};
+
+const ROLLBACK_BLOCKED: Record<RollbackBlockedCode, PlainTranslationKey> = {
+  database: 'deployments.rollbackBlocked.database',
+  dataTable: 'deployments.rollbackBlocked.dataTable',
+  databases: 'deployments.rollbackBlocked.databases',
 };
 
 const shortSha = (sha: string) => sha.slice(0, 7);
@@ -92,18 +101,19 @@ export function BuildLogContent({
 }: {
   query: UseQueryResult<string | null>;
 }) {
+  const { t } = useI18n();
   if (query.isLoading) {
     return (
       <Group gap={6} className={classes.metaItem}>
         <Loader size="xs" />
-        <Text size="xs">Loading build log…</Text>
+        <Text size="xs">{t('deployments.buildLog.loading')}</Text>
       </Group>
     );
   }
   if (query.isError) {
     return (
       <Text size="xs" c="red">
-        Failed to load build log.
+        {t('deployments.buildLog.loadFailed')}
       </Text>
     );
   }
@@ -116,7 +126,7 @@ export function BuildLogContent({
   }
   return (
     <Text size="xs" c="dimmed">
-      Build log is empty.
+      {t('deployments.buildLog.empty')}
     </Text>
   );
 }
@@ -143,27 +153,29 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
     defaultAction: ReactNode,
   ) => ReactNode;
 }) {
+  const { t, locale } = useI18n();
   const [open, handlers] = useDisclosure(false);
+  const blockedReason = deployment.rollbackBlockedCode
+    ? t(ROLLBACK_BLOCKED[deployment.rollbackBlockedCode])
+    : null;
   const hasLog = Boolean(deployment.error) || deployment.hasBuildLog;
   const rollbackReasonId = `rollback-reason-${deployment.id}`;
   const artifactNode =
     deployment.status === 'deployed' ? renderArtifact(deployment) : null;
   const defaultRollbackAction =
-    deployment.canRollback || deployment.rollbackBlockedReason ? (
+    deployment.canRollback || blockedReason ? (
       <Button
         size="compact-sm"
         variant="default"
         leftSection={<IconRestore size={14} />}
         loading={deployment.canRollback && rolling}
         disabled={!deployment.canRollback}
-        aria-describedby={
-          deployment.rollbackBlockedReason ? rollbackReasonId : undefined
-        }
+        aria-describedby={blockedReason ? rollbackReasonId : undefined}
         onClick={() => {
           if (deployment.canRollback) onRollback(deployment.id);
         }}
       >
-        Restore
+        {t('deployments.restore')}
       </Button>
     ) : null;
 
@@ -176,7 +188,7 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
           </Text>
           {deployment.isCurrent ? (
             <Badge size="xs" variant="filled" radius="sm" color="primary">
-              Live
+              {t('deployments.live')}
             </Badge>
           ) : null}
           {renderVersionMeta?.(deployment)}
@@ -184,12 +196,12 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
               states that actually need calling out (building / failed). */}
           {deployment.status !== 'deployed' ? (
             <Text size="xs" c="dimmed">
-              {STATUS_META[deployment.status].label}
+              {t(STATUS_META[deployment.status].label)}
             </Text>
           ) : null}
           <MetaDot />
           <Text size="xs" c="dimmed" truncate>
-            {formatRelative(deployment.createdAt)}
+            {formatRelativeTime(deployment.createdAt, locale)}
           </Text>
         </Group>
         {renderRollbackAction
@@ -197,14 +209,14 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
           : defaultRollbackAction}
       </Group>
 
-      {deployment.rollbackBlockedReason ? (
+      {blockedReason ? (
         <Text
           id={rollbackReasonId}
           size="xs"
           c="dimmed"
           style={{ maxWidth: '70ch' }}
         >
-          {deployment.rollbackBlockedReason}
+          {blockedReason}
         </Text>
       ) : null}
 
@@ -223,14 +235,18 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
           {deployment.sourceCommit ? (
             <>
               {deployment.sourceTag ? <MetaDot /> : null}
-              <Tooltip label="Copy commit SHA" withArrow position="top">
+              <Tooltip
+                label={t('deployments.copyCommit')}
+                withArrow
+                position="top"
+              >
                 <UnstyledButton
                   type="button"
                   className={classes.metaItem}
                   onClick={() => {
                     if (!deployment.sourceCommit) return;
                     copy(deployment.sourceCommit);
-                    toast.success('Commit SHA copied');
+                    toast.success(t('deployments.commitCopied'));
                   }}
                 >
                   <IconGitCommit size={13} stroke={1.6} />
@@ -270,7 +286,9 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
               className={`${classes.chevron} ${open ? classes.chevronOpen : ''}`}
             />
             <Text size="xs" c="dimmed" fw={600}>
-              {deployment.status === 'failed' ? 'Error log' : 'Build log'}
+              {deployment.status === 'failed'
+                ? t('deployments.errorLog')
+                : t('deployments.buildLog.title')}
             </Text>
           </UnstyledButton>
           <Collapse expanded={open}>
@@ -326,7 +344,6 @@ function DeploymentItem<TDeployment extends DeploymentLike>({
 export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
   deployments,
   isLoading,
-  emptyNoun,
   onRollback,
   rollingId,
   renderArtifact,
@@ -336,8 +353,6 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
 }: {
   deployments: TDeployment[];
   isLoading: boolean;
-  /** Resource noun used in the empty-state copy. */
-  emptyNoun: string;
   onRollback: (deploymentId: string) => void;
   /** Deployment id currently being restored, if any. */
   rollingId: string | null;
@@ -351,13 +366,14 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
     defaultAction: ReactNode,
   ) => ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <Section
       id="deployments"
-      title="Deployments"
+      title={t('deployments.title')}
       meta={
         deployments.length > 0
-          ? `${deployments.length} version${deployments.length === 1 ? '' : 's'}`
+          ? t('deployments.versions', { count: deployments.length })
           : undefined
       }
     >
@@ -368,8 +384,7 @@ export function DeploymentHistoryView<TDeployment extends DeploymentLike>({
           </Center>
         ) : deployments.length === 0 ? (
           <Text size="sm" c="dimmed">
-            No deployments yet. Deploy this {emptyNoun} to create the first
-            version.
+            {t('deployments.empty')}
           </Text>
         ) : (
           <Timeline

@@ -115,9 +115,11 @@ export function platformTarget(
         return ID.test(second) ? { kind: 'conversation', id: second } : null;
       return web();
     case 'notifications':
-      if (count === 1) return { kind: 'notifications' };
-      if (count === 2)
-        return ID.test(second) ? { kind: 'notification', id: second } : null;
+      // The web timeline, and its delivery log with one notification open.
+      if (count === 1 || (count === 2 && second === 'log'))
+        return { kind: 'notifications' };
+      if (count === 3 && second === 'log')
+        return ID.test(third) ? { kind: 'notification', id: third } : null;
       return web();
     case 'more':
       if (count === 1) return { kind: 'tab', tab: 'more' };
@@ -237,7 +239,7 @@ function segmentsOf(target: LinkTarget): string[] {
     case 'notifications':
       return ['notifications'];
     case 'notification':
-      return ['notifications', target.id];
+      return ['notifications', 'log', target.id];
     case 'phone':
       return ['more', target.page];
     case 'web':

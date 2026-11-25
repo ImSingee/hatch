@@ -16,17 +16,12 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  APP_MANAGED_DIR,
-  NODE_TOOLCHAIN_IGNORED_ROOT_FILE,
-  isAppManagedPathSegment,
-} from '../app-managed-path';
+import { APP_MANAGED_DIR, isAppManagedPathSegment } from '../app-managed-path';
 import {
   APP_TASK_OPTIONS_PROTO,
   APP_TASK_OPTIONS_PROTO_FILE,
   PLATFORM_APP_BUF_GEN_YAML,
 } from './app-codegen';
-import type { WorktreeMaterializer } from './worktree-materializer';
 import {
   AGENTS_DIR,
   HATCH_SDK_STAGING_DIR,
@@ -659,17 +654,3 @@ async function materializeHatchSdk(
 export function materializeAppHatchSdk(root: string): Promise<void> {
   return materializeHatchSdk(root, APP_HATCH_SDK_GENERATION);
 }
-
-const COMMON_HATCH_SDK_EXCLUDES = [
-  '/.hatch/',
-  '/.hatch-install-*/',
-  '/.hatch-backup-*/',
-  '/node_modules/',
-  // pnpm writes this file itself; builds ignore it.
-  `/${NODE_TOOLCHAIN_IGNORED_ROOT_FILE}`,
-] as const;
-
-export const appHatchSdkMaterializer = {
-  gitExcludePatterns: [...COMMON_HATCH_SDK_EXCLUDES, '/gen/'],
-  materialize: materializeAppHatchSdk,
-} satisfies WorktreeMaterializer;

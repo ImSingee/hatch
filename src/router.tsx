@@ -6,6 +6,7 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { errorText } from '~i18n';
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen';
@@ -26,7 +27,7 @@ export const getRouter = () => {
     mutationCache: new MutationCache({
       onError: (error, _variables, _result, mutation) => {
         if (mutation.meta?.errorToast === false) return;
-        toast.error(error.message);
+        toast.error(errorText(error, 'error.generic'));
       },
     }),
   });
