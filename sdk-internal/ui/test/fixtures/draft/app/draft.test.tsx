@@ -84,8 +84,10 @@ test('follows a field whose name changes', async () => {
   const app = await open('./main.tsx');
   await app.type('label:Call me', 'Ivy');
   await app.press('Use nickname');
+  // The new name already had a value, which is kept; the old name is gone.
+  expect(app.value('label:Call me')).toBe('Ivy G');
   await app.press('Save name');
-  await app.waitFor('text:Named nick=Ivy');
+  await app.waitFor('text:Named nick=Ivy G');
 });
 
 test('a send that ends after its form closed keeps a newer draft', async () => {
@@ -103,4 +105,27 @@ test('a send that ends after its form closed keeps a newer draft', async () => {
   await app.wait(300);
   const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
   expect(saved.memo).toBe('Second memo');
+});
+
+test('input made after a send stays a draft when the form closes', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Memo', 'Sent memo');
+  await app.press('Send memo');
+  await app.clear('label:Memo');
+  await app.type('label:Memo', 'Edited after sending');
+  await app.press('Close memo');
+  await app.press('Finish sending');
+  await app.wait(300);
+  const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
+  expect(saved.memo).toBe('Edited after sending');
+});
+
+test('a send that ends after its form closed removes what it sent', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Memo', 'Only this');
+  await app.press('Send memo');
+  await app.press('Close memo');
+  await app.press('Finish sending');
+  await app.wait(300);
+  expect(app.storage()['hatch.ui.draft.memo']).toBe(undefined);
 });

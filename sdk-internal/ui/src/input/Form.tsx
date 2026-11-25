@@ -100,15 +100,11 @@ export function Form(props: FormProps): JSX.Element {
     loaded: boolean;
     timer: number | undefined;
     sent: FormValues;
-    /** What this form last stored (`null`: it removed the draft), so a
-     * submit that finishes after the form went away removes only its own. */
-    written: string | null;
     gone: boolean;
   } = {
     loaded: false,
     timer: undefined,
     sent: initial,
-    written: null,
     gone: false,
   };
   // Resolves once the stored draft has been read and merged.
@@ -148,12 +144,10 @@ export function Form(props: FormProps): JSX.Element {
     const changed = Object.entries(kept).some(([name, value]) =>
       changedFrom(value, draft.sent[name]),
     );
-    const text = changed ? JSON.stringify(kept) : null;
-    draft.written = text;
     await (
-      text === null
-        ? Storage.removeItem(draftKey)
-        : Storage.setItem(draftKey, text)
+      changed
+        ? Storage.setItem(draftKey, JSON.stringify(kept))
+        : Storage.removeItem(draftKey)
     ).catch(() => {
       // A full store keeps the previous draft; typing goes on.
     });
@@ -212,13 +206,23 @@ export function Form(props: FormProps): JSX.Element {
     void Storage.removeItem(draftKey);
   };
 
-  // After the form went away: remove the stored draft only while it is the
-  // one this form wrote, never one a newer form with the same id saved.
-  const forgetOwnDraft = async () => {
-    if (!saveDraft() || draft.written === null) return;
+  // After the form went away: the stored draft (this form's last input, or
+  // a newer form's with the same id) is removed only when it holds nothing
+  // but what was just sent. Input made after the send stays a draft.
+  const forgetSentDraft = async (sent: FormValues) => {
+    if (!saveDraft()) return;
     const stored = await Storage.getItem(draftKey).catch(() => null);
-    if (stored === draft.written)
-      await Storage.removeItem(draftKey).catch(() => undefined);
+    if (stored === null) return;
+    let values: FormValues;
+    try {
+      values = JSON.parse(stored) as FormValues;
+    } catch {
+      return;
+    }
+    const unsent = Object.entries(values).some(([name, value]) =>
+      changedFrom(value, sent[name]),
+    );
+    if (!unsent) await Storage.removeItem(draftKey).catch(() => undefined);
   };
 
   const submit = async () => {
@@ -245,7 +249,7 @@ export function Form(props: FormProps): JSX.Element {
       // still is, so the draft is rewritten rather than deleted.
       draft.sent = current;
       restored.set(false);
-      await (draft.gone ? forgetOwnDraft() : writeDraft());
+      await (draft.gone ? forgetSentDraft(current) : writeDraft());
     } catch (error) {
       failure.set(
         error instanceof Error && error.message
@@ -271,9 +275,15 @@ export function Form(props: FormProps): JSX.Element {
     },
     move: (from, to) => {
       const current = untracked(values);
-      if (current[from] === undefined || current[to] !== undefined) return;
+      if (current[from] === undefined) return;
+      // The old name leaves the form; its value moves unless the new name
+      // already has one, which is kept.
       const { [from]: moved, ...rest } = current;
-      values.set({ ...rest, [to]: moved as FieldValue });
+      values.set(
+        current[to] === undefined
+          ? { ...rest, [to]: moved as FieldValue }
+          : rest,
+      );
     },
     error: (name) => errors()[name],
     register: (name, field) => {

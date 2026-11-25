@@ -62,6 +62,7 @@ function App() {
       </Form>
       <Form
         id="rename"
+        initialValues={{ nick: 'Ivy G' }}
         onSubmit={(values) =>
           Toast.show({ title: `Named ${describe(values)}` })
         }

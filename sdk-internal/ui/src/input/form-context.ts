@@ -11,8 +11,8 @@ export type FormApi = {
   /** The field's current value (reactive), `undefined` before any. */
   value: (name: string) => FieldValue | undefined;
   setValue: (name: string, value: FieldValue) => void;
-  /** Moves the value under `from` to `to` (a field renamed), unless `to`
-   * already has one. */
+  /** A field renamed from `from` to `to`: `from` leaves the form, and its
+   * value moves to `to` unless `to` already has one. */
   move: (from: string, to: string) => void;
   /** The field's error from the last submit (reactive). */
   error: (name: string) => string | undefined;
