@@ -112,6 +112,7 @@ function app(overrides: Partial<AppDetail> = {}): AppDetail {
       isSupported: true,
       isLatest: true,
     },
+    reservedShortcuts: [],
     currentSourceCommit: null,
     dbName: null,
     createdAt: '2026-08-13T00:00:00.000Z',

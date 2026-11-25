@@ -14,6 +14,10 @@ import {
   isAppNameWithinMaxLength,
 } from './app-identity.js';
 import { networkPolicySchema } from './network-policy.js';
+import {
+  formatKeyboardChord,
+  parseKeyboardChord,
+} from './keyboard-shortcut.js';
 
 /**
  * Reject manifest-provided paths that would escape the app source tree once
@@ -298,6 +302,49 @@ export const webhookConfigSchema = z.object({
   auth: z.enum(['platform', 'none']).default('platform'),
 });
 
+/** Most chords one App may reserve. */
+export const APP_RESERVED_SHORTCUTS_MAX_COUNT = 32;
+
+/** One chord, stored in canonical spelling (`mod+shift+k`). */
+const reservedShortcutSchema = z.string().transform((text, ctx) => {
+  const parsed = parseKeyboardChord(text);
+  if (!parsed.ok) {
+    ctx.addIssue({ code: 'custom', message: parsed.error });
+    return z.NEVER;
+  }
+  return formatKeyboardChord(parsed.chord);
+});
+
+/**
+ * Keyboard chords the App handles itself. Platform shortcuts (the command
+ * palette's `mod+K`, and any added later) work inside the App's page and
+ * widgets by default; a chord listed in `reserve` reaches the App instead
+ * while focus is inside it, and the platform does not act on it there.
+ */
+export const keyboardConfigSchema = z
+  .object({
+    reserve: z
+      .array(reservedShortcutSchema)
+      .max(APP_RESERVED_SHORTCUTS_MAX_COUNT)
+      .default([])
+      .superRefine((chords, ctx) => {
+        const seen = new Set<string>();
+        for (const [index, chord] of chords.entries()) {
+          if (seen.has(chord)) {
+            ctx.addIssue({
+              code: 'custom',
+              message: `duplicate reserved shortcut "${chord}"`,
+              path: [index],
+            });
+          }
+          seen.add(chord);
+        }
+      }),
+  })
+  .strict();
+
+export type KeyboardConfig = z.infer<typeof keyboardConfigSchema>;
+
 const supportedCapabilitiesSchema = z.object({
   database: z.boolean().default(false),
   frontend: z.boolean().default(false),
@@ -543,6 +590,8 @@ export const sourceManifestSchema = z
     cron: z.array(cronJobSchema).default([]),
     /** Inbound webhook auth mode (see webhookConfigSchema); defaults to platform. */
     webhook: webhookConfigSchema.optional(),
+    /** Keyboard chords the App's page and widgets handle instead of the platform. */
+    keyboard: keyboardConfigSchema.optional(),
     /**
      * Removed with Workflows. An empty list (the old default, still present in
      * materialized source JSON) is accepted and ignored; a declared call gets
@@ -661,6 +710,19 @@ export const sourceManifestSchema = z
         message:
           'tasks require backendMode "serverless": every task run boots its own backend instance, which would duplicate the background work of a long-running backend',
         path: ['backendMode'],
+      });
+    }
+    if (
+      manifest.keyboard &&
+      manifest.keyboard.reserve.length > 0 &&
+      !manifest.capabilities.frontend &&
+      !manifest.capabilities.widgets
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'keyboard.reserve requires capabilities.frontend or capabilities.widgets: only an App page or widget receives key presses',
+        path: ['keyboard', 'reserve'],
       });
     }
     if (manifest.capabilities.widgets && manifest.widgets.length === 0) {

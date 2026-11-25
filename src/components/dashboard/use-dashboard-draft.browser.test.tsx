@@ -51,6 +51,7 @@ const initialData: DashboardData = {
       sortOrder: 0,
       defaultSize: { w: 4, h: 3 },
       supportedSizes: [],
+      reservedShortcuts: [],
     },
   ],
   layouts: {
@@ -68,6 +69,7 @@ const addedWidget: AvailableWidget = {
   url: '/second-widget.js',
   defaultSize: { w: 4, h: 3 },
   supportedSizes: [],
+  reservedShortcuts: [],
 };
 const initialAvailableWidget: AvailableWidget = {
   appId: 'app',
@@ -78,6 +80,7 @@ const initialAvailableWidget: AvailableWidget = {
   url: '/widget.js',
   defaultSize: { w: 4, h: 3 },
   supportedSizes: [],
+  reservedShortcuts: [],
 };
 
 function dataWithDesktopX(x: number): DashboardData {

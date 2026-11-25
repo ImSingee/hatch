@@ -25,6 +25,7 @@ import { SearchPalette } from '~components/desk/command-palette';
 import type { DockOpenItem } from '~components/desk/dock-item';
 import { isAppPinOpen } from '~components/desk/dock';
 import { DESK_HOME } from '~components/desk/paths';
+import { platformShortcutKeys } from '~components/desk/platform-shortcuts';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
 import { appsQueryOptions } from '~queries/apps';
@@ -60,6 +61,8 @@ export function DesktopShell({
     event.preventDefault();
     if (command.type === 'navigate') void navigate({ to: command.to });
     if (command.type === 'toggle-sidebar') setCollapsed((value) => !value);
+    // Only a click on the menu item: ⌘K itself is a platform shortcut the
+    // page handles, so Apps that reserve it receive it.
     if (command.type === 'focus-search') spotlight.open();
   });
   useEffect(() => {
@@ -93,6 +96,7 @@ export function DesktopShell({
 
 function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
   const { t } = useI18n();
+  const searchKeys = platformShortcutKeys('palette.open');
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
@@ -138,13 +142,13 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
       <UnstyledButton
         className={classes.search}
         aria-label={t('palette.search')}
-        aria-keyshortcuts="Meta+K"
+        aria-keyshortcuts={searchKeys.aria}
         onClick={() => spotlight.open()}
       >
         <IconSearch size={14} stroke={2.2} aria-hidden />
         <span className={classes.searchLabel}>{t('desktop.search')}</span>
         <span className={classes.kbd} aria-hidden>
-          ⌘K
+          {searchKeys.label}
         </span>
       </UnstyledButton>
 

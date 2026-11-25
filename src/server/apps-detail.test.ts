@@ -87,6 +87,7 @@ describe('App deployment revision views', () => {
         isSupported: true,
         isLatest: false,
       },
+      reservedShortcuts: [],
       currentSourceCommit: 'commit-two',
       dbName: null,
       createdAt: '2026-08-13T00:00:00.000Z',

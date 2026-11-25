@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { appSurfaceSource } from './app-surface-source';
+import { attachPlatformShortcuts } from './platform-shortcuts';
 import classes from './app-surface.module.css';
 
 /** What a host can ask of a running App. */
@@ -31,11 +32,18 @@ export type AppSurfaceProps = {
   route: string;
   /** A hidden surface keeps its App running. */
   visible?: boolean;
+  /**
+   * Chords the App handles itself (its manifest's `keyboard.reserve`). Every
+   * other platform shortcut keeps working while focus is inside the App.
+   */
+  reservedShortcuts?: readonly string[];
   /** The App moved to another route by itself. */
   onRouteChange?: (route: string) => void;
   /** The App's own title changed; `null` when it has none. */
   onTitleChange?: (title: string | null) => void;
 };
+
+const NO_RESERVED_SHORTCUTS: readonly string[] = [];
 
 /** The still percent-encoded fragment of an href, without '#'. */
 function rawFragment(href: string) {
@@ -64,17 +72,21 @@ function replaceInnerRoute(win: Window, route: string) {
  * knows how an App is rendered: today a same-origin frame, later an NSH
  * player. Nothing about the frame crosses this interface. A host loads an App
  * by mounting the surface, closes it by unmounting, and otherwise uses
- * `route`, `visible`, the two callbacks and the handle.
+ * `route`, `visible`, `reservedShortcuts`, the two callbacks and the handle.
  *
- * Apps ship no bridge script, so route and title are still observed on the
- * same-origin frame from in here. Once Apps are served from their own origin
- * that observation becomes a `postMessage` exchange inside this file.
+ * Apps ship no bridge script, so route and title are still observed, and
+ * platform shortcuts caught, on the same-origin frame from in here. Once Apps
+ * are served from their own origin that becomes a `postMessage` exchange
+ * inside this file; the App side then needs the platform's chords minus its
+ * reservations up front, because it must decide to cancel a key press
+ * synchronously.
  */
 export function AppSurface({
   ref,
   app,
   route,
   visible = true,
+  reservedShortcuts = NO_RESERVED_SHORTCUTS,
   onRouteChange,
   onTitleChange,
 }: AppSurfaceProps) {
@@ -92,6 +104,7 @@ export function AppSurface({
   const reportTitleChange = useEffectEvent((title: string | null) =>
     onTitleChange?.(title),
   );
+  const currentReservedShortcuts = useEffectEvent(() => reservedShortcuts);
 
   useImperativeHandle(
     ref,
@@ -126,6 +139,7 @@ export function AppSurface({
     setLoading(true);
     let win: Window | null = null;
     let titleObserver: MutationObserver | null = null;
+    let detachShortcuts: (() => void) | null = null;
 
     const reportTitle = () => {
       try {
@@ -168,6 +182,8 @@ export function AppSurface({
       }
       titleObserver?.disconnect();
       titleObserver = null;
+      detachShortcuts?.();
+      detachShortcuts = null;
       win = null;
       winRef.current = null;
     };
@@ -204,6 +220,9 @@ export function AppSurface({
         for (const [target, type] of innerEvents(next)) {
           target.addEventListener(type, onInnerChange);
         }
+        detachShortcuts = attachPlatformShortcuts(next, () =>
+          currentReservedShortcuts(),
+        );
         const head = doc.head ?? doc.documentElement;
         if (head) {
           titleObserver = new MutationObserver(reportTitle);
