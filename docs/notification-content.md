@@ -301,10 +301,10 @@ through the same checks and normalization:
 Props take their natural JSON types (`true`, numbers, a number array for
 `Trend values`) or the same strings markup uses. A `Markdown` node is written
 with its source as its only string child (`{ "type": "Markdown", "children":
-["## Notes\n- one"] }`). A stored tree holding a `Markdown` node (as `get
---json` and envelopes return it, with `props.source` and the compiled blocks)
-is not accepted back as input; edit a stored card through its canonical
-markup instead.
+["## Notes\n- one"] }`). A stored tree is accepted back as input as it
+is (`get --json` and envelopes return a `Markdown` node with `props.source`
+and its compiled blocks; the blocks are compiled again from the source), so
+a card can be edited either as canonical markup or as its JSON tree.
 
 ### Canonical markup
 
