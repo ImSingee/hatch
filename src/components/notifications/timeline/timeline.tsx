@@ -620,7 +620,11 @@ function TimelineEntry({
       <div className={classes.main}>
         <div className={classes.meta}>
           <span className={classes.source}>
-            {item.sourceName} · {kindName(item)}
+            {/* A kind named like its source (a Channel called "CI" sending
+                "CI") is said once. */}
+            {kindName(item) === item.sourceName
+              ? item.sourceName
+              : `${item.sourceName} · ${kindName(item)}`}
           </span>
           <Time iso={item.activityAt} />
         </div>

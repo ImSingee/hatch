@@ -293,12 +293,18 @@ export function ReplyFieldInput({
   form,
   chosen,
   buttons = true,
+  markOptional = true,
 }: {
   field: ReplyField;
   form: ReplyFormState | null;
   chosen: ReplyAnswers | null;
   /** Draw a buttons field's buttons; off when a stack around it does. */
   buttons?: boolean;
+  /**
+   * Add "(optional)" to an optional question's label. Off inside a card,
+   * whose sender wrote the label as it should read.
+   */
+  markOptional?: boolean;
 }) {
   const answers = form?.answers ?? chosen ?? {};
   const current = answerOf(answers, field.id);
@@ -309,7 +315,7 @@ export function ReplyFieldInput({
       {field.label ? (
         <Text accessibilityRole="header" style={type.heading}>
           {field.label}
-          {field.required || sends ? '' : ' (optional)'}
+          {field.required || sends || !markOptional ? '' : ' (optional)'}
         </Text>
       ) : null}
       {field.description ? (

@@ -572,7 +572,10 @@ function TimelineEntry({
             style={[type.caption, { flexShrink: 1, color: c.ink }]}
             numberOfLines={1}
           >
-            {item.sourceName} · {item.kindName}
+            {/* A kind named like its source is said once. */}
+            {item.kindName === item.sourceName
+              ? item.sourceName
+              : `${item.sourceName} · ${item.kindName}`}
           </Text>
           <Text style={type.caption}>{notificationTime(item.activityAt)}</Text>
         </View>

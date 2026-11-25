@@ -958,7 +958,14 @@ function Question({ node }: { node: ContentNode }) {
   const env = useContext(Env);
   const { field, form } = useBoundField(node);
   if (!field) return null;
-  return <ReplyFieldInput field={field} form={form} chosen={env.chosen} />;
+  return (
+    <ReplyFieldInput
+      field={field}
+      form={form}
+      chosen={env.chosen}
+      markOptional={false}
+    />
+  );
 }
 
 function LinkButton({ node }: { node: ContentNode }) {
@@ -1047,6 +1054,7 @@ function ButtonRow({ node }: { node: ContentNode }) {
             form={env.form}
             chosen={env.chosen}
             buttons={false}
+            markOptional={false}
           />
         ) : null;
       })}
