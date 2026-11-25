@@ -67,7 +67,9 @@ backend, widgets and schema). In the disposable build copy it:
    - outside `app/custom/`, no import of `nsh` or `nsh/*`;
    - no namespace import (`import * as base from 'nsh/base'`) or `export *`
      of an `nsh` module, `app/custom/` included: the web player links `nsh`
-     imports by name, and such a module deploys but cannot start there;
+     imports by name, and such a module deploys but cannot start there
+     (type-only forms, `import type * as` and `export type *`, are erased
+     and allowed);
    - no bare colours: arbitrary Tailwind colour values (`bg-[#f00]`) and
      Tailwind palette classes (`bg-red-500`, `text-white/80`) in any string
      or template literal (JSX text is not a string), and colour literals

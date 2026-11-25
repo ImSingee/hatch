@@ -430,9 +430,11 @@ async function fileFindings(
       case SyntaxKind.ImportDeclaration: {
         const declaration = node as ImportDeclaration;
         const specifier = nameText(declaration.moduleSpecifier);
+        // `import type * as x` is erased and never reaches the linker.
         if (
           specifier &&
           isNshModule(specifier) &&
+          declaration.importClause?.phaseModifier !== SyntaxKind.TypeKeyword &&
           declaration.importClause?.namedBindings?.kind ===
             SyntaxKind.NamespaceImport
         ) {
@@ -446,6 +448,7 @@ async function fileFindings(
         if (
           specifier &&
           isNshModule(specifier) &&
+          !declaration.isTypeOnly &&
           (!declaration.exportClause ||
             declaration.exportClause.kind === SyntaxKind.NamespaceExport)
         ) {

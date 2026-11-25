@@ -296,14 +296,24 @@ describe.skipIf(!nshAvailable())(
         [
           "import { Button as BaseButton } from 'nsh/base';",
           "import * as base from 'nsh/base';",
+          // Type-only forms are erased before linking: not findings.
+          "import type * as nshTypes from 'nsh';",
+          "export type * from 'nsh/base';",
           "export { Button as ReexportedButton } from './reexport';",
           'export const baseModule = base;',
+          'export type Element = nshTypes.JSX.Element;',
         ].join('\n'),
       );
       const message = await buildError({
         'app/custom/ui.tsx': ui,
         'app/custom/reexport.ts': "export * from 'nsh/base';\n",
       });
+      expect(message).not.toContain(
+        `app/custom/ui.tsx:${lineOf(ui, 'import type * as nshTypes')}:`,
+      );
+      expect(message).not.toContain(
+        `app/custom/ui.tsx:${lineOf(ui, 'export type * from')}:`,
+      );
       expect(message).toContain(
         `app/custom/ui.tsx:${lineOf(ui, 'import * as base')}: "nsh/base": the web player links`,
       );
