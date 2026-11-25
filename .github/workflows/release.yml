@@ -1,0 +1,129 @@
+name: Release
+
+# Tags a release: sets every product version to the release version on top of
+# the chosen branch, tag or commit, commits that change and tags the commit as
+# v<version>. Only the tag is pushed; the release commit is not added to the
+# branch, so protected branches stay untouched. The ref must already contain
+# scripts/set-release-version.ts, which lists the files to update.
+#
+# Trigger it from the Actions tab, or with a repository dispatch:
+#   gh api repos/<owner>/<repo>/dispatches \
+#     -f event_type=release \
+#     -F 'client_payload[version]=1.2.0' -F 'client_payload[ref]=master'
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, such as 1.2.0 or v1.2.0-rc.1
+        required: true
+        type: string
+      ref:
+        description: Branch, tag or commit SHA to release
+        required: false
+        default: master
+        type: string
+  repository_dispatch:
+    types: [release]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  # Dispatches the Docker build, which a tag pushed with GITHUB_TOKEN does
+  # not trigger on its own.
+  actions: write
+
+jobs:
+  release:
+    name: Tag release
+    runs-on: ubuntu-latest
+    env:
+      INPUT_VERSION: ${{ inputs.version || github.event.client_payload.version }}
+      INPUT_REF: ${{ inputs.ref || github.event.client_payload.ref || github.event.repository.default_branch }}
+    steps:
+      - name: Check inputs
+        id: inputs
+        run: |
+          if [ -z "$INPUT_VERSION" ]; then
+            echo '::error::Missing version (workflow input or client_payload.version).'
+            exit 1
+          fi
+          version="${INPUT_VERSION#v}"
+          # Must agree with scripts/release-version.ts, which checks it again.
+          if ! printf '%s' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::\"$INPUT_VERSION\" is not a semantic version such as 1.2.0 or v1.2.0-rc.1."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.INPUT_REF }}
+          fetch-depth: 0
+
+      - name: Check tag is free
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "::error::Tag $TAG already exists."
+            exit 1
+          fi
+          if [ ! -f scripts/set-release-version.ts ]; then
+            echo "::error::$INPUT_REF has no scripts/set-release-version.ts; release a ref that includes the release tooling."
+            exit 1
+          fi
+          echo "BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      # The script needs only Node, so no dependencies of the ref are installed
+      # in a job that holds a write token.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26.x
+
+      - name: Set versions
+        env:
+          VERSION: ${{ steps.inputs.outputs.version }}
+        run: |
+          node scripts/set-release-version.ts "$VERSION"
+          if git diff --quiet; then
+            echo "::error::Every version is already $VERSION; nothing to release."
+            exit 1
+          fi
+          git diff --stat
+
+      - name: Commit and tag
+        env:
+          VERSION: ${{ steps.inputs.outputs.version }}
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --all --message "release $TAG"
+          git tag --annotate "$TAG" --message "Release $TAG"
+          git push origin "refs/tags/$TAG"
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Start Docker build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: gh workflow run docker.yml --ref "$TAG"
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: |
+          {
+            echo "## Released $TAG"
+            echo
+            echo "- Base: \`$INPUT_REF\` at \`$BASE_SHA\`"
+            echo "- Release commit: \`$RELEASE_SHA\`"
+            echo
+            echo '```'
+            git diff --stat "$BASE_SHA" "$RELEASE_SHA"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
