@@ -102,7 +102,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['app', 'adopt'],
     usage: 'app adopt <id> --directory <path>',
     description:
-      'Attach a verified Agent checkout without discarding source or history.',
+      'Attach a verified Agent checkout without discarding source or history. Fetches platform master over Git into origin/master and the deploy/* tags; the checkout keeps its own origin.',
   },
   {
     path: ['app', 'invoke', 'webhook'],
