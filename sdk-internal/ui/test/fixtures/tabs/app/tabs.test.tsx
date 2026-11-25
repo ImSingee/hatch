@@ -42,8 +42,11 @@ test('keeps rows and visited tabs when the App passes new arrays', async () => {
   await app.press('label:South');
   await app.type('label:South notes', 'Mulch in May');
   await app.type('label:Note for Bed 1', 'Shady corner');
+  // South is visited but hidden while North shows.
+  await app.press('label:North');
   await app.press('Refresh beds');
   await app.wait(100);
   expect(app.value('label:Note for Bed 1')).toBe('Shady corner');
+  await app.press('label:South');
   expect(app.value('label:South notes')).toBe('Mulch in May');
 });

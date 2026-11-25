@@ -79,3 +79,28 @@ test('shows a switch error from the form', async () => {
   await app.press('Continue');
   await app.waitFor('text:Agreed');
 });
+
+test('follows a field whose name changes', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Call me', 'Ivy');
+  await app.press('Use nickname');
+  await app.press('Save name');
+  await app.waitFor('text:Named nick=Ivy');
+});
+
+test('a send that ends after its form closed keeps a newer draft', async () => {
+  const app = await open('./main.tsx');
+  await app.type('label:Memo', 'First memo');
+  await app.press('Send memo');
+  await app.press('Close memo');
+  await app.press('Open memo');
+  // The unfinished send left its text as a draft; the new form restores it.
+  await app.waitFor('text:Restored your unsent changes.');
+  await app.clear('label:Memo');
+  await app.type('label:Memo', 'Second memo');
+  await app.wait(800);
+  await app.press('Finish sending');
+  await app.wait(300);
+  const saved = JSON.parse(app.storage()['hatch.ui.draft.memo'] ?? '{}');
+  expect(saved.memo).toBe('Second memo');
+});

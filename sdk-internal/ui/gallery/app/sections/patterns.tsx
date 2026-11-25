@@ -165,7 +165,7 @@ function Records() {
       detailTitle={(plant) => plant.name}
       renderDetail={(plant) => (
         <Card title="Care">
-          <Text>{plant.note}</Text>
+          <Text>{plant().note}</Text>
         </Card>
       )}
       empty={{ title: 'No plants match', description: 'Try another name.' }}

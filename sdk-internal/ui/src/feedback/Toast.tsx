@@ -35,8 +35,12 @@ export type ToastOptions = {
   duration?: number;
 };
 
+/** What the manager keeps: plain data only. NSH stores a toast's value as
+ * JSON, so a function in it (an action's `onPress`) would be dropped. */
 type Shown = Required<Pick<ToastOptions, 'title' | 'tone'>> &
-  Pick<ToastOptions, 'description' | 'action'>;
+  Pick<ToastOptions, 'description'> & {
+    action?: { label: string; disabled?: boolean };
+  };
 
 const TONE_ICON: Record<ToastTone, IconData | null> = {
   neutral: null,
@@ -62,6 +66,8 @@ const shown = signal<ToastEntry[]>([]);
 const expanded = signal(false);
 let timer: number | undefined;
 let nextId = 0;
+/** Each shown toast's action, by toast id, until the toast is removed. */
+const actions = new Map<string, () => void>();
 
 function sync(): void {
   shown.set(manager.visible(VISIBLE));
@@ -72,12 +78,22 @@ function sync(): void {
 }
 
 function tick(): void {
-  if (manager.advance(expanded()).changed) sync();
+  const step = manager.advance(expanded());
+  for (const entry of step.removed) actions.delete(entry.id);
+  if (step.changed) sync();
 }
 
 function dismiss(id: string): void {
   manager.dismiss(id);
   sync();
+}
+
+/** Runs a toast's action, then dismisses the toast. */
+function runAction(id: string): void {
+  const action = actions.get(id);
+  actions.delete(id);
+  action?.();
+  dismiss(id);
 }
 
 function show(options: ToastOptions): string {
@@ -87,8 +103,11 @@ function show(options: ToastOptions): string {
     title: options.title,
     description: options.description,
     tone: options.tone ?? 'neutral',
-    action: options.action,
+    action: options.action
+      ? { label: options.action.label, disabled: options.action.disabled }
+      : undefined,
   };
+  if (options.action) actions.set(id, options.action.onPress);
   const seconds = options.duration ?? (options.action ? 8 : 5);
   manager.push(id, value, { timeout: seconds * 1000 });
   timer ??= setInterval(tick, TICK_MS);
@@ -150,14 +169,11 @@ function ToastCard(props: { entry: () => ToastEntry }): JSX.Element {
       </View>
       {value().action ? (
         <Button
-          label={(value().action as Action).label}
+          label={value().action?.label ?? ''}
           kind="subtle"
           size="sm"
-          disabled={(value().action as Action).disabled}
-          onPress={() => {
-            (value().action as Action).onPress();
-            dismiss(props.entry().id);
-          }}
+          disabled={value().action?.disabled}
+          onPress={() => runAction(props.entry().id)}
         />
       ) : null}
     </BaseToast>

@@ -20,6 +20,9 @@ function describe(values: FormValues): string {
 
 function App() {
   const showPin = signal(true);
+  const nickname = signal(false);
+  const memoOpen = signal(true);
+  const finishSend: { resolve: () => void } = { resolve: () => undefined };
   return (
     <Page title="Draft">
       <Form id="note" onSubmit={() => Toast.show({ title: 'Sent' })}>
@@ -57,6 +60,36 @@ function App() {
         <Switch name="agree" label="I agree" />
         <Button label="Continue" type="submit" />
       </Form>
+      <Form
+        id="rename"
+        onSubmit={(values) =>
+          Toast.show({ title: `Named ${describe(values)}` })
+        }
+      >
+        <TextField
+          name={nickname() ? 'nick' : 'name'}
+          label="Call me"
+          required
+        />
+        <Button label="Use nickname" onPress={() => nickname.set(true)} />
+        <Button label="Save name" type="submit" />
+      </Form>
+      <If when={memoOpen()}>
+        <Form
+          id="memo"
+          onSubmit={() =>
+            new Promise<void>((resolve) => {
+              finishSend.resolve = resolve;
+            })
+          }
+        >
+          <TextField name="memo" label="Memo" />
+          <Button label="Send memo" type="submit" />
+        </Form>
+      </If>
+      <Button label="Close memo" onPress={() => memoOpen.set(false)} />
+      <Button label="Open memo" onPress={() => memoOpen.set(true)} />
+      <Button label="Finish sending" onPress={() => finishSend.resolve()} />
     </Page>
   );
 }

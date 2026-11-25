@@ -172,7 +172,9 @@ export function ListItem(props: ListItemProps): JSX.Element {
         <View class={rowClass()}>{body}</View>
       )}
       {props.control ? <View class="pr-4">{props.control}</View> : null}
-      {props.actions && props.actions.length > 0 ? (
+      {/* `If` on a boolean: a ternary reading `actions` would rebuild the
+          buttons, and lose the focused one, when the App passes a new list. */}
+      <If when={(props.actions?.length ?? 0) > 0}>
         <View class="flex-row gap-0.5 pr-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
           <Each of={props.actions}>
             {(action) => (
@@ -186,7 +188,7 @@ export function ListItem(props: ListItemProps): JSX.Element {
             )}
           </Each>
         </View>
-      ) : null}
+      </If>
     </View>
   );
 }

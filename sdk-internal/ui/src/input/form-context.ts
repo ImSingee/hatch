@@ -1,4 +1,4 @@
-import { cleanup, context, signal } from 'nsh';
+import { cleanup, context, effect, signal, untracked } from 'nsh';
 
 /** A value a form field holds. */
 export type FieldValue = string | number | boolean | readonly string[] | null;
@@ -11,6 +11,9 @@ export type FormApi = {
   /** The field's current value (reactive), `undefined` before any. */
   value: (name: string) => FieldValue | undefined;
   setValue: (name: string, value: FieldValue) => void;
+  /** Moves the value under `from` to `to` (a field renamed), unless `to`
+   * already has one. */
+  move: (from: string, to: string) => void;
   /** The field's error from the last submit (reactive). */
   error: (name: string) => string | undefined;
   /** Registers a field so the form checks `required` on submit and sends
@@ -55,15 +58,28 @@ export function bindField<T extends FieldValue>(
   options: { keep?: boolean } = {},
 ): { get: () => T; set: (value: T) => void } {
   const own = signal<T>(initial);
-  if (form && props.name !== undefined) {
-    cleanup(
-      form.register(props.name, {
-        required: () => props.required === true,
-        keep: options.keep,
-        initial,
-        controlled: () => props.value,
-      }),
-    );
+  if (form) {
+    // Registered under the current `name`, again whenever it changes; the
+    // value typed under the old name moves to the new one.
+    const registered: { name: string | undefined } = { name: undefined };
+    effect(() => {
+      const name = props.name;
+      if (name === undefined) return;
+      untracked(() => {
+        const previous = registered.name;
+        if (previous !== undefined && previous !== name)
+          form.move(previous, name);
+        registered.name = name;
+        cleanup(
+          form.register(name, {
+            required: () => props.required === true,
+            keep: options.keep,
+            initial,
+            controlled: () => props.value,
+          }),
+        );
+      });
+    });
   }
   return {
     get: () => {

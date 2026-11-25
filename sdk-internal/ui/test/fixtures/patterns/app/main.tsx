@@ -11,7 +11,7 @@ function App() {
       getKey={String}
       renderItem={(bed) => ({ title: `Bed ${bed}` })}
       detailTitle={(bed) => `Bed ${bed}`}
-      renderDetail={(bed) => <Text>Soil of bed {String(bed)}</Text>}
+      renderDetail={(bed) => <Text>Soil of bed {String(bed())}</Text>}
       search={{ value: search(), onChange: (value) => search.set(value) }}
     />
   );

@@ -100,7 +100,22 @@ export function Form(props: FormProps): JSX.Element {
     loaded: boolean;
     timer: number | undefined;
     sent: FormValues;
-  } = { loaded: false, timer: undefined, sent: initial };
+    /** What this form last stored (`null`: it removed the draft), so a
+     * submit that finishes after the form went away removes only its own. */
+    written: string | null;
+    gone: boolean;
+  } = {
+    loaded: false,
+    timer: undefined,
+    sent: initial,
+    written: null,
+    gone: false,
+  };
+  // Resolves once the stored draft has been read and merged.
+  let markLoaded = (): void => undefined;
+  const loading = new Promise<void>((resolve) => {
+    markLoaded = resolve;
+  });
   const stopTimer = () => {
     clearTimeout(draft.timer);
     draft.timer = undefined;
@@ -133,10 +148,12 @@ export function Form(props: FormProps): JSX.Element {
     const changed = Object.entries(kept).some(([name, value]) =>
       changedFrom(value, draft.sent[name]),
     );
+    const text = changed ? JSON.stringify(kept) : null;
+    draft.written = text;
     await (
-      changed
-        ? Storage.setItem(draftKey, JSON.stringify(kept))
-        : Storage.removeItem(draftKey)
+      text === null
+        ? Storage.removeItem(draftKey)
+        : Storage.setItem(draftKey, text)
     ).catch(() => {
       // A full store keeps the previous draft; typing goes on.
     });
@@ -144,6 +161,7 @@ export function Form(props: FormProps): JSX.Element {
   // Input typed while the draft loaded is saved once it has.
   const finishLoading = () => {
     draft.loaded = true;
+    markLoaded();
     if (changedWhileLoading.size > 0) void writeDraft();
   };
   if (saveDraft()) {
@@ -169,6 +187,7 @@ export function Form(props: FormProps): JSX.Element {
     }, finishLoading);
   } else {
     draft.loaded = true;
+    markLoaded();
   }
   effect(() => {
     values();
@@ -179,7 +198,10 @@ export function Form(props: FormProps): JSX.Element {
   effect(() => {
     if (lifecycle() === 'background') void writeDraft();
   });
-  cleanup(() => void writeDraft());
+  cleanup(() => {
+    void writeDraft();
+    draft.gone = true;
+  });
 
   const discardDraft = () => {
     batch(() => {
@@ -190,28 +212,40 @@ export function Form(props: FormProps): JSX.Element {
     void Storage.removeItem(draftKey);
   };
 
+  // After the form went away: remove the stored draft only while it is the
+  // one this form wrote, never one a newer form with the same id saved.
+  const forgetOwnDraft = async () => {
+    if (!saveDraft() || draft.written === null) return;
+    const stored = await Storage.getItem(draftKey).catch(() => null);
+    if (stored === draft.written)
+      await Storage.removeItem(draftKey).catch(() => undefined);
+  };
+
   const submit = async () => {
     if (submitting() || props.disabled) return;
-    const current = untracked(effectiveValues);
-    const found: Record<string, string> = {};
-    for (const [name, field] of fields) {
-      if (field.required() && isEmpty(current[name]))
-        found[name] = REQUIRED_MESSAGE;
-    }
-    Object.assign(found, props.validate?.(current) ?? {});
-    batch(() => {
-      errors.set(found);
-      failure.set(null);
-    });
-    if (Object.keys(found).length > 0) return;
     submitting.set(true);
     try {
+      // Values are read once the stored draft is in, so what is sent is
+      // what the fields show.
+      await loading;
+      const current = untracked(effectiveValues);
+      const found: Record<string, string> = {};
+      for (const [name, field] of fields) {
+        if (field.required() && isEmpty(current[name]))
+          found[name] = REQUIRED_MESSAGE;
+      }
+      Object.assign(found, props.validate?.(current) ?? {});
+      batch(() => {
+        errors.set(found);
+        failure.set(null);
+      });
+      if (Object.keys(found).length > 0) return;
       await props.onSubmit(current);
       // Sent: these values are no longer a draft. Input typed while sending
       // still is, so the draft is rewritten rather than deleted.
       draft.sent = current;
       restored.set(false);
-      await writeDraft();
+      await (draft.gone ? forgetOwnDraft() : writeDraft());
     } catch (error) {
       failure.set(
         error instanceof Error && error.message
@@ -234,6 +268,12 @@ export function Form(props: FormProps): JSX.Element {
           errors.set(rest);
         }
       });
+    },
+    move: (from, to) => {
+      const current = untracked(values);
+      if (current[from] === undefined || current[to] !== undefined) return;
+      const { [from]: moved, ...rest } = current;
+      values.set({ ...rest, [to]: moved as FieldValue });
     },
     error: (name) => errors()[name],
     register: (name, field) => {

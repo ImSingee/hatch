@@ -47,7 +47,13 @@ const TYPES: Record<string, string> = {
 const port = Number(process.argv[2] ?? 8791);
 http
   .createServer((request, response) => {
-    const url = new URL(request.url ?? '/', 'http://localhost');
+    let url: URL;
+    try {
+      url = new URL(request.url ?? '/', 'http://localhost');
+    } catch {
+      response.writeHead(400).end();
+      return;
+    }
     for (const [prefix, root] of routes) {
       if (!url.pathname.startsWith(prefix)) continue;
       let rest: string;

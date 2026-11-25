@@ -1,4 +1,4 @@
-import { Scroll, Text, View, signal } from 'nsh';
+import { Scroll, Text, View, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Each, If } from '../core/control';
 import { WIDE_MIN, paneWidth } from '../core/env';
@@ -29,8 +29,10 @@ export type ListDetailPageProps<T> = {
   renderItem: (item: T) => Omit<ListItemProps, 'onPress' | 'selected'>;
   /** The title of the detail of an item. */
   detailTitle: (item: T) => string;
-  /** The detail of the selected item: the content of its page. */
-  renderDetail: (item: T) => JSX.Element;
+  /** The detail of the selected item: the content of its page. Called once
+   * per selected item; `item()` follows the record when the App replaces it
+   * with a newer one of the same key, so input in the detail is kept. */
+  renderDetail: (item: () => T) => JSX.Element;
   /** The selected item's id, when the App controls it. */
   selectedKey?: string | null;
   onSelect?: (key: string | null) => void;
@@ -116,7 +118,7 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
     >
       {(item) => (
         <Page title={props.detailTitle(item())}>
-          {props.renderDetail(item())}
+          {untracked(() => props.renderDetail(item))}
         </Page>
       )}
     </Each>
