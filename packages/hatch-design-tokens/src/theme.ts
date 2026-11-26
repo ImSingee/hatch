@@ -13,6 +13,10 @@ import { mix, mostLegible, normalizeColor, withAlpha } from './color';
 export const THEME_APPEARANCES = ['light', 'dark'] as const;
 export type ThemeAppearance = (typeof THEME_APPEARANCES)[number];
 
+/** How a client picks the appearance: fixed, or following its device. */
+export const THEME_MODES = ['light', 'dark', 'system'] as const;
+export type ThemeMode = (typeof THEME_MODES)[number];
+
 /** The colours a theme document sets; every other colour is derived. */
 export const THEME_COLOR_KEYS = [
   'background',

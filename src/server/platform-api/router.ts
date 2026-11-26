@@ -95,7 +95,18 @@ import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/pla
 import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import { buildInfo } from '~/build-info';
 import { registerModelServices } from './model-rpc';
-import { getThemeState, updateTheme } from '~server/theme-settings';
+import {
+  getTheme,
+  listThemePresets,
+  resetTheme,
+  updateTheme,
+  validateTheme,
+} from '~server/theme-settings';
+import {
+  resolvedThemeMessage,
+  themeStateMessage,
+} from '~server/platform-api/theme';
+import type { ThemeAppearance } from '../../../packages/hatch-design-tokens/src';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
   listPins,
@@ -841,13 +852,62 @@ export function registerPlatformApi(
   });
   registerModelServices(router);
   router.service(ThemeService, {
-    getTheme: async () => ({ theme: await getThemeState() }),
+    getTheme: async (input) => {
+      const { theme, resolved } = await getTheme(
+        input.resolve as ThemeAppearance[],
+      );
+      return {
+        theme: themeStateMessage(theme),
+        resolved: resolved.map(resolvedThemeMessage),
+      };
+    },
     setTheme: async (input) => ({
-      theme: await updateTheme({
-        accent: input.accent,
-        dockLabels: input.dockLabels,
-      }),
+      theme: themeStateMessage(
+        await updateTheme({
+          accent: input.clearAccent ? null : input.accent,
+          dockLabels: input.dockLabels,
+          mode: input.mode,
+          theme:
+            input.appearance === undefined
+              ? undefined
+              : {
+                  appearance: input.appearance,
+                  preset: input.preset,
+                  custom: input.custom,
+                },
+        }),
+      ),
     }),
+    resetTheme: async () => ({
+      theme: themeStateMessage(await resetTheme()),
+    }),
+    listThemePresets: () => ({
+      presets: listThemePresets().map((preset) => ({
+        name: preset.name,
+        appearance: preset.appearance,
+        document: preset.document,
+      })),
+    }),
+    validateTheme: async (input) => {
+      const result = await validateTheme(input.document, {
+        withCurrentAccent: input.withCurrentAccent,
+      });
+      return {
+        ok: result.ok,
+        problems: result.problems.map((problem) => ({
+          code: problem.code,
+          path: problem.path,
+          message: problem.message,
+          foreground: problem.pair?.foreground ?? '',
+          background: problem.pair?.background ?? '',
+          ratio: problem.pair?.ratio ?? 0,
+          requiredRatio: problem.pair?.required ?? 0,
+        })),
+        resolved: result.resolved
+          ? resolvedThemeMessage(result.resolved)
+          : undefined,
+      };
+    },
   });
   router.service(ServerService, {
     getServerInfo: () => ({

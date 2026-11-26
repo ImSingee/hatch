@@ -3,11 +3,25 @@ syntax = "proto3";
 package hatch.platform.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/struct.proto";
 
 // The instance-wide look that the web, mobile and desktop clients apply.
+//
+// A theme is a preset (`desk`, `desk-dark`) or a custom theme document: a
+// small set of semantic values (appearance, nine colours, a base radius and
+// two bundled fonts) from which the platform derives every other token. The
+// instance has one theme for light appearance and one for dark, and a mode
+// that picks between them. See DESIGN.md "Themes".
 service ThemeService {
   rpc GetTheme(GetThemeRequest) returns (GetThemeResponse);
   rpc SetTheme(SetThemeRequest) returns (SetThemeResponse);
+  // Back to the `desk` and `desk-dark` presets, light mode and the default
+  // accent, in one change; dock labels are kept.
+  rpc ResetTheme(ResetThemeRequest) returns (ResetThemeResponse);
+  // Every built-in theme, as a document.
+  rpc ListThemePresets(ListThemePresetsRequest) returns (ListThemePresetsResponse);
+  // Checks a theme document without saving anything.
+  rpc ValidateTheme(ValidateThemeRequest) returns (ValidateThemeResponse);
 }
 
 // One accent the instance can choose.
@@ -17,8 +31,21 @@ message Accent {
   string color = 2;
 }
 
+// The theme used for one appearance: a preset, or a custom document.
+message ThemeChoice {
+  // `light` or `dark`.
+  string appearance = 1;
+  // The preset's name; empty for a custom theme.
+  string preset = 2;
+  // The custom theme document; unset for a preset.
+  google.protobuf.Struct custom = 3;
+  // The theme's display name: the preset's or the document's `name`.
+  string name = 4;
+}
+
 message ThemeState {
-  // Name of the chosen accent.
+  // Name of the chosen accent; empty when no accent is chosen and each
+  // theme's own `primary` shows.
   string accent = 1;
   // The accent used while none has been chosen.
   string default_accent = 2;
@@ -27,12 +54,60 @@ message ThemeState {
   // Whether the web dock shows each tile's name under it. Off by default;
   // the full name always shows on hover.
   bool dock_labels = 4;
+  // `light`, `dark` or `system` (each client follows its device).
+  string mode = 5;
+  // The theme drawn in light appearance.
+  ThemeChoice light = 6;
+  // The theme drawn in dark appearance.
+  ThemeChoice dark = 7;
 }
 
-message GetThemeRequest {}
+// A ten-shade ramp, from the surface (0) to the ink (9); 6 is the fill.
+message ColorRamp {
+  repeated string shades = 1;
+}
+
+// Every token of one theme, ready to apply. Clients do not derive tokens.
+message ResolvedTheme {
+  // `light` or `dark`.
+  string appearance = 1;
+  // The preset's name, or the custom document's name.
+  string name = 2;
+  // `preset` or `custom`.
+  string source = 3;
+  // Every colour role by name (`background`, `primary-foreground`,
+  // `surface-panel`, `hairline`, ...): #RRGGBB or rgba(r, g, b, a).
+  map<string, string> colors = 4;
+  // `primary`, `neutral` and each status hue.
+  map<string, ColorRamp> ramps = 5;
+  // Each radius in px by name (`xs` ... `dock`).
+  map<string, int32> radius = 6;
+  // `sans` and `mono`: a bundled face, or `system`.
+  map<string, string> fonts = 7;
+  // CSS box-shadow values by name (`card`, `dock`, `window`).
+  map<string, string> shadows = 8;
+}
+
+message GetThemeRequest {
+  // Appearances to resolve, each at most once. Empty resolves none.
+  repeated string resolve = 1 [(buf.validate.field).repeated = {
+    max_items: 2
+    unique: true
+    items: {
+      string: {
+        in: [
+          "light",
+          "dark"
+        ]
+      }
+    }
+  }];
+}
 
 message GetThemeResponse {
   ThemeState theme = 1;
+  // One per requested appearance, in request order, with the accent applied.
+  repeated ResolvedTheme resolved = 2;
 }
 
 // Changes the fields it sets and keeps the others; set at least one.
@@ -45,14 +120,99 @@ message SetThemeRequest {
   }];
   // Whether the web dock shows each tile's name under it.
   optional bool dock_labels = 2;
+  // Clears the accent, so each theme's own `primary` shows.
+  bool clear_accent = 3;
+  // `light`, `dark` or `system`.
+  optional string mode = 4 [(buf.validate.field).string = {
+    in: [
+      "light",
+      "dark",
+      "system"
+    ]
+  }];
+  // The appearance `preset` or `custom` applies to: `light` or `dark`.
+  optional string appearance = 5 [(buf.validate.field).string = {
+    in: [
+      "light",
+      "dark"
+    ]
+  }];
+  // A preset for `appearance`; clears that appearance's custom theme.
+  optional string preset = 6 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 32
+    pattern: "^[a-z][a-z0-9-]*$"
+  }];
+  // A custom theme document that replaces `appearance`'s theme whole. Its
+  // own `appearance` must match.
+  google.protobuf.Struct custom = 7;
 
   option (buf.validate.message).cel = {
     id: "set_theme.field"
-    message: "set accent or dock_labels"
-    expression: "has(this.accent) || has(this.dock_labels)"
+    message: "set accent, clear_accent, dock_labels, mode, or appearance with preset or custom"
+    expression: "has(this.accent) || this.clear_accent || has(this.dock_labels) || has(this.mode) || has(this.appearance)"
+  };
+  option (buf.validate.message).cel = {
+    id: "set_theme.accent_conflict"
+    message: "set accent or clear_accent, not both"
+    expression: "!(has(this.accent) && this.clear_accent)"
+  };
+  option (buf.validate.message).cel = {
+    id: "set_theme.theme"
+    message: "appearance needs exactly one of preset and custom, and each needs appearance"
+    expression: "has(this.appearance) ? (has(this.preset) != has(this.custom)) : (!has(this.preset) && !has(this.custom))"
   };
 }
 
 message SetThemeResponse {
   ThemeState theme = 1;
+}
+
+message ResetThemeRequest {}
+
+message ResetThemeResponse {
+  ThemeState theme = 1;
+}
+
+message ThemePreset {
+  string name = 1;
+  // `light` or `dark`.
+  string appearance = 2;
+  // The preset as a theme document (a starting point for a custom theme).
+  google.protobuf.Struct document = 3;
+}
+
+message ListThemePresetsRequest {}
+
+message ListThemePresetsResponse {
+  repeated ThemePreset presets = 1;
+}
+
+// One reason a theme document was rejected.
+message ThemeProblem {
+  // `invalid_document`, `unknown_key`, `missing_key`, `invalid_color`,
+  // `invalid_value`, `unknown_font` or `low_contrast`.
+  string code = 1;
+  // Dotted path of the key at fault (`colors.primary`); empty for contrast.
+  string path = 2;
+  string message = 3;
+  // For `low_contrast`: the text role, the surface role and the ratio.
+  string foreground = 4;
+  string background = 5;
+  double ratio = 6;
+  double required_ratio = 7;
+}
+
+message ValidateThemeRequest {
+  google.protobuf.Struct document = 1 [(buf.validate.field).required = true];
+  // Also check the document with the instance's current accent, the way it
+  // would be drawn now.
+  bool with_current_accent = 2;
+}
+
+message ValidateThemeResponse {
+  bool ok = 1;
+  repeated ThemeProblem problems = 2;
+  // The resolved theme when the document is valid.
+  ResolvedTheme resolved = 3;
 }

@@ -5,10 +5,12 @@ import { AppError } from '~server/errors';
 import { RunTokenError } from '~server/agent-runner/run-auth';
 import { DataMigrationApprovalRequired } from '~server/apps/data-table/migration-errors';
 import { AppManifestValidationError } from '~server/apps/manifest-validation';
+import { ThemeValidationError } from '~server/theme-settings';
 
 const definitions = {
   BAD_REQUEST: [Code.InvalidArgument, 400, 'Invalid request.'],
   APP_MANIFEST_INVALID: [Code.InvalidArgument, 400, 'App manifest is invalid.'],
+  THEME_INVALID: [Code.InvalidArgument, 400, 'Theme is invalid.'],
   UNAUTHORIZED: [Code.Unauthenticated, 401, 'Authentication required.'],
   INVALID_TOKEN: [Code.Unauthenticated, 401, 'Invalid Run credential.'],
   RUN_ENDED: [Code.Unauthenticated, 401, 'Run is no longer live.'],
@@ -62,6 +64,12 @@ export function publicError(
   if (error instanceof AppManifestValidationError)
     return publicApiError(
       'APP_MANIFEST_INVALID',
+      redactDomain ? undefined : error.message,
+    );
+  // Its message names theme keys and colour roles, never other input.
+  if (error instanceof ThemeValidationError)
+    return publicApiError(
+      'THEME_INVALID',
       redactDomain ? undefined : error.message,
     );
   if (error instanceof AppError && error.status === 504)

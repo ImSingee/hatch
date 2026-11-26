@@ -13,7 +13,8 @@ import {
   serviceDesc,
 } from '@bufbuild/protobuf/codegenv2';
 import { file_buf_validate_validate } from '@bufbuild/protovalidate/gen/buf/validate/validate_pb.js';
-import type { Message } from '@bufbuild/protobuf';
+import { file_google_protobuf_struct } from '@bufbuild/protobuf/wkt';
+import type { JsonObject, Message } from '@bufbuild/protobuf';
 
 /**
  * Describes the file hatch/platform/v1/theme.proto.
@@ -21,8 +22,8 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_theme: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ch1oYXRjaC9wbGF0Zm9ybS92MS90aGVtZS5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiJQoGQWNjZW50EgwKBG5hbWUYASABKAkSDQoFY29sb3IYAiABKAkidQoKVGhlbWVTdGF0ZRIOCgZhY2NlbnQYASABKAkSFgoOZGVmYXVsdF9hY2NlbnQYAiABKAkSKgoHYWNjZW50cxgDIAMoCzIZLmhhdGNoLnBsYXRmb3JtLnYxLkFjY2VudBITCgtkb2NrX2xhYmVscxgEIAEoCCIRCg9HZXRUaGVtZVJlcXVlc3QiQAoQR2V0VGhlbWVSZXNwb25zZRIsCgV0aGVtZRgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLlRoZW1lU3RhdGUi1wEKD1NldFRoZW1lUmVxdWVzdBIxCgZhY2NlbnQYASABKAlCHLpIGXIXEAEYIDIRXlthLXpdW2EtejAtOS1dKiRIAIgBARIYCgtkb2NrX2xhYmVscxgCIAEoCEgBiAEBOly6SFkaVwoPc2V0X3RoZW1lLmZpZWxkEhlzZXQgYWNjZW50IG9yIGRvY2tfbGFiZWxzGiloYXModGhpcy5hY2NlbnQpIHx8IGhhcyh0aGlzLmRvY2tfbGFiZWxzKUIJCgdfYWNjZW50Qg4KDF9kb2NrX2xhYmVscyJAChBTZXRUaGVtZVJlc3BvbnNlEiwKBXRoZW1lGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuVGhlbWVTdGF0ZTK4AQoMVGhlbWVTZXJ2aWNlElMKCEdldFRoZW1lEiIuaGF0Y2gucGxhdGZvcm0udjEuR2V0VGhlbWVSZXF1ZXN0GiMuaGF0Y2gucGxhdGZvcm0udjEuR2V0VGhlbWVSZXNwb25zZRJTCghTZXRUaGVtZRIiLmhhdGNoLnBsYXRmb3JtLnYxLlNldFRoZW1lUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLlNldFRoZW1lUmVzcG9uc2ViBnByb3RvMw',
-    [file_buf_validate_validate],
+    'Ch1oYXRjaC9wbGF0Zm9ybS92MS90aGVtZS5wcm90bxIRaGF0Y2gucGxhdGZvcm0udjEiJQoGQWNjZW50EgwKBG5hbWUYASABKAkSDQoFY29sb3IYAiABKAkiaAoLVGhlbWVDaG9pY2USEgoKYXBwZWFyYW5jZRgBIAEoCRIOCgZwcmVzZXQYAiABKAkSJwoGY3VzdG9tGAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdBIMCgRuYW1lGAQgASgJIuABCgpUaGVtZVN0YXRlEg4KBmFjY2VudBgBIAEoCRIWCg5kZWZhdWx0X2FjY2VudBgCIAEoCRIqCgdhY2NlbnRzGAMgAygLMhkuaGF0Y2gucGxhdGZvcm0udjEuQWNjZW50EhMKC2RvY2tfbGFiZWxzGAQgASgIEgwKBG1vZGUYBSABKAkSLQoFbGlnaHQYBiABKAsyHi5oYXRjaC5wbGF0Zm9ybS52MS5UaGVtZUNob2ljZRIsCgRkYXJrGAcgASgLMh4uaGF0Y2gucGxhdGZvcm0udjEuVGhlbWVDaG9pY2UiGwoJQ29sb3JSYW1wEg4KBnNoYWRlcxgBIAMoCSL9BAoNUmVzb2x2ZWRUaGVtZRISCgphcHBlYXJhbmNlGAEgASgJEgwKBG5hbWUYAiABKAkSDgoGc291cmNlGAMgASgJEjwKBmNvbG9ycxgEIAMoCzIsLmhhdGNoLnBsYXRmb3JtLnYxLlJlc29sdmVkVGhlbWUuQ29sb3JzRW50cnkSOgoFcmFtcHMYBSADKAsyKy5oYXRjaC5wbGF0Zm9ybS52MS5SZXNvbHZlZFRoZW1lLlJhbXBzRW50cnkSPAoGcmFkaXVzGAYgAygLMiwuaGF0Y2gucGxhdGZvcm0udjEuUmVzb2x2ZWRUaGVtZS5SYWRpdXNFbnRyeRI6CgVmb250cxgHIAMoCzIrLmhhdGNoLnBsYXRmb3JtLnYxLlJlc29sdmVkVGhlbWUuRm9udHNFbnRyeRI+CgdzaGFkb3dzGAggAygLMi0uaGF0Y2gucGxhdGZvcm0udjEuUmVzb2x2ZWRUaGVtZS5TaGFkb3dzRW50cnkaLQoLQ29sb3JzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ARpKCgpSYW1wc0VudHJ5EgsKA2tleRgBIAEoCRIrCgV2YWx1ZRgCIAEoCzIcLmhhdGNoLnBsYXRmb3JtLnYxLkNvbG9yUmFtcDoCOAEaLQoLUmFkaXVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgFOgI4ARosCgpGb250c0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEaLgoMU2hhZG93c0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiPwoPR2V0VGhlbWVSZXF1ZXN0EiwKB3Jlc29sdmUYASADKAlCG7pIGJIBFRACGAEiD3INUgVsaWdodFIEZGFyayJ0ChBHZXRUaGVtZVJlc3BvbnNlEiwKBXRoZW1lGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuVGhlbWVTdGF0ZRIyCghyZXNvbHZlZBgCIAMoCzIgLmhhdGNoLnBsYXRmb3JtLnYxLlJlc29sdmVkVGhlbWUi+gYKD1NldFRoZW1lUmVxdWVzdBIxCgZhY2NlbnQYASABKAlCHLpIGXIXEAEYIDIRXlthLXpdW2EtejAtOS1dKiRIAIgBARIYCgtkb2NrX2xhYmVscxgCIAEoCEgBiAEBEhQKDGNsZWFyX2FjY2VudBgDIAEoCBItCgRtb2RlGAQgASgJQhq6SBdyFVIFbGlnaHRSBGRhcmtSBnN5c3RlbUgCiAEBEisKCmFwcGVhcmFuY2UYBSABKAlCErpID3INUgVsaWdodFIEZGFya0gDiAEBEjEKBnByZXNldBgGIAEoCUIcukgZchcQARggMhFeW2Etel1bYS16MC05LV0qJEgEiAEBEicKBmN1c3RvbRgHIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3Q6jQS6SIkEGs0BCg9zZXRfdGhlbWUuZmllbGQSUHNldCBhY2NlbnQsIGNsZWFyX2FjY2VudCwgZG9ja19sYWJlbHMsIG1vZGUsIG9yIGFwcGVhcmFuY2Ugd2l0aCBwcmVzZXQgb3IgY3VzdG9tGmhoYXModGhpcy5hY2NlbnQpIHx8IHRoaXMuY2xlYXJfYWNjZW50IHx8IGhhcyh0aGlzLmRvY2tfbGFiZWxzKSB8fCBoYXModGhpcy5tb2RlKSB8fCBoYXModGhpcy5hcHBlYXJhbmNlKRprChlzZXRfdGhlbWUuYWNjZW50X2NvbmZsaWN0EiRzZXQgYWNjZW50IG9yIGNsZWFyX2FjY2VudCwgbm90IGJvdGgaKCEoaGFzKHRoaXMuYWNjZW50KSAmJiB0aGlzLmNsZWFyX2FjY2VudCkayQEKD3NldF90aGVtZS50aGVtZRJMYXBwZWFyYW5jZSBuZWVkcyBleGFjdGx5IG9uZSBvZiBwcmVzZXQgYW5kIGN1c3RvbSwgYW5kIGVhY2ggbmVlZHMgYXBwZWFyYW5jZRpoaGFzKHRoaXMuYXBwZWFyYW5jZSkgPyAoaGFzKHRoaXMucHJlc2V0KSAhPSBoYXModGhpcy5jdXN0b20pKSA6ICghaGFzKHRoaXMucHJlc2V0KSAmJiAhaGFzKHRoaXMuY3VzdG9tKSlCCQoHX2FjY2VudEIOCgxfZG9ja19sYWJlbHNCBwoFX21vZGVCDQoLX2FwcGVhcmFuY2VCCQoHX3ByZXNldCJAChBTZXRUaGVtZVJlc3BvbnNlEiwKBXRoZW1lGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuVGhlbWVTdGF0ZSITChFSZXNldFRoZW1lUmVxdWVzdCJCChJSZXNldFRoZW1lUmVzcG9uc2USLAoFdGhlbWUYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5UaGVtZVN0YXRlIloKC1RoZW1lUHJlc2V0EgwKBG5hbWUYASABKAkSEgoKYXBwZWFyYW5jZRgCIAEoCRIpCghkb2N1bWVudBgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiGQoXTGlzdFRoZW1lUHJlc2V0c1JlcXVlc3QiSwoYTGlzdFRoZW1lUHJlc2V0c1Jlc3BvbnNlEi8KB3ByZXNldHMYASADKAsyHi5oYXRjaC5wbGF0Zm9ybS52MS5UaGVtZVByZXNldCKKAQoMVGhlbWVQcm9ibGVtEgwKBGNvZGUYASABKAkSDAoEcGF0aBgCIAEoCRIPCgdtZXNzYWdlGAMgASgJEhIKCmZvcmVncm91bmQYBCABKAkSEgoKYmFja2dyb3VuZBgFIAEoCRINCgVyYXRpbxgGIAEoARIWCg5yZXF1aXJlZF9yYXRpbxgHIAEoASJmChRWYWxpZGF0ZVRoZW1lUmVxdWVzdBIxCghkb2N1bWVudBgBIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RCBrpIA8gBARIbChN3aXRoX2N1cnJlbnRfYWNjZW50GAIgASgIIooBChVWYWxpZGF0ZVRoZW1lUmVzcG9uc2USCgoCb2sYASABKAgSMQoIcHJvYmxlbXMYAiADKAsyHy5oYXRjaC5wbGF0Zm9ybS52MS5UaGVtZVByb2JsZW0SMgoIcmVzb2x2ZWQYAyABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5SZXNvbHZlZFRoZW1lMuQDCgxUaGVtZVNlcnZpY2USUwoIR2V0VGhlbWUSIi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRUaGVtZVJlcXVlc3QaIy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRUaGVtZVJlc3BvbnNlElMKCFNldFRoZW1lEiIuaGF0Y2gucGxhdGZvcm0udjEuU2V0VGhlbWVSZXF1ZXN0GiMuaGF0Y2gucGxhdGZvcm0udjEuU2V0VGhlbWVSZXNwb25zZRJZCgpSZXNldFRoZW1lEiQuaGF0Y2gucGxhdGZvcm0udjEuUmVzZXRUaGVtZVJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5SZXNldFRoZW1lUmVzcG9uc2USawoQTGlzdFRoZW1lUHJlc2V0cxIqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RUaGVtZVByZXNldHNSZXF1ZXN0GisuaGF0Y2gucGxhdGZvcm0udjEuTGlzdFRoZW1lUHJlc2V0c1Jlc3BvbnNlEmIKDVZhbGlkYXRlVGhlbWUSJy5oYXRjaC5wbGF0Zm9ybS52MS5WYWxpZGF0ZVRoZW1lUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLlZhbGlkYXRlVGhlbWVSZXNwb25zZWIGcHJvdG8z',
+    [file_buf_validate_validate, file_google_protobuf_struct],
   );
 
 /**
@@ -53,11 +54,55 @@ export const AccentSchema: GenMessage<Accent> =
   messageDesc(file_hatch_platform_v1_theme, 0);
 
 /**
+ * The theme used for one appearance: a preset, or a custom document.
+ *
+ * @generated from message hatch.platform.v1.ThemeChoice
+ */
+export type ThemeChoice = Message<'hatch.platform.v1.ThemeChoice'> & {
+  /**
+   * `light` or `dark`.
+   *
+   * @generated from field: string appearance = 1;
+   */
+  appearance: string;
+
+  /**
+   * The preset's name; empty for a custom theme.
+   *
+   * @generated from field: string preset = 2;
+   */
+  preset: string;
+
+  /**
+   * The custom theme document; unset for a preset.
+   *
+   * @generated from field: google.protobuf.Struct custom = 3;
+   */
+  custom?: JsonObject | undefined;
+
+  /**
+   * The theme's display name: the preset's or the document's `name`.
+   *
+   * @generated from field: string name = 4;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message hatch.platform.v1.ThemeChoice.
+ * Use `create(ThemeChoiceSchema)` to create a new message.
+ */
+export const ThemeChoiceSchema: GenMessage<ThemeChoice> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 1);
+
+/**
  * @generated from message hatch.platform.v1.ThemeState
  */
 export type ThemeState = Message<'hatch.platform.v1.ThemeState'> & {
   /**
-   * Name of the chosen accent.
+   * Name of the chosen accent; empty when no accent is chosen and each
+   * theme's own `primary` shows.
    *
    * @generated from field: string accent = 1;
    */
@@ -84,6 +129,27 @@ export type ThemeState = Message<'hatch.platform.v1.ThemeState'> & {
    * @generated from field: bool dock_labels = 4;
    */
   dockLabels: boolean;
+
+  /**
+   * `light`, `dark` or `system` (each client follows its device).
+   *
+   * @generated from field: string mode = 5;
+   */
+  mode: string;
+
+  /**
+   * The theme drawn in light appearance.
+   *
+   * @generated from field: hatch.platform.v1.ThemeChoice light = 6;
+   */
+  light?: ThemeChoice | undefined;
+
+  /**
+   * The theme drawn in dark appearance.
+   *
+   * @generated from field: hatch.platform.v1.ThemeChoice dark = 7;
+   */
+  dark?: ThemeChoice | undefined;
 };
 
 /**
@@ -92,12 +158,111 @@ export type ThemeState = Message<'hatch.platform.v1.ThemeState'> & {
  */
 export const ThemeStateSchema: GenMessage<ThemeState> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_theme, 1);
+  messageDesc(file_hatch_platform_v1_theme, 2);
+
+/**
+ * A ten-shade ramp, from the surface (0) to the ink (9); 6 is the fill.
+ *
+ * @generated from message hatch.platform.v1.ColorRamp
+ */
+export type ColorRamp = Message<'hatch.platform.v1.ColorRamp'> & {
+  /**
+   * @generated from field: repeated string shades = 1;
+   */
+  shades: string[];
+};
+
+/**
+ * Describes the message hatch.platform.v1.ColorRamp.
+ * Use `create(ColorRampSchema)` to create a new message.
+ */
+export const ColorRampSchema: GenMessage<ColorRamp> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 3);
+
+/**
+ * Every token of one theme, ready to apply. Clients do not derive tokens.
+ *
+ * @generated from message hatch.platform.v1.ResolvedTheme
+ */
+export type ResolvedTheme = Message<'hatch.platform.v1.ResolvedTheme'> & {
+  /**
+   * `light` or `dark`.
+   *
+   * @generated from field: string appearance = 1;
+   */
+  appearance: string;
+
+  /**
+   * The preset's name, or the custom document's name.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * `preset` or `custom`.
+   *
+   * @generated from field: string source = 3;
+   */
+  source: string;
+
+  /**
+   * Every colour role by name (`background`, `primary-foreground`,
+   * `surface-panel`, `hairline`, ...): #RRGGBB or rgba(r, g, b, a).
+   *
+   * @generated from field: map<string, string> colors = 4;
+   */
+  colors: { [key: string]: string };
+
+  /**
+   * `primary`, `neutral` and each status hue.
+   *
+   * @generated from field: map<string, hatch.platform.v1.ColorRamp> ramps = 5;
+   */
+  ramps: { [key: string]: ColorRamp };
+
+  /**
+   * Each radius in px by name (`xs` ... `dock`).
+   *
+   * @generated from field: map<string, int32> radius = 6;
+   */
+  radius: { [key: string]: number };
+
+  /**
+   * `sans` and `mono`: a bundled face, or `system`.
+   *
+   * @generated from field: map<string, string> fonts = 7;
+   */
+  fonts: { [key: string]: string };
+
+  /**
+   * CSS box-shadow values by name (`card`, `dock`, `window`).
+   *
+   * @generated from field: map<string, string> shadows = 8;
+   */
+  shadows: { [key: string]: string };
+};
+
+/**
+ * Describes the message hatch.platform.v1.ResolvedTheme.
+ * Use `create(ResolvedThemeSchema)` to create a new message.
+ */
+export const ResolvedThemeSchema: GenMessage<ResolvedTheme> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 4);
 
 /**
  * @generated from message hatch.platform.v1.GetThemeRequest
  */
-export type GetThemeRequest = Message<'hatch.platform.v1.GetThemeRequest'> & {};
+export type GetThemeRequest = Message<'hatch.platform.v1.GetThemeRequest'> & {
+  /**
+   * Appearances to resolve, each at most once. Empty resolves none.
+   *
+   * @generated from field: repeated string resolve = 1;
+   */
+  resolve: string[];
+};
 
 /**
  * Describes the message hatch.platform.v1.GetThemeRequest.
@@ -105,7 +270,7 @@ export type GetThemeRequest = Message<'hatch.platform.v1.GetThemeRequest'> & {};
  */
 export const GetThemeRequestSchema: GenMessage<GetThemeRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_theme, 2);
+  messageDesc(file_hatch_platform_v1_theme, 5);
 
 /**
  * @generated from message hatch.platform.v1.GetThemeResponse
@@ -115,6 +280,13 @@ export type GetThemeResponse = Message<'hatch.platform.v1.GetThemeResponse'> & {
    * @generated from field: hatch.platform.v1.ThemeState theme = 1;
    */
   theme?: ThemeState | undefined;
+
+  /**
+   * One per requested appearance, in request order, with the accent applied.
+   *
+   * @generated from field: repeated hatch.platform.v1.ResolvedTheme resolved = 2;
+   */
+  resolved: ResolvedTheme[];
 };
 
 /**
@@ -123,7 +295,7 @@ export type GetThemeResponse = Message<'hatch.platform.v1.GetThemeResponse'> & {
  */
 export const GetThemeResponseSchema: GenMessage<GetThemeResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_theme, 3);
+  messageDesc(file_hatch_platform_v1_theme, 6);
 
 /**
  * Changes the fields it sets and keeps the others; set at least one.
@@ -144,6 +316,42 @@ export type SetThemeRequest = Message<'hatch.platform.v1.SetThemeRequest'> & {
    * @generated from field: optional bool dock_labels = 2;
    */
   dockLabels?: boolean | undefined;
+
+  /**
+   * Clears the accent, so each theme's own `primary` shows.
+   *
+   * @generated from field: bool clear_accent = 3;
+   */
+  clearAccent: boolean;
+
+  /**
+   * `light`, `dark` or `system`.
+   *
+   * @generated from field: optional string mode = 4;
+   */
+  mode?: string | undefined;
+
+  /**
+   * The appearance `preset` or `custom` applies to: `light` or `dark`.
+   *
+   * @generated from field: optional string appearance = 5;
+   */
+  appearance?: string | undefined;
+
+  /**
+   * A preset for `appearance`; clears that appearance's custom theme.
+   *
+   * @generated from field: optional string preset = 6;
+   */
+  preset?: string | undefined;
+
+  /**
+   * A custom theme document that replaces `appearance`'s theme whole. Its
+   * own `appearance` must match.
+   *
+   * @generated from field: google.protobuf.Struct custom = 7;
+   */
+  custom?: JsonObject | undefined;
 };
 
 /**
@@ -152,7 +360,7 @@ export type SetThemeRequest = Message<'hatch.platform.v1.SetThemeRequest'> & {
  */
 export const SetThemeRequestSchema: GenMessage<SetThemeRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_theme, 4);
+  messageDesc(file_hatch_platform_v1_theme, 7);
 
 /**
  * @generated from message hatch.platform.v1.SetThemeResponse
@@ -170,10 +378,229 @@ export type SetThemeResponse = Message<'hatch.platform.v1.SetThemeResponse'> & {
  */
 export const SetThemeResponseSchema: GenMessage<SetThemeResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_theme, 5);
+  messageDesc(file_hatch_platform_v1_theme, 8);
+
+/**
+ * @generated from message hatch.platform.v1.ResetThemeRequest
+ */
+export type ResetThemeRequest =
+  Message<'hatch.platform.v1.ResetThemeRequest'> & {};
+
+/**
+ * Describes the message hatch.platform.v1.ResetThemeRequest.
+ * Use `create(ResetThemeRequestSchema)` to create a new message.
+ */
+export const ResetThemeRequestSchema: GenMessage<ResetThemeRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 9);
+
+/**
+ * @generated from message hatch.platform.v1.ResetThemeResponse
+ */
+export type ResetThemeResponse =
+  Message<'hatch.platform.v1.ResetThemeResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.ThemeState theme = 1;
+     */
+    theme?: ThemeState | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ResetThemeResponse.
+ * Use `create(ResetThemeResponseSchema)` to create a new message.
+ */
+export const ResetThemeResponseSchema: GenMessage<ResetThemeResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 10);
+
+/**
+ * @generated from message hatch.platform.v1.ThemePreset
+ */
+export type ThemePreset = Message<'hatch.platform.v1.ThemePreset'> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * `light` or `dark`.
+   *
+   * @generated from field: string appearance = 2;
+   */
+  appearance: string;
+
+  /**
+   * The preset as a theme document (a starting point for a custom theme).
+   *
+   * @generated from field: google.protobuf.Struct document = 3;
+   */
+  document?: JsonObject | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.ThemePreset.
+ * Use `create(ThemePresetSchema)` to create a new message.
+ */
+export const ThemePresetSchema: GenMessage<ThemePreset> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 11);
+
+/**
+ * @generated from message hatch.platform.v1.ListThemePresetsRequest
+ */
+export type ListThemePresetsRequest =
+  Message<'hatch.platform.v1.ListThemePresetsRequest'> & {};
+
+/**
+ * Describes the message hatch.platform.v1.ListThemePresetsRequest.
+ * Use `create(ListThemePresetsRequestSchema)` to create a new message.
+ */
+export const ListThemePresetsRequestSchema: GenMessage<ListThemePresetsRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 12);
+
+/**
+ * @generated from message hatch.platform.v1.ListThemePresetsResponse
+ */
+export type ListThemePresetsResponse =
+  Message<'hatch.platform.v1.ListThemePresetsResponse'> & {
+    /**
+     * @generated from field: repeated hatch.platform.v1.ThemePreset presets = 1;
+     */
+    presets: ThemePreset[];
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListThemePresetsResponse.
+ * Use `create(ListThemePresetsResponseSchema)` to create a new message.
+ */
+export const ListThemePresetsResponseSchema: GenMessage<ListThemePresetsResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 13);
+
+/**
+ * One reason a theme document was rejected.
+ *
+ * @generated from message hatch.platform.v1.ThemeProblem
+ */
+export type ThemeProblem = Message<'hatch.platform.v1.ThemeProblem'> & {
+  /**
+   * `invalid_document`, `unknown_key`, `missing_key`, `invalid_color`,
+   * `invalid_value`, `unknown_font` or `low_contrast`.
+   *
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * Dotted path of the key at fault (`colors.primary`); empty for contrast.
+   *
+   * @generated from field: string path = 2;
+   */
+  path: string;
+
+  /**
+   * @generated from field: string message = 3;
+   */
+  message: string;
+
+  /**
+   * For `low_contrast`: the text role, the surface role and the ratio.
+   *
+   * @generated from field: string foreground = 4;
+   */
+  foreground: string;
+
+  /**
+   * @generated from field: string background = 5;
+   */
+  background: string;
+
+  /**
+   * @generated from field: double ratio = 6;
+   */
+  ratio: number;
+
+  /**
+   * @generated from field: double required_ratio = 7;
+   */
+  requiredRatio: number;
+};
+
+/**
+ * Describes the message hatch.platform.v1.ThemeProblem.
+ * Use `create(ThemeProblemSchema)` to create a new message.
+ */
+export const ThemeProblemSchema: GenMessage<ThemeProblem> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 14);
+
+/**
+ * @generated from message hatch.platform.v1.ValidateThemeRequest
+ */
+export type ValidateThemeRequest =
+  Message<'hatch.platform.v1.ValidateThemeRequest'> & {
+    /**
+     * @generated from field: google.protobuf.Struct document = 1;
+     */
+    document?: JsonObject | undefined;
+
+    /**
+     * Also check the document with the instance's current accent, the way it
+     * would be drawn now.
+     *
+     * @generated from field: bool with_current_accent = 2;
+     */
+    withCurrentAccent: boolean;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ValidateThemeRequest.
+ * Use `create(ValidateThemeRequestSchema)` to create a new message.
+ */
+export const ValidateThemeRequestSchema: GenMessage<ValidateThemeRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 15);
+
+/**
+ * @generated from message hatch.platform.v1.ValidateThemeResponse
+ */
+export type ValidateThemeResponse =
+  Message<'hatch.platform.v1.ValidateThemeResponse'> & {
+    /**
+     * @generated from field: bool ok = 1;
+     */
+    ok: boolean;
+
+    /**
+     * @generated from field: repeated hatch.platform.v1.ThemeProblem problems = 2;
+     */
+    problems: ThemeProblem[];
+
+    /**
+     * The resolved theme when the document is valid.
+     *
+     * @generated from field: hatch.platform.v1.ResolvedTheme resolved = 3;
+     */
+    resolved?: ResolvedTheme | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ValidateThemeResponse.
+ * Use `create(ValidateThemeResponseSchema)` to create a new message.
+ */
+export const ValidateThemeResponseSchema: GenMessage<ValidateThemeResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_theme, 16);
 
 /**
  * The instance-wide look that the web, mobile and desktop clients apply.
+ *
+ * A theme is a preset (`desk`, `desk-dark`) or a custom theme document: a
+ * small set of semantic values (appearance, nine colours, a base radius and
+ * two bundled fonts) from which the platform derives every other token. The
+ * instance has one theme for light appearance and one for dark, and a mode
+ * that picks between them. See DESIGN.md "Themes".
  *
  * @generated from service hatch.platform.v1.ThemeService
  */
@@ -193,5 +620,36 @@ export const ThemeService: GenService<{
     methodKind: 'unary';
     input: typeof SetThemeRequestSchema;
     output: typeof SetThemeResponseSchema;
+  };
+  /**
+   * Back to the `desk` and `desk-dark` presets, light mode and the default
+   * accent, in one change; dock labels are kept.
+   *
+   * @generated from rpc hatch.platform.v1.ThemeService.ResetTheme
+   */
+  resetTheme: {
+    methodKind: 'unary';
+    input: typeof ResetThemeRequestSchema;
+    output: typeof ResetThemeResponseSchema;
+  };
+  /**
+   * Every built-in theme, as a document.
+   *
+   * @generated from rpc hatch.platform.v1.ThemeService.ListThemePresets
+   */
+  listThemePresets: {
+    methodKind: 'unary';
+    input: typeof ListThemePresetsRequestSchema;
+    output: typeof ListThemePresetsResponseSchema;
+  };
+  /**
+   * Checks a theme document without saving anything.
+   *
+   * @generated from rpc hatch.platform.v1.ThemeService.ValidateTheme
+   */
+  validateTheme: {
+    methodKind: 'unary';
+    input: typeof ValidateThemeRequestSchema;
+    output: typeof ValidateThemeResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_theme, 0);
