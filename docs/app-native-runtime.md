@@ -5,8 +5,7 @@ frontend is NSH TSX ([nsh.dev](https://nsh.dev)) instead of a React page; the
 backend, proto, Data Tables, widgets and the rest of the manifest are the same
 as for a `web` App. This document is the contract for anyone writing a shell
 that runs these Apps (the web player today; the iOS, Android and macOS shells
-later) and for the UI library that Apps import. The plan behind it is
-[native-app-ui-plan.md](native-app-ui-plan.md).
+later) and for the UI library that Apps import.
 
 ## Manifest
 
