@@ -345,7 +345,36 @@ vi.mock('./data-table/provision', () => ({
   },
 }));
 
-import { deployApp, reconcilePendingAppActivations } from './deploy';
+import { reconcilePendingAppActivations, releaseDeployment } from './deploy';
+import type { BuildResult } from './build';
+
+let deploymentSeq = 0;
+
+/** Release a deployment whose artifact the mocked build writes. */
+function deployApp(
+  id: string,
+  options: {
+    message: string;
+    commit?: string;
+    expectedGeneration?: string;
+    allowDestructiveDataMigration?: boolean;
+    dataMigrationApprovalToken?: string;
+  },
+) {
+  deploymentSeq += 1;
+  const deploymentId = `01kdeployrecovery${String(deploymentSeq).padStart(9, '0')}`;
+  return releaseDeployment(id, {
+    ...options,
+    deploymentId,
+    sourceCommit: options.commit ?? 'source-commit',
+    buildOrigin: 'builder',
+    produce: (outputDir) =>
+      mocks.buildApp(id, {
+        outputDir,
+        deploymentId,
+      }) as Promise<BuildResult>,
+  });
+}
 
 function appState(id: string, options: Partial<Row> = {}): Row {
   return {

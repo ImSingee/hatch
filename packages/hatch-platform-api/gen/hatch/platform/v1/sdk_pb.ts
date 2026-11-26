@@ -23,7 +23,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_sdk: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9zZGsucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIikKDUdldFNka1JlcXVlc3QSGAoEa2luZBgBIAEoCUIKukgHcgVSA2FwcCKIAQoHVG9vbGluZxITCgtidWZfdmVyc2lvbhgBIAEoCRIdChVwcm90b2NfZ2VuX2VzX3ZlcnNpb24YAiABKAkSGgoSdHlwZXNjcmlwdF92ZXJzaW9uGAMgASgJEhcKD2VzYnVpbGRfdmVyc2lvbhgEIAEoCRIUCgxwbnBtX3ZlcnNpb24YBSABKAkidgoOR2V0U2RrUmVzcG9uc2USJgoFZmlsZXMYASADKAsyFy5oYXRjaC5wbGF0Zm9ybS52MS5GaWxlEjAKB3Rvb2xpbmcYAiABKAsyGi5oYXRjaC5wbGF0Zm9ybS52MS5Ub29saW5nSACIAQFCCgoIX3Rvb2xpbmcyWwoKU2RrU2VydmljZRJNCgZHZXRTZGsSIC5oYXRjaC5wbGF0Zm9ybS52MS5HZXRTZGtSZXF1ZXN0GiEuaGF0Y2gucGxhdGZvcm0udjEuR2V0U2RrUmVzcG9uc2ViBnByb3RvMw',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9zZGsucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIikKDUdldFNka1JlcXVlc3QSGAoEa2luZBgBIAEoCUIKukgHcgVSA2FwcCK2AQoHVG9vbGluZxITCgtidWZfdmVyc2lvbhgBIAEoCRIdChVwcm90b2NfZ2VuX2VzX3ZlcnNpb24YAiABKAkSGgoSdHlwZXNjcmlwdF92ZXJzaW9uGAMgASgJEhcKD2VzYnVpbGRfdmVyc2lvbhgEIAEoCRIUCgxwbnBtX3ZlcnNpb24YBSABKAkSEwoLbnNoX3ZlcnNpb24YBiABKAkSFwoPYnVpbGRlcl9lbmFibGVkGAcgASgIInYKDkdldFNka1Jlc3BvbnNlEiYKBWZpbGVzGAEgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZRIwCgd0b29saW5nGAIgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuVG9vbGluZ0gAiAEBQgoKCF90b29saW5nMlsKClNka1NlcnZpY2USTQoGR2V0U2RrEiAuaGF0Y2gucGxhdGZvcm0udjEuR2V0U2RrUmVxdWVzdBohLmhhdGNoLnBsYXRmb3JtLnYxLkdldFNka1Jlc3BvbnNlYgZwcm90bzM',
     [file_buf_validate_validate, file_hatch_platform_v1_file],
   );
 
@@ -78,6 +78,20 @@ export type Tooling = Message<'hatch.platform.v1.Tooling'> & {
    * @generated from field: string pnpm_version = 5;
    */
   pnpmVersion: string;
+
+  /**
+   * Native (NSH) frontends. Empty on a platform that predates it.
+   *
+   * @generated from field: string nsh_version = 6;
+   */
+  nshVersion: string;
+
+  /**
+   * Whether the platform has a dedicated Builder for deployments.
+   *
+   * @generated from field: bool builder_enabled = 7;
+   */
+  builderEnabled: boolean;
 };
 
 /**

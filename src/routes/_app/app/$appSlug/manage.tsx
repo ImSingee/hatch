@@ -70,6 +70,7 @@ import { ApiPanel } from '~components/apps/api-panel';
 import { AppCompatibilityNotice } from '~components/apps/app-compatibility-notice';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { AppIconSettings } from '~components/apps/app-icon-settings';
+import { DeploymentActivity } from '~components/apps/deployment-activity';
 import { DeploymentHistory } from '~components/apps/deployment-history';
 import { DocsPanel } from '~components/apps/docs-panel';
 import { OperationsPanel } from '~components/apps/operations-panel';
@@ -394,6 +395,7 @@ function AppDetailPage() {
               {isArchived ? null : <DocsPanel appId={app.id} slug={app.slug} />}
             </Column>
             <Column basis={360}>
+              <DeploymentActivity appId={app.id} />
               <DeploymentHistory appId={app.id} />
             </Column>
           </Columns>

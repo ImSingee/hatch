@@ -1,9 +1,8 @@
-/** Server-only: build + record a deployment and flip the app live. */
+/** Server-only: record a built deployment and flip the app live. */
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
 import { resolveAppDeployCompatibilityVersion } from '~/app-compatibility';
 import {
   BUILD_WORK_DIR,
@@ -14,22 +13,17 @@ import {
 import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
 import { manifestInvalid } from './manifest-validation';
-import type { JsonObject } from '~/db/schema';
+import type { DeploymentBuildOrigin, JsonObject } from '~/db/schema';
 import { workspaceRelative } from '~server/deploy-lock';
 import { appDeployLock } from './deploy-lock';
 import { publishPlatformEvent } from '~server/platform-events';
 import { syncAppNotificationDestination } from '~server/notifications/app-destinations';
-import { buildApp, type BuildResult } from './build';
+import type { BuildResult } from './build';
 import {
   buildMatchesDeployment,
   liveBuildMatchesDeployment,
 } from './build-identity';
-import {
-  deleteDeploymentTag,
-  prepareDeployCheckout,
-  publishDeploymentSource,
-  resolveDeployCommit,
-} from './git';
+import { deleteDeploymentTag, publishDeploymentSource } from './git';
 import type { NormalizedManifest } from './manifest';
 import {
   beginAppDatabaseDeployment,
@@ -44,6 +38,14 @@ import {
 } from './data-table/migrate';
 import { appDataDbName, withAppDataCutoverLock } from './data-table/provision';
 
+/** The App was deleted or recreated after the deployment was requested. */
+export class ReleaseGenerationConflict extends AppError {
+  constructor() {
+    super('App was deleted or recreated while preparing the deploy.', 409);
+    this.name = 'ReleaseGenerationConflict';
+  }
+}
+
 export type DeployResult = {
   deploymentId: string;
   version: number;
@@ -52,17 +54,32 @@ export type DeployResult = {
   log: string;
 };
 
-export type DeployAppOptions = {
+export type ReleaseDeploymentOptions = {
+  /** The deployment id the artifact was built for. */
+  deploymentId: string;
+  /** The master commit the artifact was built from. */
+  sourceCommit: string;
   /** Reject if the immutable ID belongs to a recreated resource. */
   expectedGeneration?: string;
-  /** Commit to release; must be on master. Defaults to the master tip. */
-  commit?: string;
   /** Required release note recorded on the deployment (e.g. what changed). */
   message: string;
   /** Explicit acknowledgement required for destructive Data Table migrations. */
   allowDestructiveDataMigration?: boolean;
   /** Fingerprint returned by the exact destructive migration preview. */
   dataMigrationApprovalToken?: string;
+  /** Where the artifact was built, recorded on the deployment. */
+  buildOrigin: DeploymentBuildOrigin | null;
+  /**
+   * Write the deployment artifact to `outputDir` and describe it. Runs under
+   * the release locks, after crash recovery, so it must not run App code.
+   */
+  produce: (outputDir: string) => Promise<BuildResult>;
+  /**
+   * Called under the release locks once the artifact is accepted, before
+   * anything is changed; throwing stops the release (a cancellation or a
+   * newer release).
+   */
+  beforeRelease?: () => Promise<void>;
 };
 
 async function warmCommittedBackend(
@@ -466,22 +483,22 @@ export async function reconcilePendingAppActivations(): Promise<void> {
 }
 
 /**
- * Build + record a deployment and flip the app live. Serialized per app so two
- * concurrent deploys can't both read the same latest version, assign the same
+ * Record a built deployment and flip the app live. Serialized per app so two
+ * concurrent releases can't both read the same latest version, assign the same
  * next version, and force-move the same `deploy/v<n>` tag onto different commits.
  */
-export function deployApp(
+export function releaseDeployment(
   id: string,
-  options: DeployAppOptions,
+  options: ReleaseDeploymentOptions,
 ): Promise<DeployResult> {
   return appDeployLock.withLock(id, () =>
-    withAppDataCutoverLock(id, () => deployAppInner(id, options)),
+    withAppDataCutoverLock(id, () => releaseDeploymentInner(id, options)),
   );
 }
 
-async function deployAppInner(
+async function releaseDeploymentInner(
   id: string,
-  options: DeployAppOptions,
+  options: ReleaseDeploymentOptions,
 ): Promise<DeployResult> {
   const message = options.message?.trim();
   if (!message) {
@@ -503,23 +520,16 @@ async function deployAppInner(
     options.expectedGeneration &&
     app.createdAt.toISOString() !== options.expectedGeneration
   ) {
-    throw new AppError(
-      'App was deleted or recreated while preparing the deploy.',
-      409,
-    );
+    throw new ReleaseGenerationConflict();
   }
   // `status` is temporarily changed for build visibility. Keep the status that
   // existed before this deploy so a later failure cannot unarchive the app.
   let statusBeforeBuild = app.status;
 
-  const sourceCommit = await resolveDeployCommit(id, options.commit);
-  const sourceDir = await prepareDeployCheckout(id, sourceCommit);
-
+  const { sourceCommit, deploymentId } = options;
   // A deployment row records a *successful* release, so we don't write one until
-  // the build passes — a failed attempt leaves no history entry and burns no
-  // version number. We still mint a stable id up front to key the build/artifact
-  // dirs and the deployment row.
-  const deploymentId = ulid().toLowerCase();
+  // the artifact is accepted — a failed attempt leaves no history entry and
+  // burns no version number. The id keys the artifact dirs and the row.
   const tempBuild = path.join(BUILD_WORK_DIR, id, deploymentId, 'out');
   // Tracked so a failure after tagging can remove the tag (keeps Git history
   // free of failed attempts, mirroring the deployments table).
@@ -554,11 +564,10 @@ async function deployAppInner(
   let provisionedDbName: string | undefined;
 
   try {
-    build = await buildApp(id, {
-      sourceDir,
-      outputDir: tempBuild,
-      deploymentId,
-    });
+    await fs.rm(path.dirname(tempBuild), { recursive: true, force: true });
+    await fs.mkdir(path.dirname(tempBuild), { recursive: true });
+    build = await options.produce(tempBuild);
+    await options.beforeRelease?.();
     compatibilityVersion = resolveAppDeployCompatibilityVersion(
       build.source.compatibilityVersion,
     );
@@ -709,10 +718,7 @@ async function deployAppInner(
         options.expectedGeneration &&
         currentApp.createdAt.toISOString() !== options.expectedGeneration
       ) {
-        throw new AppError(
-          'App was deleted or recreated while preparing the deploy.',
-          409,
-        );
+        throw new ReleaseGenerationConflict();
       }
       // Capture a concurrent archive request, but never replace the original
       // state with the temporary `building` marker written by this deploy.
@@ -844,10 +850,7 @@ async function deployAppInner(
             !currentApp ||
             currentApp.createdAt.toISOString() !== options.expectedGeneration
           ) {
-            throw new AppError(
-              'App was deleted or recreated while preparing the deploy.',
-              409,
-            );
+            throw new ReleaseGenerationConflict();
           }
         }
         const last = await tx.query.deployments.findFirst({
@@ -881,6 +884,8 @@ async function deployAppInner(
           sourceTag: published.tag,
           artifactPath: workspaceRelative(artifact),
           buildLog: releaseBuild.log,
+          buildId: deploymentId,
+          buildOrigin: options.buildOrigin,
         });
 
         await tx
@@ -1121,7 +1126,5 @@ async function deployAppInner(
   } finally {
     await appDatabaseLease?.release();
     await fs.rm(path.dirname(tempBuild), { recursive: true, force: true });
-    // The source checkout is only an input to this build.
-    await fs.rm(sourceDir, { recursive: true, force: true });
   }
 }

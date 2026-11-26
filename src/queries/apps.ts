@@ -12,6 +12,8 @@ import {
   listApps,
   listCronRunsFn,
   listDeployments,
+  getAppDeploymentLogFn,
+  listAppDeploymentRequestsFn,
 } from '~server/apps';
 
 export const appsQueryOptions = queryOptions({
@@ -63,6 +65,33 @@ export const deploymentBuildLogQueryOptions = (
     queryFn: () => getDeploymentBuildLog({ data: { id: appId, deploymentId } }),
     // A deployment's build log is immutable, so never refetch once loaded.
     staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/**
+ * Recent deployment requests. Poll quickly while one is still building or
+ * releasing, so the page follows it; slowly otherwise to notice new ones.
+ */
+export const deploymentRequestsQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: ['apps', id, 'deployment-requests'],
+    queryFn: () => listAppDeploymentRequestsFn({ data: id }),
+    refetchInterval: (query) =>
+      query.state.data?.deployments.some((item) => !item.finished)
+        ? 2000
+        : 15000,
+  });
+
+/** A deployment's log, refetched while the deployment is still running. */
+export const deploymentRequestLogQueryOptions = (
+  appId: string,
+  deploymentId: string,
+) =>
+  queryOptions({
+    queryKey: ['apps', appId, 'deployment-requests', deploymentId, 'log'],
+    queryFn: () =>
+      getAppDeploymentLogFn({ data: { id: appId, deploymentId, afterSeq: 0 } }),
+    refetchInterval: (query) =>
+      query.state.data && query.state.data.deployment.finished ? false : 1500,
   });
 
 export const appOpsQueryOptions = (id: string) =>

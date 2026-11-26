@@ -9,12 +9,15 @@
  *                                                → a fresh Run credential
  *   GET  /internal/api/agent-sessions/:sessionId/attachments/:attachmentId
  *                                                → the attachment bytes
+ *   /internal/api/builds/*                       → the Builder API
+ *                                                  (src/builder/protocol.ts)
  */
 import type http from 'node:http';
 import { z } from 'zod';
 import { AppError } from '~server/errors';
 import { mintRunToken, RunTokenError } from './run-auth';
 import { getAgentAttachment } from '~server/agent-attachments';
+import { handleBuilderApiRequest } from '~server/apps/builder-api';
 
 /** JSON body cap: the only body is a small Run token request. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -114,6 +117,10 @@ export async function handleInternalApiRequest(
         200,
         await mintRunToken(decodeURIComponent(rest[0]), body.data.runnerId),
       );
+      return;
+    }
+    if (resource === 'builds') {
+      await handleBuilderApiRequest(req, res, rest.map(decodeURIComponent));
       return;
     }
     if (resource === 'agent-sessions') {

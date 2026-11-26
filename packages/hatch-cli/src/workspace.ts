@@ -34,7 +34,16 @@ export type Workspace = {
   id: string;
   generation: string;
   masterCommit: string | null;
-  pending?: { command: string; commit: string; startedAt: string };
+  /**
+   * A deploy this checkout started and has not seen finish. `deploymentId`
+   * is set once the platform created the deployment.
+   */
+  pending?: {
+    command: string;
+    commit: string;
+    startedAt: string;
+    deploymentId?: string;
+  };
   lastDeployment?: { version: number; deploymentId: string };
 };
 import { childEnvironment, git } from './process';

@@ -2,6 +2,7 @@ import {
   Badge,
   Box,
   Button,
+  Group,
   Text,
   Tooltip,
   UnstyledButton,
@@ -9,7 +10,12 @@ import {
 import { modals } from '@mantine/modals';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
-import { IconDownload, IconFileZip, IconRobot } from '@tabler/icons-react';
+import {
+  IconDownload,
+  IconFileZip,
+  IconRefresh,
+  IconRobot,
+} from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { useI18n } from '~i18n';
 import {
@@ -21,10 +27,11 @@ import { requiresAgentRollback } from '~components/deployments/deployment-histor
 import {
   appOpsQueryOptions,
   deploymentBuildLogQueryOptions,
+  deploymentRequestsQueryOptions,
   deploymentsQueryOptions,
   normalizedManifestQueryOptions,
 } from '~queries/apps';
-import { rollbackAppFn } from '~server/apps';
+import { redeployAppFn, rollbackAppFn } from '~server/apps';
 import {
   requiresDataSchemaConfirmation,
   rollbackNotification,
@@ -52,6 +59,31 @@ export function DeploymentHistory({ appId }: { appId: string }) {
   const router = useRouter();
   const qc = useQueryClient();
   const query = useQuery(deploymentsQueryOptions(appId));
+  const requests = useQuery(deploymentRequestsQueryOptions(appId));
+  const builderEnabled = requests.data?.builderEnabled ?? false;
+
+  // Rebuilding a recorded commit needs the Builder: the browser cannot build.
+  const redeploy = useMutation({
+    mutationFn: (deployment: { sourceCommit: string; version: number }) =>
+      redeployAppFn({
+        data: {
+          id: appId,
+          commit: deployment.sourceCommit,
+          message: t('deployments.redeployMessage', {
+            version: deployment.version,
+          }),
+        },
+      }),
+    onSuccess: (_result, deployment) => {
+      toast.success(
+        t('deployments.redeployQueued', { version: deployment.version }),
+      );
+      void qc.invalidateQueries(deploymentRequestsQueryOptions(appId));
+    },
+    onError: () => {
+      toast.error(t('deployments.redeployFailed'));
+    },
+  });
 
   const rollback = useMutation({
     mutationFn: (deploymentId: string) =>
@@ -107,7 +139,38 @@ export function DeploymentHistory({ appId }: { appId: string }) {
           </Badge>
         )
       }
-      renderRollbackAction={(deployment, defaultAction) => {
+      renderRollbackAction={(deployment, standardAction) => {
+        const sourceCommit = deployment.sourceCommit;
+        const redeployAction =
+          builderEnabled && sourceCommit && deployment.status === 'deployed' ? (
+            <Tooltip label={t('deployments.redeployTooltip')} withArrow>
+              <Button
+                size="compact-sm"
+                variant="default"
+                leftSection={<IconRefresh size={14} />}
+                loading={
+                  redeploy.isPending &&
+                  redeploy.variables?.version === deployment.version
+                }
+                onClick={() =>
+                  redeploy.mutate({
+                    sourceCommit,
+                    version: deployment.version,
+                  })
+                }
+              >
+                {t('deployments.redeploy')}
+              </Button>
+            </Tooltip>
+          ) : null;
+        const defaultAction = redeployAction ? (
+          <Group gap={6} wrap="nowrap">
+            {standardAction}
+            {redeployAction}
+          </Group>
+        ) : (
+          standardAction
+        );
         if (!requiresAgentRollback(deployment)) return defaultAction;
         const requiresNewerPlatform =
           deployment.compatibility.version >

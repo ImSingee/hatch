@@ -6,7 +6,8 @@
  *   - the runner WebSocket control channel (RUNNER_WS_PATH), and
  *   - the internal REST API the runner's PlatformClient calls.
  *
- * Runner REST/WS requests must present AGENT_RUNNER_TOKEN.
+ * Runner REST/WS requests must present AGENT_RUNNER_TOKEN; the Builder API
+ * (BUILDER_API_PREFIX) accepts only HATCH_BUILDER_TOKEN.
  */
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
@@ -23,6 +24,7 @@ import {
 } from '~server/agent-runs';
 import { reconcileRunnerWorkspaces } from '~server/agent-workspaces';
 import { secretsMatch } from '~server/secrets';
+import { BUILDER_API_PREFIX } from '../../builder/protocol';
 import { handleInternalApiRequest } from './internal-api';
 import { handleRunnerSocket, type RunnerHubHandlers } from './hub';
 
@@ -48,9 +50,21 @@ function bearerToken(header: string | undefined): string | null {
   return match ? match[1].trim() : null;
 }
 
-export function createInternalHttpHandler(token: string): http.RequestListener {
-  const authorized = (req: http.IncomingMessage): boolean =>
-    secretsMatch(bearerToken(req.headers.authorization), token);
+export function createInternalHttpHandler(
+  token: string,
+  builderToken: string | null = null,
+): http.RequestListener {
+  // The Builder API takes only the Builder's token, and Runner routes only
+  // the Runner's: neither service can act as the other.
+  const authorized = (req: http.IncomingMessage): boolean => {
+    const builds = (req.url ?? '')
+      .split('?')[0]
+      .startsWith(`${BUILDER_API_PREFIX}/`);
+    return secretsMatch(
+      bearerToken(req.headers.authorization),
+      builds ? builderToken : token,
+    );
+  };
 
   return (req, res) => {
     if (!authorized(req)) {
@@ -68,6 +82,7 @@ export function startAgentInternalServer(): void {
 
   const {
     agentRunnerToken: token,
+    builderToken,
     agentInternalHost,
     agentInternalPort,
   } = getPlatformEnv();
@@ -75,7 +90,9 @@ export function startAgentInternalServer(): void {
   const authorized = (req: http.IncomingMessage): boolean =>
     secretsMatch(bearerToken(req.headers.authorization), token);
 
-  const server = http.createServer(createInternalHttpHandler(token));
+  const server = http.createServer(
+    createInternalHttpHandler(token, builderToken),
+  );
 
   const wss = new WebSocketServer({ noServer: true });
   server.on('upgrade', (req, socket, head) => {

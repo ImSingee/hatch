@@ -83,9 +83,35 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['app', 'deploy'],
     usage:
-      'app deploy [--directory <path>] [--message <text>] [--commit <sha>] [--allow-destructive-data-migration --data-migration-approval-token <token>] [--reconcile | --retry-after-confirming <commit>]',
+      'app deploy [--directory <path>] [--message <text>] [--commit <sha>] [--build auto|builder|local] [--no-wait] [--allow-destructive-data-migration --data-migration-approval-token <token>] [--reconcile | --retry-after-confirming <commit>]',
     description:
-      'Push HEAD to platform master, then release it. --commit <sha> skips the push and releases that full commit id, which must already be on platform master.',
+      "Push HEAD to platform master, create a deployment of it and release it; --commit <sha> skips the push and deploys that full commit id, which must already be on platform master. --build chooses where the commit is built: builder (the platform's dedicated Builder; fails with BUILDER_UNAVAILABLE where there is none), local (this machine, with the platform's pinned toolchain installed once into ~/.cache/hatch; native frontends also need nsh), or auto (default: builder when the platform has one, else local). Build and release output goes to stderr; stdout prints the finished deployment (deploymentId, status, version, normalized manifest). A deployment that does not end ready exits with its error code: source the build rejects is app_build_failed or APP_MANIFEST_INVALID (exit 2); toolchain_mismatch, data_migration_approval_required (with the approval token in the message), superseded, canceled and the rest exit 6. --no-wait prints the created deployment without following a Builder build and has the platform post a notification when it finishes; --timeout (default 600s) expiring exits 7 with deployment_in_progress and leaves the deployment running. The checkout records a started deploy, and the next deploy settles it from the platform record first: one still running fails with deployment_in_progress. --reconcile only reports that pending deployment (not-created, in-progress or finished); --retry-after-confirming <commit> forgets it.",
+  },
+  {
+    path: ['app', 'deployments', 'list'],
+    usage:
+      'app deployments list <id-or-slug> [--limit <1-100>] [--cursor <seq>] [--json]',
+    description:
+      'List deployments newest first, 20 per page by default; pass the printed nextCursor as --cursor for the next page (null on the last). Each carries deploymentId, status (queued, awaiting_artifact, building, verifying, releasing, ready, failed, canceled or superseded), build (builder or local), commit, version once ready, error code and message.',
+  },
+  {
+    path: ['app', 'deployments', 'get'],
+    usage: 'app deployments get <id-or-slug> <deployment-id> [--json]',
+    description:
+      'Show one deployment: status, build, commit, actor, timestamps, error, and once ready its version and normalized manifest.',
+  },
+  {
+    path: ['app', 'deployments', 'logs'],
+    usage:
+      'app deployments logs <id-or-slug> <deployment-id> [--after <seq>] [--follow] [--timeout <seconds>] [--json]',
+    description:
+      'Print the build and release log after line --after (default 0). --follow streams new lines to stderr until the deployment finishes, reconnecting as needed, then prints the deployment; --timeout (default 1800s with --follow) expiring exits 7 with deployment_in_progress. --json prints {deployment, lines:[{seq,stream,text,at}]}; stream is build or platform.',
+  },
+  {
+    path: ['app', 'deployments', 'cancel'],
+    usage: 'app deployments cancel <id-or-slug> <deployment-id> [--json]',
+    description:
+      'Cancel a deployment that is queued, waiting for its local build or building; it is never released. Fails with DEPLOYMENT_NOT_CANCELABLE once it is verifying, releasing or finished.',
   },
   {
     path: ['app', 'rollback'],
@@ -811,6 +837,8 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'app invoke': 'Call a deployed App backend or webhook.',
   'app backend': 'Inspect and control App backend processes.',
   'app task': 'List, run and inspect App tasks and their runs.',
+  'app deployments':
+    'List, follow and cancel App deployments and read their logs.',
   'app docs': 'Read the docs an App publishes for the services that call it.',
   'app kv': 'Read and write App key-value data.',
   'app data-table': 'Inspect and change App data tables.',

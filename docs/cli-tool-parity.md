@@ -12,17 +12,17 @@ with the Runner's bundle checkouts and the internal `/internal/api/apps*`
 routes they used (Platform/Runner protocol 23). Their names stay in the chat UI
 so saved transcripts keep rendering.
 
-| Removed Tool         | CLI                                     | Public API / shared behavior                                                                              |
-| -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| list_apps            | app list                                | AppService/ListApps; currentVersion, compatibility, capabilities                                          |
-| get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, `frontend.runtime`/`frontend.nshVersion`, history |
-| checkout_app         | app clone / update / adopt              | GetApp, Git fetch, SdkService/GetSdk, AssociateAppSession; frozen preparation                             |
-| create_app           | app create                              | AppService/CreateApp; template, pin, directory, SDK, ID/slug/path/recovery                                |
-| deploy_app           | app push / deploy                       | Git push, then AppService/DeployApp by commit; release/URLs, generation, migration approval, association  |
-| rollback_app         | app rollback                            | AppService/RollbackApp; compatibility and forward-only data/source recovery                               |
-| query_app_db         | app db query                            | AppService/QueryAppDb; registered DB lifecycle lock, DDL/DML, caps/cancellation; no implicit provisioning |
-| query_app_kv         | app kv list/get/set/delete              | AppService/QueryAppKv; empty/large UTF-8, masking/reveal, preserve/clear secret, pagination               |
-| query_app_data_table | app data-table inspect/query/mutate/sql | AppService/QueryAppDataTable; schema/counts, JSON, cursors/revision, atomic mutations, bounded SQL        |
+| Removed Tool         | CLI                                     | Public API / shared behavior                                                                               |
+| -------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| list_apps            | app list                                | AppService/ListApps; currentVersion, compatibility, capabilities                                           |
+| get_app              | app get                                 | AppService/GetApp; full safe inspection, URLs, runtime, `frontend.runtime`/`frontend.nshVersion`, history  |
+| checkout_app         | app clone / update / adopt              | GetApp, Git fetch, SdkService/GetSdk, AssociateAppSession; frozen preparation                              |
+| create_app           | app create                              | AppService/CreateApp; template, pin, directory, SDK, ID/slug/path/recovery                                 |
+| deploy_app           | app push / deploy / deployments         | Git push, CreateAppDeployment, local build + UploadAppDeploymentArtifact or Builder, Watch/Get/List/Cancel |
+| rollback_app         | app rollback                            | AppService/RollbackApp; compatibility and forward-only data/source recovery                                |
+| query_app_db         | app db query                            | AppService/QueryAppDb; registered DB lifecycle lock, DDL/DML, caps/cancellation; no implicit provisioning  |
+| query_app_kv         | app kv list/get/set/delete              | AppService/QueryAppKv; empty/large UTF-8, masking/reveal, preserve/clear secret, pagination                |
+| query_app_data_table | app data-table inspect/query/mutate/sql | AppService/QueryAppDataTable; schema/counts, JSON, cursors/revision, atomic mutations, bounded SQL         |
 
 The Agent system prompt and the preloaded Skills (`skills/`) direct the
 platform Agent to the CLI: the prompt names the command groups and the shared
@@ -73,10 +73,15 @@ browser-bound, has no platform state, and therefore has no CLI command.
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` / `adopt` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
-pushes, then calls the Deploy RPC with the commit to release (`--commit`
-releases a commit already on `master` without pushing). The Deploy RPC still
-accepts an uploaded bundle for older CLIs, which the platform fast-forwards onto
-`master` and then releases. Two deliberate deviations from the CLI rules:
+pushes, then creates a deployment of the pushed commit
+(`AppService/CreateAppDeployment`; `--commit` deploys a commit already on
+`master` without pushing). The platform's optional dedicated Builder builds
+it, or the CLI builds it where it runs and uploads the build package to that
+deployment (`UploadAppDeploymentArtifact`); the platform never runs App
+source. `hatch app deployments list|get|logs|cancel` cover every read and
+mutation of deployments that the manage page offers (its Redeploy button is
+`app deploy --commit <sha>`); logs stream over
+`WatchAppDeploymentLogs`. Two deliberate deviations from the CLI rules:
 
 - `push` and source fetch are not backed by a Connect RPC. Git is the public
   contract for source transfer; the endpoint accepts the same credentials as
@@ -97,7 +102,10 @@ as on the platform: a `pnpm-lock.yaml` source is reproduced with the same
 frozen pnpm install and the platform's pinned `typescript`/`esbuild` versions
 from `SdkService/GetSdk`; a `deno.json` + `deno.lock` source keeps the Deno
 preparation. The pnpm toolchain adds no command, Agent Tool, public RPC method
-or CLI exception; `GetSdk` only gains tool versions and generated files.
+or CLI exception; `GetSdk` only gains tool versions and generated files. A
+local deployment build runs the same build as the Builder
+(`src/app-build/produce.ts`) with those pinned versions, `GetSdk.tooling`
+also naming the NSH version and whether the platform has a Builder.
 
 The production HTTP/PostgreSQL suite in
 `src/server/platform-api/lifecycle.integration.test.ts` covers session/key/Run

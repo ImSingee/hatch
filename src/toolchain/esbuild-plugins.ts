@@ -4,7 +4,7 @@ import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type * as esbuild from 'esbuild';
-import { APP_HATCH_SDK_IMPORTS } from '~agent/hatch-sdk';
+import { APP_HATCH_SDK_IMPORTS } from '../agent/hatch-sdk-paths';
 
 /** Resolve only the public, platform-owned Hatch SDK entrypoints. */
 export function hatchSdkPlugin(

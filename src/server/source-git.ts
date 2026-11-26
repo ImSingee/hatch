@@ -11,16 +11,7 @@
  */
 import { spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import {
-  access,
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
-import os from 'node:os';
+import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { AppError } from './errors';
 
@@ -44,8 +35,8 @@ export type PublishedSource = {
 export type GitSourceConfig = {
   /** Noun used in error messages ("app"). */
   noun: string;
+  /** Bare canonical repo for an entity id. */
   repoDir: (id: string) => string;
-  deployCheckoutDir: (id: string) => string;
 };
 
 async function pathExists(p: string): Promise<boolean> {
@@ -139,13 +130,6 @@ async function runGit(
     throw new Error(`git ${args.join(' ')} failed: ${message}`);
   }
   return result;
-}
-
-async function setLocalGitIdentity(worktree: string): Promise<void> {
-  await runGit(['config', 'user.name', 'Hatch Agent'], { cwd: worktree });
-  await runGit(['config', 'user.email', 'agent@hatch.local'], {
-    cwd: worktree,
-  });
 }
 
 async function refCommit(repoDir: string, ref: string): Promise<string | null> {
@@ -259,31 +243,6 @@ export function createGitSource(cfg: GitSourceConfig) {
   }
 
   /**
-   * Check out `commit` from the canonical repo into a checkout of its own.
-   * Each deploy attempt gets a fresh directory, so concurrent attempts, also
-   * from other processes, never build each other's source. The caller removes
-   * it when the attempt ends.
-   */
-  async function prepareDeployCheckout(
-    id: string,
-    commit: string,
-  ): Promise<string> {
-    const repoDir = await ensureRepo(id);
-    const base = cfg.deployCheckoutDir(id);
-    await mkdir(path.dirname(base), { recursive: true });
-    const checkout = await mkdtemp(`${base}-`);
-    try {
-      await runGit(['clone', '--no-checkout', repoDir, checkout]);
-      await runGit(['checkout', '--detach', commit], { cwd: checkout });
-      await setLocalGitIdentity(checkout);
-      return checkout;
-    } catch (error) {
-      await rm(checkout, { recursive: true, force: true });
-      throw error;
-    }
-  }
-
-  /**
    * Tag the released commit. Master is not moved: the commit got there by a
    * push. Called under the deploy lock that rollback shares, so the commit is
    * re-checked against master in case a rollback rewound it meanwhile.
@@ -318,83 +277,6 @@ export function createGitSource(cfg: GitSourceConfig) {
     });
   }
 
-  /**
-   * Push an uploaded bundle's HEAD to master, as a fast-forward only. This is
-   * the bundle transport's equivalent of `git push`, used by Agent Tool
-   * deploys and by CLI versions that predate the Git endpoint. Returns the
-   * pushed commit.
-   */
-  async function importBundleToMaster(
-    id: string,
-    bundle: Buffer,
-  ): Promise<string> {
-    const repoDir = await ensureRepo(id);
-    const tmp = await mkdtemp(path.join(os.tmpdir(), 'hatch-push-'));
-    try {
-      const bundleFile = path.join(tmp, 'incoming.bundle');
-      await writeFile(bundleFile, bundle);
-      const verify = await runGit(
-        ['--git-dir', repoDir, 'bundle', 'verify', bundleFile],
-        { allowFailure: true },
-      );
-      // A bundle with prerequisites missing from the canonical repo fails
-      // verify: the checkout is based on history this repo doesn't have.
-      if (verify.exitCode !== 0) {
-        throw new AppError(
-          `Cannot deploy ${cfg.noun} "${id}": the uploaded source bundle ` +
-            `does not apply to the canonical repository. Run checkout again ` +
-            `to sync with ${SOURCE_BRANCH}, rebase your work, then retry.`,
-          409,
-        );
-      }
-      // A worktree bundle names HEAD; a bundle exported from this repository
-      // names only the branch.
-      const heads = new Map(
-        (await runGit(['bundle', 'list-heads', bundleFile])).stdout
-          .trim()
-          .split('\n')
-          .map((line) => line.split(' '))
-          .map(([sha, ref]) => [ref, sha] as const),
-      );
-      const ref = heads.has('HEAD') ? 'HEAD' : `refs/heads/${SOURCE_BRANCH}`;
-      const commit = heads.get(ref);
-      if (!commit) {
-        throw new AppError(
-          `Cannot deploy ${cfg.noun} "${id}": the uploaded source bundle ` +
-            `has neither HEAD nor ${SOURCE_BRANCH}.`,
-          400,
-        );
-      }
-      // Without a leading "+", fetch refuses anything but a fast-forward. A
-      // concurrent upload of the same commit can win the ref lock instead; that
-      // push has then already happened, so retry once and accept master
-      // sitting exactly on this commit.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const pushed = await runGit(
-          [
-            '--git-dir',
-            repoDir,
-            'fetch',
-            '--no-tags',
-            bundleFile,
-            `${ref}:refs/heads/${SOURCE_BRANCH}`,
-          ],
-          { allowFailure: true },
-        );
-        if (pushed.exitCode === 0 || (await masterCommit(id)) === commit)
-          return commit;
-      }
-      throw new AppError(
-        `Cannot deploy ${cfg.noun} "${id}" because ${SOURCE_BRANCH} ` +
-          `advanced. Run "git fetch origin ${SOURCE_BRANCH}" and rebase ` +
-          'your work before deploying.',
-        409,
-      );
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  }
-
   async function moveMasterToDeploymentTag(
     id: string,
     tag: string,
@@ -415,15 +297,41 @@ export function createGitSource(cfg: GitSourceConfig) {
     return commit;
   }
 
+  /**
+   * The tree of `commit` as a gzipped tar archive (`git archive`), for a
+   * build elsewhere. Reads only Git objects; nothing is checked out.
+   */
+  async function archiveCommit(id: string, commit: string): Promise<Buffer> {
+    const repoDir = await ensureRepo(id);
+    if (!/^[0-9a-f]{40}$/.test(commit)) {
+      throw new AppError('Commit must be a full commit id.', 400);
+    }
+    return new Promise((resolve, reject) => {
+      const child = spawn(
+        'git',
+        ['--git-dir', repoDir, 'archive', '--format=tar.gz', commit],
+        { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      const chunks: Buffer[] = [];
+      let stderr = '';
+      child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      child.stderr.on('data', (chunk) => (stderr += chunk.toString()));
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) resolve(Buffer.concat(chunks));
+        else reject(new Error(`git archive failed: ${stderr.trim()}`));
+      });
+    });
+  }
+
   return {
     ensureRepo,
     masterCommit,
+    archiveCommit,
     resolveDeployCommit,
-    prepareDeployCheckout,
     publishDeploymentSource,
     deleteDeploymentTag,
     moveMasterToDeploymentTag,
-    importBundleToMaster,
   };
 }
 

@@ -36,8 +36,9 @@ import { SdkService } from '../../../packages/hatch-platform-api/gen/hatch/platf
 import { publicApiError, publicError } from './errors';
 import { AppError } from '~server/errors';
 import { db } from '~/db';
-import { deployApp } from '~server/apps/deploy';
-import { importAppBundleToMaster } from '~server/apps/git';
+import { builderEnabled } from '~server/apps/builds';
+import { NSH_VERSION } from '~server/apps/native/nsh-toolchain';
+import { registerAppDeploymentApi } from './app-deployments';
 import { rollbackAppToVersion } from '~server/apps/manage';
 import {
   type AppBackendView,
@@ -52,12 +53,7 @@ import { authenticatePublicApi } from './auth';
 import { listAppsForAgent, getAppDetailForAgent } from '~server/apps/inspect';
 import { listAppDocs, readAppDoc } from '~server/apps/docs';
 import type { PublishedAppDoc } from '~server/apps/manifest';
-import { projectAppManifestUrls } from '~server/apps/manifest';
-import {
-  appSummarySchema,
-  appDetailSchema,
-  appManifestViewSchema,
-} from '~/platform-api/views';
+import { appSummarySchema, appDetailSchema } from '~/platform-api/views';
 import {
   queryAppKvRequestSchema,
   queryAppDataTableRequestSchema,
@@ -393,50 +389,6 @@ const apps = {
         ...project(row),
         iconPath: (await appIconPaths(row.id)).get(row.id),
         view: jsonValue(view),
-      },
-    };
-  },
-  deploy: async (
-    input: {
-      id: string;
-      message: string;
-      generation: string;
-      bundle?: Uint8Array;
-      commit?: string;
-      allowDestructiveDataMigration?: boolean;
-      dataMigrationApprovalToken?: string;
-    },
-    context: HandlerContext,
-  ) => {
-    const row = await find(input.id);
-    await associate(row.id, context);
-    if (input.generation !== row.createdAt.toISOString())
-      throw publicApiError('RESOURCE_GENERATION_CONFLICT');
-    // Deprecated bundle transport: push the uploaded HEAD to master first.
-    // Current clients push over Git and name the commit to release.
-    if (input.bundle?.length && input.commit)
-      throw publicApiError('BAD_REQUEST');
-    const pushed = input.bundle?.length
-      ? await importAppBundleToMaster(row.id, Buffer.from(input.bundle))
-      : undefined;
-    const result = await deployApp(row.id, {
-      message: input.message,
-      allowDestructiveDataMigration: input.allowDestructiveDataMigration,
-      dataMigrationApprovalToken: input.dataMigrationApprovalToken,
-      commit: pushed ?? input.commit,
-      expectedGeneration: input.generation,
-    });
-    const released = await find(row.id);
-    const normalized = appManifestViewSchema.parse(
-      projectAppManifestUrls(result.normalized, row.id, released.slug),
-    );
-    return {
-      deployment: {
-        deploymentId: result.deploymentId,
-        version: result.version,
-        compatibilityVersion: result.compatibilityVersion,
-        slug: released.slug,
-        normalized: jsonValue(normalized),
       },
     };
   },
@@ -983,9 +935,7 @@ export function registerPlatformApi(
   router.rpc(AppService.method.createApp, apps.create);
   router.rpc(AppService.method.getApp, apps.get);
   router.rpc(AppService.method.rollbackApp, apps.rollback);
-  router.rpc(AppService.method.deployApp, apps.deploy, {
-    readMaxBytes: deployBodyLimit,
-  });
+  registerAppDeploymentApi(router, deployBodyLimit);
   router.rpc(AuthService.method.getStatus, (_input, context) => {
     const status = context.values.get(publicApiContext).status;
     if (!status) throw publicApiError('UNAUTHORIZED');
@@ -1014,7 +964,14 @@ export function registerPlatformApi(
     getSdk: async () => {
       // The interceptor validates the closed set before any domain access.
       const result = await sdkPayload();
-      return { files: files(result), tooling: result.tooling };
+      return {
+        files: files(result),
+        tooling: {
+          ...result.tooling,
+          nshVersion: NSH_VERSION,
+          builderEnabled: builderEnabled(),
+        },
+      };
     },
   });
 }

@@ -1,10 +1,9 @@
 /**
- * Platform source transfer over the deprecated bundle upload that DeployApp
- * still accepts:
+ * Source release over the App repository:
  *
- *   client clones platform master and commits -> client bundles HEAD ->
- *   platform importBundleToMaster (fast-forward master) ->
- *   publishDeploymentSource (deploy tag).
+ *   client clones platform master and commits -> client pushes HEAD to
+ *   master (fast-forward only) -> a deployment resolves the commit -> its
+ *   build reads the commit archive -> publishDeploymentSource (deploy tag).
  *
  * Everything runs against throwaway temp dirs.
  */
@@ -20,7 +19,6 @@ const root = await mkdtemp(path.join(tmpdir(), 'hatch-bundle-rt-'));
 const platform = createGitSource({
   noun: 'app',
   repoDir: (id) => path.join(root, 'repos', `${id}.git`),
-  deployCheckoutDir: (id) => path.join(root, 'checkouts', id),
 });
 
 function git(args: string[], cwd: string): Promise<string> {
@@ -52,14 +50,30 @@ async function configureIdentity(worktree: string): Promise<void> {
   await git(['config', 'user.name', 't'], worktree);
 }
 
-/** Bundle a worktree's HEAD the way a client uploads it. */
-async function bundleHead(worktree: string): Promise<Buffer> {
-  const file = path.join(
-    root,
-    `${path.basename(worktree)}-${Date.now()}.bundle`,
-  );
-  await git(['bundle', 'create', file, 'HEAD'], worktree);
-  return readFile(file);
+/** Push a worktree's HEAD to platform master, as `hatch app push` does. */
+async function pushHead(id: string, worktree: string): Promise<string> {
+  const repoDir = await platform.ensureRepo(id);
+  await git(['push', repoDir, 'HEAD:refs/heads/master'], worktree);
+  return git(['rev-parse', 'HEAD'], worktree);
+}
+
+/** Read one file of a commit archive, as a build of that commit does. */
+async function archivedFile(
+  id: string,
+  commit: string,
+  file: string,
+): Promise<string> {
+  const dir = await mkdtemp(path.join(root, 'archive-'));
+  const archive = path.join(dir, 'source.tar.gz');
+  await writeFile(archive, await platform.archiveCommit(id, commit));
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('tar', ['-xzf', archive, '-C', dir]);
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)),
+    );
+  });
+  return readFile(path.join(dir, file), 'utf8');
 }
 
 /** Push a worktree's HEAD to platform master and tag it as released. */
@@ -68,10 +82,7 @@ async function pushAndRelease(
   worktree: string,
   version: number,
 ): Promise<string> {
-  const commit = await platform.importBundleToMaster(
-    id,
-    await bundleHead(worktree),
-  );
+  const commit = await pushHead(id, worktree);
   await platform.publishDeploymentSource(id, commit, version);
   return commit;
 }
@@ -112,7 +123,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-describe('git bundle source transfer (platform)', () => {
+describe('source release (platform)', () => {
   const APP_ID = 'rt-app';
 
   it('transfers source both ways and fast-forwards canonical master', async () => {
@@ -142,29 +153,20 @@ describe('git bundle source transfer (platform)', () => {
     await writeFile(path.join(checkout, 'README.md'), 'v2\n');
     const localCommit = await commitAll(checkout, 'client edit');
 
-    // -- Client -> platform: bundle HEAD, stage it, publish. ----------------
-    const pushed = await platform.importBundleToMaster(
-      APP_ID,
-      await bundleHead(checkout),
-    );
+    // -- Client -> platform: push HEAD, then release it. --------------------
+    const pushed = await pushHead(APP_ID, checkout);
     expect(pushed).toBe(localCommit);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
 
-    // The deploy pipeline builds the pushed commit from a fresh checkout.
+    // A deployment resolves the pushed commit; its build reads that
+    // commit's tree, and an earlier commit's tree stays as it was.
     const release = await platform.resolveDeployCommit(APP_ID);
     expect(release).toBe(localCommit);
-    const built = await platform.prepareDeployCheckout(APP_ID, release);
-    await expect(readFile(path.join(built, 'README.md'), 'utf8')).resolves.toBe(
+    await expect(archivedFile(APP_ID, release, 'README.md')).resolves.toBe(
       'v2\n',
     );
-    // A concurrent attempt gets its own checkout and disturbs neither.
-    const concurrent = await platform.prepareDeployCheckout(APP_ID, seedCommit);
-    expect(concurrent).not.toBe(built);
-    await expect(
-      readFile(path.join(concurrent, 'README.md'), 'utf8'),
-    ).resolves.toBe('v1\n');
-    await expect(readFile(path.join(built, 'README.md'), 'utf8')).resolves.toBe(
-      'v2\n',
+    await expect(archivedFile(APP_ID, seedCommit, 'README.md')).resolves.toBe(
+      'v1\n',
     );
     const published = await platform.publishDeploymentSource(
       APP_ID,
@@ -189,27 +191,21 @@ describe('git bundle source transfer (platform)', () => {
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
   }, 15_000);
 
-  it('rejects a stale bundle that is not a fast-forward of master', async () => {
+  it('rejects a stale push that is not a fast-forward of master', async () => {
     // A second client clones, commits on top of v2… -------------------------
     const stale = await cloneMaster(APP_ID, 'stale');
     await writeFile(path.join(stale, 'README.md'), 'stale\n');
     await commitAll(stale, 'stale edit');
-    const staleBundle = await bundleHead(stale);
 
     // …but master advances first (another deploy wins the race). ------------
     const winner = await cloneMaster(APP_ID, 'winner');
     await writeFile(path.join(winner, 'README.md'), 'winner\n');
     await commitAll(winner, 'winner edit');
-    const winnerCommit = await platform.importBundleToMaster(
-      APP_ID,
-      await bundleHead(winner),
-    );
+    const winnerCommit = await pushHead(APP_ID, winner);
 
-    // The stale bundle is self-contained history, but it is not a
-    // fast-forward of master, so the push is refused and master stays put.
-    await expect(
-      platform.importBundleToMaster(APP_ID, staleBundle),
-    ).rejects.toThrow(/master advanced/);
+    // The stale push is not a fast-forward of master, so it is refused and
+    // master stays put.
+    await expect(pushHead(APP_ID, stale)).rejects.toThrow(/fast-forward/);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(winnerCommit);
   }, 15_000);
 
@@ -226,9 +222,7 @@ describe('git bundle source transfer (platform)', () => {
       recursive: true,
       force: true,
     });
-    await expect(
-      platform.importBundleToMaster(id, await bundleHead(oldCheckout)),
-    ).resolves.toBe(restoredCommit);
+    await expect(pushHead(id, oldCheckout)).resolves.toBe(restoredCommit);
     await expect(platform.masterCommit(id)).resolves.toBe(restoredCommit);
   }, 15_000);
 });

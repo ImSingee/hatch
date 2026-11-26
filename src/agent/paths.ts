@@ -159,10 +159,6 @@ export function agentAttachmentStorePath(
   return path.resolve(agentAttachmentStoreDir(sessionId), attachmentId);
 }
 
-export function appDeployCheckoutDir(id: string): string {
-  return path.resolve(CHECKOUTS_DIR, id, 'deploy');
-}
-
 export function appBuildDir(id: string): string {
   return path.resolve(BUILDS_DIR, id);
 }

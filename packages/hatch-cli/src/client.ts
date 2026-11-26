@@ -71,7 +71,10 @@ import {
   type WidgetSize,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/dashboard_pb';
 import { PreferenceService } from '../../hatch-platform-api/gen/hatch/platform/v1/preference_pb';
-import { type AppIcon } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
+import {
+  type AppDeployment,
+  type AppIcon,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import {
@@ -134,6 +137,31 @@ const deployment = (value: Deployment) => ({
   compatibilityVersion: value.compatibilityVersion,
   ...(value.slug === undefined ? {} : { slug: value.slug }),
   normalized: jsonObject(toJson(ValueSchema, required(value.normalized))),
+});
+/** A deployment request as the CLI prints it. */
+export type DeploymentView = ReturnType<typeof deploymentView>;
+const deploymentView = (value: AppDeployment) => ({
+  deploymentId: value.id,
+  appId: value.appId,
+  seq: value.seq,
+  commit: value.commit,
+  message: value.message,
+  build: value.build,
+  trigger: value.trigger,
+  actor: value.actor ?? null,
+  status: value.status,
+  finished: value.finished,
+  errorCode: value.errorCode ?? null,
+  errorMessage: value.errorMessage ?? null,
+  ...(value.deployment
+    ? (({ deploymentId: _id, ...released }) => released)(
+        deployment(value.deployment),
+      )
+    : {}),
+  createdAt: value.createdAt,
+  startedAt: value.startedAt ?? null,
+  finishedAt: value.finishedAt ?? null,
+  logSeq: value.logSeq,
 });
 const restored = (value: RestoredVersion) => ({
   version: value.version,
@@ -359,16 +387,6 @@ type CreateInput = {
   description?: string;
   pin?: boolean;
 };
-type DeployInput = {
-  params: { id: string };
-  body: {
-    message: string;
-    generation: string;
-    commit: string;
-    allowDestructiveDataMigration?: boolean;
-    dataMigrationApprovalToken?: string;
-  };
-};
 function parseData<T>(
   schema: { parse: (value: unknown) => T },
   value: unknown,
@@ -515,14 +533,6 @@ export function cliClient(transport: Transport) {
       request: CreateInput,
     ) => Promise<{ id: string; slug: string; name: string; files: File[] }>;
     get: (request: { id: string }) => Promise<{ resource?: Resource }>;
-    deploy: (request: {
-      id: string;
-      message: string;
-      generation: string;
-      commit?: string;
-      allowDestructiveDataMigration?: boolean;
-      dataMigrationApprovalToken?: string;
-    }) => Promise<{ deployment?: Deployment }>;
     rollback: (request: {
       id: string;
       version: number;
@@ -551,17 +561,6 @@ export function cliClient(transport: Transport) {
       },
       get: async (input: { id: string }) =>
         resource(required((await client.get(input)).resource)),
-      deploy: async (input: DeployInput) =>
-        deployment(
-          required(
-            (
-              await client.deploy({
-                id: input.params.id,
-                ...input.body,
-              })
-            ).deployment,
-          ),
-        ),
       rollback: async (input: {
         params: { id: string };
         body: { version: number };
@@ -1054,9 +1053,80 @@ export function cliClient(transport: Transport) {
         create: (input) =>
           apps.createApp(parseCreate(CreateAppRequestSchema, input)),
         get: apps.getApp,
-        deploy: apps.deployApp,
         rollback: apps.rollbackApp,
       }),
+      deployments: {
+        create: async (input: {
+          id: string;
+          message: string;
+          generation: string;
+          commit?: string;
+          build: 'auto' | 'builder' | 'local';
+          allowDestructiveDataMigration?: boolean;
+          dataMigrationApprovalToken?: string;
+          notify?: boolean;
+        }) =>
+          deploymentView(
+            required((await apps.createAppDeployment(input)).deployment),
+          ),
+        upload: async (input: {
+          id: string;
+          deploymentId: string;
+          artifact: Uint8Array;
+        }) =>
+          deploymentView(
+            required(
+              (await apps.uploadAppDeploymentArtifact(input)).deployment,
+            ),
+          ),
+        get: async (input: { id: string; deploymentId: string }) =>
+          deploymentView(
+            required((await apps.getAppDeployment(input)).deployment),
+          ),
+        list: async (input: {
+          id: string;
+          limit?: number;
+          cursor?: number;
+        }) => {
+          const result = await apps.listAppDeployments(input);
+          return {
+            deployments: result.deployments.map((value) =>
+              deploymentView(value),
+            ),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        cancel: async (input: {
+          id: string;
+          deploymentId: string;
+          failureMessage?: string;
+          failureCode?: 'app_build_failed' | 'APP_MANIFEST_INVALID';
+        }) =>
+          deploymentView(
+            required((await apps.cancelAppDeployment(input)).deployment),
+          ),
+        /** Lines and state changes until the deployment finishes. */
+        async *watch(
+          input: { id: string; deploymentId: string; afterSeq?: number },
+          options: { timeoutMs?: number } = {},
+        ) {
+          for await (const message of apps.watchAppDeploymentLogs(input, {
+            timeoutMs: options.timeoutMs,
+          })) {
+            yield {
+              lines: message.lines.map((line) => ({
+                seq: line.seq,
+                stream: line.stream,
+                text: line.text,
+                at: line.at,
+              })),
+              deployment: message.deployment
+                ? deploymentView(message.deployment)
+                : null,
+            };
+          }
+        },
+      },
       backend: {
         list: async (input: { limit?: number; cursor?: string }) => {
           const result = await apps.listAppBackends(input);
@@ -1234,6 +1304,8 @@ export function cliClient(transport: Transport) {
                     result.tooling.typescriptVersion || undefined,
                   esbuildVersion: result.tooling.esbuildVersion || undefined,
                   pnpmVersion: result.tooling.pnpmVersion || undefined,
+                  nshVersion: result.tooling.nshVersion || undefined,
+                  builderEnabled: result.tooling.builderEnabled,
                 },
               }
             : {}),
@@ -1272,9 +1344,54 @@ export function platformTransport(
     ],
     fetch: async (input, init) => fetch(input, { ...init, redirect: 'error' }),
   });
+  const convert = (error: unknown) => {
+    // Connect reports a rejected fetch as Unknown with the TypeError.
+    const safe =
+      error instanceof ConnectError &&
+      error.code === Code.Unknown &&
+      error.cause instanceof TypeError
+        ? fetchFailure(credential.url, error.cause)
+        : publicError(error);
+    let message = safe.message;
+    for (const value of [credential.token, credential.apiKey])
+      if (value) message = message.replaceAll(value, '[redacted]');
+    return new CliError(safe.code, message, safe.exitCode, safe.httpStatus);
+  };
   // Convert errors after Connect's call boundary, which wraps interceptor errors.
   return {
     ...transport,
+    stream: async (
+      method,
+      callSignal,
+      timeoutMs,
+      callHeaders,
+      input,
+      contextValues,
+    ) => {
+      try {
+        const response = await transport.stream(
+          method,
+          callSignal ? AbortSignal.any([callSignal, signal]) : signal,
+          timeoutMs,
+          callHeaders,
+          input,
+          contextValues,
+        );
+        const messages = response.message;
+        return {
+          ...response,
+          message: (async function* () {
+            try {
+              yield* messages;
+            } catch (error) {
+              throw convert(error);
+            }
+          })(),
+        };
+      } catch (error) {
+        throw convert(error);
+      }
+    },
     unary: async (
       method,
       callSignal,

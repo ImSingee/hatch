@@ -33,7 +33,16 @@ import {
   listCronRuns,
   runCronJobNow,
 } from './apps/scheduler';
-import { authMiddleware } from './auth';
+import { authMiddleware, requireSession } from './auth';
+import {
+  builderEnabled,
+  cancelDeployment as cancelBuildRequest,
+  createDeployment,
+  getDeployment as getBuildRequest,
+  listDeployments as listBuildRequests,
+  readBuildLog,
+  type AppBuild,
+} from './apps/builds';
 import { AppError } from './errors';
 import {
   idAndDeploymentSchema,
@@ -214,6 +223,115 @@ export const getDeploymentBuildLog = createServerFn({ method: 'GET' })
   )
   .handler(async ({ data }) => {
     return deploymentBuildLog(data.id, data.deploymentId);
+  });
+
+const ACTIVE_DEPLOYMENT_STATUSES: readonly string[] = [
+  'queued',
+  'awaiting_artifact',
+  'building',
+  'verifying',
+  'releasing',
+];
+
+/**
+ * A deployment request as the manage page shows it. Module-level code stays
+ * in the client bundle, so it uses no server value import.
+ */
+function deploymentRequestView(row: AppBuild) {
+  return {
+    id: row.id,
+    seq: row.seq,
+    commit: row.commit,
+    message: row.message,
+    build: row.mode,
+    trigger: row.trigger,
+    status: row.status,
+    finished: !ACTIVE_DEPLOYMENT_STATUSES.includes(row.status),
+    errorCode: row.errorCode,
+    errorMessage: row.errorMessage,
+    version: row.deploymentVersion,
+    createdAt: row.createdAt.toISOString(),
+    finishedAt: row.finishedAt?.toISOString() ?? null,
+  };
+}
+export type AppDeploymentRequestView = ReturnType<typeof deploymentRequestView>;
+
+/** Recent deployment requests and whether the platform has a Builder. */
+export const listAppDeploymentRequestsFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((id: string) => idSchema.parse(id))
+  .handler(async ({ data: id }) => {
+    const page = await listBuildRequests(id, { limit: 10 });
+    return {
+      builderEnabled: builderEnabled(),
+      deployments: page.items.map(deploymentRequestView),
+    };
+  });
+
+/** A deployment's log lines after `afterSeq`, and its current state. */
+export const getAppDeploymentLogFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; deploymentId: string; afterSeq: number }) =>
+    z
+      .object({
+        id: idSchema,
+        deploymentId: z.string().min(1).max(64),
+        afterSeq: z.number().int().min(0),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const row = await getBuildRequest(data.id, data.deploymentId);
+    const lines = await readBuildLog(row.id, data.afterSeq, 2000);
+    return {
+      deployment: deploymentRequestView(row),
+      lines: lines.map((line) => ({
+        seq: line.seq,
+        stream: line.stream,
+        text: line.text,
+      })),
+    };
+  });
+
+export const cancelAppDeploymentFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; deploymentId: string }) =>
+    z
+      .object({ id: idSchema, deploymentId: z.string().min(1).max(64) })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const session = await requireSession();
+    return deploymentRequestView(
+      await cancelBuildRequest(data.id, data.deploymentId, session.user.id),
+    );
+  });
+
+/** Build a recorded commit again on the Builder and release it. */
+export const redeployAppFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; commit: string; message: string }) =>
+    z
+      .object({
+        id: idSchema,
+        commit: z.string().regex(/^[0-9a-f]{40}$/),
+        message: z.string().trim().min(1).max(1000),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const session = await requireSession();
+    return deploymentRequestView(
+      await createDeployment({
+        appId: data.id,
+        commit: data.commit,
+        message: data.message,
+        build: 'builder',
+        trigger: 'ui',
+        actor: session.user.id,
+        notify: true,
+      }),
+    );
   });
 
 export const rollbackAppFn = createServerFn({ method: 'POST' })

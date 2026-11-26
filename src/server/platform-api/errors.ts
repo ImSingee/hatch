@@ -5,6 +5,7 @@ import { AppError } from '~server/errors';
 import { RunTokenError } from '~server/agent-runner/run-auth';
 import { DataMigrationApprovalRequired } from '~server/apps/data-table/migration-errors';
 import { AppManifestValidationError } from '~server/apps/manifest-validation';
+import { DeploymentRequestError } from '~server/apps/deployment-errors';
 
 const definitions = {
   BAD_REQUEST: [Code.InvalidArgument, 400, 'Invalid request.'],
@@ -30,6 +31,21 @@ const definitions = {
   ],
   INTERNAL_SERVER_ERROR: [Code.Internal, 500, 'Internal server error.'],
   SERVICE_UNAVAILABLE: [Code.Unavailable, 503, 'Service unavailable.'],
+  BUILDER_UNAVAILABLE: [
+    Code.Aborted,
+    409,
+    'This platform has no dedicated Builder.',
+  ],
+  DEPLOYMENT_NOT_CANCELABLE: [
+    Code.Aborted,
+    409,
+    'The deployment can no longer be canceled.',
+  ],
+  DEPLOYMENT_NOT_AWAITING_ARTIFACT: [
+    Code.Aborted,
+    409,
+    'The deployment does not accept a build package now.',
+  ],
   GATEWAY_TIMEOUT: [
     Code.DeadlineExceeded,
     504,
@@ -58,6 +74,8 @@ export function publicError(
       'CONFLICT',
       `Destructive Data Table migration requires explicit approval.\nApproval token: ${error.plan.approvalToken}\nInspect schema changes before retrying with --allow-destructive-data-migration and --data-migration-approval-token.`,
     );
+  if (error instanceof DeploymentRequestError)
+    return publicApiError(error.code, redactDomain ? undefined : error.message);
   // Its message names manifest fields and schema rules, never authored values.
   if (error instanceof AppManifestValidationError)
     return publicApiError(

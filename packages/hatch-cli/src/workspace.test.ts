@@ -45,6 +45,40 @@ let released: string | null;
 let deployedCommits: (string | undefined)[];
 let deploys: number;
 let loseResponse: boolean;
+let currentSocket: IncomingMessage['socket'] | undefined;
+type DeploymentRecord = {
+  id: string;
+  appId: string;
+  seq: number;
+  commit: string;
+  message: string;
+  build: string;
+  trigger: string;
+  status: string;
+  finished: boolean;
+  createdAt: string;
+  logSeq: number;
+};
+let deployments: DeploymentRecord[];
+function deploymentMessage(record: DeploymentRecord) {
+  return {
+    ...record,
+    ...(record.status === 'ready'
+      ? {
+          deployment: {
+            deploymentId: record.id,
+            version: record.seq,
+            compatibilityVersion: 1,
+            normalized: fromJson(ValueSchema, {
+              id: 'immutable',
+              name: 'Fixture',
+              description: '',
+            }),
+          },
+        }
+      : {}),
+  };
+}
 let sdkDelay: (() => Promise<void>) | undefined;
 let sdkFailure: boolean;
 let resourceSlug: string;
@@ -124,23 +158,43 @@ const rpc = connectNodeAdapter({
         appId: 'immutable',
         association: 'not-applicable',
       }),
-      deployApp: async (data) => {
+      createAppDeployment: async (data) => {
         deploys++;
+        const id = `deployment-${deploys}`;
+        const record = {
+          id,
+          appId: 'immutable',
+          seq: deploys,
+          commit: data.commit ?? '',
+          message: data.message,
+          build: 'builder',
+          trigger: 'cli',
+          // A lost response leaves the deployment the platform created
+          // still running; otherwise the fixture Builder releases at once.
+          status: loseResponse ? 'building' : 'ready',
+          finished: !loseResponse,
+          createdAt: new Date().toISOString(),
+          logSeq: 0,
+        };
+        deployments.push(record);
+        if (loseResponse) {
+          currentSocket?.destroy();
+          return new Promise<never>(() => {});
+        }
         deployedCommits.push(data.commit);
         released = data.commit ?? null;
-        return {
-          deployment: {
-            deploymentId: 'release-1',
-            version: 1,
-            compatibilityVersion: 1,
-            normalized: fromJson(ValueSchema, {
-              id: 'immutable',
-              name: 'Fixture',
-              description: '',
-            }),
-          },
-        };
+        return { deployment: deploymentMessage(record) };
       },
+      getAppDeployment: (data) => {
+        const record = deployments.find(
+          (item) => item.id === data.deploymentId,
+        );
+        if (!record) throw new ConnectError('missing', Code.NotFound);
+        return { deployment: deploymentMessage(record) };
+      },
+      listAppDeployments: () => ({
+        deployments: [...deployments].reverse().map(deploymentMessage),
+      }),
     });
     router.service(SdkService, {
       getSdk: async () => {
@@ -204,11 +258,7 @@ const server = createServer(async (request, response) => {
     gitHttp(request, response);
     return;
   }
-  if (loseResponse && request.url?.endsWith('/DeployApp')) {
-    deploys++;
-    request.socket.destroy();
-    return;
-  }
+  currentSocket = request.socket;
   await rpc(request, response);
 });
 
@@ -329,6 +379,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     released = null;
     deployedCommits = [];
     deploys = 0;
+    deployments = [];
     loseResponse = false;
     sdkDelay = undefined;
     sdkFailure = false;
@@ -724,37 +775,36 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     expect(git(target, 'rev-parse', 'HEAD')).toBe(master);
     expect(await readdir(target)).not.toContain('local.txt');
   });
-  it('records uncertain deploy outcomes and never blindly retries', async () => {
+  it('settles a lost deploy response from the platform record and never deploys twice', async () => {
     const root = await create();
     loseResponse = true;
     expect(
       (await run(['app', 'deploy', '--directory', root]).result).code,
     ).toBe(7);
+    loseResponse = false;
     const pending = JSON.parse(
       await readFile(join(root, '.git/hatch-cli.json'), 'utf8'),
     ).pending;
     expect(pending.commit).toBe(git(root, 'rev-parse', 'HEAD'));
+    expect(pending.deploymentId).toBeUndefined();
+    // The platform created the deployment before the response was lost and
+    // is still building it: no second deployment is requested.
     expect(
       (await run(['app', 'deploy', '--directory', root]).result).data.error
         .code,
-    ).toBe('deployment_outcome_unknown');
-    expect(
-      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
-        .data.state,
-    ).toBe('outcome-unresolved');
+    ).toBe('deployment_in_progress');
+    const reconciled = (
+      await run(['app', 'deploy', '--directory', root, '--reconcile']).result
+    ).data;
+    expect(reconciled).toMatchObject({
+      state: 'in-progress',
+      deployment: { deploymentId: 'deployment-1', commit: pending.commit },
+    });
     expect(deploys).toBe(1);
-    loseResponse = false;
+    // Once it finishes, the checkout settles it and deploys again.
+    Object.assign(deployments[0], { status: 'failed', finished: true });
     expect(
-      (
-        await run([
-          'app',
-          'deploy',
-          '--directory',
-          root,
-          '--retry-after-confirming',
-          pending.commit,
-        ]).result
-      ).code,
+      (await run(['app', 'deploy', '--directory', root]).result).code,
     ).toBe(0);
     expect(deploys).toBe(2);
     expect(deployedCommits).toEqual([pending.commit]);

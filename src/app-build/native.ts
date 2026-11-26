@@ -1,6 +1,7 @@
 /**
- * Server-only: build and check a `native` (NSH TSX) App frontend inside the
- * disposable build copy, and write its web player page.
+ * Build and check a `native` (NSH TSX) App frontend inside the disposable
+ * build copy. The platform makes the player page from what this writes
+ * (src/server/apps/native/player.ts).
  *
  * Deploy check, in order (docs/app-native-runtime.md):
  *  1. `nsh check`: types, including token names;
@@ -15,32 +16,24 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import * as esbuild from 'esbuild';
-import { BUILD_WORK_DIR, REPO_ROOT } from '~agent/paths';
-import { withSandboxOwnership } from '~agent/shell-sandbox';
 import {
-  APP_SDK,
   NATIVE_APP_SDK_DEFINITIONS,
   sdkImports,
-} from '../../../../sdk-internal/definitions';
+} from '../../sdk-internal/definitions';
+import { DEFAULT_ACCENT } from '../ui/theme/accents';
+import type { AppApi } from '../server/apps/manifest';
+import { nshTailwind, nshTheme } from '../server/apps/native/nsh-theme';
+import { isRuntimeFileName } from '../server/apps/native/runtime-names';
 import {
-  NATIVE_RUNTIME_META,
-  NATIVE_SURFACE_PROTOCOL,
-} from '../../../../sdk-internal/app/src/native-surface';
-import type { NativePlayerConfig } from '../../../../sdk-internal/app/src/native-player';
-import { ACCENT_NAMES, DEFAULT_ACCENT } from '../../../ui/theme/accents';
-import { subprocessSandboxEnv } from '../../sandbox-env';
-import { run } from '../../subprocess';
-import { sandboxedEvaluationCommand } from '../../../toolchain/platform';
-import { dataTableUrl, rpcUrl, type AppApi } from '../manifest';
-import { nshBinary, nshEnv, NSH_VERSION } from './nsh-toolchain';
-import { nshTailwind, nshTheme, nshThemesByAccent } from './nsh-theme';
+  checkNativeSourceRules,
+  nativeModuleGraph,
+} from '../server/apps/native/source-rules';
 import {
-  isRuntimeFileName,
-  nshRuntimeBase,
-  publishRuntimeFile,
-} from './runtime-store';
-import { checkNativeSourceRules, nativeModuleGraph } from './source-rules';
+  BUILD_PACKAGE_NATIVE_DESCRIPTION,
+  BUILD_PACKAGE_NSH_RUNTIME_DIR,
+  type NativePackage,
+} from './format';
+import type { BuildNshHost } from './host';
 
 /**
  * Host calls a native App is granted on every shell, and nothing else: no
@@ -58,11 +51,6 @@ export const NATIVE_HOST_CALLS = [
   'hatch.nav.open',
   'hatch.native.supports',
 ] as const;
-
-/** The grant a shell hands NSH for an App, as the JSON text NSH reads. */
-export function nativeGrant(): string {
-  return JSON.stringify({ host: [...NATIVE_HOST_CALLS] });
-}
 
 /**
  * The NSH app id of a Hatch App: NSH scopes an App's storage by it, so the
@@ -162,7 +150,7 @@ export function unknownClassWarnings(output: string): string[] {
     .map((line) => line.replace(/^warn\s+(?:nsh::build\s+)?/, ''));
 }
 
-class NativeBuildError extends Error {
+export class NativeBuildError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'NativeBuildError';
@@ -235,95 +223,12 @@ const NSH_PAGE_FILE =
 /** How long the start-up check may run before the deploy fails. */
 const SMOKE_TIMEOUT_MS = 60_000;
 
-type PackagedApp = {
+type PackagedApp = NativePackage & {
   id: string;
-  wasm: string;
-  code: string;
   rust?: boolean;
   host?: string | null;
-  runtime: string;
-  data?: Record<string, string>;
-  sides?: Record<string, { url: string } & Record<string, unknown>>;
-  assets?: Record<string, string>;
-  fonts?: string[];
-  chunks?: Record<string, string>;
-  chunkFonts?: Record<string, string[]>;
-  chunkSides?: Record<string, string[]>;
-  entryChunks?: string[];
-  nativeExports?: Record<string, string[]>;
   glue?: string;
 };
-
-function scriptJson(value: unknown): string {
-  return JSON.stringify(value)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-}
-
-function htmlText(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-const PLAYER_CSS = `html, body { margin: 0; height: 100%; overflow: hidden; }
-html, body { background: var(--hatch-player-background, #ffffff); }
-#app { position: fixed; inset: 0; }
-#status { position: fixed; inset: 0; display: flex; align-items: center;
-  justify-content: center; padding: 24px; box-sizing: border-box;
-  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #1e2230; text-align: center; white-space: pre-wrap; }
-#status[hidden] { display: none; }
-`;
-
-/**
- * The Desk fonts, under the family names the theme uses, from the same
- * `@fontsource-variable` files the platform UI ships. NSH renders text as
- * DOM on the web, so the player page's `@font-face` rules reach the App.
- */
-const PLAYER_FONTS = [
-  { family: 'Nunito', package: '@fontsource-variable/nunito' },
-  { family: 'JetBrains Mono', package: '@fontsource-variable/jetbrains-mono' },
-];
-
-async function writePlayerFonts(appOut: string): Promise<void> {
-  const fontsOut = path.join(appOut, 'fonts');
-  await fs.mkdir(fontsOut, { recursive: true });
-  const rules: string[] = [];
-  for (const font of PLAYER_FONTS) {
-    const dir = path.join(
-      REPO_ROOT,
-      'node_modules',
-      ...font.package.split('/'),
-    );
-    const css = await fs.readFile(path.join(dir, 'wght.css'), 'utf8');
-    const files = new Set<string>();
-    rules.push(
-      css
-        .replace(/font-family:\s*'[^']*'/g, `font-family: '${font.family}'`)
-        .replace(/url\(\.\/files\/([\w.-]+)\)/g, (_match, file: string) => {
-          files.add(file);
-          return `url(./fonts/${file})`;
-        }),
-    );
-    for (const file of files) {
-      await fs.copyFile(
-        path.join(dir, 'files', file),
-        path.join(fontsOut, file),
-      );
-    }
-  }
-  await fs.writeFile(path.join(appOut, 'fonts.css'), rules.join('\n'), 'utf8');
-}
-
-async function copyTree(from: string, to: string): Promise<void> {
-  await fs.mkdir(path.dirname(to), { recursive: true });
-  await fs.cp(from, to, { recursive: true, errorOnExist: false });
-}
 
 async function listFiles(root: string, relative = ''): Promise<string[]> {
   const out: string[] = [];
@@ -337,39 +242,61 @@ async function listFiles(root: string, relative = ''): Promise<string[]> {
   return out;
 }
 
-function packagedApp(html: string): PackagedApp {
+function packagedApp(html: string, version: string): PackagedApp {
   const match =
     /<script type="application\/json" id="nsh-app">([\s\S]*?)<\/script>/.exec(
       html,
     );
   if (!match) {
     throw new NativeBuildError(
-      `nsh package wrote no app description; is nsh ${NSH_VERSION} installed?`,
+      `nsh package wrote no app description; is nsh ${version} installed?`,
     );
   }
   return JSON.parse(match[1]) as PackagedApp;
 }
 
+const relativeRef = (file: string) => file.replace(/^\.\//, '');
+
+/** The runtime files a packaged App references, App-root relative. */
+export function nativeRuntimeRefs(packaged: NativePackage): string[] {
+  return [
+    packaged.runtime,
+    packaged.wasm,
+    ...Object.values(packaged.data ?? {}),
+    ...Object.values(packaged.sides ?? {}).map((side) => side.url),
+  ].map(relativeRef);
+}
+
+/** The App files a packaged App references, App-root relative. */
+export function nativeAppRefs(packaged: NativePackage): string[] {
+  return [
+    packaged.code,
+    ...Object.values(packaged.chunks ?? {}),
+    ...Object.values(packaged.assets ?? {}),
+  ].map(relativeRef);
+}
+
 export type NativeBuildOptions = {
   /** Disposable App root (already installed, SDK materialized, codegen run). */
   src: string;
-  /** Build output root; the frontend goes to `<out>/app/`. */
+  /** Package root; the frontend goes to `<out>/app/`. */
   out: string;
+  /** Scratch directory for NSH's intermediate output. */
+  workDir: string;
   app: { id: string; name: string; entry: string };
   api?: AppApi;
-  dataTable: boolean;
-  deploymentId?: string;
-  /** esbuild resolution for the player script (SDK plugin, boundary). */
-  esbuildResolve: Pick<esbuild.BuildOptions, 'absWorkingDir' | 'plugins'>;
+  nsh: BuildNshHost;
   logs: string[];
 };
 
-/** Build a native frontend into `<out>/app/`. Returns the NSH version used. */
+/**
+ * Build a native frontend into `<out>/app/`: the release bundle, the linked
+ * web module, its runtime files and the package description.
+ */
 export async function buildNativeFrontend(
   options: NativeBuildOptions,
-): Promise<{ nshVersion: string }> {
-  const { src, out, app, logs } = options;
-  const nsh = nshBinary();
+): Promise<void> {
+  const { src, out, app, logs, nsh } = options;
   const entryDir = path.posix.dirname(app.entry);
   if (entryDir !== 'app') {
     throw new NativeBuildError(
@@ -385,8 +312,7 @@ export async function buildNativeFrontend(
     'utf8',
   );
 
-  const env = subprocessSandboxEnv(nshEnv());
-  const work = path.join(BUILD_WORK_DIR, `${app.id}-nsh-${randomUUID()}`);
+  const work = path.join(options.workDir, `${app.id}-nsh-${randomUUID()}`);
   await fs.mkdir(work, { recursive: true });
   try {
     const nshRun = async (
@@ -394,14 +320,7 @@ export async function buildNativeFrontend(
       args: string[],
       extra: { sandboxed?: boolean; timeoutMs?: number } = {},
     ) => {
-      const [command, commandArgs] = extra.sandboxed
-        ? sandboxedEvaluationCommand([nsh, ...args])
-        : [nsh, args];
-      const result = await run(command, commandArgs, {
-        cwd: src,
-        env,
-        timeoutMs: extra.timeoutMs,
-      });
+      const result = await nsh.run(args, { cwd: src, ...extra });
       const output = appRelativeDiagnostics(
         result.output.trim(),
         args[0] === 'check' ? '' : entryDir,
@@ -468,7 +387,7 @@ export async function buildNativeFrontend(
     });
     // The check runs as the sandbox identity, which owns the private build
     // copy only while it runs.
-    await withSandboxOwnership([src], () =>
+    await nsh.withSandboxOwnership([src], () =>
       nshRun(
         'Start-up check (nsh test)',
         ['test', app.entry, '--web-host', smokeHost],
@@ -497,6 +416,7 @@ export async function buildNativeFrontend(
     const site = path.join(packageDir, 'app');
     const packaged = packagedApp(
       await fs.readFile(path.join(site, 'index.html'), 'utf8'),
+      nsh.version,
     );
     if (packaged.rust || packaged.host || packaged.glue) {
       throw new NativeBuildError(
@@ -506,6 +426,7 @@ export async function buildNativeFrontend(
 
     const appOut = path.join(out, 'app');
     const webOut = path.join(appOut, 'web');
+    const runtimeOut = path.join(out, BUILD_PACKAGE_NSH_RUNTIME_DIR);
     await fs.mkdir(webOut, { recursive: true });
     await fs.copyFile(
       path.join(bundleDir, 'bundle.js'),
@@ -524,16 +445,10 @@ export async function buildNativeFrontend(
         });
     }
 
-    // Runtime files go to the shared, content-addressed store; App files
-    // stay with the deployment.
-    const runtimeFiles = new Set<string>();
-    const runtimeRefs = [
-      packaged.runtime,
-      packaged.wasm,
-      ...Object.values(packaged.data ?? {}),
-      ...Object.values(packaged.sides ?? {}).map((side) => side.url),
-    ].map((file) => file.replace(/^\.\//, ''));
+    const runtimeRefs = nativeRuntimeRefs(packaged);
+    const appRefs = new Set(nativeAppRefs(packaged));
     const allFiles = await listFiles(site);
+    const runtimeFiles = new Set<string>();
     for (const file of allFiles) {
       const base = file.replace(/\.(?:br|gz)$/, '');
       if (runtimeRefs.includes(base) || /^browser\.[0-9a-f]+\//.test(file)) {
@@ -543,13 +458,6 @@ export async function buildNativeFrontend(
         runtimeFiles.add(file);
       }
     }
-    const appRefs = new Set(
-      [
-        packaged.code,
-        ...Object.values(packaged.chunks ?? {}),
-        ...Object.values(packaged.assets ?? {}),
-      ].map((file) => file.replace(/^\.\//, '')),
-    );
     // Every file `nsh package` wrote is served (runtime or App) or belongs
     // to its own page, which the player page replaces. A file of another
     // kind (a new NSH release loading more on demand, say) would 404 only
@@ -568,144 +476,52 @@ export async function buildNativeFrontend(
     );
     if (unplaced.length || missing.length) {
       throw new NativeBuildError(
-        `nsh ${NSH_VERSION} package output does not match what the player ` +
+        `nsh ${nsh.version} package output does not match what the player ` +
           `serves: ${[
             ...unplaced.map((file) => `unexpected ${file}`),
             ...missing.map((file) => `missing ${file}`),
           ].join(', ')}`,
       );
     }
-    for (const file of runtimeFiles) {
-      await publishRuntimeFile(NSH_VERSION, file, path.join(site, file));
-    }
     for (const file of allFiles) {
       const base = file.replace(/\.(?:br|gz)$/, '');
+      const target = (root: string) => path.join(root, ...file.split('/'));
+      if (runtimeFiles.has(file)) {
+        await fs.mkdir(path.dirname(target(runtimeOut)), { recursive: true });
+        await fs.copyFile(path.join(site, file), target(runtimeOut));
+        continue;
+      }
       if (file.endsWith('.br') || file.endsWith('.gz')) continue;
       if (appRefs.has(base) || file.startsWith('facades/')) {
-        await copyTree(path.join(site, file), path.join(webOut, file));
+        await fs.mkdir(path.dirname(target(webOut)), { recursive: true });
+        await fs.copyFile(path.join(site, file), target(webOut));
       }
     }
 
-    const web = (file: string) => `web/${file.replace(/^\.\//, '')}`;
-    const runtimeRel = (file: string) => file.replace(/^\.\//, '');
-    const methods: Record<string, string[]> = {};
-    for (const service of options.api?.services ?? []) {
-      methods[service.name] = service.methods
-        .filter((method) => !method.clientStreaming && !method.serverStreaming)
-        .map((method) => method.name);
-    }
-    const config: NativePlayerConfig = {
-      appId: app.id,
-      deploymentId: options.deploymentId ?? '',
-      name: app.name,
-      nshAppId: nshAppId(app.id),
-      runtime: {
-        base: nshRuntimeBase(NSH_VERSION),
-        module: runtimeRel(packaged.runtime),
-        wasm: runtimeRel(packaged.wasm),
-        data: Object.fromEntries(
-          Object.entries(packaged.data ?? {}).map(([key, file]) => [
-            key,
-            runtimeRel(file),
-          ]),
-        ),
-        sides: Object.fromEntries(
-          Object.entries(packaged.sides ?? {}).map(([key, side]) => [
-            key,
-            { ...side, url: runtimeRel(side.url) },
-          ]),
-        ),
-      },
-      app: {
-        code: web(packaged.code),
-        chunks: Object.fromEntries(
-          Object.entries(packaged.chunks ?? {}).map(([key, file]) => [
-            key,
-            web(file),
-          ]),
-        ),
-        assets: Object.fromEntries(
-          Object.entries(packaged.assets ?? {}).map(([key, file]) => [
-            key,
-            web(file),
-          ]),
-        ),
-        fonts: packaged.fonts ?? [],
-        chunkFonts: packaged.chunkFonts ?? {},
-        chunkSides: packaged.chunkSides ?? {},
-        entryChunks: packaged.entryChunks ?? [],
-        nativeExports: packaged.nativeExports ?? {},
-      },
-      grant: nativeGrant(),
-      rpc: options.api?.services.length
-        ? { url: rpcUrl(app.id), methods }
-        : null,
-      data: options.dataTable ? { url: dataTableUrl(app.id) } : null,
-      themes: nshThemesByAccent(),
-      defaultAccent: DEFAULT_ACCENT,
+    const description: NativePackage = {
+      nshVersion: nsh.version,
+      runtime: packaged.runtime,
+      wasm: packaged.wasm,
+      code: packaged.code,
+      data: packaged.data,
+      sides: packaged.sides,
+      assets: packaged.assets,
+      fonts: packaged.fonts,
+      chunks: packaged.chunks,
+      chunkFonts: packaged.chunkFonts,
+      chunkSides: packaged.chunkSides,
+      entryChunks: packaged.entryChunks,
+      nativeExports: packaged.nativeExports,
     };
-    // Every accent the player may be told about has a theme.
-    for (const accent of ACCENT_NAMES) {
-      if (!config.themes[accent]) throw new Error(`No theme for ${accent}`);
-    }
-
-    const player = await esbuild.build({
-      ...options.esbuildResolve,
-      stdin: {
-        // A platform-only SDK entry: no import map lists it, so App source
-        // cannot import it; it is loaded here by its materialized path.
-        contents:
-          `import { startNativePlayer } from ${JSON.stringify(
-            `./.hatch/sdk/${APP_SDK.manifest.name}/${APP_SDK.manifest.exports['./native/player'].default.slice(2)}`,
-          )};\n` + 'void startNativePlayer();\n',
-        resolveDir: options.esbuildResolve.absWorkingDir,
-        loader: 'js',
-      },
-      bundle: true,
-      format: 'esm',
-      platform: 'browser',
-      target: 'es2022',
-      minify: true,
-      write: false,
-      logLevel: 'silent',
-    });
     await fs.writeFile(
-      path.join(appOut, 'player.js'),
-      player.outputFiles[0].text,
-      'utf8',
-    );
-    await fs.writeFile(path.join(appOut, 'player.css'), PLAYER_CSS, 'utf8');
-    await writePlayerFonts(appOut);
-    const title = htmlText(app.name);
-    await fs.writeFile(
-      path.join(appOut, 'index.html'),
-      `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="${NATIVE_RUNTIME_META}" content="native" data-protocol="${NATIVE_SURFACE_PROTOCOL}">
-<title>${title}</title>
-<link rel="stylesheet" href="./player.css">
-<link rel="stylesheet" href="./fonts.css">
-<link rel="modulepreload" href="${nshRuntimeBase(NSH_VERSION)}${runtimeRel(packaged.runtime)}">
-<script type="application/json" id="hatch-player">${scriptJson(config)}</script>
-<script type="module" src="./player.js"></script>
-</head>
-<body>
-<div id="app"></div>
-<div id="status" role="status" aria-live="polite" hidden></div>
-<noscript>${title} needs JavaScript.</noscript>
-</body>
-</html>
-`,
+      path.join(out, BUILD_PACKAGE_NATIVE_DESCRIPTION),
+      JSON.stringify(description, null, 2),
       'utf8',
     );
     logs.push(
-      `built native frontend with nsh ${NSH_VERSION} -> app/index.html, ` +
-        `app/bundle.js, ${runtimeFiles.size} shared runtime file(s)`,
+      `built native frontend with nsh ${nsh.version} -> app/bundle.js, ` +
+        `${runtimeFiles.size} runtime file(s)`,
     );
-    return { nshVersion: NSH_VERSION };
   } finally {
     await fs.rm(work, { recursive: true, force: true });
   }

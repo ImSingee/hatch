@@ -38,9 +38,43 @@ for (const input of Object.keys(result.metafile.inputs)) {
     throw new Error(`Server-only module leaked into CLI: ${input}`);
 }
 
+// The local build driver runs from the toolchain cache, where esbuild and
+// TypeScript (native binaries, the platform's exact versions) are installed
+// beside it; everything else is bundled.
+const driver = await build({
+  define: { __HATCH_BUILD_INFO__: JSON.stringify(resolveBuildInfo()) },
+  metafile: true,
+  entryPoints: [
+    fileURLToPath(
+      new URL('../packages/hatch-cli/src/build-driver.ts', import.meta.url),
+    ),
+  ],
+  outfile: path.join(path.dirname(output), 'build-driver.mjs'),
+  bundle: true,
+  platform: 'node',
+  target: 'node26',
+  format: 'esm',
+  external: ['esbuild', 'typescript', 'typescript/*'],
+  banner: {
+    js: [
+      "import { createRequire as __hatchCreateRequire } from 'node:module';",
+      'const require = __hatchCreateRequire(import.meta.url);',
+    ].join('\n'),
+  },
+  logLevel: 'info',
+});
+for (const input of Object.keys(driver.metafile.inputs)) {
+  // The driver builds App source; it must never carry platform state.
+  if (/^src\/(db|auth)\//.test(input) || input === 'src/env.ts')
+    throw new Error(`Platform module leaked into the build driver: ${input}`);
+}
+
 // Preserve license notices for every npm package whose code is bundled.
 const notices = new Map<string, string>();
-for (const input of Object.keys(result.metafile.inputs)) {
+for (const input of [
+  ...Object.keys(result.metafile.inputs),
+  ...Object.keys(driver.metafile.inputs),
+]) {
   if (!input.includes('node_modules/')) continue;
   let directory = path.dirname(path.resolve(input));
   while (directory !== path.dirname(directory)) {

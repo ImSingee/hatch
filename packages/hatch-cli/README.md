@@ -135,6 +135,10 @@ hatch app update --directory ./notes-copy --json
 hatch app push --directory ./notes-copy --json
 hatch app deploy --directory ./notes-copy --message 'Release notes' --json
 hatch app deploy --directory ./notes-copy --commit <full-commit-id> --json
+hatch app deploy --directory ./notes-copy --build local --json
+hatch app deployments list <id-or-slug> --json
+hatch app deployments logs <id-or-slug> <deployment-id> --follow
+hatch app deployments cancel <id-or-slug> <deployment-id> --json
 hatch app rollback <id-or-slug> --version 1 --json
 ```
 
@@ -179,13 +183,46 @@ is rejected with `workspace_instance_mismatch`.
   `non_fast_forward`. Uncommitted changes are neither required to be absent nor
   sent. Output: `{id, commit, masterCommit, state: "pushed" | "up-to-date"}`.
 - **Deploy:** require clean committed source, validate tracked managed paths,
-  push `HEAD` exactly as `push` does, then release that commit with the recorded
-  generation. `--commit <full-commit-id>` skips the push and releases a commit
-  that is already on platform `master` (its tip or an ancestor); any other
-  commit is rejected. A failed build leaves the pushed commit on `master`
-  unreleased. Platform manifest ID/compatibility, build and migration policies
-  remain authoritative. No compatibility/protocol bump or source defaults are
-  added.
+  push `HEAD` exactly as `push` does, then create a deployment of that commit
+  with the recorded generation (`AppService/CreateAppDeployment`).
+  `--commit <full-commit-id>` skips the push and deploys a commit that is
+  already on platform `master` (its tip or an ancestor); any other commit is
+  rejected. Source always comes first: a deployment only ever names a pushed
+  commit, and its build package is uploaded to that deployment.
+  - `--build builder` builds on the platform's dedicated Builder and follows
+    its log (`WatchAppDeploymentLogs`) until the deployment finishes;
+    `--no-wait` prints the queued deployment instead and asks the platform
+    for a notification when it finishes. A platform without a Builder
+    rejects it with `BUILDER_UNAVAILABLE`.
+  - `--build local` builds here: the CLI exports the commit with
+    `git archive`, runs the platform's build with its pinned esbuild,
+    TypeScript, buf and protoc-gen-es (installed once into
+    `$XDG_CACHE_HOME/hatch/toolchain`, default `~/.cache/hatch`; or taken
+    from `HATCH_BUILD_TOOLCHAIN_DIR` when that directory's `node_modules`
+    holds exactly those versions, as in the platform image), and uploads the
+    package (`UploadAppDeploymentArtifact`, at most 200 MiB compressed). A
+    native frontend also needs `nsh` of the platform's version (`HATCH_NSH_BIN`
+    or `PATH`). Build output goes to stderr. A build that fails here is
+    recorded as a failed deployment.
+  - `--build auto` (default) is `builder` where the platform has one, else
+    `local`.
+
+  The platform checks every package (its own App, deployment, commit and
+  toolchain, the manifest, API, tasks, data schema and docs) and writes the
+  files that decide how the App runs before it releases anything. A failed
+  build leaves the pushed commit on `master` unreleased. Output is the
+  finished deployment: `deploymentId`, `status`, `build`, `commit`, and once
+  `ready` its `version`, `compatibilityVersion`, `slug` and `normalized`
+  manifest, plus `sourceCommit` and `pushState`. No compatibility/protocol
+  bump or source defaults are added.
+
+- **Deployments:** `app deployments list|get|logs|cancel` inspect deployment
+  requests (status `queued`, `awaiting_artifact`, `building`, `verifying`,
+  `releasing`, `ready`, `failed`, `canceled` or `superseded`), print or
+  follow their build and release log, and cancel one that has not started
+  verifying. A newer deployment supersedes older ones still waiting for their
+  build, and an older build that finishes after a newer release is never
+  released.
 - **Rollback:** synchronous API call with a real release version; display the
   returned compatibility object and App `dataSchemaMismatch`. Data schema and
   contents are forward-only; rollback does not undo a destructive migration.
@@ -305,8 +342,9 @@ never the authored value; an object key that is not a plain identifier shows as
 
 ## Migration approval and uncertain outcomes
 
-A destructive App Data Table preview returns `CONFLICT` and an exact approval
-token. Review the authored schema diff, then retry the same committed change explicitly:
+A destructive App Data Table preview fails the deployment with
+`data_migration_approval_required` (exit 6) and an exact approval token in the
+message. Review the authored schema diff, then retry the same committed change explicitly:
 
 ```sh
 hatch app deploy --directory notes-copy --message 'Reviewed migration' \
@@ -319,28 +357,34 @@ approval or destructive retry is performed. Definite 4xx rejections clear the
 pending marker; source/data protection is owned by existing platform services.
 
 A deploy whose source fails to build (type check, codegen, bundling, or a
-native App's deploy check) is a definite rejection: `BAD_REQUEST` (exit 2)
+native App's deploy check) is a definite rejection: `app_build_failed` (exit 2)
 whose message is the build output, naming files and lines, for example
 `app/custom/ui.tsx:17: bare colour in a class`. Nothing was released; fix the
-source and deploy again.
+source and deploy again. Other ends of a deployment exit 6 with its code:
+`toolchain_mismatch` (upgrade the CLI), `app_build_invalid` (the platform
+refused the package), `superseded`, `canceled`, `builder_lost`,
+`artifact_timeout`, `resource_generation_conflict` or `release_failed`.
 
-Create/deploy/rollback are never automatically retried. Network/5xx/cancel can
-leave an unknown server outcome. Deploy fsyncs a pending commit before sending:
+Create/deploy/rollback are never automatically retried. Every deployment is a
+platform record, so an interrupted deploy is settled rather than guessed. The
+checkout records a deploy before creating it, and the deployment id once the
+platform answers:
 
 ```sh
 hatch app deploy --directory notes-copy --reconcile --json
-# Only after inspecting release history and confirming the previous request ended:
+hatch app deployments logs <id> <deployment-id> --follow
+# Forget the pending deployment without looking it up:
 hatch app deploy --directory notes-copy --retry-after-confirming '<pending-commit>' --json
 ```
 
-`--reconcile` reports `source-matches-pending` when the resource's released
-commit (`currentSourceCommit`) equals the pending commit, otherwise
-`outcome-unresolved`. The push that precedes a release is safe to repeat.
-Matching source is evidence, not proof of a deployment version or completion.
-The explicit retry confirmation is recorded locally; it is not server-side
-idempotency. Cancellation does not cancel a platform build already in flight.
-Create/rollback uncertainty is reported for manual detail/source/release-history
-inspection. No durable operation service or fake async operation IDs are added.
+`--reconcile` reports the pending deployment as `not-created`, `in-progress`
+or `finished` (with the deployment) and forgets it unless it is still in
+progress. The next deploy does the same on its own: a finished one is
+settled, one still in progress fails with `deployment_in_progress` (exit 6)
+until it finishes or is canceled. A deploy whose `--timeout` passes while the
+Builder is working exits 7 with `deployment_in_progress` and the deployment in
+the error details; it keeps running on the platform. The push that precedes a
+deployment is safe to repeat.
 
 ## Output, errors and unsupported commands
 
