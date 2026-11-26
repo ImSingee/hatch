@@ -193,7 +193,7 @@ domain service and `silent: true` option. No Agent Tool is added.
 `hatch theme set [--theme <id>] [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels]`,
 `hatch theme list [--limit <n>] [--cursor <cursor>]`,
 `hatch theme create --file <path|->`, `hatch theme update <id> --file <path|->`,
-`hatch theme delete <id>`, `hatch theme check --file <path|->` and
+`hatch theme delete <id> --yes`, `hatch theme check --file <path|->` and
 `hatch theme reset` call `ThemeService`, which reads and writes the `ui.theme`
 platform setting and the `themes` table through
 `src/server/theme-settings.ts`, the same service as the Appearance settings
@@ -204,7 +204,7 @@ page. Web operation to command:
 | Theme library: choose a card (any theme)       | `theme set --theme <id>`                      | SetTheme             |
 | New theme / Duplicate, then Save in the editor | `theme create --file <path\|->`               | CreateTheme          |
 | Edit (or rename) a custom theme, then Save     | `theme update <id> --file <path\|->`          | UpdateTheme          |
-| Delete a custom theme (confirmation)           | `theme delete <id>`                           | DeleteTheme          |
+| Delete a custom theme (confirmation)           | `theme delete <id> --yes`                     | DeleteTheme          |
 | Editor problems shown on Save                  | `theme check --file <path\|->`                | ValidateTheme        |
 | Accent swatches, "Theme colour"                | `theme set --accent <name>`, `--clear-accent` | SetTheme             |
 | Show names in the dock                         | `theme set --dock-labels \| --no-dock-labels` | SetTheme             |

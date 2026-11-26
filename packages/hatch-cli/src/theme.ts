@@ -68,7 +68,7 @@ const OPTIONS: Record<Operation, Parameters<typeof parseCommandArgs>[3]> = {
   list: PAGE_OPTIONS,
   create: FILE,
   update: FILE,
-  delete: {},
+  delete: { yes: { type: 'boolean' } },
   check: FILE,
   reset: {},
 };
@@ -137,7 +137,11 @@ export function parseThemeCommand(
   const { flags, positionals } = parseCommandArgs(args, offset, 2, OPTIONS[op]);
   if (WITH_ID.includes(op)) {
     const id = themeId(onePositional(positionals, 'theme id'), 'The theme id');
-    if (op === 'delete') return { command: { kind: 'delete', id }, flags };
+    if (op === 'delete') {
+      if (flags.yes !== true)
+        throw invalid('Deleting a custom theme cannot be undone; pass --yes.');
+      return { command: { kind: 'delete', id }, flags };
+    }
     return { command: { kind: 'update', id, file: fileFlag(flags) }, flags };
   }
   if (positionals.length)

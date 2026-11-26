@@ -723,7 +723,7 @@ hatch theme check --file meadow.json --json
 hatch theme create --file meadow.json --json
 hatch theme update <theme-id> --file meadow.json
 hatch theme set --theme <theme-id>
-hatch theme delete <theme-id>
+hatch theme delete <theme-id> --yes
 hatch theme reset
 hatch pin list --json
 hatch pin list --limit 20 --cursor <next-cursor> --json
@@ -756,7 +756,8 @@ activated. Theme names are unique, ignoring case, and the preset names (`Desk`,
 `CONFLICT` (exit 6) and the message names it; rename by updating the document's
 `name`. `theme update <id> --file` replaces a custom theme's document
 whole; presets cannot be changed (`BAD_REQUEST`, exit 2), copy one with
-`create` instead. `theme delete <id>` deletes a custom theme permanently; the
+`create` instead. `theme delete <id> --yes` deletes a custom theme permanently (without
+`--yes` it is rejected locally, since it cannot be undone); the
 active theme cannot be deleted (`CONFLICT`, exit 6), activate another first.
 An unknown id is `NOT_FOUND` (exit 5).
 
@@ -802,7 +803,7 @@ not define, `--accent` with `--clear-accent`, `--dock-labels` with
 `--no-dock-labels`, `theme set` with nothing to change, a `--theme` or theme
 id that is not lowercase letters, digits and hyphens, `theme create`,
 `update` or `check` without `--file`, `update` or `delete` without exactly
-one id; an unreadable or non-JSON `--file` exits 2 with `input_unreadable`
+one id, `delete` without `--yes`; an unreadable or non-JSON `--file` exits 2 with `input_unreadable`
 or `invalid_input` before any request. For pins: no target or more than one of `--app`, `--dashboard` and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
 `--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`, an
 `--entry` longer than 512 characters (the platform also rejects one, never

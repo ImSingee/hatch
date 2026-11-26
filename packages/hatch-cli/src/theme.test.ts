@@ -117,7 +117,7 @@ describe('the theme library commands', () => {
       id: 'abc123',
       file: '-',
     });
-    expect(command('theme', 'delete', 'abc123')).toEqual({
+    expect(command('theme', 'delete', 'abc123', '--yes')).toEqual({
       kind: 'delete',
       id: 'abc123',
     });
@@ -141,9 +141,16 @@ describe('the theme library commands', () => {
         ['theme', 'update', 'a', 'b', '--file', '-'],
         'Supply exactly one theme id',
       ],
-      [['theme', 'delete'], 'Supply exactly one theme id'],
-      [['theme', 'delete', 'UPPER'], 'The theme id must be a theme id'],
-      [['theme', 'delete', 'abc', '--file', 'x'], '--file is not a flag'],
+      [['theme', 'delete', '--yes'], 'Supply exactly one theme id'],
+      [
+        ['theme', 'delete', 'UPPER', '--yes'],
+        'The theme id must be a theme id',
+      ],
+      [
+        ['theme', 'delete', 'abc', '--yes', '--file', 'x'],
+        '--file is not a flag',
+      ],
+      [['theme', 'delete', 'abc'], 'cannot be undone; pass --yes'],
       [['theme', 'list', '--limit', '0'], '--limit must be a whole number'],
       [['theme', 'check'], 'Supply --file'],
       [['theme', 'presets'], 'Use hatch theme get, set, list'],

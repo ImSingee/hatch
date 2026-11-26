@@ -475,9 +475,9 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['theme', 'delete'],
-    usage: 'theme delete <id>',
+    usage: 'theme delete <id> --yes',
     description:
-      'Delete a custom theme permanently. Presets cannot be deleted, and neither can the active theme (CONFLICT): activate another theme first.',
+      'Delete a custom theme permanently; cannot be undone, so --yes is required. Presets cannot be deleted, and neither can the active theme (CONFLICT): activate another theme first.',
   },
   {
     path: ['theme', 'check'],

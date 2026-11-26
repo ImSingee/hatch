@@ -62,19 +62,22 @@ function readCache(): Record<string, ResolvedTheme> {
  */
 export function InstanceTheme({ children }: PropsWithChildren) {
   const { api, origin } = useSession();
-  // Read once at launch; `stored` is what is written back.
-  const [cached] = useState(readCache);
-  const stored = useRef<Record<string, ResolvedTheme>>(cached);
+  // Each instance's last answer: read from the file once at launch, then
+  // updated on every answer, so switching back to an instance draws its
+  // latest theme even before (or without) a new answer.
+  const [cache, setCache] = useState(readCache);
+  const launched = useRef(cache);
+  useEffect(() => {
+    if (cache === launched.current) return;
+    cacheFile()
+      .write(JSON.stringify(cache))
+      .catch(() => undefined);
+  }, [cache]);
   const theme = useQuery({
     queryKey: [origin, 'theme'],
     queryFn: async ({ signal }) => {
       const next = await api!.theme(signal);
-      if (origin) {
-        stored.current = { ...stored.current, [origin]: next };
-        cacheFile()
-          .write(JSON.stringify(stored.current))
-          .catch(() => undefined);
-      }
+      if (origin) setCache((current) => ({ ...current, [origin]: next }));
       return next;
     },
     enabled: Boolean(api),
@@ -82,7 +85,7 @@ export function InstanceTheme({ children }: PropsWithChildren) {
     staleTime: 0,
   });
   const resolved =
-    theme.data ?? (origin ? cached[origin] : undefined) ?? BUILT_IN_THEME;
+    theme.data ?? (origin ? cache[origin] : undefined) ?? BUILT_IN_THEME;
 
   useEffect(() => {
     Appearance.setColorScheme(resolved.appearance);
