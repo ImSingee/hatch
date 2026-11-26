@@ -10,7 +10,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants } from 'node:fs';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
@@ -21,6 +21,7 @@ import { sdkFilesDigest } from '../../../src/app-build/sdk-digest';
 import { run } from '../../../src/server/subprocess';
 import { pnpmInvocation } from './pnpm';
 import { childEnvironment } from './process';
+import { writeFiles } from './workspace';
 
 const requestSchema = z.object({
   appId: z.string().min(1),
@@ -243,13 +244,9 @@ async function main(): Promise<void> {
       });
     },
     async materializeSdk(root) {
-      for (const file of sdkFiles) {
-        const target = path.join(root, '.hatch', ...file.path.split('/'));
-        await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, Buffer.from(file.contentBase64, 'base64'), {
-          flag: 'wx',
-        });
-      }
+      // The same path rules as a checkout's SDK files: nothing outside
+      // `.hatch`, no repository or install directories, no duplicates.
+      await writeFiles(path.join(root, '.hatch'), sdkFiles);
     },
     async tooling({ native }) {
       return {
