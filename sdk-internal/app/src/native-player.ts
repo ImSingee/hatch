@@ -634,19 +634,27 @@ export async function startNativePlayer(): Promise<void> {
     );
 
   // A font asset, fetched once; text is measured with it, so NSH reads it
-  // (`readAsset`) before the code that registers it runs.
+  // (`readAsset`) before the code that registers it runs. Callers share one
+  // request; a failed one is forgotten, so a chunk prepared later (a retried
+  // `import()`) fetches the font again.
   const fontLoads = new Map<string, Promise<void>>();
   const loadFont = (font: string): Promise<void> => {
     let load = fontLoads.get(font);
     if (!load) {
+      const forget = () => {
+        if (fontLoads.get(font) === load) fontLoads.delete(font);
+      };
       load = (async () => {
         const url = config.app.assets[font];
         if (!url) return;
         const response = await fetch(appUrl(url));
         if (response.ok) {
           fonts.set(font, new Uint8Array(await response.arrayBuffer()));
+        } else {
+          forget();
         }
       })();
+      void load.catch(forget);
       fontLoads.set(font, load);
     }
     return load;

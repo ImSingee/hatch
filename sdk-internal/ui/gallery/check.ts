@@ -368,7 +368,9 @@ async function keyboard(page: Page, prefix: string): Promise<string[]> {
       order.push(`${name}: ${now.role} "${now.name}"`);
       // NSH's Combobox root takes a Tab stop without a name; its input
       // carries the label. 0.7.0 also drops the root's `combobox` role once
-      // its popup has been used. Any other unnamed stop is a defect.
+      // its panel has been hidden and shown again (as here, after every
+      // section's screenshots) or its popup has been used, so the root is
+      // recognised by what it holds. Any other unnamed stop is a defect.
       if (!now.name && !now.comboboxRoot) {
         problems.push(`${prefix}: Tab reached a ${now.role} without a name`);
       }
