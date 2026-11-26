@@ -151,7 +151,9 @@ async function pinnedPnpm(
   const probe = spawnSync(
     onPathPnpm.executable,
     [...onPathPnpm.prefix, '--version'],
-    { encoding: 'utf8', env, timeout: 30_000 },
+    // Outside any project, as the build's pnpm runs: a `packageManager`
+    // field would make pnpm switch versions for the probe alone.
+    { encoding: 'utf8', env, timeout: 30_000, cwd: os.tmpdir() },
   );
   const found = probe.status === 0 ? probe.stdout.trim() : undefined;
   if (found === version) return onPathPnpm;

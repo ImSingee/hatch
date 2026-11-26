@@ -119,7 +119,9 @@ async function installedToolchain(
       command(
         pnpm.executable,
         [...pnpm.prefix, '--version'],
-        root,
+        // Not inside any project: a `packageManager` field there would make
+        // pnpm switch versions and report one the build would not run.
+        os.tmpdir(),
         signal,
         true,
         {
