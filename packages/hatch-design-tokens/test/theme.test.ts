@@ -355,6 +355,24 @@ describe('validation', () => {
     );
   });
 
+  it('rejects a destructive colour whose text shade is unreadable on the card', () => {
+    // Error text itself reads (shade 8 is picked), but native Apps draw
+    // field errors and destructive menu items in shade 7 (2.70:1 here).
+    const dark = THEME_PRESETS['desk-dark'].document;
+    const result = validateThemeDocument({
+      ...dark,
+      colors: { ...dark.colors, destructive: '#000000' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.problems.map((problem) => problem.pair)).toContainEqual(
+      expect.objectContaining({
+        foreground: 'destructive-strong',
+        background: 'card',
+      }),
+    );
+  });
+
   it('checks each named pair, including the derived text on primary', () => {
     expect(CONTRAST_PAIRS.slice(0, 4)).toEqual([
       ['foreground', 'background'],

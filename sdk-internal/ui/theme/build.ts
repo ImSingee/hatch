@@ -11,6 +11,7 @@
 import tokens from '../../../packages/hatch-design-tokens/tokens.json' with { type: 'json' };
 import {
   colorRamp as tokenRamp,
+  destructiveRamp,
   pressedShade,
   mix,
   resolvePreset,
@@ -176,7 +177,7 @@ export function buildAppTheme(
         // `destructive-foreground` derived (and contrast-checked) for it.
         ...toneRoles(
           'danger',
-          tokenRamp(c.destructive, theme.appearance, c.card),
+          destructiveRamp(theme),
           c['destructive-foreground'],
         ),
         ...toneRoles('warning', theme.ramps.amber, c['on-fill']),

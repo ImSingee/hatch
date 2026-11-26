@@ -83,6 +83,7 @@
   "appearance.themeEditor.role.primaryTint": "主色浅底",
   "appearance.themeEditor.role.primaryTintStrong": "按下时的主色浅底",
   "appearance.themeEditor.role.destructiveInk": "危险色浅底上的文字",
+  "appearance.themeEditor.role.destructiveStrong": "原生应用中的危险色文字",
   "appearance.themeEditor.role.destructiveTint": "危险色浅底",
   "appearance.themeEditor.role.destructiveTintStrong": "按下时的危险色浅底",
   "appearance.themeEditor.problem.invalidDocument": "这不是有效的主题文档。",

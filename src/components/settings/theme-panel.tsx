@@ -72,6 +72,7 @@ const ROLE_LABELS: Record<string, PlainTranslationKey> = {
   'primary-tint': 'appearance.themeEditor.role.primaryTint',
   'primary-tint-strong': 'appearance.themeEditor.role.primaryTintStrong',
   'destructive-ink': 'appearance.themeEditor.role.destructiveInk',
+  'destructive-strong': 'appearance.themeEditor.role.destructiveStrong',
   'destructive-tint': 'appearance.themeEditor.role.destructiveTint',
   'destructive-tint-strong':
     'appearance.themeEditor.role.destructiveTintStrong',

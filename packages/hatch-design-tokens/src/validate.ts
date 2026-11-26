@@ -62,6 +62,9 @@ const TINT_ROLES = {
   'primary-tint': ['primary', 1],
   'primary-tint-strong': ['primary', 2],
   'destructive-ink': ['destructive', 8],
+  // Native Apps' danger text on surfaces (`@hatch/ui` `danger-strong`), the
+  // destructive counterpart of the primary text shade.
+  'destructive-strong': ['destructive', TEXT_SHADE],
   'destructive-tint': ['destructive', 1],
   'destructive-tint-strong': ['destructive', 2],
 } as const;
@@ -91,6 +94,8 @@ export const CONTRAST_PAIRS: readonly (readonly [PairRole, PairRole])[] = [
   [PRIMARY_TEXT, 'card'],
   ['primary-ink', 'primary-tint'],
   ['primary-ink', 'primary-tint-strong'],
+  ['destructive-strong', 'background'],
+  ['destructive-strong', 'card'],
   ['destructive-ink', 'destructive-tint'],
   ['destructive-ink', 'destructive-tint-strong'],
 ];

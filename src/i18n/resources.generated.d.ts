@@ -85,6 +85,7 @@ export type TranslationResource = {
   'appearance.themeEditor.role.primaryTint': 'Primary tint';
   'appearance.themeEditor.role.primaryTintStrong': 'Pressed primary tint';
   'appearance.themeEditor.role.destructiveInk': 'Destructive text on its tints';
+  'appearance.themeEditor.role.destructiveStrong': 'Destructive text in native Apps';
   'appearance.themeEditor.role.destructiveTint': 'Destructive tint';
   'appearance.themeEditor.role.destructiveTintStrong': 'Pressed destructive tint';
   'appearance.themeEditor.problem.invalidDocument': 'The theme is not a valid document.';

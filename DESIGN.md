@@ -183,7 +183,8 @@ one by one gives unreadable combinations.
   and `muted`; `primary-foreground` on `primary`; `destructive-foreground` on
   `destructive`; `destructive-text` (error text: the destructive colour, or
   the first of its shades 7 and 8 that reads) on `background`, `card` and
-  `muted`; the primary text shade on `background` and `card`; and shade 8 on
+  `muted`; the primary text shade, and the same shade of the ramp built from
+  `destructive` (native Apps' danger text), on `background` and `card`; and shade 8 on
   shades 1 and 2 of the `primary` ramp and of the ramp built from
   `destructive` (tinted controls, also while pressed). The check
   runs with the theme's own `primary` and with the chosen accent.
