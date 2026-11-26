@@ -829,7 +829,10 @@ Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
 argument). `set` with both flags saves `agentMessageMode` first; if the
 background time then fails, the error keeps that failure's code and exit
 status, says the agent preference was saved, and with `--json` carries
-`details.applied` (the saved `agentMessageMode`). Platform errors: `CONFLICT` (6) for a Run credential
+`details.applied` (the saved `agentMessageMode`). It says the background time
+was not set only when the platform refused it or the request never left;
+after a timeout or a dropped connection (`outcome_unknown`) it says the
+outcome is unknown, so read it back with `hatch preferences get`. Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).
 

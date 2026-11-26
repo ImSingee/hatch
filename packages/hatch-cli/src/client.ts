@@ -965,11 +965,21 @@ export function cliClient(transport: Transport) {
         } catch (error) {
           if (input.agentMessageMode === undefined) throw error;
           // The agent preference is already saved: say so, keeping the
-          // failure's own code and exit status.
+          // failure's own code and exit status. Whether the background time
+          // was saved is known only when the platform refused it or the
+          // request never left; otherwise (a timeout, a dropped connection)
+          // it may have been.
           const failure = publicError(error);
+          const desk =
+            input.backgroundAppMinutes === undefined
+              ? 'reading the background time failed.'
+              : failure.code === 'network_error' ||
+                  (failure.httpStatus !== undefined && failure.httpStatus < 500)
+                ? 'backgroundAppMinutes was not set.'
+                : 'whether backgroundAppMinutes was set is unknown; read it with hatch preferences get.';
           throw new CliError(
             failure.code,
-            `${failure.message} agentMessageMode was already set; backgroundAppMinutes was not.`,
+            `${failure.message} agentMessageMode was already set; ${desk}`,
             failure.exitCode,
             failure.httpStatus,
             { applied: agentPreferences(agent) },

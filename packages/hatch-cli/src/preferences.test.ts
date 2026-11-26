@@ -1,5 +1,6 @@
 import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { describe, expect, it } from 'vitest';
+import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import { PreferenceService } from '../../hatch-platform-api/gen/hatch/platform/v1/preference_pb';
 import { cliClient } from './client';
 import { CliError } from './error';
@@ -85,33 +86,60 @@ describe('preferences command arguments', () => {
   });
 
   it('says the agent preference was saved when the background time then fails', async () => {
-    const transport = createRouterTransport(({ service }) => {
-      service(PreferenceService, {
-        getAgentPreferences: () => ({ preferences: { messageMode: 'steer' } }),
-        updateAgentPreferences: (request) => ({
-          preferences: { messageMode: request.messageMode ?? 'steer' },
+    const update = (failure: ConnectError) =>
+      cliClient(
+        createRouterTransport(({ service }) => {
+          service(PreferenceService, {
+            getAgentPreferences: () => ({
+              preferences: { messageMode: 'steer' },
+            }),
+            updateAgentPreferences: (request) => ({
+              preferences: { messageMode: request.messageMode ?? 'steer' },
+            }),
+            getDeskPreferences: () => ({
+              preferences: { backgroundAppMinutes: 5 },
+            }),
+            updateDeskPreferences: () => {
+              throw failure;
+            },
+          });
         }),
-        getDeskPreferences: () => ({
-          preferences: { backgroundAppMinutes: 5 },
-        }),
-        updateDeskPreferences: () => {
-          throw new ConnectError('down for maintenance', Code.Unavailable);
+      )
+        .preferences.update({
+          agentMessageMode: 'queue',
+          backgroundAppMinutes: 9,
+        })
+        .then(
+          () => {
+            throw new Error('Expected the update to fail.');
+          },
+          (caught: unknown) => caught as CliError,
+        );
+
+    // Refused by the platform: the background time was not set.
+    const refused = await update(
+      new ConnectError('Out of range.', Code.InvalidArgument, undefined, [
+        {
+          desc: PublicErrorSchema,
+          value: { code: 'BAD_REQUEST', httpStatus: 400 },
         },
-      });
-    });
-
-    const error = await cliClient(transport)
-      .preferences.update({
-        agentMessageMode: 'queue',
-        backgroundAppMinutes: 9,
-      })
-      .catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(CliError);
-    expect((error as CliError).message).toMatch(
-      /agentMessageMode was already set; backgroundAppMinutes was not/,
+      ]),
     );
-    expect((error as CliError).details).toEqual({
+    expect(refused).toBeInstanceOf(CliError);
+    expect(refused.message).toMatch(
+      /agentMessageMode was already set; backgroundAppMinutes was not set/,
+    );
+    expect(refused.details).toEqual({ applied: { agentMessageMode: 'queue' } });
+
+    // Timed out: it may have been set, so the error does not say it was not.
+    const timedOut = await update(
+      new ConnectError('deadline', Code.DeadlineExceeded),
+    );
+    expect(timedOut.code).toBe('outcome_unknown');
+    expect(timedOut.message).toMatch(
+      /agentMessageMode was already set; whether backgroundAppMinutes was set is unknown/,
+    );
+    expect(timedOut.details).toEqual({
       applied: { agentMessageMode: 'queue' },
     });
   });
