@@ -30,7 +30,7 @@ app: { entry: 'app/main.tsx', runtime: 'native', routes: [...] }
 ## Toolchain
 
 The platform runs one pinned NSH release, `NSH_VERSION` in
-`src/server/apps/native/nsh-toolchain.ts` (0.6.1). It finds `nsh` at
+`src/server/apps/native/nsh-toolchain.ts` (0.7.0). It finds `nsh` at
 `HATCH_NSH_BIN`, then on `PATH`, `~/.local/bin`, `~/.nsh/bin` and
 `/opt/nsh/bin`, and refuses any binary whose `nsh --version` differs; the
 error says how to install the pinned release. The Docker image installs the
@@ -43,8 +43,14 @@ Upgrading NSH is a deliberate change: read NSH's compatibility notes, update
 the version and every SHA-256 (the `Dockerfile` ARGs and
 `NSH_RELEASE_SHA256`; a test compares them), rebuild the UI library, run the
 catalogue screenshots on every shell, and keep serving the old web runtime for
-deployments built with the old version (the runtime store below keeps every
-version's files).
+deployments built with the old version. That last part needs no work per
+upgrade: a deployment's page, its bundled `player.js` and the runtime
+directory its page names (`/api/app-runtime/nsh/<its version>/`) are fixed
+when it is built, rollback and activation never rebuild, and the runtime
+store below keeps every version's files. The image carries only the pinned
+`nsh`; it does not need older releases to serve older deployments. Rolling
+an upgrade back is pinning the old version again; deployments built in
+between keep the newer runtime the same way.
 
 ## Build and deploy check
 
@@ -56,10 +62,15 @@ backend, widgets and schema). In the disposable build copy it:
 1. Writes `nsh.json` at the App root and `app/tsconfig.json` next to the
    entry. Both are generated, never authored: an authored root `nsh.json` or
    `app/tsconfig.json` is overwritten, any other `nsh.json` fails the deploy,
-   and `.nsh/` caches are removed. `nsh.json` holds the grant, one exact alias
-   per SDK entry (`NATIVE_APP_SDK_DEFINITIONS` in
-   `sdk-internal/definitions.ts`), `appearance: light`, the theme and, when the
-   UI library contributes one, its `tailwind` extension.
+   and `.nsh/` caches are removed. `nsh.json` holds `entry: app/main.tsx`
+   (so NSH takes the App root as the app directory even when `app/` holds an
+   `App.tsx`; imports must stay under that directory), the grant, one exact
+   alias per SDK entry (`NATIVE_APP_SDK_DEFINITIONS` in
+   `sdk-internal/definitions.ts`), `appearance: light`, the theme and, when
+   the UI library contributes one, its `tailwind` extension. It never holds
+   `dependencies` (NSH modules), which `nsh` would fetch and build with
+   Cargo. NSH reads every key it holds: a key NSH does not know would make
+   `nsh build` print `warn nsh.json: …`.
 2. `nsh check app/main.tsx`: types, including token names.
 3. Source rules NSH does not enforce (`source-rules.ts`), over the App files
    the entry reaches, parsed by the platform's TypeScript (JSX-aware, with
@@ -92,6 +103,10 @@ backend, widgets and schema). In the disposable build copy it:
    answers `hatch.rpc` with empty messages and `hatch.data.query` with no
    rows, and a 60 s limit.
 6. `nsh package --target web` links the App's module for the web player.
+   Every file it writes must be a runtime file, an App file or a file of
+   its own page (which the player page replaces); any other file, or a
+   referenced file it did not write, fails the build, so a new kind of file
+   from an NSH upgrade cannot go unserved.
 
 Source diagnostics (types, source rules, unknown classes, a start-up throw)
 name App-relative files and lines (`app/main.tsx:12:7`); other failures name
@@ -142,6 +157,12 @@ player, and runs the App's module with `linked: true`, the grant as JSON text
 and `appId: dev.hatch.app.<app id>` (which scopes NSH storage per App; `x` and
 `-` in the Hatch id are escaped as `x` plus two hex digits, so distinct ids
 never share storage).
+
+Code the App imports lazily (`import()`) is a chunk. `nsh package` moves the
+`nsh/base` parts only chunks use (pickers, the editor, ...) out of the
+engine into side modules (`nsh-<part>.<digest>.wasm`, runtime files); the
+page config lists, per chunk, its side modules and fonts, and the player
+loads them before the chunk runs (`prepareChunk`), as NSH's own page does.
 
 The App's module, chunks and assets are loaded from
 `/app/<slug>/embed/_deployments/<deployment id>/…`, which serves the page's

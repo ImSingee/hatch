@@ -48,6 +48,7 @@ export function prepareAppRoot(
     JSON.parse(fs.readFileSync(path.join(SOURCE, file), 'utf8')) as unknown;
   const nshJson = {
     name: app.name,
+    entry: 'app/main.tsx',
     id: app.id,
     version: '1.0.0',
     build: 1,

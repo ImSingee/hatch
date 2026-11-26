@@ -45,7 +45,7 @@ const sections = [
 const only = process.env.ONLY?.split(':');
 
 const problems: string[] = [];
-/** Behaviour of NSH 0.6.1 itself that the library cannot change; reported,
+/** Behaviour of NSH itself (0.7.0) that the library cannot change; reported,
  * not failed. */
 const known: string[] = [];
 
@@ -347,6 +347,9 @@ function focused(page: Page) {
         .trim()
         .slice(0, 40),
       visible: box.width > 0 && box.height > 0,
+      // The root of an NSH Combobox: it holds the named combobox input.
+      comboboxRoot:
+        element.querySelector('input[role="combobox"][aria-label]') !== null,
     };
   });
 }
@@ -363,9 +366,12 @@ async function keyboard(page: Page, prefix: string): Promise<string[]> {
       const now = await focused(page);
       if (!now) continue;
       order.push(`${name}: ${now.role} "${now.name}"`);
-      // NSH 0.6.1's Combobox root takes a Tab stop without a name; its input
-      // carries the label. Any other unnamed stop is a defect.
-      if (!now.name && now.role !== 'combobox') {
+      // NSH's Combobox root takes a Tab stop without a name; its input
+      // carries the label. 0.7.0 also drops the root's `combobox` role once
+      // its panel has been hidden and shown again (as here, after every
+      // section's screenshots) or its popup has been used, so the root is
+      // recognised by what it holds. Any other unnamed stop is a defect.
+      if (!now.name && !now.comboboxRoot) {
         problems.push(`${prefix}: Tab reached a ${now.role} without a name`);
       }
       if (!now.visible) {
@@ -390,11 +396,11 @@ async function keyboard(page: Page, prefix: string): Promise<string[]> {
     .locator('[aria-modal="true"][aria-label="Rename the bed"]')
     .filter({ visible: true });
   await dialog.waitFor();
-  // NSH 0.6.1: a Tab pressed in the first moments after a dialog mounts
-  // leaves Escape unable to close it; a person takes longer than that.
+  // NSH (0.6.1 and 0.7.0): a Tab pressed in the first moments after a dialog
+  // mounts leaves Escape unable to close it; a person takes longer than that.
   await page.waitForTimeout(400);
-  // NSH 0.6.1's web backdrop is a focusable button without a name; the
-  // second Tab reaches the dialog's own controls.
+  // NSH's web backdrop (0.6.1 and 0.7.0) is a focusable button without a
+  // name; the second Tab reaches the dialog's own controls.
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   const inside = await focused(page);

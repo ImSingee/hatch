@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { NSH_VERSION } from './nsh-toolchain';
 
 let dataDir: string;
 let store: typeof import('./runtime-store');
@@ -103,5 +104,30 @@ describe('NSH runtime store', () => {
     await expect(
       store.publishRuntimeFile('0.6.1', '../escape.js', other),
     ).rejects.toThrow(/Not an NSH runtime file/);
+  });
+
+  it('serves deployments of an earlier NSH next to the pinned one', async () => {
+    // A deployment's page names the runtime of the NSH it was built with;
+    // publishing the pinned release's files leaves the earlier ones served.
+    const pinned = path.join(dataDir, 'pinned.wasm');
+    await fs.writeFile(pinned, 'pinned engine');
+    await store.publishRuntimeFile(
+      NSH_VERSION,
+      'nsh-pickers.0123456789.wasm',
+      pinned,
+    );
+    const earlier = await store.serveNshRuntimeFile(
+      '0.6.1',
+      'nsh.0123456789.js',
+      null,
+    );
+    expect(await earlier.text()).toBe('export const runtime = 1;');
+    const current = await store.serveNshRuntimeFile(
+      NSH_VERSION,
+      'nsh-pickers.0123456789.wasm',
+      null,
+    );
+    expect(await current.text()).toBe('pinned engine');
+    expect(current.headers.get('content-type')).toBe('application/wasm');
   });
 });
