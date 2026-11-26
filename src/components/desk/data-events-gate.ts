@@ -136,38 +136,43 @@ export function gateDataEvents(win: Window, visible: boolean): DataEventsGate {
       open.delete(end);
       signal?.removeEventListener('abort', forward);
     };
-    const body = new realm.ReadableStream<Uint8Array>({
-      start(controller) {
-        end = () => {
-          if (finished) return;
-          finish();
-          controller.close();
-          upstream.abort();
-        };
-        open.add(end);
-      },
-      async pull(controller) {
-        try {
-          const chunk = await reader.read();
-          if (finished) return;
-          if (chunk.done) {
+    const body = new realm.ReadableStream<Uint8Array>(
+      {
+        start(controller) {
+          end = () => {
+            if (finished) return;
             finish();
             controller.close();
-          } else {
-            controller.enqueue(chunk.value);
+            upstream.abort();
+          };
+          open.add(end);
+        },
+        async pull(controller) {
+          try {
+            const chunk = await reader.read();
+            if (finished) return;
+            if (chunk.done) {
+              finish();
+              controller.close();
+            } else {
+              controller.enqueue(chunk.value);
+            }
+          } catch (error) {
+            if (finished) return;
+            finish();
+            controller.error(error);
           }
-        } catch (error) {
-          if (finished) return;
+        },
+        cancel(reason) {
           finish();
-          controller.error(error);
-        }
+          upstream.abort();
+          reader.cancel(reason).catch(() => undefined);
+        },
+        // Read upstream only when the App asks: nothing waits in a queue, so
+        // ending the stream on hide leaves no event for a hidden App to read.
       },
-      cancel(reason) {
-        finish();
-        upstream.abort();
-        reader.cancel(reason).catch(() => undefined);
-      },
-    });
+      { highWaterMark: 0 },
+    );
     return new realm.Response(body, {
       status: response.status,
       statusText: response.statusText,

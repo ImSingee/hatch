@@ -3,7 +3,7 @@ import { isNotFound, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AppGlyph } from '~components/apps/app-glyph';
-import { getAppViewState } from '~components/apps/app-view-policy';
+import { canRunApp } from '~components/apps/app-view-policy';
 import { AppWindowToolbar } from '~components/apps/app-window-toolbar';
 import { useAppDeploymentUpdate } from '~components/apps/use-app-deployment-update';
 import { useErrorText } from '~i18n';
@@ -30,16 +30,6 @@ function rawFragment(href: string) {
   return index < 0 ? '' : href.slice(index + 1);
 }
 
-/** Whether a running App can still run its frontend. */
-function canRun(app: AppDetail) {
-  return getAppViewState({
-    status: app.status,
-    deploymentRevision: app.deploymentRevision,
-    hasFrontend: Boolean(app.capabilities?.frontend),
-    runtimeSupported: app.compatibility?.isSupported ?? false,
-  }).canOpen;
-}
-
 /** Which running App is on screen beside the window in front, if any. */
 export function useVisibleBeside(besideShown: boolean) {
   const { sessions, front, beside } = useAppSessions();
@@ -64,7 +54,7 @@ export function RunningApps({ besideShown }: { besideShown: boolean }) {
   const beside = useVisibleBeside(besideShown);
   const onScreen = sessions
     .filter((session) => session.slug === front || session.slug === beside)
-    .map((session) => session.slug);
+    .map((session) => session.key);
   const onScreenKey = onScreen.join('\n');
 
   useEffect(() => {
@@ -73,7 +63,7 @@ export function RunningApps({ besideShown }: { besideShown: boolean }) {
 
   return sessions.map((session) => (
     <SessionWindow
-      key={session.slug}
+      key={session.key}
       session={session}
       placement={
         session.slug === front
@@ -94,43 +84,48 @@ function SessionWindow({
   placement: WindowPlacement;
 }) {
   const store = useAppSessionStore();
+  const queryClient = useQueryClient();
   const { slug, revision } = session;
   const { data: app, error } = useQuery(appViewQueryOptions(slug));
-  const runnable = app ? canRun(app) : null;
 
-  // The App is gone, or can no longer run here: stop it. In front, the App's
-  // page shows why. A failed read of an App that is still there keeps it.
-  const gone = isNotFound(error) || (!app && error !== null);
+  // Deleted, renamed away or archived: stop it (in front, the App's page
+  // then says why). A new deployment that cannot run here does not stop a
+  // running frame: it keeps the bundle it loaded until a reload.
+  const gone = isNotFound(error) || app?.status === 'archived';
   useEffect(() => {
-    if (gone || runnable === false) store.quit(slug);
-  }, [gone, runnable, store, slug]);
+    if (gone) store.quit(slug);
+  }, [gone, store, slug]);
 
-  const queryClient = useQueryClient();
   useEffect(() => {
-    // An App started beside (or restored there) reads its live deployment
-    // before it loads: the cached details may predate a redeploy.
+    // An App started without its details (restored beside after a reload)
+    // reads its live deployment before it loads, and is judged on that read
+    // alone: cached details may predate a deploy.
     if (revision !== undefined) return;
     let current = true;
-    queryClient
-      .fetchQuery({ ...appViewQueryOptions(slug), staleTime: 0 })
-      .then((fresh) => {
-        if (current) store.setRevision(slug, fresh.deploymentRevision);
-      })
-      .catch(() => {
-        // Gone: the query's error stops the App. Otherwise run what is
-        // known rather than nothing.
-        const cached = queryClient.getQueryData(
-          appViewQueryOptions(slug).queryKey,
-        );
-        if (current && cached)
-          store.setRevision(slug, cached.deploymentRevision);
-      });
+    queryClient.fetchQuery({ ...appViewQueryOptions(slug), staleTime: 0 }).then(
+      (fresh) => {
+        if (!current) return;
+        if (canRunApp(fresh)) {
+          store.setLoaded(slug, {
+            appId: fresh.id,
+            revision: fresh.deploymentRevision,
+          });
+        } else {
+          store.quit(slug);
+        }
+      },
+      () => {
+        // Not found, or unreachable: nothing to run. It was only restored,
+        // so stopping it costs no unsaved state.
+        if (current) store.quit(slug);
+      },
+    );
     return () => {
       current = false;
     };
   }, [queryClient, revision, store, slug]);
 
-  if (!app || !runnable || revision === undefined) return null;
+  if (!app || gone || revision === undefined) return null;
   return (
     <RunningAppWindow
       app={app}
@@ -168,10 +163,10 @@ function RunningAppWindow({
 
   useEffect(
     () =>
-      store.register(slug, {
+      store.register(session.key, {
         navigate: (route) => surface.current?.navigate(route),
       }),
-    [store, slug],
+    [store, session.key],
   );
 
   // The App moved by itself. In front, mirror its route out to the host URL
@@ -220,10 +215,16 @@ function RunningAppWindow({
         ...appViewQueryOptions(slug),
         staleTime: 0,
       });
-      // An App that can no longer run is stopped once the query settles.
-      if (!canRun(fresh)) return;
-      store.setRevision(slug, fresh.deploymentRevision);
-      surface.current?.reload();
+      // A reload applies the live deployment: one that cannot run here stops
+      // the App (in front, its page then says why).
+      if (!canRunApp(fresh)) {
+        store.quit(slug);
+        return;
+      }
+      const renamed = session.frameSlug !== slug;
+      store.reloaded(slug, fresh.deploymentRevision);
+      // A renamed App's frame source changes, which loads it afresh anyway.
+      if (!renamed) surface.current?.reload();
     } catch (error) {
       if (isNotFound(error)) {
         // The app was deleted or renamed: stop it, and in front let the
@@ -264,7 +265,9 @@ function RunningAppWindow({
     >
       <AppSurface
         ref={surface}
-        app={app}
+        // The slug the running frame was loaded from: renaming the App keeps
+        // the frame; the next reload uses the new slug.
+        app={{ slug: session.frameSlug, name: app.name }}
         route={session.route}
         visible={placement !== 'hidden'}
         reservedShortcuts={app.reservedShortcuts}

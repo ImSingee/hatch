@@ -14,13 +14,16 @@ import {
   IconServerBolt,
   IconSettings,
 } from '@tabler/icons-react';
-import { useEffect, useEffectEvent, useLayoutEffect, useState } from 'react';
+import { useEffectEvent, useLayoutEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { getAppViewState } from '~components/apps/app-view-policy';
 import { AppWindowToolbar } from '~components/apps/app-window-toolbar';
 import { useAppDeploymentUpdate } from '~components/apps/use-app-deployment-update';
-import { useAppSessionStore } from '~components/desk/app-sessions';
+import {
+  useAppSessionStore,
+  useAppSessions,
+} from '~components/desk/app-sessions';
 import { DeskWindow } from '~components/desk/window';
 import { useErrorText, useI18n } from '~i18n';
 import { appViewQueryOptions } from '~queries/apps';
@@ -63,6 +66,13 @@ function AppView() {
       hasFrontend,
       runtimeSupported: app.compatibility?.isSupported ?? false,
     });
+
+  // A running copy is brought forward as it is, whatever the live
+  // deployment: a deployment that cannot run here applies on its reload.
+  const running = useAppSessions().sessions.some(
+    (session) => session.slug === appSlug || session.appId === app.id,
+  );
+  if (running) return <OpenApp app={app} />;
 
   // An App without a frontend whose live deployment declares tasks is used
   // through its Tasks pages, so open them instead of a placeholder.
@@ -112,6 +122,7 @@ function OpenApp({ app }: { app: AppDetail }) {
     const route = store.show(slug, {
       route: hostFragment,
       focus,
+      appId: app.id,
       revision: liveRevision(),
     });
     if (route === null) return;
@@ -124,7 +135,7 @@ function OpenApp({ app }: { app: AppDetail }) {
       resetScroll: false,
       hashScrollIntoView: false,
     });
-  }, [hostEntryKey, hostFragment, focus, router, store, slug]);
+  }, [hostEntryKey, hostFragment, focus, router, store, slug, app.id]);
 
   // A layout cleanup, so the App never paints in front next to the page
   // that replaces it.
@@ -139,7 +150,6 @@ function AppPlaceholder({ app }: { app: AppDetail }) {
   const errorText = useErrorText();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const store = useAppSessionStore();
   const [reloading, setReloading] = useState(false);
   const hasFrontend = Boolean(app.capabilities?.frontend);
   const { hasLiveDeployment, isCompatibilityBlocked } = getAppViewState({
@@ -158,10 +168,6 @@ function AppPlaceholder({ app }: { app: AppDetail }) {
     deploymentRevision: app.deploymentRevision,
     revisionReader: readDeploymentRevision,
   });
-
-  // A running copy can no longer run (its frontend went away, or the
-  // platform no longer supports it): stop it.
-  useEffect(() => store.quit(app.slug), [store, app.slug]);
 
   const reload = async () => {
     if (reloading) return;

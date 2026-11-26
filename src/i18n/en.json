@@ -66,6 +66,8 @@
   "dock.unpin": "Unpin",
   "dock.pin": "Pin to dock",
   "dock.openBeside": "Open beside",
+  "dock.openBesideUnavailable": "This app can't open here right now.",
+  "dock.openBesideFailed": "Could not open the app beside.",
   "dock.quit": "Quit",
   "dock.pinDeployed": "Pin a deployed app",
   "dock.addShortcut": "Add another shortcut",

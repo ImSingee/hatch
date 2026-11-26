@@ -25,7 +25,20 @@ export const WEB_RUNNING_APP_LIMIT = 12;
 
 /** One running App: one mounted `AppSurface`, kept while it is hidden. */
 export type AppSession = {
+  /** Stable for the session's lifetime: its window's React key. */
+  key: string;
+  /** The App's current slug: its links and its details query use it. */
   slug: string;
+  /**
+   * The App's id, which survives a slug change; `undefined` until its
+   * details are read (an App restored beside after a reload).
+   */
+  appId: string | undefined;
+  /**
+   * The slug the running frame was loaded from. It stays put when the App is
+   * renamed, so the running frame is kept; a reload switches to `slug`.
+   */
+  frameSlug: string;
   /**
    * The App's route as it last reported it (or as it was told to go), still
    * percent-encoded; '' is its home. A (re)load opens here.
@@ -71,16 +84,17 @@ const STORAGE_KEY = 'hatch.desk.apps';
 /**
  * Per browser window, like a tab's history: which App sits beside, and the
  * last route of every App this window ran, so an App stopped by the limit or
- * by a reload opens where it was left.
+ * by a reload opens where it was left. Routes are kept in a `Map`: a slug
+ * such as `constructor` must never read an inherited property.
  */
-function readPersisted(storage: Storage | null): Persisted {
+function readPersisted(storage: Storage | null) {
+  const remembered = new Map<string, string>();
   try {
     const raw = storage?.getItem(STORAGE_KEY);
     const value = raw ? (JSON.parse(raw) as Partial<Persisted>) : {};
-    const remembered: Record<string, string> = {};
     if (value.remembered && typeof value.remembered === 'object') {
       for (const [slug, route] of Object.entries(value.remembered)) {
-        if (typeof route === 'string') remembered[slug] = route;
+        if (typeof route === 'string') remembered.set(slug, route);
       }
     }
     return {
@@ -88,7 +102,7 @@ function readPersisted(storage: Storage | null): Persisted {
       beside: typeof value.beside === 'string' ? value.beside : null,
     };
   } catch {
-    return { remembered: {}, beside: null };
+    return { remembered, beside: null };
   }
 }
 
@@ -110,6 +124,8 @@ export type ShowRequest = {
    * returns it to the pin's page.
    */
   focus: boolean;
+  /** The App's id: a running App renamed since it started is found by it. */
+  appId?: string;
   /** The live deployment revision, when the caller just read it. */
   revision?: string | null;
 };
@@ -121,15 +137,19 @@ export type ShowRequest = {
  * it to tell a fresh focus from a navigation inside the App in front.
  *
  * Every running App has one session, so opening an App that runs already
- * focuses it. Past the limit the least recently shown App is stopped (its
- * window and frame are removed) and its route remembered.
+ * focuses it, also under a new slug. Past the limit the least recently shown
+ * App that is not on screen is stopped (its window and frame are removed)
+ * and its route remembered.
  */
 export class AppSessionStore {
   readonly limit: number;
   private snapshot: AppSessionsSnapshot;
-  private remembered: Record<string, string>;
+  private readonly remembered: Map<string, string>;
   private clock = 0;
+  private sessionCount = 0;
+  /** Keys of the sessions on screen. */
   private visible = new Set<string>();
+  /** By session key. */
   private readonly handles = new Map<string, AppSessionHandle>();
   private readonly listeners = new Set<() => void>();
   private readonly storage: Storage | null;
@@ -151,14 +171,7 @@ export class AppSessionStore {
     this.snapshot = {
       // An App left beside reopens beside, where it was.
       sessions: beside
-        ? [
-            {
-              slug: beside,
-              route: this.remembered[beside] ?? '',
-              revision: undefined,
-              shownAt: this.tick(),
-            },
-          ]
+        ? [this.newSession(beside, this.remembered.get(beside) ?? '', {})]
         : [],
       front: null,
       beside,
@@ -186,15 +199,16 @@ export class AppSessionStore {
    * own, if any.
    */
   show(slug: string, request: ShowRequest): string | null {
+    this.adoptSlug(slug, request.appId);
     const wasFront = this.snapshot.front === slug;
     const beside = this.snapshot.beside === slug ? null : this.snapshot.beside;
     const running = this.session(slug);
     if (!running) {
       const seed =
         request.route === '' || request.focus
-          ? (this.remembered[slug] ?? request.route)
+          ? (this.remembered.get(slug) ?? request.route)
           : request.route;
-      this.start(slug, seed, request.revision, { front: slug, beside });
+      this.start(this.newSession(slug, seed, request), { front: slug, beside });
       return canonicalRoute(seed) === canonicalRoute(request.route)
         ? null
         : seed;
@@ -208,7 +222,7 @@ export class AppSessionStore {
         ? null
         : running.route;
     }
-    this.moveTo(slug, request.route);
+    this.moveTo(running, request.route);
     return null;
   }
 
@@ -217,16 +231,23 @@ export class AppSessionStore {
     if (this.snapshot.front === slug) this.commit({ front: null });
   }
 
-  /** Show `slug` beside the window in front, starting it if needed. */
-  openBeside(slug: string, route = '') {
+  /**
+   * Show `slug` beside the window in front, starting it if needed. The
+   * caller has read the App's live details (`appId`, `revision`) and found it
+   * runnable, so nothing is stopped for an App that cannot open.
+   */
+  openBeside(
+    slug: string,
+    app: { appId: string; revision: string | null; route?: string },
+  ) {
+    this.adoptSlug(slug, app.appId);
     if (this.snapshot.front === slug) return;
     if (this.session(slug)) {
       this.commit({ beside: slug });
       return;
     }
-    this.start(slug, this.remembered[slug] ?? route, undefined, {
-      beside: slug,
-    });
+    const route = this.remembered.get(slug) ?? app.route ?? '';
+    this.start(this.newSession(slug, route, app), { beside: slug });
   }
 
   /** Stop showing anything beside; that App keeps running. */
@@ -236,11 +257,12 @@ export class AppSessionStore {
 
   /** Stop `slug`: its frame goes away and it will start fresh next time. */
   quit(slug: string) {
-    if (!this.session(slug)) return;
-    delete this.remembered[slug];
-    this.handles.delete(slug);
+    const session = this.session(slug);
+    if (!session) return;
+    this.remembered.delete(slug);
+    this.handles.delete(session.key);
     this.commit({
-      sessions: this.snapshot.sessions.filter((s) => s.slug !== slug),
+      sessions: this.snapshot.sessions.filter((s) => s !== session),
       beside: this.snapshot.beside === slug ? null : this.snapshot.beside,
       front: this.snapshot.front === slug ? null : this.snapshot.front,
     });
@@ -250,103 +272,143 @@ export class AppSessionStore {
   setRoute(slug: string, route: string) {
     const session = this.session(slug);
     if (!session || session.route === route) return;
-    this.update(slug, { route });
+    this.update(session, { route });
   }
 
-  /** The surface (re)loaded the App's `revision`. */
-  setRevision(slug: string, revision: string | null) {
+  /** The App's details were read: what the running frame loaded. */
+  setLoaded(slug: string, app: { appId: string; revision: string | null }) {
     const session = this.session(slug);
-    if (!session || session.revision === revision) return;
-    this.update(slug, { revision });
+    if (
+      !session ||
+      (session.revision === app.revision && session.appId === app.appId)
+    ) {
+      return;
+    }
+    this.update(session, { appId: app.appId, revision: app.revision });
+  }
+
+  /** The surface reloads the App, now under its current slug. */
+  reloaded(slug: string, revision: string | null) {
+    const session = this.session(slug);
+    if (!session) return;
+    this.update(session, { revision, frameSlug: slug });
   }
 
   /** Lets the store move a running App to another route. */
-  register(slug: string, handle: AppSessionHandle) {
-    this.handles.set(slug, handle);
+  register(key: string, handle: AppSessionHandle) {
+    this.handles.set(key, handle);
     return () => {
-      if (this.handles.get(slug) === handle) this.handles.delete(slug);
+      if (this.handles.get(key) === handle) this.handles.delete(key);
     };
   }
 
   /**
-   * Which Apps are on screen now. Apps that appear or disappear are stamped,
-   * so "least recently shown" counts an App as shown until it was hidden.
+   * Which sessions (by key) are on screen now. Sessions that appear or
+   * disappear are stamped, so "least recently shown" counts an App as shown
+   * until it was hidden.
    */
-  setVisible(slugs: readonly string[]) {
-    const next = new Set(slugs);
+  setVisible(keys: readonly string[]) {
+    const next = new Set(keys);
     const changed = this.snapshot.sessions.filter(
-      (s) => next.has(s.slug) !== this.visible.has(s.slug),
+      (s) => next.has(s.key) !== this.visible.has(s.key),
     );
     this.visible = next;
     if (changed.length === 0) return;
     const shownAt = this.tick();
-    const stamped = new Set(changed.map((s) => s.slug));
+    const stamped = new Set(changed);
     this.commit({
       sessions: this.snapshot.sessions.map((s) =>
-        stamped.has(s.slug) ? { ...s, shownAt } : s,
+        stamped.has(s) ? { ...s, shownAt } : s,
       ),
     });
   }
 
-  private moveTo(slug: string, route: string) {
-    const session = this.session(slug);
-    if (!session) return;
+  /**
+   * A running App renamed since it started: carry its session (and its
+   * place in front or beside) over to the new slug, so it is not started a
+   * second time and nothing links to the old slug.
+   */
+  private adoptSlug(slug: string, appId: string | undefined) {
+    if (!appId || this.session(slug)) return;
+    const renamed = this.snapshot.sessions.find((s) => s.appId === appId);
+    if (!renamed) return;
+    const old = renamed.slug;
+    this.remembered.delete(old);
+    const rename = (value: string | null) => (value === old ? slug : value);
+    this.commit({
+      sessions: this.snapshot.sessions.map((s) =>
+        s === renamed ? { ...s, slug } : s,
+      ),
+      front: rename(this.snapshot.front),
+      beside: rename(this.snapshot.beside),
+    });
+  }
+
+  private moveTo(session: AppSession, route: string) {
     if (canonicalRoute(session.route) !== canonicalRoute(route)) {
-      this.update(slug, { route });
+      this.update(session, { route });
     }
     // Always tell the App: the route it last reported may lag its own.
-    this.handles.get(slug)?.navigate(route);
+    this.handles.get(session.key)?.navigate(route);
+  }
+
+  private newSession(
+    slug: string,
+    route: string,
+    app: { appId?: string; revision?: string | null },
+  ): AppSession {
+    this.sessionCount += 1;
+    return {
+      key: `app-session-${this.sessionCount}`,
+      slug,
+      appId: app.appId,
+      frameSlug: slug,
+      route,
+      revision: app.revision,
+      shownAt: this.tick(),
+    };
   }
 
   private start(
-    slug: string,
-    route: string,
-    revision: string | null | undefined,
+    session: AppSession,
     layout: Partial<Pick<AppSessionsSnapshot, 'front' | 'beside'>>,
   ) {
-    const beside =
+    let beside =
       layout.beside === undefined ? this.snapshot.beside : layout.beside;
     let sessions = [...this.snapshot.sessions];
     while (sessions.length >= this.limit) {
-      const victim = this.leastRecentlyShown(sessions, beside);
+      const victim = this.leastRecentlyShown(sessions);
       if (!victim) break;
-      this.remembered[victim.slug] = victim.route;
-      this.handles.delete(victim.slug);
+      this.remembered.set(victim.slug, victim.route);
+      this.handles.delete(victim.key);
       sessions = sessions.filter((s) => s !== victim);
+      if (victim.slug === beside) beside = null;
     }
-    sessions.push({ slug, route, revision, shownAt: this.tick() });
-    this.commit({ ...layout, sessions });
+    sessions.push(session);
+    this.commit({ ...layout, beside, sessions });
   }
 
-  /** The App to stop for a new one: never one on screen or kept beside. */
-  private leastRecentlyShown(
-    sessions: readonly AppSession[],
-    beside: string | null,
-  ) {
-    let victim: AppSession | null = null;
-    for (const session of sessions) {
-      if (session.slug === beside) continue;
-      // An App on screen counts as shown now.
-      const shownAt = this.visible.has(session.slug)
+  /**
+   * The App to stop for a new one: the one shown least recently. An App on
+   * screen counts as shown now; one kept beside but hidden (a narrow window)
+   * ranks by when it was last shown, like any other.
+   */
+  private leastRecentlyShown(sessions: readonly AppSession[]) {
+    const shownAt = (session: AppSession) =>
+      this.visible.has(session.key)
         ? Number.POSITIVE_INFINITY
         : session.shownAt;
-      if (
-        !victim ||
-        shownAt <
-          (this.visible.has(victim.slug)
-            ? Number.POSITIVE_INFINITY
-            : victim.shownAt)
-      ) {
-        victim = session;
-      }
+    let victim: AppSession | null = null;
+    for (const session of sessions) {
+      if (!victim || shownAt(session) < shownAt(victim)) victim = session;
     }
     return victim;
   }
 
-  private update(slug: string, patch: Partial<AppSession>) {
+  private update(session: AppSession, patch: Partial<AppSession>) {
     this.commit({
       sessions: this.snapshot.sessions.map((s) =>
-        s.slug === slug ? { ...s, ...patch } : s,
+        s === session ? { ...s, ...patch } : s,
       ),
     });
   }
@@ -359,7 +421,7 @@ export class AppSessionStore {
   private commit(patch: Partial<AppSessionsSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
     for (const session of this.snapshot.sessions) {
-      this.remembered[session.slug] = session.route;
+      this.remembered.set(session.slug, session.route);
     }
     this.persist();
     for (const listener of this.listeners) listener();
@@ -370,7 +432,7 @@ export class AppSessionStore {
       this.storage?.setItem(
         STORAGE_KEY,
         JSON.stringify({
-          remembered: this.remembered,
+          remembered: Object.fromEntries(this.remembered),
           beside: this.snapshot.beside,
         } satisfies Persisted),
       );

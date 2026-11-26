@@ -23,13 +23,15 @@ import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { AppRouteAutocomplete } from '~components/apps/app-route-autocomplete';
+import { canRunApp } from '~components/apps/app-view-policy';
 import {
+  appViewQueryOptions,
   appsQueryOptions,
   normalizedManifestQueryOptions,
 } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
-import { useI18n } from '~i18n';
+import { useErrorText, useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import {
   addSidebarItem,
@@ -44,7 +46,11 @@ import {
   DockItem,
   type DockOpenItem,
 } from './dock-item';
-import { useAppSessionStore, useAppSessions } from './app-sessions';
+import {
+  type AppSession,
+  useAppSessionStore,
+  useAppSessions,
+} from './app-sessions';
 import { DESK_HOME } from './paths';
 import { SortableList, sortByIds } from './sortable-list';
 import classes from './dock.module.css';
@@ -99,6 +105,7 @@ export function Dock({
   besideAvailable?: boolean;
 }) {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const navigate = useNavigate();
   const sessionStore = useAppSessionStore();
   const { sessions, front } = useAppSessions();
@@ -190,9 +197,20 @@ export function Dock({
   // shows only its add tile.
   const hasPins = Boolean(pins?.length);
 
+  // Running Apps by id where known: a slug may have changed since one
+  // started. Their links use the current slug from the App list.
   const pinnedSlugs = new Set((pins ?? []).map((p) => p.appSlug));
-  const running = sessions.filter((session) => !pinnedSlugs.has(session.slug));
-  const appNamed = (slug: string) => apps?.find((a) => a.slug === slug);
+  const running = sessions.filter((session) =>
+    session.appId
+      ? !pinnedIds.has(session.appId)
+      : !pinnedSlugs.has(session.slug),
+  );
+  const appOf = (session: AppSession) =>
+    apps?.find((a) =>
+      session.appId ? a.id === session.appId : a.slug === session.slug,
+    );
+  const sessionOf = (appId: string, slug: string) =>
+    sessions.find((s) => (s.appId ? s.appId === appId : s.slug === slug));
 
   const quit = (slug: string) => {
     // Leave the App's window first, so the stage never shows it empty.
@@ -203,22 +221,58 @@ export function Dock({
     }
   };
 
-  const sessionMenu = (slug: string, entryHash: string | null) => {
-    const isRunning = sessions.some((session) => session.slug === slug);
+  // Read the App's live details before showing it beside: nothing running
+  // is stopped for an App that cannot open, and the new frame's "has update"
+  // baseline is the deployment it loads.
+  const openBeside = async (slug: string, route: string) => {
+    if (sessionStore.session(slug)) {
+      const running = sessionStore.session(slug)!;
+      sessionStore.openBeside(slug, {
+        appId: running.appId ?? '',
+        revision: running.revision ?? null,
+      });
+      return;
+    }
+    try {
+      const app = await queryClient.fetchQuery({
+        ...appViewQueryOptions(slug),
+        staleTime: 0,
+      });
+      if (!canRunApp(app)) {
+        toast.error(t('dock.openBesideUnavailable'));
+        return;
+      }
+      sessionStore.openBeside(app.slug, {
+        appId: app.id,
+        revision: app.deploymentRevision,
+        route,
+      });
+    } catch (error) {
+      toast.error(errorText(error, 'dock.openBesideFailed'));
+    }
+  };
+
+  const sessionMenu = (
+    appId: string,
+    slug: string,
+    entryHash: string | null,
+  ) => {
+    const session = sessionOf(appId, slug);
+    const target = session?.slug ?? slug;
     return (
       <>
-        {besideAvailable && front !== slug ? (
+        {besideAvailable && front !== target ? (
           <Menu.Item
             leftSection={<IconLayoutSidebarRight size={15} stroke={1.7} />}
-            onClick={() => sessionStore.openBeside(slug, entryHash ?? '')}
+            onClick={() => void openBeside(target, entryHash ?? '')}
           >
             {t('dock.openBeside')}
           </Menu.Item>
         ) : null}
-        {isRunning ? (
+        {session ? (
           <Menu.Item
             leftSection={<IconPower size={15} stroke={1.7} />}
-            onClick={() => quit(slug)}
+            onClick={() => quit(session.slug)}
           >
             {t('dock.quit')}
           </Menu.Item>
@@ -234,7 +288,7 @@ export function Dock({
 
   const appMenu = (item: NonNullable<typeof pins>[number]) => (
     <>
-      {sessionMenu(item.appSlug, item.entryHash)}
+      {sessionMenu(item.appId, item.appSlug, item.entryHash)}
       <Menu.Item
         leftSection={<IconPencil size={15} stroke={1.7} />}
         onClick={() =>
@@ -313,10 +367,8 @@ export function Dock({
 
   // The right-click menu: the clicked tile's own actions, then adding.
   const clickedPin = pins?.find((p) => `app:${p.id}` === menuKey);
-  const clickedRunning = running.find((r) => `run:${r.slug}` === menuKey);
-  const clickedRunningApp = clickedRunning
-    ? appNamed(clickedRunning.slug)
-    : undefined;
+  const clickedRunning = running.find((r) => `run:${r.key}` === menuKey);
+  const clickedRunningApp = clickedRunning ? appOf(clickedRunning) : undefined;
   const contextMenu = (
     <>
       {clickedPin ? (
@@ -331,7 +383,7 @@ export function Dock({
           <Menu.Label>
             {clickedRunningApp?.name ?? clickedRunning.slug}
           </Menu.Label>
-          {sessionMenu(clickedRunning.slug, null)}
+          {sessionMenu(clickedRunning.appId ?? '', clickedRunning.slug, null)}
           {clickedRunningApp ? (
             <Menu.Item
               leftSection={<IconPin size={15} stroke={1.7} />}
@@ -346,7 +398,9 @@ export function Dock({
             renderRoot={(props) => (
               <Link
                 to="/app/$appSlug/manage"
-                params={{ appSlug: clickedRunning.slug }}
+                params={{
+                  appSlug: clickedRunningApp?.slug ?? clickedRunning.slug,
+                }}
                 {...props}
               />
             )}
@@ -456,14 +510,14 @@ export function Dock({
                       data-after-pins={pins?.length ? 'true' : undefined}
                     >
                       {running.map((session) => {
-                        const runningApp = appNamed(session.slug);
+                        const runningApp = appOf(session);
                         const label = runningApp?.name ?? session.slug;
                         return (
                           <DockItem
-                            key={session.slug}
+                            key={session.key}
                             label={label}
                             open
-                            menuKey={`run:${session.slug}`}
+                            menuKey={`run:${session.key}`}
                             glyph={
                               <AppGlyph
                                 name={label}
@@ -474,7 +528,9 @@ export function Dock({
                             renderLink={(props) => (
                               <Link
                                 to="/app/$appSlug"
-                                params={{ appSlug: session.slug }}
+                                params={{
+                                  appSlug: runningApp?.slug ?? session.slug,
+                                }}
                                 state={{ appFocus: true }}
                                 {...props}
                               />

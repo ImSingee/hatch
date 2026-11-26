@@ -332,11 +332,14 @@ claim the browser's account holds.
 
 ## Running Apps and their layout: browser window only
 
-The Desk keeps several Apps running in one browser window (up to 12): which
-ones run, which one sits beside the window in front, in what order they were
-last shown, and the route each was left on. This is the state of one browser
-window, like its open tabs, kept in memory and in that window's session
-storage (`src/components/desk/app-sessions.tsx`); nothing reaches the server.
+The Desk keeps several Apps running in one browser window (up to 12). Which
+Apps run and in what order they were last shown live only in that page's
+memory: a reload starts none of them except the one beside. The window's
+session storage (`src/components/desk/app-sessions.tsx`) keeps which App sits
+beside the window in front and the route each App was left on, so after a
+reload the App beside reopens and the others open where they were left.
+Nothing reaches the server; like open tabs, this is the state of one browser
+window.
 It is a named CLI exception (plan `docs/native-app-ui-plan.md` section 5).
 What an App opens to is covered elsewhere: its URL (`/app/<slug>#<route>`)
 deep-links into it, and its dock pins (name and entry route) are `hatch pin`

@@ -39,6 +39,8 @@ const fixtures = vi.hoisted(() => ({
   pins: [] as Pin[],
   /** The live deployment of each App, as the platform reports it. */
   revisions: new Map<string, string>(),
+  /** Apps whose live deployment has no frontend. */
+  frontendless: new Set<string>(),
   rootRoute: null as AnyRootRoute | null,
 }));
 
@@ -59,7 +61,7 @@ function appDetail(slug: string): AppDetail {
     status: 'deployed',
     capabilities: {
       database: false,
-      frontend: true,
+      frontend: !fixtures.frontendless.has(slug),
       widgets: false,
       backend: false,
       cron: false,
@@ -295,6 +297,7 @@ beforeEach(() => {
   sessionStorage.clear();
   fixtures.pins = [];
   fixtures.revisions.clear();
+  fixtures.frontendless.clear();
   limit = 12;
   vi.stubGlobal('EventSource', TestEventSource);
 });
@@ -592,7 +595,7 @@ test('a reload keeps the App beside and reopens Apps where they were', async () 
   await vi.waitFor(() =>
     expect(first.router.state.location.hash).toBe('/month'),
   );
-  first.screen.unmount();
+  await first.screen.unmount();
 
   // The page loads again: the App beside comes back, still at its page, and
   // the others open where they were left.
@@ -606,4 +609,60 @@ test('a reload keeps the App beside and reopens Apps where they were', async () 
   });
   expect((await loaded('ledger')).location.hash).toBe('#/month');
   expect(second.router.state.location.hash).toBe('/month');
+});
+
+test('a new deployment that cannot run here keeps the running App until it is reloaded', async () => {
+  const { router } = await renderDesk('/app/notes');
+  await loaded('notes');
+  const frame = frameOf('notes');
+  fixtures.revisions.set('notes', 'r2');
+  fixtures.frontendless.add('notes');
+  TestEventSource.current!.dispatchEvent(
+    new MessageEvent('platform', {
+      data: JSON.stringify({
+        type: 'app.deployment.activated',
+        appId: 'id-notes',
+        deploymentRevision: 'r2',
+      }),
+    }),
+  );
+  const pill = page.getByRole('button', {
+    name: 'Update available — reload app',
+  });
+  await expect.element(pill).toBeVisible();
+
+  // Coming back re-reads the App (now without a frontend): the running
+  // bundle stays in front.
+  await router.navigate({ to: '/agent' });
+  await router.navigate({ to: '/app/$appSlug', params: { appSlug: 'notes' } });
+  await vi.waitFor(() => expect(placementOf('notes')).toBe('front'));
+  expect(frameOf('notes')).toBe(frame);
+
+  // Reloading applies the deployment: the App stops and its page says why.
+  await pill.click();
+  await expect.element(page.getByText('Backend-only app')).toBeVisible();
+  expect(frameOf('notes')).toBeNull();
+});
+
+test('Open beside reads the App afresh rather than trusting older details', async () => {
+  fixtures.pins = [
+    {
+      id: 'pin-ledger',
+      appId: 'id-ledger',
+      appSlug: 'ledger',
+      label: 'Ledger',
+      entryHash: null,
+    },
+  ];
+  // Seen before its frontend was deployed.
+  fixtures.frontendless.add('ledger');
+  const { router } = await renderDesk('/app/ledger');
+  await expect.element(page.getByText('Backend-only app')).toBeVisible();
+  fixtures.frontendless.delete('ledger');
+  await router.navigate({ to: '/agent' });
+
+  await dockMenu('Ledger', 'Open beside');
+
+  await vi.waitFor(() => expect(placementOf('ledger')).toBe('beside'));
+  await loaded('ledger');
 });
