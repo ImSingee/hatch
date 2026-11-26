@@ -14,7 +14,7 @@ import {
   parsePlayerMessage,
   type SurfaceMessage,
 } from '../../../sdk-internal/app/src/native-surface';
-import { useAccent } from '~/ui/theme';
+import { useSurfaceTheme } from '~/ui/theme';
 import { appSurfaceSource } from './app-surface-source';
 import { attachPlatformShortcuts } from './platform-shortcuts';
 import classes from './app-surface.module.css';
@@ -134,7 +134,7 @@ export function AppSurface({
   // The live App window, kept so `navigate` can reach the loaded App.
   const winRef = useRef<Window | null>(null);
   const nativeRef = useRef<NativeChannel | null>(null);
-  const accent = useAccent();
+  const surfaceTheme = useSurfaceTheme();
   const router = useRouter({ warn: false });
   const [loading, setLoading] = useState(true);
   const [generation, setGeneration] = useState(0);
@@ -148,7 +148,7 @@ export function AppSurface({
     onTitleChange?.(title),
   );
   const currentReservedShortcuts = useEffectEvent(() => reservedShortcuts);
-  const currentAccent = useEffectEvent(() => accent);
+  const currentTheme = useEffectEvent(() => surfaceTheme);
   const currentVisible = useEffectEvent(() => visible);
   const openApp = useEffectEvent((slug: string, next: string) => {
     if (router) {
@@ -165,8 +165,8 @@ export function AppSurface({
   // The instance accent and the surface's visibility reach a native App
   // live; a `web` App reads neither.
   useEffect(() => {
-    nativeRef.current?.send({ type: 'theme', accent });
-  }, [accent]);
+    nativeRef.current?.send({ type: 'theme', ...surfaceTheme });
+  }, [surfaceTheme]);
   useEffect(() => {
     nativeRef.current?.send({ type: 'visibility', visible });
   }, [visible]);
@@ -321,7 +321,7 @@ export function AppSurface({
       channel.send({
         type: 'init',
         route: channel.route,
-        accent: currentAccent(),
+        ...currentTheme(),
         visible: currentVisible(),
       });
     };

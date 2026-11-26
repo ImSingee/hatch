@@ -21,6 +21,8 @@ type SdkEntry = ({ source: string } | { reexport: string }) & {
   runtime?: SdkEntryRuntime;
 };
 
+import type { ResolvedTheme } from '../packages/hatch-design-tokens/src/index.ts';
+
 /** An NSH theme: shadcn `cssVars`, as `nsh.json` "theme" and `setTheme` take. */
 export type SdkNshTheme = {
   cssVars: {
@@ -43,6 +45,12 @@ export type SdkDefinition = {
   nsh?: {
     /** The complete theme for an accent name (`indigo`, `teal`, ...). */
     theme?: (accent: string) => SdkNshTheme;
+    /**
+     * The complete theme for a resolved instance theme (a preset or a
+     * custom theme, light or dark; `ResolvedTheme` in
+     * `packages/hatch-design-tokens`).
+     */
+    resolvedTheme?: (theme: ResolvedTheme) => SdkNshTheme;
     /** `nsh.json` "tailwind" (an object, inlined). */
     tailwind?: Record<string, unknown>;
   };

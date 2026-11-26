@@ -5,7 +5,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px 14px 20px;
-  border: 1px solid var(--mantine-color-white);
+  border: 1px solid var(--border-glass);
   border-radius: var(--mantine-radius-xl);
   background: var(--surface-dock);
   box-shadow: var(--shadow-card);

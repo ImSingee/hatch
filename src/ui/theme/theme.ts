@@ -9,45 +9,31 @@ import {
   Select,
   Tooltip,
   createTheme,
-  darken,
-  lighten,
   rem,
 } from '@mantine/core';
 import type { MantineColorsTuple, MantineThemeOverride } from '@mantine/core';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import {
-  ACCENT_COLORS,
-  ACCENT_NAMES,
-  DEFAULT_ACCENT,
-  type AccentName,
-} from './accents';
+  BUILT_IN_THEME,
+  colorRamp as tokenRamp,
+  mix,
+  type ResolvedTheme,
+} from '../../../packages/hatch-design-tokens/src';
+import { ACCENT_COLORS, type AccentName } from './accents';
 
 /**
- * Build the ten-step ramp Mantine needs from one token colour. The colour
- * itself is shade 6 (the filled shade); lighter steps carry tints, hovers and
- * selection, darker steps carry text, links and pressed states.
+ * The ten-step ramp of one colour on a light theme: the colour is shade 6
+ * (the filled shade); lighter steps carry tints, hovers and selection,
+ * darker steps carry text, links and pressed states.
  */
 export function colorRamp(base: string): MantineColorsTuple {
-  return [
-    lighten(base, 0.92),
-    lighten(base, 0.86),
-    lighten(base, 0.72),
-    lighten(base, 0.5),
-    lighten(base, 0.3),
-    lighten(base, 0.14),
-    base,
-    darken(base, 0.16),
-    darken(base, 0.32),
-    darken(base, 0.48),
-  ];
+  return tokenRamp(base) as unknown as MantineColorsTuple;
 }
 
-/** The `primary` ramp for one of the accents the user can choose. */
+/** The `primary` ramp for one of the accents on the light `desk` theme. */
 export function accentRamp(accent: AccentName): MantineColorsTuple {
   return colorRamp(ACCENT_COLORS[accent]);
 }
-
-const neutralRamp = tokens.neutral as unknown as MantineColorsTuple;
 
 /**
  * Mantine colour names backed by a token hue. Several names share one hue so
@@ -55,23 +41,48 @@ const neutralRamp = tokens.neutral as unknown as MantineColorsTuple;
  * palette.
  */
 const HUE_BY_COLOR_NAME = {
-  red: tokens.hues.red,
-  orange: tokens.hues.orange,
-  yellow: tokens.hues.amber,
-  amber: tokens.hues.amber,
-  green: tokens.hues.green,
-  teal: tokens.hues.teal,
-  blue: tokens.hues.blue,
-  violet: tokens.hues.violet,
-  grape: tokens.hues.violet,
-  pink: tokens.hues.pink,
-} as const;
+  red: 'red',
+  orange: 'orange',
+  yellow: 'amber',
+  amber: 'amber',
+  green: 'green',
+  teal: 'teal',
+  blue: 'blue',
+  violet: 'violet',
+  grape: 'violet',
+  pink: 'pink',
+} as const satisfies Record<string, keyof typeof tokens.hues>;
 
 /** Every chromatic palette; drives the variant roles in the CSS resolver. */
 export const HUE_COLOR_NAMES: readonly string[] = [
   'primary',
   ...Object.keys(HUE_BY_COLOR_NAME),
 ];
+
+const tuple = (shades: readonly string[]) =>
+  shades as unknown as MantineColorsTuple;
+
+/**
+ * Mantine's `dark` palette, which its dark colour scheme reads for surfaces
+ * and text: shade 0 is the text, 7 the body, 6 fields and buttons, 4
+ * borders. A light theme keeps the neutral ramp there, as it always has.
+ */
+function darkSchemeRamp(theme: ResolvedTheme): MantineColorsTuple {
+  const c = theme.colors;
+  if (theme.appearance === 'light') return tuple(theme.ramps.neutral);
+  return tuple([
+    c.foreground,
+    mix(c.foreground, c['muted-foreground'], 0.5),
+    c['muted-foreground'],
+    mix(c['muted-foreground'], c.border, 0.5),
+    c.border,
+    mix(c.card, c.foreground, 0.08),
+    c.card,
+    c.background,
+    mix(c.background, '#000000', 0.25),
+    mix(c.background, '#000000', 0.45),
+  ]);
+}
 
 /** Tile fills for monogram glyphs; every one carries white text at AA. */
 export const TILE_COLORS: readonly string[] = tokens.tiles;
@@ -86,21 +97,29 @@ const CONTAINER_SIZES: Record<string, string> = {
   xxl: rem(1600),
 };
 
-const sansStack = `'${tokens.fonts.sans} Variable', '${tokens.fonts.sans}', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', 'Noto Sans SC', 'Segoe UI', Roboto, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji'`;
-const monoStack = `'${tokens.fonts.mono} Variable', '${tokens.fonts.mono}', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
+const SANS_FALLBACK = `-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', 'Noto Sans SC', 'Segoe UI', Roboto, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji'`;
+const MONO_FALLBACK = `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
 
-const buildDeskTheme = (accent: AccentName): MantineThemeOverride =>
-  createTheme({
-    white: tokens.light.card,
-    black: tokens.light.foreground,
+/** A bundled face first (its variable cut, then the static one). */
+const fontStack = (face: string, fallback: string) =>
+  face === 'system' ? fallback : `'${face} Variable', '${face}', ${fallback}`;
+
+const buildDeskTheme = (resolved: ResolvedTheme): MantineThemeOverride => {
+  const light = resolved.appearance === 'light';
+  const radius = resolved.radius;
+  return createTheme({
+    // A light theme draws Mantine's surfaces in white (the card); a dark
+    // one uses the `dark` palette for them and white only for text.
+    white: light ? resolved.colors.card : resolved.colors['on-fill'],
+    black: light ? resolved.colors.foreground : resolved.colors.background,
     colors: {
-      primary: accentRamp(accent),
-      gray: neutralRamp,
-      dark: neutralRamp,
+      primary: tuple(resolved.ramps.primary),
+      gray: tuple(resolved.ramps.neutral),
+      dark: darkSchemeRamp(resolved),
       ...(Object.fromEntries(
         Object.entries(HUE_BY_COLOR_NAME).map(([name, hue]) => [
           name,
-          colorRamp(hue),
+          tuple(resolved.ramps[hue]),
         ]),
       ) as Record<keyof typeof HUE_BY_COLOR_NAME, MantineColorsTuple>),
     },
@@ -110,14 +129,14 @@ const buildDeskTheme = (accent: AccentName): MantineThemeOverride =>
     luminanceThreshold: 0.3,
     focusRing: 'auto',
     cursorType: 'pointer',
-    fontFamily: sansStack,
-    fontFamilyMonospace: monoStack,
+    fontFamily: fontStack(resolved.fonts.sans, SANS_FALLBACK),
+    fontFamilyMonospace: fontStack(resolved.fonts.mono, MONO_FALLBACK),
     radius: {
-      xs: rem(tokens.radius.xs),
-      sm: rem(tokens.radius.sm),
-      md: rem(tokens.radius.md),
-      lg: rem(tokens.radius.lg),
-      xl: rem(tokens.radius.xl),
+      xs: rem(radius.xs),
+      sm: rem(radius.sm),
+      md: rem(radius.md),
+      lg: rem(radius.lg),
+      xl: rem(radius.xl),
     },
     defaultRadius: 'md',
     spacing: {
@@ -160,12 +179,13 @@ const buildDeskTheme = (accent: AccentName): MantineThemeOverride =>
       },
     },
     shadows: {
-      xs: tokens.shadows.card,
-      sm: tokens.shadows.card,
-      md: tokens.shadows.dock,
-      lg: tokens.shadows.dock,
-      xl: tokens.shadows.window,
+      xs: resolved.shadows.card,
+      sm: resolved.shadows.card,
+      md: resolved.shadows.dock,
+      lg: resolved.shadows.dock,
+      xl: resolved.shadows.window,
     },
+    other: { resolved },
     components: {
       Container: Container.extend({
         vars: (_, { size, fluid }) => ({
@@ -188,7 +208,7 @@ const buildDeskTheme = (accent: AccentName): MantineThemeOverride =>
         defaultProps: { p: 'xl', radius: 'xl', shadow: 'sm' },
       }),
       Modal: Modal.extend({
-        defaultProps: { radius: rem(tokens.radius.window), shadow: 'xl' },
+        defaultProps: { radius: rem(radius.window), shadow: 'xl' },
       }),
       Menu: Menu.extend({
         defaultProps: { radius: 'lg', shadow: 'md' },
@@ -204,26 +224,25 @@ const buildDeskTheme = (accent: AccentName): MantineThemeOverride =>
       }),
     },
   });
+};
 
-const THEMES = Object.fromEntries(
-  ACCENT_NAMES.map((accent) => [accent, buildDeskTheme(accent)]),
-) as Record<AccentName, MantineThemeOverride>;
+const THEMES = new WeakMap<ResolvedTheme, MantineThemeOverride>();
 
-/** The Desk theme with `primary` built from the given accent. */
-export function deskThemeFor(accent: AccentName): MantineThemeOverride {
-  return THEMES[accent];
+/** The Mantine theme drawing a resolved theme; one object per theme. */
+export function deskThemeFor(resolved: ResolvedTheme): MantineThemeOverride {
+  let theme = THEMES.get(resolved);
+  if (!theme) {
+    theme = buildDeskTheme(resolved);
+    THEMES.set(resolved, theme);
+  }
+  return theme;
 }
 
-export const deskTheme: MantineThemeOverride = THEMES[DEFAULT_ACCENT];
+/** The built-in `desk` theme with the default accent. */
+export const deskTheme: MantineThemeOverride = deskThemeFor(BUILT_IN_THEME);
 
-/**
- * Rules that give `primary` its ramp from `<html data-accent>`. They are part
- * of the prerendered shell, so a cached accent applies before the first paint
- * instead of after hydration.
- */
-export const ACCENT_CSS: string = ACCENT_NAMES.map(
-  (accent) =>
-    `:root[data-accent="${accent}"]{${accentRamp(accent)
-      .map((color, shade) => `--mantine-color-primary-${shade}:${color};`)
-      .join('')}}`,
-).join('');
+/** The resolved theme a Mantine theme was built from. */
+export function resolvedThemeOf(theme: { other?: unknown }): ResolvedTheme {
+  const other = theme.other as { resolved?: ResolvedTheme } | undefined;
+  return other?.resolved ?? BUILT_IN_THEME;
+}

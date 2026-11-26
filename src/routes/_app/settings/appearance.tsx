@@ -4,6 +4,10 @@ import { AccentPanel } from '~components/settings/accent-panel';
 import { DockLabelsPanel } from '~components/settings/dock-labels-panel';
 import { LanguagePanel } from '~components/settings/language-panel';
 import { SectionHead } from '~components/settings/section-head';
+import {
+  ThemeModePanel,
+  ThemePickerPanel,
+} from '~components/settings/theme-panel';
 import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 
@@ -21,6 +25,15 @@ function AppearanceSettings() {
         title={t('settings.appearance.label')}
         description={t('appearance.description')}
       />
+      <GroupCard padded>
+        <ThemeModePanel />
+      </GroupCard>
+      <GroupCard padded>
+        <ThemePickerPanel appearance="light" />
+      </GroupCard>
+      <GroupCard padded>
+        <ThemePickerPanel appearance="dark" />
+      </GroupCard>
       <GroupCard padded>
         <AccentPanel />
       </GroupCard>

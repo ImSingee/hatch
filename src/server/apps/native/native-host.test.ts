@@ -48,7 +48,7 @@ function setup(
   const calls: { url: string; init?: RequestInit }[] = [];
   const hideListeners = new Set<() => void>();
   const shell = {
-    accent: () => 'indigo',
+    theme: () => config.themes.indigo,
     visibleWithin: () => Promise.resolve(visible),
     onHidden: (listener: () => void) => {
       hideListeners.add(listener);

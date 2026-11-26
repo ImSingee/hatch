@@ -24,6 +24,7 @@
     "homepage.page.agent",
     "backends.column.app",
     "agent.model.withLevel",
-    "notifications.format.markdown"
+    "notifications.format.markdown",
+    "appearance.preset.desk"
   ]
 }

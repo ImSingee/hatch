@@ -6,7 +6,7 @@
   height: 72px;
   margin: 0 auto;
   padding: 0 8px;
-  border: 1px solid var(--mantine-color-white);
+  border: 1px solid var(--border-glass);
   border-radius: var(--radius-dock);
   background: var(--surface-dock);
   box-shadow: var(--shadow-dock);

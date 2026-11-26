@@ -164,7 +164,8 @@ export function createFontLoader(
 export function createNativeHost(
   config: NativePlayerConfig,
   shell: {
-    accent(): string;
+    /** The NSH theme to answer `hatch.theme.get` with. */
+    theme(): unknown;
     /** Resolves true once the App is visible, or false after `ms`. */
     visibleWithin(ms: number): Promise<boolean>;
     /** Calls `listener` when the App is hidden; returns the unsubscribe. */
@@ -395,14 +396,8 @@ export function createNativeHost(
             return await data('mutate', input);
           case 'hatch.data.events':
             return await events(input);
-          case 'hatch.theme.get': {
-            const accent = shell.accent();
-            return {
-              ok: true,
-              theme:
-                config.themes[accent] ?? config.themes[config.defaultAccent],
-            };
-          }
+          case 'hatch.theme.get':
+            return { ok: true, theme: shell.theme() };
           case 'hatch.nav.setTitle': {
             const { title } = input;
             if (
@@ -545,6 +540,47 @@ function connectSurface(onMessage: (message: SurfaceMessage) => void): {
   return { ready };
 }
 
+/** The platform's answer for the instance theme (`/api/theme/native`). */
+export type InstanceNativeTheme = { key: string; theme: unknown };
+
+const THEME_URL = '/api/theme/native';
+const DARK_QUERY = '(prefers-color-scheme: dark)';
+
+/**
+ * Read the instance theme: `appearance` when the surface names one, else
+ * the one the instance's mode picks for this device. Null when the platform
+ * does not answer with a theme (an older platform, offline): the theme
+ * baked into the page stays.
+ */
+export async function fetchInstanceTheme(
+  appearance: 'light' | 'dark' | null,
+  prefersDark: boolean,
+  fetcher: typeof fetch = fetch,
+): Promise<InstanceNativeTheme | null> {
+  const query = appearance
+    ? `appearance=${appearance}`
+    : `prefers=${prefersDark ? 'dark' : 'light'}`;
+  try {
+    const response = await fetcher(`${THEME_URL}?${query}`, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (
+      !isRecord(body) ||
+      typeof body.key !== 'string' ||
+      !isRecord(body.theme) ||
+      !isRecord(body.theme.cssVars) ||
+      !isRecord(body.theme.cssVars.light)
+    )
+      return null;
+    return { key: body.key, theme: body.theme };
+  } catch {
+    return null;
+  }
+}
+
 /** Start the player page. */
 export async function startNativePlayer(): Promise<void> {
   const config = readConfig();
@@ -561,8 +597,27 @@ export async function startNativePlayer(): Promise<void> {
     port.postMessage(message);
     return true;
   };
+  // The instance theme once the platform has answered; until then, and on
+  // a platform that does not, the page's own theme for the accent.
+  let instance: InstanceNativeTheme | null = null;
+  let appearance: 'light' | 'dark' | null = null;
+  let themeKey: string | undefined;
+  let themeRequest = 0;
   const theme = () =>
-    config.themes[accent] ?? config.themes[config.defaultAccent];
+    instance?.theme ??
+    config.themes[accent] ??
+    config.themes[config.defaultAccent];
+  const refreshTheme = async () => {
+    const request = ++themeRequest;
+    const next = await fetchInstanceTheme(
+      appearance,
+      matchMedia(DARK_QUERY).matches,
+    );
+    // Only the newest request applies; a stale answer is dropped.
+    if (request !== themeRequest || !next || next.key === instance?.key) return;
+    instance = next;
+    player?.hostEvent('hatch.theme', { theme: theme() });
+  };
 
   const apply = (message: SurfaceMessage) => {
     if (!player) {
@@ -577,12 +632,21 @@ export async function startNativePlayer(): Promise<void> {
         history.replaceState(history.state, '', `#${message.route}`);
         player.hostEvent('hatch.nav', { route: message.route });
         break;
-      case 'theme':
-        if (message.accent !== accent) {
-          accent = message.accent;
+      case 'theme': {
+        const accentChanged = message.accent !== accent;
+        const changed =
+          accentChanged ||
+          message.appearance !== (appearance ?? undefined) ||
+          message.themeKey !== themeKey;
+        appearance = message.appearance ?? null;
+        themeKey = message.themeKey;
+        accent = message.accent;
+        // Without an instance theme the accent alone recolours the App.
+        if (accentChanged && !instance)
           player.hostEvent('hatch.theme', { theme: theme() });
-        }
+        if (changed) void refreshTheme();
         break;
+      }
       case 'visibility':
         visible = message.visible;
         if (visible) {
@@ -608,6 +672,8 @@ export async function startNativePlayer(): Promise<void> {
     route = connected.init.route;
     accent = connected.init.accent;
     visible = connected.init.visible;
+    appearance = connected.init.appearance ?? null;
+    themeKey = connected.init.themeKey;
     if (rawHash() !== route) {
       history.replaceState(history.state, '', `#${route}`);
     }
@@ -618,8 +684,21 @@ export async function startNativePlayer(): Promise<void> {
     deploymentId: config.deploymentId,
   });
 
+  // Embedded, the surface reports every theme change. Opened on its own (the
+  // mobile app's WebView), the page asks again when the device's appearance
+  // changes and when it returns to the foreground.
+  void refreshTheme();
+  if (!port) {
+    matchMedia(DARK_QUERY).addEventListener('change', () => {
+      void refreshTheme();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void refreshTheme();
+    });
+  }
+
   const host = createNativeHost(config, {
-    accent: () => accent,
+    theme,
     visibleWithin: (ms) =>
       visible
         ? Promise.resolve(true)

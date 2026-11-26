@@ -7,7 +7,7 @@
   justify-content: center;
   min-height: 280px;
   padding: 8px 24px 32px;
-  border: 1px solid var(--mantine-color-white);
+  border: 1px solid var(--border-glass);
   border-radius: var(--radius-widget);
   background: var(--surface-widget);
   box-shadow: var(--shadow-card);
@@ -17,7 +17,7 @@
 /* Android's transparent WebView darkens translucent panels; see
    `native-host.ts`. */
 :global(:root[data-host-platform='android']) .panel {
-  background: var(--mantine-color-white);
+  background: var(--surface-raised);
 }
 
 /* In the editor the area is a drop zone as tall as a small widget. */

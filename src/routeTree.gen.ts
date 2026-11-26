@@ -45,6 +45,7 @@ import { Route as ApiGitSplatRouteImport } from './routes/api/git/$'
 import { Route as ApiImagesAppIconsRouteImport } from './routes/api/images/app-icons'
 import { Route as ApiNotificationsDeviceResponseRouteImport } from './routes/api/notifications/device-response'
 import { Route as ApiRpcSplatRouteImport } from './routes/api/rpc/$'
+import { Route as ApiThemeNativeRouteImport } from './routes/api/theme/native'
 import { Route as MobileDashboardDashboardIdRouteImport } from './routes/mobile/dashboard/$dashboardId'
 import { Route as AppAppAppSlugIndexRouteImport } from './routes/_app/app/$appSlug/index'
 import { Route as AppAppAppSlugManageRouteImport } from './routes/_app/app/$appSlug/manage'
@@ -265,6 +266,11 @@ const ApiNotificationsDeviceResponseRoute =
 const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
   id: '/api/rpc/$',
   path: '/api/rpc/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiThemeNativeRoute = ApiThemeNativeRouteImport.update({
+  id: '/api/theme/native',
+  path: '/api/theme/native',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MobileDashboardDashboardIdRoute =
@@ -520,6 +526,7 @@ export interface FileRoutesByFullPath {
   '/api/images/app-icons': typeof ApiImagesAppIconsRoute
   '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
+  '/api/theme/native': typeof ApiThemeNativeRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
   '/agent/': typeof AppAgentIndexRoute
   '/apps/': typeof AppAppsIndexRoute
@@ -593,6 +600,7 @@ export interface FileRoutesByTo {
   '/api/images/app-icons': typeof ApiImagesAppIconsRoute
   '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
+  '/api/theme/native': typeof ApiThemeNativeRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
   '/agent': typeof AppAgentIndexRoute
   '/apps': typeof AppAppsIndexRoute
@@ -672,6 +680,7 @@ export interface FileRoutesById {
   '/api/images/app-icons': typeof ApiImagesAppIconsRoute
   '/api/notifications/device-response': typeof ApiNotificationsDeviceResponseRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
+  '/api/theme/native': typeof ApiThemeNativeRoute
   '/mobile/dashboard/$dashboardId': typeof MobileDashboardDashboardIdRoute
   '/_app/agent/': typeof AppAgentIndexRoute
   '/_app/apps/': typeof AppAppsIndexRoute
@@ -751,6 +760,7 @@ export interface FileRouteTypes {
     | '/api/images/app-icons'
     | '/api/notifications/device-response'
     | '/api/rpc/$'
+    | '/api/theme/native'
     | '/mobile/dashboard/$dashboardId'
     | '/agent/'
     | '/apps/'
@@ -824,6 +834,7 @@ export interface FileRouteTypes {
     | '/api/images/app-icons'
     | '/api/notifications/device-response'
     | '/api/rpc/$'
+    | '/api/theme/native'
     | '/mobile/dashboard/$dashboardId'
     | '/agent'
     | '/apps'
@@ -902,6 +913,7 @@ export interface FileRouteTypes {
     | '/api/images/app-icons'
     | '/api/notifications/device-response'
     | '/api/rpc/$'
+    | '/api/theme/native'
     | '/mobile/dashboard/$dashboardId'
     | '/_app/agent/'
     | '/_app/apps/'
@@ -964,6 +976,7 @@ export interface RootRouteChildren {
   ApiImagesAppIconsRoute: typeof ApiImagesAppIconsRoute
   ApiNotificationsDeviceResponseRoute: typeof ApiNotificationsDeviceResponseRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
+  ApiThemeNativeRoute: typeof ApiThemeNativeRoute
   MobileDashboardDashboardIdRoute: typeof MobileDashboardDashboardIdRoute
   ApiAgentAttachmentsAttachmentIdRoute: typeof ApiAgentAttachmentsAttachmentIdRoute
   ApiAppAppIdDownloadRoute: typeof ApiAppAppIdDownloadRoute
@@ -1241,6 +1254,13 @@ declare module '@tanstack/react-router' {
       path: '/api/rpc/$'
       fullPath: '/api/rpc/$'
       preLoaderRoute: typeof ApiRpcSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/theme/native': {
+      id: '/api/theme/native'
+      path: '/api/theme/native'
+      fullPath: '/api/theme/native'
+      preLoaderRoute: typeof ApiThemeNativeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mobile/dashboard/$dashboardId': {
@@ -1728,6 +1748,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiImagesAppIconsRoute: ApiImagesAppIconsRoute,
   ApiNotificationsDeviceResponseRoute: ApiNotificationsDeviceResponseRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
+  ApiThemeNativeRoute: ApiThemeNativeRoute,
   MobileDashboardDashboardIdRoute: MobileDashboardDashboardIdRoute,
   ApiAgentAttachmentsAttachmentIdRoute: ApiAgentAttachmentsAttachmentIdRoute,
   ApiAppAppIdDownloadRoute: ApiAppAppIdDownloadRoute,
@@ -1759,13 +1780,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
