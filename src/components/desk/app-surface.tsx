@@ -185,7 +185,8 @@ export function AppSurface({
   });
 
   // The instance accent and the surface's visibility reach a native App
-  // live; a `web` App reads neither.
+  // live. A `web` App reads neither; its visibility only gates its Data
+  // Table change streams (`data-events-gate.ts`).
   useEffect(() => {
     nativeRef.current?.send({ type: 'theme', accent });
   }, [accent]);
