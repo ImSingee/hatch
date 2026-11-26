@@ -137,10 +137,10 @@ vi.mock('~queries/sidebar', () => ({
   },
 }));
 vi.mock('~queries/theme', () => ({
-  themeQueryOptions: {
-    queryKey: ['test-theme'],
-    queryFn: async () => ({ accent: 'indigo', dockLabels: false }),
-  },
+  themeQueryOptions: (userId: string) => ({
+    queryKey: ['test-theme', userId],
+    queryFn: async () => ({ userId, accent: 'indigo', dockLabels: false }),
+  }),
 }));
 vi.mock('~server/sidebar', () => ({
   addSidebarItem: async () => undefined,
