@@ -522,7 +522,10 @@ function scanHtml(html: string): HtmlPlaces {
   let index = 0;
   for (;;) {
     const open = html.indexOf('<', index);
-    if (open === -1) return places;
+    // A document that ends inside `<template>` would take an appended bundle
+    // into the template's inert content, where it never runs.
+    if (open === -1)
+      return templates > 0 ? { ...places, openAtEnd: true } : places;
     if (html.startsWith('<!--', open)) {
       // `<!-->` and `<!--->` are whole (empty) comments.
       const end = /^-?>/.exec(html.slice(open + 4, open + 6))

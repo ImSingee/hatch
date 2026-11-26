@@ -324,7 +324,10 @@ export async function writeFiles(
   root: string,
   files: { path: string; contentBase64: string }[],
 ) {
+  // Every path is checked before the first file is written, so a payload
+  // with one unsafe path writes nothing at all.
   const seen = new Set<string>();
+  const planned: { parts: string[]; contentBase64: string }[] = [];
   for (const file of files) {
     const parts = file.path.split('/');
     if (
@@ -346,7 +349,10 @@ export async function writeFiles(
         7,
       );
     seen.add(file.path);
-    const target = join(root, ...parts);
+    planned.push({ parts, contentBase64: file.contentBase64 });
+  }
+  for (const file of planned) {
+    const target = join(root, ...file.parts);
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, Buffer.from(file.contentBase64, 'base64'), {
       flag: 'wx',

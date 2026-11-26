@@ -23,6 +23,8 @@ describe('writing platform files', () => {
     'node_modules/x.js',
     'a\\b.js',
     'c:/x.js',
+    '.hatch/x.js',
+    'a/\u0007.js',
   ])('refuses %j and writes nothing', async (unsafe) => {
     const target = await mkdtemp(path.join(root, 'target-'));
     await expect(
@@ -40,5 +42,18 @@ describe('writing platform files', () => {
         { path: 'a.js', contentBase64: body },
       ]),
     ).rejects.toMatchObject({ code: 'unsafe_payload' });
+    // Nothing of a refused payload is written, not even its safe files.
+    expect(await readdir(target)).toEqual([]);
+  });
+
+  it('writes none of a payload whose last path is unsafe', async () => {
+    const target = await mkdtemp(path.join(root, 'target-'));
+    await expect(
+      writeFiles(target, [
+        { path: 'ok/first.js', contentBase64: body },
+        { path: '../escape.js', contentBase64: body },
+      ]),
+    ).rejects.toMatchObject({ code: 'unsafe_payload' });
+    expect(await readdir(target)).toEqual([]);
   });
 });

@@ -315,7 +315,17 @@ class LogShipper {
       deadline.addEventListener('abort', () => resolve(), { once: true });
       void flushed.then(resolve);
     });
-    if (!deadline.aborted || this.stopped) return;
+    if (this.stopped) return;
+    if (!deadline.aborted) {
+      // Everything was sent, except batches that ran out of retries during
+      // this last flush: they are reported too.
+      if (this.dropped > 0 && !signal.aborted) {
+        const lost = this.dropped;
+        this.dropped = 0;
+        await this.sendNote(droppedNote(lost), signal);
+      }
+      return;
+    }
     this.stopped = true;
     this.abandon.abort();
     // The aborted batch may or may not have landed: counted as missing.
@@ -326,12 +336,18 @@ class LogShipper {
     if (lost === 0) return;
     console.error(`[builder] up to ${lost} build log line(s) not sent`);
     if (signal.aborted) return;
+    await this.sendNote(
+      `[builder] Up to ${lost} line(s) of build output are missing: ` +
+        'the platform did not take them in time.',
+      signal,
+    );
+  }
+
+  /** One note line, within its own short deadline and the run's signal. */
+  private async sendNote(text: string, signal: AbortSignal): Promise<void> {
     await this.send(
-      [
-        `[builder] Up to ${lost} line(s) of build output are missing: ` +
-          'the platform did not take them in time.',
-      ],
-      AbortSignal.timeout(LOG_NOTE_TIMEOUT_MS),
+      [text],
+      AbortSignal.any([AbortSignal.timeout(LOG_NOTE_TIMEOUT_MS), signal]),
     ).catch(() => {});
   }
 

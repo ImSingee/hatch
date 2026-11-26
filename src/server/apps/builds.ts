@@ -72,6 +72,12 @@ const MAX_BUILD_ATTEMPTS = 2;
 export const ARTIFACT_WAIT_MS = 30 * 60_000;
 /** A verify or release with no progress for this long was interrupted. */
 const RELEASE_STALL_MS = 30 * 60_000;
+/**
+ * How often a release in progress touches its request, so the sweeper of
+ * any instance sees it is alive however long a step (a data migration, say)
+ * takes; only a release whose process stopped goes quiet.
+ */
+export const RELEASE_HEARTBEAT_MS = 60_000;
 const LOG_CHANNEL = 'hatch_app_builds';
 /** Followers waiting for queued builder work (Builder lease requests). */
 export const BUILD_QUEUE_CHANNEL = 'queue';
@@ -760,6 +766,21 @@ export async function acceptArtifact(
   // From here the deployment is this call's: every way out settles it.
   const work = path.join(BUILD_WORK_DIR, row.appId, `accept-${randomUUID()}`);
   let released: { version: number };
+  const heartbeat = setInterval(() => {
+    void db
+      .update(schema.appBuilds)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.appBuilds.id, row.id),
+          inArray(schema.appBuilds.status, ['verifying', 'releasing']),
+        ),
+      )
+      .catch((error) => {
+        console.error(`[apps] heartbeat of ${row.id} failed:`, error);
+      });
+  }, RELEASE_HEARTBEAT_MS);
+  heartbeat.unref?.();
   try {
     const packageDir = path.join(work, 'package');
     await fs.mkdir(work, { recursive: true });
@@ -872,6 +893,7 @@ export async function acceptArtifact(
       },
     });
   } catch (error) {
+    clearInterval(heartbeat);
     await cleanUp(work);
     if (error instanceof SupersededRelease) {
       return (
@@ -908,6 +930,7 @@ export async function acceptArtifact(
   }
   // The release is committed and live: nothing after this may record the
   // deployment as failed.
+  clearInterval(heartbeat);
   await cleanUp(work);
   return (
     (await transition(

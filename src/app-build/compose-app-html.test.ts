@@ -70,5 +70,7 @@ describe('composing the App page', () => {
       /app\/index\.html ends inside an unclosed/,
     );
     expect(() => compose('<textarea>notes')).toThrow(/unclosed/);
+    // An unclosed template would hold the appended bundle as inert content.
+    expect(() => compose('<template><p>x</p>')).toThrow(/unclosed/);
   });
 });

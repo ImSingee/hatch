@@ -497,6 +497,37 @@ describe('builder leases', () => {
     expect(await lastLine(lost.id)).toMatch(/nothing was released/);
   });
 
+  it('leaves a release that is still running to finish, however long it takes', async () => {
+    // A step before the release is recorded (a data migration, say) runs
+    // past the stall limit; the release's heartbeat keeps it alive for any
+    // instance's sweeper.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const deployment = await create();
+      mocks.release = async (id) => {
+        await db
+          .update(schema.appBuilds)
+          .set({ updatedAt: new Date(Date.now() - 60 * 60_000) })
+          .where(eq(schema.appBuilds.id, id));
+        vi.advanceTimersByTime(builds.RELEASE_HEARTBEAT_MS);
+        await vi.waitFor(async () => {
+          const row = await db.query.appBuilds.findFirst({ where: { id } });
+          expect(row!.updatedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+        });
+        await builds.sweepBuilds();
+        expect(await status(id)).toBe('verifying');
+      };
+      const final = await builds.acceptArtifact({
+        appId: APP,
+        buildId: deployment.id,
+        archive: packageArchive,
+      });
+      expect(final.status).toBe('ready');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('fails a local deployment whose package never arrives', async () => {
     const deployment = await create();
     await db

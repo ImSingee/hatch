@@ -37,7 +37,11 @@ export function platformBuildHost(options: {
     async runBuf(args, cwd) {
       // The platform's node_modules/.bin lets buf resolve protoc-gen-es.
       const env = subprocessSandboxEnv();
-      return run('buf', args, {
+      // Sandboxed, buf runs as the sandbox identity like every other tool.
+      const [command, commandArgs] = sandbox
+        ? sandboxedEvaluationCommand(['buf', ...args])
+        : ['buf', args];
+      return run(command, commandArgs, {
         cwd,
         env: { ...env, PATH: `${BIN_DIR}:${env.PATH ?? ''}` },
         signal,
