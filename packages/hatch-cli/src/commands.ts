@@ -444,34 +444,52 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['theme', 'get'],
-    usage: 'theme get [--resolved [--appearance light|dark]]',
+    usage: 'theme get [--resolved]',
     description:
-      'Show the instance theme: the accent (null when each theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the mode (light, dark or system), the light and dark themes (each a preset name, or a custom document under custom, with its own primary) and accentOverrides (the appearances whose primary the accent replaces). --resolved adds resolved: every token of the theme the mode draws (both while the mode is system), with the accent applied; --appearance picks one.',
+      'Show the instance theme: the accent (null when the active theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the active theme (id, name, preset or custom, light or dark appearance, its own primary and its document) and accentOverridesPrimary (whether the accent hides that primary). --resolved adds resolved: every token of the active theme, with the accent applied.',
   },
   {
     path: ['theme', 'set'],
     usage:
-      'theme set [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels] [--mode light|dark|system] [--appearance light|dark (--preset <name> | --file <path|->)]',
+      'theme set [--theme <id>] [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels]',
     description:
-      "Change the theme of the whole instance; settings left out keep their value, and at least one is required. Every signed-in web, mobile and desktop client and every open native App restyles without a reload. --accent replaces the primary colour of both themes (names come from theme get); --clear-accent lets each theme show its own primary. --mode picks the appearance; system follows each device. --appearance names the theme to replace: --preset sets a preset (names come from theme presets) and clears that appearance's custom theme, --file replaces it whole with a custom theme document (JSON; see theme check). The document's appearance must match. While an accent is chosen it replaces the document's primary; add --clear-accent to show the document's own. The result's accentOverrides lists the appearances where that happens, and after --preset or --file the result says accentOverridesPrimary (also noted on stderr). A theme whose text would be unreadable is rejected with THEME_INVALID, naming each failing pair of colours and its contrast ratio. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
+      "Change the theme of the whole instance; settings left out keep their value, and at least one is required. Every signed-in web, mobile and desktop client and every open native App restyles without a reload. --theme activates a theme of the library (a preset name such as desk or desk-dark, or a custom theme id from theme list); a dark theme is a theme like any other. --accent replaces the active theme's primary (names come from theme get); --clear-accent lets it show its own. When an accent hides the activated theme's own primary, the result says accentOverridesPrimary and a note on stderr names --clear-accent. A theme whose text would be unreadable with the accent is rejected with THEME_INVALID. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
+  },
+  {
+    path: ['theme', 'list'],
+    usage: 'theme list [--limit <n>] [--cursor <cursor>]',
+    description:
+      'List the theme library: the presets, then the custom themes, oldest first, each with its id, name, source, appearance, own primary, document, and valid (false, with problems, for a custom theme that no longer passes the rules; it cannot be activated until updated). Without --limit it prints every theme; --limit (1-100) pages and prints nextCursor while more follow.',
+  },
+  {
+    path: ['theme', 'create'],
+    usage: 'theme create --file <path|->',
+    description:
+      'Save a new custom theme from a theme document (JSON; see theme check) and print it with its id. It is not activated; use theme set --theme <id>. Rejected with THEME_INVALID, naming each problem, like theme check.',
+  },
+  {
+    path: ['theme', 'update'],
+    usage: 'theme update <id> --file <path|->',
+    description:
+      "Replace a custom theme's document whole (presets cannot be changed; create a copy instead). An active theme restyles every client at once and is also checked with the chosen accent. Rejected with THEME_INVALID like theme check; an unknown id is NOT_FOUND.",
+  },
+  {
+    path: ['theme', 'delete'],
+    usage: 'theme delete <id>',
+    description:
+      'Delete a custom theme permanently. Presets cannot be deleted, and neither can the active theme (CONFLICT): activate another theme first.',
   },
   {
     path: ['theme', 'check'],
     usage: 'theme check --file <path|->',
     description:
-      'Validate a custom theme document without changing anything, and print it resolved into every token. A document is {"name"?, "appearance": "light"|"dark", "colors": {background, foreground, card, primary, secondary, muted, muted-foreground, border, destructive}, "radius"?: px 0-32, "fonts"?: {sans, mono}}; colours are #RRGGBB, #RGB or rgb(r g b), fonts one of the bundled faces or system. Unknown keys, unparsable colours, other fonts and text below 4.5:1 contrast are rejected (exit 2, THEME_INVALID) with every problem in error.details.problems.',
-  },
-  {
-    path: ['theme', 'presets'],
-    usage: 'theme presets',
-    description:
-      'List the built-in themes with their appearance and their document, a starting point for a custom theme.',
+      'Validate a theme document without changing anything, and print it resolved into every token. A document is {"name"?, "appearance": "light"|"dark", "colors": {background, foreground, card, primary, secondary, muted, muted-foreground, border, destructive}, "radius"?: px 0-32, "fonts"?: {sans, mono}}; colours are #RRGGBB, #RGB or rgb(r g b), fonts one of the bundled faces or system. Unknown keys, unparsable colours, other fonts and text below 4.5:1 contrast are rejected (exit 2, THEME_INVALID) with every problem in error.details.problems.',
   },
   {
     path: ['theme', 'reset'],
     usage: 'theme reset',
     description:
-      'Return to the desk and desk-dark presets, light mode and no accent (each theme shows its own primary; desk looks as with the default accent) in one change; replaces both custom themes. Dock labels are kept.',
+      'Activate desk with no accent (desk looks as with the default accent) in one change. Dock labels and the custom themes are kept.',
   },
   {
     path: ['pin', 'list'],

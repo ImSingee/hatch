@@ -25,7 +25,6 @@ import {
 import {
   isResolvedTheme,
   type ResolvedTheme,
-  type ThemeMode,
 } from '../../../packages/hatch-design-tokens/src';
 import {
   appProjection,
@@ -114,13 +113,6 @@ function statusError(status: number): MobileError {
 }
 
 /** One client is permanently bound to one canonical origin. */
-
-/** What the app draws for one instance: the mode and both themes. */
-export type InstanceTheme = {
-  mode: ThemeMode;
-  light: ResolvedTheme;
-  dark: ResolvedTheme;
-};
 
 /** A resolved theme as the shared token package types it. */
 export function resolvedTheme(message: ResolvedThemeMessage): ResolvedTheme {
@@ -406,28 +398,19 @@ export class HatchApiClient {
     );
   }
   /** The instance's accent name (`ui.theme`), shared by every client. */
-  /**
-   * The instance theme: its mode and both appearances, resolved by the
-   * platform into every token.
-   */
-  async theme(signal?: AbortSignal): Promise<InstanceTheme> {
+  /** The instance's active theme, resolved by the platform into every token. */
+  async theme(signal?: AbortSignal): Promise<ResolvedTheme> {
     const response = await this.rpcRequest(
-      (signal) =>
-        this.themeRpc.getTheme({ resolve: ['light', 'dark'] }, { signal }),
+      (signal) => this.themeRpc.getTheme({ resolve: true }, { signal }),
       signal,
     );
-    const [light, dark] = response.resolved.map(resolvedTheme);
-    const mode = response.theme?.mode;
-    if (
-      !isResolvedTheme(light, 'light') ||
-      !isResolvedTheme(dark, 'dark') ||
-      (mode !== 'light' && mode !== 'dark' && mode !== 'system')
-    )
+    const theme = response.resolved && resolvedTheme(response.resolved);
+    if (!isResolvedTheme(theme))
       throw new MobileError(
         'invalid_response',
         'The instance returned no usable theme.',
       );
-    return { mode, light, dark };
+    return theme;
   }
   /** Pinned Apps, in the order every client shows them. */
   async pins(signal?: AbortSignal): Promise<Pins> {

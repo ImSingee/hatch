@@ -39,7 +39,7 @@ import {
 import {
   ThemeService,
   type ResolvedTheme,
-  type ThemeChoice,
+  type ThemeEntry,
   type ThemeProblem,
   type ThemeState,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
@@ -258,14 +258,17 @@ const catalogStatus = (value: CatalogStatus | undefined) => {
     lastError: status.lastError ?? null,
   };
 };
-const themeChoice = (value: ThemeChoice | undefined) => {
-  const choice = required(value);
+const themeEntry = (value: ThemeEntry | undefined) => {
+  const entry = required(value);
   return {
-    appearance: choice.appearance,
-    preset: choice.preset || null,
-    name: choice.name,
-    primary: choice.primary,
-    custom: choice.custom ?? null,
+    id: entry.id,
+    name: entry.name,
+    source: entry.source,
+    appearance: entry.appearance,
+    primary: entry.primary || null,
+    valid: entry.valid,
+    problems: entry.problems.map(themeProblem),
+    document: entry.document ?? null,
   };
 };
 const theme = (value: ThemeState | undefined) => {
@@ -278,10 +281,8 @@ const theme = (value: ThemeState | undefined) => {
       color: accent.color,
     })),
     dockLabels: state.dockLabels,
-    mode: state.mode,
-    light: themeChoice(state.light),
-    dark: themeChoice(state.dark),
-    accentOverrides: state.accentOverrides,
+    theme: themeEntry(state.theme),
+    accentOverridesPrimary: state.accentOverridesPrimary,
   };
 };
 const resolvedTheme = (value: ResolvedTheme) => ({
@@ -893,12 +894,12 @@ export function cliClient(transport: Transport) {
       info: async () => serverInfo((await servers.getServerInfo({})).server),
     },
     theme: {
-      get: async (resolve: ('light' | 'dark')[] = []) => {
+      get: async (resolve = false) => {
         const result = await themes.getTheme({ resolve });
         return {
           ...theme(result.theme),
-          ...(resolve.length
-            ? { resolved: result.resolved.map(resolvedTheme) }
+          ...(resolve && result.resolved
+            ? { resolved: resolvedTheme(result.resolved) }
             : {}),
         };
       },
@@ -906,19 +907,24 @@ export function cliClient(transport: Transport) {
         accent?: string;
         clearAccent?: boolean;
         dockLabels?: boolean;
-        mode?: string;
-        appearance?: string;
-        preset?: string;
-        custom?: JsonObject;
+        theme?: string;
       }) => theme((await themes.setTheme(input)).theme),
       reset: async () => theme((await themes.resetTheme({})).theme),
-      presets: async () => ({
-        presets: (await themes.listThemePresets({})).presets.map((preset) => ({
-          name: preset.name,
-          appearance: preset.appearance,
-          document: preset.document ?? null,
-        })),
-      }),
+      list: async (page: { limit: number; cursor?: string }) => {
+        const result = await themes.listThemes(page);
+        return {
+          themes: result.themes.map(themeEntry),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
+      create: async (document: JsonObject) =>
+        themeEntry((await themes.createTheme({ document })).theme),
+      update: async (id: string, document: JsonObject) =>
+        themeEntry((await themes.updateTheme({ id, document })).theme),
+      delete: async (id: string) => {
+        await themes.deleteTheme({ id });
+        return { deleted: id };
+      },
       validate: async (document: JsonObject) => {
         const result = await themes.validateTheme({ document });
         return {

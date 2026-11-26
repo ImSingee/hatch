@@ -8,8 +8,7 @@ import {
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { setThemeAccentFn } from '~server/theme';
-import { activeAppearance, usePrefersDark, type AccentName } from '~ui/theme';
-import { themeChoicePrimary } from './theme-choices';
+import type { AccentName } from '~ui/theme';
 import classes from './accent-panel.module.css';
 
 /** Display name of each accent; the stored value stays the token name. */
@@ -28,7 +27,6 @@ export function AccentPanel() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: theme } = useSuspenseQuery(themeQueryOptions);
-  const prefersDark = usePrefersDark();
   const save = useMutation({
     mutationFn: (accent: AccentName | null) =>
       setThemeAccentFn({ data: accent }),
@@ -36,13 +34,12 @@ export function AccentPanel() {
       queryClient.setQueryData(themeQueryOptions.queryKey, saved),
   });
   const selected = save.isPending ? save.variables : theme.accent;
-  const ownPrimary = themeChoicePrimary(
-    theme[activeAppearance(theme.mode, prefersDark)],
-  );
+  const ownPrimary = theme.theme.primary;
   // A custom theme whose own primary the chosen accent hides.
-  const overridden = theme.accentOverrides
-    .map((appearance) => theme[appearance])
-    .filter((choice) => choice.preset === null);
+  const overridden =
+    theme.accentOverridesPrimary && theme.theme.source === 'custom'
+      ? theme.theme
+      : null;
   const options = [
     ...theme.accents.map((accent) => ({
       value: accent.name as string,
@@ -69,16 +66,15 @@ export function AccentPanel() {
             {t('appearance.accent.description')}
           </Text>
         </Stack>
-        {overridden.map((choice) => (
+        {overridden ? (
           <Alert
-            key={choice.appearance}
             variant="light"
             color="gray"
             icon={<IconInfoCircle size={18} aria-hidden />}
           >
-            {t('appearance.accent.overrides', { name: choice.name })}
+            {t('appearance.accent.overrides', { name: overridden.name })}
           </Alert>
-        ))}
+        ) : null}
         <div
           role="radiogroup"
           aria-labelledby="accent-label"

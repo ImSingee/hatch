@@ -102,15 +102,15 @@ offered on the phone yet (`ReorderAppPins` exists).
 
 ### Theme and ground
 
-The app reads the instance theme (`ui.theme`) through `ThemeService.GetTheme`
-with both appearances resolved, after sign-in and again each time it returns
+The app reads the active instance theme (`ui.theme`) through
+`ThemeService.GetTheme` resolved, after sign-in and again each time it returns
 to the foreground (`src/state/instance-theme.tsx`). It keeps the last answer
 per instance in a file in the app's documents (resolved themes are too large
 for the Keychain), so a cold start draws it from the first frame; signed out
-or before the first answer it draws the built-in `desk` themes. The mode sets
-the app's system appearance (`Appearance.setColorScheme`: light, dark, or the
-device's in `system` mode), so native controls, the status bar and web pages
-in the app match; `app.config.ts` allows both appearances. Components read the
+or before the first answer it draws the built-in `desk` theme. The theme's
+`appearance` sets the app's appearance (`Appearance.setColorScheme`), so
+native controls, the status bar and web pages in the app match; the device's
+light or dark setting is not followed (`app.config.ts` starts light). Components read the
 theme while rendering through `src/ui/theme-context.tsx`. The app does not
 consume the platform event stream, so a change made elsewhere shows on the
 next foreground.

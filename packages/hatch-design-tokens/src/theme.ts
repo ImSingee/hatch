@@ -13,10 +13,6 @@ import { contrast, mix, mostLegible, normalizeColor, withAlpha } from './color';
 export const THEME_APPEARANCES = ['light', 'dark'] as const;
 export type ThemeAppearance = (typeof THEME_APPEARANCES)[number];
 
-/** How a client picks the appearance: fixed, or following its device. */
-export const THEME_MODES = ['light', 'dark', 'system'] as const;
-export type ThemeMode = (typeof THEME_MODES)[number];
-
 /** The colours a theme document sets; every other colour is derived. */
 export const THEME_COLOR_KEYS = [
   'background',
@@ -348,12 +344,12 @@ export function pressedShade(
 
 /**
  * Whether a value read from a cache or the network is a complete resolved
- * theme of `appearance`: every colour, ramp, radius, font and shadow a
+ * theme (of `appearance`, when given): every colour, ramp, radius, font and shadow a
  * client draws. A client keeps its previous theme otherwise.
  */
 export function isResolvedTheme(
   value: unknown,
-  appearance: ThemeAppearance,
+  appearance?: ThemeAppearance,
 ): value is ResolvedTheme {
   const theme = value as Partial<ResolvedTheme> | null;
   if (typeof theme !== 'object' || theme === null) return false;
@@ -365,7 +361,8 @@ export function isResolvedTheme(
     );
   const ramps = theme.ramps as Record<string, unknown> | undefined;
   return (
-    theme.appearance === appearance &&
+    (theme.appearance === 'light' || theme.appearance === 'dark') &&
+    (appearance === undefined || theme.appearance === appearance) &&
     typeof theme.name === 'string' &&
     (theme.source === 'preset' || theme.source === 'custom') &&
     strings(theme.colors, RESOLVED_COLOR_KEYS) &&

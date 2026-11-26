@@ -7,27 +7,25 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { Appearance, useColorScheme } from 'react-native';
+import { Appearance } from 'react-native';
 import {
-  THEME_MODES,
+  BUILT_IN_THEME,
   isResolvedTheme,
+  type ResolvedTheme,
 } from '../../../packages/hatch-design-tokens/src';
-import type { InstanceTheme as Theme } from '../core/client';
 import { ThemeProvider } from '../ui/theme-context';
-import { BUILT_IN_THEMES, mobileThemeOf } from '../ui/theme';
+import { mobileThemeOf } from '../ui/theme';
 import { useSession } from './session';
 
 /** Resolved themes are a few kilobytes each: too large for the Keychain. */
-const CACHE_FILE = 'instance-theme-v1.json';
-
-const BUILT_IN: Theme = { mode: 'light', ...BUILT_IN_THEMES };
+const CACHE_FILE = 'instance-theme-v2.json';
 
 function cacheFile(): File {
   return new File(Paths.document, CACHE_FILE);
 }
 
 /** Each origin's last theme from the cache file, dropping anything stale. */
-export function parseThemeCache(raw: string): Record<string, Theme> {
+export function parseThemeCache(raw: string): Record<string, ResolvedTheme> {
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -36,16 +34,13 @@ export function parseThemeCache(raw: string): Record<string, Theme> {
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
-    Object.entries(value as Record<string, Partial<Theme>>).filter(
-      ([, theme]) =>
-        (THEME_MODES as readonly unknown[]).includes(theme?.mode) &&
-        isResolvedTheme(theme?.light, 'light') &&
-        isResolvedTheme(theme?.dark, 'dark'),
+    Object.entries(value as Record<string, unknown>).filter(([, theme]) =>
+      isResolvedTheme(theme),
     ),
-  ) as Record<string, Theme>;
+  ) as Record<string, ResolvedTheme>;
 }
 
-function readCache(): Record<string, Theme> {
+function readCache(): Record<string, ResolvedTheme> {
   try {
     const file = cacheFile();
     return file.exists ? parseThemeCache(file.textSync()) : {};
@@ -56,19 +51,20 @@ function readCache(): Record<string, Theme> {
 }
 
 /**
- * The instance's theme (`ui.theme`, resolved by ThemeService) as the app's
- * theme. The last answer is kept on the phone, per instance, and drawn from
- * the first frame of a cold start; the instance is asked again on sign-in
- * and whenever the app returns to the foreground. Signed out, or before an
- * instance has answered once, the built-in `desk` themes apply. The mode
- * also sets the app's system appearance, so native controls, the status bar
- * and web pages (`prefers-color-scheme`) match.
+ * The instance's active theme (`ui.theme`, resolved by ThemeService) as the
+ * app's theme. The last answer is kept on the phone, per instance, and drawn
+ * from the first frame of a cold start; the instance is asked again on
+ * sign-in and whenever the app returns to the foreground. Signed out, or
+ * before an instance has answered once, the built-in `desk` applies. The
+ * theme's appearance also sets the app's system appearance, so native
+ * controls, the status bar and web pages match it whatever the device's own
+ * setting is.
  */
 export function InstanceTheme({ children }: PropsWithChildren) {
   const { api, origin } = useSession();
   // Read once at launch; `stored` is what is written back.
   const [cached] = useState(readCache);
-  const stored = useRef<Record<string, Theme>>(cached);
+  const stored = useRef<Record<string, ResolvedTheme>>(cached);
   const theme = useQuery({
     queryKey: [origin, 'theme'],
     queryFn: async ({ signal }) => {
@@ -85,25 +81,14 @@ export function InstanceTheme({ children }: PropsWithChildren) {
     // Refetched on foreground through the query focus manager.
     staleTime: 0,
   });
-  const current =
-    theme.data ?? (origin ? cached[origin] : undefined) ?? BUILT_IN;
+  const resolved =
+    theme.data ?? (origin ? cached[origin] : undefined) ?? BUILT_IN_THEME;
 
   useEffect(() => {
-    // `unspecified` follows the device again.
-    Appearance.setColorScheme(
-      current.mode === 'system' ? 'unspecified' : current.mode,
-    );
-  }, [current.mode]);
+    Appearance.setColorScheme(resolved.appearance);
+  }, [resolved.appearance]);
   useEffect(() => () => Appearance.setColorScheme('unspecified'), []);
 
-  const device = useColorScheme();
-  const appearance =
-    current.mode === 'system'
-      ? device === 'dark'
-        ? 'dark'
-        : 'light'
-      : current.mode;
-  const resolved = current[appearance];
   const mobile = useMemo(() => mobileThemeOf(resolved), [resolved]);
   return <ThemeProvider theme={mobile}>{children}</ThemeProvider>;
 }

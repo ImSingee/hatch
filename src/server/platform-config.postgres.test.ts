@@ -48,9 +48,7 @@ describe.skipIf(!adminUrl)('Platform settings on PostgreSQL', () => {
       accent: 'teal',
       dockLabels: true,
       // Untouched fields keep their defaults.
-      mode: 'light',
-      light: 'desk',
-      dark: 'desk-dark',
+      theme: 'desk',
     });
   });
 });

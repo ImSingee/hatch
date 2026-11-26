@@ -96,17 +96,21 @@ import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/pl
 import { buildInfo } from '~/build-info';
 import { registerModelServices } from './model-rpc';
 import {
+  createTheme,
+  deleteTheme,
   getTheme,
-  listThemePresets,
+  listThemes,
   resetTheme,
+  updateCustomTheme,
   updateTheme,
   validateTheme,
 } from '~server/theme-settings';
 import {
   resolvedThemeMessage,
+  themeEntryMessage,
+  themeProblemMessage,
   themeStateMessage,
 } from '~server/platform-api/theme';
-import type { ThemeAppearance } from '../../../packages/hatch-design-tokens/src';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
   listPins,
@@ -853,12 +857,10 @@ export function registerPlatformApi(
   registerModelServices(router);
   router.service(ThemeService, {
     getTheme: async (input) => {
-      const { theme, resolved } = await getTheme(
-        input.resolve as ThemeAppearance[],
-      );
+      const { theme, resolved } = await getTheme({ resolve: input.resolve });
       return {
         theme: themeStateMessage(theme),
-        resolved: resolved.map(resolvedThemeMessage),
+        resolved: resolved ? resolvedThemeMessage(resolved) : undefined,
       };
     },
     setTheme: async (input) => ({
@@ -866,43 +868,39 @@ export function registerPlatformApi(
         await updateTheme({
           accent: input.clearAccent ? null : input.accent,
           dockLabels: input.dockLabels,
-          mode: input.mode,
-          theme:
-            input.appearance === undefined
-              ? undefined
-              : {
-                  appearance: input.appearance,
-                  preset: input.preset,
-                  custom: input.custom,
-                },
+          theme: input.theme,
         }),
       ),
     }),
     resetTheme: async () => ({
       theme: themeStateMessage(await resetTheme()),
     }),
-    listThemePresets: () => ({
-      presets: listThemePresets().map((preset) => ({
-        name: preset.name,
-        appearance: preset.appearance,
-        document: preset.document,
-      })),
+    listThemes: async (input) => {
+      const page = listPage(await listThemes(), input);
+      return {
+        themes: page.items.map(themeEntryMessage),
+        nextCursor: page.nextCursor,
+      };
+    },
+    createTheme: async (input) => ({
+      theme: themeEntryMessage(await createTheme(input.document)),
     }),
+    updateTheme: async (input) => ({
+      theme: themeEntryMessage(
+        await updateCustomTheme(input.id, input.document),
+      ),
+    }),
+    deleteTheme: async (input) => {
+      await deleteTheme(input.id);
+      return {};
+    },
     validateTheme: async (input) => {
       const result = await validateTheme(input.document, {
         withCurrentAccent: input.withCurrentAccent,
       });
       return {
         ok: result.ok,
-        problems: result.problems.map((problem) => ({
-          code: problem.code,
-          path: problem.path,
-          message: problem.message,
-          foreground: problem.pair?.foreground ?? '',
-          background: problem.pair?.background ?? '',
-          ratio: problem.pair?.ratio ?? 0,
-          requiredRatio: problem.pair?.required ?? 0,
-        })),
+        problems: result.problems.map(themeProblemMessage),
         resolved: result.resolved
           ? resolvedThemeMessage(result.resolved)
           : undefined,

@@ -14,7 +14,7 @@ const rejected = (...args: string[]) => {
 
 describe('theme command arguments', () => {
   it('maps get and set, accepting every accent the tokens define', () => {
-    expect(command('theme', 'get')).toEqual({ kind: 'get', resolve: [] });
+    expect(command('theme', 'get')).toEqual({ kind: 'get', resolve: false });
     for (const accent of Object.keys(tokens.accents))
       expect(command('theme', 'set', '--accent', accent)).toEqual({
         kind: 'set',
@@ -60,7 +60,7 @@ describe('theme command arguments', () => {
     // Every rejection names the flag to fix, including the ones Node's
     // argument parser raises before the command sees the flags.
     for (const [args, message] of [
-      [['theme', 'set'], 'Supply --accent, --clear-accent, --dock-labels'],
+      [['theme', 'set'], 'Supply --theme, --accent, --clear-accent'],
       [
         ['theme', 'set', '--dock-labels', '--no-dock-labels'],
         'at most one of --dock-labels and --no-dock-labels',
@@ -75,126 +75,82 @@ describe('theme command arguments', () => {
   });
 });
 
-describe('theme modes, presets and custom themes', () => {
-  it('maps get --resolved to the mode or to one appearance', () => {
+describe('the theme library commands', () => {
+  it('maps get --resolved, activation, listing and every library change', () => {
     expect(command('theme', 'get', '--resolved')).toEqual({
       kind: 'get',
-      resolve: 'mode',
+      resolve: true,
     });
-    expect(
-      command('theme', 'get', '--resolved', '--appearance', 'dark'),
-    ).toEqual({ kind: 'get', resolve: ['dark'] });
-  });
-
-  it('maps set, leaving out every field that is not given', () => {
-    expect(command('theme', 'set', '--mode', 'system')).toEqual({
+    expect(command('theme', 'set', '--theme', 'desk-dark')).toEqual({
       kind: 'set',
-      mode: 'system',
-    });
-    expect(command('theme', 'set', '--clear-accent')).toEqual({
-      kind: 'set',
-      clearAccent: true,
+      theme: 'desk-dark',
     });
     expect(
       command(
         'theme',
         'set',
-        '--mode',
-        'dark',
-        '--appearance',
-        'dark',
-        '--preset',
-        'desk-dark',
-      ),
-    ).toEqual({
-      kind: 'set',
-      mode: 'dark',
-      appearance: 'dark',
-      preset: 'desk-dark',
-    });
-    expect(
-      command('theme', 'set', '--appearance', 'light', '--file', '-'),
-    ).toEqual({ kind: 'set', appearance: 'light', file: '-' });
-    expect(
-      command(
-        'theme',
-        'set',
-        '--accent',
-        'clay',
-        '--appearance',
-        'light',
-        '--file',
-        'meadow.json',
+        '--theme',
+        '01m8c9a96grbxmn2t7n5c7f0s0',
+        '--clear-accent',
         '--dock-labels',
       ),
     ).toEqual({
       kind: 'set',
-      accent: 'clay',
+      theme: '01m8c9a96grbxmn2t7n5c7f0s0',
+      clearAccent: true,
       dockLabels: true,
-      appearance: 'light',
+    });
+    expect(command('theme', 'list')).toEqual({
+      kind: 'list',
+      page: { limit: 0 },
+    });
+    expect(command('theme', 'list', '--limit', '5', '--cursor', '5')).toEqual({
+      kind: 'list',
+      page: { limit: 5, cursor: '5' },
+    });
+    expect(command('theme', 'create', '--file', 'meadow.json')).toEqual({
+      kind: 'create',
       file: 'meadow.json',
+    });
+    expect(command('theme', 'update', 'abc123', '--file', '-')).toEqual({
+      kind: 'update',
+      id: 'abc123',
+      file: '-',
+    });
+    expect(command('theme', 'delete', 'abc123')).toEqual({
+      kind: 'delete',
+      id: 'abc123',
     });
     expect(command('theme', 'check', '--file', 'meadow.json')).toEqual({
       kind: 'check',
       file: 'meadow.json',
     });
-    expect(command('theme', 'presets')).toEqual({ kind: 'presets' });
     expect(command('theme', 'reset')).toEqual({ kind: 'reset' });
   });
 
-  it('rejects contradictory or incomplete input before any request and names the flag', () => {
+  it('rejects incomplete or malformed input before any request and names the flag', () => {
     for (const [args, message] of [
-      [['theme', 'set', '--preset', 'desk'], '--preset needs --appearance'],
-      [['theme', 'set', '--file', 'a.json'], '--file needs --appearance'],
+      [['theme', 'set', '--theme', 'Not An Id'], '--theme must be a theme id'],
+      [['theme', 'set', '--theme', ''], '--theme must not be empty'],
+      [['theme', 'set', '--mode', 'dark'], '--mode is not a flag'],
+      [['theme', 'create'], 'Supply --file'],
+      [['theme', 'create', 'abc'], 'no positional arguments'],
+      [['theme', 'update', '--file', 'a.json'], 'Supply exactly one theme id'],
+      [['theme', 'update', 'abc123'], 'Supply --file'],
       [
-        ['theme', 'set', '--appearance', 'light'],
-        '--appearance needs --preset',
+        ['theme', 'update', 'a', 'b', '--file', '-'],
+        'Supply exactly one theme id',
       ],
-      [
-        [
-          'theme',
-          'set',
-          '--appearance',
-          'light',
-          '--preset',
-          'desk',
-          '--file',
-          '-',
-        ],
-        'at most one of --preset and --file',
-      ],
+      [['theme', 'delete'], 'Supply exactly one theme id'],
+      [['theme', 'delete', 'UPPER'], 'The theme id must be a theme id'],
+      [['theme', 'delete', 'abc', '--file', 'x'], '--file is not a flag'],
+      [['theme', 'list', '--limit', '0'], '--limit must be a whole number'],
+      [['theme', 'check'], 'Supply --file'],
+      [['theme', 'presets'], 'Use hatch theme get, set, list'],
+      [['theme', 'reset', '--theme', 'desk'], '--theme is not a flag'],
       [
         ['theme', 'set', '--accent', 'teal', '--clear-accent'],
         'at most one of --accent and --clear-accent',
-      ],
-      [
-        ['theme', 'set', '--mode', 'dim'],
-        '--mode must be light, dark or system',
-      ],
-      [['theme', 'set', '--mode', ''], '--mode must not be empty'],
-      [
-        ['theme', 'set', '--appearance', 'sepia', '--preset', 'desk'],
-        '--appearance must be light or dark',
-      ],
-      [
-        ['theme', 'set', '--appearance', 'light', '--preset', 'ocean'],
-        '--preset must be one of: desk, desk-dark',
-      ],
-      [
-        ['theme', 'set', '--appearance', 'light', '--file', ''],
-        '--file must not be empty',
-      ],
-      [
-        ['theme', 'get', '--appearance', 'dark'],
-        '--appearance needs --resolved',
-      ],
-      [['theme', 'check'], 'Supply --file'],
-      [['theme', 'check', '--preset', 'desk'], '--preset is not a flag'],
-      [['theme', 'presets', 'desk'], 'no positional arguments'],
-      [['theme', 'reset', '--mode', 'light'], '--mode is not a flag'],
-      [
-        ['theme', 'set', '--clear-accent=yes'],
-        '--clear-accent does not take a value',
       ],
     ] as const)
       expect({
@@ -209,22 +165,21 @@ describe('theme modes, presets and custom themes', () => {
   });
 });
 
-describe('theme set after a new theme', () => {
-  const state = (accent: string | null, accentOverrides: string[]) => ({
+describe('theme set after activating a theme', () => {
+  const state = (accent: string | null, accentOverridesPrimary: boolean) => ({
     accent,
-    accentOverrides,
-    light: { name: 'Meadow', primary: '#2F6B3A' },
-    dark: { name: 'Desk dark', primary: '#3F51C7' },
+    accentOverridesPrimary,
+    theme: { name: 'Meadow', primary: '#2F6B3A' },
   });
 
   it('notes an accent that hides the theme primary and names the fix', () => {
-    expect(accentOverrideNote(state('teal', ['light', 'dark']), 'light')).toBe(
-      'Note: the teal accent replaces the primary #2F6B3A of the light theme "Meadow". Run hatch theme set --clear-accent to show it.',
+    expect(accentOverrideNote(state('teal', true))).toBe(
+      'Note: the teal accent replaces the primary #2F6B3A of the theme "Meadow". Run hatch theme set --clear-accent to show it.',
     );
   });
 
   it('says nothing when the theme shows its own primary', () => {
-    expect(accentOverrideNote(state(null, []), 'light')).toBeNull();
-    expect(accentOverrideNote(state('indigo', ['light']), 'dark')).toBeNull();
+    expect(accentOverrideNote(state(null, false))).toBeNull();
+    expect(accentOverrideNote(state('indigo', false))).toBeNull();
   });
 });

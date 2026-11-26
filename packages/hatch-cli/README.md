@@ -713,14 +713,17 @@ that were saved, so no image has to be generated again.
 
 ```sh
 hatch theme get --json
-hatch theme get --resolved --appearance dark --json
+hatch theme get --resolved --json
+hatch theme list --json
+hatch theme set --theme desk-dark
 hatch theme set --accent teal
+hatch theme set --clear-accent
 hatch theme set --dock-labels
-hatch theme set --mode system
-hatch theme set --mode dark --appearance dark --preset desk-dark
-hatch theme presets --json
 hatch theme check --file meadow.json --json
-hatch theme set --mode light --appearance light --file meadow.json
+hatch theme create --file meadow.json --json
+hatch theme update <theme-id> --file meadow.json
+hatch theme set --theme <theme-id>
+hatch theme delete <theme-id>
 hatch theme reset
 hatch pin list --json
 hatch pin list --limit 20 --cursor <next-cursor> --json
@@ -733,32 +736,38 @@ hatch pin add --dashboard <dashboard-id>
 hatch pin remove --dashboard <dashboard-id>
 ```
 
-`theme get` prints the chosen `accent` (`null` when each theme shows its own
-primary), the `defaultAccent`, every accent with its colour, `dockLabels`,
-the `mode` (`light`, `dark` or `system`) and the `light` and `dark` theme:
-each has `preset` (a name, or `null`), `name` and `custom` (the custom
-document, or `null`). `--resolved` adds `resolved`, every token of the theme
-the mode draws (both while it is `system`) with the accent applied;
-`--appearance` picks one. `theme presets` prints every preset with its
-document, a starting point for a custom theme.
+`theme get` prints the chosen `accent` (`null` when the active theme shows its
+own primary), the `defaultAccent`, every accent with its colour, `dockLabels`,
+the active `theme` (`id`, `name`, `source` `preset` or `custom`,
+`appearance` `light` or `dark`, its own `primary` and its `document`) and
+`accentOverridesPrimary`, whether the chosen accent hides that primary.
+`--resolved` adds `resolved`, every token of the active theme with the accent
+applied. There is one active theme for the instance; a dark theme is a theme
+like any other, and no client follows the device's light or dark setting.
+
+`theme list` prints the library: the presets (`desk`, `desk-dark`), then the
+custom themes oldest first, each as in `theme get`, plus `valid` and
+`problems` (a custom theme saved under older rules that no longer passes them
+is listed with `valid: false` and cannot be activated until it is updated).
+`--limit` (1–100) pages and prints `nextCursor`. `theme create --file` saves a
+new custom theme (at most 100; one more is `CONFLICT`, exit 6) and prints it with its `id`; it is not
+activated. `theme update <id> --file` replaces a custom theme's document
+whole; presets cannot be changed (`BAD_REQUEST`, exit 2), copy one with
+`create` instead. `theme delete <id>` deletes a custom theme permanently; the
+active theme cannot be deleted (`CONFLICT`, exit 6), activate another first.
+An unknown id is `NOT_FOUND` (exit 5).
 
 `theme set` changes only the settings it is given, for the whole instance,
 and signed-in clients and open native Apps restyle without a reload:
-`--accent` replaces the primary of both themes and `--clear-accent` lets each
-theme show its own; `--mode` picks the appearance; `--appearance` names the
-theme to replace, with `--preset` (clears that appearance's custom theme) or
-`--file` (replaces it whole with a custom document, whose own `appearance`
-must match; while an accent is chosen it replaces the document's `primary`,
-so add `--clear-accent` to show the document's own); `--dock-labels` / `--no-dock-labels` shows or hides the names
-under the web dock tiles (hidden by default). Give at least one. `theme
-check --file` validates a document without saving it and prints it resolved.
-`theme reset` returns to `desk` and `desk-dark`, light mode and no accent (each
-theme shows its own primary; `desk`'s is the default accent, so it looks the
-same) in one change, keeping dock labels. Every theme result carries
-`accentOverrides`, the appearances whose own primary the chosen accent
-replaces; after `--preset` or `--file`, `theme set` adds
-`accentOverridesPrimary` for that appearance and notes it on stderr with the
-`--clear-accent` fix.
+`--theme <id>` activates a preset or a custom theme; `--accent` replaces the
+active theme's primary and `--clear-accent` lets it show its own;
+`--dock-labels` / `--no-dock-labels` shows or hides the names under the web
+dock tiles (hidden by default). Give at least one. When the accent hides the
+activated theme's own primary, `theme set --theme` notes it on stderr with the
+`--clear-accent` fix. `theme check --file` validates a document without saving
+it and prints it resolved. `theme reset` activates `desk` with no accent
+(`desk`'s primary is the default accent, so it looks the same) in one change,
+keeping dock labels and the custom themes.
 
 A theme document is `{"name"?, "appearance", "colors": {background,
 foreground, card, primary, secondary, muted, muted-foreground, border,
@@ -786,11 +795,11 @@ relative order after them, and prints the complete new order; `--dashboard`
 orders all dashboards, pinned or not.
 
 Local rejections exit 2 with `invalid_arguments`: an `--accent` the tokens do
-not define, `--accent` with `--clear-accent`, a `--mode` other than light,
-dark or system, `--preset` or `--file` without `--appearance` or together,
-`--appearance` without one of them, a `--preset` the CLI does not know,
-`theme get --appearance` without `--resolved`, `theme check` without
-`--file`; an unreadable or non-JSON `--file` exits 2 with `input_unreadable`
+not define, `--accent` with `--clear-accent`, `--dock-labels` with
+`--no-dock-labels`, `theme set` with nothing to change, a `--theme` or theme
+id that is not lowercase letters, digits and hyphens, `theme create`,
+`update` or `check` without `--file`, `update` or `delete` without exactly
+one id; an unreadable or non-JSON `--file` exits 2 with `input_unreadable`
 or `invalid_input` before any request. For pins: no target or more than one of `--app`, `--dashboard` and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
 `--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`, an
 `--entry` longer than 512 characters (the platform also rejects one, never

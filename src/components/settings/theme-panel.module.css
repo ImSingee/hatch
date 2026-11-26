@@ -5,16 +5,37 @@
 }
 
 .option {
-  display: flex;
-  flex-direction: column;
-  gap: var(--mantine-spacing-2xs);
-  padding: var(--mantine-spacing-2xs);
   border: 1px solid var(--border-hairline);
   border-radius: var(--mantine-radius-lg);
   position: relative;
   color: var(--mantine-color-text);
-  cursor: pointer;
   transition: background-color var(--transition-fast);
+}
+
+.optionLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-2xs);
+  padding: var(--mantine-spacing-2xs);
+  cursor: pointer;
+}
+
+.optionLabel:has(.input:disabled) {
+  cursor: not-allowed;
+}
+
+.menu {
+  position: absolute;
+  top: var(--mantine-spacing-xs);
+  inset-inline-end: var(--mantine-spacing-xs);
+  background-color: var(--surface-raised);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-3xs);
+  padding: 0 var(--mantine-spacing-3xs) var(--mantine-spacing-3xs);
 }
 
 .option:hover {
@@ -86,7 +107,7 @@
   display: flex;
   align-items: center;
   gap: var(--mantine-spacing-3xs);
-  padding: 0 var(--mantine-spacing-3xs) var(--mantine-spacing-3xs);
+  padding: 0 var(--mantine-spacing-3xs);
 }
 
 .name {

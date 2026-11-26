@@ -26,7 +26,6 @@ import {
   applyThemeState,
   deskThemeFor,
   useActiveTheme,
-  useThemeState,
 } from '~ui/theme';
 
 /**
@@ -96,13 +95,7 @@ export const Route = createRootRouteWithContext<{
 function ThemeSync() {
   const { data } = useQuery(themeQueryOptions);
   useEffect(() => {
-    if (data)
-      applyThemeState({
-        mode: data.mode,
-        accent: data.accent,
-        light: data.resolved.light,
-        dark: data.resolved.dark,
-      });
+    if (data) applyThemeState({ accent: data.accent, theme: data.resolved });
   }, [data]);
   return null;
 }
@@ -110,8 +103,7 @@ function ThemeSync() {
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const theme = useActiveTheme();
-  const { mode } = useThemeState();
-  useEffect(() => applyDocumentTheme(theme, mode), [theme, mode]);
+  useEffect(() => applyDocumentTheme(theme), [theme]);
   return (
     <html lang="en" {...mantineHtmlProps}>
       <head>

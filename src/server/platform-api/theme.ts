@@ -1,18 +1,33 @@
 /** Server-only: theme values as their public RPC messages. */
 import type { JsonObject } from '@bufbuild/protobuf';
-import type { ResolvedTheme } from '../../../packages/hatch-design-tokens/src';
-import type { ThemeChoice, ThemeState } from '~server/theme-settings';
+import type {
+  ResolvedTheme,
+  ThemeProblem,
+} from '../../../packages/hatch-design-tokens/src';
+import type { ThemeEntry, ThemeState } from '~server/theme-settings';
 
-function choiceMessage(choice: ThemeChoice) {
+export function themeProblemMessage(problem: ThemeProblem) {
   return {
-    appearance: choice.appearance,
-    preset: choice.preset ?? '',
-    custom:
-      choice.preset === null
-        ? (choice.custom as unknown as JsonObject)
-        : undefined,
-    name: choice.name,
-    primary: choice.primary,
+    code: problem.code,
+    path: problem.path,
+    message: problem.message,
+    foreground: problem.pair?.foreground ?? '',
+    background: problem.pair?.background ?? '',
+    ratio: problem.pair?.ratio ?? 0,
+    requiredRatio: problem.pair?.required ?? 0,
+  };
+}
+
+export function themeEntryMessage(entry: ThemeEntry) {
+  return {
+    id: entry.id,
+    name: entry.name,
+    source: entry.source,
+    appearance: entry.appearance,
+    primary: entry.primary,
+    document: entry.document as unknown as JsonObject,
+    valid: entry.valid,
+    problems: entry.problems.map(themeProblemMessage),
   };
 }
 
@@ -22,10 +37,8 @@ export function themeStateMessage(theme: ThemeState) {
     defaultAccent: theme.defaultAccent,
     accents: theme.accents,
     dockLabels: theme.dockLabels,
-    mode: theme.mode,
-    light: choiceMessage(theme.light),
-    dark: choiceMessage(theme.dark),
-    accentOverrides: theme.accentOverrides,
+    theme: themeEntryMessage(theme.theme),
+    accentOverridesPrimary: theme.accentOverridesPrimary,
   };
 }
 

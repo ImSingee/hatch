@@ -9,10 +9,14 @@ vi.mock('~/db', async () => {
 
 const { db, schema } = await import('~/db');
 const {
+  createTheme,
+  deleteTheme,
   getTheme,
   getThemeState,
+  listThemes,
   resetTheme,
   setThemeAccent,
+  updateCustomTheme,
   updateTheme,
   validateTheme,
 } = await import('./theme-settings');
@@ -20,16 +24,18 @@ const { subscribePlatformEvents } = await import('./platform-events');
 
 beforeEach(async () => {
   await db.delete(schema.platformConfig);
+  await db.delete(schema.themes);
 });
 
 describe('instance theme', () => {
   it('starts with no accent, desk showing the default accent colour, and offers every token accent', async () => {
     const state = await getThemeState();
     expect(state.accent).toBeNull();
-    expect(state.light.primary).toBe(
+    expect(state.theme).toMatchObject({ id: 'desk', source: 'preset' });
+    expect(state.theme.primary).toBe(
       tokens.accents[tokens.defaultAccent as keyof typeof tokens.accents],
     );
-    expect(state.accentOverrides).toEqual([]);
+    expect(state.accentOverridesPrimary).toBe(false);
     expect(state.defaultAccent).toBe(tokens.defaultAccent);
     expect(state.accents).toEqual(
       Object.entries(tokens.accents).map(([name, color]) => ({ name, color })),
@@ -148,116 +154,155 @@ const meadow = {
   fonts: { sans: 'Nunito', mono: 'JetBrains Mono' },
 };
 
-describe('instance theme: modes, presets and custom themes', () => {
-  it('reads light mode with the desk presets, also from rows that only know the accent', async () => {
-    const defaults = {
-      mode: 'light',
-      light: { appearance: 'light', preset: 'desk', name: 'Desk' },
-      dark: { appearance: 'dark', preset: 'desk-dark', name: 'Desk dark' },
-    };
-    expect(await getThemeState()).toMatchObject(defaults);
+describe('the theme library', () => {
+  it('reads desk from rows that only know the accent, and falls back to desk for an unusable theme id', async () => {
     await db
       .insert(schema.platformConfig)
       .values({ key: 'ui.theme', value: { accent: 'teal' } });
     expect(await getThemeState()).toMatchObject({
       accent: 'teal',
-      ...defaults,
+      theme: { id: 'desk' },
     });
+    await db
+      .update(schema.platformConfig)
+      .set({ value: { accent: 'teal', theme: 'deleted-theme' } });
+    expect((await getThemeState()).theme.id).toBe('desk');
   });
 
-  it('falls back field by field when a stored theme is no longer valid', async () => {
-    await db.insert(schema.platformConfig).values({
-      key: 'ui.theme',
-      value: {
-        accent: 'clay',
-        mode: 'sepia',
-        // A preset of the wrong appearance, then a document that fails
-        // contrast: each slot falls back to its own preset.
-        light: 'desk-dark',
-        dark: { ...meadow, appearance: 'dark' },
-      },
+  it('lists the presets, then custom themes, and activates a dark preset like any theme', async () => {
+    const saved = await createTheme(meadow);
+    expect(saved).toMatchObject({
+      name: 'Meadow',
+      source: 'custom',
+      appearance: 'light',
+      primary: meadow.colors.primary,
+      valid: true,
     });
-    expect(await getThemeState()).toMatchObject({
-      accent: 'clay',
-      mode: 'light',
-      light: { preset: 'desk' },
-      dark: { preset: 'desk-dark' },
-    });
-  });
-
-  it('changes mode, presets and custom themes, keeping what is left out', async () => {
+    expect((await listThemes()).map((theme) => theme.id)).toEqual([
+      'desk',
+      'desk-dark',
+      saved.id,
+    ]);
+    // Saving does not activate.
+    expect((await getThemeState()).theme.id).toBe('desk');
     const events: unknown[] = [];
     const unsubscribe = subscribePlatformEvents((event) => events.push(event));
     try {
-      await updateTheme({ accent: 'teal', dockLabels: true });
-      const custom = await updateTheme({
-        mode: 'system',
-        theme: { appearance: 'light', custom: meadow },
-      });
-      expect(custom).toMatchObject({
-        accent: 'teal',
-        dockLabels: true,
-        mode: 'system',
-        light: { preset: null, custom: meadow, name: 'Meadow' },
-        dark: { preset: 'desk-dark' },
-      });
-      // A preset replaces the custom theme of its appearance only.
-      expect(
-        await updateTheme({ theme: { appearance: 'light', preset: 'desk' } }),
-      ).toMatchObject({ mode: 'system', light: { preset: 'desk' } });
-      expect(events).toHaveLength(3);
+      const dark = await updateTheme({ theme: 'desk-dark', accent: null });
+      expect(dark.theme).toMatchObject({ id: 'desk-dark', appearance: 'dark' });
+      const { resolved } = await getTheme({ resolve: true });
+      expect(resolved).toEqual(resolvePreset('desk-dark'));
+      await updateTheme({ theme: saved.id });
+      expect((await getTheme({ resolve: true })).resolved?.colors.primary).toBe(
+        meadow.colors.primary,
+      );
+      expect(events).toHaveLength(2);
     } finally {
       unsubscribe();
     }
   });
 
-  it('resolves each requested appearance with the accent replacing primary', async () => {
-    await updateTheme({ theme: { appearance: 'light', custom: meadow } });
-    await updateTheme({ accent: null });
-    let { resolved } = await getTheme(['light', 'dark']);
-    expect(resolved.map((theme) => [theme.appearance, theme.name])).toEqual([
-      ['light', 'Meadow'],
-      ['dark', 'desk-dark'],
-    ]);
-    expect(resolved[0].colors.primary).toBe(meadow.colors.primary);
-    await setThemeAccent('violet');
-    ({ resolved } = await getTheme(['dark']));
-    expect(resolved[0].colors.primary).toBe(tokens.accents.violet);
-    expect((await getTheme()).resolved).toEqual([]);
-  });
-
-  it('rejects unusable changes and keeps the stored theme', async () => {
-    const before = await getThemeState();
-    for (const change of [
-      { mode: 'dim' },
-      { theme: { appearance: 'sepia', preset: 'desk' } },
-      { theme: { appearance: 'light' } },
-      { theme: { appearance: 'light', preset: 'desk', custom: meadow } },
-      { theme: { appearance: 'light', preset: 'nope' } },
-      // A dark preset cannot be the light theme, nor a light document the
-      // dark one.
-      { theme: { appearance: 'light', preset: 'desk-dark' } },
-      { theme: { appearance: 'dark', custom: meadow } },
-      { theme: { appearance: 'light', custom: { ...meadow, glow: true } } },
-    ])
-      await expect(updateTheme(change)).rejects.toMatchObject({ status: 400 });
-    const lowContrast = updateTheme({
-      theme: {
-        appearance: 'light',
-        custom: {
-          ...meadow,
-          colors: { ...meadow.colors, 'muted-foreground': '#9AA79C' },
-        },
+  it('replaces a custom theme whole and keeps presets read-only', async () => {
+    const saved = await createTheme(meadow);
+    const edited = await updateCustomTheme(saved.id, {
+      ...meadow,
+      name: 'Meadow night',
+      appearance: 'dark',
+      colors: {
+        ...meadow.colors,
+        background: '#0F1A14',
+        foreground: '#E6F0E9',
+        card: '#17241C',
+        secondary: '#1F2E25',
+        muted: '#1F2E25',
+        'muted-foreground': '#A5B8AC',
+        border: '#2A3A30',
       },
     });
-    await expect(lowContrast).rejects.toMatchObject({
-      status: 400,
-      code: 'theme_invalid',
-      message: expect.stringContaining(
-        'muted-foreground on background has a contrast of',
-      ),
+    expect(edited).toMatchObject({
+      id: saved.id,
+      name: 'Meadow night',
+      appearance: 'dark',
+    });
+    for (const call of [
+      () => updateCustomTheme('desk', meadow),
+      () => deleteTheme('desk-dark'),
+    ])
+      await expect(call()).rejects.toMatchObject({
+        status: 400,
+        code: 'theme_preset_readonly',
+      });
+    await expect(updateCustomTheme('missing', meadow)).rejects.toMatchObject({
+      status: 404,
+      code: 'theme_not_found',
+    });
+  });
+
+  it('deletes a custom theme, but not the active one', async () => {
+    const saved = await createTheme(meadow);
+    await updateTheme({ theme: saved.id });
+    await expect(deleteTheme(saved.id)).rejects.toMatchObject({
+      status: 409,
+      code: 'theme_active',
+    });
+    await updateTheme({ theme: 'desk' });
+    await deleteTheme(saved.id);
+    expect((await listThemes()).map((theme) => theme.id)).toEqual([
+      'desk',
+      'desk-dark',
+    ]);
+    await expect(deleteTheme(saved.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('rejects unusable themes and changes, keeping what is stored', async () => {
+    const saved = await createTheme(meadow);
+    const before = await getThemeState();
+    for (const document of [
+      { ...meadow, glow: true },
+      { ...meadow, colors: { ...meadow.colors, card: 'cream' } },
+      { ...meadow, fonts: { sans: 'Papyrus' } },
+      {
+        ...meadow,
+        colors: { ...meadow.colors, 'muted-foreground': '#9AA79C' },
+      },
+    ]) {
+      await expect(createTheme(document)).rejects.toMatchObject({
+        status: 400,
+        code: 'theme_invalid',
+      });
+      await expect(updateCustomTheme(saved.id, document)).rejects.toMatchObject(
+        {
+          code: 'theme_invalid',
+        },
+      );
+    }
+    await expect(updateTheme({ theme: 'nope' })).rejects.toMatchObject({
+      status: 404,
     });
     expect(await getThemeState()).toEqual(before);
+    expect((await listThemes()).at(-1)?.document).toEqual(meadow);
+  });
+
+  it('keeps a stored theme that no longer passes, flagged, and never draws it', async () => {
+    await db.insert(schema.themes).values({
+      id: 'faded',
+      name: 'Faded',
+      document: {
+        ...meadow,
+        colors: { ...meadow.colors, 'muted-foreground': '#C0C0C0' },
+      },
+    });
+    const faded = (await listThemes()).find((theme) => theme.id === 'faded');
+    expect(faded).toMatchObject({ valid: false, name: 'Faded' });
+    expect(faded?.problems[0]).toMatchObject({ code: 'low_contrast' });
+    await expect(updateTheme({ theme: 'faded' })).rejects.toMatchObject({
+      code: 'theme_invalid',
+    });
+    // Even when set directly, desk is drawn.
+    await db
+      .insert(schema.platformConfig)
+      .values({ key: 'ui.theme', value: { accent: null, theme: 'faded' } });
+    expect((await getThemeState()).theme.id).toBe('desk');
   });
 
   it('checks contrast with the accent that will be drawn, in both directions', async () => {
@@ -279,31 +324,42 @@ describe('instance theme: modes, presets and custom themes', () => {
         destructive: '#7A0E0E',
       },
     };
-    expect((await validateTheme(stone)).ok).toBe(true);
-    await updateTheme({ accent: null });
-    await updateTheme({ theme: { appearance: 'light', custom: stone } });
-    // An accent over the custom theme.
+    const saved = await createTheme(stone);
+    await updateTheme({ accent: null, theme: saved.id });
+    // An accent over the active theme.
     await expect(setThemeAccent('teal')).rejects.toMatchObject({
       code: 'theme_invalid',
-      message: expect.stringContaining(
-        'In the light theme with the teal accent: primary-text on background',
-      ),
+      message: expect.stringContaining('With the teal accent'),
     });
     expect((await getThemeState()).accent).toBeNull();
-    // The custom theme under an accent.
-    await updateTheme({ theme: { appearance: 'light', preset: 'desk' } });
-    await setThemeAccent('teal');
-    await expect(
-      updateTheme({ theme: { appearance: 'light', custom: stone } }),
-    ).rejects.toMatchObject({ code: 'theme_invalid' });
-    expect((await getThemeState()).light).toMatchObject({ preset: 'desk' });
+    // Activating the theme under an accent.
+    await updateTheme({ theme: 'desk', accent: 'teal' });
+    await expect(updateTheme({ theme: saved.id })).rejects.toMatchObject({
+      code: 'theme_invalid',
+    });
+    expect((await getThemeState()).theme.id).toBe('desk');
     expect((await validateTheme(stone, { withCurrentAccent: true })).ok).toBe(
       false,
     );
   });
 
+  it('says when the chosen accent hides the active theme primary', async () => {
+    const saved = await createTheme(meadow);
+    expect(
+      (await updateTheme({ theme: saved.id, accent: 'teal' }))
+        .accentOverridesPrimary,
+    ).toBe(true);
+    expect((await updateTheme({ accent: null })).accentOverridesPrimary).toBe(
+      false,
+    );
+    // Indigo is desk's own primary.
+    expect(
+      (await updateTheme({ theme: 'desk', accent: 'indigo' }))
+        .accentOverridesPrimary,
+    ).toBe(false);
+  });
+
   it('validates a document without saving it', async () => {
-    const before = await getThemeState();
     const ok = await validateTheme(meadow);
     expect(ok).toMatchObject({ ok: true, problems: [] });
     expect(ok.resolved?.name).toBe('Meadow');
@@ -313,54 +369,32 @@ describe('instance theme: modes, presets and custom themes', () => {
       resolved: null,
       problems: [{ code: 'unknown_font', path: 'fonts.sans' }],
     });
-    expect(await getThemeState()).toEqual(before);
+    expect(await listThemes()).toHaveLength(2);
   });
 
-  it('resets to desk, light mode and no accent, drawn exactly as the default accent was, and keeps dock labels', async () => {
-    await updateTheme({
-      accent: 'clay',
-      dockLabels: true,
-      mode: 'dark',
-      theme: { appearance: 'light', custom: meadow },
-    });
+  it('resets to desk with no accent, drawn exactly as the default accent was, keeping dock labels and the library', async () => {
+    const saved = await createTheme(meadow);
+    await updateTheme({ accent: 'clay', dockLabels: true, theme: saved.id });
     const events: unknown[] = [];
     const unsubscribe = subscribePlatformEvents((event) => events.push(event));
     try {
       expect(await resetTheme()).toMatchObject({
         accent: null,
         dockLabels: true,
-        mode: 'light',
-        light: { preset: 'desk' },
-        dark: { preset: 'desk-dark' },
-        accentOverrides: [],
+        theme: { id: 'desk' },
+        accentOverridesPrimary: false,
       });
-      // No accent draws desk exactly as the default accent did: a custom
-      // theme set afterwards keeps its own primary.
       const indigo =
         tokens.accents[tokens.defaultAccent as keyof typeof tokens.accents];
-      expect((await getTheme(['light', 'dark'])).resolved).toEqual([
+      expect((await getTheme({ resolve: true })).resolved).toEqual(
         resolvePreset('desk', indigo),
-        resolvePreset('desk-dark', indigo),
-      ]);
+      );
       expect(events).toEqual([
         { type: 'theme.updated', accent: tokens.defaultAccent },
       ]);
+      expect(await listThemes()).toHaveLength(3);
     } finally {
       unsubscribe();
     }
-  });
-
-  it('lists each appearance whose own primary the chosen accent replaces', async () => {
-    await updateTheme({ theme: { appearance: 'light', custom: meadow } });
-    expect((await getThemeState()).accentOverrides).toEqual([]);
-    // Teal hides Meadow's green and desk-dark's indigo.
-    expect(await setThemeAccent('teal')).toMatchObject({
-      light: { primary: meadow.colors.primary },
-      dark: { primary: '#3F51C7' },
-      accentOverrides: ['light', 'dark'],
-    });
-    // Indigo equals desk-dark's own primary, so only Meadow is overridden.
-    expect((await setThemeAccent('indigo')).accentOverrides).toEqual(['light']);
-    expect((await updateTheme({ accent: null })).accentOverrides).toEqual([]);
   });
 });

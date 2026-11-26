@@ -295,14 +295,13 @@ theme names the same tokens (`setTheme` replaces the whole theme).
 
 `nsh.json` and the player's built-in themes are `desk` with each accent, for
 the first frame and for a platform that does not answer. The player then
-reads the instance theme from `GET /api/theme/native` (public, like the theme
-itself): with `appearance=light|dark` when its surface names the appearance
-it draws (`init` and `theme` messages carry `appearance` and a `themeKey`
-that changes with the resolved theme), or with `prefers=light|dark` when it
-runs alone (the mobile app's WebView), where the instance's mode decides. It
-asks again when the surface reports a change and, alone, when the page
-returns to the foreground or the device's appearance changes, and pushes
+reads the active instance theme from `GET /api/theme/native` (public, like
+the theme itself, with no parameters: the instance has one active theme and no
+client follows the device's light or dark setting). `init` and `theme`
+messages carry a `themeKey` that changes with the resolved theme. The player
+asks again when the surface reports a change and, when it runs alone (the
+mobile app's WebView), when the page returns to the foreground, and pushes
 `hatch.theme` when the answer differs. So `hatch theme set --accent teal` or
-`--mode dark` restyles open Apps without a redeploy. Players built before
+`--theme desk-dark` restyles open Apps without a redeploy. Players built before
 this (deployments made before themes became data) follow only the accent
 until the App is deployed again.

@@ -11,12 +11,7 @@ import { usePlatformShortcut } from './platform-shortcuts';
 /** The instance theme with an accent, as the root applies it. */
 function themeWith(accent: 'indigo' | 'teal'): WebThemeState {
   const color = accent === 'teal' ? '#0F766E' : '#3F51C7';
-  return {
-    mode: 'light',
-    accent,
-    light: resolvePreset('desk', color),
-    dark: resolvePreset('desk-dark', color),
-  };
+  return { accent, theme: resolvePreset('desk', color) };
 }
 
 // Browser Mode serves a blank same-origin document titled "Embedded app" at
@@ -126,7 +121,6 @@ test('runs a native App over the player channel instead of reading its frame', a
     type: 'init',
     route: '/inbox',
     accent: 'indigo',
-    appearance: 'light',
     themeKey: expect.any(String),
     visible: true,
   });
@@ -148,7 +142,6 @@ test('runs a native App over the player channel instead of reading its frame', a
         {
           type: 'theme',
           accent: 'teal',
-          appearance: 'light',
           themeKey: expect.any(String),
         },
         { type: 'visibility', visible: false },

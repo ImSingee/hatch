@@ -47,12 +47,12 @@ session on the instance and removes it from the Keychain.
 `settings.json` in `~/Library/Application Support/app.hatch.desktop/` holds
 only the instance origin and its accent colour.
 
-The window takes the instance theme's appearance: while the theme's mode is
-fixed, the web UI names its ground in `<meta name="theme-color">`, which
+The window takes the active instance theme's appearance, not the macOS
+setting: the web UI names its ground in `<meta name="theme-color">`, which
 WebKit reports as the web view's `themeColor`; a dark ground makes the window
-dark and light one light (`src-tauri/src/appearance.rs`). In `system` mode
-the page names none and the window follows macOS. The first-run page keeps
-the built-in light tokens.
+dark and a light one light (`src-tauri/src/appearance.rs`). A page that names
+no ground, such as the first-run page with the built-in light tokens, keeps
+the window light.
 
 Passkeys cannot work inside the window: WKWebView in an app without Apple's
 browser entitlement reports no platform authenticator. That is why sign-in is

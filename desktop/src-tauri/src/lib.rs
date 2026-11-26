@@ -796,13 +796,12 @@ fn decide_navigation(app: &AppHandle, navigation: &webkit::Navigation) -> bool {
     }
 }
 
-/// The page's theme colour changed: the window takes the theme's appearance,
-/// or follows the device when the page names none.
+/// The page's theme colour changed: the window takes the theme's appearance.
 fn on_theme_color(app: &AppHandle, color: Option<webkit::Rgb>) {
     let Some(window) = main_window(app) else {
         return;
     };
-    let _ = window.set_theme(appearance::theme_for(color));
+    let _ = window.set_theme(Some(appearance::theme_for(color)));
     let _ = window.set_background_color(Some(appearance::background_for(color, GROUND)));
 }
 

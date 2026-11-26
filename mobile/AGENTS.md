@@ -126,7 +126,7 @@ scrolling height bound and the separate accessible attachment/send action row.
 Install dependencies with `pnpm exec expo install` from mobile. Adding or changing
 native modules requires prebuild, native compilation, and installation; Metro
 reload is insufficient. Verify real iOS Simulator interactions with screenshots
-and recordings, including keyboard, small screens, safe areas, device appearance,
+and recordings, including keyboard, small screens, safe areas, light and dark themes,
 Dynamic Type, and affected login/chat/attachment flows. State the exact runtime;
 web previews and Metro exports are not native runtime acceptance. Do not describe
 a Simulator as a physical device.

@@ -7,8 +7,8 @@ second implementation (the planned `@hatch/ui` App component library) can be
 built from it without reading the platform's React code.
 
 The values below are those of `desk`, the default theme. A theme is data:
-the instance picks a theme for light appearance and one for dark (see
-[Themes](#themes)), and every client draws the resolved tokens at run time.
+the instance draws one active theme from its library (see [Themes](#themes)),
+and every client draws the resolved tokens at run time.
 
 ## Where values live
 
@@ -85,8 +85,8 @@ the ground.
 
 One accent at a time, default `indigo` `#3F51C7`; alternatives `teal`
 `#0F766E`, `clay` `#B4472A`, `violet` `#7A3FB8`. The accent is a quick pick that
-replaces the theme's `primary` in both appearances; with no accent chosen,
-each theme shows its own `primary`. A fresh instance and a reset have no
+replaces the active theme's `primary`; with no accent chosen, the theme
+shows its own `primary`. A fresh instance and a reset have no
 accent (`desk`'s own primary is `indigo`, so it looks the same), and the
 settings page and `hatch theme set` say when a chosen accent hides a custom
 theme's own primary. The accent is used
@@ -185,11 +185,23 @@ one by one gives unreadable combinations.
   the first of its shades 7 and 8 that reads) on `background`, `card` and
   `muted`; the primary text shade on `background` and `card`. The check
   runs with the theme's own `primary` and with the chosen accent.
-- The instance setting (`ui.theme`) holds the accent, a `mode` (`light`,
-  `dark`, or `system` for each device's appearance) and the light and dark
-  theme (a preset name or a document). The appearance settings page sets mode,
-  presets and accent; custom themes are set with `hatch theme set --appearance
-  <light|dark> --file <path>`.
+- The instance setting (`ui.theme`) holds the accent and the active theme:
+  a preset name or the id of a custom theme. Custom themes live in the
+  `themes` table, a library of at most 100 documents beside the presets.
+- Light and dark are not modes. `appearance` is a property of a theme: a dark
+  theme is activated like any other, and no client follows the device's or
+  browser's light or dark setting. Each client draws the active theme's
+  appearance (Mantine's colour scheme on the web, the window theme on macOS,
+  the colour scheme on Mobile).
+- The appearance settings page shows the library as cards: choosing one
+  activates it for every client; "New theme" and "Duplicate" open the editor
+  on a copy; custom themes can be edited and deleted (not the active one).
+  The editor sets only the document's fields (name, appearance, nine colours,
+  radius, fonts) and shows the platform's problems, translated, on save.
+  `hatch theme` does the same from the CLI.
+- A custom theme saved under older rules that no longer passes them is listed
+  as needing fixes and cannot be activated; if it is the active one, clients
+  draw `desk` until it is fixed.
 
 ## Typography
 

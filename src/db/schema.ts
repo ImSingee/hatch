@@ -933,6 +933,21 @@ export const platformConfig = snakeCase.table('platform_config', {
 });
 
 /**
+ * Custom themes of the instance (`~server/theme-settings`): theme documents
+ * people and the Agent author on the web or with the CLI. Presets are not
+ * stored. Which theme is active lives in the `ui.theme` platform setting.
+ * `document` is checked when it is saved; a row that no longer passes the
+ * current rules is still listed (flagged) but cannot be activated.
+ */
+export const themes = snakeCase.table('themes', {
+  id: text().primaryKey(),
+  name: text().notNull(),
+  document: jsonb().$type<JsonValue>().notNull(),
+  createdAt,
+  updatedAt,
+});
+
+/**
  * Model catalogs fetched by the background refresh (`~server/model-catalog`),
  * already trimmed and validated. The newest row is the candidate; the
  * bundled snapshot is used instead when it has newer data.

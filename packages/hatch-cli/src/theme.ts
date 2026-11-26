@@ -1,82 +1,93 @@
 /** Instance theme commands. */
 import type { JsonObject } from '@bufbuild/protobuf';
 import {
-  THEME_APPEARANCES,
-  THEME_MODES,
-  THEME_PRESET_NAMES,
-  isThemePresetName,
-  type ThemeAppearance,
-  type ThemeMode,
-} from '../../hatch-design-tokens/src';
-import {
   ACCENT_NAMES,
   isAccentName,
   type AccentName,
 } from '../../../src/ui/theme/accents';
 import {
+  PAGE_OPTIONS,
   invalid,
+  onePositional,
   openClient,
+  pageFlags,
   parseCommandArgs,
   printResult,
   textFlag,
   type Flags,
+  type Page,
 } from './command-session';
 import { CliError } from './error';
 import { readInput } from './input';
 
 /** Theme documents are small; a larger file is not a theme. */
 const MAX_THEME_BYTES = 16_384;
+/** Preset names and custom theme ids (lowercase ULIDs). */
+const THEME_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export type ThemeCommand =
-  | { kind: 'get'; resolve: ThemeAppearance[] | 'mode' }
+  | { kind: 'get'; resolve: boolean }
   | {
       kind: 'set';
       accent?: AccentName;
       clearAccent?: true;
       dockLabels?: boolean;
-      mode?: ThemeMode;
-      appearance?: ThemeAppearance;
-      preset?: string;
-      /** `--file`: a path, or `-` for stdin. */
-      file?: string;
+      /** The theme to activate: a preset name or a custom theme id. */
+      theme?: string;
     }
+  | { kind: 'list'; page: Page }
+  /** `file`: a path, or `-` for stdin. */
+  | { kind: 'create'; file: string }
+  | { kind: 'update'; id: string; file: string }
+  | { kind: 'delete'; id: string }
   | { kind: 'check'; file: string }
-  | { kind: 'presets' }
   | { kind: 'reset' };
 
-const OPERATIONS = ['get', 'set', 'check', 'presets', 'reset'] as const;
+const OPERATIONS = [
+  'get',
+  'set',
+  'list',
+  'create',
+  'update',
+  'delete',
+  'check',
+  'reset',
+] as const;
 type Operation = (typeof OPERATIONS)[number];
 
+const FILE = { file: { type: 'string' } } as const;
 const OPTIONS: Record<Operation, Parameters<typeof parseCommandArgs>[3]> = {
-  get: { resolved: { type: 'boolean' }, appearance: { type: 'string' } },
+  get: { resolved: { type: 'boolean' } },
   set: {
     accent: { type: 'string' },
     'clear-accent': { type: 'boolean' },
     'dock-labels': { type: 'boolean' },
     'no-dock-labels': { type: 'boolean' },
-    mode: { type: 'string' },
-    appearance: { type: 'string' },
-    preset: { type: 'string' },
-    file: { type: 'string' },
+    theme: { type: 'string' },
   },
-  check: { file: { type: 'string' } },
-  presets: {},
+  list: PAGE_OPTIONS,
+  create: FILE,
+  update: FILE,
+  delete: {},
+  check: FILE,
   reset: {},
 };
 
-function appearanceFlag(flags: Flags): ThemeAppearance | undefined {
-  const appearance = textFlag(flags, 'appearance');
-  if (
-    appearance !== undefined &&
-    !(THEME_APPEARANCES as readonly string[]).includes(appearance)
-  )
-    throw invalid('--appearance must be light or dark.');
-  return appearance as ThemeAppearance | undefined;
+/** Operations that take one theme id as their positional argument. */
+const WITH_ID: readonly Operation[] = ['update', 'delete'];
+
+function themeId(value: string, label: string): string {
+  if (!THEME_ID.test(value))
+    throw invalid(
+      `${label} must be a theme id from hatch theme list (lowercase letters, digits and hyphens).`,
+    );
+  return value;
 }
 
-/** `--file` keeps `-` (stdin); any other value is a path. */
-function fileFlag(flags: Flags): string | undefined {
-  return textFlag(flags, 'file');
+function fileFlag(flags: Flags): string {
+  const file = textFlag(flags, 'file');
+  if (file === undefined) throw invalid('Supply --file <path|->.');
+  return file;
 }
 
 function parseSet(flags: Flags): ThemeCommand {
@@ -90,42 +101,25 @@ function parseSet(flags: Flags): ThemeCommand {
   const hide = flags['no-dock-labels'] === true;
   if (show && hide)
     throw invalid('Supply at most one of --dock-labels and --no-dock-labels.');
-  const mode = textFlag(flags, 'mode');
-  if (mode !== undefined && !(THEME_MODES as readonly string[]).includes(mode))
-    throw invalid('--mode must be light, dark or system.');
-  const appearance = appearanceFlag(flags);
-  const preset = textFlag(flags, 'preset');
-  const file = fileFlag(flags);
-  if (preset !== undefined && file !== undefined)
-    throw invalid('Supply at most one of --preset and --file.');
-  if ((preset !== undefined || file !== undefined) && !appearance)
-    throw invalid(
-      `--${preset !== undefined ? 'preset' : 'file'} needs --appearance light|dark: the theme it replaces.`,
-    );
-  if (appearance && preset === undefined && file === undefined)
-    throw invalid('--appearance needs --preset <name> or --file <path|->.');
-  if (preset !== undefined && !isThemePresetName(preset))
-    throw invalid(`--preset must be one of: ${THEME_PRESET_NAMES.join(', ')}.`);
+  const themeFlag = textFlag(flags, 'theme');
+  const theme =
+    themeFlag === undefined ? undefined : themeId(themeFlag, '--theme');
   if (
     accent === undefined &&
     !clearAccent &&
     !show &&
     !hide &&
-    mode === undefined &&
-    !appearance
+    theme === undefined
   )
     throw invalid(
-      'Supply --accent, --clear-accent, --dock-labels, --no-dock-labels, --mode, or --appearance with --preset or --file.',
+      'Supply --theme, --accent, --clear-accent, --dock-labels or --no-dock-labels.',
     );
   return {
     kind: 'set',
     ...(accent === undefined ? {} : { accent }),
     ...(clearAccent ? { clearAccent: true as const } : {}),
     ...(show || hide ? { dockLabels: show } : {}),
-    ...(mode === undefined ? {} : { mode: mode as ThemeMode }),
-    ...(appearance ? { appearance } : {}),
-    ...(preset === undefined ? {} : { preset }),
-    ...(file === undefined ? {} : { file }),
+    ...(theme === undefined ? {} : { theme }),
   };
 }
 
@@ -137,56 +131,49 @@ export function parseThemeCommand(
   const operation = args[offset + 1];
   if (!(OPERATIONS as readonly (string | undefined)[]).includes(operation))
     throw invalid(
-      'Use hatch theme get, set, check, presets or reset. See hatch help theme.',
+      `Use hatch theme ${OPERATIONS.join(', ')}. See hatch help theme.`,
     );
   const op = operation as Operation;
   const { flags, positionals } = parseCommandArgs(args, offset, 2, OPTIONS[op]);
+  if (WITH_ID.includes(op)) {
+    const id = themeId(onePositional(positionals, 'theme id'), 'The theme id');
+    if (op === 'delete') return { command: { kind: 'delete', id }, flags };
+    return { command: { kind: 'update', id, file: fileFlag(flags) }, flags };
+  }
   if (positionals.length)
     throw invalid('This command takes no positional arguments.');
   switch (op) {
-    case 'get': {
-      const appearance = appearanceFlag(flags);
-      const resolved = flags.resolved === true;
-      if (appearance && !resolved)
-        throw invalid('--appearance needs --resolved.');
+    case 'get':
       return {
-        command: {
-          kind: 'get',
-          resolve: !resolved ? [] : appearance ? [appearance] : 'mode',
-        },
+        command: { kind: 'get', resolve: flags.resolved === true },
         flags,
       };
-    }
     case 'set':
       return { command: parseSet(flags), flags };
-    case 'check': {
-      const file = fileFlag(flags);
-      if (file === undefined) throw invalid('Supply --file <path|->.');
-      return { command: { kind: 'check', file }, flags };
-    }
-    case 'presets':
-      return { command: { kind: 'presets' }, flags };
+    case 'list':
+      return { command: { kind: 'list', page: pageFlags(flags) }, flags };
+    case 'create':
+      return { command: { kind: 'create', file: fileFlag(flags) }, flags };
+    case 'check':
+      return { command: { kind: 'check', file: fileFlag(flags) }, flags };
     case 'reset':
       return { command: { kind: 'reset' }, flags };
+    default:
+      throw invalid(`Use hatch theme ${OPERATIONS.join(', ')}.`);
   }
 }
 
 /**
- * The note `theme set` prints when the theme it just set has its own primary
- * that the chosen accent replaces; null when it shows as set.
+ * The note `theme set --theme` prints when the chosen accent hides the
+ * theme's own primary; null when it shows as set.
  */
-export function accentOverrideNote(
-  state: {
-    accent: string | null;
-    accentOverrides: string[];
-    light: { name: string; primary: string };
-    dark: { name: string; primary: string };
-  },
-  appearance: ThemeAppearance,
-): string | null {
-  if (!state.accent || !state.accentOverrides.includes(appearance)) return null;
-  const theme = state[appearance];
-  return `Note: the ${state.accent} accent replaces the primary ${theme.primary} of the ${appearance} theme "${theme.name}". Run hatch theme set --clear-accent to show it.`;
+export function accentOverrideNote(state: {
+  accent: string | null;
+  accentOverridesPrimary: boolean;
+  theme: { name: string; primary: string | null };
+}): string | null {
+  if (!state.accent || !state.accentOverridesPrimary) return null;
+  return `Note: the ${state.accent} accent replaces the primary ${state.theme.primary} of the theme "${state.theme.name}". Run hatch theme set --clear-accent to show it.`;
 }
 
 function readTheme(file: string, signal: AbortSignal): Promise<JsonObject> {
@@ -201,49 +188,40 @@ export async function runTheme(
   const { command, flags } = parseThemeCommand(args, offset);
   // Read the file before connecting, so an unreadable one sends nothing.
   const document =
-    command.kind === 'check' || (command.kind === 'set' && command.file)
-      ? await readTheme(command.file!, signal)
-      : undefined;
+    'file' in command ? await readTheme(command.file, signal) : undefined;
   const client = await openClient(flags, signal);
   switch (command.kind) {
-    case 'get': {
-      if (command.resolve !== 'mode') {
-        printResult(await client.theme.get(command.resolve), flags);
-        return;
-      }
-      // The appearance the mode draws; both while it follows the device.
-      const { mode } = await client.theme.get();
-      printResult(
-        await client.theme.get(
-          mode === 'system' ? ['light', 'dark'] : [mode as ThemeAppearance],
-        ),
-        flags,
-      );
+    case 'get':
+      printResult(await client.theme.get(command.resolve), flags);
       return;
-    }
     case 'set': {
       const state = await client.theme.set({
         accent: command.accent,
         clearAccent: command.clearAccent,
         dockLabels: command.dockLabels,
-        mode: command.mode,
-        appearance: command.appearance,
-        preset: command.preset,
-        custom: document,
+        theme: command.theme,
       });
-      if (!command.appearance) {
-        printResult(state, flags);
-        return;
-      }
-      const note = accentOverrideNote(state, command.appearance);
+      const note = command.theme ? accentOverrideNote(state) : null;
       if (note && !flags.json) process.stderr.write(`${note}\n`);
-      printResult({ ...state, accentOverridesPrimary: note !== null }, flags);
+      printResult(state, flags);
       return;
     }
+    case 'list':
+      printResult(await client.theme.list(command.page), flags);
+      return;
+    case 'create':
+      printResult(await client.theme.create(document!), flags);
+      return;
+    case 'update':
+      printResult(await client.theme.update(command.id, document!), flags);
+      return;
+    case 'delete':
+      printResult(await client.theme.delete(command.id), flags);
+      return;
     case 'check': {
       const result = await client.theme.validate(document!);
       if (!result.ok)
-        // The code `set` gets from the platform for the same document.
+        // The code `create` and `update` get from the platform.
         throw new CliError(
           'THEME_INVALID',
           [
@@ -257,9 +235,6 @@ export async function runTheme(
       printResult(result, flags);
       return;
     }
-    case 'presets':
-      printResult(await client.theme.presets(), flags);
-      return;
     case 'reset':
       printResult(await client.theme.reset(), flags);
   }

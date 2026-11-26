@@ -34,10 +34,7 @@ const meadow = {
   fonts: { sans: 'Nunito', mono: 'JetBrains Mono' },
 } as const;
 
-function themeWith(
-  accent: 'teal' | null,
-  accentOverrides: ('light' | 'dark')[],
-): WebTheme {
+function themeWith(accent: 'teal' | null, overrides: boolean): WebTheme {
   return {
     accent,
     defaultAccent: 'indigo',
@@ -46,21 +43,17 @@ function themeWith(
       { name: 'teal', color: '#0F766E' },
     ],
     dockLabels: false,
-    mode: 'light',
-    light: {
-      appearance: 'light',
-      preset: null,
-      custom: meadow,
+    theme: {
+      id: 'meadow-id',
       name: 'Meadow',
+      source: 'custom',
+      appearance: 'light',
       primary: '#2F6B3A',
+      document: meadow,
+      valid: true,
+      problems: [],
     },
-    dark: {
-      appearance: 'dark',
-      preset: 'desk-dark',
-      name: 'Desk dark',
-      primary: '#3F51C7',
-    },
-    accentOverrides,
+    accentOverridesPrimary: overrides,
     // The panel does not read the resolved tokens.
     resolved: {} as WebTheme['resolved'],
   } as WebTheme;
@@ -79,20 +72,15 @@ async function renderPanel(theme: WebTheme) {
 }
 
 test('says when the accent hides the primary of a custom theme, and clears once Theme colour is chosen', async () => {
-  fixture.setAccent.mockResolvedValue(themeWith(null, []));
-  const screen = await renderPanel(themeWith('teal', ['light', 'dark']));
-  // Desk dark is a preset: only the custom theme is named.
+  fixture.setAccent.mockResolvedValue(themeWith(null, false));
+  const screen = await renderPanel(themeWith('teal', true));
   await expect
     .element(
       screen.getByText(
-        /replaces the primary colour of your custom theme “Meadow”/,
+        /replaces the primary colour of the custom theme “Meadow”/,
       ),
     )
     .toBeVisible();
-  expect(screen.getByText(/custom theme “Desk dark”/).elements()).toHaveLength(
-    0,
-  );
-
   await screen.getByRole('radio', { name: 'Theme colour' }).click();
   await vi.waitFor(() =>
     expect(fixture.setAccent).toHaveBeenCalledWith({ data: null }),
@@ -103,7 +91,7 @@ test('says when the accent hides the primary of a custom theme, and clears once 
 });
 
 test('says nothing while each theme shows its own primary', async () => {
-  const screen = await renderPanel(themeWith(null, []));
+  const screen = await renderPanel(themeWith(null, false));
   await expect
     .element(screen.getByRole('radio', { name: 'Theme colour' }))
     .toBeChecked();

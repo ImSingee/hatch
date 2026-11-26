@@ -10,12 +10,12 @@ Design rules, the theme document and the component specification are in
   motion), and `src/` (`resolveTheme`, the presets, validation and colour
   arithmetic). The server resolves the instance theme; clients do not derive
   tokens themselves.
-- `theme-store.ts` holds the theme this browser draws: the mode, the accent
-  and the resolved light and dark themes from `~queries/theme`, cached in
-  `localStorage` (`hatch.theme.v1`) so a reload paints the right theme before
-  the setting is fetched. `useActiveTheme()` picks light or dark from the mode
-  and, in `system` mode, the device. `THEME_BOOT_SCRIPT` paints the cached
-  ground and colour scheme before React mounts; `applyDocumentTheme()` keeps it
+- `theme-store.ts` holds the theme this browser draws: the accent and the
+  resolved active theme from `~queries/theme`, cached in `localStorage`
+  (`hatch.theme.v2`) so a reload paints the right theme before the setting is
+  fetched. `useActiveTheme()` returns it; the browser's light or dark
+  preference is not consulted. `THEME_BOOT_SCRIPT` paints the cached ground
+  and colour scheme before React mounts; `applyDocumentTheme()` keeps it
   and `<meta name="theme-color">` (read by the macOS app) current.
   `useSurfaceTheme()` is what App surfaces send their native players.
 - `theme.ts` builds the Mantine theme from a resolved theme

@@ -3,24 +3,28 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { authMiddleware } from './auth';
 import {
+  createTheme,
+  deleteTheme,
   getTheme,
+  listThemes,
   setThemeAccent,
+  updateCustomTheme,
   updateTheme,
+  type ThemeEntry,
   type ThemeState,
 } from './theme-settings';
-import type { ResolvedTheme } from '../../packages/hatch-design-tokens/src';
+import { ThemeValidationError } from './theme-errors';
+import type {
+  ResolvedTheme,
+  ThemeProblem,
+} from '../../packages/hatch-design-tokens/src';
 
-/** The theme state with both appearances resolved, as the Web UI draws it. */
-export type WebTheme = ThemeState & {
-  resolved: { light: ResolvedTheme; dark: ResolvedTheme };
-};
+/** The theme state with the active theme resolved, as the Web UI draws it. */
+export type WebTheme = ThemeState & { resolved: ResolvedTheme };
 
 async function webTheme(): Promise<WebTheme> {
-  const {
-    theme,
-    resolved: [light, dark],
-  } = await getTheme(['light', 'dark']);
-  return { ...theme, resolved: { light, dark } };
+  const { theme, resolved } = await getTheme({ resolve: true });
+  return { ...theme, resolved: resolved! };
 }
 
 /**
@@ -51,26 +55,57 @@ export const setDockLabelsFn = createServerFn({ method: 'POST' })
     return webTheme();
   });
 
-const appearanceSchema = z.enum(['light', 'dark']);
+const themeId = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9][a-z0-9-]*$/);
 
-/** Mode and presets from the appearance settings; custom themes come from the CLI. */
-export const setThemeAppearanceFn = createServerFn({ method: 'POST' })
+/** The theme library: presets, then custom themes. */
+export const listThemesFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .validator((change: unknown) =>
-    z
-      .object({
-        mode: z.enum(['light', 'dark', 'system']).optional(),
-        theme: z
-          .object({
-            appearance: appearanceSchema,
-            preset: z.string().min(1).max(32),
-          })
-          .optional(),
-      })
-      .refine((value) => value.mode !== undefined || value.theme !== undefined)
-      .parse(change),
-  )
+  .handler(() => listThemes());
+
+/** Make a theme of the library the one every client draws. */
+export const activateThemeFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((id: string) => themeId.parse(id))
   .handler(async ({ data }) => {
-    await updateTheme(data);
+    await updateTheme({ theme: data });
     return webTheme();
+  });
+
+/**
+ * A rejected document is an answer, not an error: the editor shows each
+ * problem next to its field, translated from its code.
+ */
+export type SaveThemeResult =
+  | { ok: true; theme: ThemeEntry }
+  | { ok: false; problems: ThemeProblem[] };
+
+/** Save a custom theme: a new one, or a whole replacement of `id`. */
+export const saveThemeFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: unknown) =>
+    z.object({ id: themeId.optional(), document: z.unknown() }).parse(input),
+  )
+  .handler(async ({ data }): Promise<SaveThemeResult> => {
+    try {
+      const theme = data.id
+        ? await updateCustomTheme(data.id, data.document)
+        : await createTheme(data.document);
+      return { ok: true, theme };
+    } catch (error) {
+      if (error instanceof ThemeValidationError)
+        return { ok: false, problems: error.problems };
+      throw error;
+    }
+  });
+
+export const deleteThemeFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((id: string) => themeId.parse(id))
+  .handler(async ({ data }) => {
+    await deleteTheme(data);
+    return { deleted: data };
   });

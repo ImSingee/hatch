@@ -17,7 +17,6 @@ describe('the native player theme', () => {
         route: '',
         accent: 'teal',
         visible: true,
-        appearance: 'dark',
         themeKey: 'a1b2',
       }),
     ).toEqual({
@@ -25,29 +24,25 @@ describe('the native player theme', () => {
       route: '',
       accent: 'teal',
       visible: true,
-      appearance: 'dark',
       themeKey: 'a1b2',
     });
     for (const bad of [
-      { type: 'theme', accent: 'teal', appearance: 'sepia' },
       { type: 'theme', accent: 'teal', themeKey: 7 },
       { type: 'theme', accent: 'teal', themeKey: 'k'.repeat(129) },
     ])
       expect(parseSurfaceMessage(bad)).toBeNull();
   });
 
-  it('asks for the surface appearance, or lets the instance mode decide', async () => {
+  it('reads the active theme from the platform', async () => {
     const fetcher = vi.fn<(url: string) => Promise<Response>>(
       async () => new Response(JSON.stringify({ key: 'k1', theme })),
     );
-    expect(await fetchInstanceTheme('dark', false, fetcher as never)).toEqual({
+    expect(await fetchInstanceTheme(fetcher as never)).toEqual({
       key: 'k1',
       theme,
     });
-    await fetchInstanceTheme(null, true, fetcher as never);
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-      '/api/theme/native?appearance=dark',
-      '/api/theme/native?prefers=dark',
+      '/api/theme/native',
     ]);
   });
 
@@ -62,8 +57,7 @@ describe('the native player theme', () => {
       },
     ])
       expect(
-        await fetchInstanceTheme('light', false, (async () =>
-          response()) as never),
+        await fetchInstanceTheme((async () => response()) as never),
       ).toBeNull();
   });
 });

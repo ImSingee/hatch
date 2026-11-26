@@ -20,7 +20,6 @@ export const NATIVE_RUNTIME_META = 'hatch-app-runtime';
  * key changes; an older player follows `accent` alone.
  */
 export type ThemeIdentity = {
-  appearance?: 'light' | 'dark';
   /** Changes whenever the surface's resolved theme changes. */
   themeKey?: string;
 };
@@ -29,11 +28,6 @@ const MAX_THEME_KEY_LENGTH = 128;
 
 function themeIdentity(value: Record<string, unknown>): ThemeIdentity | null {
   const identity: ThemeIdentity = {};
-  if (value.appearance !== undefined) {
-    if (value.appearance !== 'light' && value.appearance !== 'dark')
-      return null;
-    identity.appearance = value.appearance;
-  }
   if (value.themeKey !== undefined) {
     if (
       typeof value.themeKey !== 'string' ||

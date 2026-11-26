@@ -1,14 +1,13 @@
 /**
  * The built-in themes. `desk` is the look the platform has always had (its
  * values are `tokens.json`'s `light` block and the token surfaces) and the
- * default; `desk-dark` is its dark counterpart (`tokens.json` `dark`).
+ * default; `desk-dark` is a dark theme like any other (`tokens.json` `dark`).
  */
 import tokens from '../tokens.json' with { type: 'json' };
 import {
   BASE_RADIUS,
   resolveTheme,
   type ResolvedTheme,
-  type ThemeAppearance,
   type ThemeDocument,
   type ThemePins,
 } from './theme';
@@ -16,10 +15,8 @@ import {
 export const THEME_PRESET_NAMES = ['desk', 'desk-dark'] as const;
 export type ThemePresetName = (typeof THEME_PRESET_NAMES)[number];
 
-export const DEFAULT_PRESETS: Record<ThemeAppearance, ThemePresetName> = {
-  light: 'desk',
-  dark: 'desk-dark',
-};
+/** The theme of a fresh instance and of `theme reset`. */
+export const DEFAULT_THEME: ThemePresetName = 'desk';
 
 export type ThemePreset = {
   name: ThemePresetName;

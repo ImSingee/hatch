@@ -74,6 +74,7 @@ async function call(method: string, body: unknown = {}) {
 beforeEach(async () => {
   fixture.credential = CREDENTIALS.session;
   await db.delete(schema.platformConfig);
+  await db.delete(schema.themes);
   await db.delete(schema.sidebarItems);
   await db.delete(schema.apps);
   await db
@@ -146,7 +147,7 @@ describe('theme and pin RPCs', () => {
     expect((await call('PinService/ListPins')).data.appPins ?? []).toEqual([]);
   });
 
-  it('give every credential type the same authority over modes, presets and custom themes', async () => {
+  it('give every credential type the same authority over the theme library', async () => {
     const meadow = {
       name: 'Meadow',
       appearance: 'light',
@@ -166,49 +167,47 @@ describe('theme and pin RPCs', () => {
       fixture.credential = credential;
       const ok = (result: { status: number }) =>
         expect({ type, status: result.status }).toEqual({ type, status: 200 });
-      const mode = await call('ThemeService/SetTheme', {
-        mode: 'system',
-        appearance: 'dark',
-        preset: 'desk-dark',
+      const created = await call('ThemeService/CreateTheme', {
+        document: meadow,
       });
-      ok(mode);
-      const custom = await call('ThemeService/SetTheme', {
-        appearance: 'light',
-        custom: meadow,
+      ok(created);
+      const id = created.data.theme.id;
+      expect(created.data.theme).toMatchObject({
+        name: 'Meadow',
+        source: 'custom',
+        valid: true,
+      });
+      const listed = await call('ThemeService/ListThemes', { limit: 2 });
+      ok(listed);
+      expect(
+        listed.data.themes.map((theme: { id: string }) => theme.id),
+      ).toEqual(['desk', 'desk-dark']);
+      expect(listed.data.nextCursor).toBe('2');
+      const rest = await call('ThemeService/ListThemes', { cursor: '2' });
+      expect(rest.data.themes[0].id).toBe(id);
+      const dark = await call('ThemeService/SetTheme', {
+        theme: 'desk-dark',
         clearAccent: true,
       });
-      ok(custom);
-      expect(custom.data.theme).toMatchObject({
-        mode: 'system',
-        light: {
-          appearance: 'light',
-          name: 'Meadow',
-          custom: { name: 'Meadow' },
-        },
-        dark: { appearance: 'dark', preset: 'desk-dark' },
+      ok(dark);
+      expect(dark.data.theme.theme).toMatchObject({
+        id: 'desk-dark',
+        appearance: 'dark',
       });
-      expect(custom.data.theme.accent ?? '').toBe('');
-      const resolved = await call('ThemeService/GetTheme', {
-        resolve: ['dark', 'light'],
-      });
+      const activated = await call('ThemeService/SetTheme', { theme: id });
+      ok(activated);
+      const resolved = await call('ThemeService/GetTheme', { resolve: true });
       ok(resolved);
-      expect(
-        resolved.data.resolved.map(
-          (theme: { appearance: string; colors: Record<string, string> }) => [
-            theme.appearance,
-            theme.colors.primary,
-          ],
-        ),
-      ).toEqual([
-        ['dark', '#3F51C7'],
-        ['light', '#2F6B3A'],
-      ]);
-      expect(resolved.data.resolved[0].ramps.primary.shades).toHaveLength(10);
-      const presets = await call('ThemeService/ListThemePresets');
-      ok(presets);
-      expect(
-        presets.data.presets.map((preset: { name: string }) => preset.name),
-      ).toEqual(['desk', 'desk-dark']);
+      expect(resolved.data.resolved.colors.primary).toBe('#2F6B3A');
+      expect(resolved.data.resolved.ramps.primary.shades).toHaveLength(10);
+      const updated = await call('ThemeService/UpdateTheme', {
+        id,
+        document: { ...meadow, name: 'Meadow two' },
+      });
+      ok(updated);
+      expect(updated.data.theme.name).toBe('Meadow two');
+      const busy = await call('ThemeService/DeleteTheme', { id });
+      expect({ type, status: busy.status }).toEqual({ type, status: 409 });
       const check = await call('ThemeService/ValidateTheme', {
         document: {
           ...meadow,
@@ -223,9 +222,8 @@ describe('theme and pin RPCs', () => {
         background: 'background',
         requiredRatio: 4.5,
       });
-      const rejected = await call('ThemeService/SetTheme', {
-        appearance: 'light',
-        custom: { ...meadow, colors: { ...meadow.colors, card: 'cream' } },
+      const rejected = await call('ThemeService/CreateTheme', {
+        document: { ...meadow, colors: { ...meadow.colors, card: 'cream' } },
       });
       expect(rejected.status).toBe(400);
       expect(rejected.data.message).toContain(
@@ -233,38 +231,38 @@ describe('theme and pin RPCs', () => {
       );
       const reset = await call('ThemeService/ResetTheme');
       ok(reset);
-      expect(reset.data.theme).toMatchObject({
-        mode: 'light',
-        light: { preset: 'desk', primary: '#3F51C7' },
+      expect(reset.data.theme.theme).toMatchObject({
+        id: 'desk',
+        primary: '#3F51C7',
       });
-      // Reset leaves no accent: each theme shows its own primary.
       expect(reset.data.theme.accent ?? '').toBe('');
+      const removed = await call('ThemeService/DeleteTheme', { id });
+      ok(removed);
     }
   });
 
-  it('reject contradictory theme requests at the edge', async () => {
-    for (const body of [
-      { preset: 'desk' },
-      { custom: { appearance: 'light' } },
-      { appearance: 'light' },
-      { appearance: 'light', preset: 'desk', custom: { appearance: 'light' } },
-      { accent: 'teal', clearAccent: true },
-      { mode: 'dim' },
-      { appearance: 'sepia', preset: 'desk' },
-    ])
+  it('reject malformed theme requests at the edge', async () => {
+    for (const [method, body] of [
+      ['ThemeService/SetTheme', { accent: 'teal', clearAccent: true }],
+      ['ThemeService/SetTheme', { theme: 'Not An Id' }],
+      ['ThemeService/ListThemes', { limit: 500 }],
+      ['ThemeService/ListThemes', { cursor: 'next' }],
+      ['ThemeService/CreateTheme', {}],
+      ['ThemeService/UpdateTheme', { id: 'x' }],
+      ['ThemeService/DeleteTheme', {}],
+      ['ThemeService/ValidateTheme', {}],
+    ] as const)
       expect({
+        method,
         body,
-        status: (await call('ThemeService/SetTheme', body)).status,
-      }).toEqual({ body, status: 400 });
-    for (const resolve of [['sepia'], ['light', 'light']])
-      expect((await call('ThemeService/GetTheme', { resolve })).status).toBe(
-        400,
-      );
-    expect((await call('ThemeService/ValidateTheme', {})).status).toBe(400);
-    expect((await call('ThemeService/GetTheme')).data.theme).toMatchObject({
-      mode: 'light',
-      light: { preset: 'desk' },
-    });
+        status: (await call(method, body)).status,
+      }).toEqual({ method, body, status: 400 });
+    expect(
+      (await call('ThemeService/SetTheme', { theme: 'missing' })).status,
+    ).toBe(404);
+    expect((await call('ThemeService/GetTheme')).data.theme.theme.id).toBe(
+      'desk',
+    );
   });
 
   it('page one sequence of App pins and dashboards', async () => {

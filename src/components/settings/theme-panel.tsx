@@ -1,90 +1,74 @@
-import { Badge, Group, SegmentedControl, Stack, Text } from '@mantine/core';
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  ColorInput,
+  Group,
+  Menu,
+  Modal,
+  NumberInput,
+  SegmentedControl,
+  Select,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import { modals } from '@mantine/modals';
-import { IconCheck } from '@tabler/icons-react';
+import {
+  IconCheck,
+  IconCopy,
+  IconDots,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from '@tabler/icons-react';
 import {
   useMutation,
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { type PlainTranslationKey, useI18n } from '~i18n';
-import { themeQueryOptions } from '~queries/theme';
-import { setThemeAppearanceFn } from '~server/theme';
-import type { ThemeChoice } from '~server/theme-settings';
+import { themeQueryOptions, themesQueryOptions } from '~queries/theme';
 import {
-  THEME_PRESETS,
-  type ThemeAppearance,
+  activateThemeFn,
+  deleteThemeFn,
+  saveThemeFn,
+  type SaveThemeResult,
+} from '~server/theme';
+import type { ThemeEntry } from '~server/theme-settings';
+import {
+  BUNDLED_FONTS,
+  MAX_RADIUS,
+  THEME_COLOR_KEYS,
+  type ThemeColorKey,
   type ThemeDocument,
-  type ThemeMode,
-  type ThemePresetName,
+  type ThemeProblem,
 } from '../../../packages/hatch-design-tokens/src';
-import { presetsFor, themeChoiceDocument } from './theme-choices';
 import classes from './theme-panel.module.css';
 
-const MODE_LABELS = {
-  light: 'appearance.mode.light',
-  dark: 'appearance.mode.dark',
-  system: 'appearance.mode.system',
-} as const satisfies Record<ThemeMode, PlainTranslationKey>;
-
-const PRESET_LABELS = {
-  desk: 'appearance.preset.desk',
-  'desk-dark': 'appearance.preset.deskDark',
-} as const satisfies Record<ThemePresetName, PlainTranslationKey>;
-
-const PICKER_TITLES = {
-  light: 'appearance.lightTheme.title',
-  dark: 'appearance.darkTheme.title',
-} as const satisfies Record<ThemeAppearance, PlainTranslationKey>;
-
-type Change =
-  | { mode: ThemeMode }
-  | { theme: { appearance: ThemeAppearance; preset: ThemePresetName } };
-
-function useSaveAppearance() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (change: Change) => setThemeAppearanceFn({ data: change }),
-    onSuccess: (saved) =>
-      queryClient.setQueryData(themeQueryOptions.queryKey, saved),
-  });
-}
-
-/** Light, dark or the device's appearance, for everyone on the instance. */
-export function ThemeModePanel() {
-  const { t } = useI18n();
-  const { data: theme } = useSuspenseQuery(themeQueryOptions);
-  const save = useSaveAppearance();
-  const pending =
-    save.isPending && 'mode' in save.variables ? save.variables.mode : null;
-
-  return (
-    <Group justify="space-between" gap="md">
-      <Stack gap={2}>
-        <Text fw={700} id="theme-mode-label">
-          {t('appearance.mode.title')}
-        </Text>
-        <Text size="sm" c="dimmed">
-          {t('appearance.mode.description')}
-        </Text>
-      </Stack>
-      <SegmentedControl
-        aria-labelledby="theme-mode-label"
-        value={pending ?? theme.mode}
-        disabled={save.isPending}
-        data={(['light', 'dark', 'system'] as const).map((mode) => ({
-          value: mode,
-          label: t(MODE_LABELS[mode]),
-        }))}
-        onChange={(value) => save.mutate({ mode: value as ThemeMode })}
-      />
-    </Group>
-  );
-}
+/** Label of each document colour, and of each role a contrast pair names. */
+const ROLE_LABELS: Record<string, PlainTranslationKey> = {
+  background: 'appearance.themeEditor.color.background',
+  foreground: 'appearance.themeEditor.color.foreground',
+  card: 'appearance.themeEditor.color.card',
+  primary: 'appearance.themeEditor.color.primary',
+  secondary: 'appearance.themeEditor.color.secondary',
+  muted: 'appearance.themeEditor.color.muted',
+  'muted-foreground': 'appearance.themeEditor.color.mutedForeground',
+  border: 'appearance.themeEditor.color.border',
+  destructive: 'appearance.themeEditor.color.destructive',
+  'primary-foreground': 'appearance.themeEditor.role.primaryForeground',
+  'primary-text': 'appearance.themeEditor.role.primaryText',
+  'destructive-foreground': 'appearance.themeEditor.role.destructiveForeground',
+  'destructive-text': 'appearance.themeEditor.role.destructiveText',
+};
 
 /** A small picture of a theme: its ground, a card and its primary. */
 function ThemePreview({ document }: { document: ThemeDocument }) {
-  const { colors } = document;
+  const colors = document.colors ?? ({} as ThemeDocument['colors']);
   return (
     <span
       className={classes.preview}
@@ -112,117 +96,385 @@ function ThemePreview({ document }: { document: ThemeDocument }) {
   );
 }
 
+function useInvalidateTheme() {
+  const queryClient = useQueryClient();
+  return () =>
+    queryClient.invalidateQueries({ queryKey: themeQueryOptions.queryKey });
+}
+
 /**
- * The theme one appearance draws: a preset, or the custom theme set through
- * the CLI. Choosing a preset over a custom theme replaces it, after asking.
+ * The theme library: presets and custom themes as cards. Choosing a card
+ * makes it the theme every client draws; custom themes can be edited and
+ * deleted, and any theme copied into a new custom one.
  */
-export function ThemePickerPanel({
-  appearance,
-}: {
-  appearance: ThemeAppearance;
-}) {
+export function ThemeLibraryPanel() {
   const { t } = useI18n();
   const labelId = useId();
-  const { data: theme } = useSuspenseQuery(themeQueryOptions);
-  const save = useSaveAppearance();
-  const choice: ThemeChoice = theme[appearance];
-  const pending =
-    save.isPending && 'theme' in save.variables
-      ? save.variables.theme.preset
-      : null;
-  const selected = pending ?? choice.preset;
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTheme();
+  const { data: state } = useSuspenseQuery(themeQueryOptions);
+  const { data: themes } = useSuspenseQuery(themesQueryOptions);
+  const [editing, setEditing] = useState<{
+    id?: string;
+    document: ThemeDocument;
+  } | null>(null);
+  const activate = useMutation({
+    mutationFn: (id: string) => activateThemeFn({ data: id }),
+    onSuccess: (saved) =>
+      queryClient.setQueryData(themeQueryOptions.queryKey, saved),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteThemeFn({ data: id }),
+    onSuccess: () => invalidate(),
+  });
+  const activeId = activate.isPending ? activate.variables : state.theme.id;
 
-  const choose = (preset: ThemePresetName) => {
-    if (preset === choice.preset) return;
-    const apply = () => save.mutate({ theme: { appearance, preset } });
-    if (choice.preset !== null) return apply();
+  const copyOf = (theme: ThemeEntry): ThemeDocument => ({
+    ...theme.document,
+    name: t('appearance.themes.copyName', { name: theme.name }),
+  });
+  const confirmDelete = (theme: ThemeEntry) =>
     modals.openConfirmModal({
-      title: t('appearance.customTheme.replaceTitle', { name: choice.name }),
+      title: t('appearance.themes.deleteTitle', { name: theme.name }),
       centered: true,
-      children: (
-        <Text size="sm">{t('appearance.customTheme.replaceBody')}</Text>
-      ),
+      children: <Text size="sm">{t('appearance.themes.deleteBody')}</Text>,
       labels: {
-        confirm: t('appearance.customTheme.replaceConfirm'),
+        confirm: t('appearance.themes.delete'),
         cancel: t('common.cancel'),
       },
-      onConfirm: apply,
+      confirmProps: { color: 'red' },
+      onConfirm: () => remove.mutate(theme.id),
     });
-  };
-
-  const options = [
-    ...presetsFor(appearance).map((preset) => ({
-      key: preset,
-      preset: preset as ThemePresetName | null,
-      document: THEME_PRESETS[preset].document,
-      label: t(PRESET_LABELS[preset]),
-    })),
-    ...(choice.preset === null
-      ? [
-          {
-            key: 'custom',
-            preset: null,
-            document: themeChoiceDocument(choice),
-            label: choice.name,
-          },
-        ]
-      : []),
-  ];
 
   return (
     <Stack gap="sm">
-      <Stack gap={2}>
-        <Text fw={700} id={labelId}>
-          {t(PICKER_TITLES[appearance])}
-        </Text>
-        <Text size="sm" c="dimmed">
-          {t('appearance.theme.description')}
-        </Text>
-      </Stack>
+      <Group justify="space-between" align="flex-start" gap="md">
+        <Stack gap={2} style={{ flex: '1 1 240px' }}>
+          <Text fw={700} id={labelId}>
+            {t('appearance.themes.title')}
+          </Text>
+          <Text size="sm" c="dimmed">
+            {t('appearance.themes.description')}
+          </Text>
+        </Stack>
+        <Button
+          variant="default"
+          leftSection={<IconPlus size={16} aria-hidden />}
+          onClick={() => setEditing({ document: copyOf(state.theme) })}
+        >
+          {t('appearance.themes.new')}
+        </Button>
+      </Group>
       <div
         role="radiogroup"
         aria-labelledby={labelId}
         className={classes.options}
       >
-        {options.map((option) => {
-          const checked = option.preset === selected;
+        {themes.map((theme) => {
+          const checked = theme.id === activeId;
+          const isActive = theme.id === state.theme.id;
           return (
-            <label key={option.key} className={classes.option}>
-              <input
-                type="radio"
-                name={`theme-${appearance}`}
-                className={classes.input}
-                value={option.key}
-                checked={checked}
-                disabled={save.isPending}
-                onChange={() => {
-                  if (option.preset) choose(option.preset);
-                }}
-              />
-              <ThemePreview document={option.document} />
-              <span className={classes.caption}>
-                <span className={classes.name}>{option.label}</span>
-                {option.preset === null ? (
+            <div key={theme.id} className={classes.option}>
+              <label className={classes.optionLabel}>
+                <input
+                  type="radio"
+                  name="theme"
+                  className={classes.input}
+                  value={theme.id}
+                  checked={checked}
+                  disabled={activate.isPending || !theme.valid}
+                  onChange={() => activate.mutate(theme.id)}
+                />
+                <ThemePreview document={theme.document} />
+                <span className={classes.caption}>
+                  <span className={classes.name}>{theme.name}</span>
+                  {checked ? (
+                    <IconCheck
+                      size={16}
+                      stroke={3}
+                      className={classes.check}
+                      aria-hidden
+                    />
+                  ) : null}
+                </span>
+                <span className={classes.badges}>
                   <Badge size="xs" variant="light" color="gray">
-                    {t('appearance.customTheme.badge')}
+                    {t(
+                      theme.appearance === 'dark'
+                        ? 'appearance.themes.dark'
+                        : 'appearance.themes.light',
+                    )}
                   </Badge>
-                ) : null}
-                {checked ? (
-                  <IconCheck
-                    size={16}
-                    stroke={3}
-                    className={classes.check}
-                    aria-hidden
-                  />
-                ) : null}
-              </span>
-            </label>
+                  {theme.source === 'custom' ? (
+                    <Badge size="xs" variant="light" color="gray">
+                      {t('appearance.themes.custom')}
+                    </Badge>
+                  ) : null}
+                  {theme.valid ? null : (
+                    <Badge size="xs" variant="light" color="red">
+                      {t('appearance.themes.invalid')}
+                    </Badge>
+                  )}
+                </span>
+              </label>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="sm"
+                    className={classes.menu}
+                    aria-label={t('appearance.themes.actions', {
+                      name: theme.name,
+                    })}
+                  >
+                    <IconDots size={16} aria-hidden />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {theme.source === 'custom' ? (
+                    <Menu.Item
+                      leftSection={<IconPencil size={16} aria-hidden />}
+                      onClick={() =>
+                        setEditing({ id: theme.id, document: theme.document })
+                      }
+                    >
+                      {t('appearance.themes.edit')}
+                    </Menu.Item>
+                  ) : null}
+                  <Menu.Item
+                    leftSection={<IconCopy size={16} aria-hidden />}
+                    onClick={() => setEditing({ document: copyOf(theme) })}
+                  >
+                    {t('appearance.themes.duplicate')}
+                  </Menu.Item>
+                  {theme.source === 'custom' ? (
+                    <Menu.Item
+                      color="red"
+                      disabled={isActive}
+                      leftSection={<IconTrash size={16} aria-hidden />}
+                      onClick={() => confirmDelete(theme)}
+                    >
+                      {isActive
+                        ? t('appearance.themes.deleteActive')
+                        : t('appearance.themes.delete')}
+                    </Menu.Item>
+                  ) : null}
+                </Menu.Dropdown>
+              </Menu>
+            </div>
           );
         })}
       </div>
-      <Text size="xs" c="dimmed">
-        {t('appearance.customTheme.hint')}
-      </Text>
+      {editing ? (
+        <ThemeEditor
+          id={editing.id}
+          initial={editing.document}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void invalidate();
+          }}
+        />
+      ) : null}
     </Stack>
+  );
+}
+
+function translatedProblem(
+  t: ReturnType<typeof useI18n>['t'],
+  problem: ThemeProblem,
+): string {
+  const role = (name: string) =>
+    ROLE_LABELS[name] ? t(ROLE_LABELS[name]) : name;
+  const field = problem.path.startsWith('colors.')
+    ? role(problem.path.slice('colors.'.length))
+    : problem.path;
+  switch (problem.code) {
+    case 'low_contrast':
+      return t('appearance.themeEditor.problem.lowContrast', {
+        foreground: role(problem.pair?.foreground ?? ''),
+        background: role(problem.pair?.background ?? ''),
+        ratio: problem.pair?.ratio ?? 0,
+      });
+    case 'unknown_key':
+      return t('appearance.themeEditor.problem.unknownKey', { field });
+    case 'missing_key':
+      return t('appearance.themeEditor.problem.missingKey', { field });
+    case 'invalid_color':
+      return t('appearance.themeEditor.problem.invalidColor', { field });
+    case 'invalid_value':
+      return t('appearance.themeEditor.problem.invalidValue', { field });
+    case 'unknown_font':
+      return t('appearance.themeEditor.problem.unknownFont', { field });
+    case 'invalid_document':
+      return t('appearance.themeEditor.problem.invalidDocument');
+  }
+}
+
+/**
+ * Edit a theme document: its name, appearance, nine colours, base radius
+ * and fonts. Every other token is derived from these; there is no per-token
+ * editor. The platform checks the document on save and the problems show
+ * here, translated.
+ */
+function ThemeEditor({
+  id,
+  initial,
+  onClose,
+  onSaved,
+}: {
+  id?: string;
+  initial: ThemeDocument;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const [document, setDocument] = useState<ThemeDocument>(initial);
+  const [problems, setProblems] = useState<ThemeProblem[]>([]);
+  const save = useMutation({
+    mutationFn: (): Promise<SaveThemeResult> =>
+      saveThemeFn({ data: { id, document } }),
+    onSuccess: (result) => {
+      if (result.ok) onSaved();
+      else setProblems(result.problems);
+    },
+  });
+  const setColor = (key: ThemeColorKey, value: string) =>
+    setDocument((current) => ({
+      ...current,
+      colors: { ...current.colors, [key]: value },
+    }));
+  const fieldError = (path: string) =>
+    problems.some((problem) => problem.path === path) || undefined;
+
+  return (
+    <Modal
+      opened
+      onClose={onClose}
+      size="lg"
+      title={
+        id
+          ? t('appearance.themeEditor.editTitle')
+          : t('appearance.themeEditor.newTitle')
+      }
+    >
+      <Stack gap="md">
+        <Group align="flex-start" gap="lg" wrap="wrap">
+          <Stack gap="sm" style={{ flex: '1 1 260px' }}>
+            <TextInput
+              label={t('appearance.themeEditor.name')}
+              value={document.name ?? ''}
+              maxLength={48}
+              error={fieldError('name')}
+              onChange={(event) => {
+                const name = event.currentTarget.value;
+                setDocument((current) => ({ ...current, name }));
+              }}
+            />
+            <Stack gap={4}>
+              <Text size="sm" fw={700} id="theme-editor-appearance">
+                {t('appearance.themeEditor.appearance')}
+              </Text>
+              <SegmentedControl
+                aria-labelledby="theme-editor-appearance"
+                value={document.appearance}
+                data={[
+                  { value: 'light', label: t('appearance.themes.light') },
+                  { value: 'dark', label: t('appearance.themes.dark') },
+                ]}
+                onChange={(value) =>
+                  setDocument((current) => ({
+                    ...current,
+                    appearance: value as ThemeDocument['appearance'],
+                  }))
+                }
+              />
+            </Stack>
+          </Stack>
+          <ThemePreview document={document} />
+        </Group>
+        <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
+          {THEME_COLOR_KEYS.map((key) => (
+            <ColorInput
+              key={key}
+              label={t(ROLE_LABELS[key])}
+              format="hex"
+              value={document.colors[key]}
+              error={fieldError(`colors.${key}`)}
+              onChange={(value) => setColor(key, value)}
+            />
+          ))}
+        </SimpleGrid>
+        <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="sm">
+          <NumberInput
+            label={t('appearance.themeEditor.radius')}
+            min={0}
+            max={MAX_RADIUS}
+            suffix=" px"
+            value={document.radius}
+            error={fieldError('radius')}
+            onChange={(value) =>
+              setDocument((current) => ({
+                ...current,
+                radius: typeof value === 'number' ? value : current.radius,
+              }))
+            }
+          />
+          {(['sans', 'mono'] as const).map((role) => (
+            <Select
+              key={role}
+              label={t(
+                role === 'sans'
+                  ? 'appearance.themeEditor.fontSans'
+                  : 'appearance.themeEditor.fontMono',
+              )}
+              allowDeselect={false}
+              value={document.fonts[role]}
+              error={fieldError(`fonts.${role}`)}
+              data={BUNDLED_FONTS[role].map((face) => ({
+                value: face,
+                label:
+                  face === 'system'
+                    ? t('appearance.themeEditor.fontSystem')
+                    : face,
+              }))}
+              onChange={(value) =>
+                value &&
+                setDocument((current) => ({
+                  ...current,
+                  fonts: { ...current.fonts, [role]: value },
+                }))
+              }
+            />
+          ))}
+        </SimpleGrid>
+        {problems.length ? (
+          <Alert
+            color="red"
+            variant="light"
+            title={t('appearance.themeEditor.rejected')}
+          >
+            <Stack gap={4}>
+              {problems.map((problem, index) => (
+                // Problems have no ids; their order is stable per answer.
+                // oxlint-disable-next-line react/no-array-index-key
+                <Text key={index} size="sm">
+                  {translatedProblem(t, problem)}
+                </Text>
+              ))}
+            </Stack>
+          </Alert>
+        ) : null}
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button loading={save.isPending} onClick={() => save.mutate()}>
+            {t('appearance.themeEditor.save')}
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 }

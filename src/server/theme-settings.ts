@@ -1,6 +1,16 @@
-/** Server-only: the instance-wide theme every client applies. */
+/**
+ * Server-only: the instance theme every client applies.
+ *
+ * The instance has one active theme, picked from a library: the presets
+ * (`desk`, `desk-dark`) and the custom themes people and the Agent save on
+ * the web or with the CLI (`themes` table). A dark theme is a theme like
+ * any other; clients draw the active theme whatever their device prefers.
+ * An optional accent replaces the active theme's primary.
+ */
+import { asc, eq } from 'drizzle-orm';
+import { ulid } from 'ulid';
 import {
-  THEME_APPEARANCES,
+  DEFAULT_THEME,
   THEME_PRESETS,
   THEME_PRESET_NAMES,
   contrastProblems,
@@ -12,8 +22,6 @@ import {
   type ResolvedTheme,
   type ThemeAppearance,
   type ThemeDocument,
-  type ThemeMode,
-  type ThemePresetName,
   type ThemeProblem,
 } from '../../packages/hatch-design-tokens/src';
 import {
@@ -23,265 +31,230 @@ import {
   isAccentName,
   type AccentName,
 } from '~/ui/theme/accents';
+import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
-import { ThemeValidationError } from '~server/theme-errors';
 import {
+  DEFAULT_UI_THEME,
   getPlatformConfig,
   updatePlatformConfig,
-  DEFAULT_UI_THEME,
-  type ThemeChoiceConfig,
   type UiThemeConfig,
 } from '~server/platform-config';
 import { publishPlatformEvent } from '~server/platform-events';
+import { ThemeValidationError } from '~server/theme-errors';
 
-/** The theme one appearance uses. */
-export type ThemeChoice = (
-  | { appearance: ThemeAppearance; preset: ThemePresetName; name: string }
-  | {
-      appearance: ThemeAppearance;
-      preset: null;
-      custom: ThemeDocument;
-      name: string;
-    }
-) & {
+/** One theme of the library. */
+export type ThemeEntry = {
+  /** A preset's name, or a custom theme's id. */
+  id: string;
+  name: string;
+  source: 'preset' | 'custom';
+  appearance: ThemeAppearance;
   /** The theme's own primary (`#RRGGBB`), shown while no accent is chosen. */
   primary: string;
+  /** The theme document, as saved. */
+  document: ThemeDocument;
+  /**
+   * False for a custom theme that no longer passes the current rules; it is
+   * listed with its problems and cannot be activated until it is fixed.
+   */
+  valid: boolean;
+  problems: ThemeProblem[];
 };
 
 export type ThemeState = {
-  /** null: no accent, each theme's own `primary` shows. */
+  /** null: no accent, the active theme shows its own primary. */
   accent: AccentName | null;
   defaultAccent: AccentName;
   /** Every accent that can be chosen, in token order. */
   accents: { name: AccentName; color: string }[];
   /** Whether the web dock shows each tile's name under it; off by default. */
   dockLabels: boolean;
-  mode: ThemeMode;
-  light: ThemeChoice;
-  dark: ThemeChoice;
-  /**
-   * Appearances whose theme has its own primary that the chosen accent
-   * replaces; empty while no accent is chosen or the colours agree.
-   */
-  accentOverrides: ThemeAppearance[];
+  /** The theme every client draws. */
+  theme: ThemeEntry;
+  /** Whether the chosen accent hides the active theme's own primary. */
+  accentOverridesPrimary: boolean;
 };
 
-function choiceOf(
-  appearance: ThemeAppearance,
-  stored: ThemeChoiceConfig,
-): ThemeChoice {
-  return typeof stored === 'string'
-    ? {
-        appearance,
-        preset: stored,
-        name: THEME_PRESETS[stored].document.name ?? stored,
-        primary: normalizeColor(THEME_PRESETS[stored].document.colors.primary),
-      }
-    : {
-        appearance,
-        preset: null,
-        custom: stored,
-        name: stored.name ?? 'Custom',
-        primary: normalizeColor(stored.colors.primary),
-      };
+const MAX_CUSTOM_THEMES = 100;
+const CUSTOM_NAME = 'Custom theme';
+
+function presetEntry(name: (typeof THEME_PRESET_NAMES)[number]): ThemeEntry {
+  const document = THEME_PRESETS[name].document;
+  return {
+    id: name,
+    name: document.name ?? name,
+    source: 'preset',
+    appearance: document.appearance,
+    primary: normalizeColor(document.colors.primary),
+    document,
+    valid: true,
+    problems: [],
+  };
 }
 
-function themeState(config: UiThemeConfig): ThemeState {
-  const light = choiceOf('light', config.light);
-  const dark = choiceOf('dark', config.dark);
-  const accent = accentColor(config.accent);
+type ThemeRow = typeof schema.themes.$inferSelect;
+
+/** A stored custom theme, checked against the current rules. */
+function customEntry(row: ThemeRow): ThemeEntry {
+  const result = validateThemeDocument(row.document);
+  if (result.ok)
+    return {
+      id: row.id,
+      name: row.name,
+      source: 'custom',
+      appearance: result.document.appearance,
+      primary: normalizeColor(result.document.colors.primary),
+      document: result.document,
+      valid: true,
+      problems: [],
+    };
+  // Kept and listed so it can be fixed or deleted; never drawn.
+  const raw = row.document as Partial<ThemeDocument>;
   return {
-    accent: config.accent,
-    defaultAccent: DEFAULT_ACCENT,
-    accents: ACCENT_NAMES.map((name) => ({ name, color: ACCENT_COLORS[name] })),
-    dockLabels: config.dockLabels,
-    mode: config.mode,
-    light,
-    dark,
-    accentOverrides: accent
-      ? [light, dark]
-          .filter((choice) => choice.primary !== normalizeColor(accent))
-          .map((choice) => choice.appearance)
-      : [],
+    id: row.id,
+    name: row.name,
+    source: 'custom',
+    appearance: raw?.appearance === 'dark' ? 'dark' : 'light',
+    primary: '',
+    document: raw as ThemeDocument,
+    valid: false,
+    problems: result.problems,
   };
+}
+
+async function customRow(id: string): Promise<ThemeRow | undefined> {
+  return db.query.themes.findFirst({ where: { id } });
+}
+
+/** A theme of the library by id, or undefined. */
+export async function findTheme(id: string): Promise<ThemeEntry | undefined> {
+  if (isThemePresetName(id)) return presetEntry(id);
+  const row = await customRow(id);
+  return row ? customEntry(row) : undefined;
 }
 
 function accentColor(accent: AccentName | null): string | null {
   return accent ? ACCENT_COLORS[accent] : null;
 }
 
-/** Every token of one appearance's theme, with the accent applied. */
-export function resolveChoice(
-  stored: ThemeChoiceConfig,
+/** The theme drawn for a stored setting: its theme, or desk if unusable. */
+async function activeEntry(config: UiThemeConfig): Promise<ThemeEntry> {
+  const entry = await findTheme(config.theme);
+  return entry?.valid ? entry : presetEntry(DEFAULT_THEME);
+}
+
+function stateOf(config: UiThemeConfig, theme: ThemeEntry): ThemeState {
+  const accent = accentColor(config.accent);
+  return {
+    accent: config.accent,
+    defaultAccent: DEFAULT_ACCENT,
+    accents: ACCENT_NAMES.map((name) => ({ name, color: ACCENT_COLORS[name] })),
+    dockLabels: config.dockLabels,
+    theme,
+    accentOverridesPrimary:
+      accent !== null && normalizeColor(accent) !== theme.primary,
+  };
+}
+
+/** Every token of a theme, with the accent applied. */
+export function resolveEntry(
+  entry: ThemeEntry,
   accent: AccentName | null,
 ): ResolvedTheme {
-  return typeof stored === 'string'
-    ? resolvePreset(stored, accentColor(accent))
-    : resolveTheme(stored, {
-        name: stored.name ?? 'Custom',
+  return entry.source === 'preset' && isThemePresetName(entry.id)
+    ? resolvePreset(entry.id, accentColor(accent))
+    : resolveTheme(entry.document, {
+        name: entry.name,
         source: 'custom',
         accent: accentColor(accent),
       });
 }
 
 export async function getThemeState(): Promise<ThemeState> {
-  return themeState(await getPlatformConfig('ui.theme'));
-}
-
-/** The theme with each requested appearance resolved. */
-export async function getTheme(resolve: readonly ThemeAppearance[] = []) {
   const config = await getPlatformConfig('ui.theme');
-  return {
-    theme: themeState(config),
-    resolved: resolve.map((appearance) =>
-      resolveChoice(config[appearance], config.accent),
-    ),
-  };
+  return stateOf(config, await activeEntry(config));
 }
 
-/** The appearance a client in `mode` draws, given what its device prefers. */
-export function appearanceFor(
-  mode: ThemeMode,
-  prefers: ThemeAppearance,
-): ThemeAppearance {
-  return mode === 'system' ? prefers : mode;
+/** The theme state, and every token of the active theme when asked. */
+export async function getTheme(
+  options: { resolve?: boolean } = {},
+): Promise<{ theme: ThemeState; resolved: ResolvedTheme | null }> {
+  const config = await getPlatformConfig('ui.theme');
+  const active = await activeEntry(config);
+  return {
+    theme: stateOf(config, active),
+    resolved: options.resolve ? resolveEntry(active, config.accent) : null,
+  };
 }
 
 export type ThemeChange = {
   /** An accent name, or null to clear it. */
   accent?: string | null;
   dockLabels?: boolean;
-  mode?: string;
-  /** Replaces one appearance's theme. */
-  theme?: {
-    appearance: string;
-    preset?: string;
-    /** A custom theme document, checked here. */
-    custom?: unknown;
-  };
+  /** The theme to activate: a preset name or a custom theme's id. */
+  theme?: string;
 };
 
 function badRequest(message: string): AppError {
   return new AppError(message, 400);
 }
 
-/** Check a change and turn it into stored values; throws on any problem. */
-function readChange(change: ThemeChange): {
-  accent?: AccentName | null;
-  dockLabels?: boolean;
-  mode?: ThemeMode;
-  theme?: { appearance: ThemeAppearance; choice: ThemeChoiceConfig };
-} {
+/** Text must stay readable with the accent that will be drawn on a theme. */
+function checkWithAccent(entry: ThemeEntry, accent: AccentName | null): void {
+  if (entry.source === 'preset' || !accent) return;
+  const problems = contrastProblems(resolveEntry(entry, accent)).map(
+    (problem) => ({
+      ...problem,
+      message: `With the ${accent} accent: ${problem.message}`,
+    }),
+  );
+  if (problems.length) throw new ThemeValidationError(problems);
+}
+
+/**
+ * Change the accent, the dock labels or the active theme. Each field left
+ * out keeps its stored value; at least one must be given. Connected clients
+ * are told to re-read the theme.
+ */
+export async function updateTheme(change: ThemeChange): Promise<ThemeState> {
   if (
     change.accent === undefined &&
     change.dockLabels === undefined &&
-    change.mode === undefined &&
     change.theme === undefined
   )
-    throw badRequest(
-      'Give an accent, the dock labels setting, a mode or a theme for an appearance.',
-    );
+    throw badRequest('Give an accent, the dock labels setting or a theme.');
   if (
     change.accent !== undefined &&
     change.accent !== null &&
     !isAccentName(change.accent)
   )
     throw badRequest(`Unknown accent. Use one of: ${ACCENT_NAMES.join(', ')}.`);
-  if (
-    change.mode !== undefined &&
-    !(['light', 'dark', 'system'] as const).includes(change.mode as ThemeMode)
-  )
-    throw badRequest('Unknown mode. Use light, dark or system.');
-
-  let theme:
-    | { appearance: ThemeAppearance; choice: ThemeChoiceConfig }
-    | undefined;
-  if (change.theme) {
-    const { appearance, preset, custom } = change.theme;
-    if (!(THEME_APPEARANCES as readonly string[]).includes(appearance))
-      throw badRequest('Unknown appearance. Use light or dark.');
-    const target = appearance as ThemeAppearance;
-    if ((preset === undefined) === (custom === undefined))
-      throw badRequest('Give exactly one of a preset and a custom theme.');
-    if (preset !== undefined) {
-      if (!isThemePresetName(preset))
-        throw badRequest(
-          `Unknown preset. Use one of: ${THEME_PRESET_NAMES.join(', ')}.`,
-        );
-      if (THEME_PRESETS[preset].document.appearance !== target)
-        throw badRequest(
-          `${preset} is a ${THEME_PRESETS[preset].document.appearance} theme; it cannot be the ${target} theme.`,
-        );
-      theme = { appearance: target, choice: preset };
-    } else {
-      const result = validateThemeDocument(custom);
-      if (!result.ok) throw new ThemeValidationError(result.problems);
-      if (result.document.appearance !== target)
-        throw new ThemeValidationError([
-          {
-            code: 'invalid_value',
-            path: 'appearance',
-            message: `The document's appearance is ${result.document.appearance}; it cannot be the ${target} theme.`,
-          },
-        ]);
-      theme = { appearance: target, choice: result.document };
-    }
+  let next: ThemeEntry | undefined;
+  if (change.theme !== undefined) {
+    next = await findTheme(change.theme);
+    if (!next)
+      throw new AppError(
+        'No theme has this id. List them with hatch theme list.',
+        404,
+        { code: 'theme_not_found' },
+      );
+    if (!next.valid) throw new ThemeValidationError(next.problems);
   }
-  return {
-    ...(change.accent === undefined
-      ? {}
-      : { accent: change.accent as AccentName | null }),
-    ...(change.dockLabels === undefined
-      ? {}
-      : { dockLabels: change.dockLabels }),
-    ...(change.mode === undefined ? {} : { mode: change.mode as ThemeMode }),
-    ...(theme ? { theme } : {}),
-  };
-}
-
-/**
- * Text must stay readable with the accent that will be drawn: a new custom
- * theme under the current accent, or a new accent over each custom theme.
- */
-function checkEffectiveContrast(config: UiThemeConfig): void {
-  const problems: ThemeProblem[] = [];
-  for (const appearance of THEME_APPEARANCES) {
-    const stored = config[appearance];
-    if (typeof stored === 'string') continue;
-    for (const problem of contrastProblems(
-      resolveChoice(stored, config.accent),
-    ))
-      problems.push({
-        ...problem,
-        message: `In the ${appearance} theme with the ${config.accent ?? 'theme'} accent: ${problem.message}`,
-      });
-  }
-  if (problems.length) throw new ThemeValidationError(problems);
-}
-
-/**
- * Change the instance theme. Each field left out keeps its stored value; at
- * least one must be given. Connected clients are told to re-read the theme.
- */
-export async function updateTheme(change: ThemeChange): Promise<ThemeState> {
-  const checked = readChange(change);
+  const current = await getPlatformConfig('ui.theme');
+  const accent =
+    change.accent === undefined
+      ? current.accent
+      : (change.accent as AccentName | null);
+  checkWithAccent(next ?? (await activeEntry(current)), accent);
   // Fields left out keep their latest stored value, even when another change
   // to the theme lands at the same moment.
-  const next = await updatePlatformConfig('ui.theme', (current) => {
-    const value: UiThemeConfig = {
-      accent: checked.accent === undefined ? current.accent : checked.accent,
-      dockLabels: checked.dockLabels ?? current.dockLabels,
-      mode: checked.mode ?? current.mode,
-      light: current.light,
-      dark: current.dark,
-    };
-    if (checked.theme) value[checked.theme.appearance] = checked.theme.choice;
-    if (checked.accent !== undefined || checked.theme)
-      checkEffectiveContrast(value);
-    return value;
-  });
-  publishThemeUpdated(next);
-  return themeState(next);
+  const config = await updatePlatformConfig('ui.theme', (stored) => ({
+    accent: change.accent === undefined ? stored.accent : accent,
+    dockLabels: change.dockLabels ?? stored.dockLabels,
+    theme: change.theme ?? stored.theme,
+  }));
+  publishThemeUpdated(config);
+  return stateOf(config, await activeEntry(config));
 }
 
 function publishThemeUpdated(config: UiThemeConfig): void {
@@ -292,17 +265,14 @@ function publishThemeUpdated(config: UiThemeConfig): void {
   });
 }
 
-/**
- * Back to `desk` and `desk-dark`, light mode and no accent (each theme's own
- * primary; `desk`'s is the default accent); keeps dock labels.
- */
+/** Back to `desk` with no accent; keeps dock labels and the library. */
 export async function resetTheme(): Promise<ThemeState> {
-  const next = await updatePlatformConfig('ui.theme', (current) => ({
+  const config = await updatePlatformConfig('ui.theme', (current) => ({
     ...DEFAULT_UI_THEME,
     dockLabels: current.dockLabels,
   }));
-  publishThemeUpdated(next);
-  return themeState(next);
+  publishThemeUpdated(config);
+  return stateOf(config, await activeEntry(config));
 }
 
 /** Choose the accent and keep the other theme settings. */
@@ -310,18 +280,106 @@ export function setThemeAccent(accent: string): Promise<ThemeState> {
   return updateTheme({ accent });
 }
 
-export type ThemePresetInfo = {
-  name: ThemePresetName;
-  appearance: ThemeAppearance;
-  document: ThemeDocument;
-};
+/** The library: presets first, then custom themes, oldest first. */
+export async function listThemes(): Promise<ThemeEntry[]> {
+  const rows = await db
+    .select()
+    .from(schema.themes)
+    .orderBy(asc(schema.themes.createdAt), asc(schema.themes.id));
+  return [...THEME_PRESET_NAMES.map(presetEntry), ...rows.map(customEntry)];
+}
 
-export function listThemePresets(): ThemePresetInfo[] {
-  return THEME_PRESET_NAMES.map((name) => ({
-    name,
-    appearance: THEME_PRESETS[name].document.appearance,
-    document: THEME_PRESETS[name].document,
-  }));
+function checkedDocument(document: unknown): ThemeDocument {
+  const result = validateThemeDocument(document);
+  if (!result.ok) throw new ThemeValidationError(result.problems);
+  return result.document;
+}
+
+/** Save a new custom theme. It is not activated. */
+export async function createTheme(document: unknown): Promise<ThemeEntry> {
+  const checked = checkedDocument(document);
+  const count = await db.$count(schema.themes);
+  if (count >= MAX_CUSTOM_THEMES)
+    throw new AppError(
+      `An instance keeps at most ${MAX_CUSTOM_THEMES} custom themes; delete one first.`,
+      409,
+      { code: 'theme_library_full', params: { max: MAX_CUSTOM_THEMES } },
+    );
+  const [row] = await db
+    .insert(schema.themes)
+    .values({
+      id: ulid().toLowerCase(),
+      name: checked.name ?? CUSTOM_NAME,
+      document: checked,
+    })
+    .returning();
+  publishThemeUpdated(await getPlatformConfig('ui.theme'));
+  return customEntry(row);
+}
+
+function customOnly(id: string): void {
+  if (isThemePresetName(id))
+    throw new AppError(
+      'Presets cannot be changed or deleted; save a copy as a custom theme instead.',
+      400,
+      { code: 'theme_preset_readonly' },
+    );
+}
+
+/**
+ * Replace a custom theme's document whole. The active theme is also checked
+ * with the chosen accent, since it is drawn with it.
+ */
+export async function updateCustomTheme(
+  id: string,
+  document: unknown,
+): Promise<ThemeEntry> {
+  customOnly(id);
+  const checked = checkedDocument(document);
+  const existing = await customRow(id);
+  if (!existing)
+    throw new AppError('No custom theme has this id.', 404, {
+      code: 'theme_not_found',
+    });
+  const config = await getPlatformConfig('ui.theme');
+  const name = checked.name ?? CUSTOM_NAME;
+  if (config.theme === id)
+    checkWithAccent(
+      customEntry({ ...existing, name, document: checked }),
+      config.accent,
+    );
+  const [row] = await db
+    .update(schema.themes)
+    .set({ name, document: checked, updatedAt: new Date() })
+    .where(eq(schema.themes.id, id))
+    .returning();
+  if (!row)
+    throw new AppError('No custom theme has this id.', 404, {
+      code: 'theme_not_found',
+    });
+  publishThemeUpdated(config);
+  return customEntry(row);
+}
+
+/** Delete a custom theme. The active theme cannot be deleted. */
+export async function deleteTheme(id: string): Promise<void> {
+  customOnly(id);
+  const config = await getPlatformConfig('ui.theme');
+  if (config.theme === id)
+    throw new AppError(
+      'This theme is active. Activate another theme before deleting it.',
+      409,
+      { code: 'theme_active' },
+    );
+  const deleted = await db
+    .delete(schema.themes)
+    .where(eq(schema.themes.id, id))
+    .returning({ id: schema.themes.id });
+  if (!deleted.length)
+    throw new AppError('No custom theme has this id.', 404, {
+      code: 'theme_not_found',
+    });
+  publishThemeUpdated(config);
 }
 
 /** Check a document without saving it; optionally with the current accent. */
@@ -343,6 +401,10 @@ export async function validateTheme(
   return {
     ok: true,
     problems: [],
-    resolved: resolveChoice(result.document, accent),
+    resolved: resolveTheme(result.document, {
+      name: result.document.name ?? CUSTOM_NAME,
+      source: 'custom',
+      accent: accentColor(accent),
+    }),
   };
 }

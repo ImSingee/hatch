@@ -1,6 +1,6 @@
 import { createContext, useContext, type PropsWithChildren } from 'react';
+import { BUILT_IN_THEME } from '../../../packages/hatch-design-tokens/src';
 import {
-  BUILT_IN_THEMES,
   mobileThemeOf,
   type Accent,
   type MobileTheme,
@@ -8,9 +8,7 @@ import {
   type Status,
 } from './theme';
 
-const ThemeContext = createContext<MobileTheme>(
-  mobileThemeOf(BUILT_IN_THEMES.light),
-);
+const ThemeContext = createContext<MobileTheme>(mobileThemeOf(BUILT_IN_THEME));
 
 /**
  * The single place the theme enters the app. Every colour, radius, font and

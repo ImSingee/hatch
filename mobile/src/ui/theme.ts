@@ -5,11 +5,9 @@
 // motion) are read from the shared token file.
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import {
-  BUILT_IN_THEME,
   colorRamp,
   mix,
   pressedShade,
-  resolvePreset,
   type ResolvedTheme,
   type ThemeAppearance,
 } from '../../../packages/hatch-design-tokens/src';
@@ -139,12 +137,6 @@ export function mobileThemeOf(theme: ResolvedTheme): MobileTheme {
   }
   return mobile;
 }
-
-/** Drawn before an instance has answered, and while signed out. */
-export const BUILT_IN_THEMES: Record<ThemeAppearance, ResolvedTheme> = {
-  light: BUILT_IN_THEME,
-  dark: resolvePreset('desk-dark'),
-};
 
 /** Fills for monogram and row tiles; every one carries white text at AA. */
 export const tiles: readonly string[] = tokens.tiles;

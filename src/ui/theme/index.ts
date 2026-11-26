@@ -13,11 +13,9 @@ export type { AccentName } from './accents';
 export { applyAccent, useAccent } from './accent-store';
 export {
   THEME_BOOT_SCRIPT,
-  activeAppearance,
   applyDocumentTheme,
   applyThemeState,
   useActiveTheme,
-  usePrefersDark,
   useSurfaceTheme,
   useThemeState,
 } from './theme-store';
