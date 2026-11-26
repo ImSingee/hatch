@@ -21,7 +21,8 @@ const {
 const { subscribePlatformEvents } = await import('./platform-events');
 
 const { readDashboards } = await import('./workspace-read');
-const { createDashboard } = await import('./dashboard-service');
+const { createDashboard, deleteDashboard } =
+  await import('./dashboard-service');
 
 const U = 'user-a';
 const OTHER = 'user-b';
@@ -296,6 +297,11 @@ describe('Per-user pins', () => {
       { id: 'd3', name: 'Later', createdAt: new Date('2026-01-03') },
     ]);
     // A user migrated from the instance-wide pins keeps exactly their rows.
+    await db.insert(schema.userPreferences).values({
+      userId: OTHER,
+      homepage: { kind: 'page', page: 'dashboard' },
+      dashboardDefaultsApplied: true,
+    });
     await db.insert(schema.userDashboards).values([
       { userId: OTHER, dashboardId: 'd1', pinned: false, sortOrder: 0 },
       { userId: OTHER, dashboardId: 'd2', pinned: true, sortOrder: 1 },
@@ -325,6 +331,26 @@ describe('Per-user pins', () => {
         where: { userId: { notIn: [U, OTHER] } },
       }),
     ).toEqual([]);
+  });
+
+  it('never pins a default again once the first visit pinned one', async () => {
+    await db
+      .insert(schema.dashboards)
+      .values({ id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') });
+    const pinned = async (userId: string) =>
+      (await readDashboards(userId)).filter((d) => d.pinned).map((d) => d.id);
+    expect(await pinned(U)).toEqual(['d1']);
+    await setDashboardPinned(U, 'd1', false);
+    // Another user replaces the only dashboard, which removes all of U's rows.
+    const replacement = await createDashboard(OTHER, { name: 'Ops' });
+    await deleteDashboard('d1');
+    expect(
+      await db.query.userDashboards.findMany({ where: { userId: U } }),
+    ).toEqual([]);
+    expect(await pinned(U)).toEqual([]);
+    await reorderDashboards(U, [replacement.id]);
+    expect(await pinned(U)).toEqual([]);
+    expect(await pinned(OTHER)).toEqual([replacement.id]);
   });
 
   it('pins a new dashboard for its creator only, at the end of their order', async () => {

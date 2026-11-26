@@ -1,5 +1,6 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { db, schema, type TX } from '~/db';
+import { DEFAULT_HOMEPAGE } from '~/homepage';
 
 export type Dashboard = {
   id: string;
@@ -24,21 +25,39 @@ async function ensureDefaultDashboard(): Promise<void> {
 }
 
 /**
- * A user who has no dashboard rows yet (a new user) starts with one pinned
- * dashboard: the default one, first in the order they see (the oldest, which
- * the homepage also falls back to). Once they have rows this does nothing,
- * so unpinning it sticks. Concurrent first visits insert the same row once.
+ * A new user's first visit pins one dashboard: the default one, first in the
+ * order they see (the oldest, which the homepage also falls back to). It
+ * happens once per user, when `dashboardDefaultsApplied` turns true, so
+ * unpinning it sticks and losing every dashboard row later (the dashboards
+ * were deleted) never pins another one. Concurrent first visits flip the flag
+ * once: the later upsert finds it already set and pins nothing.
  */
 export async function pinDefaultDashboardForNewUser(
-  database: Pick<TX, 'execute'>,
+  tx: TX,
   userId: string,
 ): Promise<void> {
+  const preferences = schema.userPreferences;
+  const flipped = await tx
+    .insert(preferences)
+    // A first preference row needs a homepage; the default is what the user
+    // already gets without one.
+    .values({
+      userId,
+      homepage: DEFAULT_HOMEPAGE,
+      dashboardDefaultsApplied: true,
+    })
+    .onConflictDoUpdate({
+      target: preferences.userId,
+      set: { dashboardDefaultsApplied: true },
+      setWhere: eq(preferences.dashboardDefaultsApplied, false),
+    })
+    .returning({ userId: preferences.userId });
+  if (!flipped.length) return;
   const view = schema.userDashboards;
-  await database.execute(sql`
+  await tx.execute(sql`
     insert into ${view} (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}, ${sql.identifier('pinned')}, ${sql.identifier('sort_order')})
     select ${userId}::text, ${schema.dashboards.id}, true, 0
     from ${schema.dashboards}
-    where not exists (select 1 from ${view} where ${view.userId} = ${userId}::text)
     order by ${schema.dashboards.createdAt} asc, ${schema.dashboards.id} asc
     limit 1
     on conflict do nothing
@@ -82,7 +101,8 @@ export async function readDashboards(
   userId: string | null,
 ): Promise<Dashboard[]> {
   await ensureDefaultDashboard();
-  if (userId) await pinDefaultDashboardForNewUser(db, userId);
+  if (userId)
+    await db.transaction((tx) => pinDefaultDashboardForNewUser(tx, userId));
   const rows = await readUserDashboards(db, userId);
   return rows.map((d) => ({
     id: d.id,

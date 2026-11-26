@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "ef147010-1fe2-4a25-becc-115c2d44a2d8",
+  "id": "1a19c4cf-0890-4c3b-86cc-984115506a57",
   "prevIds": ["bbaadf53-e782-4955-9ec0-f7f9760398ba"],
   "footprints": [
     {
@@ -50,6 +50,21 @@
         "s|col|public.user_preferences.dock_labels",
         "n|col|public.user_preferences.dock_labels",
         "e|col|public.user_preferences.dock_labels"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "user_preferences",
+        "dashboard_defaults_applied"
+      ],
+      "writes": [
+        "s|col|public.user_preferences.dashboard_defaults_applied",
+        "n|col|public.user_preferences.dashboard_defaults_applied",
+        "e|col|public.user_preferences.dashboard_defaults_applied"
       ],
       "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
     },
@@ -269,6 +284,22 @@
         "notNull": false,
         "dimensions": 0,
         "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "dashboard_defaults_applied",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
         "generated": null,
         "identity": null,
         "entityType": "columns"

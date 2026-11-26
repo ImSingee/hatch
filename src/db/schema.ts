@@ -1007,6 +1007,14 @@ export const userPreferences = snakeCase.table(
     accent: text(),
     /** Whether the web dock shows tile names; null keeps the default (off). */
     dockLabels: boolean('dock_labels'),
+    /**
+     * Whether the user's first visit already pinned the default dashboard.
+     * Kept apart from `user_dashboards` so that losing those rows (their
+     * dashboards were deleted) never makes the user look new again.
+     */
+    dashboardDefaultsApplied: boolean('dashboard_defaults_applied')
+      .notNull()
+      .default(false),
     updatedAt,
   },
   () => [

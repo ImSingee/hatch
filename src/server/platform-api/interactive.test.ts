@@ -1618,6 +1618,10 @@ describe('session workspace navigation', () => {
   it('uses the same default dashboard when web and native initialize an empty instance concurrently', async () => {
     await db.delete(schema.dashboards);
     await db.delete(schema.apps);
+    // As a new user, whose first visit pins the default dashboard.
+    await db
+      .delete(schema.userPreferences)
+      .where(eq(schema.userPreferences.userId, sessionUserId));
     const { readDashboards } = await import('../workspace-read');
     const [web, native, repeated] = await Promise.all([
       readDashboards(sessionUserId),

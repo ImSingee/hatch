@@ -204,7 +204,7 @@ function scenarios(open: () => Database | Promise<Database>) {
         expect(
           await database.rows(
             `SELECT user_id, homepage, agent_message_mode, language, accent,
-                    dock_labels
+                    dock_labels, dashboard_defaults_applied
              FROM user_preferences ORDER BY user_id`,
           ),
         ).toEqual([
@@ -215,6 +215,7 @@ function scenarios(open: () => Database | Promise<Database>) {
             language: null,
             accent: 'teal',
             dock_labels: true,
+            dashboard_defaults_applied: true,
           },
           // An existing row keeps its other preferences.
           {
@@ -224,6 +225,7 @@ function scenarios(open: () => Database | Promise<Database>) {
             language: 'zh-CN',
             accent: 'teal',
             dock_labels: true,
+            dashboard_defaults_applied: true,
           },
         ]);
         expect(
@@ -252,6 +254,38 @@ function scenarios(open: () => Database | Promise<Database>) {
         expect(await themesOf(database)).toEqual([
           { user_id: 'u-a', accent: 'teal', dock_labels: null },
           { user_id: 'u-b', accent: 'teal', dock_labels: null },
+        ]);
+      },
+    ));
+
+  it('marks users who already see dashboards as past their first visit', () =>
+    migrate(
+      open,
+      `${USERS}
+      INSERT INTO dashboards (id, name, pinned, sort_order)
+      VALUES ('d-home', 'Home', false, 0);`,
+      async (database) => {
+        // Without a theme they still need a row, with the default homepage.
+        expect(
+          await database.rows(
+            `SELECT user_id, homepage, accent, dashboard_defaults_applied
+             FROM user_preferences ORDER BY user_id`,
+          ),
+        ).toEqual(
+          ['u-a', 'u-b'].map((user_id) => ({
+            user_id,
+            homepage: { kind: 'page', page: 'dashboard' },
+            accent: null,
+            dashboard_defaults_applied: true,
+          })),
+        );
+        expect(
+          await database.rows(
+            'SELECT user_id, pinned FROM user_dashboards ORDER BY user_id',
+          ),
+        ).toEqual([
+          { user_id: 'u-a', pinned: false },
+          { user_id: 'u-b', pinned: false },
         ]);
       },
     ));
@@ -290,11 +324,15 @@ function scenarios(open: () => Database | Promise<Database>) {
     }));
 }
 
-describe('per-user theme and pins migration on PGlite', () => {
-  scenarios(pglite);
-});
+// Each scenario applies every migration, over the network on PostgreSQL.
+describe(
+  'per-user theme and pins migration on PGlite',
+  { timeout: 60_000 },
+  () => {
+    scenarios(pglite);
+  },
+);
 
-// Each scenario applies every migration over the network.
 describe.skipIf(!adminUrl)(
   'per-user theme and pins migration on PostgreSQL',
   { timeout: 60_000 },

@@ -7,6 +7,7 @@
 -- as the old reader fell back per field; the service drops a retired accent.
 ALTER TABLE "user_preferences" ADD COLUMN "accent" text;--> statement-breakpoint
 ALTER TABLE "user_preferences" ADD COLUMN "dock_labels" boolean;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "dashboard_defaults_applied" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 INSERT INTO "user_preferences" ("user_id", "homepage", "accent", "dock_labels")
 SELECT
   "user"."id",
@@ -71,4 +72,15 @@ SELECT "user"."id", "dashboards"."id", "dashboards"."pinned", "dashboards"."sort
 FROM "dashboards"
 CROSS JOIN "user";--> statement-breakpoint
 ALTER TABLE "dashboards" DROP COLUMN "pinned";--> statement-breakpoint
-ALTER TABLE "dashboards" DROP COLUMN "sort_order";
+ALTER TABLE "dashboards" DROP COLUMN "sort_order";--> statement-breakpoint
+
+-- 4. A new user's first visit pins the default dashboard once. Users who
+-- already see dashboards are past that visit: they keep exactly the pins
+-- copied above. Users without a preference row get one, with the default
+-- homepage. On an instance without dashboards, the first visit still creates
+-- the default one pinned, as it did before.
+INSERT INTO "user_preferences" ("user_id", "homepage", "dashboard_defaults_applied")
+SELECT "user"."id", '{"kind":"page","page":"dashboard"}'::jsonb, true
+FROM "user"
+WHERE EXISTS (SELECT 1 FROM "dashboards")
+ON CONFLICT ("user_id") DO UPDATE SET "dashboard_defaults_applied" = true;
