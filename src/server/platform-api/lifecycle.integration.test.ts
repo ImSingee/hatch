@@ -675,8 +675,8 @@ describe.runIf(Boolean(databaseUrl))(
         expect(masterCommit(id)).toBe(stable);
         git(dir, 'checkout', '-f', 'master');
         // A builder that grants the release more than the commit declares
-        // (here --allow-all) is refused: the platform evaluates the commit's
-        // manifest itself.
+        // (here the KV capability) is refused: the platform evaluates the
+        // commit's manifest itself.
         const forged = await prepareDeploy(
           collection,
           id,
@@ -686,17 +686,20 @@ describe.runIf(Boolean(databaseUrl))(
           async (packageDir) => {
             const file = path.join(packageDir, 'build.json');
             const pkg = JSON.parse(await readFile(file, 'utf8'));
-            pkg.manifest.backend = {
-              ...pkg.manifest.backend,
-              extraPermissions: ['--allow-all'],
+            // A capability the commit does not declare.
+            pkg.manifest.capabilities = {
+              ...pkg.manifest.capabilities,
+              kv: true,
             };
             await writeFile(file, JSON.stringify(pkg));
           },
         );
         const refused = await forged.upload!();
         expect(refused.response.status).toBe(409);
-        expect(refused.data.code).toBe('app_build_invalid');
-        expect(refused.data.message).toMatch(/is not the one commit/);
+        expect(refused.data).toMatchObject({
+          code: 'app_build_invalid',
+          message: expect.stringMatching(/is not the one commit/),
+        });
         const deployments = await database.db.query.deployments.findMany({
           where: { appId: id },
         });
@@ -1080,7 +1083,15 @@ describe.runIf(Boolean(databaseUrl))(
     }, 30000);
 
     it('runs installed-style CLI lifecycles and SDK preparation for session, API key and Run credentials', async () => {
-      for (const headers of [credentials[3], credentials[1], credentials[2]]) {
+      for (const pick of [3, 1, 2]) {
+        // Native builds make each round long: the Run round gets a JWT
+        // minted when it starts, not one older than its lifetime.
+        if (pick === 2) {
+          const minted = await mint();
+          assert.equal(minted.response.status, 200);
+          credentials[2] = bearer(minted.data.token);
+        }
+        const headers = credentials[pick];
         const verified = await cliInvoke(['auth', 'status'], headers, {
           HOME: path.join(root, 'no-cli-config'),
         });
