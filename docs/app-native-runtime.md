@@ -5,8 +5,7 @@ frontend is NSH TSX ([nsh.dev](https://nsh.dev)) instead of a React page; the
 backend, proto, Data Tables, widgets and the rest of the manifest are the same
 as for a `web` App. This document is the contract for anyone writing a shell
 that runs these Apps (the web player today; the iOS, Android and macOS shells
-later) and for the UI library that Apps import. The plan behind it is
-[native-app-ui-plan.md](native-app-ui-plan.md).
+later) and for the UI library that Apps import.
 
 ## Manifest
 
@@ -257,9 +256,9 @@ the bridge to authorize what web App code can reach. The grant is exactly these 
   `/api/app/<id>/data/*` with the deployment header.
 - A call cannot be cancelled once sent; it ends with its answer or its
   `host.call` timeout. `hatch.data.events` waits up to 25 s for a change and
-  answers `events: []` if none came; while the App is hidden it answers
-  `events: []` after the wait without a request, and the App's cursor makes it
-  catch up when shown. `@hatch/app/native` treats an empty answer that comes
+  answers `events: []` if none came, whether or not the App is shown (the Desk
+  stops an App that waits in the background too long instead).
+  `@hatch/app/native` treats an empty answer that comes
   back within a second (an empty proxy response) as a dropped stream, so the
   Data Table watch backs off before polling again.
 - Events the shell sends (`player.hostEvent` on the web): `hatch.theme`

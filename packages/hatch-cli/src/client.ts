@@ -593,6 +593,11 @@ export function cliClient(transport: Transport) {
   ): { agentMessageMode: string } => ({
     agentMessageMode: required(value).messageMode,
   });
+  const deskPreferences = (
+    value: { backgroundAppMinutes: number } | undefined,
+  ): { backgroundAppMinutes: number } => ({
+    backgroundAppMinutes: required(value).backgroundAppMinutes,
+  });
   return {
     dashboards: {
       list: async (page: { limit: number; cursor?: string }) => {
@@ -925,18 +930,62 @@ export function cliClient(transport: Transport) {
       },
     },
     preferences: {
-      get: async () =>
-        agentPreferences(
+      // One DTO for all of the caller's preferences, from both services.
+      get: async () => ({
+        ...agentPreferences(
           (await preferences.getAgentPreferences({})).preferences,
         ),
-      update: async (input: { agentMessageMode: string }) =>
-        agentPreferences(
-          (
-            await preferences.updateAgentPreferences({
-              messageMode: input.agentMessageMode,
-            })
-          ).preferences,
+        ...deskPreferences(
+          (await preferences.getDeskPreferences({})).preferences,
         ),
+      }),
+      update: async (input: {
+        agentMessageMode?: string;
+        backgroundAppMinutes?: number;
+      }) => {
+        const agent =
+          input.agentMessageMode === undefined
+            ? (await preferences.getAgentPreferences({})).preferences
+            : (
+                await preferences.updateAgentPreferences({
+                  messageMode: input.agentMessageMode,
+                })
+              ).preferences;
+        let desk;
+        try {
+          desk =
+            input.backgroundAppMinutes === undefined
+              ? (await preferences.getDeskPreferences({})).preferences
+              : (
+                  await preferences.updateDeskPreferences({
+                    backgroundAppMinutes: input.backgroundAppMinutes,
+                  })
+                ).preferences;
+        } catch (error) {
+          if (input.agentMessageMode === undefined) throw error;
+          // The agent preference is already saved: say so, keeping the
+          // failure's own code and exit status. Whether the background time
+          // was saved is known only when the platform refused it or the
+          // request never left; otherwise (a timeout, a dropped connection)
+          // it may have been.
+          const failure = publicError(error);
+          const desk =
+            input.backgroundAppMinutes === undefined
+              ? 'reading the background time failed.'
+              : failure.code === 'network_error' ||
+                  (failure.httpStatus !== undefined && failure.httpStatus < 500)
+                ? 'backgroundAppMinutes was not set.'
+                : 'whether backgroundAppMinutes was set is unknown; read it with hatch preferences get.';
+          throw new CliError(
+            failure.code,
+            `${failure.message} agentMessageMode was already set; ${desk}`,
+            failure.exitCode,
+            failure.httpStatus,
+            { applied: agentPreferences(agent) },
+          );
+        }
+        return { ...agentPreferences(agent), ...deskPreferences(desk) };
+      },
     },
     images: {
       models: async (page: { limit: number; cursor?: string }) => {

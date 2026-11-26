@@ -656,16 +656,34 @@ describe.runIf(Boolean(databaseUrl))(
       const leased = await start('expired-lease');
       await ready(leased.label);
       const leaseToken = await getFresh(leased.label);
-      await database.db
-        .update(database.schema.agentRuns)
-        .set({ leaseExpiresAt: new Date(0) })
-        .where(eq(database.schema.agentRuns.id, leased.runId));
-      expect((await status(leaseToken)).response.ok).toBe(false);
       const lc = captures.get(leased.label)!;
-      expect(
-        (await json(lc.endpoint, {}, { authorization: `Bearer ${lc.key}` }))
-          .response.status,
-      ).toBe(503);
+      // Every event and heartbeat from the Run's own Runner renews its lease,
+      // and the command's last output may still be in flight here. Expire the
+      // lease, check both authorities, and accept the result only if the lease
+      // stayed expired throughout; otherwise a renewal won the race, so retry.
+      const expiredLease = async () => {
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          await database.db
+            .update(database.schema.agentRuns)
+            .set({ leaseExpiresAt: new Date(0) })
+            .where(eq(database.schema.agentRuns.id, leased.runId));
+          const publicAuthority = (await status(leaseToken)).response.ok;
+          const renewal = (
+            await json(lc.endpoint, {}, { authorization: `Bearer ${lc.key}` })
+          ).response.status;
+          const run = await database.db.query.agentRuns.findFirst({
+            where: { id: leased.runId },
+            columns: { leaseExpiresAt: true },
+          });
+          if (run?.leaseExpiresAt?.getTime() === 0)
+            return { publicAuthority, renewal };
+        }
+        throw new Error('The expired lease kept being renewed.');
+      };
+      expect(await expiredLease()).toEqual({
+        publicAuthority: false,
+        renewal: 503,
+      });
       await json(
         `${origin}/api/agent/runs/${leased.runId}/cancel`,
         {},

@@ -10,9 +10,16 @@ export type AgentMessageMode = (typeof AGENT_MESSAGE_MODES)[number];
 type Flags = Record<string, string | boolean | undefined>;
 const invalid = (message: string) => new CliError('invalid_arguments', message);
 
+export const MIN_BACKGROUND_APP_MINUTES = 1;
+export const MAX_BACKGROUND_APP_MINUTES = 1440;
+
 export type PreferencesCommand =
   | { kind: 'get' }
-  | { kind: 'set'; agentMessageMode: AgentMessageMode };
+  | {
+      kind: 'set';
+      agentMessageMode?: AgentMessageMode;
+      backgroundAppMinutes?: number;
+    };
 
 const GLOBALS = {
   json: { type: 'boolean' },
@@ -37,7 +44,10 @@ export function parsePreferencesCommand(
       options: {
         ...GLOBALS,
         ...(operation === 'set'
-          ? { 'agent-message-mode': { type: 'string' } }
+          ? {
+              'agent-message-mode': { type: 'string' },
+              'background-app-minutes': { type: 'string' },
+            }
           : {}),
       },
       allowPositionals: true,
@@ -50,23 +60,42 @@ export function parsePreferencesCommand(
     throw invalid('This command takes no positional arguments.');
   const flags = parsed.values as Flags;
   if (operation === 'get') return { command: { kind: 'get' }, flags };
-  const modes = new Set(
-    (parsed.tokens ?? []).flatMap((token) =>
-      token.kind === 'option' && token.name === 'agent-message-mode'
-        ? [token.value]
-        : [],
-    ),
-  );
-  if (modes.size > 1) throw invalid('Supply --agent-message-mode only once.');
+  const given = (name: string) =>
+    (parsed.tokens ?? []).filter(
+      (token) => token.kind === 'option' && token.name === name,
+    ).length;
+  if (given('agent-message-mode') > 1)
+    throw invalid('Supply --agent-message-mode only once.');
+  if (given('background-app-minutes') > 1)
+    throw invalid('Supply --background-app-minutes only once.');
   const mode = flags['agent-message-mode'];
-  if (mode === undefined)
-    throw invalid('Supply --agent-message-mode queue|steer.');
-  if (!(AGENT_MESSAGE_MODES as readonly unknown[]).includes(mode))
-    throw invalid('--agent-message-mode must be queue or steer.');
-  return {
-    command: { kind: 'set', agentMessageMode: mode as AgentMessageMode },
-    flags,
+  const minutes = flags['background-app-minutes'];
+  if (mode === undefined && minutes === undefined)
+    throw invalid(
+      'Supply --agent-message-mode queue|steer and/or --background-app-minutes <minutes>.',
+    );
+  const command: Extract<PreferencesCommand, { kind: 'set' }> = {
+    kind: 'set',
   };
+  if (mode !== undefined) {
+    if (!(AGENT_MESSAGE_MODES as readonly unknown[]).includes(mode))
+      throw invalid('--agent-message-mode must be queue or steer.');
+    command.agentMessageMode = mode as AgentMessageMode;
+  }
+  if (minutes !== undefined) {
+    const value = typeof minutes === 'string' ? Number(minutes) : Number.NaN;
+    if (
+      typeof minutes !== 'string' ||
+      !/^\d+$/.test(minutes) ||
+      value < MIN_BACKGROUND_APP_MINUTES ||
+      value > MAX_BACKGROUND_APP_MINUTES
+    )
+      throw invalid(
+        `--background-app-minutes must be a whole number from ${MIN_BACKGROUND_APP_MINUTES} to ${MAX_BACKGROUND_APP_MINUTES}.`,
+      );
+    command.backgroundAppMinutes = value;
+  }
+  return { command, flags };
 }
 
 export async function runPreferences(
@@ -98,6 +127,7 @@ export async function runPreferences(
       ? await client.preferences.get()
       : await client.preferences.update({
           agentMessageMode: command.agentMessageMode,
+          backgroundAppMinutes: command.backgroundAppMinutes,
         });
   process.stdout.write(
     `${JSON.stringify(result, null, flags.json ? undefined : 2)}\n`,

@@ -65,6 +65,10 @@ import { associateAgentSessionApp } from '~server/agent-session-apps';
 import { WorkspaceService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/workspace_pb';
 import { readWorkspace } from '~server/workspace-read';
 import { ImageService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/image_pb';
+import {
+  readDeskPreferences,
+  updateDeskPreferences,
+} from '~server/desk-preferences';
 import { PreferenceService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/preference_pb';
 import {
   readAgentPreferences,
@@ -738,6 +742,17 @@ export function registerPlatformApi(
         input.messageMode === undefined
           ? {}
           : { messageMode: input.messageMode as 'queue' | 'steer' },
+      ),
+    }),
+    getDeskPreferences: async (_input, context) => ({
+      preferences: await readDeskPreferences(await preferenceUserId(context)),
+    }),
+    updateDeskPreferences: async (input, context) => ({
+      preferences: await updateDeskPreferences(
+        await preferenceUserId(context),
+        input.backgroundAppMinutes === undefined
+          ? {}
+          : { backgroundAppMinutes: input.backgroundAppMinutes },
       ),
     }),
   });

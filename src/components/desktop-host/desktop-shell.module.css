@@ -227,6 +227,8 @@
 }
 
 .stage {
+  /* Holds the windows of running Apps that wait, at the stage's size. */
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;

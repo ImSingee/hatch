@@ -54,6 +54,7 @@ import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import { APP_SLUG_MAX_LENGTH } from '~/app-identity';
 import { useI18n } from '~i18n';
+import { useOptionalAppSessionStore } from '~components/desk/app-sessions';
 import { DeskWindow } from '~components/desk/window';
 import {
   Column,
@@ -106,6 +107,7 @@ function AppDetailPage() {
   const router = useRouter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const sessions = useOptionalAppSessionStore();
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const isPinned = Boolean(pins?.some((p) => p.appId === app.id));
   const capabilities = app.capabilities ?? null;
@@ -116,25 +118,39 @@ function AppDetailPage() {
   // Source only lands on `master` once an app has been deployed at least once.
   const hasSource = Boolean(app.currentSourceCommit);
 
+  // The App is part of each mutation's variables: this page may show
+  // another App by the time a request settles.
   const archive = useMutation({
-    mutationFn: (archived: boolean) =>
-      archiveAppFn({ data: { id: app.id, archived } }),
-    onSuccess: (_result, archived) => {
+    mutationFn: ({
+      archived,
+      id,
+    }: {
+      archived: boolean;
+      id: string;
+      slug: string;
+    }) => archiveAppFn({ data: { id, archived } }),
+    onSuccess: (_result, { archived, id, slug }) => {
       toast.success(
         archived ? t('appManage.archived') : t('appManage.unarchived'),
       );
       // Archiving stops the backend/cron; restoring re-enables them. The
       // Operations panel reads appOpsQueryOptions, so invalidate it too or it
       // keeps showing pre-toggle running/idle state until a later refetch.
-      void queryClient.invalidateQueries(appOpsQueryOptions(app.id));
+      void queryClient.invalidateQueries(appOpsQueryOptions(id));
+      // An archived App cannot run: stop a running copy rather than leave it
+      // in the dock and beside this page.
+      if (archived) sessions?.quitApp(id, slug);
       void router.invalidate();
     },
   });
 
   const remove = useMutation({
-    mutationFn: () => deleteAppFn({ data: app.id }),
-    onSuccess: () => {
-      toast.success(t('appManage.deleted', { name: app.name }));
+    mutationFn: ({ id }: { id: string; slug: string; name: string }) =>
+      deleteAppFn({ data: id }),
+    onSuccess: (_result, { id, slug, name }) => {
+      toast.success(t('appManage.deleted', { name }));
+      // Stop a running copy: its dock tile would lead to a 404.
+      sessions?.quitApp(id, slug);
       // The delete cascades to sidebar pins, so drop those caches too; otherwise
       // the deleted app lingers in the sidebar / pin menu and links to a 404
       // until the next focus refetch.
@@ -144,7 +160,13 @@ function AppDetailPage() {
       void queryClient.invalidateQueries({
         queryKey: appsQueryOptions.queryKey,
       });
-      void navigate({ to: '/apps' });
+      // Leave only if this page still shows the deleted App.
+      const shown = router.state.location.pathname;
+      const own = router.buildLocation({
+        to: '/app/$appSlug/manage',
+        params: { appSlug: slug },
+      }).pathname;
+      if (shown === own) void navigate({ to: '/apps' });
     },
   });
 
@@ -168,7 +190,8 @@ function AppDetailPage() {
         cancel: t('common.cancel'),
       },
       confirmProps: { color: 'red' },
-      onConfirm: () => remove.mutate(),
+      onConfirm: () =>
+        remove.mutate({ id: app.id, slug: app.slug, name: app.name }),
     });
 
   const sections = useManageSections(
@@ -258,7 +281,13 @@ function AppDetailPage() {
               <IconArchive size={16} />
             )
           }
-          onClick={() => archive.mutate(!isArchived)}
+          onClick={() =>
+            archive.mutate({
+              archived: !isArchived,
+              id: app.id,
+              slug: app.slug,
+            })
+          }
         >
           {isArchived ? t('appManage.unarchive') : t('appManage.archive')}
         </Menu.Item>
