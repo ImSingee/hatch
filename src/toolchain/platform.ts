@@ -50,7 +50,10 @@ function evaluationCommand(args: string[]): [string, string[]] {
  * and the output cap. `tsc` runs on the platform's own Node binary, and so
  * does `node`, which evaluates authored code under the sandbox identity.
  */
-function platformToolchainRunner(root: string): ToolchainRunner {
+function platformToolchainRunner(
+  root: string,
+  signal?: AbortSignal,
+): ToolchainRunner {
   return async ({ tool, args, step, cwd, input, timeoutMs, env }) => {
     const base = subprocessSandboxEnv(env);
     const [command, commandArgs] =
@@ -69,6 +72,7 @@ function platformToolchainRunner(root: string): ToolchainRunner {
           : base,
       input,
       timeoutMs,
+      signal,
     });
   };
 }
@@ -77,11 +81,13 @@ function platformToolchainRunner(root: string): ToolchainRunner {
 export function platformToolchainContext(
   root: string,
   logs: string[],
+  /** Stops every command it runs (each in its own process group). */
+  signal?: AbortSignal,
 ): SourceToolchainContext {
   return {
     root,
     logs,
-    run: platformToolchainRunner(root),
+    run: platformToolchainRunner(root, signal),
     // Set in the image so installs share one store on the cache volume.
     pnpmStoreDir: process.env.HATCH_PNPM_STORE_DIR || undefined,
   };

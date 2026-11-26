@@ -104,16 +104,18 @@ export async function packBuildDirectory(root: string): Promise<Buffer> {
 }
 
 /**
- * Read a file of at most `limit` bytes, checked before reading and on the
- * bytes read (a file that grows meanwhile is still caught).
+ * Read a file of at most `limit` bytes. The buffer is the file's own size
+ * (checked against the limit before reading), plus one byte that catches a
+ * file growing while it is read, which is refused.
  */
 async function readAtMost(file: string, limit: number): Promise<Buffer> {
   const handle = await fs.open(file, 'r');
   try {
-    if ((await handle.stat()).size > limit) {
+    const { size } = await handle.stat();
+    if (size > limit) {
       throw new BuildArchiveError('The build package is too large.');
     }
-    const body = Buffer.alloc(limit + 1);
+    const body = Buffer.alloc(size + 1);
     let read = 0;
     for (;;) {
       const { bytesRead } = await handle.read(
@@ -124,8 +126,10 @@ async function readAtMost(file: string, limit: number): Promise<Buffer> {
       );
       if (bytesRead === 0) break;
       read += bytesRead;
-      if (read > limit) {
-        throw new BuildArchiveError('The build package is too large.');
+      if (read > size) {
+        throw new BuildArchiveError(
+          `A file changed while the build package was packed: ${path.basename(file)}`,
+        );
       }
     }
     return body.subarray(0, read);

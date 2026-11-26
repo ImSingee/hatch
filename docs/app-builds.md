@@ -34,7 +34,7 @@ wakes followers, on every platform instance.
   on the platform. `BUILDER_CONCURRENCY` builds run at once, and several
   Builders can share the queue. A Builder that stops renewing its lease loses
   the build: it is queued again once, then fails with `builder_lost`.
-- **Local**: the CLI builds a `git archive` of the commit with the platform's
+- **Local**: the CLI builds a checkout of the commit with the platform's
   pinned toolchain from `GetSdk.tooling` (installed once into
   `~/.cache/hatch/toolchain`, or `HATCH_BUILD_TOOLCHAIN_DIR` when that
   directory's `node_modules` already holds those versions, as the image's
@@ -70,6 +70,24 @@ backend's boundary at run time stays the Deno sandbox with the permissions
 the platform derived. Where an artifact came from is recorded on the
 deployment (`build_origin`: `builder` or `local`; null for deployments the
 platform built before).
+
+### Who is trusted with a build
+
+Without running the source, the platform cannot prove that a package is what
+the commit builds to. Whoever produces the package is therefore trusted with
+everything the package declares: a manifest is evaluated by the builder, and
+its `extraPermissions` (up to `--allow-all`), RPC service and data schema
+become the deployment's, within the checks above.
+
+- A local build is made by a caller who may deploy the App anyway, with the
+  same authority as every other workspace credential, so it adds no power.
+- The Builder holds `HATCH_BUILDER_TOKEN`, which can claim any queued build
+  and upload its package: it is equivalent to deploying any App. Run Builders
+  only where you would run the platform, keep the token as secret as the
+  platform's own, and never hand it to App code. A build job never receives
+  the token, and the App code it runs uses the sandbox identity. Reaching the
+  token therefore takes an escape from that sandbox, which before Builders
+  happened in the platform process itself.
 
 ## Operating it
 

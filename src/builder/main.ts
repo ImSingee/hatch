@@ -57,10 +57,18 @@ type JobRequest = {
 
 /** `--job <request>`: build one source tree; the parent talks to the platform. */
 async function runJob(file: string): Promise<void> {
+  // The Builder stops a job with SIGTERM: every tool it started (each in its
+  // own process group, outside the job's) is stopped first, then the job
+  // exits; the Builder kills what remains after a grace period.
+  const stopping = new AbortController();
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => stopping.abort());
+  }
   const request = JSON.parse(await readFile(file, 'utf8')) as JobRequest;
   const host = platformBuildHost({
     sdkDigest: request.sdkDigest,
     workDir: request.workDir,
+    signal: stopping.signal,
   });
   const toolchainContext = host.toolchainContext;
   host.toolchainContext = (root, logs) => {
@@ -138,6 +146,8 @@ const CALL_TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 15 * 60_000;
 /** How long a stopping Builder lets its builds wind down. */
 const SHUTDOWN_GRACE_MS = 20_000;
+/** How long a stopped job has to stop its tools before it is killed. */
+const JOB_STOP_GRACE_MS = 10_000;
 const LOG_SEND_ATTEMPTS = 3;
 
 type CallInit = RequestInit & {
@@ -361,12 +371,22 @@ async function startBuilder(): Promise<void> {
           stdio: ['ignore', 'pipe', 'pipe'],
         },
       );
-      const kill = () => {
+      const killGroup = () => {
         try {
           if (job.pid) process.kill(-job.pid, 'SIGKILL');
         } catch {
           /* already stopped */
         }
+      };
+      let forced: NodeJS.Timeout | undefined;
+      // Ask the job to stop its tools, then kill what is left of it.
+      const kill = () => {
+        try {
+          job.kill('SIGTERM');
+        } catch {
+          /* already stopped */
+        }
+        forced = setTimeout(killGroup, JOB_STOP_GRACE_MS);
       };
       stop.signal.addEventListener('abort', kill, { once: true });
       let stdout = '';
@@ -385,7 +405,10 @@ async function startBuilder(): Promise<void> {
         job.once('close', () => resolve(null));
       });
       clearInterval(flusher);
+      clearTimeout(forced);
       stop.signal.removeEventListener('abort', kill);
+      // Nothing of the job outlives it.
+      killGroup();
       if (carry) logs.push([carry]);
       await logs.flush();
       if (stop.signal.aborted) {

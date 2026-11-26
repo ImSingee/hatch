@@ -354,11 +354,6 @@ export const appBuilds = snakeCase.table(
     dataMigrationApprovalToken: text('data_migration_approval_token'),
     /** Post a platform notification when it is released or fails. */
     notifyOnFinish: boolean('notify_on_finish').notNull().default(false),
-    /**
-     * Client-chosen id of the create request, so a retried or uncertain
-     * create finds the deployment it made instead of making another.
-     */
-    requestId: text('request_id'),
     /** Builder holding the build, and until when (builder mode). */
     builderId: text('builder_id'),
     leaseExpiresAt: msTimestamp('lease_expires_at'),
@@ -380,9 +375,6 @@ export const appBuilds = snakeCase.table(
   },
   (table) => [
     uniqueIndex('app_builds_app_seq_idx').on(table.appId, table.seq),
-    uniqueIndex('app_builds_app_request_idx')
-      .on(table.appId, table.requestId)
-      .where(sql`${table.requestId} is not null`),
     // One build per App at a time, whatever claims race (see leaseBuild).
     uniqueIndex('app_builds_one_building_idx')
       .on(table.appId)
@@ -411,6 +403,26 @@ export const appBuildLogs = snakeCase.table(
     at: msTimestamp('at').notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.buildId, table.seq] })],
+);
+
+/**
+ * Create requests and the deployment each one got: the one it made, or the
+ * identical build it joined. A retried or uncertain create finds its
+ * deployment by its client-chosen id instead of making another.
+ */
+export const appBuildRequests = snakeCase.table(
+  'app_build_requests',
+  {
+    appId: text('app_id')
+      .notNull()
+      .references(() => apps.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    buildId: ulid('build_id')
+      .notNull()
+      .references(() => appBuilds.id, { onDelete: 'cascade' }),
+    createdAt,
+  },
+  (table) => [primaryKey({ columns: [table.appId, table.requestId] })],
 );
 
 /** ================== app task runs ================== */

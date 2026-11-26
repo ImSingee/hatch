@@ -2,12 +2,18 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "e6d97dda-2bfc-4c04-a426-39f9f12cd89f",
-  "prevIds": ["180a32b9-2ce8-4d77-b3e3-7748d5917356"],
+  "id": "eb135572-0ab7-4179-af94-bce0503c32a6",
+  "prevIds": [
+    "180a32b9-2ce8-4d77-b3e3-7748d5917356"
+  ],
   "footprints": [
     {
       "statementType": "create_table",
-      "statementTarget": ["table", "public", "app_build_logs"],
+      "statementTarget": [
+        "table",
+        "public",
+        "app_build_logs"
+      ],
       "writes": [
         "s|tbl|public.app_build_logs",
         "n|tbl|public.app_build_logs",
@@ -16,11 +22,36 @@
         "n|type|public.app_build_logs",
         "n|rel|public.app_build_logs_pkey"
       ],
-      "reads": ["n|sch|public"]
+      "reads": [
+        "n|sch|public"
+      ]
     },
     {
       "statementType": "create_table",
-      "statementTarget": ["table", "public", "app_builds"],
+      "statementTarget": [
+        "table",
+        "public",
+        "app_build_requests"
+      ],
+      "writes": [
+        "s|tbl|public.app_build_requests",
+        "n|tbl|public.app_build_requests",
+        "e|tbl|public.app_build_requests",
+        "n|rel|public.app_build_requests",
+        "n|type|public.app_build_requests",
+        "n|rel|public.app_build_requests_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "app_builds"
+      ],
       "writes": [
         "s|tbl|public.app_builds",
         "n|tbl|public.app_builds",
@@ -29,27 +60,45 @@
         "n|type|public.app_builds",
         "n|rel|public.app_builds_pkey"
       ],
-      "reads": ["n|sch|public"]
+      "reads": [
+        "n|sch|public"
+      ]
     },
     {
       "statementType": "add_column",
-      "statementTarget": ["column", "public", "deployments", "build_id"],
+      "statementTarget": [
+        "column",
+        "public",
+        "deployments",
+        "build_id"
+      ],
       "writes": [
         "s|col|public.deployments.build_id",
         "n|col|public.deployments.build_id",
         "e|col|public.deployments.build_id"
       ],
-      "reads": ["n|tbl|public.deployments", "n|sch|public"]
+      "reads": [
+        "n|tbl|public.deployments",
+        "n|sch|public"
+      ]
     },
     {
       "statementType": "add_column",
-      "statementTarget": ["column", "public", "deployments", "build_origin"],
+      "statementTarget": [
+        "column",
+        "public",
+        "deployments",
+        "build_origin"
+      ],
       "writes": [
         "s|col|public.deployments.build_origin",
         "n|col|public.deployments.build_origin",
         "e|col|public.deployments.build_origin"
       ],
-      "reads": ["n|tbl|public.deployments", "n|sch|public"]
+      "reads": [
+        "n|tbl|public.deployments",
+        "n|sch|public"
+      ]
     },
     {
       "statementType": "create_index",
@@ -70,27 +119,6 @@
         "n|sch|public",
         "n|col|public.app_builds.app_id",
         "n|col|public.app_builds.seq"
-      ]
-    },
-    {
-      "statementType": "create_index",
-      "statementTarget": [
-        "index",
-        "public",
-        "app_builds",
-        "app_builds_app_request_idx"
-      ],
-      "writes": [
-        "s|idx|public.app_builds_app_request_idx",
-        "n|idx|public.app_builds_app_request_idx",
-        "e|idx|public.app_builds_app_request_idx",
-        "n|rel|public.app_builds_app_request_idx"
-      ],
-      "reads": [
-        "n|tbl|public.app_builds",
-        "n|sch|public",
-        "n|col|public.app_builds.app_id",
-        "n|col|public.app_builds.request_id"
       ]
     },
     {
@@ -157,7 +185,11 @@
     },
     {
       "statementType": "create_fk",
-      "statementTarget": ["table", "public", "app_build_logs"],
+      "statementTarget": [
+        "table",
+        "public",
+        "app_build_logs"
+      ],
       "writes": [
         "s|fk|public.app_build_logs.app_build_logs_build_id_app_builds_id_fkey",
         "n|fk|public.app_build_logs.app_build_logs_build_id_app_builds_id_fkey",
@@ -176,7 +208,57 @@
     },
     {
       "statementType": "create_fk",
-      "statementTarget": ["table", "public", "app_builds"],
+      "statementTarget": [
+        "table",
+        "public",
+        "app_build_requests"
+      ],
+      "writes": [
+        "s|fk|public.app_build_requests.app_build_requests_app_id_apps_id_fkey",
+        "n|fk|public.app_build_requests.app_build_requests_app_id_apps_id_fkey",
+        "e|fk|public.app_build_requests.app_build_requests_app_id_apps_id_fkey",
+        "n|con|public.app_build_requests.app_build_requests_app_id_apps_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.app_build_requests",
+        "n|sch|public",
+        "n|tbl|public.apps",
+        "n|sch|public",
+        "n|col|public.app_build_requests.app_id",
+        "n|col|public.apps.id",
+        "e|uniqueness|public.apps.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "app_build_requests"
+      ],
+      "writes": [
+        "s|fk|public.app_build_requests.app_build_requests_build_id_app_builds_id_fkey",
+        "n|fk|public.app_build_requests.app_build_requests_build_id_app_builds_id_fkey",
+        "e|fk|public.app_build_requests.app_build_requests_build_id_app_builds_id_fkey",
+        "n|con|public.app_build_requests.app_build_requests_build_id_app_builds_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.app_build_requests",
+        "n|sch|public",
+        "n|tbl|public.app_builds",
+        "n|sch|public",
+        "n|col|public.app_build_requests.build_id",
+        "n|col|public.app_builds.id",
+        "e|uniqueness|public.app_builds.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "app_builds"
+      ],
       "writes": [
         "s|fk|public.app_builds.app_builds_app_id_apps_id_fkey",
         "n|fk|public.app_builds.app_builds_app_id_apps_id_fkey",
@@ -200,6 +282,15 @@
       "row": {
         "schema": "public",
         "name": "app_build_logs",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "app_build_requests",
         "isRlsEnabled": false,
         "entityType": "tables"
       }
@@ -284,6 +375,70 @@
         "table": "app_build_logs",
         "name": "at",
         "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "app_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "request_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "build_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "created_at",
+        "type": "timestamp with time zone",
         "typeSchema": null,
         "notNull": true,
         "dimensions": 0,
@@ -496,22 +651,6 @@
         "notNull": true,
         "dimensions": 0,
         "default": "false",
-        "generated": null,
-        "identity": null,
-        "entityType": "columns"
-      }
-    },
-    {
-      "op": "create",
-      "row": {
-        "schema": "public",
-        "table": "app_builds",
-        "name": "request_id",
-        "type": "text",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
         "generated": null,
         "identity": null,
         "entityType": "columns"
@@ -792,36 +931,6 @@
       "row": {
         "schema": "public",
         "table": "app_builds",
-        "name": "app_builds_app_request_idx",
-        "nameExplicit": true,
-        "columns": [
-          {
-            "value": "app_id",
-            "isExpression": false,
-            "asc": true,
-            "nullsFirst": false,
-            "opclass": null
-          },
-          {
-            "value": "request_id",
-            "isExpression": false,
-            "asc": true,
-            "nullsFirst": false,
-            "opclass": null
-          }
-        ],
-        "isUnique": true,
-        "where": "\"request_id\" is not null",
-        "with": "",
-        "method": "btree",
-        "entityType": "indexes"
-      }
-    },
-    {
-      "op": "create",
-      "row": {
-        "schema": "public",
-        "table": "app_builds",
         "name": "app_builds_one_building_idx",
         "nameExplicit": true,
         "columns": [
@@ -907,10 +1016,54 @@
         "table": "app_build_logs",
         "name": "app_build_logs_build_id_app_builds_id_fkey",
         "nameExplicit": false,
-        "columns": ["build_id"],
+        "columns": [
+          "build_id"
+        ],
         "schemaTo": "public",
         "tableTo": "app_builds",
-        "columnsTo": ["id"],
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "app_build_requests_app_id_apps_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "app_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "apps",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "app_build_requests_build_id_app_builds_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "build_id"
+        ],
+        "schemaTo": "public",
+        "tableTo": "app_builds",
+        "columnsTo": [
+          "id"
+        ],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
         "entityType": "fks"
@@ -923,10 +1076,14 @@
         "table": "app_builds",
         "name": "app_builds_app_id_apps_id_fkey",
         "nameExplicit": false,
-        "columns": ["app_id"],
+        "columns": [
+          "app_id"
+        ],
         "schemaTo": "public",
         "tableTo": "apps",
-        "columnsTo": ["id"],
+        "columnsTo": [
+          "id"
+        ],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
         "entityType": "fks"
@@ -938,7 +1095,24 @@
         "schema": "public",
         "table": "app_build_logs",
         "name": "app_build_logs_pkey",
-        "columns": ["build_id", "seq"],
+        "columns": [
+          "build_id",
+          "seq"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_build_requests",
+        "name": "app_build_requests_pkey",
+        "columns": [
+          "app_id",
+          "request_id"
+        ],
         "nameExplicit": false,
         "entityType": "pks"
       }
@@ -949,7 +1123,9 @@
         "schema": "public",
         "table": "app_builds",
         "name": "app_builds_pkey",
-        "columns": ["id"],
+        "columns": [
+          "id"
+        ],
         "nameExplicit": false,
         "entityType": "pks"
       }

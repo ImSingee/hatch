@@ -158,6 +158,23 @@ describe('creating deployments', () => {
     expect(await builds.findDeploymentByRequest(APP, 'req-2')).toBeNull();
   });
 
+  it('finds a joined build by the request id of the request that joined', async () => {
+    mocks.builderToken = 'token';
+    const first = await create({ build: 'builder', requestId: 'req-a' });
+    const joined = await create({ build: 'builder', requestId: 'req-b' });
+    expect(joined.id).toBe(first.id);
+    expect((await builds.findDeploymentByRequest(APP, 'req-b'))?.id).toBe(
+      first.id,
+    );
+    // Repeating the joiner returns that build, not a new one.
+    expect((await create({ build: 'builder', requestId: 'req-b' })).id).toBe(
+      first.id,
+    );
+    expect(
+      await db.query.appBuilds.findMany({ where: { appId: APP } }),
+    ).toHaveLength(1);
+  });
+
   it('creates nothing for a caller that has already given up', async () => {
     const waiting = await create();
     const abort = new AbortController();

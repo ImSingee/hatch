@@ -23,16 +23,21 @@ export function platformBuildHost(options: {
   /** Digest of the SDK delivery the platform expects (`GetSdk` files). */
   sdkDigest: string;
   workDir?: string;
+  /** Stops every tool the build runs (a Builder job being stopped). */
+  signal?: AbortSignal;
 }): BuildHost {
+  const { signal } = options;
   return {
     workDir: options.workDir ?? BUILD_WORK_DIR,
-    toolchainContext: platformToolchainContext,
+    toolchainContext: (root, logs) =>
+      platformToolchainContext(root, logs, signal),
     async runBuf(args, cwd) {
       // The platform's node_modules/.bin lets buf resolve protoc-gen-es.
       const env = subprocessSandboxEnv();
       return run('buf', args, {
         cwd,
         env: { ...env, PATH: `${BIN_DIR}:${env.PATH ?? ''}` },
+        signal,
       });
     },
     materializeSdk: materializeAppHatchSdk,
@@ -57,7 +62,7 @@ export function platformBuildHost(options: {
           const [command, commandArgs] = sandboxed
             ? sandboxedEvaluationCommand([binary, ...args])
             : [binary, args];
-          return run(command, commandArgs, { cwd, env, timeoutMs });
+          return run(command, commandArgs, { cwd, env, timeoutMs, signal });
         },
         withSandboxOwnership,
       };

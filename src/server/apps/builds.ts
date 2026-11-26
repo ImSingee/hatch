@@ -308,11 +308,28 @@ export async function createDeployment(
       .where(eq(schema.apps.id, input.appId))
       .for('update');
     if (requestId) {
-      const repeated = await tx.query.appBuilds.findFirst({
-        where: { appId: input.appId, requestId },
-      });
-      if (repeated) return { row: repeated, joined: true };
+      const [repeated] = await tx
+        .select({ build: schema.appBuilds })
+        .from(schema.appBuildRequests)
+        .innerJoin(
+          schema.appBuilds,
+          eq(schema.appBuilds.id, schema.appBuildRequests.buildId),
+        )
+        .where(
+          and(
+            eq(schema.appBuildRequests.appId, input.appId),
+            eq(schema.appBuildRequests.requestId, requestId),
+          ),
+        );
+      if (repeated) return { row: repeated.build, joined: true };
     }
+    /** This request gets `buildId`: recorded so a repeat finds it. */
+    const record = async (buildId: string) => {
+      if (!requestId) return;
+      await tx
+        .insert(schema.appBuildRequests)
+        .values({ appId: input.appId, requestId, buildId });
+    };
     if (mode === 'builder') {
       // The same request while its build is still waiting or running joins
       // that build instead of building the commit twice. Only an identical
@@ -330,6 +347,7 @@ export async function createDeployment(
         orderBy: { seq: 'desc' },
       });
       if (existing) {
+        await record(existing.id);
         if (input.notify && !existing.notifyOnFinish) {
           // A joiner that asked to be told is told.
           const [notified] = await tx
@@ -377,9 +395,9 @@ export async function createDeployment(
         allowDestructiveDataMigration: allowDestructive,
         dataMigrationApprovalToken: approvalToken,
         notifyOnFinish: Boolean(input.notify),
-        requestId,
       })
       .returning();
+    await record(row.id);
     await insertLog(tx, row.id, {
       stream: 'platform',
       text:
@@ -406,10 +424,20 @@ export async function findDeploymentByRequest(
   requestId: string,
 ): Promise<AppBuild | null> {
   await sweepBuilds().catch(() => {});
-  return (
-    (await db.query.appBuilds.findFirst({ where: { appId, requestId } })) ??
-    null
-  );
+  const [found] = await db
+    .select({ build: schema.appBuilds })
+    .from(schema.appBuildRequests)
+    .innerJoin(
+      schema.appBuilds,
+      eq(schema.appBuilds.id, schema.appBuildRequests.buildId),
+    )
+    .where(
+      and(
+        eq(schema.appBuildRequests.appId, appId),
+        eq(schema.appBuildRequests.requestId, requestId),
+      ),
+    );
+  return found?.build ?? null;
 }
 
 async function getDeploymentRow(
