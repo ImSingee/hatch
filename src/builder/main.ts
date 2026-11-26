@@ -3,7 +3,9 @@
  * deployments (src/builder/protocol.ts).
  *
  * It holds no database credentials and no platform secret besides its own
- * token. It leases a queued build, downloads the commit, builds it in a
+ * token, but it is trusted like the platform: the frontends it builds run as
+ * the signed-in user while App pages share the platform's origin
+ * (docs/app-builds.md). It leases a queued build, downloads the commit, builds it in a
  * child process that runs App code under the sandbox identity, streams the
  * output, and uploads the build package, which the platform checks and
  * releases. Several Builders (and BUILDER_CONCURRENCY builds each) can run

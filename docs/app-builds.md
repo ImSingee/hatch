@@ -26,7 +26,10 @@ wakes followers, on every platform instance.
 
 - **Dedicated Builder** (optional): `node dist/builder/main.mjs`, the same
   image as the platform, enabled by setting `HATCH_BUILDER_TOKEN` on both.
-  It has no database credentials or platform secrets. It pulls work over the
+  It has no database credentials or platform secrets, but it is not a
+  lower-privileged service: what it builds runs as the platform (see
+  [What a build is trusted with](#what-a-build-is-trusted-with)), so run it
+  only where you would run the platform. It pulls work over the
   platform's internal server (`/internal/api/builds/*`,
   `src/builder/protocol.ts`), so the platform keeps no connection to it and
   may run as several instances. Each build runs in a child process that never
@@ -102,18 +105,24 @@ What the platform still takes from the builder, because checking it would
 mean building the App, is the code: the frontend page and its scripts,
 widgets, backend bundles, the RPC descriptor, the Data Table descriptor and
 docs, within the checks above. This is inherent to delegating a build, as
-with a compromised CI runner. A forged backend bundle does whatever it likes
-within the permissions its commit's manifest grants, and no more. A forged
-frontend runs with whatever reach App frontends have: today App pages are
-same-origin with the platform (see the trust model in
-[Native App runtime](app-native-runtime.md)), so that is the reach of the
-signed-in viewer, the same reach any App code its authors deploy already
-has. Giving App pages their own origin is the change that narrows both. A forged Data Table
-schema can change only that App's tables, and a destructive change still
-needs the approval token of its plan. Run Builders only where you would run
-the platform, and keep their token as secret as the platform's own. A build
-job never receives the token, and the App code it runs uses the sandbox
-identity.
+with a compromised CI runner. The manifest check protects backend privilege
+only, not frontend content:
+
+- A forged backend bundle does whatever it likes within the permissions its
+  commit's manifest grants, and no more.
+- A forged frontend is a takeover of whoever opens the App. App pages are
+  same-origin with the platform until they get their own origin (see the
+  trust model in [Native App runtime](app-native-runtime.md)), so its
+  scripts act as the signed-in user on the platform. An App's authors are
+  that user or their Agent; a Builder is a separate service, so for frontend
+  content a Builder is trusted as much as the platform itself.
+- A forged Data Table schema can change only that App's tables, and a
+  destructive change still needs the approval token of its plan.
+
+Until App pages have their own origin, run Builders only where you would run
+the platform, and keep `HATCH_BUILDER_TOKEN` as secret as the platform's own
+secrets. A build job never receives the token, and the App code it runs uses
+the sandbox identity.
 
 ## Operating it
 

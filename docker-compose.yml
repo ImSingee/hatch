@@ -132,7 +132,9 @@ services:
   # setting HATCH_BUILDER_TOKEN in .env. Like the Runner it only opens
   # outbound connections to the platform's internal server (3701) and has no
   # database credentials or platform secrets; each build's App code runs
-  # under a separate sandbox identity. Run several (or raise
+  # under a separate sandbox identity. It is still trusted like the platform:
+  # the frontends it builds run as the signed-in user (docs/app-builds.md),
+  # so run it only where you would run the platform. Run several (or raise
   # BUILDER_CONCURRENCY) for parallel builds.
   builder:
     image: ${HATCH_IMAGE:-ghcr.io/imsingee/hatch:master}
