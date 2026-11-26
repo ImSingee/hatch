@@ -11,6 +11,7 @@ import type { BuildHost } from '../../app-build/host';
 import {
   platformToolchainContext,
   sandboxedEvaluationCommand,
+  toolchainSandboxHome,
   type ToolchainSandbox,
 } from '../../toolchain/platform';
 import { platformTooling } from '../platform-tooling';
@@ -36,8 +37,11 @@ export function platformBuildHost(options: {
       platformToolchainContext(root, logs, signal, sandbox),
     async runBuf(args, cwd) {
       // The platform's node_modules/.bin lets buf resolve protoc-gen-es.
-      const env = subprocessSandboxEnv();
-      // Sandboxed, buf runs as the sandbox identity like every other tool.
+      // Sandboxed, buf runs as the sandbox identity like every other tool,
+      // with its own home: it reads its configuration and cache from there.
+      const env = subprocessSandboxEnv(
+        sandbox ? toolchainSandboxHome(sandbox) : undefined,
+      );
       const [command, commandArgs] = sandbox
         ? sandboxedEvaluationCommand(['buf', ...args])
         : ['buf', args];
@@ -66,7 +70,10 @@ export function platformBuildHost(options: {
       const env = subprocessSandboxEnv({
         ...nshEnv(),
         ...(sandbox
-          ? { NSH_CACHE: `${sandbox.home}/nsh`, HOME: sandbox.home }
+          ? {
+              ...toolchainSandboxHome(sandbox),
+              NSH_CACHE: `${sandbox.home}/nsh`,
+            }
           : {}),
       });
       return {

@@ -53,6 +53,24 @@ export type ToolchainSandbox = {
 };
 
 /**
+ * The home and XDG roots of a sandboxed tool, all below `sandbox.home`,
+ * which the sandbox identity owns: no tool reads or writes the host user's
+ * own configuration or caches.
+ */
+export function toolchainSandboxHome(
+  sandbox: ToolchainSandbox,
+): Record<string, string> {
+  return {
+    HOME: sandbox.home,
+    XDG_CONFIG_HOME: `${sandbox.home}/config`,
+    XDG_CACHE_HOME: `${sandbox.home}/cache`,
+    XDG_DATA_HOME: `${sandbox.home}/data`,
+    XDG_STATE_HOME: `${sandbox.home}/state`,
+    DENO_DIR: `${sandbox.home}/deno`,
+  };
+}
+
+/**
  * Every command gets the sanitized build environment, the shared time budget
  * and the output cap. `tsc` runs on the platform's own Node binary, and so
  * does `node`, which evaluates authored code under the sandbox identity.
@@ -66,17 +84,7 @@ function platformToolchainRunner(
     // Sandboxed, every tool gets its own home and an empty configuration,
     // all below `sandbox.home`, which the sandbox identity owns.
     const base = subprocessSandboxEnv(
-      sandbox
-        ? {
-            ...env,
-            HOME: sandbox.home,
-            XDG_CONFIG_HOME: `${sandbox.home}/config`,
-            XDG_CACHE_HOME: `${sandbox.home}/cache`,
-            XDG_DATA_HOME: `${sandbox.home}/data`,
-            XDG_STATE_HOME: `${sandbox.home}/state`,
-            DENO_DIR: `${sandbox.home}/deno`,
-          }
-        : env,
+      sandbox ? { ...env, ...toolchainSandboxHome(sandbox) } : env,
     );
     const argv: [string, ...string[]] =
       tool === 'tsc'
