@@ -139,6 +139,9 @@ export function DeskWindow({
   const frame = useRef<HTMLElement>(null);
   const hosted = useWindowFrame() === 'host';
   const maximizable = useWindowMaximize();
+  // The shell maximizes every window on screen; the one in front holds the
+  // button.
+  const maximized = !hosted && Boolean(maximizable?.maximized);
   const maximize = hosted || beside ? null : maximizable;
   const router = useRouter();
   const leave = () => {
@@ -198,7 +201,7 @@ export function DeskWindow({
       data-window-placement={placement}
       data-fill={fill || undefined}
       data-frame={hosted ? 'host' : undefined}
-      data-maximized={maximize?.maximized || undefined}
+      data-maximized={maximized || undefined}
       style={{ '--window-max-width': `${maxWidth}px` } as CSSProperties}
     >
       <header
