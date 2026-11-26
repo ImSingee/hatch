@@ -147,6 +147,50 @@ The same source runs everywhere; the components adapt:
 | A narrow pane with a pointer    | `AppShell` shows a row of tabs at the top                                                        |
 | Compact panes (below 600)       | `Grid` shows one column, `Row collapse` stacks, page padding shrinks                             |
 
+## Addresses and titles
+
+The library keeps the App's address and title in the shell; App code does
+not call the bridge for them.
+
+- `AppShell`'s selected section is the first part of the address,
+  `/<section id>`: a link, a pin or a reload opens that section, and the
+  shell's back button and links move between sections. Use short, stable,
+  lowercase section ids.
+- A `NavStack` given `routes` keeps its pages in the rest of the address.
+  `path` turns the stack into an address and `parse` turns an address back
+  into the stack, first page included; `null` shows the first page. Write
+  the return type on `parse`, so the routes' literal types are kept:
+
+  ```tsx
+  type Route = { name: 'list' } | { name: 'note'; id: string };
+  const notes = createNavStack<Route>([{ name: 'list' }]);
+
+  <NavStack
+    stack={notes}
+    routes={{
+      path: (stack) => {
+        const top = stack[stack.length - 1];
+        return top?.name === 'note' ? `/${top.id}` : '';
+      },
+      parse: (path): Route[] | null => {
+        const id = /^\/([\w-]+)$/.exec(path)?.[1];
+        return id ? [{ name: 'list' }, { name: 'note', id }] : null;
+      },
+    }}
+  >
+    {(route) => (route.name === 'note' ? <Note id={route.id} /> : <Notes />)}
+  </NavStack>;
+  ```
+
+  Inside an `AppShell` section the stack's address follows the section's:
+  `/notes/42`. Each page shows its own data from the route (`Note` loads note
+  `42`), because a deep link opens it without the pages before it running.
+
+- The title of the `Page` on screen is the App's title in the shell: the
+  selected section's page, the top page of a stack, an item's page in a
+  `ListDetailPage`. Give each `Page` the specific name of what it shows
+  ("Tomato seedlings", not "Detail").
+
 ## Catalogue
 
 Generated from the component types by `sdk-internal/ui/scripts/generate.ts`;
@@ -158,7 +202,7 @@ do not edit between the markers.
 
 #### Page
 
-One screen of the App: a scrolling body with the title row. In a `NavStack` above its first page, the title row starts with a back button.
+One screen of the App: a scrolling body with the title row. In a `NavStack` above its first page, the title row starts with a back button. While it is shown (the selected section, the top of its stack) its title is the App's title in the shell; the deepest shown page wins.
 
 | Prop               | Type          | Description                                                                                                                             |
 | ------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -245,25 +289,26 @@ A hairline between groups of content.
 
 #### AppShell
 
-The frame of an App with top-level sections. It decides the navigation from the App's own pane: a sidebar when the pane is wide, a bottom tab bar on narrow touch screens, a row of tabs at the top in a narrow desktop window. Each section's `content` is usually a `Page` or a `NavStack`.
+The frame of an App with top-level sections. It decides the navigation from the App's own pane: a sidebar when the pane is wide, a bottom tab bar on narrow touch screens, a row of tabs at the top in a narrow desktop window. Each section's `content` is usually a `Page` or a `NavStack`. The selected section is the first segment of the App's address (`/<section id>`, then the section's `NavStack` path), so a deep link or a reload opens the same section and the shell can navigate between them.
 
 | Prop                  | Type                    | Description                                                                              |
 | --------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
 | `title` (required)    | `string`                | The App's name, shown above the sidebar.                                                 |
 | `sections` (required) | `readonly AppSection[]` | Two to six top-level sections.                                                           |
 | `value`               | `string`                | The selected section's id, when the App controls it.                                     |
-| `defaultValue`        | `string`                | The section shown first, when the App does not control it.                               |
+| `defaultValue`        | `string`                | The section shown first, when the App does not control it and the address names none.    |
 | `onChange`            | `(id: string) => void`  | Called with the new value as the user changes it.                                        |
 | `actions`             | `JSX.Element`           | Buttons at the foot of the sidebar, or at the end of the top tab row: settings, account. |
 
 #### NavStack
 
-Pages pushed on top of each other, with the platform's back gestures and keys. Each page above the first gets a back button in its title row.
+Pages pushed on top of each other, with the platform's back gestures and keys. Each page above the first gets a back button in its title row. Only the top page counts as shown: it names the App's title.
 
-| Prop                  | Type                        | Description                                       |
-| --------------------- | --------------------------- | ------------------------------------------------- |
-| `stack` (required)    | `NavStackState<R>`          | From `createNavStack`.                            |
-| `children` (required) | `(route: R) => JSX.Element` | The page of a route: a `Page`, or a page pattern. |
+| Prop                  | Type                        | Description                                                                                                                         |
+| --------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `stack` (required)    | `NavStackState<R>`          | From `createNavStack`.                                                                                                              |
+| `children` (required) | `(route: R) => JSX.Element` | The page of a route: a `Page`, or a page pattern.                                                                                   |
+| `routes`              | `NavRoutes<R>`              | Keeps the stack in the App's address (deep links, reloads, the shell's back button). Without it the address names only the section. |
 
 #### Tabs
 
@@ -811,7 +856,7 @@ An overview: key figures, then cards of detail.
 
 #### mount
 
-Starts the App: renders `app` into the shell, follows the shell's theme and hosts toasts. Call it once, in `app/main.tsx`.
+Starts the App: renders `app` into the shell, follows the shell's theme, keeps the shell's title on the shown page's and hosts toasts. Call it once, in `app/main.tsx`.
 
 `mount(app: Component): () => void`
 

@@ -28,7 +28,8 @@ export default defineAppManifest({
   },
   app: {
     entry: 'app/main.tsx',
-    html: 'app/index.html',
+    // Hatch's native runtime: the UI comes from `@hatch/ui`.
+    runtime: 'native',
     routes: [
       { path: '/', description: 'Persistent counter' },
       { path: '/about', description: 'About this app' },

@@ -32,6 +32,7 @@ import { ViolationsSchema } from '@bufbuild/protovalidate/gen/buf/validate/valid
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PROTOCOL_VERSION, RUNNER_WS_PATH } from '~agent/protocol';
+import { nshBinary } from '~server/apps/native/nsh-toolchain';
 
 const cliExecutable = fileURLToPath(
   new URL('../../../packages/hatch-cli/dist/main.mjs', import.meta.url),
@@ -964,19 +965,18 @@ describe.runIf(Boolean(databaseUrl))(
             ),
           ).toBe(true);
           // The prepared scaffold type-checks as a whole with the platform
-          // compiler and the configuration delivered with the SDK.
+          // compiler and the configuration delivered with the SDK: its
+          // native frontend with `nsh check` against the generated
+          // nsh.json, everything else with tsc.
+          const tsc = fileURLToPath(
+            new URL(
+              '../../../node_modules/typescript/bin/tsc',
+              import.meta.url,
+            ),
+          );
           const check = execFileSync(
             process.execPath,
-            [
-              fileURLToPath(
-                new URL(
-                  '../../../node_modules/typescript/bin/tsc',
-                  import.meta.url,
-                ),
-              ),
-              '-p',
-              '.hatch/tsconfig.json',
-            ],
+            [tsc, '-p', '.hatch/tsconfig.native.json'],
             {
               cwd: directory,
               encoding: 'utf8',
@@ -984,6 +984,11 @@ describe.runIf(Boolean(databaseUrl))(
             },
           );
           expect(typeof check).toBe('string');
+          execFileSync(nshBinary(), ['check'], {
+            cwd: directory,
+            env: { ...process.env, NSH_TSC: tsc },
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
           const first = await cliInvoke(
             [
               kind,

@@ -207,6 +207,39 @@ describe.skipIf(!nshAvailable())(
       }
     });
 
+    it('builds the default template, which uses @hatch/ui, with no custom files', async () => {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'hatch-native-template-'),
+      );
+      tempDirs.push(root);
+      const sourceDir = path.join(root, 'src');
+      const outputDir = path.join(root, 'out');
+      await fs.cp(templateDir, sourceDir, { recursive: true });
+      for (const file of ['manifest.ts', 'package.json', 'app/main.tsx']) {
+        const target = path.join(sourceDir, file);
+        await fs.writeFile(
+          target,
+          (await fs.readFile(target, 'utf8'))
+            .replaceAll(
+              '__APP_ID__',
+              file === 'package.json' ? 'demo' : JSON.stringify('demo'),
+            )
+            .replaceAll('__APP_NAME__', JSON.stringify('Demo'))
+            .replaceAll('__APP_DESCRIPTION__', JSON.stringify('Demo app')),
+        );
+      }
+      const result = await buildApp('demo', { sourceDir, outputDir });
+      expect(result.normalized.app).toMatchObject({
+        runtime: 'native',
+        nshVersion: NSH_VERSION,
+      });
+      // Every class the template uses is a theme token of the library.
+      expect(result.log).not.toMatch(/unknown class/);
+      expect(result.log).toContain('native custom files: none');
+      await fs.access(path.join(outputDir, 'app', 'index.html'));
+      await fs.access(path.join(outputDir, 'widgets', 'counter.js'));
+    });
+
     it('builds an App that also has an App.tsx beside its entry', async () => {
       // NSH takes a directory holding `App.tsx` as the app directory unless
       // the root nsh.json names the entry; then `.hatch/` is outside it and

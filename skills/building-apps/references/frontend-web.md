@@ -1,6 +1,11 @@
-# Frontend and widgets
+# Web frontend and widgets
 
-Read this reference when an App has a frontend or dashboard widget.
+Read this reference for dashboard widgets, which are React in every App, and
+for an App whose frontend uses the web runtime: its manifest has no
+`app.runtime` or sets `app.runtime: 'web'` and names an `app.html` page.
+Imported Apps and Apps created before the native runtime are web Apps; keep
+them web unless the user asks to migrate (see Migrating a web App to native
+in the Skill). New Apps are native: see [Native frontend](frontend-native.md).
 
 ## React SPA
 
@@ -42,7 +47,8 @@ platform wiring. Import packages normally after adding them to `package.json`.
 
 ## Browser storage
 
-Every App page and widget runs on the Hatch origin. Before any App code runs,
+This section is about React pages and widgets; a native frontend has no
+browser storage. Every App page and widget runs on the Hatch origin. Before any App code runs,
 Hatch scopes that page's `localStorage` and `sessionStorage` to the App: keys,
 `length`, `clear()` and `storage` events cover only this App's entries, so
 Apps and Hatch cannot overwrite or clear each other's values. Use the standard
@@ -158,4 +164,7 @@ Treat initial load and background refresh differently:
 - Do not add a routine refresh button inside the widget; the dashboard provides
   it when `onRefresh` is registered.
 
-Widgets may use the same Connect client or managed Data Table client as the SPA.
+Widgets use the web Connect transport and `createDataClient` from
+`@hatch/app/data`, as a React SPA does, in native Apps too: the
+`@hatch/app/native` clients and `@hatch/ui` work only in the native
+frontend.
