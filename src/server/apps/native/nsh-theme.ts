@@ -37,16 +37,9 @@ function library() {
  * {@link tokenThemeFor}.
  */
 export function nshThemeFor(theme: ResolvedTheme): SdkNshTheme {
-  const nsh = library()?.nsh;
-  if (nsh?.resolvedTheme) return nsh.resolvedTheme(theme);
-  // A library that only knows accents draws the built-in theme.
-  if (nsh?.theme && theme.source === 'preset' && theme.name === 'desk') {
-    const accent = ACCENT_NAMES.find(
-      (name) => ACCENT_COLORS[name] === theme.colors.primary,
-    );
-    if (accent) return nsh.theme(accent);
-  }
-  return tokenThemeFor(theme);
+  // One builder for every theme: the themes a player switches between must
+  // name the same tokens, since `setTheme` replaces the whole theme.
+  return library()?.nsh?.resolvedTheme?.(theme) ?? tokenThemeFor(theme);
 }
 
 /** The built-in `desk` theme with an accent, as native Apps get it. */
@@ -64,6 +57,15 @@ export function nshTailwind(): Record<string, unknown> | undefined {
   )?.nsh?.tailwind;
 }
 
+const SANS_FALLBACK =
+  'PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif';
+const MONO_FALLBACK = 'ui-monospace, Menlo, Consolas, monospace';
+
+/** A bundled face first, or the platform's own for `system`. */
+function fontFamily(face: string, fallback: string): string {
+  return face === 'system' ? fallback : `${face}, ${fallback}`;
+}
+
 /** The shadcn names NSH types as tokens, filled from a resolved theme. */
 export function tokenThemeFor(theme: ResolvedTheme): NshTheme {
   const c = theme.colors;
@@ -77,6 +79,8 @@ export function tokenThemeFor(theme: ResolvedTheme): NshTheme {
     cssVars: {
       theme: {
         radius: `${theme.radius.md}px`,
+        'font-sans': fontFamily(theme.fonts.sans, SANS_FALLBACK),
+        'font-mono': fontFamily(theme.fonts.mono, MONO_FALLBACK),
       },
       // NSH applies `light` as the theme; a dark theme's values go here too.
       light: {

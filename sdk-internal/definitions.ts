@@ -106,6 +106,7 @@ export const UI_SDK: SdkDefinition = {
   entries: { '.': { source: 'index.ts', runtime: 'native' } },
   nsh: {
     theme: (accent) => buildAppTheme({ accent: accent as AccentName }),
+    resolvedTheme: (theme) => buildAppTheme({ theme }),
     tailwind: uiTailwind,
   },
 };

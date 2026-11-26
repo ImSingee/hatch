@@ -47,6 +47,10 @@ describe.skipIf(!adminUrl)('Platform settings on PostgreSQL', () => {
     expect(await config.getPlatformConfig('ui.theme')).toEqual({
       accent: 'teal',
       dockLabels: true,
+      // Untouched fields keep their defaults.
+      mode: 'light',
+      light: 'desk',
+      dark: 'desk-dark',
     });
   });
 });

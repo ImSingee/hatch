@@ -169,7 +169,13 @@ export function buildAppTheme(
         'neutral-fill-hover': neutral[3],
 
         // Status colours: red, amber, green and blue (DESIGN.md "Hues").
-        ...toneRoles('danger', theme.ramps.red, theme.appearance),
+        // The theme's own destructive colour, so a danger fill keeps the
+        // `destructive-foreground` derived (and contrast-checked) for it.
+        ...toneRoles(
+          'danger',
+          tokenRamp(c.destructive, theme.appearance, c.card),
+          theme.appearance,
+        ),
         ...toneRoles('warning', theme.ramps.amber, theme.appearance),
         ...toneRoles('success', theme.ramps.green, theme.appearance),
         ...toneRoles('info', theme.ramps.blue, theme.appearance),
