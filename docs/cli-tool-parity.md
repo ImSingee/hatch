@@ -334,7 +334,8 @@ claim the browser's account holds.
 
 The Desk keeps several Apps running in one browser window (up to 12). Which
 Apps run and in what order they were last shown live only in that page's
-memory: a reload starts none of them except the one beside. The window's
+memory: after a reload only the App the URL opens and the one beside start
+again. The window's
 session storage (`src/components/desk/app-sessions.tsx`) keeps which App sits
 beside the window in front and the route each App was left on, so after a
 reload the App beside reopens and the others open where they were left.

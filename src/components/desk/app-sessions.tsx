@@ -268,6 +268,14 @@ export class AppSessionStore {
     });
   }
 
+  /** Stop the App with this id, under whichever slug it runs. */
+  quitApp(appId: string, slug: string) {
+    const running =
+      this.snapshot.sessions.find((s) => s.appId === appId) ??
+      this.snapshot.sessions.find((s) => s.slug === slug && !s.appId);
+    if (running) this.quit(running.slug);
+  }
+
   /** The App moved to `route` by itself. */
   setRoute(slug: string, route: string) {
     const session = this.session(slug);
@@ -329,7 +337,14 @@ export class AppSessionStore {
    * second time and nothing links to the old slug.
    */
   private adoptSlug(slug: string, appId: string | undefined) {
-    if (!appId || this.session(slug)) return;
+    if (!appId) return;
+    const holder = this.session(slug);
+    if (holder?.appId === appId || (holder && !holder.appId)) return;
+    if (holder) {
+      // Another App that ran under this slug before it was renamed: its new
+      // slug is unknown here, so stop it rather than show it as this App.
+      this.quit(slug);
+    }
     const renamed = this.snapshot.sessions.find((s) => s.appId === appId);
     if (!renamed) return;
     const old = renamed.slug;

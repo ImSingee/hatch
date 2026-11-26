@@ -54,6 +54,7 @@ import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import { APP_SLUG_MAX_LENGTH } from '~/app-identity';
 import { useI18n } from '~i18n';
+import { useOptionalAppSessionStore } from '~components/desk/app-sessions';
 import { DeskWindow } from '~components/desk/window';
 import {
   Column,
@@ -105,6 +106,7 @@ function AppDetailPage() {
   const router = useRouter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const sessions = useOptionalAppSessionStore();
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const isPinned = Boolean(pins?.some((p) => p.appId === app.id));
   const capabilities = app.capabilities ?? null;
@@ -126,6 +128,9 @@ function AppDetailPage() {
       // Operations panel reads appOpsQueryOptions, so invalidate it too or it
       // keeps showing pre-toggle running/idle state until a later refetch.
       void queryClient.invalidateQueries(appOpsQueryOptions(app.id));
+      // An archived App cannot run: stop a running copy rather than leave it
+      // in the dock and beside this page.
+      if (archived) sessions?.quitApp(app.id, app.slug);
       void router.invalidate();
     },
   });
@@ -134,6 +139,8 @@ function AppDetailPage() {
     mutationFn: () => deleteAppFn({ data: app.id }),
     onSuccess: () => {
       toast.success(t('appManage.deleted', { name: app.name }));
+      // Stop a running copy: its dock tile would lead to a 404.
+      sessions?.quitApp(app.id, app.slug);
       // The delete cascades to sidebar pins, so drop those caches too; otherwise
       // the deleted app lingers in the sidebar / pin menu and links to a 404
       // until the next focus refetch.

@@ -50,3 +50,28 @@ test('an App kept beside but hidden is stopped by recency like any other', () =>
   expect(slugs(sessions)).toEqual(['a', 'c', 'd']);
   expect(sessions.getSnapshot().beside).toBeNull();
 });
+
+test('a slug taken over by another App does not show the old App', () => {
+  const sessions = store();
+  sessions.show('notes', { route: '/old', focus: false, appId: 'app-1' });
+  const first = sessions.session('notes')!;
+  sessions.leaveFront('notes');
+
+  // app-1 was renamed elsewhere and app-2 now uses `notes`.
+  sessions.show('notes', { route: '', focus: true, appId: 'app-2' });
+
+  const now = sessions.session('notes')!;
+  expect(slugs(sessions)).toEqual(['notes']);
+  expect(now.appId).toBe('app-2');
+  expect(now.key).not.toBe(first.key);
+  expect(now.route).toBe('');
+});
+
+test('stopping an App by id finds it under a stale slug', () => {
+  const sessions = store();
+  sessions.show('notes', { route: '', focus: false, appId: 'app-1' });
+
+  sessions.quitApp('app-1', 'journal');
+
+  expect(slugs(sessions)).toEqual([]);
+});
