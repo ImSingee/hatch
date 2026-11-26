@@ -50,7 +50,7 @@ The capabilities below never had an Agent Tool.
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                      |
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
-| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
+| Preferences      | preferences get / set                                                                               | PreferenceService/Get/UpdateAgentPreferences, Get/UpdateInterfacePreferences; queue/steer default, UI language   |
 | Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
 
 `frontend` in `app get` reports how the live deployment's frontend runs:
@@ -73,9 +73,13 @@ its own commands (backed by `ImageService`), and `model add --kind image`,
 `model update` and `model remove` reach the same rows through `ModelService`.
 See [App icons](app-icons.md) and the section below.
 
-The Web UI language (Settings → Appearance → Language) is a display preference
-of one browser, kept in its local storage and never sent to the server. It is
-browser-bound, has no platform state, and therefore has no CLI command.
+The Web UI language (Settings → Appearance → Language) is a personal
+preference of the user, read and set with `preferences get` / `preferences set
+--language` through `PreferenceService/GetInterfacePreferences` and
+`UpdateInterfacePreferences`, which use the same
+`src/server/interface-preferences.ts` service as the Settings Server Functions
+(`src/server/interface-preference-settings.ts`). Each browser only caches the
+last language it showed.
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` / `adopt` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`

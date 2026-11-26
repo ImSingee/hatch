@@ -808,6 +808,7 @@ deleting the last dashboard.
 ```sh
 hatch preferences get --json
 hatch preferences set --agent-message-mode queue
+hatch preferences set --language zh-CN
 ```
 
 `preferences` reads and writes the caller's personal preferences. With a Run
@@ -816,10 +817,14 @@ answers. `agentMessageMode` decides how a chat message sent while the Agent is
 working is delivered: `steer` (the default) injects it into the running run
 after its current tool calls finish, and several waiting messages go together;
 `queue` waits until the run completes and then starts one run per message, in
-send order. A change applies to messages sent afterwards.
+send order. A change applies to messages sent afterwards. `language` is the
+Web UI language (`en` or `zh-CN`) of every browser the user signs in to; it is
+`null` until the user picks one, and each browser then follows its own
+language. `set` changes only the flags it is given.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
-a missing `--agent-message-mode`, a value other than `queue` or `steer`, or a
+neither `--agent-message-mode` nor `--language`, a flag given twice, a mode
+other than `queue` or `steer`, a language other than `en` or `zh-CN`, or a
 positional argument). Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).

@@ -548,13 +548,14 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['preferences', 'get'],
     usage: 'preferences get',
     description:
-      "Show the caller's personal preferences: agentMessageMode (queue or steer). With a Run credential, the preferences of the user who sent the run's prompt.",
+      "Show the caller's personal preferences: agentMessageMode (queue or steer) and language (en, zh-CN, or null when never picked, so each browser follows its own language). With a Run credential, the preferences of the user who sent the run's prompt.",
   },
   {
     path: ['preferences', 'set'],
-    usage: 'preferences set --agent-message-mode queue|steer',
+    usage:
+      'preferences set [--agent-message-mode queue|steer] [--language en|zh-CN]',
     description:
-      'Set how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish. Applies to messages sent afterwards; already pending ones keep their mode.',
+      'Change the given preferences; omitted ones keep their value, and at least one flag is required. --agent-message-mode sets how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish. It applies to messages sent afterwards; already pending ones keep their mode. --language sets the Web UI language of every browser the user signs in to; open pages switch the next time they load the preference.',
   },
   {
     path: ['notification', 'list'],

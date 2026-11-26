@@ -42,7 +42,8 @@ export type TranslationResource = {
   'appearance.dockLabels.title': 'Show names in the dock';
   'appearance.dockLabels.description': 'Print each App name under its tile. Pointing at a tile shows its full name either way.';
   'appearance.language.title': 'Language';
-  'appearance.language.description': 'The language of the Hatch interface in this browser. Other people and devices keep their own choice.';
+  'appearance.language.description': 'The language of the Hatch interface for your account, in every browser you sign in to. Other people keep their own choice.';
+  'appearance.language.saveFailed': "Couldn't save your language. It switched back.";
   'mention.label': 'Apps';
   'mention.loading': 'Loading Apps…';
   'mention.loadFailed': 'Could not load Apps';

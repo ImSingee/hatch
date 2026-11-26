@@ -964,6 +964,13 @@ export const userPreferences = snakeCase.table(
       .$type<AgentMessageMode>()
       .notNull()
       .default('steer'),
+    /**
+     * The Web UI language the user picked (a `Locale`); null until they pick
+     * one, when each browser follows its own language. Validated by the
+     * service rather than a check constraint, so adding a catalog needs no
+     * migration.
+     */
+    language: text(),
     updatedAt,
   },
   () => [

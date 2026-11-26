@@ -6,13 +6,15 @@ import { CliError } from './error';
 
 export const AGENT_MESSAGE_MODES = ['queue', 'steer'] as const;
 export type AgentMessageMode = (typeof AGENT_MESSAGE_MODES)[number];
+export const LANGUAGES = ['en', 'zh-CN'] as const;
+export type Language = (typeof LANGUAGES)[number];
 
 type Flags = Record<string, string | boolean | undefined>;
 const invalid = (message: string) => new CliError('invalid_arguments', message);
 
 export type PreferencesCommand =
   | { kind: 'get' }
-  | { kind: 'set'; agentMessageMode: AgentMessageMode };
+  | { kind: 'set'; agentMessageMode?: AgentMessageMode; language?: Language };
 
 const GLOBALS = {
   json: { type: 'boolean' },
@@ -37,7 +39,10 @@ export function parsePreferencesCommand(
       options: {
         ...GLOBALS,
         ...(operation === 'set'
-          ? { 'agent-message-mode': { type: 'string' } }
+          ? {
+              'agent-message-mode': { type: 'string' },
+              language: { type: 'string' },
+            }
           : {}),
       },
       allowPositionals: true,
@@ -50,21 +55,37 @@ export function parsePreferencesCommand(
     throw invalid('This command takes no positional arguments.');
   const flags = parsed.values as Flags;
   if (operation === 'get') return { command: { kind: 'get' }, flags };
-  const modes = new Set(
-    (parsed.tokens ?? []).flatMap((token) =>
-      token.kind === 'option' && token.name === 'agent-message-mode'
-        ? [token.value]
-        : [],
-    ),
-  );
-  if (modes.size > 1) throw invalid('Supply --agent-message-mode only once.');
-  const mode = flags['agent-message-mode'];
-  if (mode === undefined)
-    throw invalid('Supply --agent-message-mode queue|steer.');
-  if (!(AGENT_MESSAGE_MODES as readonly unknown[]).includes(mode))
+  const once = (name: string) => {
+    const count = (parsed.tokens ?? []).filter(
+      (token) => token.kind === 'option' && token.name === name,
+    ).length;
+    if (count > 1) throw invalid(`Supply --${name} only once.`);
+    return flags[name] as string | undefined;
+  };
+  const mode = once('agent-message-mode');
+  const language = once('language');
+  if (mode === undefined && language === undefined)
+    throw invalid(
+      'Supply --agent-message-mode queue|steer, --language en|zh-CN or both.',
+    );
+  if (
+    mode !== undefined &&
+    !(AGENT_MESSAGE_MODES as readonly unknown[]).includes(mode)
+  )
     throw invalid('--agent-message-mode must be queue or steer.');
+  if (
+    language !== undefined &&
+    !(LANGUAGES as readonly unknown[]).includes(language)
+  )
+    throw invalid('--language must be en or zh-CN.');
   return {
-    command: { kind: 'set', agentMessageMode: mode as AgentMessageMode },
+    command: {
+      kind: 'set',
+      ...(mode === undefined
+        ? {}
+        : { agentMessageMode: mode as AgentMessageMode }),
+      ...(language === undefined ? {} : { language: language as Language }),
+    },
     flags,
   };
 }
@@ -98,6 +119,7 @@ export async function runPreferences(
       ? await client.preferences.get()
       : await client.preferences.update({
           agentMessageMode: command.agentMessageMode,
+          language: command.language,
         });
   process.stdout.write(
     `${JSON.stringify(result, null, flags.json ? undefined : 2)}\n`,

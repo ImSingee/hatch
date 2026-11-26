@@ -20,12 +20,37 @@ describe('preferences command arguments', () => {
     expect(
       command('preferences', 'set', '--agent-message-mode=steer', '--json'),
     ).toEqual({ kind: 'set', agentMessageMode: 'steer' });
+    expect(command('preferences', 'set', '--language', 'zh-CN')).toStrictEqual({
+      kind: 'set',
+      language: 'zh-CN',
+    });
+    expect(
+      command(
+        'preferences',
+        'set',
+        '--language=en',
+        '--agent-message-mode',
+        'queue',
+      ),
+    ).toStrictEqual({ kind: 'set', agentMessageMode: 'queue', language: 'en' });
   });
 
   it('rejects incomplete, unknown or misplaced input before any request', () => {
     expect(rejected('preferences')).toMatch(/preferences get or/);
     expect(rejected('preferences', 'list')).toMatch(/preferences get or/);
-    expect(rejected('preferences', 'set')).toMatch(/--agent-message-mode/);
+    expect(rejected('preferences', 'set')).toMatch(
+      /--agent-message-mode .*--language/,
+    );
+    for (const language of ['fr', 'zh', 'ZH-cn', ''])
+      expect(rejected('preferences', 'set', '--language', language)).toMatch(
+        /--language must be en or zh-CN/,
+      );
+    expect(
+      rejected('preferences', 'set', '--language', 'en', '--language=zh-CN'),
+    ).toMatch(/--language only once/);
+    expect(rejected('preferences', 'get', '--language', 'en')).toMatch(
+      /Invalid arguments/,
+    );
     expect(
       rejected('preferences', 'set', '--agent-message-mode', 'later'),
     ).toMatch(/queue or steer/);
@@ -48,6 +73,6 @@ describe('preferences command arguments', () => {
           first,
           `--agent-message-mode=${second}`,
         ),
-      ).toMatch(/only once/);
+      ).toMatch(/--agent-message-mode only once/);
   });
 });

@@ -21,6 +21,7 @@ import appCss from '~styles.css?url';
 // Starts the UI language (and <html lang>) before any route renders.
 import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
+import { LocaleSync } from '~components/system/locale-sync';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
   ACCENT_BOOT_SCRIPT,
@@ -127,6 +128,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           forceColorScheme="light"
         >
           <AccentSync />
+          <LocaleSync />
           <ModalsProvider>{children}</ModalsProvider>
 
           {/* Client-only: the shell is prerendered in English, and hydration

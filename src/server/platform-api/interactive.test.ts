@@ -544,6 +544,34 @@ describe('interactive Platform API contracts and authority', () => {
 
     const orphan = await preferences(await runJwt(null));
     expect(orphan.status).toBe(409);
+
+    const ui = async (
+      headers: Record<string, string>,
+      update?: { language?: string },
+    ) => {
+      const response = await call(
+        update
+          ? 'PreferenceService/UpdateInterfacePreferences'
+          : 'PreferenceService/GetInterfacePreferences',
+        { headers, body: update ?? {} },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+    // No language until the user picks one; a Run sets it for its user.
+    expect(await ui({})).toEqual({ status: 200, body: { preferences: {} } });
+    expect(await ui(run, { language: 'zh-CN' })).toEqual({
+      status: 200,
+      body: { preferences: { language: 'zh-CN' } },
+    });
+    expect(await ui({ 'x-api-key': key }, {})).toEqual({
+      status: 200,
+      body: { preferences: { language: 'zh-CN' } },
+    });
+    expect((await ui({}, { language: 'fr' })).status).toBe(400);
+    expect(await preferences({})).toMatchObject({
+      body: { preferences: { messageMode: 'steer' } },
+    });
+    expect((await ui(await runJwt(null))).status).toBe(409);
     await db.delete(schema.agentRuns);
   });
 

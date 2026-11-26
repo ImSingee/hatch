@@ -4,7 +4,7 @@ import {
   LOCALES,
   SOURCE_LOCALE,
   isLocale,
-  persistLocale,
+  cacheLocale,
   readLocale,
   type Locale,
 } from './locale';
@@ -46,9 +46,12 @@ function applyDocumentLanguage() {
 applyDocumentLanguage();
 i18n.on('languageChanged', applyDocumentLanguage);
 
-/** Switch this browser's language in place and remember the choice. */
+/**
+ * Switch the language in place and cache it for this browser's next load.
+ * The user's saved preference is written separately (Settings → Appearance).
+ */
 export async function changeLocale(locale: Locale) {
-  persistLocale(locale);
+  cacheLocale(locale);
   await i18n.changeLanguage(locale);
 }
 

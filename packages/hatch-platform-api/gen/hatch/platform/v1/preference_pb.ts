@@ -21,7 +21,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_preference: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'CiJoYXRjaC9wbGF0Zm9ybS92MS9wcmVmZXJlbmNlLnByb3RvEhFoYXRjaC5wbGF0Zm9ybS52MSIoChBBZ2VudFByZWZlcmVuY2VzEhQKDG1lc3NhZ2VfbW9kZRgBIAEoCSIcChpHZXRBZ2VudFByZWZlcmVuY2VzUmVxdWVzdCJXChtHZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USOAoLcHJlZmVyZW5jZXMYASABKAsyIy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFByZWZlcmVuY2VzImAKHVVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Ei4KDG1lc3NhZ2VfbW9kZRgBIAEoCUITukgQcg5SBXF1ZXVlUgVzdGVlckgAiAEBQg8KDV9tZXNzYWdlX21vZGUiWgoeVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEjgKC3ByZWZlcmVuY2VzGAEgASgLMiMuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcmVmZXJlbmNlczKIAgoRUHJlZmVyZW5jZVNlcnZpY2USdAoTR2V0QWdlbnRQcmVmZXJlbmNlcxItLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Gi4uaGF0Y2gucGxhdGZvcm0udjEuR2V0QWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEn0KFlVwZGF0ZUFnZW50UHJlZmVyZW5jZXMSMC5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVBZ2VudFByZWZlcmVuY2VzUmVxdWVzdBoxLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXNwb25zZWIGcHJvdG8z',
+    'CiJoYXRjaC9wbGF0Zm9ybS92MS9wcmVmZXJlbmNlLnByb3RvEhFoYXRjaC5wbGF0Zm9ybS52MSIoChBBZ2VudFByZWZlcmVuY2VzEhQKDG1lc3NhZ2VfbW9kZRgBIAEoCSIcChpHZXRBZ2VudFByZWZlcmVuY2VzUmVxdWVzdCJXChtHZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USOAoLcHJlZmVyZW5jZXMYASABKAsyIy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFByZWZlcmVuY2VzImAKHVVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Ei4KDG1lc3NhZ2VfbW9kZRgBIAEoCUITukgQcg5SBXF1ZXVlUgVzdGVlckgAiAEBQg8KDV9tZXNzYWdlX21vZGUiWgoeVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEjgKC3ByZWZlcmVuY2VzGAEgASgLMiMuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcmVmZXJlbmNlcyI6ChRJbnRlcmZhY2VQcmVmZXJlbmNlcxIVCghsYW5ndWFnZRgBIAEoCUgAiAEBQgsKCV9sYW5ndWFnZSIgCh5HZXRJbnRlcmZhY2VQcmVmZXJlbmNlc1JlcXVlc3QiXwofR2V0SW50ZXJmYWNlUHJlZmVyZW5jZXNSZXNwb25zZRI8CgtwcmVmZXJlbmNlcxgBIAEoCzInLmhhdGNoLnBsYXRmb3JtLnYxLkludGVyZmFjZVByZWZlcmVuY2VzIlkKIVVwZGF0ZUludGVyZmFjZVByZWZlcmVuY2VzUmVxdWVzdBInCghsYW5ndWFnZRgBIAEoCUIQukgNcgtSAmVuUgV6aC1DTkgAiAEBQgsKCV9sYW5ndWFnZSJiCiJVcGRhdGVJbnRlcmZhY2VQcmVmZXJlbmNlc1Jlc3BvbnNlEjwKC3ByZWZlcmVuY2VzGAEgASgLMicuaGF0Y2gucGxhdGZvcm0udjEuSW50ZXJmYWNlUHJlZmVyZW5jZXMylwQKEVByZWZlcmVuY2VTZXJ2aWNlEnQKE0dldEFnZW50UHJlZmVyZW5jZXMSLS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBZ2VudFByZWZlcmVuY2VzUmVxdWVzdBouLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFnZW50UHJlZmVyZW5jZXNSZXNwb25zZRJ9ChZVcGRhdGVBZ2VudFByZWZlcmVuY2VzEjAuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1JlcXVlc3QaMS5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USgAEKF0dldEludGVyZmFjZVByZWZlcmVuY2VzEjEuaGF0Y2gucGxhdGZvcm0udjEuR2V0SW50ZXJmYWNlUHJlZmVyZW5jZXNSZXF1ZXN0GjIuaGF0Y2gucGxhdGZvcm0udjEuR2V0SW50ZXJmYWNlUHJlZmVyZW5jZXNSZXNwb25zZRKJAQoaVXBkYXRlSW50ZXJmYWNlUHJlZmVyZW5jZXMSNC5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVJbnRlcmZhY2VQcmVmZXJlbmNlc1JlcXVlc3QaNS5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVJbnRlcmZhY2VQcmVmZXJlbmNlc1Jlc3BvbnNlYgZwcm90bzM',
     [file_buf_validate_validate],
   );
 
@@ -121,6 +121,101 @@ export const UpdateAgentPreferencesResponseSchema: GenMessage<UpdateAgentPrefere
   messageDesc(file_hatch_platform_v1_preference, 4);
 
 /**
+ * @generated from message hatch.platform.v1.InterfacePreferences
+ */
+export type InterfacePreferences =
+  Message<'hatch.platform.v1.InterfacePreferences'> & {
+    /**
+     * The Web UI language ("en" or "zh-CN"). Unset until the user picks one;
+     * each browser then follows its own language.
+     *
+     * @generated from field: optional string language = 1;
+     */
+    language?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.InterfacePreferences.
+ * Use `create(InterfacePreferencesSchema)` to create a new message.
+ */
+export const InterfacePreferencesSchema: GenMessage<InterfacePreferences> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 5);
+
+/**
+ * @generated from message hatch.platform.v1.GetInterfacePreferencesRequest
+ */
+export type GetInterfacePreferencesRequest =
+  Message<'hatch.platform.v1.GetInterfacePreferencesRequest'> & {};
+
+/**
+ * Describes the message hatch.platform.v1.GetInterfacePreferencesRequest.
+ * Use `create(GetInterfacePreferencesRequestSchema)` to create a new message.
+ */
+export const GetInterfacePreferencesRequestSchema: GenMessage<GetInterfacePreferencesRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 6);
+
+/**
+ * @generated from message hatch.platform.v1.GetInterfacePreferencesResponse
+ */
+export type GetInterfacePreferencesResponse =
+  Message<'hatch.platform.v1.GetInterfacePreferencesResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.InterfacePreferences preferences = 1;
+     */
+    preferences?: InterfacePreferences | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetInterfacePreferencesResponse.
+ * Use `create(GetInterfacePreferencesResponseSchema)` to create a new message.
+ */
+export const GetInterfacePreferencesResponseSchema: GenMessage<GetInterfacePreferencesResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 7);
+
+/**
+ * @generated from message hatch.platform.v1.UpdateInterfacePreferencesRequest
+ */
+export type UpdateInterfacePreferencesRequest =
+  Message<'hatch.platform.v1.UpdateInterfacePreferencesRequest'> & {
+    /**
+     * Unset leaves the language unchanged.
+     *
+     * @generated from field: optional string language = 1;
+     */
+    language?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.UpdateInterfacePreferencesRequest.
+ * Use `create(UpdateInterfacePreferencesRequestSchema)` to create a new message.
+ */
+export const UpdateInterfacePreferencesRequestSchema: GenMessage<UpdateInterfacePreferencesRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 8);
+
+/**
+ * @generated from message hatch.platform.v1.UpdateInterfacePreferencesResponse
+ */
+export type UpdateInterfacePreferencesResponse =
+  Message<'hatch.platform.v1.UpdateInterfacePreferencesResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.InterfacePreferences preferences = 1;
+     */
+    preferences?: InterfacePreferences | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.UpdateInterfacePreferencesResponse.
+ * Use `create(UpdateInterfacePreferencesResponseSchema)` to create a new message.
+ */
+export const UpdateInterfacePreferencesResponseSchema: GenMessage<UpdateInterfacePreferencesResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 9);
+
+/**
  * Personal preferences of the calling user. A Run credential acts for the
  * user who sent the prompt its run answers.
  *
@@ -142,5 +237,21 @@ export const PreferenceService: GenService<{
     methodKind: 'unary';
     input: typeof UpdateAgentPreferencesRequestSchema;
     output: typeof UpdateAgentPreferencesResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.PreferenceService.GetInterfacePreferences
+   */
+  getInterfacePreferences: {
+    methodKind: 'unary';
+    input: typeof GetInterfacePreferencesRequestSchema;
+    output: typeof GetInterfacePreferencesResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.PreferenceService.UpdateInterfacePreferences
+   */
+  updateInterfacePreferences: {
+    methodKind: 'unary';
+    input: typeof UpdateInterfacePreferencesRequestSchema;
+    output: typeof UpdateInterfacePreferencesResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_preference, 0);

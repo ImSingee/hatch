@@ -75,6 +75,12 @@ import {
   updateAgentPreferences,
 } from '~server/agent-preferences';
 import {
+  readInterfacePreferences,
+  updateInterfacePreferences,
+  type InterfacePreferences,
+} from '~server/interface-preferences';
+import type { Locale } from '~i18n/locale';
+import {
   appIconPath,
   clearAppIcon,
   getAppIcon,
@@ -243,6 +249,10 @@ const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
  * session or API key, or for a Run credential the user who sent the prompt
  * the run answers.
  */
+function interfacePreferencesMessage({ language }: InterfacePreferences) {
+  return { preferences: { language: language ?? undefined } };
+}
+
 async function preferenceUserId(context: HandlerContext): Promise<string> {
   const { status, run } = context.values.get(publicApiContext);
   if (
@@ -788,6 +798,18 @@ export function registerPlatformApi(
           : { messageMode: input.messageMode as 'queue' | 'steer' },
       ),
     }),
+    getInterfacePreferences: async (_input, context) =>
+      interfacePreferencesMessage(
+        await readInterfacePreferences(await preferenceUserId(context)),
+      ),
+    updateInterfacePreferences: async (input, context) =>
+      interfacePreferencesMessage(
+        await updateInterfacePreferences(
+          await preferenceUserId(context),
+          // Protovalidate limits the value to a shipped language.
+          { language: input.language as Locale | undefined },
+        ),
+      ),
   });
   router.service(ImageService, {
     listImageModels: async (input) => {

@@ -589,10 +589,13 @@ export function cliClient(transport: Transport) {
   const preferences = createClient(PreferenceService, transport);
   const providers = createClient(ProviderService, transport);
   const catalog = createClient(CatalogService, transport);
-  const agentPreferences = (
-    value: { messageMode: string } | undefined,
-  ): { agentMessageMode: string } => ({
-    agentMessageMode: required(value).messageMode,
+  /** One DTO for both preference groups; `language` is null until picked. */
+  const personalPreferences = (
+    agent: { messageMode: string } | undefined,
+    ui: { language?: string } | undefined,
+  ): { agentMessageMode: string; language: string | null } => ({
+    agentMessageMode: required(agent).messageMode,
+    language: required(ui).language ?? null,
   });
   return {
     dashboards: {
@@ -926,18 +929,32 @@ export function cliClient(transport: Transport) {
       },
     },
     preferences: {
-      get: async () =>
-        agentPreferences(
-          (await preferences.getAgentPreferences({})).preferences,
-        ),
-      update: async (input: { agentMessageMode: string }) =>
-        agentPreferences(
-          (
-            await preferences.updateAgentPreferences({
-              messageMode: input.agentMessageMode,
-            })
-          ).preferences,
-        ),
+      get: async () => {
+        const [agent, ui] = await Promise.all([
+          preferences.getAgentPreferences({}),
+          preferences.getInterfacePreferences({}),
+        ]);
+        return personalPreferences(agent.preferences, ui.preferences);
+      },
+      /** Changes only the given fields; the others keep their value. */
+      update: async (input: {
+        agentMessageMode?: string;
+        language?: string;
+      }) => {
+        const agent =
+          input.agentMessageMode === undefined
+            ? await preferences.getAgentPreferences({})
+            : await preferences.updateAgentPreferences({
+                messageMode: input.agentMessageMode,
+              });
+        const ui =
+          input.language === undefined
+            ? await preferences.getInterfacePreferences({})
+            : await preferences.updateInterfacePreferences({
+                language: input.language,
+              });
+        return personalPreferences(agent.preferences, ui.preferences);
+      },
     },
     images: {
       models: async (page: { limit: number; cursor?: string }) => {
