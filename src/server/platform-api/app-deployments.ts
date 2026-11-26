@@ -24,6 +24,15 @@ import { publicApiError, publicError } from './errors';
 
 /** How long one watch response may wait for news before it repeats state. */
 const WATCH_HEARTBEAT_MS = 15_000;
+/** Lines one watch message carries at most. */
+const WATCH_BATCH_LINES = 2000;
+/**
+ * Body limit of a cancel: its `failure_message` may hold 64,000 characters,
+ * and JSON may escape each as up to twelve bytes (a surrogate pair written
+ * as two `\uXXXX`), so 1 MiB holds any message the schema allows with room
+ * for the other fields.
+ */
+const CANCEL_BODY_LIMIT = 1024 * 1024;
 
 async function appRow(id: string) {
   const lookup = (where: { id: string } | { slug: string }) =>
@@ -180,28 +189,32 @@ export function registerAppDeploymentApi(
       throw publicError(error);
     }
   });
-  router.rpc(AppService.method.cancelAppDeployment, async (input, context) => {
-    try {
-      const app = await appRow(input.id);
-      const row = await cancelDeployment(
-        app.id,
-        input.deploymentId,
-        actorOf(context),
-        input.failureMessage
-          ? {
-              code:
-                input.failureCode === 'APP_MANIFEST_INVALID'
-                  ? 'APP_MANIFEST_INVALID'
-                  : 'app_build_failed',
-              message: input.failureMessage,
-            }
-          : undefined,
-      );
-      return { deployment: await deploymentMessage(row, app.slug) };
-    } catch (error) {
-      throw publicError(error);
-    }
-  });
+  router.rpc(
+    AppService.method.cancelAppDeployment,
+    async (input, context) => {
+      try {
+        const app = await appRow(input.id);
+        const row = await cancelDeployment(
+          app.id,
+          input.deploymentId,
+          actorOf(context),
+          input.failureMessage
+            ? {
+                code:
+                  input.failureCode === 'APP_MANIFEST_INVALID'
+                    ? 'APP_MANIFEST_INVALID'
+                    : 'app_build_failed',
+                message: input.failureMessage,
+              }
+            : undefined,
+        );
+        return { deployment: await deploymentMessage(row, app.slug) };
+      } catch (error) {
+        throw publicError(error);
+      }
+    },
+    { readMaxBytes: CANCEL_BODY_LIMIT },
+  );
   router.rpc(
     AppService.method.watchAppDeploymentLogs,
     async function* (input, context) {
@@ -213,15 +226,20 @@ export function registerAppDeploymentApi(
         for (;;) {
           context.signal.throwIfAborted();
           const row = await getDeployment(app.id, input.deploymentId);
-          // Read lines up to the state just read, so a finished deployment's
-          // last message follows its last line.
+          // Lines up to the `logSeq` of the row this message carries: a
+          // line committed after the row was read waits for the next one,
+          // so no message reports lines past its own watermark.
           const lines = [];
-          for (;;) {
-            const batch = await readBuildLog(row.id, after);
-            lines.push(...batch);
+          while (lines.length < WATCH_BATCH_LINES && after < row.logSeq) {
+            const batch = await readBuildLog(
+              row.id,
+              after,
+              Math.min(500, WATCH_BATCH_LINES - lines.length),
+              row.logSeq,
+            );
             if (batch.length === 0) break;
+            lines.push(...batch);
             after = batch.at(-1)!.seq;
-            if (lines.length >= 2000) break;
           }
           const state = `${row.status}:${row.updatedAt.toISOString()}`;
           const finished = isFinishedBuild(row.status) && after >= row.logSeq;
@@ -246,7 +264,7 @@ export function registerAppDeploymentApi(
             };
           }
           if (finished) return;
-          if (lines.length >= 2000) continue;
+          if (lines.length >= WATCH_BATCH_LINES) continue;
           await waitForBuildChange(row.id, WATCH_HEARTBEAT_MS, context.signal);
         }
       } catch (error) {

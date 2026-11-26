@@ -33,8 +33,10 @@ import { asBuildError } from './build';
 import { platformBuildHost } from './build-host';
 import { DataMigrationApprovalRequired } from './data-table/migrate';
 import { ReleaseGenerationConflict, releaseDeployment } from './deploy';
+import { appDeployLock } from './deploy-lock';
 import { BuildPackageError, finalizeBuild } from './finalize';
 import { checkoutAppCommit, resolveDeployCommit } from './git';
+import { COMMIT_NOT_ON_MASTER_ERROR } from '../source-git';
 import { evaluateAppSourceManifest } from '../../app-build/produce';
 import { withSandboxOwnership } from '~agent/shell-sandbox';
 import { AppManifestValidationError } from './manifest-validation';
@@ -74,6 +76,11 @@ const LOG_CHANNEL = 'hatch_app_builds';
 /** Followers waiting for queued builder work (Builder lease requests). */
 export const BUILD_QUEUE_CHANNEL = 'queue';
 const MAX_LOG_LINE = LOG_LINE_MAX_CHARS;
+/**
+ * Log rows per INSERT: each binds four parameters, and PostgreSQL takes at
+ * most 65,535 in one statement (a local build's package log can be long).
+ */
+const LOG_INSERT_ROWS = 4_000;
 
 /** Whether this platform has a dedicated Builder. */
 export function builderEnabled(): boolean {
@@ -118,14 +125,16 @@ async function insertLog(
     .returning({ logSeq: schema.appBuilds.logSeq });
   if (!row) return null;
   const first = row.logSeq - lines.length + 1;
-  await tx.insert(schema.appBuildLogs).values(
-    lines.map((line, index) => ({
-      buildId,
-      seq: first + index,
-      stream: entry.stream,
-      text: line,
-    })),
-  );
+  for (let start = 0; start < lines.length; start += LOG_INSERT_ROWS) {
+    await tx.insert(schema.appBuildLogs).values(
+      lines.slice(start, start + LOG_INSERT_ROWS).map((line, index) => ({
+        buildId,
+        seq: first + start + index,
+        stream: entry.stream,
+        text: line,
+      })),
+    );
+  }
   return row.logSeq;
 }
 
@@ -154,13 +163,16 @@ async function appendBuildLogQuietly(
   });
 }
 
-/** Move a build between states; returns the row when the move applied. */
-async function transition(
+type TransitionValues = Partial<typeof schema.appBuilds.$inferInsert> & {
+  status: AppBuildStatus;
+};
+
+/** Move a build between states inside `tx`; null when the move matched none. */
+async function moveBuild(
+  tx: Tx,
   buildId: string,
   from: readonly AppBuildStatus[],
-  values: Partial<typeof schema.appBuilds.$inferInsert> & {
-    status: AppBuildStatus;
-  },
+  values: TransitionValues,
   extra?: ReturnType<typeof and>,
   /**
    * Written in the same transaction, so a follower never sees the new state
@@ -169,38 +181,52 @@ async function transition(
   log?: LogEntry,
 ): Promise<AppBuild | null> {
   const finished = isFinishedBuild(values.status);
-  const row = await db.transaction(async (tx) => {
-    const [moved] = await tx
-      .update(schema.appBuilds)
-      .set({
-        ...values,
-        ...(finished ? { finishedAt: new Date(), leaseExpiresAt: null } : {}),
-      })
-      .where(
-        and(
-          eq(schema.appBuilds.id, buildId),
-          inArray(schema.appBuilds.status, [...from]),
-          extra,
-        ),
-      )
-      .returning();
-    if (!moved) return null;
-    if (!log) return moved;
-    const logSeq = await insertLog(tx, buildId, log);
-    return logSeq === null ? moved : { ...moved, logSeq };
-  });
-  if (row) {
-    await notifyBuild(buildId);
-    if (
-      row.notifyOnFinish &&
-      (row.status === 'ready' || row.status === 'failed')
-    ) {
-      void notifyDeploymentFinished(row).catch((error) => {
-        console.error(`[apps] notification for ${row.id} failed:`, error);
-      });
-    }
+  const [moved] = await tx
+    .update(schema.appBuilds)
+    .set({
+      ...values,
+      ...(finished ? { finishedAt: new Date(), leaseExpiresAt: null } : {}),
+    })
+    .where(
+      and(
+        eq(schema.appBuilds.id, buildId),
+        inArray(schema.appBuilds.status, [...from]),
+        extra,
+      ),
+    )
+    .returning();
+  if (!moved) return null;
+  if (!log) return moved;
+  const logSeq = await insertLog(tx, buildId, log);
+  return logSeq === null ? moved : { ...moved, logSeq };
+}
+
+/** After a committed move: wake followers, post an asked-for notification. */
+async function announceMove(row: AppBuild): Promise<void> {
+  await notifyBuild(row.id);
+  if (
+    row.notifyOnFinish &&
+    (row.status === 'ready' || row.status === 'failed')
+  ) {
+    void notifyDeploymentFinished(row).catch((error) => {
+      console.error(`[apps] notification for ${row.id} failed:`, error);
+    });
   }
-  return row ?? null;
+}
+
+/** Move a build between states; returns the row when the move applied. */
+async function transition(
+  buildId: string,
+  from: readonly AppBuildStatus[],
+  values: TransitionValues,
+  extra?: ReturnType<typeof and>,
+  log?: LogEntry,
+): Promise<AppBuild | null> {
+  const row = await db.transaction((tx) =>
+    moveBuild(tx, buildId, from, values, extra, log),
+  );
+  if (row) await announceMove(row);
+  return row;
 }
 
 /** The platform notification of a finished deployment someone asked for. */
@@ -296,12 +322,18 @@ export async function createDeployment(
       409,
     );
   }
+  const requestId = input.requestId || null;
+  // A repeated request gets the deployment it made, even if its commit has
+  // left master since (a restore): look it up before checking the source.
+  if (requestId) {
+    const repeated = await deploymentOfRequest(db, input.appId, requestId);
+    if (repeated) return repeated;
+  }
   // Source first: only a commit already on master can be deployed.
   const commit = await resolveDeployCommit(input.appId, input.commit);
   const allowDestructive = Boolean(input.allowDestructiveDataMigration);
   const approvalToken = input.dataMigrationApprovalToken || null;
 
-  const requestId = input.requestId || null;
   const created = await db.transaction(async (tx) => {
     // Serialize sequence numbers and supersession per App.
     await tx
@@ -310,20 +342,9 @@ export async function createDeployment(
       .where(eq(schema.apps.id, input.appId))
       .for('update');
     if (requestId) {
-      const [repeated] = await tx
-        .select({ build: schema.appBuilds })
-        .from(schema.appBuildRequests)
-        .innerJoin(
-          schema.appBuilds,
-          eq(schema.appBuilds.id, schema.appBuildRequests.buildId),
-        )
-        .where(
-          and(
-            eq(schema.appBuildRequests.appId, input.appId),
-            eq(schema.appBuildRequests.requestId, requestId),
-          ),
-        );
-      if (repeated) return { row: repeated.build, joined: true };
+      // A concurrent first submission of the same request committed first.
+      const repeated = await deploymentOfRequest(tx, input.appId, requestId);
+      if (repeated) return { row: repeated, joined: true };
     }
     /** This request gets `buildId`: recorded so a repeat finds it. */
     const record = async (buildId: string) => {
@@ -347,19 +368,29 @@ export async function createDeployment(
           dataMigrationApprovalToken: approvalToken ?? { isNull: true },
         },
         orderBy: { seq: 'desc' },
+        columns: { id: true },
       });
-      if (existing) {
-        await record(existing.id);
-        if (input.notify && !existing.notifyOnFinish) {
-          // A joiner that asked to be told is told.
-          const [notified] = await tx
+      // Joined only while it is still unfinished, checked in the same write
+      // that asks for its notification: a build that finished in between
+      // already sent (or skipped) its notification, so this request gets a
+      // deployment of its own instead.
+      const [joined] = existing
+        ? await tx
             .update(schema.appBuilds)
-            .set({ notifyOnFinish: true })
-            .where(eq(schema.appBuilds.id, existing.id))
-            .returning();
-          return { row: notified ?? existing, joined: true };
-        }
-        return { row: existing, joined: true };
+            .set({
+              notifyOnFinish: sql`${schema.appBuilds.notifyOnFinish} or ${Boolean(input.notify)}::boolean`,
+            })
+            .where(
+              and(
+                eq(schema.appBuilds.id, existing.id),
+                inArray(schema.appBuilds.status, ['queued', 'building']),
+              ),
+            )
+            .returning()
+        : [];
+      if (joined) {
+        await record(joined.id);
+        return { row: joined, joined: true };
       }
     }
     const [last] = await tx
@@ -426,7 +457,15 @@ export async function findDeploymentByRequest(
   requestId: string,
 ): Promise<AppBuild | null> {
   await sweepBuilds().catch(() => {});
-  const [found] = await db
+  return deploymentOfRequest(db, appId, requestId);
+}
+
+async function deploymentOfRequest(
+  client: typeof db | Tx,
+  appId: string,
+  requestId: string,
+): Promise<AppBuild | null> {
+  const [found] = await client
     .select({ build: schema.appBuilds })
     .from(schema.appBuildRequests)
     .innerJoin(
@@ -546,13 +585,24 @@ export type BuildLogLine = {
   at: Date;
 };
 
+/**
+ * Lines after `afterSeq`, oldest first; with `throughSeq`, none past it (a
+ * follower bounds a batch by the `logSeq` of the row it sends with it).
+ */
 export async function readBuildLog(
   buildId: string,
   afterSeq: number,
   limit = 500,
+  throughSeq?: number,
 ): Promise<BuildLogLine[]> {
   return db.query.appBuildLogs.findMany({
-    where: { buildId, seq: { gt: afterSeq } },
+    where: {
+      buildId,
+      seq:
+        throughSeq === undefined
+          ? { gt: afterSeq }
+          : { gt: afterSeq, lte: throughSeq },
+    },
     orderBy: { seq: 'asc' },
     limit,
     columns: { seq: true, stream: true, text: true, at: true },
@@ -595,8 +645,6 @@ export async function waitForBuildChange(
   signal?: AbortSignal,
 ): Promise<void> {
   if (signal?.aborted) return;
-  await ensureListening();
-  if (signal?.aborted) return;
   await new Promise<void>((resolve) => {
     const waiter: Waiter = { buildId, wake: () => done() };
     const timer = setTimeout(() => done(), timeoutMs);
@@ -608,6 +656,9 @@ export async function waitForBuildChange(
     };
     waiters.add(waiter);
     signal?.addEventListener('abort', done, { once: true });
+    // The deadline and the abort already apply while LISTEN is set up; a
+    // wake-up missed meanwhile only delays the follower to its next poll.
+    void ensureListening();
   });
 }
 
@@ -621,6 +672,10 @@ function failureCode(error: unknown): string {
   if (error instanceof ReleaseGenerationConflict)
     return 'resource_generation_conflict';
   if (error instanceof BuildArchiveError) return 'app_build_invalid';
+  // The commit left master (a restore) after the deployment was created:
+  // the same stable code a create of that commit gets.
+  if (error instanceof AppError && error.code === COMMIT_NOT_ON_MASTER_ERROR)
+    return 'COMMIT_NOT_ON_MASTER';
   if (error instanceof AppError && error.status < 500)
     return 'app_build_failed';
   return 'release_failed';
@@ -643,12 +698,16 @@ function failureMessage(error: unknown): string {
 /** A Builder's hold on one build: valid only for the attempt it leased. */
 export type BuildLease = { builderId: string; attempt: number };
 
-/** Row predicate: the build is still held by exactly this lease. */
+/**
+ * Row predicate: the build is still held by exactly this lease, and the lease
+ * has not expired (the sweeper may not have reclaimed it yet).
+ */
 function heldBy(lease: BuildLease) {
   return and(
     eq(schema.appBuilds.status, 'building'),
     eq(schema.appBuilds.builderId, lease.builderId),
     eq(schema.appBuilds.attempts, lease.attempt),
+    gt(schema.appBuilds.leaseExpiresAt, new Date()),
   );
 }
 
@@ -885,13 +944,7 @@ export async function leaseBuild(builderId: string): Promise<AppBuild | null> {
     if (uniqueViolation(error)) return null;
     throw error;
   });
-  if (leased) {
-    await appendBuildLog(
-      leased.id,
-      'platform',
-      `Building on ${builderId} (attempt ${leased.attempts}).`,
-    );
-  }
+  if (leased) await notifyBuild(leased.id);
   return leased;
 }
 
@@ -937,7 +990,13 @@ function claimQueuedBuild(builderId: string): Promise<AppBuild | null> {
         ),
       )
       .returning();
-    return row ?? null;
+    if (!row) return null;
+    // Committed with the claim, so a lease is never lost to its log line.
+    const logSeq = await insertLog(tx, row.id, {
+      stream: 'platform',
+      text: `Building on ${builderId} (attempt ${row.attempts}).`,
+    });
+    return { ...row, logSeq: logSeq ?? row.logSeq };
   });
 }
 
@@ -994,7 +1053,12 @@ export async function leasedBuild(
 ): Promise<AppBuild | null> {
   return (
     (await db.query.appBuilds.findFirst({
-      where: { id: buildId, builderId, status: 'building' },
+      where: {
+        id: buildId,
+        builderId,
+        status: 'building',
+        leaseExpiresAt: { gt: new Date() },
+      },
     })) ?? null
   );
 }
@@ -1074,31 +1138,49 @@ export function sweepBuilds(): Promise<void> {
         updatedAt: { lt: new Date(now - RELEASE_STALL_MS) },
       },
     });
-    for (const build of stalled) {
-      const recorded = await db.query.deployments.findFirst({
-        where: { id: build.id },
-        columns: { version: true },
-      });
-      // Only while the row is exactly as selected: every write to it (a
-      // state move, a log line) advances updatedAt, so a release that
-      // resumed in between is left alone.
-      await transition(
-        build.id,
-        [build.status],
-        recorded
-          ? { status: 'ready', deploymentVersion: recorded.version }
-          : {
-              status: 'failed',
-              errorCode: 'release_interrupted',
-              errorMessage: 'The platform stopped while releasing.',
-            },
-        eq(schema.appBuilds.updatedAt, build.updatedAt),
-      );
-    }
+    for (const build of stalled) await settleStalledRelease(build);
   })().finally(() => {
     sweeping = undefined;
   });
   return sweeping;
+}
+
+/**
+ * Settle a verify or release that stopped making progress, from the recorded
+ * deployments. A release records its deployment row under the App's deploy
+ * lock, so holding it here means none is mid-commit: the row read under it
+ * is final for this check. The move applies only while the request is
+ * exactly as selected (every write to it, a state move or a log line,
+ * advances updatedAt), so a release that resumed in between is left alone.
+ */
+async function settleStalledRelease(build: AppBuild): Promise<void> {
+  const settled = await db.transaction(async (tx) => {
+    await appDeployLock.acquire(tx, build.appId);
+    const recorded = await tx.query.deployments.findFirst({
+      where: { id: build.id, appId: build.appId },
+      columns: { version: true },
+    });
+    return moveBuild(
+      tx,
+      build.id,
+      [build.status],
+      recorded
+        ? { status: 'ready', deploymentVersion: recorded.version }
+        : {
+            status: 'failed',
+            errorCode: 'release_interrupted',
+            errorMessage: 'The platform stopped while releasing.',
+          },
+      eq(schema.appBuilds.updatedAt, build.updatedAt),
+      {
+        stream: 'platform',
+        text: recorded
+          ? `Released version ${recorded.version}; the platform stopped before confirming it.`
+          : 'The platform stopped while releasing; nothing was released.',
+      },
+    );
+  });
+  if (settled) await announceMove(settled);
 }
 
 let sweeper: ReturnType<typeof setInterval> | undefined;

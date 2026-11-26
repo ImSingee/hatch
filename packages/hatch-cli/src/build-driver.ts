@@ -97,20 +97,23 @@ function toolUnavailable(message: string): Error {
   return Object.assign(new Error(message), { code: 'tool_unavailable' });
 }
 
-/** Whether `name` is an executable on PATH (with PATHEXT on Windows). */
-function onPath(name: string, env: NodeJS.ProcessEnv): boolean {
-  const extensions =
-    process.platform === 'win32'
-      ? (env.PATHEXT ?? '.EXE;.CMD').split(';').filter(Boolean)
-      : [''];
-  return (env.PATH ?? '')
-    .split(path.delimiter)
-    .filter(Boolean)
-    .some((dir) =>
-      extensions.some((extension) =>
-        executable(path.join(dir, `${name}${extension}`)),
-      ),
-    );
+/**
+ * The `deno` executable on PATH, as an absolute path. Tools run without a
+ * shell, so on Windows only `deno.exe` counts: a `deno.cmd` or `.bat` shim
+ * cannot be started without a command interpreter.
+ */
+function denoOnPath(env: NodeJS.ProcessEnv): string | null {
+  const name = process.platform === 'win32' ? 'deno.exe' : 'deno';
+  const search = Object.entries(env).find(
+    ([key]) => key.toUpperCase() === 'PATH',
+  )?.[1];
+  for (const dir of (search ?? '').split(path.delimiter)) {
+    const directory = dir.trim().replace(/^"(.*)"$/, '$1');
+    if (!directory) continue;
+    const file = path.resolve(directory, name);
+    if (executable(file)) return file;
+  }
+  return null;
 }
 
 /**
@@ -214,11 +217,14 @@ async function main(): Promise<void> {
               [...resolved.prefix, ...args],
             ];
           } else {
-            if (!onPath('deno', env))
+            const deno = denoOnPath(env);
+            if (!deno)
               throw toolUnavailable(
-                'Deno Apps build with deno, which is not on PATH. Install it from https://deno.com, or build on the platform with --build builder.',
+                process.platform === 'win32'
+                  ? 'Deno Apps build with deno.exe, which is not on PATH (a deno.cmd shim cannot run without a shell). Install Deno from https://deno.com, or build on the platform with --build builder.'
+                  : 'Deno Apps build with deno, which is not on PATH. Install it from https://deno.com, or build on the platform with --build builder.',
               );
-            [command, commandArgs] = ['deno', args];
+            [command, commandArgs] = [deno, args];
           }
           return tool(command, commandArgs, {
             cwd: cwd ?? root,

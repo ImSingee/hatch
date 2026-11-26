@@ -126,8 +126,12 @@ only and cannot be deleted. Tags cannot be pushed: the platform creates the
 names the `commit` to release, which must be on `master`, and defaults to its
 tip; its build package (built by the platform's dedicated Builder, or by the
 caller and uploaded) must be built for that deployment and commit. The removed
-`DeployApp` RPC and its bundle upload have no replacement: CLIs older than
-deployments cannot deploy and must be upgraded. There is no RPC that downloads
+`DeployApp` RPC and its bundle upload have no drop-in replacement. The
+workflow that replaces them is: push the commit over Git, call
+`CreateAppDeployment`, then either follow the Builder's build
+(`WatchAppDeploymentLogs`) or build locally and upload the package with
+`UploadAppDeploymentArtifact`. CLIs older than deployments cannot deploy and
+must be upgraded. There is no RPC that downloads
 source; read it with Git fetch, whose
 master commit always matches the history it delivers. Rollback moves `master`
 back to the restored release.

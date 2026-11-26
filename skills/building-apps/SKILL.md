@@ -139,6 +139,19 @@ finished one by itself; one still running blocks it with
 `hatch app deployments cancel <id> <deployment-id>`. Report success only for
 a deployment whose status is `ready`.
 
+When no deployment id exists (the create request may never have reached the
+platform, and `hatch app deployments list <id> --json` shows no deployment of
+that commit), rely on `--reconcile`. While it reports `unconfirmed`, the
+create could still land: do not deploy, and run `--reconcile` again once a
+minute has passed after `pending.createDeadline` (the deploy error names that
+time). `not-created` means no deployment was made and the checkout forgot the
+request: deploy again normally. `in-progress` or
+`finished` carries the deployment: follow, cancel or report it as above.
+`missing` (or deploy failing with `pending_deployment_missing`) means the
+recorded deployment no longer exists: check `hatch app deployments list`,
+then deploy with `--retry-after-confirming <pending-commit>`, which forgets
+the record and starts a new deployment in the same command.
+
 ## Source contract
 
 `hatch app create` produces a prepared, runnable Counter App with a native

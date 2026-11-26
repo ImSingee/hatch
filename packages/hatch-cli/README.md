@@ -205,12 +205,16 @@ is rejected with `workspace_instance_mismatch`.
     from `HATCH_BUILD_TOOLCHAIN_DIR` when that directory's `node_modules`
     holds exactly those versions and `PATH` has the pinned pnpm, as in the
     platform image), and uploads the package (`UploadAppDeploymentArtifact`,
-    at most 200 MiB compressed). A Deno source also needs `deno` on `PATH`,
+    at most 200 MiB compressed). A Deno source also needs `deno` on `PATH`
+    (on Windows `deno.exe`: a `deno.cmd` shim cannot run without a shell),
     and a native frontend `nsh` of the platform's version (`HATCH_NSH_BIN` or
     `PATH`); a missing or mismatched tool fails with `tool_unavailable` or
     `nsh_unavailable` (exit 7). A build that outlives `--timeout` stops with
-    `local_build_timeout` (exit 7). Build output goes to stderr. A build that
-    fails here is recorded as a failed deployment.
+    `local_build_timeout` (exit 7). With `--commit`, the commit must be in
+    this checkout (the build does not fetch it): otherwise the deploy fails
+    with `source_unavailable` (exit 6) before creating a deployment; run
+    `hatch app update` first. Build output goes to stderr. A build that fails
+    here is recorded as a failed deployment.
   - `--build auto` (default) is `builder` where the platform has one, else
     `local`.
 
@@ -369,8 +373,12 @@ whose message is the build output, naming files and lines, for example
 `app/custom/ui.tsx:17: bare colour in a class`. Nothing was released; fix the
 source and deploy again. Other ends of a deployment exit 6 with its code:
 `toolchain_mismatch` (upgrade the CLI), `app_build_invalid` (the platform
-refused the package), `superseded`, `canceled`, `builder_lost`,
-`artifact_timeout`, `resource_generation_conflict` or `release_failed`.
+refused the package), `COMMIT_NOT_ON_MASTER` (a rollback took the commit off
+`master` before it was released), `superseded`, `canceled`, `builder_lost`,
+`artifact_timeout`, `resource_generation_conflict` or `release_failed`. A
+source tree over 512 MiB or 100,000 files is refused (the platform checks it
+out to evaluate its manifest), and so is a repository that uses SHA-256 commit
+ids.
 
 Create/deploy/rollback are never automatically retried. Every deployment is a
 platform record, so an interrupted deploy is settled rather than guessed. The
@@ -381,22 +389,38 @@ once the platform answers:
 ```sh
 hatch app deploy --directory notes-copy --reconcile --json
 hatch app deployments logs <id> <deployment-id> --follow
-# Forget the pending deployment without looking it up:
+# Forget the pending deployment without looking it up, then deploy again
+# (push and create a new deployment) in the same command:
 hatch app deploy --directory notes-copy --retry-after-confirming '<pending-commit>' --json
 ```
 
-`--reconcile` reports the pending deployment as `not-created`, `in-progress`,
-`finished` (with the deployment) or `unconfirmed`, and forgets it only when
-`finished` or `not-created`. `not-created` is reported only after the create
-request's own deadline (its `--timeout`) and a minute more have passed: the
-platform creates nothing for a request whose call has ended, so the
-deployment cannot appear later. Until then the request is `unconfirmed`. The
-next deploy does the same on its own: a finished one is settled, one still in
-progress or unconfirmed fails with `deployment_in_progress` (exit 6) until it
-finishes, is canceled or can be confirmed absent. A deploy whose `--timeout` passes while the
-Builder is working exits 7 with `deployment_in_progress` and the deployment in
-the error details; it keeps running on the platform. The push that precedes a
-deployment is safe to repeat.
+`--reconcile` only reads the platform record, so it works in a checkout with
+uncommitted changes. It reports the pending deployment as `not-created`,
+`in-progress`, `finished` (with the deployment), `missing` or `unconfirmed`,
+and forgets it only when `finished` or `not-created`. `not-created` is
+reported once the create request's own deadline (its `--timeout`) and a
+minute more have passed with no deployment found for its request id; until
+then the request is `unconfirmed`, so reconcile again later. The platform
+creates nothing for a request whose call has already ended when it checks,
+so `not-created` holds with one narrow exception: a create whose call ends
+while the platform is already committing it can still appear after
+`not-created` was reported. Its cost is a duplicate deployment of the same
+commit that deploy asked for, never a release of other source. `missing`
+means the checkout recorded a deployment id the platform no longer has; no
+wait settles it, so inspect `hatch app deployments list <id>` and forget it
+explicitly with `--retry-after-confirming <pending-commit>`, which then
+deploys again.
+
+The next deploy does the same on its own: a finished one is settled, one
+still in progress or unconfirmed fails with `deployment_in_progress` (exit 6)
+until it finishes, is canceled or can be confirmed absent, and a missing one
+fails with `pending_deployment_missing` (exit 6). A deploy whose `--timeout`
+passes while the Builder is working exits 7 with `deployment_in_progress` and
+the deployment in the error details; it keeps running on the platform. A
+deployment that finished before the rest of its log arrived settles by its
+outcome, with a note on stderr; `deployments logs --follow` instead fails with
+`deployment_log_incomplete` (exit 7) and the `afterSeq` to resume from with
+`--after`. The push that precedes a deployment is safe to repeat.
 
 ## Output, errors and unsupported commands
 

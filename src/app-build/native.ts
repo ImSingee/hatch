@@ -39,6 +39,16 @@ import type { BuildNshHost } from './host';
 export { NATIVE_HOST_CALLS, nshAppId } from '../server/apps/native/nsh-config';
 
 /**
+ * Remove a directory this build owns. A failure is logged, never thrown: it
+ * must not replace the build's own result or error.
+ */
+async function removeOwned(dir: string): Promise<void> {
+  await fs.rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
+    console.error(`[app-build] could not remove ${dir}:`, error);
+  });
+}
+
+/**
  * Rewrite the paths NSH prints to App-root paths. `nsh build`, `nsh test` and
  * `nsh package` print them relative to the entry's directory (`main.tsx:4:2`,
  * `../gen/x.ts`): pass that directory as `base`. TypeScript in `nsh check`
@@ -243,87 +253,90 @@ export async function buildNativeFrontend(
       return output;
     };
 
-    // 1) Types, token names included.
-    await nshRun('nsh check', ['check', app.entry]);
-
-    // 2) Rules NSH does not enforce.
-    const files = await nativeModuleGraph({
-      root: src,
-      entry: app.entry,
-      aliases: nativeSdkAliases(),
-    });
-    await checkNativeSourceRules({
-      root: src,
-      files,
-      services: options.api?.services ?? [],
-    });
-    const custom = files.filter((file) => file.startsWith('app/custom/'));
-    logs.push(
-      custom.length
-        ? `native custom files (may use nsh directly):\n  ${custom.join('\n  ')}`
-        : 'native custom files: none',
-    );
-
-    // 3) Release build; unknown classes are not tokens of the catalogue.
     const bundleDir = path.join(work, 'bundle');
-    const built = await nshRun('nsh build', [
-      'build',
-      '--release',
-      '-o',
-      bundleDir,
-      app.entry,
-    ]);
-    const unknown = unknownClassWarnings(built);
-    if (unknown.length) {
-      throw new NativeBuildError(
-        `nsh build failed: unknown classes are not theme tokens:\n${unknown.join('\n')}`,
-      );
-    }
+    const packageDir = path.join(work, 'web');
+    // Every nsh step runs while the sandbox identity owns the build copy and
+    // this scratch directory: the start-up check runs App code as that
+    // identity, and a host that runs every tool sandboxed (the Builder) can
+    // then write NSH's caches and outputs.
+    await nsh.withSandboxOwnership([src, work], async () => {
+      // 1) Types, token names included.
+      await nshRun('nsh check', ['check', app.entry]);
 
-    // 4) Start-up check on canned host answers.
-    const smokeHost = path.join(work, 'smoke-host.js');
-    await fs.writeFile(
-      smokeHost,
-      SMOKE_HOST.replace('__THEME__', JSON.stringify(nshTheme())),
-      'utf8',
-    );
-    await fs.chmod(work, 0o755);
-    await fs.chmod(smokeHost, 0o644);
-    // `nsh test` writes its step harness to `.nsh/test/` in the app
-    // directory, the App root (nsh.json names the entry); start from a
-    // fresh one.
-    await fs.rm(path.join(src, '.nsh', 'test'), {
-      recursive: true,
-      force: true,
-    });
-    // The check runs as the sandbox identity, which owns the private build
-    // copy only while it runs.
-    await nsh.withSandboxOwnership([src], () =>
-      nshRun(
+      // 2) Rules NSH does not enforce.
+      const files = await nativeModuleGraph({
+        root: src,
+        entry: app.entry,
+        aliases: nativeSdkAliases(),
+      });
+      await checkNativeSourceRules({
+        root: src,
+        files,
+        services: options.api?.services ?? [],
+      });
+      const custom = files.filter((file) => file.startsWith('app/custom/'));
+      logs.push(
+        custom.length
+          ? `native custom files (may use nsh directly):\n  ${custom.join('\n  ')}`
+          : 'native custom files: none',
+      );
+
+      // 3) Release build; unknown classes are not tokens of the catalogue.
+      const built = await nshRun('nsh build', [
+        'build',
+        '--release',
+        '-o',
+        bundleDir,
+        app.entry,
+      ]);
+      const unknown = unknownClassWarnings(built);
+      if (unknown.length) {
+        throw new NativeBuildError(
+          `nsh build failed: unknown classes are not theme tokens:\n${unknown.join('\n')}`,
+        );
+      }
+
+      // 4) Start-up check on canned host answers.
+      const smokeHost = path.join(work, 'smoke-host.js');
+      await fs.writeFile(
+        smokeHost,
+        SMOKE_HOST.replace('__THEME__', JSON.stringify(nshTheme())),
+        'utf8',
+      );
+      await fs.chmod(work, 0o755);
+      await fs.chmod(smokeHost, 0o644);
+      // `nsh test` writes its step harness to `.nsh/test/` in the app
+      // directory, the App root (nsh.json names the entry); start from a
+      // fresh one.
+      await fs.rm(path.join(src, '.nsh', 'test'), {
+        recursive: true,
+        force: true,
+      });
+      // The check runs App code as the sandbox identity.
+      await nshRun(
         'Start-up check (nsh test)',
         ['test', app.entry, '--web-host', smokeHost],
         { sandboxed: true, timeoutMs: SMOKE_TIMEOUT_MS },
-      ),
-    );
+      );
 
-    // 5) The linked web module and its engine.
-    const packageDir = path.join(work, 'web');
-    await nshRun('nsh package', [
-      'package',
-      '--target',
-      'web',
-      '-o',
-      packageDir,
-      '--name',
-      'app',
-      '--id',
-      nshAppId(app.id),
-      '--app-version',
-      '1.0.0',
-      '--build',
-      '1',
-      app.entry,
-    ]);
+      // 5) The linked web module and its engine.
+      await nshRun('nsh package', [
+        'package',
+        '--target',
+        'web',
+        '-o',
+        packageDir,
+        '--name',
+        'app',
+        '--id',
+        nshAppId(app.id),
+        '--app-version',
+        '1.0.0',
+        '--build',
+        '1',
+        app.entry,
+      ]);
+    });
     const site = path.join(packageDir, 'app');
     const packaged = packagedApp(
       await fs.readFile(path.join(site, 'index.html'), 'utf8'),
@@ -434,6 +447,6 @@ export async function buildNativeFrontend(
         `${runtimeFiles.size} runtime file(s)`,
     );
   } finally {
-    await fs.rm(work, { recursive: true, force: true });
+    await removeOwned(work);
   }
 }

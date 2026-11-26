@@ -1131,9 +1131,19 @@ export function cliClient(transport: Transport) {
               (await apps.uploadAppDeploymentArtifact(input)).deployment,
             ),
           ),
-        get: async (input: { id: string; deploymentId: string }) =>
+        get: async (
+          input: { id: string; deploymentId: string },
+          options: { timeoutMs?: number; signal?: AbortSignal } = {},
+        ) =>
           deploymentView(
-            required((await apps.getAppDeployment(input)).deployment),
+            required(
+              (
+                await apps.getAppDeployment(input, {
+                  timeoutMs: options.timeoutMs,
+                  signal: options.signal,
+                })
+              ).deployment,
+            ),
           ),
         list: async (input: {
           id: string;
@@ -1418,25 +1428,79 @@ export function platformTransport(
     credential.token !== undefined &&
     process.env.HATCH_CLI_RUN_ENDPOINT !== undefined &&
     process.env.HATCH_CLI_TOKEN === credential.token;
-  let renewing: Promise<void> | undefined;
-  const current = async () => {
+  // One renewal at a time, shared by every request that needs it. Each
+  // request waits only within its own deadline; the renewal stops once no
+  // request waits for it any more.
+  let renewal:
+    | { done: Promise<void>; stop: AbortController; waiters: number }
+    | undefined;
+  const renew = (callSignal: AbortSignal) => {
+    if (!renewal) {
+      const stop = new AbortController();
+      const entry = {
+        stop,
+        waiters: 0,
+        done: refreshRunEnvironment(
+          process.env,
+          AbortSignal.any([signal, stop.signal]),
+        ).then(() => {
+          const next = process.env.HATCH_CLI_TOKEN;
+          if (next) {
+            issued.add(next);
+            headers = { authorization: `Bearer ${next}` };
+          }
+        }),
+      };
+      // Settled or abandoned, it is no longer the one to join.
+      entry.done
+        .finally(() => {
+          if (renewal === entry) renewal = undefined;
+        })
+        .catch(() => {});
+      renewal = entry;
+    }
+    const entry = renewal;
+    entry.waiters++;
+    return new Promise<void>((resolve, reject) => {
+      let left = false;
+      const leave = (abandoned: boolean) => {
+        if (left) return;
+        left = true;
+        callSignal.removeEventListener('abort', onAbort);
+        if (--entry.waiters === 0 && abandoned && renewal === entry) {
+          renewal = undefined;
+          entry.stop.abort();
+        }
+      };
+      // Connect ends the call with its own reason (deadline or cancel).
+      const onAbort = () => {
+        leave(true);
+        reject(callSignal.reason);
+      };
+      callSignal.addEventListener('abort', onAbort, { once: true });
+      if (callSignal.aborted) {
+        onAbort();
+        return;
+      }
+      entry.done.then(
+        () => {
+          leave(false);
+          resolve();
+        },
+        (error: unknown) => {
+          leave(false);
+          reject(error);
+        },
+      );
+    });
+  };
+  const current = async (callSignal: AbortSignal) => {
     if (!runCredential) return headers;
     const token = headers.authorization?.slice('Bearer '.length) ?? '';
     const expiresAt = jwtExpiresAt(token);
     if (expiresAt !== null && expiresAt - Date.now() > RUN_CREDENTIAL_MARGIN_MS)
       return headers;
-    renewing ??= refreshRunEnvironment(process.env, signal)
-      .then(() => {
-        const next = process.env.HATCH_CLI_TOKEN;
-        if (next) {
-          issued.add(next);
-          headers = { authorization: `Bearer ${next}` };
-        }
-      })
-      .finally(() => {
-        renewing = undefined;
-      });
-    await renewing;
+    await renew(callSignal);
     return headers;
   };
   const transport = createConnectTransport({
@@ -1445,7 +1509,9 @@ export function platformTransport(
     defaultTimeoutMs: timeout,
     interceptors: [
       (next) => async (request) => {
-        for (const [key, value] of Object.entries(await current()))
+        for (const [key, value] of Object.entries(
+          await current(request.signal),
+        ))
           request.header.set(key, value);
         return next(request);
       },
@@ -1453,13 +1519,19 @@ export function platformTransport(
     fetch: async (input, init) => fetch(input, { ...init, redirect: 'error' }),
   });
   const convert = (error: unknown) => {
-    // Connect reports a rejected fetch as Unknown with the TypeError.
+    // Connect reports what an interceptor or fetch threw as Unknown with
+    // that error as the cause: a rejected fetch is a TypeError, and a Run
+    // credential renewal that failed (no request was sent) a CliError.
+    const cause =
+      error instanceof ConnectError && error.code === Code.Unknown
+        ? error.cause
+        : undefined;
     const safe =
-      error instanceof ConnectError &&
-      error.code === Code.Unknown &&
-      error.cause instanceof TypeError
-        ? fetchFailure(credential.url, error.cause)
-        : publicError(error);
+      cause instanceof TypeError
+        ? fetchFailure(credential.url, cause)
+        : cause instanceof CliError
+          ? cause
+          : publicError(error);
     let message = safe.message;
     for (const value of issued)
       message = message.replaceAll(value, '[redacted]');

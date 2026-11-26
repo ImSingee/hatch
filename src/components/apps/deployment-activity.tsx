@@ -232,8 +232,9 @@ export function DeploymentActivity({ appId }: { appId: string }) {
   // history, the operations panel and the API panel. It may start and finish
   // between two polls, so any release that was not ready in the previous
   // snapshot counts, including one this page never saw building. The first
-  // snapshot fetched for this App is only the baseline: those releases are
-  // already reflected in the rest of the page.
+  // snapshot fetched for this App is the baseline: it raises no toasts, but
+  // the rest of the page may have loaded before a release in it finished, so
+  // it still refreshes what depends on releases.
   const seen = useRef<{ appId: string; statuses: Map<string, string> | null }>({
     appId,
     statuses: null,
@@ -260,7 +261,10 @@ export function DeploymentActivity({ appId }: { appId: string }) {
       }
     }
     seen.current.statuses = statuses;
-    if (released.length === 0) return;
+    const baselineHasRelease =
+      previous === null &&
+      data.deployments.some((deployment) => deployment.status === 'ready');
+    if (released.length === 0 && !baselineHasRelease) return;
     for (const deployment of released) {
       toast.success(
         t('deployments.request.released', {

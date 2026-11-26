@@ -14,7 +14,7 @@
     "dev:platform:watch": "HATCH_DATA_DIR=../hatch-data vite dev",
     "dev:runner": "pnpm hatch-sdk:build && pnpm build:cli && pnpm dev:runner:watch",
     "dev:runner:watch": "HATCH_DATA_DIR=../hatch-runner-data tsx watch src/runner/main.ts",
-    "dev:builder": "HATCH_DATA_DIR=../hatch-builder-data tsx watch src/builder/main.ts",
+    "dev:builder": "pnpm hatch-sdk:build && HATCH_DATA_DIR=../hatch-builder-data tsx watch src/builder/main.ts",
     "build": "pnpm hatch-sdk:build && pnpm build:platform && pnpm build:runner && pnpm build:cli",
     "build:platform": "vite build",
     "build:runner": "tsx scripts/build-runner.ts",

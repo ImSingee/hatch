@@ -19,6 +19,7 @@
  *   HATCH_DATA_DIR       scratch root for builds (see ~agent/paths)
  */
 import { spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
 import {
   chmod,
   mkdir,
@@ -28,7 +29,11 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { BUILD_WORK_DIR } from '~agent/paths';
+import { withSandboxOwnership } from '~agent/shell-sandbox';
 import { getBuilderEnv } from '~env';
 import { packBuildDirectory } from '../app-build/archive';
 import { buildAppSource } from '../app-build/produce';
@@ -67,11 +72,47 @@ async function runJob(file: string): Promise<void> {
     process.once(signal, () => stopping.abort());
   }
   const request = JSON.parse(await readFile(file, 'utf8')) as JobRequest;
+  // Every tool of the build runs as the sandbox identity, with a home and a
+  // pnpm store of this job's own (never a shared one another App's build
+  // could have written), and the build copy is that identity's while it runs.
+  const sandbox = {
+    home: path.join(request.workDir, 'sandbox-home'),
+    pnpmStoreDir: path.join(request.workDir, 'sandbox-store'),
+  };
+  await mkdir(sandbox.home, { recursive: true });
+  await mkdir(sandbox.pnpmStoreDir, { recursive: true });
   const host = platformBuildHost({
     sdkDigest: request.sdkDigest,
     workDir: request.workDir,
     signal: stopping.signal,
+    sandbox,
   });
+  const owned: string[] = [];
+  const isOwned = (target: string) =>
+    owned.some((root) => target === root || target.startsWith(`${root}/`));
+  host.withSource = async (src, task) => {
+    const targets = [src, sandbox.home, sandbox.pnpmStoreDir];
+    owned.push(...targets);
+    try {
+      return await withSandboxOwnership(targets, task);
+    } finally {
+      owned.length = 0;
+    }
+  };
+  // A nested hand-over (the native build's) only adds what is not already
+  // the sandbox's, so it never gives the build copy back mid-build.
+  const nshHost = host.nsh.bind(host);
+  host.nsh = () => {
+    const nsh = nshHost();
+    return {
+      ...nsh,
+      withSandboxOwnership: (targets, task) =>
+        withSandboxOwnership(
+          targets.filter((target) => !isOwned(target)),
+          task,
+        ),
+    };
+  };
   const toolchainContext = host.toolchainContext;
   host.toolchainContext = (root, logs) => {
     // Stream the build to the parent as it runs.
@@ -152,33 +193,101 @@ const SHUTDOWN_GRACE_MS = 20_000;
 const JOB_STOP_GRACE_MS = 10_000;
 const LOG_SEND_ATTEMPTS = 3;
 
+/**
+ * Build output waiting to be sent, at most: past it, output is dropped and
+ * one line says how much, so a platform that cannot keep up costs bounded
+ * memory instead of all of a long build's output.
+ */
+const LOG_QUEUE_MAX_LINES = 20_000;
+const LOG_QUEUE_MAX_BYTES = 8 * 1024 * 1024;
+/** How long a finished build waits for its queued output to be sent. */
+const LOG_DRAIN_MS = 30_000;
+/** How long the line noting dropped output may take to send. */
+const LOG_NOTE_TIMEOUT_MS = 5_000;
+/** Largest source archive a Builder downloads. */
+const SOURCE_MAX_BYTES = 1024 * 1024 * 1024;
+
 type CallInit = RequestInit & {
   build?: LeasedBuild;
   timeoutMs?: number;
 };
 
+function cutLine(line: string): string {
+  return line.length > LOG_LINE_MAX_CHARS
+    ? `${line.slice(0, LOG_LINE_MAX_CHARS - 1)}…`
+    : line;
+}
+
+/** The line that stands for `count` lines of output that were dropped. */
+function droppedNote(count: number): string {
+  return `[builder] ${count} line(s) of build output were dropped: the platform did not take them in time.`;
+}
+
+/** A queued log line, or a note standing for `lines` dropped ones. */
+type LogEntry = { text: string; lines: number };
+
 /**
  * Build output on its way to the platform: sent one batch at a time, in
- * order, each within the protocol's line and byte limits; a failed batch is
- * retried a few times, then dropped with a note, so a broken log endpoint
- * cannot hold up the build.
+ * order, each within the protocol's line and byte limits. The queue is
+ * bounded (output past it is dropped and counted); a failed batch is
+ * retried a few times, then dropped and counted, so a broken log endpoint
+ * cannot hold up the build. Each gap is marked by one line saying how many
+ * lines it lost.
  */
 class LogShipper {
-  private queue: string[] = [];
+  private queue: LogEntry[] = [];
+  private queuedBytes = 0;
+  /** Lines lost since the last note, not yet reported. */
+  private dropped = 0;
+  /** Lines (notes counted by what they stand for) of the batch in flight. */
+  private inFlight = 0;
   private sending: Promise<void> = Promise.resolve();
   private stopped = false;
+  /** A flush started by a burst is pending. */
+  private kicked = false;
+  /** Aborts the batch in flight once the shipper is abandoned. */
+  private readonly abandon = new AbortController();
 
-  constructor(private readonly send: (lines: string[]) => Promise<Response>) {}
+  constructor(
+    private readonly send: (
+      lines: string[],
+      signal: AbortSignal,
+    ) => Promise<Response>,
+  ) {}
 
   push(lines: readonly string[]): void {
     if (this.stopped) return;
-    for (const line of lines) {
-      this.queue.push(
-        line.length > LOG_LINE_MAX_CHARS
-          ? `${line.slice(0, LOG_LINE_MAX_CHARS - 1)}…`
-          : line,
-      );
+    for (const raw of lines) {
+      const line = cutLine(raw);
+      if (
+        this.queue.length >= LOG_QUEUE_MAX_LINES ||
+        this.queuedBytes + Buffer.byteLength(line) > LOG_QUEUE_MAX_BYTES
+      ) {
+        this.dropped += 1;
+        continue;
+      }
+      // Space again after a gap: the note goes where the gap is. One note
+      // per gap, so notes stay bounded by the lines that fit.
+      this.noteDropped();
+      this.enqueue({ text: line, lines: 1 });
     }
+    // A burst sends at once rather than at the next timed flush, so the
+    // queue limit drops output only when the platform falls behind.
+    if (!this.kicked && this.queue.length >= LOG_BATCH_MAX_LINES) {
+      this.kicked = true;
+      void this.flush().finally(() => (this.kicked = false));
+    }
+  }
+
+  private noteDropped(): void {
+    if (this.dropped === 0) return;
+    this.enqueue({ text: droppedNote(this.dropped), lines: this.dropped });
+    this.dropped = 0;
+  }
+
+  private enqueue(entry: LogEntry): void {
+    this.queue.push(entry);
+    this.queuedBytes += Buffer.byteLength(entry.text);
   }
 
   /** Send what is queued now; resolves when it (and earlier sends) landed. */
@@ -191,34 +300,113 @@ class LogShipper {
     return this.sending;
   }
 
-  private takeBatch(): string[] {
+  /**
+   * Send the rest within `ms`, or until `signal` aborts. Then the batch in
+   * flight is aborted, what is still queued is dropped, and (unless `signal`
+   * aborted) one line saying how many lines may be missing is sent, with a
+   * short deadline of its own.
+   */
+  async drain(ms: number, signal: AbortSignal): Promise<void> {
+    if (!this.stopped) this.noteDropped();
+    const deadline = AbortSignal.any([AbortSignal.timeout(ms), signal]);
+    const flushed = this.flush();
+    await new Promise<void>((resolve) => {
+      if (deadline.aborted) resolve();
+      deadline.addEventListener('abort', () => resolve(), { once: true });
+      void flushed.then(resolve);
+    });
+    if (!deadline.aborted || this.stopped) return;
+    this.stopped = true;
+    this.abandon.abort();
+    // The aborted batch may or may not have landed: counted as missing.
+    let lost = this.inFlight + this.dropped;
+    for (const entry of this.queue) lost += entry.lines;
+    this.queue = [];
+    this.queuedBytes = 0;
+    if (lost === 0) return;
+    console.error(`[builder] up to ${lost} build log line(s) not sent`);
+    if (signal.aborted) return;
+    await this.send(
+      [
+        `[builder] Up to ${lost} line(s) of build output are missing: ` +
+          'the platform did not take them in time.',
+      ],
+      AbortSignal.timeout(LOG_NOTE_TIMEOUT_MS),
+    ).catch(() => {});
+  }
+
+  private takeBatch(): LogEntry[] {
     // `{"lines":[]}` plus each JSON string and its comma.
     let bytes = 12;
     let count = 0;
     while (count < this.queue.length && count < LOG_BATCH_MAX_LINES) {
-      const size = Buffer.byteLength(JSON.stringify(this.queue[count])) + 1;
+      const size =
+        Buffer.byteLength(JSON.stringify(this.queue[count]!.text)) + 1;
       if (count > 0 && bytes + size > LOG_BATCH_MAX_BYTES) break;
       bytes += size;
       count += 1;
     }
-    return this.queue.splice(0, count);
+    const batch = this.queue.splice(0, count);
+    for (const entry of batch) {
+      this.queuedBytes -= Buffer.byteLength(entry.text);
+    }
+    return batch;
   }
 
-  private async sendBatch(lines: string[]): Promise<void> {
-    for (let attempt = 1; attempt <= LOG_SEND_ATTEMPTS; attempt++) {
-      const response = await this.send(lines).catch(() => null);
-      if (response?.ok) return;
-      if (response?.status === 409) {
-        // The lease moved on; nothing more is accepted for this build.
-        this.stopped = true;
-        this.queue = [];
+  private async sendBatch(batch: LogEntry[]): Promise<void> {
+    const represented = batch.reduce((sum, entry) => sum + entry.lines, 0);
+    this.inFlight = represented;
+    try {
+      const lines = batch.map((entry) => entry.text);
+      for (let attempt = 1; attempt <= LOG_SEND_ATTEMPTS; attempt++) {
+        if (this.abandon.signal.aborted) return;
+        const response = await this.send(lines, this.abandon.signal).catch(
+          () => null,
+        );
+        if (response?.ok) return;
+        if (response?.status === 409) {
+          // The lease moved on; nothing more is accepted for this build.
+          this.stopped = true;
+          this.queue = [];
+          this.queuedBytes = 0;
+          return;
+        }
+        if (response && response.status >= 400 && response.status < 500) break;
+        await sleep(500 * attempt, this.abandon.signal);
+      }
+      if (this.abandon.signal.aborted) return;
+      console.error(`[builder] dropped ${represented} build log line(s)`);
+      this.dropped += represented;
+    } finally {
+      // An abandoned batch is counted by drain(), which reads it first.
+      if (!this.abandon.signal.aborted) this.inFlight = 0;
+    }
+  }
+}
+
+/** Write a response body to `file`, at most `limit` bytes of it. */
+async function saveBody(
+  response: Response,
+  file: string,
+  limit: number,
+): Promise<void> {
+  if (!response.body) throw new Error('The source download has no body.');
+  let received = 0;
+  const cap = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length;
+      if (received > limit) {
+        callback(new Error('The source archive is larger than expected.'));
         return;
       }
-      if (response && response.status >= 400 && response.status < 500) break;
-      await sleep(500 * attempt);
-    }
-    console.error(`[builder] dropped ${lines.length} build log line(s)`);
-  }
+      callback(null, chunk);
+    },
+  });
+  await pipeline(
+    Readable.fromWeb(response.body as WebReadableStream),
+    cap,
+    createWriteStream(file),
+  );
 }
 
 async function startBuilder(): Promise<void> {
@@ -226,11 +414,18 @@ async function startBuilder(): Promise<void> {
   // Aborted on SIGTERM/SIGINT: ends the lease wait and every running build.
   const shutdown = new AbortController();
 
+  /**
+   * Fetch from the platform within `timeoutMs`, body included. With
+   * `onBody`, the body is not buffered: `onBody` consumes it under the same
+   * deadline and signal, and the response is returned with its body used.
+   */
   async function call(
     pathname: string,
-    init: CallInit = {},
+    init: CallInit & {
+      onBody?: (response: Response) => Promise<void>;
+    } = {},
   ): Promise<Response> {
-    const { build, timeoutMs = CALL_TIMEOUT_MS, ...rest } = init;
+    const { build, timeoutMs = CALL_TIMEOUT_MS, onBody, ...rest } = init;
     const signal = AbortSignal.any([
       AbortSignal.timeout(timeoutMs),
       ...(rest.signal ? [rest.signal] : []),
@@ -250,6 +445,10 @@ async function startBuilder(): Promise<void> {
         },
       },
     );
+    if (onBody && response.ok) {
+      await onBody(response);
+      return response;
+    }
     // The deadline covers the body too: read it now, under the same signal.
     const body = await response.arrayBuffer();
     return new Response(body, {
@@ -309,10 +508,11 @@ async function startBuilder(): Promise<void> {
         renewing = false;
       }
     }, HEARTBEAT_MS);
-    const logs = new LogShipper((lines) =>
+    const logs = new LogShipper((lines, signal) =>
       call(`/${build.id}/logs`, {
         method: 'POST',
         build,
+        signal,
         body: JSON.stringify({ lines }),
       }),
     );
@@ -324,15 +524,24 @@ async function startBuilder(): Promise<void> {
       // directories below (the source it owns, the native check's scratch),
       // so that identity must be able to pass through, though not list it.
       await chmod(work, 0o711);
+      const archive = path.join(work, 'source.tar.gz');
+      // Streamed to disk: the archive may be large.
       const source = await call(`/${build.id}/source`, {
         build,
         signal: stop.signal,
         timeoutMs: UPLOAD_TIMEOUT_MS,
+        onBody: (response) => saveBody(response, archive, SOURCE_MAX_BYTES),
       });
-      if (!source.ok)
-        throw new Error(`Source download failed: ${source.status}`);
-      const archive = path.join(work, 'source.tar.gz');
-      await writeFile(archive, Buffer.from(await source.arrayBuffer()));
+      if (!source.ok) {
+        // The platform names why (a source over its budget, say).
+        const reason = (
+          (await source.json().catch(() => ({}))) as { error?: unknown }
+        ).error;
+        throw new Error(
+          `Source download failed (${source.status})` +
+            (typeof reason === 'string' ? `: ${reason}` : '.'),
+        );
+      }
       const sourceDir = path.join(work, 'source');
       await mkdir(sourceDir);
       await new Promise<void>((resolve, reject) => {
@@ -412,7 +621,9 @@ async function startBuilder(): Promise<void> {
       // Nothing of the job outlives it.
       killGroup();
       if (carry) logs.push([carry]);
-      await logs.flush();
+      // Bounded: a slow log endpoint must not keep the package from the
+      // platform (nor a stopped build from ending).
+      await logs.drain(LOG_DRAIN_MS, stop.signal);
       if (stop.signal.aborted) {
         console.log(
           `[builder] ${build.id}: ${leaseLost ? 'lease ended' : 'stopped'}`,
@@ -458,7 +669,7 @@ async function startBuilder(): Promise<void> {
     } catch (error) {
       if (stop.signal.aborted) return;
       console.error(`[builder] ${build.id} failed:`, error);
-      await logs.flush();
+      await logs.drain(LOG_DRAIN_MS, stop.signal);
       await call(`/${build.id}/fail`, {
         method: 'POST',
         build,

@@ -83,8 +83,9 @@ pushes, then creates a deployment of the pushed commit
 (`AppService/CreateAppDeployment`; `--commit` deploys a commit already on
 `master` without pushing). The platform's optional dedicated Builder builds
 it, or the CLI builds it where it runs and uploads the build package to that
-deployment (`UploadAppDeploymentArtifact`); the platform never runs App
-source. `hatch app deployments list|get|logs|cancel` cover every read and
+deployment (`UploadAppDeploymentArtifact`). The platform executes nothing
+from the package; it evaluates the commit's own `manifest.ts` in the sandbox
+to bind the release's privileges to the commit. `hatch app deployments list|get|logs|cancel` cover every read and
 mutation of deployments that the manage page offers (its Redeploy button is
 `app deploy --commit <sha>`); logs stream over
 `WatchAppDeploymentLogs`. Two deliberate deviations from the CLI rules:

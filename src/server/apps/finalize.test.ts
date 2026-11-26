@@ -216,4 +216,32 @@ describe('accepting a build package', () => {
       ),
     ).rejects.toThrow(/api\.binpb/);
   });
+
+  it('reports what the package itself gets wrong as an invalid package', async () => {
+    // Callers rebuild an invalid package; a platform failure is another code.
+    await expect(
+      finalize(
+        await writePackage(
+          {},
+          { rpc: { proto: 'proto/service.proto', service: 'demo.v1.Demo' } },
+          // A descriptor set without the declared service.
+          { 'api.binpb': '' },
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'app_build_invalid',
+      message: expect.stringMatching(/demo\.v1\.Demo/),
+    });
+    await expect(
+      finalize(
+        await writePackage(
+          { dataSchema: { version: 2, tables: [] } },
+          { capabilities: { backend: true, dataTable: true } },
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'app_build_invalid',
+      message: expect.stringMatching(/Data Table schema is invalid/),
+    });
+  });
 });

@@ -5,6 +5,7 @@
  * lease by its build token.
  */
 import type http from 'node:http';
+import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import {
   BUILD_TOKEN_HEADER,
@@ -184,13 +185,36 @@ export async function handleBuilderApiRequest(
   const { build, lease } = leased;
 
   if (action === 'source' && method === 'GET') {
-    const archive = await archiveAppCommit(build.appId, build.commit);
+    // The Builder left (or gave up) when the response closes unfinished:
+    // stop checking out or archiving for it.
+    const abort = new AbortController();
+    res.once('close', () => {
+      if (!res.writableFinished) abort.abort();
+    });
+    // Rejects before any byte is sent: a source over the budget or one that
+    // cannot be checked out is answered with an error status.
+    const archive = await archiveAppCommit(
+      build.appId,
+      build.commit,
+      abort.signal,
+    ).catch((error) => {
+      // Nobody to answer once the Builder left.
+      if (abort.signal.aborted) return null;
+      throw error;
+    });
+    if (!archive) return;
     res.writeHead(200, {
       'content-type': 'application/gzip',
-      'content-length': String(archive.length),
       'cache-control': 'no-store',
     });
-    res.end(archive);
+    // Streamed without a length: a failure past this point resets the
+    // connection, so the Builder never reads a cut archive as complete.
+    await pipeline(archive, res).catch((error) => {
+      if (!abort.signal.aborted) {
+        console.error(`[builder-api] source of ${build.id} failed:`, error);
+      }
+      res.destroy();
+    });
     return;
   }
   if (action === 'heartbeat' && method === 'POST') {

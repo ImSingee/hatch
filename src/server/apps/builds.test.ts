@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   builderToken: null as string | null,
   releases: [] as string[],
   release: undefined as undefined | ((id: string) => Promise<void>),
+  /** Fails the source check of a create, as a commit not on master does. */
+  resolve: undefined as undefined | (() => Promise<never>),
+  packageLog: '',
 }));
 
 vi.mock('~/db', async () => {
@@ -26,8 +29,10 @@ vi.mock('~env', () => ({
   }),
 }));
 vi.mock('./git', () => ({
-  resolveDeployCommit: async (_id: string, commit?: string) =>
-    commit ?? 'a'.repeat(40),
+  resolveDeployCommit: async (_id: string, commit?: string) => {
+    await mocks.resolve?.();
+    return commit ?? 'a'.repeat(40);
+  },
 }));
 vi.mock('../platform-api/sdk', () => ({
   platformSdkDigest: async () => '0'.repeat(64),
@@ -37,7 +42,7 @@ vi.mock('./finalize', () => ({
   finalizeBuild: async () => ({
     source: {},
     normalized: {},
-    log: '',
+    log: mocks.packageLog,
     tooling: {},
   }),
 }));
@@ -60,6 +65,7 @@ vi.mock('./deploy', () => ({
 }));
 
 const { db, schema } = await import('~/db');
+const { AppError } = await import('~server/errors');
 const builds = await import('./builds');
 const { packBuildDirectory } = await import('../../app-build/archive');
 
@@ -88,6 +94,9 @@ beforeEach(async () => {
   mocks.builderToken = null;
   mocks.releases = [];
   mocks.release = undefined;
+  mocks.resolve = undefined;
+  mocks.packageLog = '';
+  await db.delete(schema.deployments);
   await db.delete(schema.appBuilds);
   await db.delete(schema.apps);
   await db.insert(schema.apps).values([
@@ -156,6 +165,18 @@ describe('creating deployments', () => {
       first.id,
     );
     expect(await builds.findDeploymentByRequest(APP, 'req-2')).toBeNull();
+    // Also once its commit has left master (a restore): the repeat is
+    // answered before the source is checked again.
+    mocks.resolve = () =>
+      Promise.reject(
+        new AppError('not on master', 409, {
+          code: 'deployments.commitNotOnMaster',
+        }),
+      );
+    expect((await create({ requestId: 'req-1' })).id).toBe(first.id);
+    await expect(create({ requestId: 'req-3' })).rejects.toMatchObject({
+      code: 'deployments.commitNotOnMaster',
+    });
   });
 
   it('finds a joined build by the request id of the request that joined', async () => {
@@ -290,6 +311,48 @@ describe('accepting build packages', () => {
     expect(final.status).toBe('ready');
   });
 
+  it('keeps the not-on-master code when the commit left master before release', async () => {
+    const deployment = await create();
+    // Publishing re-checks master under the deploy lock (a restore may have
+    // moved it back meanwhile).
+    mocks.release = async () => {
+      throw new AppError('Commit is not on master.', 409, {
+        code: 'deployments.commitNotOnMaster',
+      });
+    };
+    const final = await builds.acceptArtifact({
+      appId: APP,
+      buildId: deployment.id,
+      archive: packageArchive,
+    });
+    expect(final).toMatchObject({
+      status: 'failed',
+      errorCode: 'COMMIT_NOT_ON_MASTER',
+    });
+  });
+
+  it('stores a local build log of any length with its package', async () => {
+    // More rows than one INSERT can bind parameters for.
+    mocks.packageLog = Array.from(
+      { length: 20_000 },
+      (_, i) => `line ${i + 1}`,
+    ).join('\n');
+    const deployment = await create();
+    const final = await builds.acceptArtifact({
+      appId: APP,
+      buildId: deployment.id,
+      archive: packageArchive,
+    });
+    expect(final.status).toBe('ready');
+    const lines = await db.query.appBuildLogs.findMany({
+      where: { buildId: deployment.id, stream: 'build' },
+      orderBy: { seq: 'asc' },
+    });
+    expect(lines).toHaveLength(20_000);
+    expect(lines.at(-1)?.text).toBe('line 20000');
+    expect(lines.at(-1)!.seq - lines[0]!.seq).toBe(19_999);
+  });
+
   it('records a package it cannot read as a failed deployment', async () => {
     const deployment = await create();
     const final = await builds.acceptArtifact({
@@ -307,23 +370,63 @@ describe('accepting build packages', () => {
 describe('builder leases', () => {
   it('builds one deployment per App at a time', async () => {
     mocks.builderToken = 'token';
-    await create({ build: 'builder' });
-    await db.insert(schema.appBuilds).values({
-      id: 'other-queued',
-      appId: 'other-app',
-      seq: 1,
+    const queued = (id: string, appId: string, seq: number, at: number) => ({
+      id,
+      appId,
+      seq,
       commit: 'c'.repeat(40),
-      message: 'Other',
-      mode: 'builder',
-      trigger: 'cli',
-      status: 'queued',
+      message: id,
+      mode: 'builder' as const,
+      trigger: 'cli' as const,
+      status: 'queued' as const,
+      createdAt: new Date(at),
     });
-    const first = await builds.leaseBuild('builder-1');
-    const second = await builds.leaseBuild('builder-2');
-    expect(new Set([first?.appId, second?.appId])).toEqual(
-      new Set([APP, 'other-app']),
-    );
+    // The App's second deployment is older than the other App's, so it is
+    // first in line; while the App builds, the other App goes first.
+    const now = Date.now();
+    await db
+      .insert(schema.appBuilds)
+      .values([
+        queued('app-first', APP, 1, now - 3000),
+        queued('app-second', APP, 2, now - 2000),
+        queued('other-queued', 'other-app', 1, now - 1000),
+      ]);
+    expect((await builds.leaseBuild('builder-1'))?.id).toBe('app-first');
+    expect((await builds.leaseBuild('builder-2'))?.id).toBe('other-queued');
     expect(await builds.leaseBuild('builder-3')).toBeNull();
+    expect(await status('app-second')).toBe('queued');
+  });
+
+  it('accepts nothing under a lease that expired before the sweep', async () => {
+    mocks.builderToken = 'token';
+    const deployment = await create({ build: 'builder' });
+    const leased = await builds.leaseBuild('builder-1');
+    // The lease and its log line commit together.
+    const log = await builds.readBuildLog(deployment.id, 0);
+    expect(log.at(-1)?.text).toBe('Building on builder-1 (attempt 1).');
+    expect(leased?.logSeq).toBe(log.at(-1)?.seq);
+    await db
+      .update(schema.appBuilds)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.appBuilds.id, deployment.id));
+    const lease = { builderId: 'builder-1', attempt: 1 };
+    expect(await builds.leasedBuild(deployment.id, 'builder-1')).toBeNull();
+    expect(await builds.renewBuildLease(deployment.id, lease)).toBe(false);
+    expect(
+      await builds.appendLeasedBuildLog(deployment.id, lease, ['late line']),
+    ).toBe(false);
+    expect(await builds.failBuild(deployment.id, lease, 'late')).toBe(false);
+    await expect(
+      builds.acceptArtifact({
+        appId: APP,
+        buildId: deployment.id,
+        archive: packageArchive,
+        lease,
+      }),
+    ).rejects.toMatchObject({ code: 'DEPLOYMENT_NOT_AWAITING_ARTIFACT' });
+    // The upload's own lookup swept it: queued again for another attempt.
+    expect(await status(deployment.id)).toBe('queued');
+    expect(mocks.releases).toEqual([]);
   });
 
   it('queues a lost build again once, then fails it', async () => {
@@ -358,6 +461,40 @@ describe('builder leases', () => {
     expect(
       await db.query.appBuilds.findFirst({ where: { id: deployment.id } }),
     ).toMatchObject({ status: 'failed', errorCode: 'builder_lost' });
+  });
+
+  it('settles an interrupted release from the recorded deployments, with a log line', async () => {
+    const stall = async (id: string, state: 'verifying' | 'releasing') => {
+      await db
+        .update(schema.appBuilds)
+        .set({ status: state, updatedAt: new Date(Date.now() - 60 * 60_000) })
+        .where(eq(schema.appBuilds.id, id));
+    };
+    const lastLine = async (id: string) =>
+      (await builds.readBuildLog(id, 0)).at(-1)?.text;
+    // Released and recorded, but the platform stopped before marking it.
+    const recorded = await create();
+    await stall(recorded.id, 'releasing');
+    await db.insert(schema.deployments).values({
+      id: recorded.id,
+      appId: APP,
+      version: 4,
+      status: 'deployed',
+      buildId: recorded.id,
+    });
+    await builds.sweepBuilds();
+    expect(
+      await db.query.appBuilds.findFirst({ where: { id: recorded.id } }),
+    ).toMatchObject({ status: 'ready', deploymentVersion: 4 });
+    expect(await lastLine(recorded.id)).toMatch(/Released version 4/);
+    // Nothing recorded: the release did not happen.
+    const lost = await create();
+    await stall(lost.id, 'verifying');
+    await builds.sweepBuilds();
+    expect(
+      await db.query.appBuilds.findFirst({ where: { id: lost.id } }),
+    ).toMatchObject({ status: 'failed', errorCode: 'release_interrupted' });
+    expect(await lastLine(lost.id)).toMatch(/nothing was released/);
   });
 
   it('fails a local deployment whose package never arrives', async () => {

@@ -75,6 +75,12 @@ export async function packBuildDirectory(root: string): Promise<Buffer> {
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const entry of entries) {
       const child = relative ? `${relative}/${entry.name}` : entry.name;
+      // What the unpacker would refuse fails the build, not the upload.
+      if (!isSafeName(child)) {
+        throw new BuildArchiveError(
+          `The build package has a path the platform cannot unpack: ${child}`,
+        );
+      }
       if (entry.isDirectory()) {
         directories += 1;
         if (files + directories > BUILD_PACKAGE_MAX_ENTRIES) {
@@ -85,7 +91,10 @@ export async function packBuildDirectory(root: string): Promise<Buffer> {
       } else if (entry.isFile()) {
         files += 1;
         const remaining = BUILD_PACKAGE_MAX_EXPANDED_BYTES - bytes;
-        if (files > BUILD_PACKAGE_MAX_FILES) {
+        if (
+          files > BUILD_PACKAGE_MAX_FILES ||
+          files + directories > BUILD_PACKAGE_MAX_ENTRIES
+        ) {
           throw new BuildArchiveError('The build package is too large.');
         }
         const body = await readAtMost(path.join(root, child), remaining);
@@ -158,20 +167,22 @@ function readOctal(block: Buffer, offset: number, length: number): number {
   return text ? Number.parseInt(text, 8) : 0;
 }
 
-/** A relative, normalized name with no traversal, or an error. */
+/** Whether `name` is relative and normalized, with no traversal. */
+function isSafeName(name: string): boolean {
+  return (
+    Boolean(name) &&
+    path.posix.normalize(name) === name &&
+    !name.startsWith('/') &&
+    !name.includes('\\') &&
+    !name.includes('\0') &&
+    !name.split('/').some((part) => part === '.' || part === '..' || !part)
+  );
+}
+
+/** A name read from an archive, normalized, or an error. */
 function safeName(raw: string): string {
   const name = raw.replace(/\/+$/, '');
-  const normalized = path.posix.normalize(name);
-  if (
-    !name ||
-    normalized !== name ||
-    name.startsWith('/') ||
-    name === '..' ||
-    name.startsWith('../') ||
-    name.includes('\\') ||
-    name.includes('\0') ||
-    name.split('/').some((part) => part === '.' || part === '..' || !part)
-  ) {
+  if (!isSafeName(name)) {
     throw new BuildArchiveError(`The build archive has an unsafe path: ${raw}`);
   }
   return name;
@@ -228,6 +239,12 @@ export async function unpackBuildArchive(
   while (offset + BLOCK <= tar.length) {
     const block = tar.subarray(offset, offset + BLOCK);
     if (block.every((byte) => byte === 0)) {
+      // The end of the archive is two zero blocks; one alone is not.
+      const second = tar.subarray(offset + BLOCK, offset + BLOCK * 2);
+      if (second.length < BLOCK) break;
+      if (!second.every((byte) => byte === 0)) {
+        throw new BuildArchiveError('The build archive is corrupt.');
+      }
       terminated = true;
       break;
     }

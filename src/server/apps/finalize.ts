@@ -254,8 +254,9 @@ function resolveTaskInputs(
       task.inputSchema = taskInputSchema(registry, method.inputType);
     } catch (error) {
       if (error instanceof TaskInputSchemaError) {
-        throw new Error(
+        throw new BuildPackageError(
           `Task "${task.name}" cannot use ${method.inputType} as its input: ${error.message}`,
+          'app_build_invalid',
         );
       }
       throw error;
@@ -363,8 +364,9 @@ export async function finalizeBuild(
       );
     }
     if (!api.services.some((service) => service.name === rpc.service)) {
-      throw new Error(
+      throw new BuildPackageError(
         `RPC service declared by ${manifestFile} was not found in the compiled proto: ${rpc.service}`,
+        'app_build_invalid',
       );
     }
     logs.push(
@@ -377,10 +379,11 @@ export async function finalizeBuild(
     try {
       dataSchema = parseDataSchemaDescriptor(pkg.dataSchema);
     } catch (error) {
-      throw new Error(
+      throw new BuildPackageError(
         `Data Table schema is invalid: ${
           error instanceof Error ? error.message : String(error)
         }`,
+        'app_build_invalid',
       );
     }
   }

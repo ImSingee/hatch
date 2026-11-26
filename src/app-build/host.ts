@@ -26,6 +26,11 @@ export type BuildHost = {
   tooling(options: { native: boolean }): Promise<BuildTooling>;
   /** The pinned NSH CLI, for a native frontend. */
   nsh(): BuildNshHost;
+  /**
+   * Run the whole build of the disposable copy at `src` inside `task`, for
+   * a host that hands the copy to the sandbox identity (the Builder).
+   */
+  withSource?<T>(src: string, task: () => Promise<T>): Promise<T>;
 };
 
 export type BuildNshHost = {

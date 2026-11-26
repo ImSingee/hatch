@@ -8,7 +8,15 @@
  * Everything runs against throwaway temp dirs.
  */
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -220,8 +228,8 @@ describe('source release (platform)', () => {
     const winnerCommit = await pushHead(APP_ID, winner);
 
     // The stale push is not a fast-forward of master, so it is refused and
-    // master stays put.
-    await expect(pushHead(APP_ID, stale)).rejects.toThrow(/fast-forward/);
+    // master stays put. (Git's wording depends on its advice settings.)
+    await expect(pushHead(APP_ID, stale)).rejects.toThrow(/git push .* failed/);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(winnerCommit);
   }, 15_000);
 
@@ -240,5 +248,78 @@ describe('source release (platform)', () => {
     });
     await expect(pushHead(id, oldCheckout)).resolves.toBe(restoredCommit);
     await expect(platform.masterCommit(id)).resolves.toBe(restoredCommit);
+  }, 15_000);
+});
+
+describe('source the platform writes out', () => {
+  it('refuses a tree over the source budget before writing any of it', async () => {
+    const small = createGitSource({
+      noun: 'app',
+      repoDir: (id) => path.join(root, 'repos', `${id}.git`),
+      treeBudget: { bytes: 1000, files: 3 },
+    });
+    const id = 'rt-budget';
+    const seed = path.join(root, `seed-${id}`);
+    await mkdir(seed, { recursive: true });
+    await git(['init', '--initial-branch', 'master'], seed);
+    await configureIdentity(seed);
+    await writeFile(path.join(seed, 'README.md'), 'fits\n');
+    const fits = await commitAll(seed, 'fits');
+    await writeFile(path.join(seed, 'big.txt'), 'x'.repeat(2000));
+    const tooLarge = await commitAll(seed, 'too large');
+    await rm(path.join(seed, 'big.txt'));
+    for (const name of ['a', 'b', 'c']) {
+      await writeFile(path.join(seed, name), name);
+    }
+    const tooMany = await commitAll(seed, 'too many files');
+    await pushHead(id, seed);
+
+    const target = path.join(root, 'budget-checkout');
+    for (const commit of [tooLarge, tooMany]) {
+      await expect(small.archiveCommit(id, commit)).rejects.toMatchObject({
+        status: 413,
+        message: expect.stringMatching(/larger than the platform builds/),
+      });
+      await expect(
+        small.checkoutCommitInto(id, commit, target),
+      ).rejects.toMatchObject({ status: 413 });
+      await expect(stat(target)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+    await small.checkoutCommitInto(id, fits, target);
+    await expect(
+      readFile(path.join(target, 'README.md'), 'utf8'),
+    ).resolves.toBe('fits\n');
+  }, 15_000);
+
+  it('deploys SHA-1 commit ids only', async () => {
+    const id = 'rt-commit-format';
+    await seedPlatformSource(id);
+    await expect(
+      platform.resolveDeployCommit(id, 'a'.repeat(64)),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringMatching(/SHA-256/),
+    });
+    await expect(
+      platform.resolveDeployCommit(id, 'a'.repeat(39)),
+    ).rejects.toMatchObject({ status: 400 });
+  }, 15_000);
+
+  it('tells a commit that is not on master from a lookup that failed', async () => {
+    const id = 'rt-on-master';
+    await seedPlatformSource(id);
+    await expect(platform.commitOnMaster(id, 'e'.repeat(40))).resolves.toBe(
+      false,
+    );
+    if (process.getuid?.() === 0) return; // root reads it regardless
+    const objects = path.join(root, 'repos', `${id}.git`, 'objects');
+    await chmod(objects, 0o000);
+    try {
+      await expect(platform.commitOnMaster(id, 'e'.repeat(40))).rejects.toThrow(
+        /failed/,
+      );
+    } finally {
+      await chmod(objects, 0o755);
+    }
   }, 15_000);
 });

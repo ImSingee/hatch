@@ -8,6 +8,9 @@
  *        -> {build: {id, appId, commit, token, sdkDigest} | null}
  *        Waits up to LEASE_WAIT_MS for a queued build.
  *   GET  /internal/api/builds/:id/source     -> the commit as .tar.gz
+ *        Streamed without a length; a failure while streaming resets the
+ *        connection. A source over the platform's budget is refused first
+ *        (413 {error}, see SOURCE_TREE_BUDGET in src/server/source-git.ts).
  *   POST /internal/api/builds/:id/heartbeat  -> {continue: boolean}
  *   POST /internal/api/builds/:id/logs       {lines: string[]}
  *        At most LOG_BATCH_MAX_LINES lines and LOG_BATCH_MAX_BYTES of JSON.

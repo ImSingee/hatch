@@ -147,7 +147,8 @@ export function DeploymentHistory({ appId }: { appId: string }) {
         const redeployAction =
           builderEnabled &&
           sourceCommit &&
-          deployment.sourceOnMaster &&
+          // null: the lookup failed; the platform still enforces the rule.
+          deployment.sourceOnMaster !== false &&
           deployment.status === 'deployed' ? (
             <Tooltip label={t('deployments.redeployTooltip')} withArrow>
               <Button

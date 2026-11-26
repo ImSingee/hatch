@@ -1,8 +1,11 @@
 # App builds and deployments
 
-The platform never runs App source. A deployment names a commit already on
-the App's `master`, its build runs elsewhere, and the platform checks the
-resulting build package and releases it.
+A deployment names a commit already on the App's `master`. Its build runs
+elsewhere (a Builder or the CLI), and the platform checks the resulting build
+package and releases it. The platform executes nothing from the package. It
+does evaluate the committed `manifest.ts` itself, in the sandbox, to bind the
+release's privileges to the commit (see
+[What a build is trusted with](#what-a-build-is-trusted-with)).
 
 ```text
 hatch app deploy ── git push ──▶ master
@@ -14,7 +17,9 @@ hatch app deploy ── git push ──▶ master
                  ─▶ verifying (finalizeBuild) ─▶ releasing (releaseDeployment) ─▶ ready
 ```
 
-Every unfinished state can end `failed`, `canceled` or `superseded`. A new
+Every unfinished state can end `failed` or `superseded`. A deployment can be
+canceled while it is `queued`, `awaiting_artifact` or `building`; once it is
+`verifying` or later, cancel returns `DEPLOYMENT_NOT_CANCELABLE`. A new
 deployment supersedes older ones still `queued` or `awaiting_artifact`; a
 build that finishes after a newer deployment was released is not released.
 One App builds one deployment on the Builder at a time. Log lines are rows of
@@ -124,13 +129,23 @@ the platform, and keep `HATCH_BUILDER_TOKEN` as secret as the platform's own
 secrets. A build job never receives the token, and the App code it runs uses
 the sandbox identity.
 
+## Limits
+
+- The source tree of a deployment is at most 512 MiB and 100,000 files: the
+  platform checks the commit out to evaluate its manifest and to serve it to
+  the Builder, and refuses a larger tree before writing anything.
+- A build package is at most 200 MiB compressed and 512 MiB expanded, and
+  its files and directories together are bounded too.
+- Deployments use SHA-1 commit ids; a repository that uses SHA-256 is
+  refused when the deployment is created.
+
 ## Operating it
 
 - Without `HATCH_BUILDER_TOKEN`, every deployment builds locally: `--build
   builder` fails with `BUILDER_UNAVAILABLE`, and the manage page offers no
   Redeploy.
 - With it, start one or more Builders (`docker compose --profile builder up
-  -d`, or `pnpm dev:builder` in development). Deployments stay `queued` while
+  -d`, or `pnpm dev:builder` in development, which builds the SDK first). Deployments stay `queued` while
   no Builder runs.
 - The platform settles deployments nobody moves any more every 30 seconds and
   at startup: lost leases, missing uploads, and a verify or release that a

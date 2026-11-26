@@ -84,6 +84,8 @@ function toolchainDependencies(tooling: LocalBuildTooling) {
  */
 async function installedToolchain(
   tooling: LocalBuildTooling,
+  signal: AbortSignal,
+  remaining: () => number,
 ): Promise<string | null> {
   const root = process.env.HATCH_BUILD_TOOLCHAIN_DIR?.trim();
   if (!root) return null;
@@ -109,16 +111,51 @@ async function installedToolchain(
     .then((text) => (JSON.parse(text) as { version?: string }).version)
     .catch(() => undefined);
   if (bundled === tooling.pnpmVersion) return modules;
+  // A pnpm that cannot be found, run or asked in time is only a miss: the
+  // cache may still hold the toolchain with its own pnpm.
   const env = childEnvironment();
-  const pnpm = await pnpmInvocation(process.platform, env);
-  const probe = spawnSync(pnpm.executable, [...pnpm.prefix, '--version'], {
-    encoding: 'utf8',
-    env,
-    timeout: 30_000,
+  const version = await pnpmInvocation(process.platform, env)
+    .then((pnpm) =>
+      command(
+        pnpm.executable,
+        [...pnpm.prefix, '--version'],
+        root,
+        signal,
+        true,
+        {
+          env,
+          timeoutMs: Math.min(PNPM_PROBE_TIMEOUT_MS, remaining()),
+        },
+      ),
+    )
+    .then(
+      (probe) => (probe.code === 0 ? probe.stdout.trim() : null),
+      (error: unknown) => {
+        // Cancellation and the build's own deadline still end the build.
+        if (
+          signal.aborted ||
+          (error instanceof CliError && error.code === 'local_build_timeout')
+        )
+          throw error;
+        return null;
+      },
+    );
+  return version === tooling.pnpmVersion ? modules : null;
+}
+
+/** How long the installed toolchain's pnpm has to report its version. */
+const PNPM_PROBE_TIMEOUT_MS = 30_000;
+
+/**
+ * Remove a scratch directory without letting a failure replace the build's
+ * own result or error: a file still locked only leaves the directory behind.
+ */
+async function removeScratch(directory: string): Promise<void> {
+  await rm(directory, { recursive: true, force: true }).catch(() => {
+    process.stderr.write(
+      `Could not remove the temporary directory ${directory}; remove it by hand.\n`,
+    );
   });
-  if (probe.status === 0 && probe.stdout.trim() === tooling.pnpmVersion)
-    return modules;
-  return null;
 }
 
 /**
@@ -129,9 +166,9 @@ async function installedToolchain(
 async function ensureToolchain(
   tooling: LocalBuildTooling,
   signal: AbortSignal,
-  timeoutMs: number,
+  remaining: () => number,
 ): Promise<string> {
-  const installed = await installedToolchain(tooling);
+  const installed = await installedToolchain(tooling, signal, remaining);
   if (installed) return installed;
   // The cache also carries the platform's pnpm, which the build then uses
   // for App dependencies whatever pnpm this machine has.
@@ -186,7 +223,11 @@ async function ensureToolchain(
         stage,
         signal,
         true,
-        { env: { ...env, XDG_CONFIG_HOME: configHome }, timeoutMs },
+        {
+          env: { ...env, XDG_CONFIG_HOME: configHome },
+          // What the probe and the setup above left of the build's budget.
+          timeoutMs: remaining(),
+        },
       );
       if (installed.code !== 0)
         throw new CliError(
@@ -195,7 +236,7 @@ async function ensureToolchain(
           7,
         );
     } finally {
-      await rm(configHome, { recursive: true, force: true });
+      await removeScratch(configHome);
     }
     await writeFile(path.join(stage, '.ready'), '');
     // Publish by one atomic rename of the complete install, never replacing
@@ -217,7 +258,7 @@ async function ensureToolchain(
     });
     return path.join(directory, 'node_modules');
   } finally {
-    await rm(stage, { recursive: true, force: true });
+    await removeScratch(stage);
   }
 }
 
@@ -231,17 +272,22 @@ async function exportCommit(
   commit: string,
   target: string,
   signal: AbortSignal,
+  timeoutMs: number,
+  timedOut: () => CliError,
 ): Promise<void> {
+  // Git stops with the build: on cancellation and once its budget is spent.
+  const budget = AbortSignal.timeout(timeoutMs);
   try {
     await checkoutCommit({
       repo: { cwd: root },
       commit,
       target,
       env: childEnvironment(),
-      signal,
+      signal: AbortSignal.any([signal, budget]),
     });
   } catch (error) {
-    if (signal.aborted) throw error;
+    if (signal.aborted) throw new CliError('cancelled', 'Cancelled.', 130);
+    if (budget.aborted) throw timedOut();
     if (error instanceof CommitCheckoutError && error.missingCommit)
       throw new CliError(
         'source_unavailable',
@@ -405,7 +451,7 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
       const modules = await ensureToolchain(
         input.tooling,
         signal,
-        remaining(),
+        remaining,
       ).catch((error: unknown) => {
         // An install cut off by the budget is the build running out of time.
         if (Date.now() >= deadline) throw timedOut();
@@ -423,8 +469,14 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
       );
     }
     const source = path.join(work, 'source');
-    remaining();
-    await exportCommit(input.root, input.commit, source, signal);
+    await exportCommit(
+      input.root,
+      input.commit,
+      source,
+      signal,
+      remaining(),
+      timedOut,
+    );
     const sdkFiles = path.join(work, 'sdk-files.json');
     await writeFile(sdkFiles, JSON.stringify(input.sdkFiles));
     const request = path.join(work, 'request.json');
@@ -476,7 +528,10 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
         tool ? 7 : 2,
       );
     }
-    return await packBuildDirectory(outDir);
+    const archive = await packBuildDirectory(outDir);
+    // A package packed after the deadline is as late as a build that is.
+    remaining();
+    return archive;
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CliError(
@@ -485,6 +540,6 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
       6,
     );
   } finally {
-    await rm(work, { recursive: true, force: true });
+    await removeScratch(work);
   }
 }

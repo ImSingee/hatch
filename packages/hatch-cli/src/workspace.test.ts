@@ -45,6 +45,12 @@ let released: string | null;
 let deployedCommits: (string | undefined)[];
 let deploys: number;
 let loseResponse: boolean;
+/** The watch sends no line past this one, as a stalled log stream. */
+let logLimit: number;
+/** Lines the build appends after each watch response. */
+let logGrowth: number;
+/** getAppDeployment never answers. */
+let stallGet: boolean;
 let currentSocket: IncomingMessage['socket'] | undefined;
 type DeploymentRecord = {
   id: string;
@@ -86,7 +92,7 @@ let resourceSlug: string;
 let createRequests: unknown[];
 /** Extra scaffold files, layered over the default fixture. */
 let scaffoldFiles: Record<string, string>;
-let sdkTooling: Record<string, string> | undefined;
+let sdkTooling: Record<string, string | boolean> | undefined;
 /** PATH entry holding a pnpm that matches the platform's major version. */
 let tools: string;
 const PNPM_LOCKFILE = `lockfileVersion: '9.0'
@@ -193,6 +199,7 @@ const rpc = connectNodeAdapter({
         return { deployment: deploymentMessage(record) };
       },
       getAppDeployment: (data) => {
+        if (stallGet) return new Promise<never>(() => {});
         const record = deployments.find(
           (item) => item.id === data.deploymentId,
         );
@@ -206,10 +213,14 @@ const rpc = connectNodeAdapter({
           (item) => item.id === data.deploymentId,
         );
         if (!record) throw new ConnectError('missing', Code.NotFound);
-        const total = record.logSeq;
-        for (let from = (data.afterSeq ?? 0) + 1; from <= total; from += 2000) {
+        for (
+          let from = (data.afterSeq ?? 0) + 1;
+          from <= Math.min(record.logSeq, logLimit);
+          from += 2000
+        ) {
           const lines = [];
-          for (let seq = from; seq < Math.min(from + 2000, total + 1); seq++)
+          const end = Math.min(from + 2000, record.logSeq + 1, logLimit + 1);
+          for (let seq = from; seq < end; seq++)
             lines.push({
               seq,
               stream: 'build',
@@ -217,6 +228,7 @@ const rpc = connectNodeAdapter({
               at: new Date().toISOString(),
             });
           yield { lines, deployment: deploymentMessage(record) };
+          record.logSeq += logGrowth;
         }
         await new Promise(() => {});
       },
@@ -414,6 +426,9 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     deploys = 0;
     deployments = [];
     loseResponse = false;
+    logLimit = Number.POSITIVE_INFINITY;
+    logGrowth = 0;
+    stallGet = false;
     sdkDelay = undefined;
     sdkFailure = false;
     resourceSlug = 'fixture';
@@ -854,6 +869,8 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     ).toBe(0);
     const last = deployments.at(-1)!;
     last.logSeq = 4_500;
+    // The build keeps writing while the log is read: none of it is printed.
+    logGrowth = 1;
     const logs = await run([
       'app',
       'deployments',
@@ -886,6 +903,8 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       createDeadline: new Date(Date.now() + 60_000).toISOString(),
     };
     await writeFile(workspace, JSON.stringify({ ...metadata, pending }));
+    // Reconciling only reads the platform: local edits do not block it.
+    await writeFile(join(root, 'draft.txt'), 'uncommitted');
     const unconfirmed = (
       await run(['app', 'deploy', '--directory', root, '--reconcile']).result
     ).data;
@@ -914,6 +933,117 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     expect(
       JSON.parse(await readFile(workspace, 'utf8')).pending,
     ).toBeUndefined();
+    await rm(join(root, 'draft.txt'));
+    // A deployment id the platform no longer knows is missing: no wait
+    // settles it, only an explicit confirmation, which then deploys.
+    const lost = { ...pending, deploymentId: 'deployment-gone' };
+    await writeFile(workspace, JSON.stringify({ ...metadata, pending: lost }));
+    expect(
+      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
+        .data,
+    ).toMatchObject({ state: 'missing', deployment: null });
+    const blocked = await run(['app', 'deploy', '--directory', root]).result;
+    expect(blocked.code).toBe(6);
+    expect(blocked.data.error.code).toBe('pending_deployment_missing');
+    expect(blocked.data.error.message).toContain('--retry-after-confirming');
+    expect(JSON.parse(await readFile(workspace, 'utf8')).pending).toEqual(lost);
+    expect(deploys).toBe(1);
+    const retried = await run([
+      'app',
+      'deploy',
+      '--directory',
+      root,
+      '--retry-after-confirming',
+      commit,
+    ]).result;
+    expect(retried.code).toBe(0);
+    expect(deploys).toBe(2);
+  });
+  it('follows a finished deployment to the end of its log and names where to resume when it stalls', async () => {
+    const root = await create();
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const last = deployments.at(-1)!;
+    last.logSeq = 4_500;
+    // A finished status before the rest of its log is not the end of it.
+    logLimit = 2_000;
+    const follow = (...extra: string[]) =>
+      run([
+        'app',
+        'deployments',
+        'logs',
+        'immutable',
+        last.id,
+        '--follow',
+        ...extra,
+      ]).result;
+    const stalled = await follow('--timeout', '3');
+    expect(stalled.code).toBe(7);
+    expect(stalled.data.error).toMatchObject({
+      code: 'deployment_log_incomplete',
+      details: { afterSeq: 2_000, deployment: { status: 'ready' } },
+    });
+    logLimit = Number.POSITIVE_INFINITY;
+    // With the whole log it returns at its end, without waiting out the
+    // timeout for the stream to close.
+    const started = Date.now();
+    const resumed = await follow('--after', '2000', '--timeout', '60');
+    expect(resumed.code).toBe(0);
+    expect(resumed.data).toMatchObject({
+      deploymentId: last.id,
+      logSeq: 4_500,
+    });
+    expect(resumed.stderr).toContain('line 4500');
+    expect(resumed.stderr).not.toContain('line 2000\n');
+    expect(Date.now() - started).toBeLessThan(15_000);
+  });
+  it('keeps the final state lookup of a follow within its timeout', async () => {
+    const root = await create();
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const last = deployments.at(-1)!;
+    Object.assign(last, { status: 'building', finished: false, logSeq: 1 });
+    stallGet = true;
+    const result = await run([
+      'app',
+      'deployments',
+      'logs',
+      'immutable',
+      last.id,
+      '--follow',
+      '--timeout',
+      '4',
+    ]).result;
+    // An unbounded lookup would time out on its own (outcome_unknown).
+    expect(result.code).toBe(7);
+    expect(result.data.error).toMatchObject({
+      code: 'deployment_in_progress',
+      details: { afterSeq: 1, deployment: { status: 'building' } },
+    });
+  });
+  it('refuses a commit it would build but does not have before creating a deployment', async () => {
+    const root = await create();
+    const workspace = join(root, '.git/hatch-cli.json');
+    const absent = 'b'.repeat(40);
+    const deploy = (...extra: string[]) =>
+      run(['app', 'deploy', '--directory', root, '--commit', absent, ...extra])
+        .result;
+    // --build local, and auto on a platform without a Builder.
+    for (const extra of [['--build', 'local'], []]) {
+      const refused = await deploy(...extra);
+      expect(refused.code).toBe(6);
+      expect(refused.data.error.code).toBe('source_unavailable');
+    }
+    expect(deploys).toBe(0);
+    expect(
+      JSON.parse(await readFile(workspace, 'utf8')).pending,
+    ).toBeUndefined();
+    // A Builder fetches the commit itself.
+    sdkTooling = { ...NODE_TOOLING, builderEnabled: true };
+    expect((await deploy()).code).toBe(0);
+    expect(deployedCommits).toEqual([absent]);
   });
   it('uses a cross-process lock and releases it after completion or POSIX cancellation', async () => {
     const root = await create();

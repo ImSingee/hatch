@@ -58,13 +58,22 @@ export function platformBuildHost(options: {
     },
     nsh() {
       const binary = nshBinary();
-      const env = subprocessSandboxEnv(nshEnv());
+      // Sandboxed, NSH's cache is the sandbox's own too.
+      const env = subprocessSandboxEnv({
+        ...nshEnv(),
+        ...(sandbox
+          ? { NSH_CACHE: `${sandbox.home}/nsh`, HOME: sandbox.home }
+          : {}),
+      });
       return {
         version: NSH_VERSION,
         run(args, { cwd, sandboxed, timeoutMs }) {
-          const [command, commandArgs] = sandboxed
-            ? sandboxedEvaluationCommand([binary, ...args])
-            : [binary, args];
+          // A sandboxed host runs every nsh step as the sandbox identity, not
+          // only the start-up check.
+          const [command, commandArgs] =
+            sandboxed || sandbox
+              ? sandboxedEvaluationCommand([binary, ...args])
+              : [binary, args];
           return run(command, commandArgs, { cwd, env, timeoutMs, signal });
         },
         withSandboxOwnership,

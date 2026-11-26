@@ -19,13 +19,18 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { packBuildDirectory, unpackBuildArchive } from './archive';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'hatch-build-archive-'));
-afterAll(() => rm(root, { recursive: true, force: true }));
+// The directory-limit case leaves tens of thousands of directories.
+afterAll(() => rm(root, { recursive: true, force: true }), 60_000);
 
 let counter = 0;
 const target = () => path.join(root, `out-${++counter}`);
+// Where an absolute name in an archive points: outside every destination.
+const absolute = path.join(root, 'a', 'escape.js');
 
 /** One ustar entry with an arbitrary type flag and name. */
 function entry(name: string, type: string, body = Buffer.alloc(0)): Buffer {
+  // The name field holds 100 bytes; a longer name would be cut silently.
+  expect(Buffer.byteLength(name)).toBeLessThanOrEqual(100);
   const header = Buffer.alloc(512, 0);
   header.write(name, 0, 100, 'utf8');
   header.write('0000644\0', 100, 8, 'ascii');
@@ -91,13 +96,15 @@ describe('build archives', () => {
       'a nested parent path',
       entry('app/../../escape.js', '0', Buffer.from('x')),
     ],
-    ['an absolute path', entry('/tmp/escape.js', '0', Buffer.from('x'))],
+    ['an absolute path', entry(absolute, '0', Buffer.from('x'))],
   ])('rejects %s and writes nothing outside', async (_name, unsafe) => {
     const destination = target();
+    await mkdir(path.dirname(absolute), { recursive: true });
     await expect(
       unpackBuildArchive(archive(unsafe), destination),
     ).rejects.toThrow(/files and directories|unsafe path/);
     expect(await readdir(root)).not.toContain('escape.js');
+    await expect(lstat(absolute)).rejects.toThrow(/ENOENT/);
     const written = await readdir(destination).catch(() => []);
     expect(written).toEqual([]);
   });
@@ -128,7 +135,26 @@ describe('build archives', () => {
     await expect(unpackBuildArchive(gzipSync(whole), target())).rejects.toThrow(
       /truncated/,
     );
+    // Only the first of the two end-of-archive blocks is there.
+    await expect(
+      unpackBuildArchive(
+        gzipSync(Buffer.concat([whole, Buffer.alloc(512, 0)])),
+        target(),
+      ),
+    ).rejects.toThrow(/truncated/);
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses to pack a name the platform would not unpack',
+    async () => {
+      const source = path.join(root, 'backslash');
+      await mkdir(path.join(source, 'app'), { recursive: true });
+      await writeFile(path.join(source, 'app', 'a\\b.js'), 'export {};');
+      await expect(packBuildDirectory(source)).rejects.toThrow(
+        'cannot unpack: app/a\\b.js',
+      );
+    },
+  );
 
   it('bounds the directories an archive creates, not only its files', async () => {
     // Few files, each implying 40 directories of its own: the directories

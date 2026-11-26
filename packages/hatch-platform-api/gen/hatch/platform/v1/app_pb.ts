@@ -340,8 +340,10 @@ export type CreateAppDeploymentRequest =
     /**
      * Client-chosen id of this create request (a UUID, say). Repeating it
      * returns the deployment it already made instead of making another, and
-     * ListAppDeployments finds it by this id. A request whose call has ended
-     * (deadline or disconnect) before the deployment was stored creates none.
+     * ListAppDeployments finds it by this id. A request whose call has already
+     * ended (deadline or disconnect) when the platform checks creates none; one
+     * that ends while the platform is committing it can still create its
+     * deployment, of the same commit.
      *
      * @generated from field: optional string request_id = 9;
      */
