@@ -224,11 +224,13 @@ export function Dock({
   // Read the App's live details before showing it beside: nothing running
   // is stopped for an App that cannot open, and the new frame's "has update"
   // baseline is the deployment it loads.
-  const openBeside = async (slug: string, route: string) => {
-    if (sessionStore.session(slug)) {
-      const running = sessionStore.session(slug)!;
-      sessionStore.openBeside(slug, {
-        appId: running.appId ?? '',
+  const openBeside = async (appId: string, slug: string, route: string) => {
+    // Reuse only this App's own session: another App may have run under the
+    // slug before a rename.
+    const running = sessionOf(appId, slug);
+    if (running && (!appId || !running.appId || running.appId === appId)) {
+      sessionStore.openBeside(running.slug, {
+        appId: running.appId ?? appId,
         revision: running.revision ?? null,
       });
       return;
@@ -264,7 +266,7 @@ export function Dock({
         {besideAvailable && front !== target ? (
           <Menu.Item
             leftSection={<IconLayoutSidebarRight size={15} stroke={1.7} />}
-            onClick={() => void openBeside(target, entryHash ?? '')}
+            onClick={() => void openBeside(appId, target, entryHash ?? '')}
           >
             {t('dock.openBeside')}
           </Menu.Item>

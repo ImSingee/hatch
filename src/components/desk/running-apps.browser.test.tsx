@@ -40,6 +40,8 @@ const fixtures = vi.hoisted(() => ({
   revisions: new Map<string, string>(),
   /** Apps whose live deployment has no frontend. */
   frontendless: new Set<string>(),
+  /** A slug now owned by another App than `id-<slug>`. */
+  owners: new Map<string, string>(),
   rootRoute: null as AnyRootRoute | null,
 }));
 
@@ -52,7 +54,7 @@ const NAMES: Record<string, string> = {
 
 function appDetail(slug: string): AppDetail {
   return {
-    id: `id-${slug}`,
+    id: fixtures.owners.get(slug) ?? `id-${slug}`,
     slug,
     name: NAMES[slug] ?? slug,
     description: null,
@@ -307,6 +309,7 @@ beforeEach(() => {
   fixtures.pins = [];
   fixtures.revisions.clear();
   fixtures.frontendless.clear();
+  fixtures.owners.clear();
   limit = 12;
   backgroundTimeoutMs = 600_000;
   vi.stubGlobal('EventSource', TestEventSource);
@@ -654,4 +657,32 @@ test('Open beside reads the App afresh rather than trusting older details', asyn
 
   await vi.waitFor(() => expect(placementOf('ledger')).toBe('beside'));
   await loaded('ledger');
+});
+
+test("Open beside on another App's pin never shows a renamed App under its old slug", async () => {
+  // A pin of another App that will take over the slug `notes`.
+  fixtures.pins = [
+    {
+      id: 'pin-other',
+      appId: 'id-other',
+      appSlug: 'notes',
+      label: 'Other notes',
+      entryHash: null,
+    },
+  ];
+  const { router } = await renderDesk('/app/notes');
+  await loaded('notes');
+  const old = frameOf('notes');
+  await router.navigate({ to: '/agent' });
+  // Notes was renamed elsewhere, and the other App now uses its old slug.
+  fixtures.owners.set('notes', 'id-other');
+
+  await dockMenu('Other notes', 'Open beside');
+
+  await vi.waitFor(() => expect(placementOf('notes')).toBe('beside'));
+  await loaded('notes');
+  // A fresh frame for the other App; the renamed App's frame is gone.
+  expect(frameOf('notes')).not.toBe(old);
+  expect(old!.isConnected).toBe(false);
+  expect(framesOf('notes')).toBe(1);
 });
