@@ -181,7 +181,9 @@ one by one gives unreadable combinations.
   bundled, and text below 4.5:1 on its surface: `foreground` on `background`,
   `card`, `secondary` and `muted`; `muted-foreground` on `background`, `card`
   and `muted`; `primary-foreground` on `primary`; `destructive-foreground` on
-  `destructive`; the primary text shade on `background` and `card`. The check
+  `destructive`; `destructive-text` (error text: the destructive colour, or
+  the first of its shades 7 and 8 that reads) on `background`, `card` and
+  `muted`; the primary text shade on `background` and `card`. The check
   runs with the theme's own `primary` and with the chosen accent.
 - The instance setting (`ui.theme`) holds the accent, a `mode` (`light`,
   `dark`, or `system` for each device's appearance) and the light and dark

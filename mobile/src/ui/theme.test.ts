@@ -45,7 +45,7 @@ describe.each(THEME_PRESET_NAMES)(
     it.each([c.ground, c.card, c.muted, c.sunken])(
       'keeps body, secondary and error text readable on %s',
       (surface) => {
-        for (const ink of [c.ink, c.inkSoft, status.danger.ink])
+        for (const ink of [c.ink, c.inkSoft, c.danger, status.danger.ink])
           expect(contrast(ink, surface)).toBeGreaterThanOrEqual(4.5);
       },
     );

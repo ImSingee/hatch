@@ -275,6 +275,8 @@ describe('instance theme: modes, presets and custom themes', () => {
         muted: '#C8C8C8',
         'muted-foreground': '#1A1A1A',
         border: '#999999',
+        // Dark enough to read as error text on the grey ground.
+        destructive: '#7A0E0E',
       },
     };
     expect((await validateTheme(stone)).ok).toBe(true);

@@ -386,6 +386,35 @@ describe('validation', () => {
     ).toBe(true);
   });
 
+  it('checks the destructive colour as error text on the ground and cards', () => {
+    // Desk's red reads as text; desk-dark draws a lighter shade of it.
+    expect(resolvePreset('desk').colors['destructive-text']).toBe(
+      tokens.light.destructive,
+    );
+    const dark = resolvePreset('desk-dark');
+    expect(dark.colors['destructive-text']).not.toBe(tokens.dark.destructive);
+    for (const surface of ['background', 'card'] as const)
+      expect(
+        contrast(dark.colors['destructive-text'], dark.colors[surface]),
+      ).toBeGreaterThanOrEqual(4.5);
+    // A yellow destructive cannot carry error text on a light theme.
+    const result = validateThemeDocument({
+      ...deskDocument,
+      colors: { ...deskDocument.colors, destructive: '#FFFF00' },
+    });
+    expect(
+      !result.ok &&
+        result.problems.map((problem) =>
+          [problem.pair?.foreground, problem.pair?.background].join(' on '),
+        ),
+    ).toEqual(
+      expect.arrayContaining([
+        'destructive-text on background',
+        'destructive-text on card',
+      ]),
+    );
+  });
+
   it('accepts every preset document', () => {
     for (const name of THEME_PRESET_NAMES)
       expect(validateThemeDocument(THEME_PRESETS[name].document).ok).toBe(true);

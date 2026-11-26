@@ -85,6 +85,8 @@ export const RESOLVED_COLOR_KEYS = [
   'ring',
   'destructive',
   'destructive-foreground',
+  /** Error text on the ground and on cards. */
+  'destructive-text',
   // Desk surfaces (DESIGN.md "Roles").
   'surface-panel',
   'surface-dock',
@@ -214,6 +216,25 @@ function onFill(fill: string, darkInk: string): string {
   return mostLegible(fill, [WHITE, darkInk]);
 }
 
+/**
+ * Error text: the destructive colour itself where it reads on every surface
+ * text sits on (desk's red does), else the first of its ramp's text shades
+ * (7, then 8) that does.
+ */
+function errorText(
+  destructive: string,
+  appearance: ThemeAppearance,
+  surfaces: readonly string[],
+): string {
+  const ramp = colorRamp(destructive, appearance, surfaces[1]);
+  const candidates = [destructive, ramp[7], ramp[8]];
+  return (
+    candidates.find((color) =>
+      surfaces.every((surface) => contrast(color, surface) >= 4.5),
+    ) ?? ramp[8]
+  );
+}
+
 /** Every radius scaled from the base, so `BASE_RADIUS` gives the tokens. */
 function radiiFor(base: number): Record<RadiusName, number> {
   return Object.fromEntries(
@@ -263,6 +284,11 @@ export function resolveTheme(
     input: mix(colors.border, foreground, 0.12),
     ring: foreground,
     'destructive-foreground': onFill(destructive, darkInk),
+    'destructive-text': errorText(destructive, appearance, [
+      background,
+      card,
+      colors.muted,
+    ]),
     'surface-panel': withAlpha(card, 0.72),
     'surface-dock': withAlpha(card, 0.82),
     'surface-widget': withAlpha(card, 0.8),

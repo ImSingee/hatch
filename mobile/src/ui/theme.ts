@@ -64,7 +64,8 @@ function paletteOf(theme: ResolvedTheme) {
     widget: c['surface-widget'],
     groundWarm: c['ground-warm'],
     groundFresh: c['ground-fresh'],
-    danger: c.destructive,
+    /** Error text; the destructive colour, or a readable shade of it. */
+    danger: c['destructive-text'],
     dangerSoft: colorRamp(c.destructive, theme.appearance, c.card)[1],
   } as const;
 }

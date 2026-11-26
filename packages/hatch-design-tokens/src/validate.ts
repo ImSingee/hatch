@@ -66,6 +66,9 @@ export const CONTRAST_PAIRS: readonly (readonly [PairRole, PairRole])[] = [
   ['muted-foreground', 'card'],
   ['muted-foreground', 'muted'],
   ['destructive-foreground', 'destructive'],
+  ['destructive-text', 'background'],
+  ['destructive-text', 'card'],
+  ['destructive-text', 'muted'],
   [PRIMARY_TEXT, 'background'],
   [PRIMARY_TEXT, 'card'],
 ];
