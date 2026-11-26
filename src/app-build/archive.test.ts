@@ -130,6 +130,19 @@ describe('build archives', () => {
     );
   });
 
+  it('bounds the directories an archive creates, not only its files', async () => {
+    // Few files, each implying 40 directories of its own: the directories
+    // alone pass the limit long before the files would.
+    const deep = 'a/'.repeat(39);
+    const many = Array.from({ length: 1_001 }, (_, index) =>
+      entry(`t${index}/${deep}f`, '0', Buffer.from('x')),
+    );
+    await expect(
+      unpackBuildArchive(archive(...many), target()),
+    ).rejects.toThrow(/too large/);
+    // Reaching the limit takes creating that many directories.
+  }, 60_000);
+
   it('rejects data that is not a gzipped archive', async () => {
     await expect(
       unpackBuildArchive(Buffer.from('not gzip'), target()),

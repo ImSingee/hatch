@@ -199,6 +199,27 @@ const rpc = connectNodeAdapter({
         if (!record) throw new ConnectError('missing', Code.NotFound);
         return { deployment: deploymentMessage(record) };
       },
+      // A long log arrives over several responses, as the platform caps
+      // each at 2,000 lines; it then keeps the stream open for new output.
+      async *watchAppDeploymentLogs(data) {
+        const record = deployments.find(
+          (item) => item.id === data.deploymentId,
+        );
+        if (!record) throw new ConnectError('missing', Code.NotFound);
+        const total = record.logSeq;
+        for (let from = (data.afterSeq ?? 0) + 1; from <= total; from += 2000) {
+          const lines = [];
+          for (let seq = from; seq < Math.min(from + 2000, total + 1); seq++)
+            lines.push({
+              seq,
+              stream: 'build',
+              text: `line ${seq}`,
+              at: new Date().toISOString(),
+            });
+          yield { lines, deployment: deploymentMessage(record) };
+        }
+        await new Promise(() => {});
+      },
       listAppDeployments: (data) => ({
         deployments: [...deployments]
           .reverse()
@@ -825,6 +846,26 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       JSON.parse(await readFile(join(root, '.git/hatch-cli.json'), 'utf8'))
         .pending,
     ).toBeUndefined();
+  });
+  it('prints a whole long log without --follow and stops at its end', async () => {
+    const root = await create();
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const last = deployments.at(-1)!;
+    last.logSeq = 4_500;
+    const logs = await run([
+      'app',
+      'deployments',
+      'logs',
+      'immutable',
+      last.id,
+      '--after',
+      '10',
+    ]).result;
+    expect(logs.code).toBe(0);
+    expect(logs.data.lines).toHaveLength(4_490);
+    expect(logs.data.lines.at(-1)).toMatchObject({ seq: 4_500 });
   });
   it('never takes another deployment of the same commit for an unconfirmed create', async () => {
     const root = await create();

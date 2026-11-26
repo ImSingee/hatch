@@ -9,6 +9,7 @@ import path from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import {
   BUILD_PACKAGE_MAX_COMPRESSED_BYTES,
+  BUILD_PACKAGE_MAX_ENTRIES,
   BUILD_PACKAGE_MAX_EXPANDED_BYTES,
   BUILD_PACKAGE_MAX_FILES,
 } from './format';
@@ -65,6 +66,7 @@ function header(name: string, size: number, directory: boolean): Buffer {
 export async function packBuildDirectory(root: string): Promise<Buffer> {
   const parts: Buffer[] = [];
   let files = 0;
+  let directories = 0;
   let bytes = 0;
   async function walk(relative: string): Promise<void> {
     const entries = await fs.readdir(path.join(root, relative), {
@@ -74,6 +76,10 @@ export async function packBuildDirectory(root: string): Promise<Buffer> {
     for (const entry of entries) {
       const child = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
+        directories += 1;
+        if (files + directories > BUILD_PACKAGE_MAX_ENTRIES) {
+          throw new BuildArchiveError('The build package is too large.');
+        }
         parts.push(header(child, 0, true));
         await walk(child);
       } else if (entry.isFile()) {
@@ -198,6 +204,23 @@ export async function unpackBuildArchive(
 
   await fs.mkdir(destination, { recursive: false });
   const seen = new Set<string>();
+  // Every directory the archive creates, named or implied by a file's path,
+  // counts toward the entry limit with the files: an archive of nothing but
+  // directories must not exhaust the filesystem's inodes either.
+  const directories = new Set<string>();
+  const addDirectories = (relative: string) => {
+    for (
+      let dir = relative;
+      dir && dir !== '.';
+      dir = path.posix.dirname(dir)
+    ) {
+      if (directories.has(dir)) break;
+      directories.add(dir);
+    }
+    if (files + directories.size > BUILD_PACKAGE_MAX_ENTRIES) {
+      throw new BuildArchiveError('The build package is too large.');
+    }
+  };
   let files = 0;
   let bytes = 0;
   let offset = 0;
@@ -227,6 +250,7 @@ export async function unpackBuildArchive(
     seen.add(name);
     const target = path.join(destination, ...name.split('/'));
     if (type === '5') {
+      addDirectories(name);
       await fs.mkdir(target, { recursive: true });
       continue;
     }
@@ -243,6 +267,7 @@ export async function unpackBuildArchive(
     ) {
       throw new BuildArchiveError('The build package is too large.');
     }
+    addDirectories(path.posix.dirname(name));
     // The body and its padding to the next block must all be there.
     if (offset + Math.ceil(size / BLOCK) * BLOCK > tar.length) {
       throw new BuildArchiveError('The build archive is truncated.');

@@ -43,6 +43,8 @@ export const BUILD_PACKAGE_ROOT_ENTRIES = [
 export const BUILD_PACKAGE_MAX_COMPRESSED_BYTES = 200 * 1024 * 1024;
 export const BUILD_PACKAGE_MAX_EXPANDED_BYTES = 512 * 1024 * 1024;
 export const BUILD_PACKAGE_MAX_FILES = 20_000;
+/** Files and directories together, named or implied by a path. */
+export const BUILD_PACKAGE_MAX_ENTRIES = 2 * BUILD_PACKAGE_MAX_FILES;
 
 /**
  * Versions of the tools a build ran. The platform accepts a package only

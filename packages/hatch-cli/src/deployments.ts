@@ -190,14 +190,19 @@ export async function runDeployments(
   }
   const lines = [];
   let state: DeploymentView | null = null;
+  // Without --follow: every line up to the deployment's log as it stood at
+  // the first response (several responses for a long log), then stop
+  // without waiting for more.
+  let snapshot: number | null = null;
   for await (const message of deployments.watch(
     { ...target, afterSeq: command.after },
     { timeoutMs: command.timeoutMs },
   )) {
     lines.push(...message.lines);
     if (message.deployment) state = message.deployment;
-    // Without --follow, stop at the first response: the lines so far.
-    break;
+    snapshot ??= state?.logSeq ?? 0;
+    const last = lines.at(-1)?.seq ?? command.after;
+    if (last >= snapshot) break;
   }
   write(
     { deployment: state, lines },
