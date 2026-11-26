@@ -31,12 +31,14 @@ import {
   isAccentName,
   type AccentName,
 } from '~/ui/theme/accents';
-import { db, schema } from '~/db';
+import { db, schema, type DB, type TX } from '~/db';
 import { AppError } from '~server/errors';
 import {
   DEFAULT_UI_THEME,
   getPlatformConfig,
   updatePlatformConfig,
+  withPlatformConfigLock,
+  writeLockedPlatformConfig,
   type UiThemeConfig,
 } from '~server/platform-config';
 import { publishPlatformEvent } from '~server/platform-events';
@@ -122,14 +124,20 @@ function customEntry(row: ThemeRow): ThemeEntry {
   };
 }
 
-async function customRow(id: string): Promise<ThemeRow | undefined> {
-  return db.query.themes.findFirst({ where: { id } });
+async function customRow(
+  id: string,
+  executor: DB | TX = db,
+): Promise<ThemeRow | undefined> {
+  return executor.query.themes.findFirst({ where: { id } });
 }
 
 /** A theme of the library by id, or undefined. */
-export async function findTheme(id: string): Promise<ThemeEntry | undefined> {
+export async function findTheme(
+  id: string,
+  executor: DB | TX = db,
+): Promise<ThemeEntry | undefined> {
   if (isThemePresetName(id)) return presetEntry(id);
-  const row = await customRow(id);
+  const row = await customRow(id, executor);
   return row ? customEntry(row) : undefined;
 }
 
@@ -138,8 +146,11 @@ function accentColor(accent: AccentName | null): string | null {
 }
 
 /** The theme drawn for a stored setting: its theme, or desk if unusable. */
-async function activeEntry(config: UiThemeConfig): Promise<ThemeEntry> {
-  const entry = await findTheme(config.theme);
+async function activeEntry(
+  config: UiThemeConfig,
+  executor: DB | TX = db,
+): Promise<ThemeEntry> {
+  const entry = await findTheme(config.theme, executor);
   return entry?.valid ? entry : presetEntry(DEFAULT_THEME);
 }
 
@@ -229,30 +240,35 @@ export async function updateTheme(change: ThemeChange): Promise<ThemeState> {
     !isAccentName(change.accent)
   )
     throw badRequest(`Unknown accent. Use one of: ${ACCENT_NAMES.join(', ')}.`);
-  let next: ThemeEntry | undefined;
-  if (change.theme !== undefined) {
-    next = await findTheme(change.theme);
-    if (!next)
-      throw new AppError(
-        'No theme has this id. List them with hatch theme list.',
-        404,
-        { code: 'theme_not_found' },
-      );
-    if (!next.valid) throw new ThemeValidationError(next.problems);
-  }
-  const current = await getPlatformConfig('ui.theme');
-  const accent =
-    change.accent === undefined
-      ? current.accent
-      : (change.accent as AccentName | null);
-  checkWithAccent(next ?? (await activeEntry(current)), accent);
-  // Fields left out keep their latest stored value, even when another change
-  // to the theme lands at the same moment.
-  const config = await updatePlatformConfig('ui.theme', (stored) => ({
-    accent: change.accent === undefined ? stored.accent : accent,
-    dockLabels: change.dockLabels ?? stored.dockLabels,
-    theme: change.theme ?? stored.theme,
-  }));
+  // The theme's checks run under the setting's lock, so it cannot be deleted
+  // or changed between being checked and being activated; fields left out
+  // keep their latest stored value.
+  const config = await withPlatformConfigLock(
+    'ui.theme',
+    async (stored, tx) => {
+      let next: ThemeEntry | undefined;
+      if (change.theme !== undefined) {
+        next = await findTheme(change.theme, tx);
+        if (!next)
+          throw new AppError(
+            'No theme has this id. List them with hatch theme list.',
+            404,
+            { code: 'theme_not_found' },
+          );
+        if (!next.valid) throw new ThemeValidationError(next.problems);
+      }
+      const accent =
+        change.accent === undefined
+          ? stored.accent
+          : (change.accent as AccentName | null);
+      checkWithAccent(next ?? (await activeEntry(stored, tx)), accent);
+      return writeLockedPlatformConfig(tx, 'ui.theme', {
+        accent,
+        dockLabels: change.dockLabels ?? stored.dockLabels,
+        theme: change.theme ?? stored.theme,
+      });
+    },
+  );
   publishThemeUpdated(config);
   return stateOf(config, await activeEntry(config));
 }
@@ -298,14 +314,18 @@ function nameTaken(name: string): AppError {
 }
 
 /** Names pick one theme, ignoring case; preset names are taken too. */
-async function assertNameFree(name: string, exceptId?: string): Promise<void> {
+async function assertNameFree(
+  executor: DB | TX,
+  name: string,
+  exceptId?: string,
+): Promise<void> {
   const key = name.toLowerCase();
   const preset = THEME_PRESET_NAMES.some(
     (preset) => THEME_PRESETS[preset].document.name?.toLowerCase() === key,
   );
   const [row] = preset
     ? []
-    : await db
+    : await executor
         .select({ id: schema.themes.id })
         .from(schema.themes)
         .where(sql`lower(${schema.themes.name}) = ${key}`)
@@ -339,23 +359,29 @@ function checkedDocument(document: unknown): ThemeDocument {
 /** Save a new custom theme. It is not activated. */
 export async function createTheme(document: unknown): Promise<ThemeEntry> {
   const checked = checkedDocument(document);
-  const count = await db.$count(schema.themes);
-  if (count >= MAX_CUSTOM_THEMES)
-    throw new AppError(
-      `An instance keeps at most ${MAX_CUSTOM_THEMES} custom themes; delete one first.`,
-      409,
-      { code: 'theme_library_full', params: { max: MAX_CUSTOM_THEMES } },
-    );
   const name = checked.name ?? CUSTOM_NAME;
-  await assertNameFree(name);
-  const [row] = await db
-    .insert(schema.themes)
-    .values({ id: ulid().toLowerCase(), name, document: checked })
-    .returning()
-    .catch((error: unknown) => {
-      throw isNameConflict(error) ? nameTaken(name) : error;
-    });
-  publishThemeUpdated(await getPlatformConfig('ui.theme'));
+  const { row, config } = await withPlatformConfigLock(
+    'ui.theme',
+    async (config, tx) => {
+      const count = await tx.$count(schema.themes);
+      if (count >= MAX_CUSTOM_THEMES)
+        throw new AppError(
+          `An instance keeps at most ${MAX_CUSTOM_THEMES} custom themes; delete one first.`,
+          409,
+          { code: 'theme_library_full', params: { max: MAX_CUSTOM_THEMES } },
+        );
+      await assertNameFree(tx, name);
+      const [row] = await tx
+        .insert(schema.themes)
+        .values({ id: ulid().toLowerCase(), name, document: checked })
+        .returning()
+        .catch((error: unknown) => {
+          throw isNameConflict(error) ? nameTaken(name) : error;
+        });
+      return { row, config };
+    },
+  );
+  publishThemeUpdated(config);
   return customEntry(row);
 }
 
@@ -378,31 +404,34 @@ export async function updateCustomTheme(
 ): Promise<ThemeEntry> {
   customOnly(id);
   const checked = checkedDocument(document);
-  const existing = await customRow(id);
-  if (!existing)
-    throw new AppError('No custom theme has this id.', 404, {
-      code: 'theme_not_found',
-    });
-  const config = await getPlatformConfig('ui.theme');
   const name = checked.name ?? CUSTOM_NAME;
-  await assertNameFree(name, id);
-  if (config.theme === id)
-    checkWithAccent(
-      customEntry({ ...existing, name, document: checked }),
-      config.accent,
-    );
-  const [row] = await db
-    .update(schema.themes)
-    .set({ name, document: checked, updatedAt: new Date() })
-    .where(eq(schema.themes.id, id))
-    .returning()
-    .catch((error: unknown) => {
-      throw isNameConflict(error) ? nameTaken(name) : error;
-    });
-  if (!row)
-    throw new AppError('No custom theme has this id.', 404, {
-      code: 'theme_not_found',
-    });
+  // Under the setting's lock: the theme cannot be activated (and checked
+  // with the accent) or have the accent changed while it is replaced.
+  const { row, config } = await withPlatformConfigLock(
+    'ui.theme',
+    async (config, tx) => {
+      const existing = await customRow(id, tx);
+      if (!existing)
+        throw new AppError('No custom theme has this id.', 404, {
+          code: 'theme_not_found',
+        });
+      await assertNameFree(tx, name, id);
+      if (config.theme === id)
+        checkWithAccent(
+          customEntry({ ...existing, name, document: checked }),
+          config.accent,
+        );
+      const [row] = await tx
+        .update(schema.themes)
+        .set({ name, document: checked, updatedAt: new Date() })
+        .where(eq(schema.themes.id, id))
+        .returning()
+        .catch((error: unknown) => {
+          throw isNameConflict(error) ? nameTaken(name) : error;
+        });
+      return { row, config };
+    },
+  );
   publishThemeUpdated(config);
   return customEntry(row);
 }
@@ -410,21 +439,28 @@ export async function updateCustomTheme(
 /** Delete a custom theme. The active theme cannot be deleted. */
 export async function deleteTheme(id: string): Promise<void> {
   customOnly(id);
-  const config = await getPlatformConfig('ui.theme');
-  if (config.theme === id)
-    throw new AppError(
-      'This theme is active. Activate another theme before deleting it.',
-      409,
-      { code: 'theme_active' },
-    );
-  const deleted = await db
-    .delete(schema.themes)
-    .where(eq(schema.themes.id, id))
-    .returning({ id: schema.themes.id });
-  if (!deleted.length)
-    throw new AppError('No custom theme has this id.', 404, {
-      code: 'theme_not_found',
-    });
+  // Under the setting's lock, so the theme cannot be activated between the
+  // check and the delete.
+  const config = await withPlatformConfigLock(
+    'ui.theme',
+    async (config, tx) => {
+      if (config.theme === id)
+        throw new AppError(
+          'This theme is active. Activate another theme before deleting it.',
+          409,
+          { code: 'theme_active' },
+        );
+      const deleted = await tx
+        .delete(schema.themes)
+        .where(eq(schema.themes.id, id))
+        .returning({ id: schema.themes.id });
+      if (!deleted.length)
+        throw new AppError('No custom theme has this id.', 404, {
+          code: 'theme_not_found',
+        });
+      return config;
+    },
+  );
   publishThemeUpdated(config);
 }
 

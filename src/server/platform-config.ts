@@ -20,6 +20,7 @@ import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
 import { DEFAULT_THEME } from '../../packages/hatch-design-tokens/src';
 import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
 import { db, schema } from '../db';
+import type { TX } from '../db/db';
 import type { JsonValue } from '../db/schema';
 
 /**
@@ -190,25 +191,46 @@ export async function updatePlatformConfig<K extends PlatformConfigKey>(
   key: K,
   change: (current: PlatformConfigValue<K>) => PlatformConfigValue<K>,
 ): Promise<PlatformConfigValue<K>> {
-  const entry = REGISTRY[key];
+  return withPlatformConfigLock(key, (current, tx) =>
+    writeLockedPlatformConfig(tx, key, change(current)),
+  );
+}
+
+/**
+ * Run `work` in one transaction that holds the key's lock, with the value
+ * stored under it. Changes that check other tables against the setting (a
+ * theme being deleted is not the active one) run their checks and writes
+ * here, so a change to the setting cannot slip in between.
+ */
+export async function withPlatformConfigLock<K extends PlatformConfigKey, T>(
+  key: K,
+  work: (current: PlatformConfigValue<K>, tx: TX) => Promise<T>,
+): Promise<T> {
   return db.transaction(async (tx) => {
     // A lock on the key, not on its row: the first write has no row to lock.
     await tx.execute(
       sql`select pg_advisory_xact_lock(${PLATFORM_CONFIG_LOCK_NS}, hashtext(${key}))`,
     );
     const row = await tx.query.platformConfig.findFirst({ where: { key } });
-    const validated = entry.schema.parse(
-      change(readStored(key, row)),
-    ) as JsonValue;
-    await tx
-      .insert(schema.platformConfig)
-      .values({ key, value: validated })
-      .onConflictDoUpdate({
-        target: schema.platformConfig.key,
-        set: { value: validated, updatedAt: new Date() },
-      });
-    return validated as PlatformConfigValue<K>;
+    return work(readStored(key, row), tx);
   });
+}
+
+/** Write a setting inside `withPlatformConfigLock`, validated like any. */
+export async function writeLockedPlatformConfig<K extends PlatformConfigKey>(
+  tx: TX,
+  key: K,
+  value: PlatformConfigValue<K>,
+): Promise<PlatformConfigValue<K>> {
+  const validated = REGISTRY[key].schema.parse(value) as JsonValue;
+  await tx
+    .insert(schema.platformConfig)
+    .values({ key, value: validated })
+    .onConflictDoUpdate({
+      target: schema.platformConfig.key,
+      set: { value: validated, updatedAt: new Date() },
+    });
+  return validated as PlatformConfigValue<K>;
 }
 
 /**

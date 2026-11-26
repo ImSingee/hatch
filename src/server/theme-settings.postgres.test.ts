@@ -54,4 +54,23 @@ describe.skipIf(!adminUrl)('Theme library on PostgreSQL', () => {
       ),
     );
   });
+
+  it('never deletes a theme that is being activated at the same moment', async () => {
+    const config = await import('./platform-config');
+    for (let round = 0; round < 12; round++) {
+      const saved = await themes.createTheme({
+        ...THEME_PRESETS.desk.document,
+        name: `Race ${round}`,
+      });
+      // Delete and activate race over separate pooled connections.
+      await Promise.allSettled([
+        themes.deleteTheme(saved.id),
+        themes.updateTheme({ theme: saved.id }),
+      ]);
+      const active = (await config.getPlatformConfig('ui.theme')).theme;
+      const ids = (await themes.listThemes()).map((theme) => theme.id);
+      expect(ids).toContain(active);
+      await themes.updateTheme({ theme: 'desk' });
+    }
+  });
 });
