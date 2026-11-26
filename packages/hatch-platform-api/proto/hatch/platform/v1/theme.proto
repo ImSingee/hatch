@@ -4,13 +4,16 @@ package hatch.platform.v1;
 
 import "buf/validate/validate.proto";
 
-// The instance-wide look that the web, mobile and desktop clients apply.
+// The caller's own look, which their web, mobile and desktop clients apply.
+// Every user has their own; a new user starts from the defaults. A Run acts
+// for the user who sent the prompt it answers; a Run no user prompted is
+// rejected as a conflict (aborted).
 service ThemeService {
   rpc GetTheme(GetThemeRequest) returns (GetThemeResponse);
   rpc SetTheme(SetThemeRequest) returns (SetThemeResponse);
 }
 
-// One accent the instance can choose.
+// One accent that can be chosen.
 message Accent {
   string name = 1;
   // Base colour as #RRGGBB.

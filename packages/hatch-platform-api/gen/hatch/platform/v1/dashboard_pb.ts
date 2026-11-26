@@ -47,6 +47,8 @@ export type Dashboard = Message<'hatch.platform.v1.Dashboard'> & {
   description?: string | undefined;
 
   /**
+   * Whether the caller pinned it; false for a Run no user prompted.
+   *
    * @generated from field: bool pinned = 4;
    */
   pinned: boolean;
@@ -349,7 +351,8 @@ export const ListDashboardsRequestSchema: GenMessage<ListDashboardsRequest> =
 export type ListDashboardsResponse =
   Message<'hatch.platform.v1.ListDashboardsResponse'> & {
     /**
-     * In dashboard order, pinned or not.
+     * In the caller's dashboard order, pinned or not. Dashboards the caller
+     * never pinned or ordered come last, oldest first.
      *
      * @generated from field: repeated hatch.platform.v1.Dashboard dashboards = 1;
      */
@@ -439,7 +442,9 @@ export const CreateDashboardRequestSchema: GenMessage<CreateDashboardRequest> =
 export type CreateDashboardResponse =
   Message<'hatch.platform.v1.CreateDashboardResponse'> & {
     /**
-     * The new dashboard is pinned, last in order and has no widgets.
+     * The new dashboard has no widgets. It is pinned and last in order for the
+     * caller only; other users find it unpinned. A Run no user prompted pins it
+     * for nobody.
      *
      * @generated from field: hatch.platform.v1.Dashboard dashboard = 1;
      */

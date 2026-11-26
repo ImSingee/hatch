@@ -80,8 +80,8 @@ export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const pins = (pinned.data?.apps ?? []).filter(
     (pin) => pin.appStatus !== 'archived',
   );
-  // Pins are shared by every client: a change re-reads them, and the
-  // workspace that marks a pinned App on its App page.
+  // The user's pins are the same on every client: a change re-reads them,
+  // and the workspace that marks a pinned App on its App page.
   const changed = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: [origin, 'pins'] }),

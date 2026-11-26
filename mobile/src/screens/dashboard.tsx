@@ -26,7 +26,7 @@ import { SecureSurface } from '../ui/secure-surface';
 import { palette as c, pill, radii, shadows } from '../ui/theme';
 
 /**
- * The dashboards of the instance and the one on show. Widgets are web
+ * The dashboards of the instance, in the user's order, and the one on show. Widgets are web
  * content: a dashboard is one web canvas, peeked at on the home screen and
  * shown at full height on the Widgets page.
  */

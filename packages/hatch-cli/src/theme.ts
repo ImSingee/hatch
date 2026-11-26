@@ -1,4 +1,4 @@
-/** Instance theme commands. */
+/** Theme commands: the caller's own accent and dock labels. */
 import {
   ACCENT_NAMES,
   isAccentName,

@@ -446,52 +446,52 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'get'],
     usage: 'theme get',
     description:
-      'Show the instance theme: the chosen accent, the default accent, every accent that can be chosen with its #RRGGBB colour, and dockLabels (whether the web dock shows names under its tiles).',
+      'Show your theme (each user has their own): the chosen accent, the default accent, every accent that can be chosen with its #RRGGBB colour, and dockLabels (whether the web dock shows names under its tiles). In a Run it is the theme of the user who sent the prompt.',
   },
   {
     path: ['theme', 'set'],
     usage: 'theme set [--accent <name>] [--dock-labels | --no-dock-labels]',
     description:
-      'Change the theme of the whole instance; settings left out keep their value, and at least one is required. --accent replaces the accent colour (names come from theme get); every signed-in web, mobile and desktop client recolours without a reload. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default); the full name still shows on hover.',
+      'Change your theme; other users keep theirs. In a Run it changes the theme of the user who sent the prompt. Settings left out keep their value, and at least one is required. --accent replaces the accent colour (names come from theme get); your signed-in web, mobile and desktop clients recolour without a reload. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default); the full name still shows on hover.',
   },
   {
     path: ['pin', 'list'],
     usage: 'pin list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List navigation pins: App pins in order (pin id, App id and slug, label, entry point, App status) and pinned dashboards. Without --limit it prints every pin. --limit (1-100) pages one sequence: App pins, then dashboards; pass the printed nextCursor as --cursor for the next page. No nextCursor means the last page.',
+      'List your navigation pins (each user has their own; in a Run, those of the user who sent the prompt): App pins in order (pin id, App id and slug, label, entry point, App status) and pinned dashboards. Without --limit it prints every pin. --limit (1-100) pages one sequence: App pins, then dashboards; pass the printed nextCursor as --cursor for the next page. No nextCursor means the last page.',
   },
   {
     path: ['pin', 'add'],
     usage:
       'pin add (--app <id-or-slug> [--label <text>] [--entry <fragment>] [--if-absent] | --dashboard <id>)',
     description:
-      'Pin an App or dashboard. --app always adds another pin (an App can have several, each with its own label and entry fragment such as /settings) and prints its pin id; --if-absent instead returns the existing pin when the App already has one. The label defaults to the App name. Pinning a dashboard that is already pinned succeeds.',
+      'Pin an App or dashboard to your navigation; other users are unaffected. --app always adds another pin (an App can have several, each with its own label and entry fragment such as /settings) and prints its pin id; --if-absent instead returns your existing pin when you already pinned the App. The label defaults to the App name. Pinning a dashboard that is already pinned succeeds.',
   },
   {
     path: ['pin', 'update'],
     usage:
       'pin update <pin-id> [--label <text>] [--entry <fragment> | --clear-entry]',
     description:
-      'Change an App pin. Omitted fields stay unchanged; --clear-entry makes the pin open the App root.',
+      'Change one of your App pins. Omitted fields stay unchanged; --clear-entry makes the pin open the App root.',
   },
   {
     path: ['pin', 'remove'],
     usage:
       'pin remove (--pin <pin-id> | --app <id-or-slug> | --dashboard <id>)',
     description:
-      'Unpin. --pin deletes that one App pin; --app deletes every pin of the App and prints the removed pin ids. --dashboard clears the pinned flag; the dashboard itself is kept.',
+      'Unpin from your navigation. --pin deletes that one App pin; --app deletes all your pins of the App and prints the removed pin ids. --dashboard clears your pinned flag; the dashboard itself is kept.',
   },
   {
     path: ['pin', 'reorder'],
     usage: 'pin reorder (--pin <pin-id>... | --dashboard <id>...)',
     description:
-      'Reorder App pins or dashboards. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order.',
+      'Reorder your App pins or your dashboard order. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order.',
   },
   {
     path: ['dashboard', 'list'],
     usage: 'dashboard list [--limit <n>] [--cursor <cursor>]',
     description:
-      'Without --limit, list every dashboard in order: id, name, description, pinned and autoRefreshSeconds (0 is off). Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.',
+      "Without --limit, list every dashboard in your order: id, name, description, pinned (by you) and autoRefreshSeconds (0 is off). Dashboards are shared; the pinned flag and order are each user's own, and dashboards you never pinned or ordered come last, oldest first. Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.",
   },
   {
     path: ['dashboard', 'get'],
@@ -503,7 +503,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['dashboard', 'create'],
     usage: 'dashboard create --name <text> [--description <text>]',
     description:
-      'Create an empty dashboard and print its id. It is pinned and placed last.',
+      'Create an empty dashboard and print its id. It is pinned and placed last for you (in a Run, the user who sent the prompt); other users find it unpinned.',
   },
   {
     path: ['dashboard', 'update'],
@@ -822,8 +822,8 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'model catalog': 'Search the built-in model catalog and control its updates.',
   'image-model': 'Manage image generation models.',
   image: 'Generate images.',
-  theme: 'Show or change the instance theme.',
-  pin: 'Manage navigation pins for Apps and dashboards.',
+  theme: 'Show or change your theme.',
+  pin: 'Manage your navigation pins for Apps and dashboards.',
   dashboard: 'Manage dashboards.',
   'dashboard widget': 'Add, arrange and remove dashboard widgets.',
   preferences: 'Show or change personal preferences.',

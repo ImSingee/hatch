@@ -341,7 +341,7 @@ showing it there) and Close (quit). Narrower, only the window in front shows.
 
 - Tile 40 (`sizes.dockTile`), radius 12: the App icon, or a `tiles` fill
   with a white monogram.
-- Names under the tiles are an instance setting (`ui.theme.dockLabels`,
+- Names under the tiles are each user's setting (`user_preferences.dock_labels`,
   Appearance › Show names in the dock), off by default. Shown: 11 / 700,
   neutral shade 8, one line, ellipsis, tile column 64 wide, gap 5. Hidden:
   the tile column is 52 wide.
@@ -452,7 +452,7 @@ may describe it, and is hidden while the menu is open.
 
 Native-runtime Apps draw these components from `@hatch/ui`
 (`sdk-internal/ui`), whose theme `buildAppTheme` builds from the same
-`tokens.json` and the instance accent. The App-side rules, screen patterns
+`tokens.json` and the viewer's accent. The App-side rules, screen patterns
 and the catalogue are in `skills/building-apps/references/design-system.md`.
 
 - `AppShell` follows the App's own pane, not the screen: a sidebar from 720
