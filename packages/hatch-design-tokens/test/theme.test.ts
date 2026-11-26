@@ -337,6 +337,24 @@ describe('validation', () => {
     );
   });
 
+  it('rejects a colour whose label is unreadable on its own tints', () => {
+    // Readable as a fill and as error text, but the mobile danger button
+    // keeps shade 8 on shade 2 while pressed (3.99:1).
+    const desk = THEME_PRESETS.desk.document;
+    const result = validateThemeDocument({
+      ...desk,
+      colors: { ...desk.colors, destructive: '#FF55EE' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.problems.map((problem) => problem.pair)).toContainEqual(
+      expect.objectContaining({
+        foreground: 'destructive-ink',
+        background: 'destructive-tint-strong',
+      }),
+    );
+  });
+
   it('checks each named pair, including the derived text on primary', () => {
     expect(CONTRAST_PAIRS.slice(0, 4)).toEqual([
       ['foreground', 'background'],

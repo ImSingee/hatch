@@ -183,7 +183,9 @@ one by one gives unreadable combinations.
   and `muted`; `primary-foreground` on `primary`; `destructive-foreground` on
   `destructive`; `destructive-text` (error text: the destructive colour, or
   the first of its shades 7 and 8 that reads) on `background`, `card` and
-  `muted`; the primary text shade on `background` and `card`. The check
+  `muted`; the primary text shade on `background` and `card`; and shade 8 on
+  shades 1 and 2 of the `primary` ramp and of the ramp built from
+  `destructive` (tinted controls, also while pressed). The check
   runs with the theme's own `primary` and with the chosen accent.
 - The instance setting (`ui.theme`) holds the accent and the active theme:
   a preset name or the id of a custom theme. Custom themes live in the

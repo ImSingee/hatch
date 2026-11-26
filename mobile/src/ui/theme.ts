@@ -5,7 +5,7 @@
 // motion) are read from the shared token file.
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import {
-  colorRamp,
+  destructiveRamp,
   mix,
   pressedShade,
   type ResolvedTheme,
@@ -64,7 +64,7 @@ function paletteOf(theme: ResolvedTheme) {
     groundFresh: c['ground-fresh'],
     /** Error text; the destructive colour, or a readable shade of it. */
     danger: c['destructive-text'],
-    dangerSoft: colorRamp(c.destructive, theme.appearance, c.card)[1],
+    dangerSoft: destructiveRamp(theme)[1],
   } as const;
 }
 
@@ -77,7 +77,7 @@ function statusOf(theme: ResolvedTheme) {
     rampRoles(ramp, c['on-fill'], c.card);
   return {
     danger: rampRoles(
-      colorRamp(c.destructive, theme.appearance, c.card),
+      destructiveRamp(theme),
       c['destructive-foreground'],
       c.card,
     ),

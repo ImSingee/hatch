@@ -301,7 +301,8 @@ client follows the device's light or dark setting). `init` and `theme`
 messages carry a `themeKey` that changes with the resolved theme. The player
 asks again when the surface reports a change and, when it runs alone (the
 mobile app's WebView), when the page returns to the foreground, and pushes
-`hatch.theme` when the answer differs. So `hatch theme set --accent teal` or
+`hatch.theme` when the answer differs. A refresh the platform does not answer
+is retried after 1, 4 and 15 seconds, and again whenever the App is shown. So `hatch theme set --accent teal` or
 `--theme desk-dark` restyles open Apps without a redeploy. Players built before
 this (deployments made before themes became data) follow only the accent
 until the App is deployed again.

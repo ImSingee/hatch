@@ -7,6 +7,7 @@ import {
   BASE_RADIUS,
   BUNDLED_FONTS,
   MAX_RADIUS,
+  colorRamp,
   TEXT_SHADE,
   THEME_APPEARANCES,
   THEME_COLOR_KEYS,
@@ -50,7 +51,24 @@ export type ThemeValidation =
 /** The `primary` ramp's text shade, as the pairs name it. */
 const PRIMARY_TEXT = 'primary-text';
 
-type PairRole = ResolvedColorKey | typeof PRIMARY_TEXT;
+/**
+ * Tinted controls (light buttons and badges, the mobile danger button) draw
+ * shade 8 of a ramp on its shade 1, and on shade 2 while pressed or hovered
+ * (DESIGN.md "Ramps"). The pairs name those shades of the `primary` ramp and
+ * of the ramp clients build from `destructive`.
+ */
+const TINT_ROLES = {
+  'primary-ink': ['primary', 8],
+  'primary-tint': ['primary', 1],
+  'primary-tint-strong': ['primary', 2],
+  'destructive-ink': ['destructive', 8],
+  'destructive-tint': ['destructive', 1],
+  'destructive-tint-strong': ['destructive', 2],
+} as const;
+
+type TintRole = keyof typeof TINT_ROLES;
+
+type PairRole = ResolvedColorKey | typeof PRIMARY_TEXT | TintRole;
 
 /**
  * Every text colour on every surface it is drawn on. The first four are the
@@ -71,12 +89,30 @@ export const CONTRAST_PAIRS: readonly (readonly [PairRole, PairRole])[] = [
   ['destructive-text', 'muted'],
   [PRIMARY_TEXT, 'background'],
   [PRIMARY_TEXT, 'card'],
+  ['primary-ink', 'primary-tint'],
+  ['primary-ink', 'primary-tint-strong'],
+  ['destructive-ink', 'destructive-tint'],
+  ['destructive-ink', 'destructive-tint-strong'],
 ];
 
+/** The ramp clients build from `destructive` (mobile status colours). */
+export function destructiveRamp(theme: ResolvedTheme): string[] {
+  return colorRamp(
+    theme.colors.destructive,
+    theme.appearance,
+    theme.colors.card,
+  );
+}
+
 function roleColor(theme: ResolvedTheme, role: PairRole): string {
-  return role === PRIMARY_TEXT
-    ? theme.ramps.primary[TEXT_SHADE]
-    : theme.colors[role];
+  if (role === PRIMARY_TEXT) return theme.ramps.primary[TEXT_SHADE];
+  if (role in TINT_ROLES) {
+    const [ramp, shade] = TINT_ROLES[role as TintRole];
+    return (ramp === 'primary' ? theme.ramps.primary : destructiveRamp(theme))[
+      shade
+    ];
+  }
+  return theme.colors[role as ResolvedColorKey];
 }
 
 /** Rounded down, so a reported ratio never looks like it passed. */

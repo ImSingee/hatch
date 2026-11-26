@@ -1,6 +1,10 @@
 /** How the native App player learns and reads the instance theme. */
 import { describe, expect, it, vi } from 'vitest';
-import { fetchInstanceTheme } from '../../../../sdk-internal/app/src/native-player';
+import {
+  createThemeRefresher,
+  fetchInstanceTheme,
+  THEME_RETRY_DELAYS_MS,
+} from '../../../../sdk-internal/app/src/native-player';
 import { parseSurfaceMessage } from '../../../../sdk-internal/app/src/native-surface';
 
 const theme = { cssVars: { theme: {}, light: { background: '#17191F' } } };
@@ -59,5 +63,47 @@ describe('the native player theme', () => {
       expect(
         await fetchInstanceTheme((async () => response()) as never),
       ).toBeNull();
+  });
+
+  it('retries a refresh the platform did not answer, and again when the App is shown', async () => {
+    vi.useFakeTimers();
+    try {
+      let drawn: string | undefined = 'old';
+      const answers: (string | null)[] = [];
+      const fetchTheme = vi.fn<
+        () => Promise<{ key: string; theme: unknown } | null>
+      >(async () => {
+        const key = answers.shift() ?? null;
+        return key ? { key, theme } : null;
+      });
+      const refresher = createThemeRefresher({
+        fetchTheme,
+        current: () => drawn,
+        apply: (next) => {
+          drawn = next.key;
+        },
+      });
+      // A theme change whose first request fails is applied by a retry.
+      answers.push(null, 'new');
+      refresher.refresh();
+      await vi.advanceTimersByTimeAsync(THEME_RETRY_DELAYS_MS[0]);
+      expect(drawn).toBe('new');
+      // An answered refresh leaves nothing pending.
+      refresher.refreshIfStale();
+      expect(fetchTheme).toHaveBeenCalledTimes(2);
+      // Every retry failing: showing the App asks again.
+      refresher.refresh();
+      for (const delay of THEME_RETRY_DELAYS_MS)
+        await vi.advanceTimersByTimeAsync(delay);
+      expect(fetchTheme).toHaveBeenCalledTimes(
+        3 + THEME_RETRY_DELAYS_MS.length,
+      );
+      answers.push('newer');
+      refresher.refreshIfStale();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(drawn).toBe('newer');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

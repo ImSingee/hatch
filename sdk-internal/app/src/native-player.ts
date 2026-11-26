@@ -550,6 +550,56 @@ const THEME_URL = '/api/theme/native';
  * with a theme (an older platform, offline): the theme baked into the page
  * stays.
  */
+/** Waits before asking again after a failed theme refresh. */
+export const THEME_RETRY_DELAYS_MS = [1_000, 4_000, 15_000];
+
+/**
+ * Keeps the player's instance theme current. Only the newest answer
+ * applies. A refresh the platform does not answer stays pending: it is
+ * retried after each of `THEME_RETRY_DELAYS_MS`, and `refreshIfStale` (the
+ * App being shown) asks again after those run out, so one failed request
+ * never leaves the App on an old theme.
+ */
+export function createThemeRefresher(options: {
+  fetchTheme: () => Promise<InstanceNativeTheme | null>;
+  /** The key of the theme drawn now. */
+  current: () => string | undefined;
+  apply: (theme: InstanceNativeTheme) => void;
+}) {
+  let request = 0;
+  let stale = false;
+  let failures = 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  const run = async () => {
+    clearTimeout(retry);
+    stale = true;
+    const mine = ++request;
+    const next = await options.fetchTheme();
+    if (mine !== request) return;
+    if (!next) {
+      if (failures < THEME_RETRY_DELAYS_MS.length)
+        retry = setTimeout(() => void run(), THEME_RETRY_DELAYS_MS[failures++]);
+      return;
+    }
+    stale = false;
+    failures = 0;
+    if (next.key !== options.current()) options.apply(next);
+  };
+  return {
+    /** Ask now, with a fresh set of retries. */
+    refresh() {
+      failures = 0;
+      void run();
+    },
+    /** Ask again only when the last refresh never got an answer. */
+    refreshIfStale() {
+      if (!stale) return;
+      failures = 0;
+      void run();
+    },
+  };
+}
+
 export async function fetchInstanceTheme(
   fetcher: typeof fetch = fetch,
 ): Promise<InstanceNativeTheme | null> {
@@ -594,19 +644,18 @@ export async function startNativePlayer(): Promise<void> {
   // a platform that does not, the page's own theme for the accent.
   let instance: InstanceNativeTheme | null = null;
   let themeKey: string | undefined;
-  let themeRequest = 0;
   const theme = () =>
     instance?.theme ??
     config.themes[accent] ??
     config.themes[config.defaultAccent];
-  const refreshTheme = async () => {
-    const request = ++themeRequest;
-    const next = await fetchInstanceTheme();
-    // Only the newest request applies; a stale answer is dropped.
-    if (request !== themeRequest || !next || next.key === instance?.key) return;
-    instance = next;
-    player?.hostEvent('hatch.theme', { theme: theme() });
-  };
+  const themes = createThemeRefresher({
+    fetchTheme: () => fetchInstanceTheme(),
+    current: () => instance?.key,
+    apply: (next) => {
+      instance = next;
+      player?.hostEvent('hatch.theme', { theme: theme() });
+    },
+  });
 
   const apply = (message: SurfaceMessage) => {
     if (!player) {
@@ -629,12 +678,13 @@ export async function startNativePlayer(): Promise<void> {
         // Without an instance theme the accent alone recolours the App.
         if (accentChanged && !instance)
           player.hostEvent('hatch.theme', { theme: theme() });
-        if (changed) void refreshTheme();
+        if (changed) themes.refresh();
         break;
       }
       case 'visibility':
         visible = message.visible;
         if (visible) {
+          themes.refreshIfStale();
           for (const resolve of showWaiters.splice(0)) resolve();
         } else {
           for (const listener of hideListeners) listener();
@@ -671,10 +721,10 @@ export async function startNativePlayer(): Promise<void> {
   // Embedded, the surface reports every theme change. Opened on its own (the
   // mobile app's WebView), the page asks again when it returns to the
   // foreground.
-  void refreshTheme();
+  themes.refresh();
   if (!port) {
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') void refreshTheme();
+      if (document.visibilityState === 'visible') themes.refresh();
     });
   }
 

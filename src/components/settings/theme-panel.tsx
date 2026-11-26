@@ -64,6 +64,13 @@ const ROLE_LABELS: Record<string, PlainTranslationKey> = {
   'primary-text': 'appearance.themeEditor.role.primaryText',
   'destructive-foreground': 'appearance.themeEditor.role.destructiveForeground',
   'destructive-text': 'appearance.themeEditor.role.destructiveText',
+  'primary-ink': 'appearance.themeEditor.role.primaryInk',
+  'primary-tint': 'appearance.themeEditor.role.primaryTint',
+  'primary-tint-strong': 'appearance.themeEditor.role.primaryTintStrong',
+  'destructive-ink': 'appearance.themeEditor.role.destructiveInk',
+  'destructive-tint': 'appearance.themeEditor.role.destructiveTint',
+  'destructive-tint-strong':
+    'appearance.themeEditor.role.destructiveTintStrong',
 };
 
 /** A small picture of a theme: its ground, a card and its primary. */

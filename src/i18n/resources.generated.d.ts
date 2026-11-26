@@ -80,6 +80,12 @@ export type TranslationResource = {
   'appearance.themeEditor.role.primaryText': 'Primary links';
   'appearance.themeEditor.role.destructiveForeground': 'Text on destructive';
   'appearance.themeEditor.role.destructiveText': 'Error text';
+  'appearance.themeEditor.role.primaryInk': 'Primary text on its tints';
+  'appearance.themeEditor.role.primaryTint': 'Primary tint';
+  'appearance.themeEditor.role.primaryTintStrong': 'Pressed primary tint';
+  'appearance.themeEditor.role.destructiveInk': 'Destructive text on its tints';
+  'appearance.themeEditor.role.destructiveTint': 'Destructive tint';
+  'appearance.themeEditor.role.destructiveTintStrong': 'Pressed destructive tint';
   'appearance.themeEditor.problem.invalidDocument': 'The theme is not a valid document.';
   'appearance.themeEditor.problem.unknownKey': '{{field}} is not a theme setting.';
   'appearance.themeEditor.problem.missingKey': '{{field}} is required.';
