@@ -6,8 +6,8 @@ import {
   LANGUAGE_NAMES,
   LOCALES,
   changeLocale,
+  i18n,
   isLocale,
-  useErrorText,
   useI18n,
   type Locale,
 } from '~i18n';
@@ -20,7 +20,6 @@ import { updateInterfacePreferenceSettings } from '~server/interface-preference-
  */
 export function LanguagePanel() {
   const { t, locale } = useI18n();
-  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const userId = authClient.useSession().data?.user.id;
   const save = useMutation({
@@ -48,9 +47,12 @@ export function LanguagePanel() {
         );
       }
     },
-    onError: (error, _language, context) => {
-      if (context) void changeLocale(context.previous);
-      toast.error(errorText(error, 'appearance.language.saveFailed'));
+    // The only thing a reader can act on is that the switch did not stick,
+    // so say that, once the previous language is back, instead of the raw
+    // request error.
+    onError: async (_error, _language, context) => {
+      if (context) await changeLocale(context.previous);
+      toast.error(i18n.t('appearance.language.saveFailed'));
     },
   });
 

@@ -86,9 +86,14 @@ test('saves the picked language to the account and reverts when saving fails', a
   expect(fixture.update).toHaveBeenCalledWith({ data: { language: 'zh-CN' } });
   expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('zh-CN');
 
+  // A failed save says it switched back, in the language it switched back
+  // to, rather than showing the raw request error.
   fixture.saveFailure = true;
   await screen.getByText('English').click();
   await vi.waitFor(() => expect(fixture.error).toHaveBeenCalledOnce());
   await expect.element(screen.getByText('语言')).toBeVisible();
   expect(i18n.resolvedLanguage).toBe('zh-CN');
+  expect(fixture.error).toHaveBeenCalledWith(
+    i18n.t('appearance.language.saveFailed'),
+  );
 });
