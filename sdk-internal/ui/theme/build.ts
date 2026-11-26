@@ -10,6 +10,7 @@
  */
 import tokens from '../../../packages/hatch-design-tokens/tokens.json' with { type: 'json' };
 import {
+  FILL_PRESSED_SHADE,
   colorRamp as tokenRamp,
   mix,
   resolvePreset,
@@ -41,15 +42,19 @@ export function colorRamp(base: string): string[] {
 
 /**
  * The roles a chromatic colour plays (DESIGN.md "Ramps"): the fill, its
- * stronger shade for hover and for text or links, and the tint variant.
+ * stronger shade for text, links and icons, the shade a hovered or pressed
+ * fill takes (darker than the fill in light and dark alike), and the tint
+ * variant.
  */
 function toneRoles(
   name: string,
   ramp: readonly string[],
+  appearance: ResolvedTheme['appearance'],
 ): Record<string, string> {
   return {
     [name]: ramp[6],
     [`${name}-strong`]: ramp[7],
+    [`${name}-pressed`]: ramp[FILL_PRESSED_SHADE[appearance]],
     [`${name}-tint`]: ramp[1],
     [`${name}-tint-hover`]: ramp[2],
     [`${name}-tint-foreground`]: ramp[8],
@@ -84,7 +89,7 @@ export function buildAppTheme(
   const c = theme.colors;
   const neutral = theme.ramps.neutral;
   const primaryColor = c.primary;
-  const primary = toneRoles('primary', theme.ramps.primary);
+  const primary = toneRoles('primary', theme.ramps.primary, theme.appearance);
 
   return {
     cssVars: {
@@ -164,10 +169,10 @@ export function buildAppTheme(
         'neutral-fill-hover': neutral[3],
 
         // Status colours: red, amber, green and blue (DESIGN.md "Hues").
-        ...toneRoles('danger', theme.ramps.red),
-        ...toneRoles('warning', theme.ramps.amber),
-        ...toneRoles('success', theme.ramps.green),
-        ...toneRoles('info', theme.ramps.blue),
+        ...toneRoles('danger', theme.ramps.red, theme.appearance),
+        ...toneRoles('warning', theme.ramps.amber, theme.appearance),
+        ...toneRoles('success', theme.ramps.green, theme.appearance),
+        ...toneRoles('info', theme.ramps.blue, theme.appearance),
 
         // Monogram tile fills; each carries white text at 4.5:1.
         ...Object.fromEntries(

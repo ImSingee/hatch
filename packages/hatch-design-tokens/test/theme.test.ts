@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import tokens from '../tokens.json';
 import {
   CONTRAST_PAIRS,
+  FILL_PRESSED_SHADE,
   HUE_NAMES,
   THEME_COLOR_KEYS,
   THEME_PRESETS,
@@ -166,10 +167,11 @@ describe('derivation', () => {
           ).toBeGreaterThanOrEqual(4.5);
         // A light badge: shade-8 text on the shade-1 tint.
         expect(contrast(ramp[8], ramp[1])).toBeGreaterThanOrEqual(4.5);
-        // Filled controls carry white text.
-        expect(
-          contrast(theme.colors['on-fill'], ramp[6]),
-        ).toBeGreaterThanOrEqual(4.5);
+        // Filled controls carry white text, also while pressed.
+        for (const shade of [6, FILL_PRESSED_SHADE[theme.appearance]])
+          expect(
+            contrast(theme.colors['on-fill'], ramp[shade]),
+          ).toBeGreaterThanOrEqual(4.5);
       }
     },
   );

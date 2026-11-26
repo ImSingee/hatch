@@ -10,6 +10,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import {
   BUILT_IN_THEME,
   THEME_MODES,
+  isResolvedTheme,
   resolvePreset,
   type ResolvedTheme,
   type ThemeAppearance,
@@ -37,20 +38,6 @@ const BUILT_IN: WebThemeState = {
   dark: resolvePreset('desk-dark'),
 };
 
-function isResolved(value: unknown, appearance: ThemeAppearance): boolean {
-  const theme = value as Partial<ResolvedTheme> | null;
-  return (
-    typeof theme === 'object' &&
-    theme !== null &&
-    theme.appearance === appearance &&
-    typeof theme.colors?.background === 'string' &&
-    Array.isArray(theme.ramps?.primary) &&
-    typeof theme.radius?.md === 'number' &&
-    typeof theme.shadows?.card === 'string' &&
-    typeof theme.fonts?.sans === 'string'
-  );
-}
-
 /** A cached state, or null when it is missing or from another format. */
 function parseCached(raw: string | null): WebThemeState | null {
   if (!raw) return null;
@@ -59,8 +46,8 @@ function parseCached(raw: string | null): WebThemeState | null {
     if (
       !(THEME_MODES as readonly unknown[]).includes(value.mode) ||
       !(value.accent === null || isAccentName(value.accent)) ||
-      !isResolved(value.light, 'light') ||
-      !isResolved(value.dark, 'dark')
+      !isResolvedTheme(value.light, 'light') ||
+      !isResolvedTheme(value.dark, 'dark')
     )
       return null;
     return value as WebThemeState;

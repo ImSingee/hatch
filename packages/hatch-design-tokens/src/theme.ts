@@ -305,3 +305,54 @@ export function resolveTheme(
  * (Mantine's `-text`, `-outline` and anchor roles).
  */
 export const TEXT_SHADE = 7;
+
+/**
+ * The shade a filled control takes while hovered or pressed: one step
+ * darker than the fill, so its text stays readable. On a light ramp that is
+ * towards the ink (7); on a dark ramp, towards the surface (5).
+ */
+export const FILL_PRESSED_SHADE: Record<ThemeAppearance, number> = {
+  light: 7,
+  dark: 5,
+};
+
+/**
+ * Whether a value read from a cache or the network is a complete resolved
+ * theme of `appearance`: every colour, ramp, radius, font and shadow a
+ * client draws. A client keeps its previous theme otherwise.
+ */
+export function isResolvedTheme(
+  value: unknown,
+  appearance: ThemeAppearance,
+): value is ResolvedTheme {
+  const theme = value as Partial<ResolvedTheme> | null;
+  if (typeof theme !== 'object' || theme === null) return false;
+  const strings = (record: unknown, keys: readonly string[]) =>
+    typeof record === 'object' &&
+    record !== null &&
+    keys.every(
+      (key) => typeof (record as Record<string, unknown>)[key] === 'string',
+    );
+  const ramps = theme.ramps as Record<string, unknown> | undefined;
+  return (
+    theme.appearance === appearance &&
+    typeof theme.name === 'string' &&
+    (theme.source === 'preset' || theme.source === 'custom') &&
+    strings(theme.colors, RESOLVED_COLOR_KEYS) &&
+    typeof ramps === 'object' &&
+    ramps !== null &&
+    ['primary', 'neutral', ...HUE_NAMES].every((name) => {
+      const ramp = ramps[name];
+      return (
+        Array.isArray(ramp) &&
+        ramp.length === 10 &&
+        ramp.every((shade) => typeof shade === 'string')
+      );
+    }) &&
+    typeof theme.radius === 'object' &&
+    theme.radius !== null &&
+    RADIUS_NAMES.every((name) => typeof theme.radius?.[name] === 'number') &&
+    strings(theme.fonts, ['sans', 'mono']) &&
+    strings(theme.shadows, Object.keys(tokens.shadows))
+  );
+}

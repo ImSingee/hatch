@@ -16,13 +16,28 @@ const before = golden as Record<string, (typeof golden)['indigo']>;
 
 describe('native App themes', () => {
   it.each(ACCENTS)('match the pre-theme desk output with %s', (accent) => {
-    expect(buildAppTheme({ accent })).toEqual(before[accent].nshLibrary);
-    expect(tokenTheme(accent)).toEqual(before[accent].nshTokens);
+    const library = before[accent].nshLibrary;
+    // Added since: the pressed fill of each tone, which on a light theme is
+    // the shade its hover always used.
+    const pressed = Object.fromEntries(
+      ['primary', 'danger', 'warning', 'success', 'info'].map((tone) => [
+        `${tone}-pressed`,
+        (library.cssVars.light as Record<string, string>)[`${tone}-strong`],
+      ]),
+    );
+    const expected = {
+      cssVars: {
+        theme: library.cssVars.theme,
+        light: { ...library.cssVars.light, ...pressed },
+      },
+    };
+    expect(buildAppTheme({ accent })).toEqual(expected);
     expect(
       buildAppTheme({
         theme: resolvePreset('desk', tokens.accents[accent]),
       }),
-    ).toEqual(before[accent].nshLibrary);
+    ).toEqual(expected);
+    expect(tokenTheme(accent)).toEqual(before[accent].nshTokens);
   });
 
   it('name the same tokens in every theme, since setTheme replaces the whole theme', () => {

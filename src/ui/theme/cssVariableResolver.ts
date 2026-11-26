@@ -1,5 +1,9 @@
 import type { CSSVariablesResolver } from '@mantine/core';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
+import {
+  FILL_PRESSED_SHADE,
+  type ThemeAppearance,
+} from '../../../packages/hatch-design-tokens/src';
 import { HUE_COLOR_NAMES, resolvedThemeOf } from './theme';
 
 /**
@@ -8,9 +12,21 @@ import { HUE_COLOR_NAMES, resolvedThemeOf } from './theme';
  * solid light tint with shade-8 text, and shade 7 wherever a hue is used as a
  * text or outline colour.
  */
-function hueRoles(name: string): Record<string, string> {
+function hueRoles(
+  name: string,
+  appearance: ThemeAppearance,
+): Record<string, string> {
   const shade = (step: number) => `var(--mantine-color-${name}-${step})`;
   return {
+    // A dark ramp's shade 7 is lighter (it is the text shade there), so a
+    // hovered fill steps towards the surface instead.
+    ...(appearance === 'dark'
+      ? {
+          [`--mantine-color-${name}-filled-hover`]: shade(
+            FILL_PRESSED_SHADE.dark,
+          ),
+        }
+      : {}),
     [`--mantine-color-${name}-text`]: shade(7),
     [`--mantine-color-${name}-light`]: shade(1),
     [`--mantine-color-${name}-light-hover`]: shade(2),
@@ -54,7 +70,10 @@ export const cssVariablesResolver: CSSVariablesResolver = (mantineTheme) => {
     '--mantine-color-gray-outline': 'var(--mantine-color-gray-6)',
     '--mantine-color-gray-outline-hover': c['surface-hover'],
 
-    ...Object.assign({}, ...HUE_COLOR_NAMES.map(hueRoles)),
+    ...Object.assign(
+      {},
+      ...HUE_COLOR_NAMES.map((name) => hueRoles(name, theme.appearance)),
+    ),
   };
   return {
     variables: {
