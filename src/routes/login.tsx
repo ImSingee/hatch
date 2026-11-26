@@ -10,7 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { authClient } from '~auth/client';
+import { announceSignIn, authClient } from '~auth/client';
 import { authErrorOf } from '~auth/auth-errors';
 import { browserSupportsPasskeys } from '~auth/passkey-browser';
 import { Brand } from '~components/desk/brand';
@@ -79,6 +79,7 @@ function LoginPage() {
     // A session that expired in this document may have left another user's
     // pins and dashboards in the cache; the new user must never see them.
     queryClient.removeQueries();
+    announceSignIn();
     await router.navigate({ href: safeRedirect(redirectTo) });
   }, [queryClient, redirectTo, router]);
 

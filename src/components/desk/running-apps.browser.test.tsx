@@ -153,7 +153,9 @@ vi.mock('~auth/client', () => ({
   authClient: {
     signOut: async () => ({}),
     useSession: () => ({
-      data: { user: { name: 'Test owner', email: 'owner@example.test' } },
+      data: {
+        user: { id: 'owner', name: 'Test owner', email: 'owner@example.test' },
+      },
     }),
   },
 }));
