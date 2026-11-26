@@ -10,6 +10,7 @@ import { buildApp } from './build';
 
 const execFileAsync = promisify(execFile);
 const templateDir = path.resolve('templates/default-app');
+const webFixtureDir = path.resolve('src/server/apps/test-fixtures/web-app');
 const tempDirs: string[] = [];
 
 /** The runtime flags of a `bundle-v1` backend artifact. */
@@ -36,10 +37,16 @@ async function workspace(): Promise<{ sourceDir: string; outputDir: string }> {
   };
 }
 
-/** The default template as `create_app` scaffolds it, with the id `demo`. */
+/**
+ * The default template as `create_app` scaffolds it, with the id `demo`, and
+ * a web-runtime (React) frontend in place of its native one: web Apps keep
+ * deploying as they did (the native build has its own tests).
+ */
 async function templateSource() {
   const dirs = await workspace();
   await fs.cp(templateDir, dirs.sourceDir, { recursive: true });
+  await fs.rm(path.join(dirs.sourceDir, 'app'), { recursive: true });
+  await fs.cp(webFixtureDir, dirs.sourceDir, { recursive: true });
   const manifest = path.join(dirs.sourceDir, 'manifest.ts');
   await fs.writeFile(
     manifest,
@@ -108,7 +115,7 @@ afterEach(async () => {
 });
 
 describe('buildApp with the Node toolchain', { timeout: 180_000 }, () => {
-  it('builds the default template into a self-contained artifact that Deno serves', async () => {
+  it('builds a web App from the template into a self-contained artifact that Deno serves', async () => {
     const { sourceDir, outputDir } = await templateSource();
     // pnpm writes this file into worktrees; a deploy must never act on it.
     await fs.writeFile(

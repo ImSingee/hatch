@@ -18,8 +18,12 @@ import { SyntaxKind } from 'typescript/unstable/ast';
 import { createScanner } from 'typescript/unstable/ast/scanner';
 import {
   SDK_DEFINITIONS,
+  appMaterializedSdkDefinitions,
   type SdkDefinition,
 } from '../sdk-internal/definitions';
+
+/** Every SDK package an App root receives, native-only libraries included. */
+const BUILT_SDKS = appMaterializedSdkDefinitions();
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const sdkRoot = path.join(root, 'sdk-internal');
@@ -129,7 +133,47 @@ async function emitDeclarations(): Promise<void> {
   ]);
 }
 
+/**
+ * A source-form library (`form: 'source'`): `src/` becomes `dist/` byte for
+ * byte, because NSH compiles the library's TSX together with the App. Every
+ * export must name a file that exists in it.
+ */
+async function copySourceDefinition(definition: SdkDefinition): Promise<void> {
+  const directory = path.join(payloads, definition.directory);
+  const dist = path.join(directory, 'dist');
+  await mkdir(directory, { recursive: true });
+  await cp(path.join(sdkRoot, definition.directory, 'src'), dist, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+  });
+  const { manifest, entries } = definition;
+  if (
+    Object.keys(entries).sort().join() !==
+    Object.keys(manifest.exports).sort().join()
+  ) {
+    throw new Error(`SDK sources and exports differ: ${manifest.name}`);
+  }
+  for (const [key, entry] of Object.entries(entries)) {
+    const output = manifest.exports[key];
+    if (!('source' in entry) || output.default !== output.types)
+      throw new Error(
+        `Source-form SDK exports must name one source file: ${manifest.name} ${key}`,
+      );
+    if (output.default !== `./dist/${entry.source}`)
+      throw new Error(
+        `SDK export does not match its source: ${manifest.name} ${key}`,
+      );
+    await access(exportedPath(directory, output.default));
+  }
+  await cp(
+    path.join(sdkRoot, definition.directory, 'package.json'),
+    path.join(directory, 'package.json'),
+  );
+}
+
 async function buildDefinition(definition: SdkDefinition): Promise<void> {
+  if (definition.form === 'source') return copySourceDefinition(definition);
   const directory = path.join(payloads, definition.directory);
   const dist = path.join(directory, 'dist');
   await mkdir(dist, { recursive: true });
@@ -286,7 +330,7 @@ async function publish(): Promise<void> {
     hadPrevious: boolean;
   }[] = [];
   try {
-    for (const definition of SDK_DEFINITIONS) {
+    for (const definition of BUILT_SDKS) {
       const destination = path.join(sdkRoot, definition.directory, 'dist');
       const backup = path.join(temporary, `previous-${definition.directory}`);
       const hadPrevious = await access(destination).then(
@@ -326,9 +370,11 @@ async function publish(): Promise<void> {
 
 try {
   await emitDeclarations();
-  for (const definition of SDK_DEFINITIONS) await buildDefinition(definition);
+  for (const definition of BUILT_SDKS) await buildDefinition(definition);
   await publish();
-  console.log('Built @hatch/app and legacy @hatch/data re-exports.');
+  console.log(
+    `Built ${BUILT_SDKS.map((definition) => definition.manifest.name).join(', ')}.`,
+  );
 } finally {
   if (!preserveTemporary) await rm(temporary, { recursive: true, force: true });
 }

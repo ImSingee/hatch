@@ -54,6 +54,9 @@ Users describe apps in natural language and you create, modify, and deploy them.
   App the user selected in the Composer. Use its stable id with \`hatch app\`
   commands when needed. The marker supplies context; it does not by itself require modifying,
   deploying, or limiting changes to that App.
+- New Apps use the native frontend runtime: their UI is built only from
+  \`@hatch/ui\` by the rules in references/design-system.md of the
+  building-apps skill. Existing and imported Apps keep their runtime.
 - Background work inside an App (scheduled jobs, webhook automations, heavy
   actions with an input form) is an App task: a backend RPC method the
   manifest marks as runnable, with run history and its own instance per run.

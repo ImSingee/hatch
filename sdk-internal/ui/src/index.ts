@@ -30,7 +30,11 @@ export type { GridProps, RowProps, StackProps } from './layout/Stack';
 export { AppShell } from './navigation/AppShell';
 export type { AppSection, AppShellProps } from './navigation/AppShell';
 export { NavStack, createNavStack } from './navigation/NavStack';
-export type { NavStackProps, NavStackState } from './navigation/NavStack';
+export type {
+  NavRoutes,
+  NavStackProps,
+  NavStackState,
+} from './navigation/NavStack';
 export { Tabs } from './navigation/Tabs';
 export type { TabItem, TabsProps } from './navigation/Tabs';
 

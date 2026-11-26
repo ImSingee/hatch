@@ -62,6 +62,12 @@ bridge add no command: they are how a frame renders an App, the same as the
 Web UI, and the bridge's requests are the existing App RPC and Data API
 calls (see [Native App runtime](app-native-runtime.md)).
 
+`app create`, `clone`, `update` and `adopt` prepare a native App's checkout
+with the `nsh.json` and `app/tsconfig.json` a deploy generates (the SDK from
+`SdkService/GetSdk` carries them; the CLI adds the App's name, id and entry),
+so the Agent runs `nsh check`, `nsh test` and `nsh build` from the App root.
+No command changed; new Apps are created with a native frontend.
+
 Image models are the provider models of kind `image`; `image-model` keeps
 its own commands (backed by `ImageService`), and `model add --kind image`,
 `model update` and `model remove` reach the same rows through `ModelService`.

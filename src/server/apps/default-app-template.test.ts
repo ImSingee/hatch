@@ -60,4 +60,28 @@ describe('default app template', { timeout: 60_000 }, () => {
     expect(counter).not.toContain('current.value + amount');
     expect(dataSchema).toContain("uniqueIndex('by_name', ['name'])");
   });
+
+  it('starts new Apps on the native runtime with @hatch/ui', async () => {
+    const { manifest } = await loadDefaultManifest();
+    const template = new URL(
+      '../../../templates/default-app/',
+      import.meta.url,
+    );
+    expect(manifest.app).toMatchObject({
+      entry: 'app/main.tsx',
+      runtime: 'native',
+    });
+    expect(manifest.app).not.toHaveProperty('html');
+    await expect(
+      readFile(new URL('app/index.html', template), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    const main = await readFile(new URL('app/main.tsx', template), 'utf8');
+    expect(main).toContain("from '@hatch/ui'");
+    expect(main).toContain("from '@hatch/app/native'");
+    expect(main).toContain("from '@hatch/app/native/rpc'");
+    // Generated per checkout and deploy, never committed.
+    const ignored = await readFile(new URL('.gitignore', template), 'utf8');
+    for (const entry of ['/nsh.json', '/app/tsconfig.json', '.nsh/'])
+      expect(ignored.split('\n')).toContain(entry);
+  });
 });

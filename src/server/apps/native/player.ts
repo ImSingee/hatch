@@ -21,26 +21,17 @@ import {
   BUILD_PACKAGE_NSH_RUNTIME_DIR,
   nativePackageSchema,
 } from '../../../app-build/format';
-import {
-  NATIVE_HOST_CALLS,
-  nativeAppRefs,
-  nativeRuntimeRefs,
-  nshAppId,
-} from '../../../app-build/native';
+import { nativeAppRefs, nativeRuntimeRefs } from '../../../app-build/native';
 import {
   hatchSdkPlugin,
   sourceBoundaryPlugin,
 } from '../../../toolchain/esbuild-plugins';
 import { dataTableUrl, rpcUrl, type AppApi } from '../manifest';
+import { nativeGrant, nshAppId } from './nsh-config';
 import { NSH_VERSION } from './nsh-toolchain';
 import { nshThemesByAccent } from './nsh-theme';
 import { publishRuntimeSet } from './runtime-store';
 import { randomUUID } from 'node:crypto';
-
-/** The grant a shell hands NSH for an App, as the JSON text NSH reads. */
-export function nativeGrant(): string {
-  return JSON.stringify({ host: [...NATIVE_HOST_CALLS] });
-}
 
 function scriptJson(value: unknown): string {
   return JSON.stringify(value)

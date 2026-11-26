@@ -16,13 +16,14 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import {
-  NATIVE_APP_SDK_DEFINITIONS,
-  sdkImports,
-} from '../../sdk-internal/definitions';
-import { DEFAULT_ACCENT } from '../ui/theme/accents';
 import type { AppApi } from '../server/apps/manifest';
-import { nshTailwind, nshTheme } from '../server/apps/native/nsh-theme';
+import {
+  nativeEntryTsconfig,
+  nativeNshJson,
+  nativeSdkAliases,
+  nshAppId,
+} from '../server/apps/native/nsh-config';
+import { nshTheme } from '../server/apps/native/nsh-theme';
 import { isRuntimeFileName } from '../server/apps/native/runtime-names';
 import {
   checkNativeSourceRules,
@@ -35,97 +36,7 @@ import {
 } from './format';
 import type { BuildNshHost } from './host';
 
-/**
- * Host calls a native App is granted on every shell, and nothing else: no
- * network, files, clipboard or URL access. Granted native capabilities add
- * their `hatch.native.<id>.*` names (a later phase).
- */
-export const NATIVE_HOST_CALLS = [
-  'hatch.rpc',
-  'hatch.data.query',
-  'hatch.data.mutate',
-  'hatch.data.events',
-  'hatch.theme.get',
-  'hatch.nav.setTitle',
-  'hatch.nav.setRoute',
-  'hatch.nav.open',
-  'hatch.native.supports',
-] as const;
-
-/**
- * The NSH app id of a Hatch App: NSH scopes an App's storage by it, so the
- * mapping is reversible. Hatch ids are `[a-z0-9-]`; `x` and `-` are escaped
- * as `x` plus two hex digits (`habit-tracker` -> `habitx2dtracker`), so
- * `habit-tracker` and `habittracker` never share a namespace.
- */
-export function nshAppId(appId: string): string {
-  const encoded = appId.replace(
-    /[^a-wyz0-9]/g,
-    (char) => `x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
-  );
-  return `dev.hatch.app.${encoded}`;
-}
-
-/** Exact `nsh.json` aliases: one per entry of every native SDK, App-root relative. */
-export function nativeSdkAliases(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(sdkImports(NATIVE_APP_SDK_DEFINITIONS, 'native')).map(
-      ([specifier, target]) => [specifier, `./.hatch/${target.slice(2)}`],
-    ),
-  );
-}
-
-/** The platform-generated `nsh.json` at the App root. */
-export function nativeNshJson(app: {
-  id: string;
-  name: string;
-  entry: string;
-}): string {
-  return `${JSON.stringify(
-    {
-      name: app.name,
-      // Names the App root as NSH's app directory for this entry. Without
-      // it, an `App.tsx` beside the entry would make `app/` the app
-      // directory, where the SDK aliases under `.hatch/` cannot be reached.
-      entry: app.entry,
-      id: nshAppId(app.id),
-      version: '1.0.0',
-      build: 1,
-      // Declared capabilities deny everything not listed.
-      capabilities: { host: [...NATIVE_HOST_CALLS] },
-      resolve: { alias: nativeSdkAliases() },
-      // Hatch is light-only until the theme-data phase adds dark presets.
-      appearance: 'light',
-      theme: nshTheme(DEFAULT_ACCENT),
-      ...(nshTailwind() ? { tailwind: nshTailwind() } : {}),
-    },
-    null,
-    2,
-  )}\n`;
-}
-
-/** The platform-generated `app/tsconfig.json` next to the entry. */
-export function nativeEntryTsconfig(): string {
-  const paths: Record<string, string[]> = {
-    nsh: ['./.nsh/types/nsh/index.d.ts'],
-    'nsh/*': ['./.nsh/types/nsh/*.d.ts'],
-  };
-  for (const [specifier, target] of Object.entries(nativeSdkAliases())) {
-    // `.js` targets resolve to their sibling declarations; source entries
-    // (`.ts`/`.tsx` libraries) are checked as they are.
-    paths[specifier] = [`.${target.replace(/\.js$/, '')}`];
-  }
-  return `${JSON.stringify(
-    {
-      extends: './.nsh/tsconfig.json',
-      compilerOptions: { allowImportingTsExtensions: true, paths },
-      include: ['**/*.ts', '**/*.tsx', '../gen/**/*.ts'],
-      exclude: ['./.nsh'],
-    },
-    null,
-    2,
-  )}\n`;
-}
+export { NATIVE_HOST_CALLS, nshAppId } from '../server/apps/native/nsh-config';
 
 /**
  * Rewrite the paths NSH prints to App-root paths. `nsh build`, `nsh test` and
