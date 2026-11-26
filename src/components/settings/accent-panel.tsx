@@ -1,5 +1,5 @@
-import { Stack, Text } from '@mantine/core';
-import { IconCheck } from '@tabler/icons-react';
+import { Alert, Stack, Text } from '@mantine/core';
+import { IconCheck, IconInfoCircle } from '@tabler/icons-react';
 import {
   useMutation,
   useQueryClient,
@@ -39,6 +39,10 @@ export function AccentPanel() {
   const ownPrimary = themeChoicePrimary(
     theme[activeAppearance(theme.mode, prefersDark)],
   );
+  // A custom theme whose own primary the chosen accent hides.
+  const overridden = theme.accentOverrides
+    .map((appearance) => theme[appearance])
+    .filter((choice) => choice.preset === null);
   const options = [
     ...theme.accents.map((accent) => ({
       value: accent.name as string,
@@ -65,6 +69,16 @@ export function AccentPanel() {
             {t('appearance.accent.description')}
           </Text>
         </Stack>
+        {overridden.map((choice) => (
+          <Alert
+            key={choice.appearance}
+            variant="light"
+            color="gray"
+            icon={<IconInfoCircle size={18} aria-hidden />}
+          >
+            {t('appearance.accent.overrides', { name: choice.name })}
+          </Alert>
+        ))}
         <div
           role="radiogroup"
           aria-labelledby="accent-label"

@@ -86,7 +86,10 @@ the ground.
 One accent at a time, default `indigo` `#3F51C7`; alternatives `teal`
 `#0F766E`, `clay` `#B4472A`, `violet` `#7A3FB8`. The accent is a quick pick that
 replaces the theme's `primary` in both appearances; with no accent chosen,
-each theme shows its own `primary`. The accent is used
+each theme shows its own `primary`. A fresh instance and a reset have no
+accent (`desk`'s own primary is `indigo`, so it looks the same), and the
+settings page and `hatch theme set` say when a chosen accent hides a custom
+theme's own primary. The accent is used
 for the primary action of a view, the current navigation item, selection and
 links. It is not used for decoration.
 

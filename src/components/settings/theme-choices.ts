@@ -17,7 +17,7 @@ export function themeChoiceDocument(choice: ThemeChoice): ThemeDocument {
 
 /** The theme's own primary, shown while no accent replaces it. */
 export function themeChoicePrimary(choice: ThemeChoice): string {
-  return themeChoiceDocument(choice).colors.primary;
+  return choice.primary;
 }
 
 /** The presets that can be the theme of one appearance. */

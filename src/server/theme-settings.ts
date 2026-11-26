@@ -5,6 +5,7 @@ import {
   THEME_PRESET_NAMES,
   contrastProblems,
   isThemePresetName,
+  normalizeColor,
   resolvePreset,
   resolveTheme,
   validateThemeDocument,
@@ -34,14 +35,18 @@ import {
 import { publishPlatformEvent } from '~server/platform-events';
 
 /** The theme one appearance uses. */
-export type ThemeChoice =
+export type ThemeChoice = (
   | { appearance: ThemeAppearance; preset: ThemePresetName; name: string }
   | {
       appearance: ThemeAppearance;
       preset: null;
       custom: ThemeDocument;
       name: string;
-    };
+    }
+) & {
+  /** The theme's own primary (`#RRGGBB`), shown while no accent is chosen. */
+  primary: string;
+};
 
 export type ThemeState = {
   /** null: no accent, each theme's own `primary` shows. */
@@ -54,6 +59,11 @@ export type ThemeState = {
   mode: ThemeMode;
   light: ThemeChoice;
   dark: ThemeChoice;
+  /**
+   * Appearances whose theme has its own primary that the chosen accent
+   * replaces; empty while no accent is chosen or the colours agree.
+   */
+  accentOverrides: ThemeAppearance[];
 };
 
 function choiceOf(
@@ -65,24 +75,34 @@ function choiceOf(
         appearance,
         preset: stored,
         name: THEME_PRESETS[stored].document.name ?? stored,
+        primary: normalizeColor(THEME_PRESETS[stored].document.colors.primary),
       }
     : {
         appearance,
         preset: null,
         custom: stored,
         name: stored.name ?? 'Custom',
+        primary: normalizeColor(stored.colors.primary),
       };
 }
 
 function themeState(config: UiThemeConfig): ThemeState {
+  const light = choiceOf('light', config.light);
+  const dark = choiceOf('dark', config.dark);
+  const accent = accentColor(config.accent);
   return {
     accent: config.accent,
     defaultAccent: DEFAULT_ACCENT,
     accents: ACCENT_NAMES.map((name) => ({ name, color: ACCENT_COLORS[name] })),
     dockLabels: config.dockLabels,
     mode: config.mode,
-    light: choiceOf('light', config.light),
-    dark: choiceOf('dark', config.dark),
+    light,
+    dark,
+    accentOverrides: accent
+      ? [light, dark]
+          .filter((choice) => choice.primary !== normalizeColor(accent))
+          .map((choice) => choice.appearance)
+      : [],
   };
 }
 
@@ -272,7 +292,10 @@ function publishThemeUpdated(config: UiThemeConfig): void {
   });
 }
 
-/** Back to `desk`, light mode and the default accent; keeps dock labels. */
+/**
+ * Back to `desk` and `desk-dark`, light mode and no accent (each theme's own
+ * primary; `desk`'s is the default accent); keeps dock labels.
+ */
 export async function resetTheme(): Promise<ThemeState> {
   const next = await updatePlatformConfig('ui.theme', (current) => ({
     ...DEFAULT_UI_THEME,

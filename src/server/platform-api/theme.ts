@@ -12,6 +12,7 @@ function choiceMessage(choice: ThemeChoice) {
         ? (choice.custom as unknown as JsonObject)
         : undefined,
     name: choice.name,
+    primary: choice.primary,
   };
 }
 
@@ -24,6 +25,7 @@ export function themeStateMessage(theme: ThemeState) {
     mode: theme.mode,
     light: choiceMessage(theme.light),
     dark: choiceMessage(theme.dark),
+    accentOverrides: theme.accentOverrides,
   };
 }
 

@@ -38,6 +38,7 @@
   "appearance.accent.clay": "陶土",
   "appearance.accent.violet": "紫罗兰",
   "appearance.accent.theme": "主题颜色",
+  "appearance.accent.overrides": "强调色替换了自定义主题“{{name}}”自己的主色。选择“主题颜色”即可显示它。",
   "appearance.mode.title": "外观",
   "appearance.mode.description": "所有人统一使用浅色或深色，或跟随各自设备的设置。",
   "appearance.mode.light": "浅色",

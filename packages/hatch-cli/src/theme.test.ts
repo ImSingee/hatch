@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import tokens from '../../hatch-design-tokens/tokens.json';
-import { parseThemeCommand } from './theme';
+import { accentOverrideNote, parseThemeCommand } from './theme';
 
 const command = (...args: string[]) => parseThemeCommand(args, 0).command;
 const rejected = (...args: string[]) => {
@@ -206,5 +206,25 @@ describe('theme modes, presets and custom themes', () => {
         code: 'invalid_arguments',
         message: expect.stringContaining(message),
       });
+  });
+});
+
+describe('theme set after a new theme', () => {
+  const state = (accent: string | null, accentOverrides: string[]) => ({
+    accent,
+    accentOverrides,
+    light: { name: 'Meadow', primary: '#2F6B3A' },
+    dark: { name: 'Desk dark', primary: '#3F51C7' },
+  });
+
+  it('notes an accent that hides the theme primary and names the fix', () => {
+    expect(accentOverrideNote(state('teal', ['light', 'dark']), 'light')).toBe(
+      'Note: the teal accent replaces the primary #2F6B3A of the light theme "Meadow". Run hatch theme set --clear-accent to show it.',
+    );
+  });
+
+  it('says nothing when the theme shows its own primary', () => {
+    expect(accentOverrideNote(state(null, []), 'light')).toBeNull();
+    expect(accentOverrideNote(state('indigo', ['light']), 'dark')).toBeNull();
   });
 });

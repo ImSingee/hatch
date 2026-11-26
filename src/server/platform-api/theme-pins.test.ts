@@ -139,8 +139,9 @@ describe('theme and pin RPCs', () => {
         status: (await call(method, body)).status,
       }).toEqual({ method, body, status: 400 });
     expect((await call('PinService/PinApp', { app: 'nope' })).status).toBe(404);
-    expect((await call('ThemeService/GetTheme')).data.theme.accent).toBe(
-      'indigo',
+    // Still the fresh state: no accent.
+    expect((await call('ThemeService/GetTheme')).data.theme.accent ?? '').toBe(
+      '',
     );
     expect((await call('PinService/ListPins')).data.appPins ?? []).toEqual([]);
   });
@@ -233,10 +234,11 @@ describe('theme and pin RPCs', () => {
       const reset = await call('ThemeService/ResetTheme');
       ok(reset);
       expect(reset.data.theme).toMatchObject({
-        accent: 'indigo',
         mode: 'light',
-        light: { preset: 'desk' },
+        light: { preset: 'desk', primary: '#3F51C7' },
       });
+      // Reset leaves no accent: each theme shows its own primary.
+      expect(reset.data.theme.accent ?? '').toBe('');
     }
   });
 

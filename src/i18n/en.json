@@ -38,6 +38,7 @@
   "appearance.accent.clay": "Clay",
   "appearance.accent.violet": "Violet",
   "appearance.accent.theme": "Theme colour",
+  "appearance.accent.overrides": "The accent replaces the primary colour of your custom theme “{{name}}”. Choose Theme colour to show it.",
   "appearance.mode.title": "Appearance",
   "appearance.mode.description": "Light or dark for everyone, or follow each device's setting.",
   "appearance.mode.light": "Light",

@@ -171,6 +171,24 @@ export function parseThemeCommand(
   }
 }
 
+/**
+ * The note `theme set` prints when the theme it just set has its own primary
+ * that the chosen accent replaces; null when it shows as set.
+ */
+export function accentOverrideNote(
+  state: {
+    accent: string | null;
+    accentOverrides: string[];
+    light: { name: string; primary: string };
+    dark: { name: string; primary: string };
+  },
+  appearance: ThemeAppearance,
+): string | null {
+  if (!state.accent || !state.accentOverrides.includes(appearance)) return null;
+  const theme = state[appearance];
+  return `Note: the ${state.accent} accent replaces the primary ${theme.primary} of the ${appearance} theme "${theme.name}". Run hatch theme set --clear-accent to show it.`;
+}
+
 function readTheme(file: string, signal: AbortSignal): Promise<JsonObject> {
   return readInput(file, signal, MAX_THEME_BYTES) as Promise<JsonObject>;
 }
@@ -203,20 +221,25 @@ export async function runTheme(
       );
       return;
     }
-    case 'set':
-      printResult(
-        await client.theme.set({
-          accent: command.accent,
-          clearAccent: command.clearAccent,
-          dockLabels: command.dockLabels,
-          mode: command.mode,
-          appearance: command.appearance,
-          preset: command.preset,
-          custom: document,
-        }),
-        flags,
-      );
+    case 'set': {
+      const state = await client.theme.set({
+        accent: command.accent,
+        clearAccent: command.clearAccent,
+        dockLabels: command.dockLabels,
+        mode: command.mode,
+        appearance: command.appearance,
+        preset: command.preset,
+        custom: document,
+      });
+      if (!command.appearance) {
+        printResult(state, flags);
+        return;
+      }
+      const note = accentOverrideNote(state, command.appearance);
+      if (note && !flags.json) process.stderr.write(`${note}\n`);
+      printResult({ ...state, accentOverridesPrimary: note !== null }, flags);
       return;
+    }
     case 'check': {
       const result = await client.theme.validate(document!);
       if (!result.ok)

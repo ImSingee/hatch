@@ -264,6 +264,7 @@ const themeChoice = (value: ThemeChoice | undefined) => {
     appearance: choice.appearance,
     preset: choice.preset || null,
     name: choice.name,
+    primary: choice.primary,
     custom: choice.custom ?? null,
   };
 };
@@ -280,6 +281,7 @@ const theme = (value: ThemeState | undefined) => {
     mode: state.mode,
     light: themeChoice(state.light),
     dark: themeChoice(state.dark),
+    accentOverrides: state.accentOverrides,
   };
 };
 const resolvedTheme = (value: ResolvedTheme) => ({

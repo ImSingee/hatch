@@ -752,8 +752,13 @@ must match; while an accent is chosen it replaces the document's `primary`,
 so add `--clear-accent` to show the document's own); `--dock-labels` / `--no-dock-labels` shows or hides the names
 under the web dock tiles (hidden by default). Give at least one. `theme
 check --file` validates a document without saving it and prints it resolved.
-`theme reset` returns to `desk` and `desk-dark`, light mode and the default
-accent in one change, keeping dock labels.
+`theme reset` returns to `desk` and `desk-dark`, light mode and no accent (each
+theme shows its own primary; `desk`'s is the default accent, so it looks the
+same) in one change, keeping dock labels. Every theme result carries
+`accentOverrides`, the appearances whose own primary the chosen accent
+replaces; after `--preset` or `--file`, `theme set` adds
+`accentOverridesPrimary` for that appearance and notes it on stderr with the
+`--clear-accent` fix.
 
 A theme document is `{"name"?, "appearance", "colors": {background,
 foreground, card, primary, secondary, muted, muted-foreground, border,

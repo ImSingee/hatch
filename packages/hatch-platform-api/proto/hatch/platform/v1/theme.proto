@@ -15,8 +15,9 @@ import "google/protobuf/struct.proto";
 service ThemeService {
   rpc GetTheme(GetThemeRequest) returns (GetThemeResponse);
   rpc SetTheme(SetThemeRequest) returns (SetThemeResponse);
-  // Back to the `desk` and `desk-dark` presets, light mode and the default
-  // accent, in one change; dock labels are kept.
+  // Back to the `desk` and `desk-dark` presets, light mode and no accent
+  // (each theme's own primary; desk's is the default accent), in one change;
+  // dock labels are kept.
   rpc ResetTheme(ResetThemeRequest) returns (ResetThemeResponse);
   // Every built-in theme, as a document.
   rpc ListThemePresets(ListThemePresetsRequest) returns (ListThemePresetsResponse);
@@ -41,6 +42,8 @@ message ThemeChoice {
   google.protobuf.Struct custom = 3;
   // The theme's display name: the preset's or the document's `name`.
   string name = 4;
+  // The theme's own primary as #RRGGBB, shown while no accent is chosen.
+  string primary = 5;
 }
 
 message ThemeState {
@@ -60,6 +63,9 @@ message ThemeState {
   ThemeChoice light = 6;
   // The theme drawn in dark appearance.
   ThemeChoice dark = 7;
+  // Appearances (`light`, `dark`) whose theme has its own primary that the
+  // chosen accent replaces. Clear the accent to show the theme's primary.
+  repeated string accent_overrides = 8;
 }
 
 // A ten-shade ramp, from the surface (0) to the ink (9); 6 is the fill.

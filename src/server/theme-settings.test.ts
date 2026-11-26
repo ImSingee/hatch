@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import tokens from '../../packages/hatch-design-tokens/tokens.json';
+import { resolvePreset } from '../../packages/hatch-design-tokens/src';
 
 vi.mock('~/db', async () => {
   const { createTestDb } = await import('~/db/test-db');
@@ -22,9 +23,13 @@ beforeEach(async () => {
 });
 
 describe('instance theme', () => {
-  it('starts on the default accent and offers every token accent', async () => {
+  it('starts with no accent, desk showing the default accent colour, and offers every token accent', async () => {
     const state = await getThemeState();
-    expect(state.accent).toBe(tokens.defaultAccent);
+    expect(state.accent).toBeNull();
+    expect(state.light.primary).toBe(
+      tokens.accents[tokens.defaultAccent as keyof typeof tokens.accents],
+    );
+    expect(state.accentOverrides).toEqual([]);
     expect(state.defaultAccent).toBe(tokens.defaultAccent);
     expect(state.accents).toEqual(
       Object.entries(tokens.accents).map(([name, color]) => ({ name, color })),
@@ -54,7 +59,7 @@ describe('instance theme', () => {
         await expect(setThemeAccent(accent)).rejects.toMatchObject({
           status: 400,
         });
-      expect((await getThemeState()).accent).toBe(tokens.defaultAccent);
+      expect((await getThemeState()).accent).toBeNull();
       expect(events).toEqual([]);
     } finally {
       unsubscribe();
@@ -309,7 +314,7 @@ describe('instance theme: modes, presets and custom themes', () => {
     expect(await getThemeState()).toEqual(before);
   });
 
-  it('resets to desk, light mode and the default accent but keeps dock labels', async () => {
+  it('resets to desk, light mode and no accent, drawn exactly as the default accent was, and keeps dock labels', async () => {
     await updateTheme({
       accent: 'clay',
       dockLabels: true,
@@ -320,17 +325,40 @@ describe('instance theme: modes, presets and custom themes', () => {
     const unsubscribe = subscribePlatformEvents((event) => events.push(event));
     try {
       expect(await resetTheme()).toMatchObject({
-        accent: tokens.defaultAccent,
+        accent: null,
         dockLabels: true,
         mode: 'light',
         light: { preset: 'desk' },
         dark: { preset: 'desk-dark' },
+        accentOverrides: [],
       });
+      // No accent draws desk exactly as the default accent did: a custom
+      // theme set afterwards keeps its own primary.
+      const indigo =
+        tokens.accents[tokens.defaultAccent as keyof typeof tokens.accents];
+      expect((await getTheme(['light', 'dark'])).resolved).toEqual([
+        resolvePreset('desk', indigo),
+        resolvePreset('desk-dark', indigo),
+      ]);
       expect(events).toEqual([
         { type: 'theme.updated', accent: tokens.defaultAccent },
       ]);
     } finally {
       unsubscribe();
     }
+  });
+
+  it('lists each appearance whose own primary the chosen accent replaces', async () => {
+    await updateTheme({ theme: { appearance: 'light', custom: meadow } });
+    expect((await getThemeState()).accentOverrides).toEqual([]);
+    // Teal hides Meadow's green and desk-dark's indigo.
+    expect(await setThemeAccent('teal')).toMatchObject({
+      light: { primary: meadow.colors.primary },
+      dark: { primary: '#3F51C7' },
+      accentOverrides: ['light', 'dark'],
+    });
+    // Indigo equals desk-dark's own primary, so only Meadow is overridden.
+    expect((await setThemeAccent('indigo')).accentOverrides).toEqual(['light']);
+    expect((await updateTheme({ accent: null })).accentOverrides).toEqual([]);
   });
 });

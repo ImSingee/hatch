@@ -446,14 +446,14 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'get'],
     usage: 'theme get [--resolved [--appearance light|dark]]',
     description:
-      'Show the instance theme: the accent (null when each theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the mode (light, dark or system) and the light and dark themes (each a preset name, or a custom document under custom). --resolved adds resolved: every token of the theme the mode draws (both while the mode is system), with the accent applied; --appearance picks one.',
+      'Show the instance theme: the accent (null when each theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the mode (light, dark or system), the light and dark themes (each a preset name, or a custom document under custom, with its own primary) and accentOverrides (the appearances whose primary the accent replaces). --resolved adds resolved: every token of the theme the mode draws (both while the mode is system), with the accent applied; --appearance picks one.',
   },
   {
     path: ['theme', 'set'],
     usage:
       'theme set [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels] [--mode light|dark|system] [--appearance light|dark (--preset <name> | --file <path|->)]',
     description:
-      "Change the theme of the whole instance; settings left out keep their value, and at least one is required. Every signed-in web, mobile and desktop client and every open native App restyles without a reload. --accent replaces the primary colour of both themes (names come from theme get); --clear-accent lets each theme show its own primary. --mode picks the appearance; system follows each device. --appearance names the theme to replace: --preset sets a preset (names come from theme presets) and clears that appearance's custom theme, --file replaces it whole with a custom theme document (JSON; see theme check). The document's appearance must match. While an accent is chosen it replaces the document's primary; add --clear-accent to show the document's own. A theme whose text would be unreadable is rejected with THEME_INVALID, naming each failing pair of colours and its contrast ratio. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
+      "Change the theme of the whole instance; settings left out keep their value, and at least one is required. Every signed-in web, mobile and desktop client and every open native App restyles without a reload. --accent replaces the primary colour of both themes (names come from theme get); --clear-accent lets each theme show its own primary. --mode picks the appearance; system follows each device. --appearance names the theme to replace: --preset sets a preset (names come from theme presets) and clears that appearance's custom theme, --file replaces it whole with a custom theme document (JSON; see theme check). The document's appearance must match. While an accent is chosen it replaces the document's primary; add --clear-accent to show the document's own. The result's accentOverrides lists the appearances where that happens, and after --preset or --file the result says accentOverridesPrimary (also noted on stderr). A theme whose text would be unreadable is rejected with THEME_INVALID, naming each failing pair of colours and its contrast ratio. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
   },
   {
     path: ['theme', 'check'],
@@ -471,7 +471,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'reset'],
     usage: 'theme reset',
     description:
-      'Return to the desk and desk-dark presets, light mode and the default accent in one change; replaces both custom themes. Dock labels are kept.',
+      'Return to the desk and desk-dark presets, light mode and no accent (each theme shows its own primary; desk looks as with the default accent) in one change; replaces both custom themes. Dock labels are kept.',
   },
   {
     path: ['pin', 'list'],

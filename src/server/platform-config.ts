@@ -75,8 +75,12 @@ const uiThemeConfigSchema = z.object({
 });
 export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
 
+/**
+ * A fresh instance, and `theme reset`: no accent, so each theme shows its own
+ * primary (`desk`'s is the default accent, so it looks the same).
+ */
 export const DEFAULT_UI_THEME: UiThemeConfig = {
-  accent: DEFAULT_ACCENT,
+  accent: null,
   dockLabels: false,
   mode: 'light',
   light: DEFAULT_PRESETS.light,
