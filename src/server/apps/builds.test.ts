@@ -166,7 +166,15 @@ describe('creating deployments', () => {
     expect((await builds.findDeploymentByRequest(APP, 'req-b'))?.id).toBe(
       first.id,
     );
-    // Repeating the joiner returns that build, not a new one.
+    // Repeating the joiner returns that build, not a new one, also once
+    // that build has finished.
+    expect((await create({ build: 'builder', requestId: 'req-b' })).id).toBe(
+      first.id,
+    );
+    await db
+      .update(schema.appBuilds)
+      .set({ status: 'ready' })
+      .where(eq(schema.appBuilds.id, first.id));
     expect((await create({ build: 'builder', requestId: 'req-b' })).id).toBe(
       first.id,
     );

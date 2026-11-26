@@ -307,6 +307,16 @@ export function createGitSource(cfg: GitSourceConfig) {
     return commit;
   }
 
+  /** Check `commit` out into `target`, a directory that does not exist yet. */
+  async function checkoutCommitInto(
+    id: string,
+    commit: string,
+    target: string,
+  ): Promise<void> {
+    const repoDir = await ensureRepo(id);
+    await checkoutCommit({ repo: { gitDir: repoDir }, commit, target });
+  }
+
   /**
    * The tree of `commit` as a gzipped tar archive, for a build elsewhere: a
    * checkout (src/app-build/checkout.ts), so archive-only attributes such as
@@ -346,6 +356,7 @@ export function createGitSource(cfg: GitSourceConfig) {
     ensureRepo,
     masterCommit,
     archiveCommit,
+    checkoutCommitInto,
     resolveDeployCommit,
     publishDeploymentSource,
     deleteDeploymentTag,

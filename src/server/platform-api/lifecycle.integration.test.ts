@@ -164,6 +164,8 @@ async function prepareDeploy(
   headers: Record<string, string>,
   dir: string,
   request: DeployRequest,
+  /** Changes the built package before it is packed (a forging builder). */
+  tamper?: (packageDir: string) => Promise<void>,
 ) {
   const commit = commitAll(dir);
   try {
@@ -210,6 +212,7 @@ async function prepareDeploy(
       outDir: path.join(work, 'package'),
     },
   );
+  await tamper?.(path.join(work, 'package'));
   const artifact = await packBuildDirectory(path.join(work, 'package'));
   await rm(work, { recursive: true, force: true });
   return {
@@ -671,6 +674,29 @@ describe.runIf(Boolean(databaseUrl))(
         expect(denied.data.code).toBe('non_fast_forward');
         expect(masterCommit(id)).toBe(stable);
         git(dir, 'checkout', '-f', 'master');
+        // A builder that grants the release more than the commit declares
+        // (here --allow-all) is refused: the platform evaluates the commit's
+        // manifest itself.
+        const forged = await prepareDeploy(
+          collection,
+          id,
+          credentials[0],
+          dir,
+          body,
+          async (packageDir) => {
+            const file = path.join(packageDir, 'build.json');
+            const pkg = JSON.parse(await readFile(file, 'utf8'));
+            pkg.manifest.backend = {
+              ...pkg.manifest.backend,
+              extraPermissions: ['--allow-all'],
+            };
+            await writeFile(file, JSON.stringify(pkg));
+          },
+        );
+        const refused = await forged.upload!();
+        expect(refused.response.status).toBe(409);
+        expect(refused.data.code).toBe('app_build_invalid');
+        expect(refused.data.message).toMatch(/is not the one commit/);
         const deployments = await database.db.query.deployments.findMany({
           where: { appId: id },
         });

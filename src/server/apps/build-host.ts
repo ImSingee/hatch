@@ -11,6 +11,7 @@ import type { BuildHost } from '../../app-build/host';
 import {
   platformToolchainContext,
   sandboxedEvaluationCommand,
+  type ToolchainSandbox,
 } from '../../toolchain/platform';
 import { platformTooling } from '../platform-tooling';
 import { subprocessSandboxEnv } from '../sandbox-env';
@@ -25,12 +26,14 @@ export function platformBuildHost(options: {
   workDir?: string;
   /** Stops every tool the build runs (a Builder job being stopped). */
   signal?: AbortSignal;
+  /** Runs every toolchain command, installs included, sandboxed. */
+  sandbox?: ToolchainSandbox;
 }): BuildHost {
-  const { signal } = options;
+  const { signal, sandbox } = options;
   return {
     workDir: options.workDir ?? BUILD_WORK_DIR,
     toolchainContext: (root, logs) =>
-      platformToolchainContext(root, logs, signal),
+      platformToolchainContext(root, logs, signal, sandbox),
     async runBuf(args, cwd) {
       // The platform's node_modules/.bin lets buf resolve protoc-gen-es.
       const env = subprocessSandboxEnv();

@@ -34,7 +34,9 @@ import { platformBuildHost } from './build-host';
 import { DataMigrationApprovalRequired } from './data-table/migrate';
 import { ReleaseGenerationConflict, releaseDeployment } from './deploy';
 import { BuildPackageError, finalizeBuild } from './finalize';
-import { resolveDeployCommit } from './git';
+import { checkoutAppCommit, resolveDeployCommit } from './git';
+import { evaluateAppSourceManifest } from '../../app-build/produce';
+import { withSandboxOwnership } from '~agent/shell-sandbox';
 import { AppManifestValidationError } from './manifest-validation';
 import { DEFAULT_NOTIFICATION_PRIORITY } from '../notifications/contract';
 import { ingestNotification } from '../notifications/ingest';
@@ -720,6 +722,44 @@ export async function acceptArtifact(
           deploymentId: row.id,
           commit: row.commit,
           tooling: platformBuildHost({ sdkDigest }).tooling,
+          // The privilege the release gets comes from the commit, never from
+          // the package: the platform evaluates the manifest itself.
+          committedManifest: async () => {
+            const tree = path.join(work, 'committed');
+            await checkoutAppCommit(row.appId, row.commit, tree);
+            // Authored code (and, if the manifest needs packages, their
+            // install) runs as the sandbox identity, with a home and pnpm
+            // store of its own that nothing else reuses.
+            const sandbox = {
+              home: path.join(work, 'evaluation-home'),
+              pnpmStoreDir: path.join(work, 'evaluation-store'),
+            };
+            const scratch = path.join(work, 'evaluation');
+            for (const dir of [sandbox.home, sandbox.pnpmStoreDir, scratch]) {
+              await fs.mkdir(dir, { recursive: true });
+            }
+            const { manifest, installed } = await evaluateAppSourceManifest(
+              platformBuildHost({ sdkDigest, workDir: scratch, sandbox }),
+              {
+                appId: row.appId,
+                sourceDir: tree,
+                maxInstallBytes: MANIFEST_INSTALL_MAX_BYTES,
+                withSource: (src, task) =>
+                  withSandboxOwnership(
+                    [src, sandbox.home, sandbox.pnpmStoreDir],
+                    task,
+                  ),
+              },
+            );
+            await appendBuildLogQuietly(
+              row.id,
+              'platform',
+              installed
+                ? 'Evaluated the manifest of the commit (with its dependencies).'
+                : 'Evaluated the manifest of the commit.',
+            );
+            return manifest;
+          },
         });
         await db
           .update(schema.appBuilds)
@@ -826,6 +866,9 @@ async function cleanUp(work: string): Promise<void> {
     console.error(`[apps] could not remove ${work}:`, error);
   });
 }
+
+/** Largest dependency tree the platform installs to evaluate a manifest. */
+const MANIFEST_INSTALL_MAX_BYTES = 1024 * 1024 * 1024;
 
 class SupersededRelease extends Error {
   constructor(readonly newerId: string) {

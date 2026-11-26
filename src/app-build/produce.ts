@@ -507,16 +507,16 @@ async function describeDataSchema(
   }
 }
 
-/** Build `sourceDir` into a build package at `outDir`. */
-export async function buildAppSource(
+/**
+ * A disposable copy of `originalSrc` below the host's work directory, without
+ * any checkout's own installations or generated roots and without links.
+ * The caller removes it.
+ */
+async function copySource(
   host: BuildHost,
-  options: BuildAppSourceOptions,
-): Promise<BuildPackageManifest> {
-  const { appId: id, deploymentId } = options;
-  const originalSrc = options.sourceDir;
-  const out = options.outDir;
-  const logs: string[] = [];
-
+  id: string,
+  originalSrc: string,
+): Promise<string> {
   try {
     await fs.access(originalSrc);
   } catch (error) {
@@ -535,8 +535,6 @@ export async function buildAppSource(
     await fs.realpath(path.join(host.workDir, id)),
     randomUUID(),
   );
-  await fs.mkdir(out, { recursive: false });
-
   try {
     await fs.cp(originalSrc, src, {
       recursive: true,
@@ -562,7 +560,115 @@ export async function buildAppSource(
       },
     });
     await assertSourceHasNoSymlinks(src);
+  } catch (error) {
+    await fs.rm(src, { recursive: true, force: true });
+    throw error;
+  }
+  return src;
+}
 
+/**
+ * Evaluate the manifest of `sourceDir` and nothing else, as the platform does
+ * to bind a build package to its commit: whoever built the package is not
+ * trusted with what the manifest grants. Most manifests import only the SDK
+ * and the App's own files, so they are evaluated without installing
+ * dependencies; one that needs them (it imports a package) is evaluated
+ * again after the committed lockfile is installed.
+ */
+export async function evaluateAppSourceManifest(
+  host: BuildHost,
+  options: {
+    appId: string;
+    sourceDir: string;
+    /**
+     * Runs the evaluation while the copy at `src` is the sandbox's (the
+     * platform hands it to the sandbox identity, which installs into it).
+     */
+    withSource?: <T>(src: string, task: () => Promise<T>) => Promise<T>;
+    /** Largest installed dependency tree the fallback accepts. */
+    maxInstallBytes?: number;
+  },
+): Promise<{ manifest: SourceManifest; installed: boolean }> {
+  const src = await copySource(host, options.appId, options.sourceDir);
+  const logs: string[] = [];
+  const withSource =
+    options.withSource ?? (<T>(_src: string, task: () => Promise<T>) => task());
+  try {
+    if ((await detectSourceManifest(src)) === 'manifest.json') {
+      const { manifest } = await loadSourceManifest(src, {
+        parse: parseSourceManifest,
+      });
+      return { manifest, installed: false };
+    }
+    const toolchain = createSourceToolchain(
+      await detectSourceToolchain(sourceToolchainReader(src)),
+      host.toolchainContext(src, logs),
+    );
+    await host.materializeSdk(src);
+    return await withSource(src, async () => {
+      try {
+        const { manifest } =
+          await toolchain.evaluateManifest(parseSourceManifest);
+        return { manifest, installed: false };
+      } catch {
+        // Whatever failed without packages is decided with them: the frozen
+        // lockfile, installed without scripts, used for this evaluation only.
+        await toolchain.validateDependencies();
+        await toolchain.install();
+        if (options.maxInstallBytes !== undefined) {
+          const size = await treeSize(path.join(src, 'node_modules'));
+          if (size > options.maxInstallBytes) {
+            throw new Error(
+              `The installed dependencies take ${size} bytes; the manifest ` +
+                `may be evaluated with at most ${options.maxInstallBytes}.`,
+            );
+          }
+        }
+        const { manifest } =
+          await toolchain.evaluateManifest(parseSourceManifest);
+        return { manifest, installed: true };
+      }
+    });
+  } finally {
+    await fs.rm(src, { recursive: true, force: true });
+  }
+}
+
+/** Bytes of the regular files below `root` (links are not followed). */
+async function treeSize(root: string): Promise<number> {
+  let total = 0;
+  const entries = await fs
+    .readdir(root, { withFileTypes: true, recursive: true })
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    total += (await fs.lstat(path.join(entry.parentPath, entry.name))).size;
+  }
+  return total;
+}
+
+/** Build `sourceDir` into a build package at `outDir`. */
+export async function buildAppSource(
+  host: BuildHost,
+  options: BuildAppSourceOptions,
+): Promise<BuildPackageManifest> {
+  const { appId: id, deploymentId } = options;
+  const originalSrc = options.sourceDir;
+  const out = options.outDir;
+  const logs: string[] = [];
+
+  const src = await copySource(host, id, originalSrc);
+  // Never inside the block below, whose failure path removes `out`: a
+  // directory that already exists is not this build's to remove.
+  await fs.mkdir(out, { recursive: false }).catch(async (error) => {
+    await fs.rm(src, { recursive: true, force: true });
+    throw error;
+  });
+
+  try {
     const manifestFile = await detectSourceManifest(src);
     const legacy =
       manifestFile === 'manifest.json'

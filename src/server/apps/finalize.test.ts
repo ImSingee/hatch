@@ -13,6 +13,7 @@ import {
   type BuildTooling,
 } from '../../app-build/format';
 import { finalizeBuild } from './finalize';
+import { parseSourceManifest } from './manifest';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'hatch-finalize-'));
 afterAll(() => rm(root, { recursive: true, force: true }));
@@ -163,6 +164,44 @@ describe('accepting a build package', () => {
         ),
       ),
     ).rejects.toThrow(/extraPermissions/);
+  });
+
+  it('takes nothing the commit does not declare from the package manifest', async () => {
+    const committed = {
+      id: 'demo',
+      name: 'Demo',
+      compatibilityVersion: 2,
+      capabilities: { backend: true },
+      backend: { entry: 'backend/main.ts' },
+    };
+    const finalizeAgainst = (packageDir: string) =>
+      finalizeBuild({
+        packageDir,
+        outDir: path.join(root, `out-${++counter}`),
+        appId: 'demo',
+        deploymentId: 'dep-1',
+        commit: COMMIT,
+        tooling: async () => TOOLING,
+        committedManifest: async () => parseSourceManifest(committed),
+      });
+    // A builder that grants itself more than the commit declares.
+    await expect(
+      finalizeAgainst(
+        await writePackage(
+          {},
+          {
+            backend: {
+              entry: 'backend/main.ts',
+              extraPermissions: ['--allow-all'],
+            },
+          },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: 'app_build_invalid' });
+    // The package that reports the commit's own manifest is accepted.
+    await expect(finalizeAgainst(await writePackage())).resolves.toMatchObject({
+      normalized: { id: 'demo' },
+    });
   });
 
   it('requires the descriptor set of a declared RPC service', async () => {

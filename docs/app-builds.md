@@ -71,23 +71,44 @@ the platform derived. Where an artifact came from is recorded on the
 deployment (`build_origin`: `builder` or `local`; null for deployments the
 platform built before).
 
-### Who is trusted with a build
+### What a build is trusted with
 
-Without running the source, the platform cannot prove that a package is what
-the commit builds to. Whoever produces the package is therefore trusted with
-everything the package declares: a manifest is evaluated by the builder, and
-its `extraPermissions` (up to `--allow-all`), RPC service and data schema
-become the deployment's, within the checks above.
+The manifest decides what a release may do: the backend's `extraPermissions`
+(up to `--allow-all`), its network and environment grants, tasks and cron,
+native capabilities. So the platform never takes it from the package. It
+checks out the deployment's commit from its own repository and evaluates
+`manifest.ts` itself (`evaluateAppSourceManifest`), in the same sandbox the
+builds use: the sandbox identity, no network, a time limit. The package's
+manifest must be exactly that one, or the deployment fails with
+`app_build_invalid`. A manifest that imports only the SDK and the App's own
+files, as the template and the Skill do, is evaluated without installing
+anything. One that imports a package is evaluated again after the
+platform installs the commit's lockfile, so that deployment pays for an
+install on the platform. That install runs as the sandbox identity too, from
+the frozen lockfile with every package's scripts disabled, into a pnpm store
+and home of its own (never the shared store). It is capped by the usual step
+time limits and at 1 GiB of installed files, and the installed tree serves
+this evaluation only: it is removed with it and never shipped or reused. A
+lockfile that cannot install that way fails the deployment with
+`app_build_invalid`.
 
-- A local build is made by a caller who may deploy the App anyway, with the
-  same authority as every other workspace credential, so it adds no power.
-- The Builder holds `HATCH_BUILDER_TOKEN`, which can claim any queued build
-  and upload its package: it is equivalent to deploying any App. Run Builders
-  only where you would run the platform, keep the token as secret as the
-  platform's own, and never hand it to App code. A build job never receives
-  the token, and the App code it runs uses the sandbox identity. Reaching the
-  token therefore takes an escape from that sandbox, which before Builders
-  happened in the platform process itself.
+This brings one evaluation of authored code back into the platform, which
+the move to Builders and local builds otherwise removed. That is the
+trade-off for keeping the manifest's grants bound to the committed source:
+without it, a compromised Builder (which holds `HATCH_BUILDER_TOKEN` and can
+claim any queued build) could give any App's release any permission.
+
+What the platform still takes from the builder, because checking it would
+mean building the App, is the code: bundles, the RPC descriptor, the Data
+Table descriptor and docs, within the checks above. This is inherent to
+delegating a build, as with a compromised CI runner: a forged backend bundle
+does whatever it likes within the permissions its commit's manifest grants,
+and no more. A forged Data Table
+schema can change only that App's tables, and a destructive change still
+needs the approval token of its plan. Run Builders only where you would run
+the platform, and keep their token as secret as the platform's own. A build
+job never receives the token, and the App code it runs uses the sandbox
+identity.
 
 ## Operating it
 

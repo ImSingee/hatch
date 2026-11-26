@@ -47,7 +47,10 @@ import {
   normalizeManifest,
   parseSourceManifest,
 } from './manifest';
-import { manifestInvalid } from './manifest-validation';
+import {
+  AppManifestValidationError,
+  manifestInvalid,
+} from './manifest-validation';
 import { assembleNativePlayer } from './native/player';
 import {
   TaskInputSchemaError,
@@ -85,7 +88,27 @@ export type FinalizeBuildOptions = {
   commit: string | null;
   /** The toolchain the platform accepts packages from. */
   tooling: (options: { native: boolean }) => Promise<BuildTooling>;
+  /**
+   * The manifest the platform evaluated from the deployment's own commit.
+   * The package's must be exactly it: whoever built the package is not
+   * trusted with what the manifest grants (permissions, network, tasks,
+   * capabilities). Omitted only for a build the platform made itself.
+   */
+  committedManifest?: () => Promise<SourceManifest>;
 };
+
+/** Stable JSON: the same value always prints the same text. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(
+          Object.entries(item as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : item,
+  );
+}
 
 /**
  * Walk the package: regular files and directories only, known top-level
@@ -284,6 +307,26 @@ export async function finalizeBuild(
   const logs = [pkg.log];
 
   const manifest = parseSourceManifest(pkg.manifest);
+  if (options.committedManifest) {
+    const committed = await options.committedManifest().catch((error) => {
+      // The source's own fault is reported as such; anything else means the
+      // package cannot be bound to its commit.
+      if (error instanceof AppManifestValidationError) throw error;
+      throw new BuildPackageError(
+        `The platform could not evaluate ${manifestFile} of commit ` +
+          `${options.commit ?? ''}: ${error instanceof Error ? error.message : String(error)}`,
+        'app_build_invalid',
+      );
+    });
+    if (canonicalJson(committed) !== canonicalJson(manifest)) {
+      throw new BuildPackageError(
+        `The build package's ${manifestFile} is not the one commit ` +
+          `${options.commit ?? ''} declares, as the platform evaluated it. ` +
+          'Build the deployment again from that commit.',
+        'app_build_invalid',
+      );
+    }
+  }
   // The manifest id drives every generated URL (app/widget/RPC), but
   // artifacts and the DB row are keyed by the App id. If they diverge, the
   // deploy "succeeds" with URLs pointing at a different slug.
