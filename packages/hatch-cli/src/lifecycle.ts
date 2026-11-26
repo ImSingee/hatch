@@ -656,22 +656,19 @@ export async function runLifecycle(
     const commit = requested ?? head!;
     const pushed = requested ? null : await push(commit);
     // A long push can outlive a Run token; take a fresh one for the release.
-    // A client with the current credential: a Run token is short-lived, so
-    // it is refreshed before the create and again after a long local build.
-    const freshClient = async () => {
-      await refreshRunEnvironment(process.env, signal);
-      return platformClient(
-        await resolveCredential(
-          process.env,
-          configPath(process.env, values.config as string | undefined),
-          values.profile as string | undefined,
-        ),
-        timeout,
-        signal,
-      );
-    };
-    const releaseClient = await freshClient();
-    let deployments = releaseClient.apps.deployments;
+    // The client renews it itself before any later request it would not
+    // outlive (a long local build, a follow, a reconnect).
+    await refreshRunEnvironment(process.env, signal);
+    const releaseClient = platformClient(
+      await resolveCredential(
+        process.env,
+        configPath(process.env, values.config as string | undefined),
+        values.profile as string | undefined,
+      ),
+      timeout,
+      signal,
+    );
+    const deployments = releaseClient.apps.deployments;
     const startedAt = Date.now();
     metadata.pending = {
       command: 'deploy',
@@ -753,10 +750,6 @@ export async function runLifecycle(
                   | 'APP_MANIFEST_INVALID',
               }
             : {};
-        // As for the upload: the credential may have expired meanwhile.
-        deployments =
-          (await freshClient().catch(() => null))?.apps.deployments ??
-          deployments;
         const settled = await deployments
           .cancel({
             id: metadata.id,
@@ -779,8 +772,6 @@ export async function runLifecycle(
         }
         throw error;
       }
-      // The build may have outlived the credential the client was made with.
-      deployments = (await freshClient()).apps.deployments;
       process.stderr.write(
         `Uploading the build package (${(archive.length / 1024 / 1024).toFixed(1)} MB)...\n`,
       );

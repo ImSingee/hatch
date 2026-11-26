@@ -21,6 +21,7 @@ import {
   type Transport,
 } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
+import { refreshRunEnvironment } from './run-credential';
 import {
   type AppBackend,
   type AppTask,
@@ -1378,20 +1379,73 @@ export function platformClient(
   return cliClient(platformTransport(credential, timeout, signal));
 }
 
-/** Authenticated Connect transport that converts errors to safe CLI errors. */
+/** When a JWT expires (its `exp`, in ms), or null for any other token. */
+function jwtExpiresAt(token: string): number | null {
+  const payload = token.split('.')[1];
+  if (!payload || token.split('.').length !== 3) return null;
+  try {
+    const exp = (
+      JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+        exp?: unknown;
+      }
+    ).exp;
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A Run credential this close to expiry is replaced before a request. */
+const RUN_CREDENTIAL_MARGIN_MS = 30_000;
+
+/**
+ * Authenticated Connect transport that converts errors to safe CLI errors.
+ * Inside an Agent Run (the Runner's credential endpoint is configured), the
+ * short-lived Run JWT is renewed before any request it would not outlive,
+ * so a long build, follow or reconnect never sends an expired one.
+ */
 export function platformTransport(
   credential: Profile,
   timeout: number,
   signal: AbortSignal,
 ): Transport {
-  const headers = credentialHeaders(credential);
+  let headers = credentialHeaders(credential);
+  const issued = new Set(
+    [credential.token, credential.apiKey].filter(Boolean) as string[],
+  );
+  const runCredential =
+    !credential.apiKey &&
+    credential.token !== undefined &&
+    process.env.HATCH_CLI_RUN_ENDPOINT !== undefined &&
+    process.env.HATCH_CLI_TOKEN === credential.token;
+  let renewing: Promise<void> | undefined;
+  const current = async () => {
+    if (!runCredential) return headers;
+    const token = headers.authorization?.slice('Bearer '.length) ?? '';
+    const expiresAt = jwtExpiresAt(token);
+    if (expiresAt !== null && expiresAt - Date.now() > RUN_CREDENTIAL_MARGIN_MS)
+      return headers;
+    renewing ??= refreshRunEnvironment(process.env, signal)
+      .then(() => {
+        const next = process.env.HATCH_CLI_TOKEN;
+        if (next) {
+          issued.add(next);
+          headers = { authorization: `Bearer ${next}` };
+        }
+      })
+      .finally(() => {
+        renewing = undefined;
+      });
+    await renewing;
+    return headers;
+  };
   const transport = createConnectTransport({
     baseUrl: `${credential.url}/api/rpc`,
     useBinaryFormat: true,
     defaultTimeoutMs: timeout,
     interceptors: [
-      (next) => (request) => {
-        for (const [key, value] of Object.entries(headers))
+      (next) => async (request) => {
+        for (const [key, value] of Object.entries(await current()))
           request.header.set(key, value);
         return next(request);
       },
@@ -1407,8 +1461,8 @@ export function platformTransport(
         ? fetchFailure(credential.url, error.cause)
         : publicError(error);
     let message = safe.message;
-    for (const value of [credential.token, credential.apiKey])
-      if (value) message = message.replaceAll(value, '[redacted]');
+    for (const value of issued)
+      message = message.replaceAll(value, '[redacted]');
     return new CliError(safe.code, message, safe.exitCode, safe.httpStatus);
   };
   // Convert errors after Connect's call boundary, which wraps interceptor errors.
