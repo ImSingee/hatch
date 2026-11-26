@@ -6,7 +6,10 @@ import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { SaveThemeResult, WebTheme } from '~server/theme';
 import type { ThemeEntry } from '~server/theme-settings';
-import { THEME_PRESETS } from '../../../packages/hatch-design-tokens/src';
+import {
+  THEME_PRESETS,
+  validateThemeDocument,
+} from '../../../packages/hatch-design-tokens/src';
 import { ThemeLibraryPanel } from './theme-panel';
 
 const fixture = vi.hoisted(() => ({
@@ -187,6 +190,29 @@ test('copies under a free name and shows a taken name under the field', async ()
   await expect
     .element(screen.getByRole('button', { name: 'Save theme' }))
     .toBeVisible();
+});
+
+test('starts a theme switched to dark from the dark preset colours', async () => {
+  fixture.save.mockResolvedValue({ ok: true, theme: meadow });
+  const screen = await renderPanel();
+  await screen.getByRole('button', { name: 'New theme' }).click();
+  await screen.getByRole('dialog').getByText('Dark', { exact: true }).click();
+  await screen.getByRole('button', { name: 'Save theme' }).click();
+  await vi.waitFor(() =>
+    expect(fixture.save).toHaveBeenCalledWith({
+      data: {
+        id: undefined,
+        document: expect.objectContaining({
+          appearance: 'dark',
+          colors: THEME_PRESETS['desk-dark'].document.colors,
+        }),
+      },
+    }),
+  );
+  // The saved document passes the platform's rules as it stands.
+  expect(
+    validateThemeDocument(fixture.save.mock.calls[0][0].data.document).ok,
+  ).toBe(true);
 });
 
 test('edits a custom theme and deletes it after confirming', async () => {

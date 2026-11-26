@@ -201,6 +201,8 @@ one by one gives unreadable combinations.
   on a copy; custom themes can be edited and deleted (not the active one).
   The editor sets only the document's fields (name, appearance, nine colours,
   radius, fonts) and shows the platform's problems, translated, on save.
+  Switching a theme's appearance starts its colours from `desk` or
+  `desk-dark`, since colours readable on one appearance are not on the other.
   `hatch theme` does the same from the CLI.
 - A custom theme saved under older rules that no longer passes them is listed
   as needing fixes and cannot be activated; if it is the active one, clients

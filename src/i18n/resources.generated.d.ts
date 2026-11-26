@@ -61,6 +61,7 @@ export type TranslationResource = {
   'appearance.themeEditor.editTitle': 'Edit theme';
   'appearance.themeEditor.name': 'Name';
   'appearance.themeEditor.appearance': 'Appearance';
+  'appearance.themeEditor.appearanceHint': 'Switching loads the colours of Desk or Desk dark to start from.';
   'appearance.themeEditor.radius': 'Corner radius';
   'appearance.themeEditor.fontSans': 'Text font';
   'appearance.themeEditor.fontMono': 'Code font';

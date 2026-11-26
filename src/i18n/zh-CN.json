@@ -59,6 +59,7 @@
   "appearance.themeEditor.editTitle": "编辑主题",
   "appearance.themeEditor.name": "名称",
   "appearance.themeEditor.appearance": "外观",
+  "appearance.themeEditor.appearanceHint": "切换外观会载入 Desk 或 Desk dark 的颜色作为起点。",
   "appearance.themeEditor.radius": "圆角",
   "appearance.themeEditor.fontSans": "正文字体",
   "appearance.themeEditor.fontMono": "代码字体",

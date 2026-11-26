@@ -43,11 +43,15 @@ import {
   BUNDLED_FONTS,
   MAX_RADIUS,
   THEME_COLOR_KEYS,
+  THEME_PRESETS,
   type ThemeColorKey,
   type ThemeDocument,
   type ThemeProblem,
 } from '../../../packages/hatch-design-tokens/src';
 import classes from './theme-panel.module.css';
+
+/** The preset whose colours a theme switched to this appearance starts from. */
+const PRESET_FOR = { light: 'desk', dark: 'desk-dark' } as const;
 
 /** Label of each document colour, and of each role a contrast pair names. */
 const ROLE_LABELS: Record<string, PlainTranslationKey> = {
@@ -409,13 +413,22 @@ function ThemeEditor({
                   { value: 'light', label: t('appearance.themes.light') },
                   { value: 'dark', label: t('appearance.themes.dark') },
                 ]}
-                onChange={(value) =>
+                onChange={(value) => {
+                  const appearance = value as ThemeDocument['appearance'];
+                  // Colours read on one appearance are unreadable on the
+                  // other, so the switch starts from that preset's colours.
                   setDocument((current) => ({
                     ...current,
-                    appearance: value as ThemeDocument['appearance'],
-                  }))
-                }
+                    appearance,
+                    colors: {
+                      ...THEME_PRESETS[PRESET_FOR[appearance]].document.colors,
+                    },
+                  }));
+                }}
               />
+              <Text size="xs" c="dimmed">
+                {t('appearance.themeEditor.appearanceHint')}
+              </Text>
             </Stack>
           </Stack>
           <ThemePreview document={document} />
