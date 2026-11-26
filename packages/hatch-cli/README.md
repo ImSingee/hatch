@@ -926,8 +926,7 @@ offline too.
 
 Local rejections exit 2. Contradictory or incomplete flags are
 `invalid_arguments`: two kinds of content, `--markdown`/`--card` together
-with `--title`, `--body`, `--clear-body`, `--clear-card` or
-`--clear-summary`, a Markdown or card `send` without `--summary`, a summary
+with `--title`, `--body`, `--clear-body` or `--clear-summary`, a Markdown or card `send` without `--summary`, a summary
 that is blank, has a line break or is over 200 characters, `--summary` with
 `--clear-summary`, a card with inline inputs (`<Choice>`, `<Buttons>`,
 `<Input>`, which make the reply form) together with `--reply`, or more than one
@@ -943,13 +942,6 @@ as `error.details.issues` (`[{message,line?,column?,path?}]`). For example:
   2:3: <Titel> is not a component; allowed inside <Card>: Column, Row, …
 Components and props: hatch notification card catalog.
 ```
-
-Scripts written for the earlier card keep working: `--card` holding a JSON
-object without `"type"` is the `{status,block}` card
-(`{"status":{"label","tone"},"block":{"type":"progress"|"stats"|"quote",…}}`),
-checked as before and sent as the `card` message. On `send` it needs
-`--title` and becomes a card notification whose summary is the title; on
-`update` it replaces such a card, and `--clear-card` removes it, leaving text.
 
 ### Reply forms
 

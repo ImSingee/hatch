@@ -10,8 +10,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { summaryFromTitle } from '../../../packages/hatch-platform-api/notification-content';
-import { legacyToContent } from '../../../packages/hatch-platform-api/notification-content-legacy';
 import {
   compileCard,
   compileMarkdown,
@@ -1409,6 +1407,7 @@ const CARD_PUSH = {
   card: '<Card status="CI failed" tone="danger" flag="Urgent"><Title>PR #261</Title><Text>e2e/login failed</Text></Card>',
   summary: 'PR #261 CI failed',
 };
+/** The #319 card, which is no longer accepted. */
 const LEGACY_CARD = {
   status: { label: 'Running', tone: 'info' },
   block: { type: 'progress', label: 'Checks', percent: 21, value: '3 / 14' },
@@ -1447,7 +1446,7 @@ describe('content', () => {
         push: TEXT_PUSH,
         stored: { format: 'text', title: 'Deploy #88', summary: null },
         phone: { t: 'Deploy #88', b: 'Queued' },
-        envelope: { title: 'Deploy #88', body: 'Queued', card: null },
+        envelope: { title: 'Deploy #88', body: 'Queued' },
       },
       {
         push: { ...TEXT_PUSH, summary: 'Deploy queued' },
@@ -1457,7 +1456,7 @@ describe('content', () => {
           summary: 'Deploy queued',
         },
         phone: { t: 'Deploy #88', b: 'Deploy queued' },
-        envelope: { title: 'Deploy #88', body: 'Queued', card: null },
+        envelope: { title: 'Deploy #88', body: 'Queued' },
       },
       {
         push: MARKDOWN_PUSH,
@@ -1475,7 +1474,6 @@ describe('content', () => {
           body: contentToPlainText(markdownTree),
           markdown: MARKDOWN_PUSH.markdown,
           content: markdownTree,
-          card: null,
         },
       },
       {
@@ -1486,7 +1484,6 @@ describe('content', () => {
           title: 'PR #261 CI failed',
           body: 'CI failed · Urgent\nPR #261\ne2e/login failed',
           markdown: null,
-          card: { status: { label: 'CI failed', tone: 'danger' } },
         },
       },
     ];
@@ -1507,6 +1504,7 @@ describe('content', () => {
         summary: stored.summary,
         ...envelope,
       });
+      expect(sent.notification).not.toHaveProperty('card');
     }
   });
 
@@ -1543,9 +1541,11 @@ describe('content', () => {
     expect(await rejected({ ...INLINE_PUSH, reply: APPROVE_FORM })).toBe(
       'reply: cannot be combined with inputs written in the card',
     );
-    expect(await rejected({ kind: 'deploy', card: LEGACY_CARD })).toMatch(
-      /needs a title/,
-    );
+    // The #319 shape is not a card any more, with or without a title.
+    expect(await rejected(LEGACY_PUSH)).toMatch(/^card: /);
+    expect(
+      await rejected({ kind: 'deploy', card: LEGACY_CARD, summary: 'CI' }),
+    ).toMatch(/^card: /);
     // Parser positions reach the sender as the parser wrote them.
     const markup = '<Card>\n  <Title>PR</Title>\n  <Bogus/>\n</Card>';
     let parserMessage = '';
@@ -1558,29 +1558,6 @@ describe('content', () => {
     expect(
       await rejected({ kind: 'deploy', card: markup, summary: 'PR' }),
     ).toBe(`card: ${parserMessage}`);
-  });
-
-  it('turns a #319 card into a card notification that reads back the same', async () => {
-    received.length = 0;
-    const id = await pushed(LEGACY_PUSH);
-    const legacy = {
-      title: LEGACY_PUSH.title,
-      body: LEGACY_PUSH.body,
-      card: LEGACY_CARD,
-    };
-    expect(await service.getNotification(id)).toMatchObject({
-      format: 'card',
-      title: null,
-      body: null,
-      summary: summaryFromTitle(LEGACY_PUSH.title),
-      content: legacyToContent(legacy),
-    });
-    // Receivers that read `card` still get the card they were sent.
-    const sent = JSON.parse(received[0]!.body);
-    expect(sent.notification).toMatchObject({
-      title: 'CI running',
-      card: LEGACY_CARD,
-    });
   });
 
   it('applies edits by the format they leave the notification in', async () => {
@@ -1647,73 +1624,28 @@ describe('content', () => {
         expected: { format: 'text', summary: null },
       },
       {
-        name: 'a #319 card retitled, its summary following',
-        push: LEGACY_PUSH,
-        update: { title: 'CI passed' },
-        expected: {
-          format: 'card',
-          summary: 'CI passed',
-          content: legacyToContent({
-            title: 'CI passed',
-            body: LEGACY_PUSH.body,
-            card: LEGACY_CARD,
-          }),
-        },
-      },
-      {
-        name: 'a #319 card with its own summary retitled',
-        push: { ...LEGACY_PUSH, summary: 'Nightly CI' },
-        update: { title: 'CI passed' },
-        expected: { format: 'card', summary: 'Nightly CI' },
-      },
-      {
-        name: 'a #319 card removed',
-        push: LEGACY_PUSH,
-        update: { card: null },
+        name: 'a card turned into text, keeping the summary',
+        push: CARD_PUSH,
+        update: { title: 'Fixed', body: 'All checks pass' },
         expected: {
           format: 'text',
-          title: 'CI running',
-          body: 'Started by Ada',
-          summary: null,
+          title: 'Fixed',
+          body: 'All checks pass',
+          summary: 'PR #261 CI failed',
           content: null,
         },
       },
       {
-        name: 'a #319 card added to text',
+        name: 'a card edit whose card is empty, which keeps the card',
+        push: CARD_PUSH,
+        update: { card: null, summary: 'PR #261 rerun' },
+        expected: { format: 'card', summary: 'PR #261 rerun' },
+      },
+      {
+        name: 'the #319 {status, block} card',
         push: TEXT_PUSH,
-        update: { card: { status: { label: 'Done', tone: 'success' } } },
-        expected: {
-          format: 'card',
-          summary: 'Deploy #88',
-          content: legacyToContent({
-            title: 'Deploy #88',
-            body: 'Queued',
-            card: { status: { label: 'Done', tone: 'success' } },
-          }),
-        },
-      },
-      {
-        name: 'a #319 card given to a free-form card without a title',
-        push: CARD_PUSH,
-        update: { card: { status: { label: 'Done', tone: 'success' } } },
-        expected: /^title is required/,
-      },
-      {
-        name: 'a free-form card replaced by a title and a #319 card',
-        push: CARD_PUSH,
-        update: {
-          title: 'Fixed',
-          card: { status: { label: 'Done', tone: 'success' } },
-        },
-        expected: {
-          format: 'card',
-          summary: 'PR #261 CI failed',
-          content: legacyToContent({
-            title: 'Fixed',
-            body: null,
-            card: { status: { label: 'Done', tone: 'success' } },
-          }),
-        },
+        update: { card: LEGACY_CARD },
+        expected: /^card: /,
       },
       {
         name: 'markdown and a title at once',

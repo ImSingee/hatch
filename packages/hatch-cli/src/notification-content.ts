@@ -11,7 +11,6 @@ import {
   compileCardTree,
   compileMarkdown,
   formatContentIssue,
-  isLegacyCardInput,
   summarySchema,
   type CompiledCard,
   type ContentIssue,
@@ -34,9 +33,6 @@ import {
   contentToMarkup,
   contentToPlainText,
 } from '../../hatch-platform-api/notification-content-text';
-import { notificationCardSchema } from '../../hatch-platform-api/notification-card-schema';
-import { cardToMessage } from '../../hatch-platform-api/notification-card-proto';
-import { describeIssue } from '../../hatch-platform-api/notification-reply-schema';
 import type { ReplyForm } from '../../hatch-platform-api/notification-reply';
 import { CliError } from './error';
 import { readTextInput } from './input';
@@ -119,34 +115,15 @@ export function parseSummary(text: string, mode: 'send' | 'update'): string {
 
 /** A `--card` value, by its shape. */
 export type CardFlagValue =
-  /** The #319 `{status, block}` object, sent as the `card` message. */
-  | { shape: 'legacy'; card: ReturnType<typeof cardToMessage> }
   | { shape: 'markup'; markup: string; reply: ReplyForm | null }
   | { shape: 'tree'; json: string; reply: ReplyForm | null };
 
-/** Validate a #319 card exactly as the platform does; empty is rejected. */
-export function parseLegacyCard(value: unknown, flag: string) {
-  const parsed = notificationCardSchema.safeParse(value);
-  if (!parsed.success) invalid(`--${flag}: ${describeIssue(parsed.error)}`);
-  if (!parsed.data)
-    invalid(`--${flag}: give a status or a block, or use --clear-card.`);
-  return parsed.data;
-}
-
 /**
  * Read a card as given to `--card`/`--card-file`: text whose first
- * non-space character is `{` is JSON, either a render tree (it has a
- * `type`) or the #319 `{status, block}` object; anything else is markup.
- * Markup and trees are compiled as the platform will compile them.
- *
- * `legacy`: whether the #319 object can apply (on update, or on send with
- * `--title`); elsewhere an object without `type` is a tree missing it.
+ * non-space character is `{` is a JSON render tree; anything else is
+ * markup. Both are compiled as the platform will compile them.
  */
-export function readCardFlag(
-  text: string,
-  flag: string,
-  legacy: boolean,
-): CardFlagValue {
+export function readCardFlag(text: string, flag: string): CardFlagValue {
   const trimmed = text.trim();
   if (!trimmed) invalid(`--${flag} cannot be empty.`);
   if (trimmed.startsWith('{')) {
@@ -160,15 +137,6 @@ export function readCardFlag(
         false,
       );
     }
-    if (isLegacyCardInput(parsed) && !legacy)
-      invalid(
-        `--${flag} is a JSON object without "type". A card tree starts with {"type":"Card",…}; the {status, block} card of older scripts needs --title.`,
-      );
-    if (isLegacyCardInput(parsed))
-      return {
-        shape: 'legacy',
-        card: cardToMessage(parseLegacyCard(parsed, flag)),
-      };
     const card = compiled(`--${flag}`, true, () => compileCardTree(parsed));
     return { shape: 'tree', json: trimmed, reply: card.reply };
   }
@@ -194,7 +162,7 @@ const flags = (names: readonly string[]) =>
  * The content of `send` or `update`: exactly one of text (`--title`,
  * `--body`), Markdown (`--markdown`/`--markdown-file`) or a card
  * (`--card`/`--card-file`), plus `--summary` (and on update
- * `--clear-summary`, `--clear-body`, `--clear-card`). Everything that can
+ * `--clear-summary`, `--clear-body`). Everything that can
  * be checked is checked here or, for files, in `load`, before any request.
  *
  * `hasReplyForm`: `--reply`/`--reply-file` is given; a card with inline
@@ -248,9 +216,6 @@ export function contentPlan(
     invalid('Use either --summary or --clear-summary, not both.');
   const summary =
     summaryText === undefined ? undefined : parseSummary(summaryText, mode);
-  const clearCard = update && values['clear-card'] === true;
-  if (cardFlag && clearCard)
-    invalid('Use either --card/--card-file or --clear-card, not both.');
 
   const request: Record<string, unknown> = {
     summary,
@@ -266,7 +231,6 @@ export function contentPlan(
   const rejectTextFlags = (flag: string) => {
     const conflicts = [
       ...textFlags,
-      ...(clearCard ? ['clear-card'] : []),
       ...(clearSummary ? ['clear-summary'] : []),
     ];
     if (conflicts.length > 0)
@@ -277,8 +241,6 @@ export function contentPlan(
   };
 
   if (title !== undefined && !title.trim()) invalid('--title cannot be empty.');
-  // The #319 card keeps title and body, so on send it comes with --title.
-  const legacyCard = update || title !== undefined;
 
   if (markdownFlag) {
     rejectTextFlags(markdownFlag);
@@ -304,15 +266,8 @@ export function contentPlan(
   }
 
   if (cardFlag) {
+    rejectTextFlags(cardFlag);
     const apply = (card: CardFlagValue): Record<string, unknown> => {
-      if (card.shape === 'legacy') {
-        if (clearSummary)
-          invalid(
-            `--clear-summary cannot be combined with a {status, block} --${cardFlag}: a card always has a summary.`,
-          );
-        return { card: card.card };
-      }
-      rejectTextFlags(cardFlag);
       if (card.reply && hasReplyForm)
         invalid(
           `--${cardFlag} has inline inputs (<Choice>, <Buttons> or <Input>), which make its reply form; drop --reply/--reply-file.`,
@@ -323,14 +278,8 @@ export function contentPlan(
     };
     const inline = str(values, 'card');
     if (inline !== undefined)
-      Object.assign(request, apply(readCardFlag(inline, 'card', legacyCard)));
+      Object.assign(request, apply(readCardFlag(inline, 'card')));
     const path = str(values, 'card-file');
-    // A file's shape is known only once read: without --title it can only
-    // be markup or a tree, so the summary is checked now.
-    if (path !== undefined && !update && title === undefined && !summary)
-      invalid(
-        `--card-file needs --summary: one plain line (at most ${MAX_SUMMARY_LENGTH} characters) that pushes and lists show. A {status, block} card needs --title instead.`,
-      );
     return {
       request,
       changes,
@@ -342,7 +291,6 @@ export function contentPlan(
                 readCardFlag(
                   await readTextInput(path, signal, CONTENT_INPUT_MAX_BYTES),
                   'card-file',
-                  legacyCard,
                 ),
               ),
     };
@@ -360,7 +308,7 @@ export function contentPlan(
 
 // --------------------------------------------------------------- reading
 
-/** `format` of a summary or revision; builds before it are text. */
+/** `format` of a summary or revision. */
 export function formatOf(row: Row | undefined): string {
   return field(row, 'format') || 'text';
 }
@@ -446,13 +394,6 @@ export function checkCard(input: string): CardCheck {
           { message: 'card starts with "{" but is not valid JSON' },
         ]);
       }
-      if (isLegacyCardInput(tree))
-        throw new ContentError([
-          {
-            message:
-              'this is the {status, block} card of older scripts, not a render tree; write it as markup or {"type":"Card",…}',
-          },
-        ]);
       card = compileCard(tree);
     } else card = compileCard(input);
   } catch (error) {

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { answeredCardHead, notificationHeadline } from './notification-content';
 import { CARD_EXAMPLES } from './notification-content-examples';
-import {
-  contentToLegacy,
-  legacyCardPreview,
-  legacyToContent,
-  type LegacyContent,
-} from './notification-content-legacy';
 import { compileCardMarkup } from './notification-content-schema';
 import { contentToPlainText } from './notification-content-text';
 
@@ -100,125 +94,6 @@ describe('plain text of a tree', () => {
         'View PR: https://example.com/pr',
       ].join('\n'),
     );
-  });
-});
-
-describe('the #319 card shape', () => {
-  const cases: LegacyContent[] = [
-    {
-      title: 'Deploy v2.5',
-      body: null,
-      card: { status: { label: 'Deploying', tone: 'info' } },
-    },
-    {
-      title: 'Import\nfinished',
-      body: 'Rows:  12\n\n  Skipped 1  ',
-      card: {
-        status: { label: 'Running', tone: 'warning' },
-        block: { type: 'progress', label: 'Rows', percent: 0, value: '0 / 9' },
-      },
-    },
-    {
-      title: 'Spend',
-      body: 'This month',
-      card: {
-        status: { label: 'Over', tone: 'neutral' },
-        block: {
-          type: 'stats',
-          items: [
-            { value: '¥3,482', label: 'Spent' },
-            { value: '12%', label: 'Over budget' },
-            { value: '3', label: 'Alerts' },
-          ],
-        },
-      },
-    },
-    {
-      title: 'Total',
-      body: null,
-      card: {
-        block: { type: 'stats', items: [{ value: '4', label: 'Runs' }] },
-      },
-    },
-    {
-      title: 'Review',
-      body: null,
-      card: {
-        block: {
-          type: 'quote',
-          author: 'Bryan',
-          text: 'No upper bound.\nPlease cap it.',
-          location: 'idle.ts:142',
-        },
-      },
-    },
-  ];
-
-  it.each(cases.map((legacy) => [legacy.title.split('\n')[0], legacy]))(
-    'turns %s into a tree that reads back as the same card',
-    (_title, legacy) => {
-      const content = legacyToContent(legacy);
-      const back = contentToLegacy(content)!;
-      expect(back.card).toEqual(legacy.card);
-      // Whitespace is tidied like any other inline text; nothing else changes.
-      expect(back.title.replace(/\s+/g, ' ')).toBe(
-        legacy.title.replace(/\s+/g, ' '),
-      );
-      expect(legacyToContent(back)).toEqual(content);
-    },
-  );
-
-  it('writes the progress bar in the status tone, like #319 drew it', () => {
-    expect(legacyToContent(cases[1]!)).toEqual({
-      type: 'Card',
-      props: { status: 'Running', tone: 'warning' },
-      children: [
-        { type: 'Title', children: ['Import', { type: 'br' }, 'finished'] },
-        {
-          type: 'Text',
-          children: ['Rows: 12', { type: 'br' }, { type: 'br' }, 'Skipped 1'],
-        },
-        {
-          type: 'Progress',
-          props: { label: 'Rows', value: '0 / 9', percent: 0, tone: 'warning' },
-        },
-      ],
-    });
-  });
-
-  it('does not mistake a free-form card for the old shape', () => {
-    expect(contentToLegacy(example('deploy'))).toBeNull();
-    expect(
-      contentToLegacy(
-        card('<Card status="x" flag="Urgent"><Title>t</Title></Card>'),
-      ),
-    ).toBeNull();
-    expect(
-      contentToLegacy(card('<Card><Title>Only a title</Title></Card>')),
-    ).toBeNull();
-  });
-
-  it('gives older phones the status and first block of any card', () => {
-    expect(legacyCardPreview(example('pr261-running'))).toEqual({
-      status: { label: 'CI 运行中', tone: 'info' },
-      block: { type: 'progress', label: '检查', percent: 21, value: '3 / 14' },
-    });
-    expect(legacyCardPreview(example('spending'))).toEqual({
-      status: { label: '超支', tone: 'warning' },
-      block: {
-        type: 'stats',
-        items: [
-          { value: '¥1,204', label: '餐饮' },
-          { value: '¥980', label: '交通' },
-          { value: '¥1,298', label: '其它' },
-        ],
-      },
-    });
-    expect(legacyCardPreview(example('task'))).toEqual({
-      // `working` came later; older builds show it as neutral.
-      status: { label: '进行中', tone: 'neutral' },
-    });
-    expect(legacyCardPreview(card('<Card><Text>x</Text></Card>'))).toBeNull();
   });
 });
 

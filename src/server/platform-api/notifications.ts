@@ -1,21 +1,12 @@
 /** Connect adapter for the notification center management API. */
 import type { ConnectRouter, HandlerContext } from '@connectrpc/connect';
 import { AppError } from '~server/errors';
-import {
-  NotificationService,
-  type NotificationCard as NotificationCardMessage,
-} from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
-import {
-  cardInputFromMessage,
-  cardToMessage,
-} from '../../../packages/hatch-platform-api/notification-card-proto';
+import { NotificationService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/notification_pb';
 import {
   cardHead,
-  notificationHeadline,
   type ContentNode,
   type NotificationFormat,
 } from '../../../packages/hatch-platform-api/notification-content';
-import { legacyCardPreview } from '../../../packages/hatch-platform-api/notification-content-legacy';
 import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
 import {
   answersFromMessages,
@@ -122,9 +113,8 @@ function channel(view: ChannelView) {
 
 /**
  * A notification's content as NotificationSummary and NotificationRevision
- * carry it. Builds that predate `format` read `title` and `body`, so a
- * markdown or card notification fills them with its summary and plain text,
- * and `card` with the #319 shape of its status and first block.
+ * carry it: `title` and `body` for text, the tree and its plain text for
+ * markdown and card.
  */
 function contentFields(view: {
   format: NotificationFormat;
@@ -139,11 +129,10 @@ function contentFields(view: {
       ? contentToPlainText(view.content)
       : undefined;
   const head = cardHead(view.content);
-  const card = view.format === 'card' ? legacyCardPreview(view.content) : null;
   return {
     format: view.format,
-    title: notificationHeadline(view),
-    body: view.format === 'text' ? none(view.body) : text || undefined,
+    title: none(view.title),
+    body: none(view.body),
     summary: none(view.summary),
     markdown: none(view.markdown),
     contentJson: view.content ? JSON.stringify(view.content) : undefined,
@@ -151,7 +140,6 @@ function contentFields(view: {
     flag: none(head.flag),
     icon: none(head.icon),
     cardStatus: head.status ?? undefined,
-    card: card ? cardToMessage(card) : undefined,
   };
 }
 
@@ -171,34 +159,26 @@ function summary(view: NotificationSummaryView) {
 }
 
 /**
- * The card a request gives: markup, a JSON tree (`card_json`, parsed here so
- * a JSON error names it) or the #319 message; at most one of them.
+ * The card a request gives: markup or a JSON tree (`card_json`, parsed here
+ * so a JSON error names it); at most one of them.
  */
 function cardFromRequest(input: {
-  card?: NotificationCardMessage;
   cardMarkup?: string;
   cardJson?: string;
 }): unknown {
-  const given = [
-    input.card !== undefined,
-    input.cardMarkup !== undefined,
-    input.cardJson !== undefined,
-  ].filter(Boolean).length;
-  if (given > 1) {
+  if (input.cardMarkup !== undefined && input.cardJson !== undefined) {
     throw publicApiError(
       'BAD_REQUEST',
-      'Set only one of card, card_markup or card_json.',
+      'Set only one of card_markup or card_json.',
     );
   }
   if (input.cardMarkup !== undefined) return input.cardMarkup;
-  if (input.cardJson !== undefined) {
-    try {
-      return JSON.parse(input.cardJson) as unknown;
-    } catch {
-      throw publicApiError('BAD_REQUEST', 'card_json must be valid JSON.');
-    }
+  if (input.cardJson === undefined) return undefined;
+  try {
+    return JSON.parse(input.cardJson) as unknown;
+  } catch {
+    throw publicApiError('BAD_REQUEST', 'card_json must be valid JSON.');
   }
-  return input.card ? cardInputFromMessage(input.card) : undefined;
 }
 
 function delivery(view: DeliveryView) {
@@ -429,24 +409,12 @@ export function registerNotificationApi(router: ConnectRouter) {
             'Set either reply or clear_reply, not both.',
           );
         }
-        if (
-          input.clearCard &&
-          (input.card ||
-            input.cardMarkup !== undefined ||
-            input.cardJson !== undefined)
-        ) {
-          throw publicApiError(
-            'BAD_REQUEST',
-            'Set either a card or clear_card, not both.',
-          );
-        }
         if (input.summary !== undefined && input.clearSummary) {
           throw publicApiError(
             'BAD_REQUEST',
             'Set either summary or clear_summary, not both.',
           );
         }
-        const card = cardFromRequest(input);
         const result = await updateNotificationAsMember({
           id: input.id,
           title: input.title,
@@ -468,7 +436,7 @@ export function registerNotificationApi(router: ConnectRouter) {
               : undefined,
           summary: input.clearSummary ? null : input.summary,
           markdown: input.markdown,
-          card: input.clearCard ? null : card,
+          card: cardFromRequest(input),
         });
         return { revision: result.revision, changed: result.changed };
       },

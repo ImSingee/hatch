@@ -9,8 +9,9 @@ ALTER TABLE "notifications" ADD COLUMN "content" jsonb;--> statement-breakpoint
 ALTER TABLE "notifications" ALTER COLUMN "title" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "notification_revisions" ALTER COLUMN "title" DROP NOT NULL;--> statement-breakpoint
 -- #319 cards become card notifications. These helpers write exactly what
--- `legacyToContent` and `summaryFromTitle` (packages/hatch-platform-api)
--- write; notification-content-migration.test.ts checks that they agree.
+-- `legacyToContent` and `summaryFromTitle` in
+-- src/db/notification-content-migration.test.ts write; the test checks that
+-- they agree.
 -- `textToInline`: lines joined by br nodes, runs of spaces, tabs, CR and FF
 -- one space, each line trimmed, empty strings dropped.
 CREATE FUNCTION "hatch_migration_text_to_inline"(input text) RETURNS jsonb

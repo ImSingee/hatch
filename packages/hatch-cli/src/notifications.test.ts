@@ -886,36 +886,18 @@ describe('asking a new question in an edit', () => {
 });
 
 describe('cards', () => {
-  it('sends a checked card, clears it, and rejects invalid or conflicting input before any request', async () => {
-    const { transport, received } = recordingTransport();
-    await executeNotificationCall(
-      transport,
+  it('rejects the #319 {status, block} card and --clear-card before any request', () => {
+    expect(() =>
       parse(
         'update',
         'notification-1',
         '--card',
-        '{"status":{"label":"CI failed","tone":"danger"},"block":{"type":"progress","label":"Checks","percent":86,"value":"12 / 14"}}',
+        '{"status":{"label":"CI failed","tone":"danger"}}',
       ),
+    ).toThrow(/^--card:/);
+    expect(() => parse('update', 'notification-1', '--clear-card')).toThrow(
+      /clear-card/,
     );
-    expect(received.updateNotification?.card).toMatchObject({
-      status: { label: 'CI failed', tone: 'danger' },
-      block: { case: 'progress', value: { percent: 86, value: '12 / 14' } },
-    });
-    await executeNotificationCall(
-      transport,
-      parse('update', 'notification-1', '--clear-card'),
-    );
-    expect(received.updateNotification).toMatchObject({ clearCard: true });
-
-    expect(() =>
-      parse('update', 'notification-1', '--card', '{"block":{"type":"chart"}}'),
-    ).toThrow(/--card: block/);
-    expect(() => parse('update', 'notification-1', '--card', '{}')).toThrow(
-      '--card: give a status or a block, or use --clear-card.',
-    );
-    expect(() =>
-      parse('update', 'notification-1', '--card', '{}', '--clear-card'),
-    ).toThrow('Use either --card/--card-file or --clear-card, not both.');
   });
 });
 
@@ -1066,23 +1048,6 @@ describe('notification content: text, Markdown or a card', () => {
     );
     expect(received.sendNotification).toMatchObject({ cardJson: tree });
     expect(received.sendNotification?.cardMarkup).toBeUndefined();
-
-    // Older scripts: a {status, block} object with a title.
-    await executeNotificationCall(
-      transport,
-      parse(
-        ...to,
-        '--title',
-        'CI failed',
-        '--card',
-        '{"status":{"label":"Failed","tone":"danger"}}',
-      ),
-    );
-    expect(received.sendNotification).toMatchObject({
-      title: 'CI failed',
-      card: { status: { label: 'Failed', tone: 'danger' } },
-    });
-    expect(received.sendNotification?.cardJson).toBeUndefined();
   });
 
   it('reads Markdown and cards from files, checking them before any request', async () => {
@@ -1126,12 +1091,9 @@ describe('notification content: text, Markdown or a card', () => {
     expect((failure as Error).message).toMatch(
       /^--card-file: 3:11: <Bogus> is not a component; allowed inside <Fields>: Field/,
     );
-    await expect(
-      executeNotificationCall(
-        transport,
-        parse(...to, '--card-file', markup, '--title', 'Deployed'),
-      ),
-    ).rejects.toThrow(/--card-file cannot be combined with --title/);
+    expect(() =>
+      parse(...to, '--card-file', markup, '--title', 'Deployed'),
+    ).toThrow(/--card-file cannot be combined with --title/);
     expect(received.sendNotification).toBeUndefined();
   });
 
@@ -1173,14 +1135,8 @@ describe('notification content: text, Markdown or a card', () => {
     expect(() => parse(...to, '--title', 'x', '--summary', ' ')).toThrow(
       '--summary cannot be empty.',
     );
-    // The {status, block} shape keeps title and body, so it needs a title.
-    expect(() =>
-      parse(...to, '--card', '{"status":{"label":"Failed"}}', '--summary', 's'),
-    ).toThrow(
-      /--card is a JSON object without "type"\. A card tree starts with \{"type":"Card",…\}; the \{status, block\} card of older scripts needs --title\./,
-    );
     for (const card of [
-      '{"status":{"label":"Failed"}}',
+      '{"type":"Card","children":[{"type":"Title","children":["x"]}]}',
       example('deploy').markup!,
     ])
       expect(() => parse(...to, '--title', ' ', '--card', card)).toThrow(
@@ -1254,9 +1210,6 @@ describe('notification content: text, Markdown or a card', () => {
         '--clear-summary',
       ),
     ).toThrow('--markdown cannot be combined with --clear-summary');
-    expect(() =>
-      parse('update', 'notification-1', '--markdown', '# Hi', '--clear-card'),
-    ).toThrow('--markdown cannot be combined with --clear-card');
     expect(() =>
       parse(
         'update',

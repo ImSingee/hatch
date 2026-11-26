@@ -121,43 +121,6 @@ export type NotificationContentNode = {
   children?: (NotificationContentNode | string)[];
 };
 
-/**
- * The card shape of older Apps: a short status with a tone and at most one
- * block, shown with the title and body.
- *
- * @deprecated Write the card as markup (see `card`) or as a
- * `NotificationContentNode` tree, with a `summary`. This shape is still
- * accepted (with `title`) and becomes a card notification whose summary is
- * the title.
- */
-export type NotificationCard = {
-  /** At most 24 characters, such as "CI failed". Tone defaults to neutral. */
-  status?: {
-    label: string;
-    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
-  };
-  block?:
-    | {
-        /** A bar filled to `percent` (0-100), with an optional "3 / 14". */
-        type: 'progress';
-        label: string;
-        percent: number;
-        value?: string;
-      }
-    | {
-        /** One to three figures side by side. */
-        type: 'stats';
-        items: { value: string; label: string }[];
-      }
-    | {
-        /** A comment someone made, such as a review note. */
-        type: 'quote';
-        author: string;
-        text: string;
-        location?: string;
-      };
-};
-
 type NotificationInputBase = {
   /** A kind declared in `notifications.kinds`. */
   kind: string;
@@ -210,11 +173,7 @@ export type NotificationTextInput = NotificationInputBase & {
    * pushes show under the title instead of the body. Optional for text.
    */
   summary?: string;
-  /**
-   * @deprecated The status-and-block card of older Apps; write a card
-   * notification (`card` markup or a tree, with `summary`) instead.
-   */
-  card?: NotificationCard;
+  card?: never;
   markdown?: never;
 };
 
@@ -482,11 +441,9 @@ export type NotificationUpdateInput = {
   /**
    * New card content: markup (see `card`) or a `NotificationContentNode`
    * tree. A card with inline inputs asks a new question with the form they
-   * make; content without them removes such a form. The deprecated
-   * status-and-block `NotificationCard` replaces the card of an older-style
-   * notification, and `null` removes that card, leaving text.
+   * make; content without them removes such a form.
    */
-  card?: string | NotificationContentNode | NotificationCard | null;
+  card?: string | NotificationContentNode;
 };
 
 /**
@@ -608,13 +565,6 @@ export type HatchNotificationEnvelope = {
     recalledAt: string | null;
     /** The form to answer, or null. */
     reply: NotificationReply | null;
-    /**
-     * A card's status and first progress, stats or quote block in the older
-     * status-and-block shape, or null; tones are always filled in.
-     *
-     * @deprecated Read `format` and `content` instead.
-     */
-    card: NotificationCard | null;
     /**
      * The answer, only in `hatch.notification.responded` (sent by a response
      * route); null in every other event.

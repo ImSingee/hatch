@@ -12,13 +12,8 @@ import {
   type NotificationDetail as RpcNotificationDetail,
   type NotificationReadState as RpcNotificationReadState,
   type NotificationResponse as RpcNotificationResponse,
-  type NotificationCard as RpcNotificationCard,
   type NotificationSummary as RpcNotificationSummary,
 } from '@hatch/platform-api';
-import { cardFromMessage } from '../../../packages/hatch-platform-api/notification-card-proto';
-import { summaryFromTitle } from '../../../packages/hatch-platform-api/notification-content';
-import { legacyToContent } from '../../../packages/hatch-platform-api/notification-content-legacy';
-import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
 import { contentFromJson, knownFormat } from './notification-content';
 import { MobileError } from './security';
 import type {
@@ -193,47 +188,21 @@ export function catalogProjection(
   };
 }
 
-/**
- * The content of a notification or a kept version. Markdown and card
- * notifications also carry a title and body (the summary and plain text) for
- * builds that predate formats; this build reads the format instead. The
- * legacy `card` is for those builds too and is not read.
- */
+/** The content of a notification or a kept version. */
 function contentProjection(value: {
   format: string;
-  title: string;
+  title?: string;
   body?: string;
   summary?: string;
   markdown?: string;
   contentJson?: string;
   text?: string;
-  card?: RpcNotificationCard;
 }) {
-  // An instance from before formats sends no format, and its #319 card
-  // beside the title and body: show it as the card it became on newer ones.
-  const legacy =
-    !value.format && value.card ? cardFromMessage(value.card) : null;
-  if (legacy) {
-    const content = legacyToContent({
-      title: value.title,
-      body: value.body ?? null,
-      card: legacy,
-    });
-    return {
-      format: 'card' as const,
-      title: null,
-      body: null,
-      summary: summaryFromTitle(value.title),
-      markdown: null,
-      content,
-      text: contentToPlainText(content),
-    };
-  }
   const format = knownFormat(value.format);
   if (format === 'text') {
     return {
       format,
-      title: value.title,
+      title: value.title ?? '',
       body: value.body ?? null,
       summary: value.summary ?? null,
       markdown: null,
@@ -245,10 +214,10 @@ function contentProjection(value: {
     format,
     title: null,
     body: null,
-    summary: value.summary ?? value.title,
+    summary: value.summary ?? '',
     markdown: format === 'markdown' ? (value.markdown ?? null) : null,
     content: contentFromJson(value.contentJson),
-    text: value.text ?? value.body ?? null,
+    text: value.text ?? null,
   };
 }
 

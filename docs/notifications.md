@@ -512,7 +512,6 @@ Webhook and App destinations receive the same envelope:
     "summary": null,
     "markdown": null,
     "content": null,
-    "card": null,
     "url": null,
     "autoOpenUrl": false,
     "priority": 0,
@@ -532,7 +531,7 @@ Webhook and App destinations receive the same envelope:
 a Markdown or card notification. `body` is the body of a text notification
 and the plain-text version of the others; `markdown` is the source of a
 Markdown notification; `content` is the render tree of a Markdown or card
-notification; `card` is, for card notifications, the #319 shape (a status and one block) taken from the tree, for receivers written for it. See
+notification. See
 [notification-content.md](notification-content.md#what-each-surface-shows).
 
 `source.type` is `app`, `channel`, `platform` or `user`; `source.id` is the
@@ -837,13 +836,13 @@ The `user` source type is an additive envelope value: App destinations built
 against the earlier `app | channel | platform` set receive it as a plain
 string, so no compatibility version change is needed either.
 
-The timeline additions are additive too. `notification.card`,
-`notification.response.round` and the content fields `format`, `summary`,
-`markdown` and `content` are new envelope fields, which
-`verifyNotificationRequest` ignores (it checks only `type`), and
-`notification.title` stays a string for every format. Senders that still
-push the #319 `card: { status, block }` keep working; it becomes a card
-notification (see [legacy cards](notification-content.md#legacy-cards)). A second
+The timeline additions are additive too. `notification.response.round` and
+the content fields `format`, `summary`, `markdown` and `content` are new
+envelope fields, which `verifyNotificationRequest` ignores (it checks only
+`type`), and `notification.title` stays a string for every format. The #319
+`card: { status, block }` input and the envelope's `notification.card` are
+gone: send a card notification instead (see
+[App compatibility](../skills/app-compatibility/SKILL.md)). A second
 `hatch.notification.responded` for the same notification arrives only after an
 edit asked a new question: the source itself with an SDK that has `reply` on
 `updateNotification`, or a member through `hatch notification update --reply`.

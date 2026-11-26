@@ -12,24 +12,16 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
-import { optionalCardSchema } from '../../../packages/hatch-platform-api/notification-card-schema';
-import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
 import {
   notificationHeadline,
-  summaryFromTitle,
   type ContentNode,
   type NotificationFormat,
 } from '../../../packages/hatch-platform-api/notification-content';
-import {
-  legacyCardPreview,
-  legacyToContent,
-} from '../../../packages/hatch-platform-api/notification-content-legacy';
 import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
 import {
   ContentError,
   compileCard,
   compileMarkdown,
-  isLegacyCardInput,
   optionalSummarySchema,
   type CompiledCard,
 } from '../../../packages/hatch-platform-api/notification-content-schema';
@@ -182,27 +174,15 @@ const markdownText = z.preprocess(
   z.string({ error: 'markdown must be a string' }).optional(),
 );
 
-type ParsedCard =
-  | { kind: 'none' }
-  /** The #319 `{ status, block }` shape; null when it normalizes to nothing. */
-  | { kind: 'legacy'; card: NotificationCard | null }
-  | { kind: 'card'; compiled: CompiledCard };
+type ParsedCard = { kind: 'none' } | { kind: 'card'; compiled: CompiledCard };
 
 function issue(ctx: z.RefinementCtx, path: string, message: string) {
   ctx.addIssue({ code: 'custom', message, path: [path] });
 }
 
-/** Card markup, a JSON tree or the #319 shape; issues go to `card`. */
+/** Card markup or a JSON tree; issues go to `card`. */
 function parseCard(value: unknown, ctx: z.RefinementCtx): ParsedCard | null {
   if (isEmptyCard(value)) return { kind: 'none' };
-  if (isLegacyCardInput(value)) {
-    const legacy = optionalCardSchema.safeParse(value);
-    if (!legacy.success) {
-      issue(ctx, 'card', describeIssue(legacy.error, 'card'));
-      return null;
-    }
-    return { kind: 'legacy', card: legacy.data };
-  }
   try {
     return { kind: 'card', compiled: compileCard(value) };
   } catch (error) {
@@ -231,8 +211,7 @@ const notificationPushInput = z
     kind: z.string().regex(NOTIFICATION_KIND_RE, 'invalid notification kind'),
     /**
      * The content is one of: `title` (with an optional `body`), `markdown`,
-     * or `card` (markup, a JSON tree, or the #319 `{ status, block }` shape
-     * together with `title` and `body`).
+     * or `card` (markup or a JSON tree).
      */
     title: optionalTitle,
     body: optionalText(MAX_NOTIFICATION_TEXT),
@@ -281,9 +260,8 @@ export const notificationPushSchema = notificationPushInput.transform(
     const content =
       markdown === undefined ? null : parseMarkdown(markdown, ctx);
     if (!card || (markdown !== undefined && !content)) return z.NEVER;
-    const legacy = card.kind === 'legacy';
     const given = [
-      title !== undefined || legacy,
+      title !== undefined,
       markdown !== undefined,
       card.kind === 'card',
     ].filter(Boolean).length;
@@ -299,14 +277,6 @@ export const notificationPushSchema = notificationPushInput.transform(
       issue(ctx, 'title', ONE_CONTENT);
       return z.NEVER;
     }
-    if (legacy && title === undefined) {
-      issue(
-        ctx,
-        'title',
-        'a card in the { status, block } shape needs a title',
-      );
-      return z.NEVER;
-    }
     if (body !== null && title === undefined) {
       issue(
         ctx,
@@ -319,24 +289,14 @@ export const notificationPushSchema = notificationPushInput.transform(
     let fields: NotificationContentFields;
     let reply = givenReply;
     if (title !== undefined) {
-      fields =
-        card.kind === 'legacy' && card.card
-          ? {
-              format: 'card',
-              title: null,
-              body: null,
-              summary: summary ?? summaryFromTitle(title),
-              markdown: null,
-              content: legacyToContent({ title, body, card: card.card }),
-            }
-          : {
-              format: 'text',
-              title,
-              body,
-              summary,
-              markdown: null,
-              content: null,
-            };
+      fields = {
+        format: 'text',
+        title,
+        body,
+        summary,
+        markdown: null,
+        content: null,
+      };
     } else {
       if (summary === null) {
         issue(ctx, 'summary', SUMMARY_REQUIRED);
@@ -422,10 +382,9 @@ export type NotificationContentReplacement =
  * of the signed body.
  *
  * Content: `markdown` or a `card` in markup or as a tree switches to that
- * format (keeping the summary unless one is given). `title`, `body` and a
- * #319 `{ status, block }` card (or `card: null`) edit a text notification
- * or a card sent in that shape; on any other notification they switch it to
- * text and need a `title`. See `resolveContentUpdate`.
+ * format (keeping the summary unless one is given). `title` and `body` edit
+ * a text notification; on a markdown or card one they switch it to text and
+ * need a `title`. See `resolveContentUpdate`.
  */
 export const notificationUpdateSchema = z
   .object({
@@ -441,7 +400,7 @@ export const notificationUpdateSchema = z
       .transform((value) => value || null)
       .optional(),
     markdown: markdownText,
-    /** Markup, a JSON tree, the #319 shape, or null to remove a #319 card. */
+    /** Card markup or a JSON tree. */
     card: z.unknown().optional(),
     /** A new summary, or null to remove a text notification's summary. */
     summary: optionalSummarySchema.optional(),
@@ -460,19 +419,11 @@ export const notificationUpdateSchema = z
   .strict()
   .transform((update, ctx) => {
     const { markdown, card: cardInput, ...rest } = update;
-    const card =
-      cardInput === undefined
-        ? ({ kind: 'none' } as const)
-        : cardInput === null || isEmptyCard(cardInput)
-          ? ({ kind: 'legacy', card: null } as const)
-          : parseCard(cardInput, ctx);
+    const card = parseCard(cardInput, ctx);
     const markdownContent =
       markdown === undefined ? null : parseMarkdown(markdown, ctx);
     if (!card || (markdown !== undefined && !markdownContent)) return z.NEVER;
-    const textEdit =
-      update.title !== undefined ||
-      update.body !== undefined ||
-      card.kind === 'legacy';
+    const textEdit = update.title !== undefined || update.body !== undefined;
     if (
       [textEdit, markdown !== undefined, card.kind === 'card'].filter(Boolean)
         .length > 1
@@ -503,7 +454,6 @@ export const notificationUpdateSchema = z
     const result = {
       ...rest,
       ...(content ? { content } : {}),
-      ...(card.kind === 'legacy' ? { legacyCard: card.card } : {}),
     };
     if (
       result.silent === true &&
@@ -663,11 +613,6 @@ export type NotificationEnvelope = {
     /** -2 lowest, -1 low, 0 normal, 1 high. */
     priority: number;
     data: JsonObject | null;
-    /**
-     * For receivers built before `format`: a card's status and first
-     * progress, stats or quote block in the #319 shape; null otherwise.
-     */
-    card: NotificationCard | null;
     dedupeKey: string | null;
     occurredAt: string;
     revision: number;
@@ -796,10 +741,6 @@ export function buildEnvelope(args: {
       autoOpenUrl: notification.autoOpenUrl,
       priority: notification.priority,
       data: notification.data,
-      card:
-        notification.format === 'card'
-          ? legacyCardPreview(notification.content)
-          : null,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),
       revision: contentRevision(notification),

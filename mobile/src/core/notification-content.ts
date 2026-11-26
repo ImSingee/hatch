@@ -74,11 +74,7 @@ export function contentFromJson(json: string | undefined): ContentNode | null {
   return readNode(parsed, 0);
 }
 
-/**
- * The format a build knows. A format added later is shown the way builds
- * from before formats show every notification: its title and body, which
- * the platform fills with the summary and plain text for them.
- */
+/** A notification's format: markdown, card, or else text. */
 export function knownFormat(value: string): NotificationFormat {
   return value === 'markdown' || value === 'card' ? value : 'text';
 }

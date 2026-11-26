@@ -41,9 +41,8 @@ A push or send gives exactly one kind of content:
 
 Markdown and card notifications have no `title` or `body`; their content
 carries its own heading. Giving `title` or `body` next to `markdown` or a
-card in markup or tree form, or `markdown` next to `card`, is rejected
-(`400`, `BAD_REQUEST` in the RPCs). The one exception is the legacy card
-object, which comes with a title (see [Legacy cards](#legacy-cards)).
+card, or `markdown` next to `card`, is rejected (`400`, `BAD_REQUEST` in the
+RPCs).
 
 Where the fields go:
 
@@ -106,33 +105,30 @@ happened and to what ("CI failed on PR #261: 2 unit tests time out"), not
 
 ## What each surface shows
 
-| Surface                      | Text                                                                   | Markdown                                                              | Card                                                                               |
-| ---------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Timeline (web and phone)     | Title and body                                                         | The rendered Markdown                                                 | The rendered card                                                                  |
-| Phone push                   | With a summary: title and summary. Without: title and body (as before) | Title: the source name. Subtitle: the kind. Body: the summary         | Title: the source name. Subtitle: the kind. Body: the summary                      |
-| Delivery log list            | The title, plus a line with the summary when there is one              | The summary                                                           | The summary                                                                        |
-| Delivery log detail          | The content and a "push text" entry                                    | The rendered content, the summary and the Markdown source             | The rendered card, the summary and the canonical card markup                       |
-| Webhook and App envelope     | `title`, `body` (as before)                                            | `title` = summary, `body` = plain text, plus `markdown` and `content` | `title` = summary, `body` = plain text, plus `content` and `card` (legacy preview) |
-| CLI `hatch notification get` | Title and body                                                         | Summary and Markdown source                                           | Summary, plain text and canonical markup                                           |
+| Surface                      | Text                                                                   | Markdown                                                              | Card                                                          |
+| ---------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Timeline (web and phone)     | Title and body                                                         | The rendered Markdown                                                 | The rendered card                                             |
+| Phone push                   | With a summary: title and summary. Without: title and body (as before) | Title: the source name. Subtitle: the kind. Body: the summary         | Title: the source name. Subtitle: the kind. Body: the summary |
+| Delivery log list            | The title, plus a line with the summary when there is one              | The summary                                                           | The summary                                                   |
+| Delivery log detail          | The content and a "push text" entry                                    | The rendered content, the summary and the Markdown source             | The rendered card, the summary and the canonical card markup  |
+| Webhook and App envelope     | `title`, `body` (as before)                                            | `title` = summary, `body` = plain text, plus `markdown` and `content` | `title` = summary, `body` = plain text, plus `content`        |
+| CLI `hatch notification get` | Title and body                                                         | Summary and Markdown source                                           | Summary, plain text and canonical markup                      |
 
 Notes:
 
 - Phone push for Markdown and cards: the encrypted payload carries the source
   name as the title, the summary as the body and `ks: 1`, which tells the
   Notification Service Extension to show only the kind as the subtitle.
-  Extensions built before that key show "source · kind", so the source name
-  appears twice until the phone app is rebuilt.
 - Envelope fields (`notification.*`): `format` (`text`, `markdown` or `card`);
-  `summary` (string or null); `title`, always a string (the headline), so
-  existing receivers keep working; `body`, the body of a text notification or
-  the plain-text version of the others; `markdown`, the source of a Markdown
-  notification, otherwise null; `content`, the render tree of a Markdown or
-  card notification, otherwise null; `card`, for card notifications, the #319 shape (status and the first progress bar, figures or quote of the tree) for receivers written for it, otherwise null.
+  `summary` (string or null); `title`, always a string (the headline);
+  `body`, the body of a text notification or the plain-text version of the
+  others; `markdown`, the source of a Markdown notification, otherwise null;
+  `content`, the render tree of a Markdown or card notification, otherwise
+  null.
 - RPC DTOs (`NotificationSummary`, `NotificationRevision`) carry `format`,
   `summary`, `markdown`, `content_json` (the tree), `text` (plain text),
-  `flag` and `icon`. `title` holds the headline and `body` the plain text for
-  Markdown and cards, so older phone builds still show something; `card` is
-  filled with the legacy preview.
+  `flag`, `icon` and `card_status`. `title` and `body` are set for text
+  notifications only.
 
 The **plain-text version** (envelope `body`, CLI, RPC `text`) has one line per
 paragraph, field, step, list item or table row: a card's status (and flag)
@@ -157,8 +153,7 @@ marks lowercase (`b`, `a`). Stored trees are normalized: props equal to their
 default are left out, inline strings never contain a line break (that is a
 `br` node) and no string is empty. A card's root is `Card`; a Markdown
 notification's root is `Document`. A renderer that meets a type it does not
-know renders a container's children and skips anything else, so older phone
-builds keep working when the catalog grows.
+know renders a container's children and skips anything else.
 
 Card markup is not stored. `contentToMarkup` writes the stored tree back as
 canonical markup (see [Canonical markup](#canonical-markup)), which the CLI and
@@ -542,13 +537,11 @@ stay in its history. An edit may switch to any format:
 - `markdown` or a card (markup or tree) switches to that format. The summary
   is the one given, otherwise the current one; with neither, the edit is
   rejected naming `summary`.
-- `title` and `body` on a text notification (or on a card that is exactly a
-  [legacy card](#legacy-cards)) change those fields as before. On a Markdown
-  or free-form card notification they switch it to text and need `title`.
+- `title` and `body` on a text notification change those fields. On a
+  Markdown or card notification they switch it to text and need `title`.
 - `summary` replaces the summary; `clear_summary` (`--clear-summary`) removes
   it, which only a text notification allows.
-- A summary that equals the old title (as a legacy card's derived summary
-  does) follows a new title; any other summary is kept.
+- Without `summary`, the current summary is kept.
 - Inline inputs are recompiled with the card. A different form starts a new
   round; the same form again changes nothing. An edit whose content no
   longer has inline inputs removes their form and starts a new round, unless
@@ -559,20 +552,6 @@ stay in its history. An edit may switch to any format:
 The CLI reads the current card with `hatch notification get <id>` (canonical
 markup) and writes it back with `hatch notification update <id> --card-file
 card.xml`.
-
-## Legacy cards
-
-The #319 shape, `card: { status, block }` next to `title` and `body`, is still
-accepted from every sender. It becomes a card notification whose tree is a
-`Title` (the title), a `Text` (the body, if any) and the block (`Progress`,
-`Stat` or a `Grid` of `Stat`s, or `Quote`), with the status on `<Card>`. Its
-summary is the title on one line. Edits that keep using the old shape merge
-into it as long as the stored tree is still exactly that shape. Notifications
-stored with a #319 card were migrated the same way. Envelopes and RPC DTOs
-keep carrying a `card` in the old shape for receivers written for it. In the CLI the old shape is a `--card` JSON object without `type`, and
-`update --clear-card` removes such a card, leaving text. The old
-input shape is planned for removal (recorded in the App compatibility Skill's
-proposal list); new senders should write markup.
 
 ## Security
 

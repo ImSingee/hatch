@@ -799,7 +799,6 @@ const specs: Record<string, Spec> = {
       'markdown-file': { type: 'string' },
       card: { type: 'string' },
       'card-file': { type: 'string' },
-      'clear-card': { type: 'boolean' },
       url: { type: 'string' },
       'clear-url': { type: 'boolean' },
       'auto-open-url': { type: 'boolean' },
@@ -832,7 +831,6 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
         clearReply: clearReply || undefined,
-        clearCard: values['clear-card'] === true || undefined,
       };
       const { id: _, silent, ...changes } = request;
       if (
@@ -842,7 +840,7 @@ const specs: Record<string, Spec> = {
         Object.values(changes).every((value) => value === undefined)
       )
         invalid(
-          'Supply at least one change: --title, --[clear-]body, --[clear-]summary, --markdown[-file], --card[-file]/--clear-card, --[clear-]url, --[no-]auto-open-url, --[clear-]data or --reply/--clear-reply.',
+          'Supply at least one change: --title, --[clear-]body, --[clear-]summary, --markdown[-file], --card[-file], --[clear-]url, --[no-]auto-open-url, --[clear-]data or --reply/--clear-reply.',
         );
       return {
         method: 'updateNotification',

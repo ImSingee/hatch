@@ -2,13 +2,109 @@ import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { describe, expect, it } from 'vitest';
-import type { NotificationCard } from '../../packages/hatch-platform-api/notification-card';
-import { summaryFromTitle } from '../../packages/hatch-platform-api/notification-content';
-import { legacyToContent } from '../../packages/hatch-platform-api/notification-content-legacy';
+import {
+  CARD_ROOT,
+  MAX_SUMMARY_LENGTH,
+  textToInline,
+  type ContentChild,
+  type ContentNode,
+} from '../../packages/hatch-platform-api/notification-content';
 
 const migrationsFolder = path.resolve(import.meta.dirname, '../../migrations');
 
-type Legacy = { title: string; body: string | null; card: NotificationCard };
+// The #319 card the migration converts, and the tree and summary it must
+// write: the reference its SQL functions are checked against.
+type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+type Block =
+  | { type: 'progress'; label: string; percent: number; value?: string }
+  | { type: 'stats'; items: { value: string; label: string }[] }
+  | { type: 'quote'; author: string; text: string; location?: string };
+type Legacy = {
+  title: string;
+  body: string | null;
+  card: { status?: { label: string; tone: Tone }; block?: Block };
+};
+
+function element(
+  type: string,
+  props: Record<string, string | number> | undefined,
+  children: ContentChild[],
+): ContentNode {
+  const node: ContentNode = { type };
+  if (props && Object.keys(props).length > 0) node.props = props;
+  if (children.length > 0) node.children = children;
+  return node;
+}
+
+function blockToContent(block: Block, tone: Tone | undefined): ContentNode {
+  switch (block.type) {
+    case 'progress':
+      return element(
+        'Progress',
+        {
+          label: block.label,
+          ...(block.value ? { value: block.value } : {}),
+          percent: block.percent,
+          // The bar took the status's colour.
+          ...(tone && tone !== 'neutral' ? { tone } : {}),
+        },
+        [],
+      );
+    case 'stats': {
+      const stats = block.items.map((item) =>
+        element('Stat', { value: item.value, label: item.label }, []),
+      );
+      if (stats.length === 1) return stats[0]!;
+      return element(
+        'Grid',
+        stats.length === 2 ? undefined : { columns: stats.length },
+        stats,
+      );
+    }
+    case 'quote':
+      return element(
+        'Quote',
+        {
+          author: block.author,
+          ...(block.location ? { location: block.location } : {}),
+        },
+        textToInline(block.text),
+      );
+  }
+}
+
+/** The tree a #319 card becomes: title, body, then its block. */
+function legacyToContent(legacy: Legacy): ContentNode {
+  const { status, block } = legacy.card;
+  const children: ContentNode[] = [
+    element('Title', undefined, textToInline(legacy.title)),
+  ];
+  const body = legacy.body ? textToInline(legacy.body) : [];
+  if (body.length > 0) children.push(element('Text', undefined, body));
+  if (block) children.push(blockToContent(block, status?.tone));
+  return element(
+    CARD_ROOT,
+    status
+      ? {
+          status: status.label,
+          ...(status.tone !== 'neutral' ? { tone: status.tone } : {}),
+        }
+      : undefined,
+    children,
+  );
+}
+
+/** The summary a #319 card's title becomes: one line, at most 200 chars. */
+function summaryFromTitle(title: string): string {
+  const line = title
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[ \t\f]+/g, ' ')
+    .trim();
+  const chars = Array.from(line);
+  return chars.length > MAX_SUMMARY_LENGTH
+    ? `${chars.slice(0, MAX_SUMMARY_LENGTH - 1).join('')}…`
+    : line;
+}
 
 // Every #319 shape: no status, each tone, each block and its options, and
 // titles and bodies with line breaks, blank lines and runs of whitespace.
@@ -137,7 +233,7 @@ describe('notification content migration', () => {
         row: {
           title: string;
           body: string | null;
-          card: NotificationCard | null;
+          card: Legacy['card'] | null;
         },
       ) =>
         client.query(
@@ -157,7 +253,7 @@ describe('notification content migration', () => {
         row: {
           title: string;
           body: string | null;
-          card: NotificationCard | null;
+          card: Legacy['card'] | null;
         },
       ) =>
         client.query(

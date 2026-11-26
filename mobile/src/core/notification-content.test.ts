@@ -50,24 +50,15 @@ describe('notification content projection', () => {
       summary: null,
       content: null,
     });
-    // Instances from before formats send none.
-    expect(summary({ title: 'Backup done' })).toMatchObject({
-      format: 'text',
-      title: 'Backup done',
-    });
   });
 
-  it('reads a card by its format, not the title and body kept for old builds', () => {
+  it('reads a card as its summary, tree and plain text', () => {
     expect(
       summary({
         format: 'card',
-        // What builds without formats show.
-        title: 'PR #261 failed CI',
-        body: 'PR #261\nTwo checks failed',
         summary: 'PR #261 failed CI',
         contentJson: JSON.stringify(tree),
         text: 'PR #261\nTwo checks failed',
-        card: { status: { label: 'CI failed', tone: 'danger' } },
       }),
     ).toMatchObject({
       format: 'card',
@@ -83,7 +74,6 @@ describe('notification content projection', () => {
   it('keeps the Markdown source of a Markdown notification', () => {
     const projected = summary({
       format: 'markdown',
-      title: 'v12 released',
       summary: 'v12 released',
       markdown: '## v12\n- fixed login',
       contentJson: JSON.stringify({
@@ -100,7 +90,6 @@ describe('notification content projection', () => {
       expect(
         summary({
           format: 'card',
-          title: 'Summary',
           summary: 'Summary',
           contentJson,
           text: 'Plain',
@@ -133,73 +122,6 @@ describe('notification content projection', () => {
     });
   });
 
-  it('shows a format added later the way builds without formats do', () => {
-    expect(
-      summary({
-        format: 'diagram',
-        title: 'A summary',
-        body: 'Plain text',
-        contentJson: JSON.stringify(tree),
-      }),
-    ).toMatchObject({
-      format: 'text',
-      title: 'A summary',
-      body: 'Plain text',
-      content: null,
-    });
-  });
-
-  it('shows the #319 card of an instance from before formats as a card', () => {
-    const card = {
-      status: { label: 'CI running', tone: 'info' },
-      block: {
-        case: 'progress' as const,
-        value: { label: 'Checks', percent: 21, value: '3 / 14' },
-      },
-    };
-    const expected = {
-      format: 'card',
-      title: null,
-      body: null,
-      summary: 'PR #261',
-      content: {
-        type: 'Card',
-        props: { status: 'CI running', tone: 'info' },
-        children: [
-          { type: 'Title', children: ['PR #261'] },
-          { type: 'Text', children: ['2 commits pushed'] },
-          {
-            type: 'Progress',
-            props: {
-              label: 'Checks',
-              value: '3 / 14',
-              percent: 21,
-              tone: 'info',
-            },
-          },
-        ],
-      },
-    };
-    expect(
-      summary({ title: 'PR #261', body: '2 commits pushed', card }),
-    ).toMatchObject(expected);
-    const page = versionsPageProjection(
-      create(ListNotificationRevisionsResponseSchema, {
-        revisions: [
-          {
-            revision: 1,
-            title: 'PR #261',
-            body: '2 commits pushed',
-            card,
-            activityAt: '2026-11-25T09:00:00Z',
-            replacedAt: '2026-11-25T10:00:00Z',
-          },
-        ],
-      }),
-    );
-    expect(page.versions[0]).toMatchObject(expected);
-  });
-
   it('projects kept versions the same way', () => {
     const page = versionsPageProjection(
       create(ListNotificationRevisionsResponseSchema, {
@@ -207,7 +129,6 @@ describe('notification content projection', () => {
           {
             revision: 2,
             format: 'card',
-            title: 'Earlier',
             summary: 'Earlier',
             contentJson: JSON.stringify(tree),
             activityAt: '2026-11-25T10:00:00Z',
@@ -216,7 +137,6 @@ describe('notification content projection', () => {
           {
             revision: 1,
             format: 'card',
-            title: 'Unreadable',
             summary: 'Unreadable',
             contentJson: '{"type":',
             text: 'Plain',

@@ -95,7 +95,8 @@ message NotificationSummary {
   string source_name = 4;
   string kind = 5;
   string kind_name = 6;
-  string title = 7;
+  // A text notification's title and body; absent for markdown and card.
+  optional string title = 7;
   optional string body = 8;
   optional string url = 9;
   // ISO-8601 timestamps.
@@ -128,13 +129,12 @@ message NotificationSummary {
   // Which question reply is: 1 for the form it was sent with, one more for
   // each edit that replaced or removed it.
   uint32 reply_round = 23;
-  // The #319 card shape, for builds that predate format: the card's status
-  // and its first progress, stats or quote block; absent without one.
-  NotificationCard card = 24;
+  // Was the #319 card preview.
+  reserved 24;
+  reserved "card";
   // Versions an edit replaced (ListNotificationRevisions); 0 when never edited.
   uint32 earlier_versions = 25;
-  // text | markdown | card. For markdown and card, title holds the summary
-  // and body the plain text, so builds that predate format still show them.
+  // text | markdown | card.
   string format = 26;
   // One plain line for push and lists; always set for markdown and card.
   optional string summary = 27;
@@ -417,9 +417,9 @@ message SendNotificationRequest {
   optional bool auto_open_url = 9;
   // Form people answer once; answers go to response routes.
   NotificationReply reply = 12;
-  // The #319 card shape, with title and body: sent as a card notification
-  // whose summary is the title.
-  NotificationCard card = 15;
+  // Was the #319 card.
+  reserved 15;
+  reserved "card";
   // One plain line (at most 200 characters, no line breaks) for push and
   // lists. Optional for text, required for markdown and card.
   optional string summary = 16 [(buf.validate.field).string.max_len = 1000];
@@ -510,11 +510,9 @@ message UpdateNotificationRequest {
   NotificationReply reply = 9;
   // Remove the reply form (also starts the next round). Not with reply.
   bool clear_reply = 10;
-  // The #319 card shape: replaces the whole card of a text notification or
-  // of a card sent in that shape. Not with clear_card.
-  NotificationCard card = 11;
-  // Remove a #319 card, leaving a text notification.
-  bool clear_card = 12;
+  // Were the #319 card and clear_card.
+  reserved 11, 12;
+  reserved "card", "clear_card";
   // Replace the summary. Not with clear_summary.
   optional string summary = 13 [(buf.validate.field).string.max_len = 1000];
   // Remove the summary of a text notification.
@@ -557,13 +555,14 @@ message DeleteNotificationResponse {}
 
 // ---------------------------------------------------------------- cards
 
+// A card's status, as written on <Card status tone>.
 message NotificationCardStatus {
   string label = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 24
   }];
   // neutral | info | success | warning | danger | working; empty means
-  // neutral. working is only read back, from a card's status.
+  // neutral.
   string tone = 2 [(buf.validate.field).string = {
     in: [
       "",
@@ -577,66 +576,11 @@ message NotificationCardStatus {
   }];
 }
 
-// A bar filled to percent (0-100), with an optional value such as "3 / 14".
-message NotificationCardProgress {
-  string label = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 40
-  }];
-  // Required; 0 is a valid value.
-  optional double percent = 2 [(buf.validate.field).double = {
-    gte: 0
-    lte: 100
-  }];
-  optional string value = 3 [(buf.validate.field).string.max_len = 24];
-}
-
-message NotificationCardStat {
-  string value = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 24
-  }];
-  string label = 2 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 40
-  }];
-}
-
-// One to three figures side by side.
-message NotificationCardStats {
-  repeated NotificationCardStat items = 1 [(buf.validate.field).repeated = {
-    min_items: 1
-    max_items: 3
-  }];
-}
-
-// A comment someone made, such as a review note.
-message NotificationCardQuote {
-  string author = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 40
-  }];
-  string text = 2 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 500
-  }];
-  optional string location = 3 [(buf.validate.field).string.max_len = 80];
-}
-
-// What a notification shows in the timeline besides its title and body.
-message NotificationCard {
-  NotificationCardStatus status = 1;
-  oneof block {
-    NotificationCardProgress progress = 2;
-    NotificationCardStats stats = 3;
-    NotificationCardQuote quote = 4;
-  }
-}
-
 message NotificationRevision {
   // The notification revision while this version was current.
   uint32 revision = 1;
-  string title = 2;
+  // As on NotificationSummary: set for text only.
+  optional string title = 2;
   optional string body = 3;
   optional string url = 4;
   // JSON object.
@@ -644,12 +588,13 @@ message NotificationRevision {
   // The question it asked then; absent when it asked nothing.
   NotificationReply reply = 6;
   uint32 reply_round = 7;
-  // As on NotificationSummary.
-  NotificationCard card = 10;
+  // Was the #319 card preview.
+  reserved 10;
+  reserved "card";
   // Whether tapping the phone push opened url; false for versions kept
   // before this was recorded.
   bool auto_open_url = 11;
-  // As on NotificationSummary: title holds the summary for markdown and card.
+  // As on NotificationSummary.
   string format = 12;
   optional string summary = 13;
   optional string markdown = 14;

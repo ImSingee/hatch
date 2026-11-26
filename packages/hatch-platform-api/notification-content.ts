@@ -1019,18 +1019,6 @@ export function notificationHeadline(notification: {
   return notification.summary ?? notification.title ?? '';
 }
 
-/** A summary given for a text notification, or derived from a title. */
-export function summaryFromTitle(title: string): string {
-  const line = title
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/[ \t\f]+/g, ' ')
-    .trim();
-  const chars = Array.from(line);
-  return chars.length > MAX_SUMMARY_LENGTH
-    ? `${chars.slice(0, MAX_SUMMARY_LENGTH - 1).join('')}…`
-    : line;
-}
-
 /**
  * What a card shows in its status area once someone answered an inline
  * question: the chosen option's `then-status` replaces the status and the

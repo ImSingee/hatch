@@ -150,8 +150,7 @@ and on update `--clear-summary` (`SendNotification` / `UpdateNotification`
 else markup. The content is compiled locally with the platform's own compiler
 (`packages/hatch-platform-api/notification-content-schema.ts`) before any
 request, and problems are reported as `line:column` (or tree path) issues with
-the code `invalid_content`. The older `{status, block}` card (a JSON object
-without `type`) still maps to `card` / `clear_card`. `notification get` prints
+the code `invalid_content`. `notification get` prints
 the format, summary and content (Markdown source, or a card's plain text and
 canonical markup); `--json` is the full `NotificationSummary` with `format`,
 `summary`, `markdown`, `content_json`, `text`, `flag`, `icon` and

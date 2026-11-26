@@ -953,16 +953,3 @@ export function compileMarkdown(source: string): ContentNode {
   if (children.length > 0) root.children = children;
   return root;
 }
-
-/**
- * Whether a `card` value is the #319 shape (`{ status, block }`) rather
- * than markup or a tree.
- */
-export function isLegacyCardInput(value: unknown): boolean {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    !Object.hasOwn(value, 'type')
-  );
-}

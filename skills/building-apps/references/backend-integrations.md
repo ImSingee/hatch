@@ -419,9 +419,7 @@ The `notification-content` Skill has the markup rules, the full component
 catalog and an example for every design card; run
 `hatch notification card check --file <path>` on a sample card while
 developing (it runs offline). Invalid content throws `NotificationError`
-(400) with the line and column, or naming `summary` when it is missing. The
-#319 shape `card: { status, block }` next to `title` and `body` still works
-and becomes a card, but write markup in new code.
+(400) with the line and column, or naming `summary` when it is missing.
 
 ### Editing and recalling
 
