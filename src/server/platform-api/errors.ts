@@ -5,7 +5,7 @@ import { AppError } from '~server/errors';
 import { RunTokenError } from '~server/agent-runner/run-auth';
 import { DataMigrationApprovalRequired } from '~server/apps/data-table/migration-errors';
 import { AppManifestValidationError } from '~server/apps/manifest-validation';
-import { ThemeValidationError } from '~server/theme-settings';
+import { ThemeValidationError } from '~server/theme-errors';
 
 const definitions = {
   BAD_REQUEST: [Code.InvalidArgument, 400, 'Invalid request.'],

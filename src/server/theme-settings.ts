@@ -23,6 +23,7 @@ import {
   type AccentName,
 } from '~/ui/theme/accents';
 import { AppError } from '~server/errors';
+import { ThemeValidationError } from '~server/theme-errors';
 import {
   getPlatformConfig,
   updatePlatformConfig,
@@ -54,21 +55,6 @@ export type ThemeState = {
   light: ThemeChoice;
   dark: ThemeChoice;
 };
-
-/** A theme document the platform refused, with every reason. */
-export class ThemeValidationError extends AppError {
-  constructor(readonly problems: ThemeProblem[]) {
-    super(
-      [
-        'The theme was rejected:',
-        ...problems.map((problem) => `- ${problem.message}`),
-      ].join('\n'),
-      400,
-      { code: 'theme_invalid' },
-    );
-    this.name = 'ThemeValidationError';
-  }
-}
 
 function choiceOf(
   appearance: ThemeAppearance,
