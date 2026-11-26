@@ -69,7 +69,8 @@
   height: 22px;
   border-radius: var(--mantine-radius-xs);
   background: var(--mantine-color-gray-7);
-  color: var(--mantine-color-white);
+  /* The ink inverted: white on light themes, the card on dark ones. */
+  color: var(--surface-raised);
 }
 
 .title {

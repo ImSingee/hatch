@@ -101,7 +101,8 @@
   border: 2px solid var(--surface-raised);
   border-radius: 50%;
   background: var(--mantine-color-text);
-  color: var(--mantine-color-white);
+  /* The ink inverted: white on light themes, the card on dark ones. */
+  color: var(--surface-raised);
 }
 
 .card {
