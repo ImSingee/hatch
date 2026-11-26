@@ -285,6 +285,7 @@ function runDriver(
   cwd: string,
   signal: AbortSignal,
   timeoutMs: number,
+  timedOut: () => CliError,
 ): Promise<{ ok: boolean; code?: string; message?: string }> {
   if (signal.aborted)
     return Promise.reject(new CliError('cancelled', 'Cancelled.', 130));
@@ -342,13 +343,7 @@ function runDriver(
         return;
       }
       if (stopped === 'timeout') {
-        reject(
-          new CliError(
-            'local_build_timeout',
-            `The local build did not finish within ${Math.round(timeoutMs / 1000)}s; raise --timeout or build with --build builder.`,
-            7,
-          ),
-        );
+        reject(timedOut());
         return;
       }
       const line = stdout.trim().split('\n').at(-1) ?? '';
@@ -381,6 +376,20 @@ export type LocalBuildInput = {
 /** Build `commit` for `deploymentId` and return the packed build package. */
 export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
   const { signal, timeoutMs } = input;
+  // One budget for the whole build: the toolchain install, the source
+  // checkout and the driver each get only what is left of it.
+  const deadline = Date.now() + timeoutMs;
+  const timedOut = () =>
+    new CliError(
+      'local_build_timeout',
+      `The local build did not finish within ${Math.round(timeoutMs / 1000)}s; raise --timeout or build with --build builder.`,
+      7,
+    );
+  const remaining = () => {
+    const left = deadline - Date.now();
+    if (left <= 0) throw timedOut();
+    return left;
+  };
   const work = await mkdtemp(path.join(os.tmpdir(), 'hatch-build-'));
   try {
     let toolchainDir: string;
@@ -393,8 +402,17 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
       // itself, here a link to the toolchain.
       toolchainDir = path.join(work, 'toolchain');
       await mkdir(toolchainDir);
+      const modules = await ensureToolchain(
+        input.tooling,
+        signal,
+        remaining(),
+      ).catch((error: unknown) => {
+        // An install cut off by the budget is the build running out of time.
+        if (Date.now() >= deadline) throw timedOut();
+        throw error;
+      });
       await symlink(
-        await ensureToolchain(input.tooling, signal, timeoutMs),
+        modules,
         path.join(toolchainDir, 'node_modules'),
         'junction',
       );
@@ -405,6 +423,7 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
       );
     }
     const source = path.join(work, 'source');
+    remaining();
     await exportCommit(input.root, input.commit, source, signal);
     const sdkFiles = path.join(work, 'sdk-files.json');
     await writeFile(sdkFiles, JSON.stringify(input.sdkFiles));
@@ -436,7 +455,8 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
       sourceMode ? ['--import', 'tsx', driver, request] : [driver, request],
       sourceMode ? toolchainDir : work,
       signal,
-      timeoutMs,
+      remaining(),
+      timedOut,
     );
     if (result.code === 'APP_MANIFEST_INVALID')
       // The same rejection, message and exit status as the platform's.
