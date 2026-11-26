@@ -542,8 +542,40 @@ describe('interactive Platform API contracts and authority', () => {
       await db.query.userPreferences.findFirst({ where: { userId } }),
     ).toMatchObject({ homepage: { kind: 'page', page: 'dashboard' } });
 
+    // The background time of minimised Apps, with each credential type.
+    const desk = async (
+      headers: Record<string, string>,
+      update?: { backgroundAppMinutes?: number },
+    ) => {
+      const response = await call(
+        update
+          ? 'PreferenceService/UpdateDeskPreferences'
+          : 'PreferenceService/GetDeskPreferences',
+        { headers, body: update ?? {} },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+    expect(
+      await desk({ 'x-api-key': key }, { backgroundAppMinutes: 20 }),
+    ).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 20 } },
+    });
+    expect(await desk(run)).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 20 } },
+    });
+    expect(await desk(run, { backgroundAppMinutes: 7 })).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 7 } },
+    });
+    expect((await desk({})).body).toEqual({
+      preferences: { backgroundAppMinutes: 7 },
+    });
+
     const orphan = await preferences(await runJwt(null));
     expect(orphan.status).toBe(409);
+    expect((await desk(await runJwt(null))).status).toBe(409);
     await db.delete(schema.agentRuns);
   });
 

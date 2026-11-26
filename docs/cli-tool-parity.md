@@ -352,8 +352,12 @@ state of one shell window, like a browser's open tabs.
 What an App opens to is covered elsewhere: its URL (`/app/<slug>#<route>`)
 deep-links into it, and its dock pins (name and entry route) are `hatch pin`
 commands. How long a minimised App keeps running before the Desk stops it is a
-personal preference (Settings › Account), covered by
-`hatch preferences get|set --background-app-minutes`.
+personal preference (Settings › Account), covered by `hatch preferences get`
+(`backgroundAppMinutes`) and `hatch preferences set --background-app-minutes
+<1-1440>` through `PreferenceService/GetDeskPreferences` and
+`UpdateDeskPreferences`. Like the other preferences they accept every
+credential; a Run reads and writes the preference of the user who sent its
+prompt.
 
 ## App tasks: CLI only, no Agent Tool
 
