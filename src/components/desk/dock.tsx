@@ -11,8 +11,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   IconAppWindow,
+  IconLayoutSidebarRight,
   IconPencil,
+  IconPin,
   IconPinnedOff,
+  IconPower,
   IconSettings,
   IconSparkles,
 } from '@tabler/icons-react';
@@ -41,6 +44,8 @@ import {
   DockItem,
   type DockOpenItem,
 } from './dock-item';
+import { useAppSessionStore, useAppSessions } from './app-sessions';
+import { DESK_HOME } from './paths';
 import { SortableList, sortByIds } from './sortable-list';
 import classes from './dock.module.css';
 
@@ -78,14 +83,25 @@ function dockKeyOf(target: EventTarget | null) {
 }
 
 /**
- * The dock: pinned Apps, then All apps, with a marker under each one whose
- * window is open. Adding happens in
- * the dock's right-click menu; only an empty Apps group shows an add tile,
- * and a dock with no pins at all shows nothing else.
+ * The dock: pinned Apps, then running Apps that are not pinned, then All
+ * apps, with a marker under each running App. Selecting a running App's tile
+ * brings it forward as it was. Adding happens in the dock's right-click
+ * menu, which also shows a running App beside the window in front and quits
+ * it; only an empty Apps group shows an add tile, and a dock with no pins at
+ * all shows nothing else.
  */
-export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
+export function Dock({
+  openItems,
+  besideAvailable = false,
+}: {
+  openItems: readonly DockOpenItem[];
+  /** Whether an App can be shown beside the window in front right now. */
+  besideAvailable?: boolean;
+}) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const sessionStore = useAppSessionStore();
+  const { sessions, front } = useAppSessions();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
@@ -174,6 +190,43 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
   // shows only its add tile.
   const hasPins = Boolean(pins?.length);
 
+  const pinnedSlugs = new Set((pins ?? []).map((p) => p.appSlug));
+  const running = sessions.filter((session) => !pinnedSlugs.has(session.slug));
+  const appNamed = (slug: string) => apps?.find((a) => a.slug === slug);
+
+  const quit = (slug: string) => {
+    // Leave the App's window first, so the stage never shows it empty.
+    if (front === slug) {
+      void navigate({ to: DESK_HOME }).then(() => sessionStore.quit(slug));
+    } else {
+      sessionStore.quit(slug);
+    }
+  };
+
+  const sessionMenu = (slug: string, entryHash: string | null) => {
+    const isRunning = sessions.some((session) => session.slug === slug);
+    return (
+      <>
+        {besideAvailable && front !== slug ? (
+          <Menu.Item
+            leftSection={<IconLayoutSidebarRight size={15} stroke={1.7} />}
+            onClick={() => sessionStore.openBeside(slug, entryHash ?? '')}
+          >
+            {t('dock.openBeside')}
+          </Menu.Item>
+        ) : null}
+        {isRunning ? (
+          <Menu.Item
+            leftSection={<IconPower size={15} stroke={1.7} />}
+            onClick={() => quit(slug)}
+          >
+            {t('dock.quit')}
+          </Menu.Item>
+        ) : null}
+      </>
+    );
+  };
+
   const goCreate = () => {
     toast.info(t('dock.createHint'));
     void navigate({ to: '/agent' });
@@ -181,6 +234,7 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
 
   const appMenu = (item: NonNullable<typeof pins>[number]) => (
     <>
+      {sessionMenu(item.appSlug, item.entryHash)}
       <Menu.Item
         leftSection={<IconPencil size={15} stroke={1.7} />}
         onClick={() =>
@@ -259,12 +313,46 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
 
   // The right-click menu: the clicked tile's own actions, then adding.
   const clickedPin = pins?.find((p) => `app:${p.id}` === menuKey);
+  const clickedRunning = running.find((r) => `run:${r.slug}` === menuKey);
+  const clickedRunningApp = clickedRunning
+    ? appNamed(clickedRunning.slug)
+    : undefined;
   const contextMenu = (
     <>
       {clickedPin ? (
         <>
           <Menu.Label>{clickedPin.label}</Menu.Label>
           {appMenu(clickedPin)}
+          <Menu.Divider />
+        </>
+      ) : null}
+      {clickedRunning ? (
+        <>
+          <Menu.Label>
+            {clickedRunningApp?.name ?? clickedRunning.slug}
+          </Menu.Label>
+          {sessionMenu(clickedRunning.slug, null)}
+          {clickedRunningApp ? (
+            <Menu.Item
+              leftSection={<IconPin size={15} stroke={1.7} />}
+              disabled={pin.isPending}
+              onClick={() => pin.mutate(clickedRunningApp.id)}
+            >
+              {t('dock.pin')}
+            </Menu.Item>
+          ) : null}
+          <Menu.Item
+            leftSection={<IconSettings size={15} stroke={1.7} />}
+            renderRoot={(props) => (
+              <Link
+                to="/app/$appSlug/manage"
+                params={{ appSlug: clickedRunning.slug }}
+                {...props}
+              />
+            )}
+          >
+            {t('common.manage')}
+          </Menu.Item>
           <Menu.Divider />
         </>
       ) : null}
@@ -322,30 +410,80 @@ export function Dock({ openItems }: { openItems: readonly DockOpenItem[] }) {
                     <SortableList
                       items={pins}
                       onReorder={(ids) => reorder.mutate(ids)}
-                      renderItem={(item) => (
-                        <DockItem
-                          label={item.label}
-                          open={isAppPinOpen(item, pins, openItems)}
-                          menuKey={`app:${item.id}`}
-                          glyph={
-                            <AppGlyph
-                              name={item.label}
-                              seed={item.appId}
-                              size="dock"
-                            />
-                          }
-                          renderLink={(props) => (
-                            <Link
-                              to="/app/$appSlug"
-                              params={{ appSlug: item.appSlug }}
-                              hash={item.entryHash ?? undefined}
-                              {...props}
-                            />
-                          )}
-                          hintHidden={menuOpen}
-                        />
-                      )}
+                      renderItem={(item) => {
+                        const open = isAppPinOpen(item, pins, openItems);
+                        // The App's only pin stands for the App: it brings
+                        // the running App forward as it was. One of several
+                        // pins is a page of the App, unless it is the page
+                        // the App is on.
+                        const single =
+                          pins.filter((p) => p.appId === item.appId).length <=
+                          1;
+                        return (
+                          <DockItem
+                            label={item.label}
+                            open={open}
+                            menuKey={`app:${item.id}`}
+                            glyph={
+                              <AppGlyph
+                                name={item.label}
+                                seed={item.appId}
+                                size="dock"
+                              />
+                            }
+                            renderLink={(props) => (
+                              <Link
+                                to="/app/$appSlug"
+                                params={{ appSlug: item.appSlug }}
+                                hash={item.entryHash ?? undefined}
+                                state={
+                                  single || open
+                                    ? { appFocus: true }
+                                    : undefined
+                                }
+                                {...props}
+                              />
+                            )}
+                            hintHidden={menuOpen}
+                          />
+                        );
+                      }}
                     />
+                  ) : null}
+                  {running.length > 0 ? (
+                    <div
+                      className={classes.running}
+                      data-after-pins={pins?.length ? 'true' : undefined}
+                    >
+                      {running.map((session) => {
+                        const runningApp = appNamed(session.slug);
+                        const label = runningApp?.name ?? session.slug;
+                        return (
+                          <DockItem
+                            key={session.slug}
+                            label={label}
+                            open
+                            menuKey={`run:${session.slug}`}
+                            glyph={
+                              <AppGlyph
+                                name={label}
+                                seed={runningApp?.id ?? session.slug}
+                                size="dock"
+                              />
+                            }
+                            renderLink={(props) => (
+                              <Link
+                                to="/app/$appSlug"
+                                params={{ appSlug: session.slug }}
+                                state={{ appFocus: true }}
+                                {...props}
+                              />
+                            )}
+                            hintHidden={menuOpen}
+                          />
+                        );
+                      })}
+                    </div>
                   ) : null}
                   {pins && pins.length === 0 ? (
                     <DockAddButton

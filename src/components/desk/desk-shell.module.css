@@ -44,6 +44,30 @@
   padding: 20px clamp(12px, 2vw, 40px) 8px;
 }
 
+/* A running App beside the window in front: two columns of equal width,
+   the App on the right. Waiting Apps stay in the stage, hidden. */
+.shell[data-split] .stage {
+  flex-direction: row;
+  gap: 16px;
+}
+
+.shell[data-split] .stage > [data-window-placement] {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+}
+
+.shell[data-split] .stage > [data-window-placement='beside'] {
+  order: 1;
+}
+
+.shell[data-split][data-maximized] .stage {
+  gap: 1px;
+}
+
 .dock {
   position: relative;
   z-index: 2;

@@ -330,6 +330,18 @@ releasing the page's own claim before switching account
 (`releaseDeviceClaim` in `src/server/device-claims.ts`), which acts only on the
 claim the browser's account holds.
 
+## Running Apps and their layout: browser window only
+
+The Desk keeps several Apps running in one browser window (up to 12): which
+ones run, which one sits beside the window in front, in what order they were
+last shown, and the route each was left on. This is the state of one browser
+window, like its open tabs, kept in memory and in that window's session
+storage (`src/components/desk/app-sessions.tsx`); nothing reaches the server.
+It is a named CLI exception (plan `docs/native-app-ui-plan.md` section 5).
+What an App opens to is covered elsewhere: its URL (`/app/<slug>#<route>`)
+deep-links into it, and its dock pins (name and entry route) are `hatch pin`
+commands.
+
 ## App tasks: CLI only, no Agent Tool
 
 `hatch app task list|run|runs|get-run|cancel|rotate-webhook-secret` calls

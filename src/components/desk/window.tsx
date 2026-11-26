@@ -48,8 +48,30 @@ export type DeskWindowProps = {
   fill?: boolean;
   /** Widest the window grows, in px. */
   maxWidth?: number;
+  /**
+   * Where the window is. `front`: the page the URL opens; it names the tab,
+   * takes focus when it comes forward and answers Escape. `beside`: shown
+   * next to the window in front (a running App); it answers Escape only
+   * while focus is inside it. `hidden`: kept mounted but not shown (a
+   * running App waiting on the desk).
+   */
+  placement?: WindowPlacement;
+  /**
+   * Makes Minimise available: the window waits on the desk instead of
+   * closing. Called by Minimise, and by Escape and the back button, which
+   * then minimise rather than close. A `front` window still leads to
+   * `closeTo` afterwards.
+   */
+  onMinimise?: () => void;
+  /**
+   * Called when Close is chosen. A `front` window then leads to `closeTo`;
+   * a `beside` window only calls this.
+   */
+  onClose?: () => void;
   children: ReactNode;
 };
+
+export type WindowPlacement = 'front' | 'beside' | 'hidden';
 
 /**
  * Layers that sit above a window and answer Escape themselves. A closed
@@ -79,14 +101,16 @@ function isEditing(target: EventTarget | null) {
 
 /**
  * The frame every page is shown in. The window is a layout component and
- * holds no state of its own: which window is open is the URL, so closing is a
- * link, and reload, deep links and the back button work as for any page.
- * Maximizing belongs to the desk shell, so the next window opens the same
- * way. Minimise is shown but disabled until windows can wait on the desk.
+ * holds no state of its own: which window is in front is the URL, so closing
+ * is a link, and reload, deep links and the back button work as for any
+ * page. Maximizing belongs to the desk shell, so the next window opens the
+ * same way. Minimise is available where the window can wait on the desk (a
+ * running App, see `RunningApps`); elsewhere it is shown but disabled.
  *
- * Keyboard: opening a window moves focus into it unless the page already
- * placed focus, and Escape closes it when nothing above it (a menu, a modal)
- * or inside it (a field being edited) wants the key.
+ * Keyboard: a window coming to the front moves focus into it unless the page
+ * already placed focus, and Escape closes (or minimises) the window that has
+ * focus, else the one in front, when nothing above it (a menu, a modal) or
+ * inside it (a field being edited) wants the key.
  */
 export function DeskWindow({
   title,
@@ -97,6 +121,9 @@ export function DeskWindow({
   closeTo,
   fill = false,
   maxWidth = 1320,
+  placement = 'front',
+  onMinimise,
+  onClose,
   children,
 }: DeskWindowProps) {
   const { t } = useI18n();
@@ -105,23 +132,32 @@ export function DeskWindow({
     label: t('window.desk'),
   };
   const titleId = useId();
-  useDocumentTitle(documentTitle || title);
+  const front = placement === 'front';
+  const beside = placement === 'beside';
+  // Only the window in front names the tab ('' leaves the title alone).
+  useDocumentTitle(front ? documentTitle || title : '');
   const frame = useRef<HTMLElement>(null);
   const hosted = useWindowFrame() === 'host';
   const maximizable = useWindowMaximize();
-  const maximize = hosted ? null : maximizable;
+  const maximize = hosted || beside ? null : maximizable;
   const router = useRouter();
-  const close = useEffectEvent(() => {
+  const leave = () => {
     void router.navigate(target.link as never);
+  };
+  // Escape: a window that can wait on the desk minimises, others close.
+  const dismiss = useEffectEvent(() => {
+    if (onMinimise) onMinimise();
+    if (!beside) leave();
   });
 
   useEffect(() => {
+    if (!front) return;
     const element = frame.current;
     if (!element) return;
     const active = document.activeElement;
     if (active && element.contains(active)) return;
     element.focus({ preventScroll: true });
-  }, []);
+  }, [front]);
 
   useEffect(() => {
     // A layer closes itself during the same event, so note whether one was
@@ -136,15 +172,21 @@ export function DeskWindow({
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey)
         return;
       if (layerWasOpen || isEditing(event.target)) return;
-      close();
+      // The key belongs to the window that has focus, else to the front.
+      const owner = (event.target as Element | null)?.closest?.(
+        '[data-window-placement]',
+      );
+      if (owner ? owner !== frame.current : !front) return;
+      dismiss();
     };
+    if (placement === 'hidden') return;
     window.addEventListener('keydown', capture, true);
     window.addEventListener('keydown', onEscape);
     return () => {
       window.removeEventListener('keydown', capture, true);
       window.removeEventListener('keydown', onEscape);
     };
-  }, []);
+  }, [placement, front]);
 
   return (
     <section
@@ -152,6 +194,8 @@ export function DeskWindow({
       tabIndex={-1}
       aria-labelledby={titleId}
       className={classes.window}
+      hidden={placement === 'hidden'}
+      data-window-placement={placement}
       data-fill={fill || undefined}
       data-frame={hosted ? 'host' : undefined}
       data-maximized={maximize?.maximized || undefined}
@@ -169,13 +213,16 @@ export function DeskWindow({
           maximize.toggle();
         }}
       >
-        <Link
-          {...target.link}
-          className={`${classes.button} ${classes.back}`}
-          aria-label={t('window.backTo', { target: target.label })}
-        >
-          <IconChevronLeft size={18} stroke={2.4} aria-hidden />
-        </Link>
+        {beside ? null : (
+          <Link
+            {...target.link}
+            className={`${classes.button} ${classes.back}`}
+            aria-label={t('window.backTo', { target: target.label })}
+            onClick={onMinimise}
+          >
+            <IconChevronLeft size={18} stroke={2.4} aria-hidden />
+          </Link>
+        )}
         <span className={classes.tile} aria-hidden>
           {tile ?? (
             <span className={classes.defaultTile}>
@@ -191,15 +238,29 @@ export function DeskWindow({
         {toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
         {hosted ? null : (
           <>
-            <button
-              type="button"
-              className={`${classes.button} ${classes.wide}`}
-              aria-label={t('window.minimise')}
-              title={t('window.minimiseUnavailable')}
-              disabled
-            >
-              <IconMinus size={14} stroke={2.4} aria-hidden />
-            </button>
+            {onMinimise ? (
+              <button
+                type="button"
+                className={`${classes.button} ${classes.wide}`}
+                aria-label={t('window.minimise')}
+                onClick={() => {
+                  onMinimise();
+                  if (!beside) leave();
+                }}
+              >
+                <IconMinus size={14} stroke={2.4} aria-hidden />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={`${classes.button} ${classes.wide}`}
+                aria-label={t('window.minimise')}
+                title={t('window.minimiseUnavailable')}
+                disabled
+              >
+                <IconMinus size={14} stroke={2.4} aria-hidden />
+              </button>
+            )}
             {maximize ? (
               <button
                 type="button"
@@ -222,13 +283,25 @@ export function DeskWindow({
                 )}
               </button>
             ) : null}
-            <Link
-              {...target.link}
-              className={`${classes.button} ${classes.wide}`}
-              aria-label={t('window.closeBackTo', { target: target.label })}
-            >
-              <IconX size={14} stroke={2.4} aria-hidden />
-            </Link>
+            {beside ? (
+              <button
+                type="button"
+                className={`${classes.button} ${classes.wide}`}
+                aria-label={t('window.closeNamed', { name: title })}
+                onClick={onClose}
+              >
+                <IconX size={14} stroke={2.4} aria-hidden />
+              </button>
+            ) : (
+              <Link
+                {...target.link}
+                className={`${classes.button} ${classes.wide}`}
+                aria-label={t('window.closeBackTo', { target: target.label })}
+                onClick={onClose}
+              >
+                <IconX size={14} stroke={2.4} aria-hidden />
+              </Link>
+            )}
           </>
         )}
       </header>

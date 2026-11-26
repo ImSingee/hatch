@@ -55,6 +55,10 @@ vi.mock('~queries/apps', () => ({
     queryFn: async () => ({ app: { routes: [] } }),
   }),
 }));
+// The windows of running Apps read their deployment; these tests run none.
+vi.mock('~server/apps', () => ({
+  getAppDeploymentRevision: async () => null,
+}));
 vi.mock('~queries/sidebar', () => ({
   sidebarItemsQueryOptions: {
     queryKey: ['test-pins'],
@@ -98,11 +102,13 @@ vi.mock('~components/apps/use-app-icon', () => ({
 
 /** The real shell around stand-in pages, each in a real window. */
 async function renderDesk(initialEntry: string) {
-  const [{ DeskShell }, { DeskWindow }, { DeskHome }] = await Promise.all([
-    import('./desk-shell'),
-    import('./window'),
-    import('./desk-home'),
-  ]);
+  const [{ DeskShell }, { DeskWindow }, { DeskHome }, { AppSessionsProvider }] =
+    await Promise.all([
+      import('./desk-shell'),
+      import('./window'),
+      import('./desk-home'),
+      import('./app-sessions'),
+    ]);
 
   // Mirrors `src/routes/_app.tsx`: view and dock markers come from the URL.
   function Shell() {
@@ -111,13 +117,15 @@ async function renderDesk(initialEntry: string) {
       strict: false,
     }) as Record<string, string | undefined>;
     return (
-      <DeskShell
-        view={dashboardId ? 'home' : 'window'}
-        tabDestination={false}
-        openItems={appSlug ? [{ kind: 'app', slug: appSlug, route }] : []}
-      >
-        <Outlet />
-      </DeskShell>
+      <AppSessionsProvider>
+        <DeskShell
+          view={dashboardId ? 'home' : 'window'}
+          tabDestination={false}
+          openItems={appSlug ? [{ kind: 'app', slug: appSlug, route }] : []}
+        >
+          <Outlet />
+        </DeskShell>
+      </AppSessionsProvider>
     );
   }
 

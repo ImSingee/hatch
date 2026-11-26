@@ -2,6 +2,7 @@ import { Loader } from '@mantine/core';
 import { useRouter } from '@tanstack/react-router';
 import {
   type Ref,
+  useCallback,
   useEffect,
   useEffectEvent,
   useImperativeHandle,
@@ -16,6 +17,7 @@ import {
 } from '../../../sdk-internal/app/src/native-surface';
 import { useAccent } from '~/ui/theme';
 import { appSurfaceSource } from './app-surface-source';
+import { type DataEventsGate, gateDataEvents } from './data-events-gate';
 import { attachPlatformShortcuts } from './platform-shortcuts';
 import classes from './app-surface.module.css';
 
@@ -38,7 +40,10 @@ export type AppSurfaceProps = {
    * into `%20` and change what the route points at.
    */
   route: string;
-  /** A hidden surface keeps its App running. */
+  /**
+   * A hidden surface keeps its App running, but the App gets no Data Table
+   * change events until it is shown again; it then catches up.
+   */
   visible?: boolean;
   /**
    * Chords the App handles itself (its manifest's `keyboard.reserve`). Every
@@ -134,6 +139,23 @@ export function AppSurface({
   // The live App window, kept so `navigate` can reach the loaded App.
   const winRef = useRef<Window | null>(null);
   const nativeRef = useRef<NativeChannel | null>(null);
+  // Holds a hidden `web` App's change events (see `data-events-gate.ts`).
+  const gateRef = useRef<DataEventsGate | null>(null);
+  // Read when a frame is inserted, which happens outside any effect.
+  const visibleRef = useRef(visible);
+  const attachFrame = useCallback((frame: HTMLIFrameElement | null) => {
+    frameRef.current = frame;
+    // Gate the App's change events before its first script runs: the frame
+    // still shows its initial `about:blank`, whose window the App's page
+    // reuses.
+    const initial = frame?.contentWindow;
+    if (!initial) return;
+    try {
+      gateRef.current = gateDataEvents(initial, visibleRef.current);
+    } catch {
+      // cross-origin frame
+    }
+  }, []);
   const accent = useAccent();
   const router = useRouter({ warn: false });
   const [loading, setLoading] = useState(true);
@@ -168,6 +190,8 @@ export function AppSurface({
     nativeRef.current?.send({ type: 'theme', accent });
   }, [accent]);
   useEffect(() => {
+    visibleRef.current = visible;
+    gateRef.current?.setVisible(visible);
     nativeRef.current?.send({ type: 'visibility', visible });
   }, [visible]);
   // "Update available" once the host's live deployment and the player's
@@ -342,10 +366,15 @@ export function AppSurface({
       detach();
       win = next;
       winRef.current = next;
+      // Usually already installed on the frame's first window (below); this
+      // covers a browser that gave the page a new one, or an App reload.
+      gateRef.current = gateDataEvents(next, currentVisible());
       try {
         const doc = frame.contentDocument;
         if (!doc) return;
         if (isNativePlayer(doc)) {
+          // The player answers `hatch.data.events` by visibility itself.
+          gateRef.current.release();
           attachNative(next);
           detachShortcuts = attachPlatformShortcuts(next, () =>
             currentReservedShortcuts(),
@@ -402,7 +431,7 @@ export function AppSurface({
         // A fresh element per load: reusing it would briefly expose the
         // previous document as already loaded.
         key={`${src}:${generation}`}
-        ref={frameRef}
+        ref={attachFrame}
         src={src}
         title={app.name}
         className={classes.frame}

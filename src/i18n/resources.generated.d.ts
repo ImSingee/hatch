@@ -66,6 +66,9 @@ export type TranslationResource = {
   'dock.reorderConflict': 'The dock changed while you were moving that pin. It now shows the current order; try again.';
   'dock.createHint': 'Tell the Agent what App to build';
   'dock.unpin': 'Unpin';
+  'dock.pin': 'Pin to dock';
+  'dock.openBeside': 'Open beside';
+  'dock.quit': 'Quit';
   'dock.pinDeployed': 'Pin a deployed app';
   'dock.addShortcut': 'Add another shortcut';
   'dock.noDeployedApps': 'No deployed apps yet';
@@ -1820,6 +1823,7 @@ export type TranslationResource = {
   'window.desk': 'the desk';
   'window.backTo': 'Back to {{target}}';
   'window.closeBackTo': 'Close window, back to {{target}}';
+  'window.closeNamed': 'Close {{name}}';
   'window.minimise': 'Minimise window';
   'window.minimiseUnavailable': 'Minimise is not available yet';
   'window.maximize': 'Maximize window';
