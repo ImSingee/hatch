@@ -80,3 +80,14 @@ test('follows the shell to another section and page without echoing it', async (
   ]);
   expect(last(sent(app, 'hatch.nav.setTitle'))).toEqual({ title: 'Note 9' });
 });
+
+test('goes back to the first section when the shell navigates home', async () => {
+  const app = await open('./main.tsx', {
+    host: { handlers, params: { route: '/notes' } },
+  });
+  await app.waitFor('Open note 7');
+  await app.host.send('hatch.nav', { route: '/' });
+  await app.waitFor("text:Today's page");
+  await app.wait(100);
+  expect(last(sent(app, 'hatch.nav.setTitle'))).toEqual({ title: 'Today' });
+});

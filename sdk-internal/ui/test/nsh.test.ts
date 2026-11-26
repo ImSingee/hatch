@@ -110,7 +110,7 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('keeps the route and title in the shell for sections and stack pages', () => {
     expect(run(['test', 'app/route.test.tsx'], fixture('route'))).toMatch(
-      /^ok\n[\s\S]*4 passed/,
+      /^ok\n[\s\S]*5 passed/,
     );
   }, 240_000);
 

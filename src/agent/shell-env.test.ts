@@ -52,7 +52,8 @@ describe('Agent shell environment', () => {
     const release = await mkdtemp(path.join(tmpdir(), 'hatch-nsh-release-'));
     const bin = path.join(release, 'bin');
     await mkdir(bin, { recursive: true });
-    const nsh = path.join(bin, 'nsh');
+    // A versioned name: the Agent still runs it as `nsh`.
+    const nsh = path.join(bin, 'nsh-pinned');
     await writeFile(nsh, `#!/bin/sh\necho "nsh ${NSH_VERSION} (test)"\n`);
     await chmod(nsh, 0o755);
     vi.stubEnv('HATCH_NSH_BIN', nsh);
@@ -63,7 +64,13 @@ describe('Agent shell environment', () => {
         env,
         encoding: 'utf8',
       });
-      expect(found.stdout.trim()).toBe(path.join(realpathSync(bin), 'nsh'));
+      const command = found.stdout.trim();
+      expect(realpathSync(command)).toBe(realpathSync(nsh));
+      const version = spawnSync('nsh', ['--version'], {
+        env,
+        encoding: 'utf8',
+      });
+      expect(version.stdout).toContain(`nsh ${NSH_VERSION}`);
       expect(env.NSH_TSC).toBe(
         path.join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
       );

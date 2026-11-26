@@ -238,12 +238,17 @@ export function AppShell(props: AppShellProps): JSX.Element {
     depth: scope.depth,
   });
 
-  // The shell asked for another address: show the section it names, or the
-  // starting one for the App's home.
+  // The shell asked for another address: show the section it names, or for
+  // the App's home the one it starts on (`defaultValue`, else the first
+  // enabled section), as opening the App there would.
+  const home = () =>
+    props.defaultValue !== undefined && known(props.defaultValue)
+      ? props.defaultValue
+      : props.sections.find((section) => !section.disabled)?.id;
   effect(() => {
     const id = sectionOf(scope.route());
     untracked(() => {
-      const target = known(id) ? id : id === '' ? props.defaultValue : null;
+      const target = known(id) ? id : id === '' ? home() : undefined;
       if (target && target !== selected.get()) selected.set(target);
     });
   });
