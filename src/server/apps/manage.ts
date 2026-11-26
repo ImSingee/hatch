@@ -29,7 +29,7 @@ import { syncAppNotificationDestination } from '~server/notifications/app-destin
 import { AppError } from '~server/errors';
 import { buildMatchesDeployment } from './build-identity';
 import { appDeployLock } from './deploy';
-import { moveMasterToDeploymentTag } from './git';
+import { appCommitOnMaster, moveMasterToDeploymentTag } from './git';
 import {
   type NormalizedManifest,
   isValidAppId,
@@ -93,6 +93,11 @@ export type DeploymentSummary = {
   rollbackBlockedCode: RollbackBlockedCode | null;
   /** Commit on the app's `master` branch this version was built from. */
   sourceCommit: string | null;
+  /**
+   * Whether that commit is still on master, so the version can be built
+   * again (a restore moves master back past newer versions).
+   */
+  sourceOnMaster: boolean;
   /** Immutable `deploy/v<version>` Git tag for this version. */
   sourceTag: string | null;
   /** Whether the build artifact still exists on disk (required to restore). */
@@ -158,6 +163,9 @@ export async function listDeployments(
         createdAt: d.createdAt.toISOString(),
         isCurrent,
         sourceCommit: d.sourceCommit,
+        sourceOnMaster: d.sourceCommit
+          ? await appCommitOnMaster(id, d.sourceCommit).catch(() => false)
+          : false,
         sourceTag: d.sourceTag,
         hasArtifact,
         hasBuildLog: Boolean(d.buildLog),

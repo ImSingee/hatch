@@ -189,6 +189,22 @@ describe('source release (platform)', () => {
       platform.publishDeploymentSource(APP_ID, unpushed, 9),
     ).rejects.toThrow(/is not on master/);
     await expect(platform.masterCommit(APP_ID)).resolves.toBe(localCommit);
+
+    // Restoring v1 moves master back: v2's commit is then not on master, so
+    // it is not offered for (or accepted by) a rebuild until pushed again.
+    await expect(platform.commitOnMaster(APP_ID, localCommit)).resolves.toBe(
+      true,
+    );
+    await platform.moveMasterToDeploymentTag(APP_ID, 'deploy/v1');
+    await expect(platform.commitOnMaster(APP_ID, localCommit)).resolves.toBe(
+      false,
+    );
+    await expect(platform.commitOnMaster(APP_ID, seedCommit)).resolves.toBe(
+      true,
+    );
+    await expect(
+      platform.resolveDeployCommit(APP_ID, localCommit),
+    ).rejects.toMatchObject({ code: 'deployments.commitNotOnMaster' });
   }, 15_000);
 
   it('rejects a stale push that is not a fast-forward of master', async () => {

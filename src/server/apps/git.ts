@@ -20,6 +20,7 @@ export const ensureAppRepo = core.ensureRepo;
 export const appMasterCommit = core.masterCommit;
 export const archiveAppCommit = core.archiveCommit;
 export const checkoutAppCommit = core.checkoutCommitInto;
+export const appCommitOnMaster = core.commitOnMaster;
 export const resolveDeployCommit = core.resolveDeployCommit;
 export const publishDeploymentSource = core.publishDeploymentSource;
 export const deleteDeploymentTag = core.deleteDeploymentTag;

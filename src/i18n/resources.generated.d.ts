@@ -767,7 +767,6 @@ export type TranslationResource = {
   'deployments.redeployTooltip': 'Build this commit again on the Builder and release it as a new version';
   'deployments.redeployMessage': 'Redeploy v{{version}}';
   'deployments.redeployQueued': 'Redeploy of v{{version}} queued';
-  'deployments.redeployFailed': 'The redeploy could not be started.';
   'appDetail.reloadFailed': 'Could not reload the app.';
   'appDetail.updateReload': 'Update available — reload app';
   'appDetail.reload': 'Reload app';
@@ -1384,6 +1383,7 @@ export type TranslationResource = {
   'error.notifications.devicePushOff': 'Push was turned off on this device; turn it back on in the Hatch app.';
   'error.notifications.kindNotDeclared': 'The source does not declare kind "{{kind}}".';
   'error.notifications.responseTargetInvalid': 'Answers can only go to a webhook, or to an App whose manifest sets notifications.destination.responses.';
+  'error.deployments.commitNotOnMaster': "This version's commit is no longer on master, so it cannot be built again. Restore it instead, or deploy a commit that is on master.";
   'error.notifications.testDestinationDisabled': 'Enable the destination before testing it.';
   'error.notifications.alreadyAnswered': 'This notification was already answered by {{name}}.';
   'error.notifications.noReplyForm': 'This notification has no reply form.';

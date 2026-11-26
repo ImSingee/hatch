@@ -80,9 +80,6 @@ export function DeploymentHistory({ appId }: { appId: string }) {
       );
       void qc.invalidateQueries(deploymentRequestsQueryOptions(appId));
     },
-    onError: () => {
-      toast.error(t('deployments.redeployFailed'));
-    },
   });
 
   const rollback = useMutation({
@@ -142,7 +139,10 @@ export function DeploymentHistory({ appId }: { appId: string }) {
       renderRollbackAction={(deployment, standardAction) => {
         const sourceCommit = deployment.sourceCommit;
         const redeployAction =
-          builderEnabled && sourceCommit && deployment.status === 'deployed' ? (
+          builderEnabled &&
+          sourceCommit &&
+          deployment.sourceOnMaster &&
+          deployment.status === 'deployed' ? (
             <Tooltip label={t('deployments.redeployTooltip')} withArrow>
               <Button
                 size="compact-sm"

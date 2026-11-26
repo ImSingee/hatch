@@ -205,7 +205,17 @@ export function createGitSource(cfg: GitSourceConfig) {
       `Cannot deploy ${cfg.noun} "${id}": commit ${commit} is not on ` +
         `${SOURCE_BRANCH}. Push it to ${SOURCE_BRANCH} first.`,
       409,
+      { code: 'deployments.commitNotOnMaster' },
     );
+  }
+
+  /**
+   * Whether `commit` is still on master: a restore moves master back, so a
+   * newer version's commit may no longer be deployable.
+   */
+  async function commitOnMaster(id: string, commit: string): Promise<boolean> {
+    const repoDir = await ensureRepo(id);
+    return isOnMaster(repoDir, commit);
   }
 
   /** True when `commit` is the master tip or one of its ancestors. */
@@ -357,6 +367,7 @@ export function createGitSource(cfg: GitSourceConfig) {
     masterCommit,
     archiveCommit,
     checkoutCommitInto,
+    commitOnMaster,
     resolveDeployCommit,
     publishDeploymentSource,
     deleteDeploymentTag,
