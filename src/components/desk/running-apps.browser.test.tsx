@@ -24,8 +24,7 @@ import { DeskWindow } from './window';
 // The real desk (shell, dock, session manager, platform events) around the
 // real App route; stand-in pages for the rest. Browser Mode serves the App
 // frames (vitest.config.ts): `native-*` slugs get a stand-in native player
-// that records what the surface sends, `web-data-*` slugs a `web` App that
-// watches a Data Table with the real SDK.
+// that records what the surface sends.
 
 type Pin = {
   id: string;
@@ -49,7 +48,6 @@ const NAMES: Record<string, string> = {
   ledger: 'Ledger',
   garden: 'Garden',
   'native-tasks': 'Tasks',
-  'web-data-journal': 'Journal',
 };
 
 function appDetail(slug: string): AppDetail {
@@ -118,6 +116,12 @@ vi.mock('~server/apps', () => {
     listDeployments: unused,
   };
 });
+// The background time comes from the provider here, not the user's
+// preference.
+vi.mock('~server/desk-preference-settings', () => ({
+  getDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+  updateDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+}));
 vi.mock('~queries/agent', () => ({
   agentRunnerStatusQueryOptions: {
     queryKey: ['test-runner-status'],
@@ -171,6 +175,8 @@ class TestEventSource extends EventTarget {
 }
 
 let limit = 12;
+/** Long enough that no test but the background-time one sees it. */
+let backgroundTimeoutMs = 600_000;
 
 function Shell() {
   const { dashboardId } = useParams({ strict: false }) as Record<
@@ -179,7 +185,10 @@ function Shell() {
   >;
   return (
     <PlatformEventsProvider>
-      <AppSessionsProvider limit={limit}>
+      <AppSessionsProvider
+        limit={limit}
+        backgroundTimeoutMs={backgroundTimeoutMs}
+      >
         <OpenItemsShell view={dashboardId ? 'home' : 'window'} />
       </AppSessionsProvider>
     </PlatformEventsProvider>
@@ -299,6 +308,7 @@ beforeEach(() => {
   fixtures.revisions.clear();
   fixtures.frontendless.clear();
   limit = 12;
+  backgroundTimeoutMs = 600_000;
   vi.stubGlobal('EventSource', TestEventSource);
 });
 
@@ -419,47 +429,26 @@ test('past the limit the App shown least recently stops, and reopens where it wa
   expect(frameOf('garden')).not.toBeNull();
 });
 
-test('a hidden App gets no data events until it is shown again', async () => {
-  const slug = 'web-data-journal';
-  await fetch(`/__fixture/data/${slug}/reset`, { method: 'POST' });
-  const fixture = async () =>
-    (await (await fetch(`/__fixture/data/${slug}/`)).json()) as {
-      open: string[];
-      sinces: number[];
-    };
-  const { router } = await renderDesk(`/app/${slug}`);
-  await loaded(slug);
-  await vi.waitFor(async () =>
-    expect((await fixture()).open).toContain('notes'),
-  );
+test('a minimised App stops after its background time and reopens where it was left', async () => {
+  backgroundTimeoutMs = 600;
+  const { router } = await renderDesk('/app/notes');
+  const notes = await loaded('notes');
+  notes.history.pushState(null, '', '#/drafts');
+  await vi.waitFor(() => expect(router.state.location.hash).toBe('/drafts'));
 
-  await router.navigate({
-    to: '/app/$appSlug',
-    params: { appSlug: 'native-tasks' },
+  await router.navigate({ to: '/app/$appSlug', params: { appSlug: 'ledger' } });
+  await loaded('ledger');
+  // Within its time it keeps running in the background.
+  expect(frameOf('notes')!.contentWindow).toBe(notes);
+  await vi.waitFor(() => expect(frameOf('notes')).toBeNull(), {
+    timeout: 3000,
   });
-  const player = (await loaded('native-tasks')) as Window & {
-    received: { type: string; visible?: boolean }[];
-  };
-  // The `web` App's change streams end while it waits.
-  await vi.waitFor(async () => expect((await fixture()).open).toEqual([]));
+  // The App in front is never stopped.
+  expect(placementOf('ledger')).toBe('front');
 
-  // The native App is told when it is hidden, and its player stops
-  // answering data events (sdk-internal/app/src/native-player.ts).
-  await router.navigate({ to: '/agent' });
-  await vi.waitFor(() =>
-    expect(player.received).toContainEqual({
-      type: 'visibility',
-      visible: false,
-    }),
-  );
-
-  // Shown again, the `web` App reconnects from where it was.
-  await router.navigate({ to: '/app/$appSlug', params: { appSlug: slug } });
-  await vi.waitFor(async () => {
-    const state = await fixture();
-    expect(state.open).toContain('notes');
-    expect(state.sinces).toEqual([0, 0]);
-  });
+  await router.navigate({ to: '/app/$appSlug', params: { appSlug: 'notes' } });
+  expect((await loaded('notes')).location.hash).toBe('#/drafts');
+  await vi.waitFor(() => expect(router.state.location.hash).toBe('/drafts'));
 });
 
 test('a new deployment marks a running App instead of replacing it', async () => {

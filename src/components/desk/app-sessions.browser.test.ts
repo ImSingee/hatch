@@ -75,3 +75,23 @@ test('stopping an App by id finds it under a stale slug', () => {
 
   expect(slugs(sessions)).toEqual([]);
 });
+
+test('an App off screen past its background time is stopped and remembered', () => {
+  const sessions = store();
+  const keyOf = (slug: string) => sessions.session(slug)!.key;
+  sessions.show('a', { route: '/page', focus: false });
+  sessions.setVisible([keyOf('a')], 0);
+  sessions.leaveFront('a');
+  sessions.show('b', { route: '', focus: false });
+  sessions.setVisible([keyOf('b')], 1000);
+
+  // `a` is due 5 s after it was hidden; the App on screen never is.
+  expect(sessions.stopWaiting(5000, 5999)).toBe(6000);
+  expect(slugs(sessions)).toEqual(['a', 'b']);
+  expect(sessions.stopWaiting(5000, 6000)).toBeNull();
+  expect(slugs(sessions)).toEqual(['b']);
+
+  sessions.leaveFront('b');
+  sessions.show('a', { route: '', focus: true });
+  expect(sessions.session('a')?.route).toBe('/page');
+});

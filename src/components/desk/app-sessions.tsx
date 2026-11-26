@@ -137,9 +137,11 @@ export type ShowRequest = {
  * it to tell a fresh focus from a navigation inside the App in front.
  *
  * Every running App has one session, so opening an App that runs already
- * focuses it, also under a new slug. Past the limit the least recently shown
- * App that is not on screen is stopped (its window and frame are removed)
- * and its route remembered.
+ * focuses it, also under a new slug. A minimised App keeps running, its
+ * listeners and all, until it has waited off screen for the background time
+ * (a user preference, 5 minutes by default) or the limit needs its place
+ * (the least recently shown goes first); it is then stopped (its window and
+ * frame are removed) and its route remembered, so it reopens there.
  */
 export class AppSessionStore {
   readonly limit: number;
@@ -149,6 +151,10 @@ export class AppSessionStore {
   private sessionCount = 0;
   /** Keys of the sessions on screen. */
   private visible = new Set<string>();
+  /** When each session off screen was last hidden (ms since the epoch). */
+  private readonly hiddenAt = new Map<string, number>();
+  /** Fixed background time for tests; otherwise the browser preference. */
+  readonly backgroundTimeoutMs: number | undefined;
   /** By session key. */
   private readonly handles = new Map<string, AppSessionHandle>();
   private readonly listeners = new Set<() => void>();
@@ -158,12 +164,15 @@ export class AppSessionStore {
     limit = WEB_RUNNING_APP_LIMIT,
     storage = sessionStorageOrNull(),
     besideEnabled = true,
+    backgroundTimeoutMs,
   }: {
     limit?: number;
     storage?: Storage | null;
     besideEnabled?: boolean;
+    backgroundTimeoutMs?: number;
   } = {}) {
     this.limit = Math.max(1, limit);
+    this.backgroundTimeoutMs = backgroundTimeoutMs;
     this.storage = storage;
     const persisted = readPersisted(storage);
     this.remembered = persisted.remembered;
@@ -261,6 +270,7 @@ export class AppSessionStore {
     if (!session) return;
     this.remembered.delete(slug);
     this.handles.delete(session.key);
+    this.hiddenAt.delete(session.key);
     this.commit({
       sessions: this.snapshot.sessions.filter((s) => s !== session),
       beside: this.snapshot.beside === slug ? null : this.snapshot.beside,
@@ -313,10 +323,16 @@ export class AppSessionStore {
   /**
    * Which sessions (by key) are on screen now. Sessions that appear or
    * disappear are stamped, so "least recently shown" counts an App as shown
-   * until it was hidden.
+   * until it was hidden, and an App off screen starts its background time.
    */
-  setVisible(keys: readonly string[]) {
+  setVisible(keys: readonly string[], now = Date.now()) {
     const next = new Set(keys);
+    for (const session of this.snapshot.sessions) {
+      if (next.has(session.key)) this.hiddenAt.delete(session.key);
+      else if (!this.hiddenAt.has(session.key)) {
+        this.hiddenAt.set(session.key, now);
+      }
+    }
     const changed = this.snapshot.sessions.filter(
       (s) => next.has(s.key) !== this.visible.has(s.key),
     );
@@ -329,6 +345,41 @@ export class AppSessionStore {
         stamped.has(s) ? { ...s, shownAt } : s,
       ),
     });
+  }
+
+  /**
+   * Stops every App that has waited off screen for `timeoutMs` or longer,
+   * remembering its route, as the limit does. Returns when the next waiting
+   * App is due, or `null` when none waits.
+   */
+  stopWaiting(timeoutMs: number, now = Date.now()): number | null {
+    const due = (session: AppSession) => {
+      const since = this.hiddenAt.get(session.key);
+      return since === undefined ? null : since + timeoutMs;
+    };
+    const expired = this.snapshot.sessions.filter((session) => {
+      const at = due(session);
+      return at !== null && at <= now;
+    });
+    if (expired.length > 0) {
+      let beside = this.snapshot.beside;
+      for (const session of expired) {
+        this.remembered.set(session.slug, session.route);
+        this.handles.delete(session.key);
+        this.hiddenAt.delete(session.key);
+        if (session.slug === beside) beside = null;
+      }
+      this.commit({
+        sessions: this.snapshot.sessions.filter((s) => !expired.includes(s)),
+        beside,
+      });
+    }
+    let next: number | null = null;
+    for (const session of this.snapshot.sessions) {
+      const at = due(session);
+      if (at !== null && (next === null || at < next)) next = at;
+    }
+    return next;
   }
 
   /**
@@ -396,6 +447,7 @@ export class AppSessionStore {
       if (!victim) break;
       this.remembered.set(victim.slug, victim.route);
       this.handles.delete(victim.key);
+      this.hiddenAt.delete(victim.key);
       sessions = sessions.filter((s) => s !== victim);
       if (victim.slug === beside) beside = null;
     }
@@ -463,14 +515,19 @@ const AppSessionsContext = createContext<AppSessionStore | null>(null);
 export function AppSessionsProvider({
   limit,
   besideEnabled,
+  backgroundTimeoutMs,
   children,
 }: {
   limit?: number;
   /** Whether an App can be shown beside another window here. */
   besideEnabled?: boolean;
+  /** Overrides the browser's background-time preference (tests). */
+  backgroundTimeoutMs?: number;
   children: ReactNode;
 }) {
-  const [store] = useState(() => new AppSessionStore({ limit, besideEnabled }));
+  const [store] = useState(
+    () => new AppSessionStore({ limit, besideEnabled, backgroundTimeoutMs }),
+  );
   return (
     <AppSessionsContext.Provider value={store}>
       {children}

@@ -50,7 +50,7 @@ The capabilities below never had an Agent Tool.
 | Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
 | Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                      |
 | Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
-| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
+| Preferences      | preferences get / set                                                                               | PreferenceService/Get/UpdateAgentPreferences, Get/UpdateDeskPreferences; queue/steer default, background time    |
 | Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
 
 `frontend` in `app get` reports how the live deployment's frontend runs:
@@ -351,7 +351,9 @@ It is a named CLI exception: the list and layout of running Apps are the
 state of one shell window, like a browser's open tabs.
 What an App opens to is covered elsewhere: its URL (`/app/<slug>#<route>`)
 deep-links into it, and its dock pins (name and entry route) are `hatch pin`
-commands.
+commands. How long a minimised App keeps running before the Desk stops it is a
+personal preference (Settings › Account), covered by
+`hatch preferences get|set --background-app-minutes`.
 
 ## App tasks: CLI only, no Agent Tool
 

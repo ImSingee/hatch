@@ -75,124 +75,15 @@ const NATIVE_PLAYER_FIXTURE = `<!doctype html>
   });
 </script>`;
 
-// A `web` App that watches a Data Table with the real SDK, so a test drives
-// the App's own reconnect loop. Its first script asks for a change stream
-// while the page is still parsing, before any `load`.
-const dataAppFixture = (slug: string) => `<!doctype html>
-<title>Data app</title>
-<script>
-  window.earlyEnded = false;
-  fetch('/api/app/${slug}/data/events?since=0&table=early').then(async (response) => {
-    const reader = response.body.getReader();
-    while (!(await reader.read()).done) {}
-    window.earlyEnded = true;
-  });
-</script>
-<script type="module">
-  import { createDataClient } from '/sdk-internal/app/src/data.ts';
-  window.snapshots = [];
-  window.errors = [];
-  createDataClient({ baseUrl: '/api/app/${slug}/data' }).watch(
-    { table: 'notes' },
-    (result) => window.snapshots.push(result.revision),
-    (error) => window.errors.push(String(error)),
-  );
-</script>`;
-
-type DataStream = { table: string; send: (chunk: string) => void };
-type DataFixtureState = {
-  revision: number;
-  streams: Set<DataStream>;
-  /** The `since` of every `notes` stream opened, in order. */
-  sinces: number[];
-};
-
-/**
- * The Data API of `web-data-*` Apps: `query` answers the current revision,
- * `events` streams changes (replaying any after `since`), and
- * `/__fixture/data/<slug>` reports (GET), makes a change (POST `change`) or
- * starts over (POST `reset`).
- */
-function dataApiFixture(
-  req: import('node:http').IncomingMessage,
-  res: import('node:http').ServerResponse,
-  states: Map<string, DataFixtureState>,
-) {
-  const url = new URL(req.url ?? '/', 'http://fixture.invalid');
-  const fixture = url.pathname.match(/^\/__fixture\/data\/([^/]+)\/?(\w*)$/);
-  const api = url.pathname.match(
-    /^\/api\/app\/(web-data-[^/]+)\/data\/(query|events)$/,
-  );
-  const slug = fixture?.[1] ?? api?.[1];
-  if (!slug) return false;
-  let state = states.get(slug);
-  if (!state || fixture?.[2] === 'reset') {
-    for (const stream of state?.streams ?? []) stream.send('');
-    state = { revision: 0, streams: new Set(), sinces: [] };
-    states.set(slug, state);
-  }
-  const json = (value: unknown) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(value));
-  };
-  if (fixture) {
-    if (fixture[2] === 'change') {
-      state.revision += 1;
-      for (const stream of state.streams) {
-        if (stream.table === 'notes') {
-          stream.send(`id: ${state.revision}\nevent: change\ndata: {}\n\n`);
-        }
-      }
-    }
-    json({
-      revision: state.revision,
-      open: [...state.streams].map((stream) => stream.table),
-      sinces: state.sinces,
-    });
-    return true;
-  }
-  if (api?.[2] === 'query') {
-    json({ items: [], revision: state.revision });
-    return true;
-  }
-  const table = url.searchParams.get('table') ?? '';
-  const since = Number(url.searchParams.get('since') ?? 0);
-  if (table === 'notes') state.sinces.push(since);
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.flushHeaders();
-  const current = state;
-  const stream: DataStream = {
-    table,
-    send: (chunk) => {
-      if (chunk) res.write(chunk);
-      else res.end();
-    },
-  };
-  current.streams.add(stream);
-  req.on('close', () => current.streams.delete(stream));
-  res.write(': connected\n\n');
-  if (table === 'notes' && since < current.revision) {
-    res.write(`id: ${current.revision}\nevent: change\ndata: {}\n\n`);
-  }
-  return true;
-}
-
 // App views embed `/app/<slug>/embed/`. Serve a blank same-origin document
 // there so the iframe never boots the Browser Mode runner page instead.
 function appEmbedFixture(): Plugin {
-  const dataStates = new Map<string, DataFixtureState>();
   return {
     name: 'app-embed-test-fixture',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (dataApiFixture(req, res, dataStates)) return;
         if (!/^\/app\/[^/]+\/embed\//.test(req.url ?? '')) return next();
         res.setHeader('Content-Type', 'text/html');
-        const dataApp = req.url?.match(/^\/app\/(web-data-[^/]+)\/embed\//);
-        if (dataApp) {
-          res.end(dataAppFixture(dataApp[1]));
-          return;
-        }
         // `native-*` slugs get a stand-in for the native player page: it
         // records what the surface sends and answers like the player.
         if (/^\/app\/native-[^/]+\/embed\//.test(req.url ?? '')) {

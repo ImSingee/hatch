@@ -21,7 +21,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_preference: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'CiJoYXRjaC9wbGF0Zm9ybS92MS9wcmVmZXJlbmNlLnByb3RvEhFoYXRjaC5wbGF0Zm9ybS52MSIoChBBZ2VudFByZWZlcmVuY2VzEhQKDG1lc3NhZ2VfbW9kZRgBIAEoCSIcChpHZXRBZ2VudFByZWZlcmVuY2VzUmVxdWVzdCJXChtHZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USOAoLcHJlZmVyZW5jZXMYASABKAsyIy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFByZWZlcmVuY2VzImAKHVVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Ei4KDG1lc3NhZ2VfbW9kZRgBIAEoCUITukgQcg5SBXF1ZXVlUgVzdGVlckgAiAEBQg8KDV9tZXNzYWdlX21vZGUiWgoeVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEjgKC3ByZWZlcmVuY2VzGAEgASgLMiMuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcmVmZXJlbmNlczKIAgoRUHJlZmVyZW5jZVNlcnZpY2USdAoTR2V0QWdlbnRQcmVmZXJlbmNlcxItLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Gi4uaGF0Y2gucGxhdGZvcm0udjEuR2V0QWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEn0KFlVwZGF0ZUFnZW50UHJlZmVyZW5jZXMSMC5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVBZ2VudFByZWZlcmVuY2VzUmVxdWVzdBoxLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXNwb25zZWIGcHJvdG8z',
+    'CiJoYXRjaC9wbGF0Zm9ybS92MS9wcmVmZXJlbmNlLnByb3RvEhFoYXRjaC5wbGF0Zm9ybS52MSIoChBBZ2VudFByZWZlcmVuY2VzEhQKDG1lc3NhZ2VfbW9kZRgBIAEoCSIcChpHZXRBZ2VudFByZWZlcmVuY2VzUmVxdWVzdCJXChtHZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USOAoLcHJlZmVyZW5jZXMYASABKAsyIy5oYXRjaC5wbGF0Zm9ybS52MS5BZ2VudFByZWZlcmVuY2VzImAKHVVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0Ei4KDG1lc3NhZ2VfbW9kZRgBIAEoCUITukgQcg5SBXF1ZXVlUgVzdGVlckgAiAEBQg8KDV9tZXNzYWdlX21vZGUiWgoeVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEjgKC3ByZWZlcmVuY2VzGAEgASgLMiMuaGF0Y2gucGxhdGZvcm0udjEuQWdlbnRQcmVmZXJlbmNlcyIxCg9EZXNrUHJlZmVyZW5jZXMSHgoWYmFja2dyb3VuZF9hcHBfbWludXRlcxgBIAEoBSIbChlHZXREZXNrUHJlZmVyZW5jZXNSZXF1ZXN0IlUKGkdldERlc2tQcmVmZXJlbmNlc1Jlc3BvbnNlEjcKC3ByZWZlcmVuY2VzGAEgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuRGVza1ByZWZlcmVuY2VzImoKHFVwZGF0ZURlc2tQcmVmZXJlbmNlc1JlcXVlc3QSLwoWYmFja2dyb3VuZF9hcHBfbWludXRlcxgBIAEoBUIKukgHGgUYoAsoAUgAiAEBQhkKF19iYWNrZ3JvdW5kX2FwcF9taW51dGVzIlgKHVVwZGF0ZURlc2tQcmVmZXJlbmNlc1Jlc3BvbnNlEjcKC3ByZWZlcmVuY2VzGAEgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuRGVza1ByZWZlcmVuY2VzMvcDChFQcmVmZXJlbmNlU2VydmljZRJ0ChNHZXRBZ2VudFByZWZlcmVuY2VzEi0uaGF0Y2gucGxhdGZvcm0udjEuR2V0QWdlbnRQcmVmZXJlbmNlc1JlcXVlc3QaLi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBZ2VudFByZWZlcmVuY2VzUmVzcG9uc2USfQoWVXBkYXRlQWdlbnRQcmVmZXJlbmNlcxIwLmhhdGNoLnBsYXRmb3JtLnYxLlVwZGF0ZUFnZW50UHJlZmVyZW5jZXNSZXF1ZXN0GjEuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlQWdlbnRQcmVmZXJlbmNlc1Jlc3BvbnNlEnEKEkdldERlc2tQcmVmZXJlbmNlcxIsLmhhdGNoLnBsYXRmb3JtLnYxLkdldERlc2tQcmVmZXJlbmNlc1JlcXVlc3QaLS5oYXRjaC5wbGF0Zm9ybS52MS5HZXREZXNrUHJlZmVyZW5jZXNSZXNwb25zZRJ6ChVVcGRhdGVEZXNrUHJlZmVyZW5jZXMSLy5oYXRjaC5wbGF0Zm9ybS52MS5VcGRhdGVEZXNrUHJlZmVyZW5jZXNSZXF1ZXN0GjAuaGF0Y2gucGxhdGZvcm0udjEuVXBkYXRlRGVza1ByZWZlcmVuY2VzUmVzcG9uc2ViBnByb3RvMw',
     [file_buf_validate_validate],
   );
 
@@ -121,6 +121,100 @@ export const UpdateAgentPreferencesResponseSchema: GenMessage<UpdateAgentPrefere
   messageDesc(file_hatch_platform_v1_preference, 4);
 
 /**
+ * @generated from message hatch.platform.v1.DeskPreferences
+ */
+export type DeskPreferences = Message<'hatch.platform.v1.DeskPreferences'> & {
+  /**
+   * Minutes a minimised App keeps running in the background before the Desk
+   * stops it; it then reopens on the page it was left on.
+   *
+   * @generated from field: int32 background_app_minutes = 1;
+   */
+  backgroundAppMinutes: number;
+};
+
+/**
+ * Describes the message hatch.platform.v1.DeskPreferences.
+ * Use `create(DeskPreferencesSchema)` to create a new message.
+ */
+export const DeskPreferencesSchema: GenMessage<DeskPreferences> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 5);
+
+/**
+ * @generated from message hatch.platform.v1.GetDeskPreferencesRequest
+ */
+export type GetDeskPreferencesRequest =
+  Message<'hatch.platform.v1.GetDeskPreferencesRequest'> & {};
+
+/**
+ * Describes the message hatch.platform.v1.GetDeskPreferencesRequest.
+ * Use `create(GetDeskPreferencesRequestSchema)` to create a new message.
+ */
+export const GetDeskPreferencesRequestSchema: GenMessage<GetDeskPreferencesRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 6);
+
+/**
+ * @generated from message hatch.platform.v1.GetDeskPreferencesResponse
+ */
+export type GetDeskPreferencesResponse =
+  Message<'hatch.platform.v1.GetDeskPreferencesResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.DeskPreferences preferences = 1;
+     */
+    preferences?: DeskPreferences | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.GetDeskPreferencesResponse.
+ * Use `create(GetDeskPreferencesResponseSchema)` to create a new message.
+ */
+export const GetDeskPreferencesResponseSchema: GenMessage<GetDeskPreferencesResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 7);
+
+/**
+ * @generated from message hatch.platform.v1.UpdateDeskPreferencesRequest
+ */
+export type UpdateDeskPreferencesRequest =
+  Message<'hatch.platform.v1.UpdateDeskPreferencesRequest'> & {
+    /**
+     * Unset leaves the value unchanged.
+     *
+     * @generated from field: optional int32 background_app_minutes = 1;
+     */
+    backgroundAppMinutes?: number | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.UpdateDeskPreferencesRequest.
+ * Use `create(UpdateDeskPreferencesRequestSchema)` to create a new message.
+ */
+export const UpdateDeskPreferencesRequestSchema: GenMessage<UpdateDeskPreferencesRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 8);
+
+/**
+ * @generated from message hatch.platform.v1.UpdateDeskPreferencesResponse
+ */
+export type UpdateDeskPreferencesResponse =
+  Message<'hatch.platform.v1.UpdateDeskPreferencesResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.DeskPreferences preferences = 1;
+     */
+    preferences?: DeskPreferences | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.UpdateDeskPreferencesResponse.
+ * Use `create(UpdateDeskPreferencesResponseSchema)` to create a new message.
+ */
+export const UpdateDeskPreferencesResponseSchema: GenMessage<UpdateDeskPreferencesResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_preference, 9);
+
+/**
  * Personal preferences of the calling user. A Run credential acts for the
  * user who sent the prompt its run answers.
  *
@@ -142,5 +236,21 @@ export const PreferenceService: GenService<{
     methodKind: 'unary';
     input: typeof UpdateAgentPreferencesRequestSchema;
     output: typeof UpdateAgentPreferencesResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.PreferenceService.GetDeskPreferences
+   */
+  getDeskPreferences: {
+    methodKind: 'unary';
+    input: typeof GetDeskPreferencesRequestSchema;
+    output: typeof GetDeskPreferencesResponseSchema;
+  };
+  /**
+   * @generated from rpc hatch.platform.v1.PreferenceService.UpdateDeskPreferences
+   */
+  updateDeskPreferences: {
+    methodKind: 'unary';
+    input: typeof UpdateDeskPreferencesRequestSchema;
+    output: typeof UpdateDeskPreferencesResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_preference, 0);

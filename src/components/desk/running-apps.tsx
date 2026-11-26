@@ -7,7 +7,9 @@ import { canRunApp } from '~components/apps/app-view-policy';
 import { AppWindowToolbar } from '~components/apps/app-window-toolbar';
 import { useAppDeploymentUpdate } from '~components/apps/use-app-deployment-update';
 import { useErrorText } from '~i18n';
+import { DEFAULT_BACKGROUND_APP_MINUTES } from '~/desk-preferences';
 import { appViewQueryOptions } from '~queries/apps';
+import { deskPreferencesQueryOptions } from '~queries/desk-preferences';
 import { type AppDetail, getAppDeploymentRevision } from '~server/apps';
 import {
   type AppSession,
@@ -46,7 +48,8 @@ export function useVisibleBeside(besideShown: boolean) {
  * App keeps its screen and unsaved input. The windows render in the order
  * the Apps were opened, which never changes, so no frame ever moves in the
  * document; where a window shows (in front, beside it, or not at all) is
- * only its placement. A hidden App gets no data events (see `AppSurface`).
+ * only its placement. A hidden App keeps running, listeners and all, until
+ * its background time is up.
  */
 export function RunningApps({ besideShown }: { besideShown: boolean }) {
   const store = useAppSessionStore();
@@ -57,9 +60,34 @@ export function RunningApps({ besideShown }: { besideShown: boolean }) {
     .map((session) => session.key);
   const onScreenKey = onScreen.join('\n');
 
+  // Re-run for a new session too: one that starts off screen (an App
+  // restored beside a narrow window) starts its background time.
+  const runningKeys = sessions.map((session) => session.key).join('\n');
   useEffect(() => {
     store.setVisible(onScreenKey ? onScreenKey.split('\n') : []);
-  }, [store, onScreenKey]);
+  }, [store, onScreenKey, runningKeys]);
+
+  // Stop Apps that waited in the background too long. Re-armed whenever the
+  // running Apps, what is on screen or the background time change.
+  const { data: preferences } = useQuery({
+    ...deskPreferencesQueryOptions,
+    enabled: store.backgroundTimeoutMs === undefined,
+  });
+  const timeoutMs =
+    store.backgroundTimeoutMs ??
+    (preferences?.backgroundAppMinutes ?? DEFAULT_BACKGROUND_APP_MINUTES) *
+      60_000;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () => {
+      const due = store.stopWaiting(timeoutMs);
+      if (due !== null) {
+        timer = setTimeout(check, Math.max(0, due - Date.now()));
+      }
+    };
+    check();
+    return () => clearTimeout(timer);
+  }, [store, timeoutMs, sessions, onScreenKey]);
 
   return sessions.map((session) => (
     <SessionWindow

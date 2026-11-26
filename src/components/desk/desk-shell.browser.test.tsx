@@ -56,6 +56,10 @@ vi.mock('~queries/apps', () => ({
   }),
 }));
 // The windows of running Apps read their deployment; these tests run none.
+vi.mock('~server/desk-preference-settings', () => ({
+  getDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+  updateDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+}));
 vi.mock('~server/apps', () => ({
   getAppDeploymentRevision: async () => null,
 }));

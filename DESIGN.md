@@ -329,8 +329,10 @@ running App's window minimises instead. Below 560 wide the buttons become one
 back button at the start of the title bar, which minimises an App likewise.
 
 Running Apps: up to 12 per browser window keep running while other windows are
-in front. Opening a running App brings it forward; past 12 the App shown least
-recently quits and later reopens on the page it was left on. From 768 wide one
+in front, listeners and all. Opening a running App brings it forward. An App
+that waits off screen longer than the user's background time (Settings ›
+Account, 5 minutes by default) quits, and so does the App shown least recently
+when a 13th opens; either reopens on the page it was left on. From 768 wide one
 running App can sit beside the window in front (the dock's Open beside): two
 windows of equal width, 16 apart, the App on the right, with Minimise (stop
 showing it there) and Close (quit). Narrower, only the window in front shows.

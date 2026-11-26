@@ -53,6 +53,10 @@ vi.mock('~components/apps/use-app-deployment-update', () => ({
   }),
 }));
 
+vi.mock('~server/desk-preference-settings', () => ({
+  getDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+  updateDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+}));
 vi.mock('~server/apps', () => {
   const unused = vi.fn<() => void>();
   return {

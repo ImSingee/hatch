@@ -594,6 +594,11 @@ export function cliClient(transport: Transport) {
   ): { agentMessageMode: string } => ({
     agentMessageMode: required(value).messageMode,
   });
+  const deskPreferences = (
+    value: { backgroundAppMinutes: number } | undefined,
+  ): { backgroundAppMinutes: number } => ({
+    backgroundAppMinutes: required(value).backgroundAppMinutes,
+  });
   return {
     dashboards: {
       list: async (page: { limit: number; cursor?: string }) => {
@@ -926,18 +931,37 @@ export function cliClient(transport: Transport) {
       },
     },
     preferences: {
-      get: async () =>
-        agentPreferences(
+      // One DTO for all of the caller's preferences, from both services.
+      get: async () => ({
+        ...agentPreferences(
           (await preferences.getAgentPreferences({})).preferences,
         ),
-      update: async (input: { agentMessageMode: string }) =>
-        agentPreferences(
-          (
-            await preferences.updateAgentPreferences({
-              messageMode: input.agentMessageMode,
-            })
-          ).preferences,
+        ...deskPreferences(
+          (await preferences.getDeskPreferences({})).preferences,
         ),
+      }),
+      update: async (input: {
+        agentMessageMode?: string;
+        backgroundAppMinutes?: number;
+      }) => {
+        const agent =
+          input.agentMessageMode === undefined
+            ? (await preferences.getAgentPreferences({})).preferences
+            : (
+                await preferences.updateAgentPreferences({
+                  messageMode: input.agentMessageMode,
+                })
+              ).preferences;
+        const desk =
+          input.backgroundAppMinutes === undefined
+            ? (await preferences.getDeskPreferences({})).preferences
+            : (
+                await preferences.updateDeskPreferences({
+                  backgroundAppMinutes: input.backgroundAppMinutes,
+                })
+              ).preferences;
+        return { ...agentPreferences(agent), ...deskPreferences(desk) };
+      },
     },
     images: {
       models: async (page: { limit: number; cursor?: string }) => {
