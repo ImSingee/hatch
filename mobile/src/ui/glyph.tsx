@@ -1,6 +1,6 @@
 import { SymbolView, type AndroidSymbol } from 'expo-symbols';
 import { useWindowDimensions, View } from 'react-native';
-import { palette } from './theme';
+import { usePalette } from './theme-context';
 import type { GlyphName, GlyphProps } from './glyph.types';
 
 // Android draws each glyph with the Material symbol that plays the SF
@@ -66,7 +66,9 @@ const symbols: Record<GlyphName, AndroidSymbol> = {
 
 // Decorative symbol in a square box; the surrounding control owns its
 // accessible name.
-export function Glyph({ name, size = 18, color = palette.ink }: GlyphProps) {
+export function Glyph({ name, size = 18, color }: GlyphProps) {
+  const c = usePalette();
+  const tint = color ?? c.ink;
   const { fontScale } = useWindowDimensions();
   const scaled = Math.round(size * Math.min(Math.max(fontScale, 1), 1.6));
   const box = Math.round(scaled * 1.25);
@@ -85,7 +87,7 @@ export function Glyph({ name, size = 18, color = palette.ink }: GlyphProps) {
       <SymbolView
         name={{ android: symbols[name] }}
         size={box}
-        tintColor={color}
+        tintColor={tint}
       />
     </View>
   );

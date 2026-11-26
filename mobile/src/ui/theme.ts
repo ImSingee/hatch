@@ -1,105 +1,156 @@
-// Desk on native. Every colour, radius, font, weight and shadow is read from
-// the shared token file; nothing here is a design value of its own. The web
-// builds its Mantine theme from the same file (`src/ui/theme/theme.ts`).
+// Desk on native. Every colour, radius, font and shadow comes from the
+// instance theme, resolved by the platform (`ThemeService.GetTheme`) into the
+// same token set the web draws; nothing here is a design value of its own.
+// Values that do not change with the theme (weights, sizes, tile fills,
+// motion) are read from the shared token file.
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
-
-export type AccentName = keyof typeof tokens.accents;
-export const accentNames = Object.keys(tokens.accents) as AccentName[];
-export const defaultAccent = tokens.defaultAccent as AccentName;
-
-function channels(hex: string): [number, number, number] {
-  return [1, 3, 5].map((start) =>
-    Number.parseInt(hex.slice(start, start + 2), 16),
-  ) as [number, number, number];
-}
-
-function mix(hex: string, toward: number, amount: number): string {
-  return `#${channels(hex)
-    .map((channel) =>
-      Math.round(channel + (toward - channel) * amount)
-        .toString(16)
-        .padStart(2, '0'),
-    )
-    .join('')}`.toUpperCase();
-}
+import {
+  BUILT_IN_THEME,
+  FILL_PRESSED_SHADE,
+  colorRamp,
+  mix,
+  resolvePreset,
+  type ResolvedTheme,
+  type ThemeAppearance,
+} from '../../../packages/hatch-design-tokens/src';
 
 /**
  * The ramp steps DESIGN.md names ("Ramps"): the token is the fill, `tint` is
- * shade 1 (86 % white), `tintStrong` shade 2 (72 % white), `pressed` shade 7
- * (16 % black) and `ink` shade 8 (32 % black). Same steps as the web's
- * `colorRamp()`, so a tint or a label is the same colour on every platform.
+ * shade 1, `tintStrong` shade 2, `pressed` shade 7 and `ink` shade 8. Same
+ * steps as the web, so a tint or a label is the same colour on every
+ * platform; on a dark theme the tints darken and the inks lighten.
  */
-function ramp(fill: string) {
+function rampRoles(
+  ramp: readonly string[],
+  onFill: string,
+  card: string,
+  appearance: ThemeAppearance,
+) {
   return {
-    fill,
-    tint: mix(fill, 255, 0.86),
-    tintStrong: mix(fill, 255, 0.72),
-    pressed: mix(fill, 0, 0.16),
-    ink: mix(fill, 0, 0.32),
-    onFill: tokens.light['primary-foreground'],
-    /** The accent's ground shape: a faint tint of it on white. */
-    ground: mix(fill, 255, 1 - tokens.ground.accentTint / 100),
+    fill: ramp[6],
+    tint: ramp[1],
+    tintStrong: ramp[2],
+    /** One step darker than the fill: shade 7 on light, 5 on dark. */
+    pressed: ramp[FILL_PRESSED_SHADE[appearance]],
+    ink: ramp[8],
+    onFill,
+    /** The colour's ground shape: a faint tint of it on the card. */
+    ground: mix(ramp[6], card, 1 - tokens.ground.accentTint / 100),
   } as const;
 }
 
-/**
- * The accent an instance names, if this build's tokens define it. An instance
- * newer than the app may name one it does not know: that is the default.
- */
-export function knownAccent(value: unknown): AccentName {
-  return accentNames.includes(value as AccentName)
-    ? (value as AccentName)
-    : defaultAccent;
+export type Accent = ReturnType<typeof rampRoles>;
+
+function paletteOf(theme: ResolvedTheme) {
+  const c = theme.colors;
+  return {
+    ground: c.background,
+    ink: c.foreground,
+    inkSoft: c['muted-foreground'],
+    card: c.card,
+    muted: c.muted,
+    sunken: c['surface-sunken'],
+    panel: c['surface-panel'],
+    hairline: c.hairline,
+    hover: c['surface-hover'],
+    pressed: c['surface-pressed'],
+    scrim: c['surface-scrim'],
+    input: c.input,
+    ring: c.ring,
+    /** Inactive pager dots and switch tracks. */
+    idle: theme.ramps.neutral[4],
+    /** Dashed outlines of "add" tiles; decoration, never text. */
+    outline: theme.ramps.neutral[5],
+    onFill: c['primary-foreground'],
+    /** Letters and glyphs on the fixed monogram tile fills: always white. */
+    onTile: c['on-fill'],
+    dock: c['surface-dock'],
+    /** Widget cards: the card at 80% over the ground. */
+    widget: c['surface-widget'],
+    groundWarm: c['ground-warm'],
+    groundFresh: c['ground-fresh'],
+    danger: c.destructive,
+    dangerSoft: colorRamp(c.destructive, theme.appearance, c.card)[1],
+  } as const;
 }
 
-export type Accent = ReturnType<typeof ramp>;
-
-/**
- * The accent is the theme's one input. Components read it through
- * `useAccent()` (`./accent.tsx`) at render time, never at module scope, so the
- * whole app follows whatever name the provider is given.
- */
-export function accentOf(name: AccentName): Accent {
-  return ramp(tokens.accents[name]);
-}
-
-export const palette = {
-  ground: tokens.light.background,
-  ink: tokens.light.foreground,
-  inkSoft: tokens.light['muted-foreground'],
-  card: tokens.light.card,
-  muted: tokens.light.muted,
-  sunken: tokens.surfaces.sunken,
-  panel: tokens.surfaces.panel,
-  hairline: tokens.surfaces.hairline,
-  hover: tokens.surfaces.hover,
-  pressed: tokens.surfaces.pressed,
-  scrim: tokens.surfaces.scrim,
-  input: tokens.light.input,
-  ring: tokens.light.ring,
-  /** Inactive pager dots and switch tracks. */
-  idle: tokens.neutral[4],
-  /** Dashed outlines of "add" tiles; decoration, never text. */
-  outline: tokens.neutral[5],
-  onFill: tokens.light['primary-foreground'],
-  dock: tokens.surfaces.dock,
-  /** Widget cards: white at 80% over the ground. */
-  widget: tokens.surfaces.widget,
-  groundWarm: tokens.ground.warm,
-  groundFresh: tokens.ground.fresh,
-  danger: tokens.light.destructive,
-  dangerSoft: mix(tokens.light.destructive, 255, 0.86),
-} as const;
+export type Palette = ReturnType<typeof paletteOf>;
 
 /** Status colours: colour never carries state alone, pair it with a word. */
-export const status = {
-  danger: ramp(tokens.light.destructive),
-  success: ramp(tokens.hues.green),
-  warning: ramp(tokens.hues.amber),
-  info: ramp(tokens.hues.blue),
-  /** Work in progress, such as a card's "Fixing" status. */
-  working: ramp(tokens.hues.orange),
-} as const;
+function statusOf(theme: ResolvedTheme) {
+  const c = theme.colors;
+  const roles = (ramp: readonly string[]) =>
+    rampRoles(ramp, c['on-fill'], c.card, theme.appearance);
+  return {
+    danger: rampRoles(
+      colorRamp(c.destructive, theme.appearance, c.card),
+      c['destructive-foreground'],
+      c.card,
+      theme.appearance,
+    ),
+    success: roles(theme.ramps.green),
+    warning: roles(theme.ramps.amber),
+    info: roles(theme.ramps.blue),
+    /** Work in progress, such as a card's "Fixing" status. */
+    working: roles(theme.ramps.orange),
+  } as const;
+}
+
+export type Status = ReturnType<typeof statusOf>;
+
+/**
+ * Nunito and JetBrains Mono ship in the binary (see `app.config.ts`). Neither
+ * has CJK glyphs: iOS falls back to PingFang and Android to Noto Sans CJK.
+ * A theme that picks `system` gets the platform face (no family). System
+ * controls (navigation bars, tab bars, native fields and menus) keep the
+ * system font.
+ */
+function fontsOf(theme: ResolvedTheme) {
+  const face = (name: string) => (name === 'system' ? undefined : name);
+  return { sans: face(theme.fonts.sans), mono: face(theme.fonts.mono) };
+}
+
+export type MobileTheme = {
+  appearance: ThemeAppearance;
+  palette: Palette;
+  status: Status;
+  accent: Accent;
+  radii: ResolvedTheme['radius'];
+  fonts: ReturnType<typeof fontsOf>;
+  /** CSS shadows, used as React Native `boxShadow` values. */
+  shadows: ResolvedTheme['shadows'];
+};
+
+const built = new WeakMap<ResolvedTheme, MobileTheme>();
+
+/** The app's theme for a resolved instance theme; one object per theme. */
+export function mobileThemeOf(theme: ResolvedTheme): MobileTheme {
+  let mobile = built.get(theme);
+  if (!mobile) {
+    mobile = {
+      appearance: theme.appearance,
+      palette: paletteOf(theme),
+      status: statusOf(theme),
+      accent: rampRoles(
+        theme.ramps.primary,
+        theme.colors['primary-foreground'],
+        theme.colors.card,
+        theme.appearance,
+      ),
+      radii: theme.radius,
+      fonts: fontsOf(theme),
+      shadows: theme.shadows,
+    };
+    built.set(theme, mobile);
+  }
+  return mobile;
+}
+
+/** Drawn before an instance has answered, and while signed out. */
+export const BUILT_IN_THEMES: Record<ThemeAppearance, ResolvedTheme> = {
+  light: BUILT_IN_THEME,
+  dark: resolvePreset('desk-dark'),
+};
 
 /** Fills for monogram and row tiles; every one carries white text at AA. */
 export const tiles: readonly string[] = tokens.tiles;
@@ -112,18 +163,9 @@ export function tileFor(seed: string): string {
   return tiles[hash % tiles.length];
 }
 
-export const radii = tokens.radius;
 export const sizes = tokens.sizes;
 /** Fully rounded ends; geometry, not a palette value. */
 export const pill = 999;
-
-/**
- * Nunito and JetBrains Mono ship in the binary (see `app.config.ts`). Neither
- * has CJK glyphs: iOS falls back to PingFang and Android to Noto Sans CJK.
- * System controls (navigation bars, tab bars, native fields and menus) keep
- * the system font.
- */
-export const fonts = tokens.fonts;
 
 type Weight = '500' | '600' | '700' | '800';
 export const weights = {
@@ -138,8 +180,5 @@ export const weights = {
  * `backgroundImage`; keeps the white letter at 4.5:1 on every tile.
  */
 export const tileLight: string = tokens.tileLight;
-
-/** CSS shadows, used as React Native `boxShadow` values. */
-export const shadows = tokens.shadows;
 
 export const motion = tokens.motion;

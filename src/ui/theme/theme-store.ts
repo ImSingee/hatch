@@ -136,10 +136,15 @@ function rootRule(background: string, appearance: ThemeAppearance): string {
 
 /**
  * Keep the document's own colour (behind the app, and in the page's
- * overscroll), its `color-scheme` and its `theme-color` on the theme. The
- * macOS app reads `theme-color` to match its window to the theme.
+ * overscroll) and its `color-scheme` on the theme. While the mode is fixed,
+ * `theme-color` names the ground: the macOS app reads it to give its window
+ * the theme's appearance. In `system` mode there is none, so the window
+ * follows the device, and with it this page's `prefers-color-scheme`.
  */
-export function applyDocumentTheme(theme: ResolvedTheme): void {
+export function applyDocumentTheme(
+  theme: ResolvedTheme,
+  mode: ThemeMode,
+): void {
   let style = document.getElementById(BOOT_STYLE_ID);
   if (!style) {
     style = document.createElement('style');
@@ -150,6 +155,10 @@ export function applyDocumentTheme(theme: ResolvedTheme): void {
   let meta = document.querySelector<HTMLMetaElement>(
     'meta[name="theme-color"]',
   );
+  if (mode === 'system') {
+    meta?.remove();
+    return;
+  }
   if (!meta) {
     meta = document.createElement('meta');
     meta.name = 'theme-color';
@@ -163,7 +172,7 @@ export function applyDocumentTheme(theme: ResolvedTheme): void {
  * theme's ground and colour scheme, so a dark theme never flashes light.
  * Anything unreadable leaves the built-in light ground.
  */
-export const THEME_BOOT_SCRIPT = `try{var t=JSON.parse(localStorage.getItem(${JSON.stringify(STORAGE_KEY)}));var d=t.mode==='system'?matchMedia(${JSON.stringify(DARK_QUERY)}).matches:t.mode==='dark';var r=d?t.dark:t.light;var b=String(r.colors.background);if(/^#[0-9A-Fa-f]{6}$/.test(b)&&(r.appearance==='light'||r.appearance==='dark')){var e=document.documentElement;e.dataset.mantineColorScheme=r.appearance;var s=document.createElement('style');s.id=${JSON.stringify(BOOT_STYLE_ID)};s.textContent=':root{background-color:'+b+';color-scheme:'+r.appearance+'}body{background-color:'+b+'}';document.head.appendChild(s);var m=document.createElement('meta');m.name='theme-color';m.content=b;document.head.appendChild(m)}}catch(x){}`;
+export const THEME_BOOT_SCRIPT = `try{var t=JSON.parse(localStorage.getItem(${JSON.stringify(STORAGE_KEY)}));var d=t.mode==='system'?matchMedia(${JSON.stringify(DARK_QUERY)}).matches:t.mode==='dark';var r=d?t.dark:t.light;var b=String(r.colors.background);if(/^#[0-9A-Fa-f]{6}$/.test(b)&&(r.appearance==='light'||r.appearance==='dark')){var e=document.documentElement;e.dataset.mantineColorScheme=r.appearance;var s=document.createElement('style');s.id=${JSON.stringify(BOOT_STYLE_ID)};s.textContent=':root{background-color:'+b+';color-scheme:'+r.appearance+'}body{background-color:'+b+'}';document.head.appendChild(s);if(t.mode!=='system'){var m=document.createElement('meta');m.name='theme-color';m.content=b;document.head.appendChild(m)}}}catch(x){}`;
 
 /** A short, stable fingerprint of a resolved theme (FNV-1a over its JSON). */
 function themeKeyOf(theme: ResolvedTheme): string {

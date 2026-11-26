@@ -26,6 +26,7 @@ import {
   applyThemeState,
   deskThemeFor,
   useActiveTheme,
+  useThemeState,
 } from '~ui/theme';
 
 /**
@@ -109,7 +110,8 @@ function ThemeSync() {
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const theme = useActiveTheme();
-  useEffect(() => applyDocumentTheme(theme), [theme]);
+  const { mode } = useThemeState();
+  useEffect(() => applyDocumentTheme(theme, mode), [theme, mode]);
   return (
     <html lang="en" {...mantineHtmlProps}>
       <head>

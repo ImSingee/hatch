@@ -12,6 +12,7 @@
 //! the Keychain.
 
 mod api;
+mod appearance;
 mod deep_link;
 mod menu;
 mod policy;
@@ -795,6 +796,16 @@ fn decide_navigation(app: &AppHandle, navigation: &webkit::Navigation) -> bool {
     }
 }
 
+/// The page's theme colour changed: the window takes the theme's appearance,
+/// or follows the device when the page names none.
+fn on_theme_color(app: &AppHandle, color: Option<webkit::Rgb>) {
+    let Some(window) = main_window(app) else {
+        return;
+    };
+    let _ = window.set_theme(appearance::theme_for(color));
+    let _ = window.set_background_color(Some(appearance::background_for(color, GROUND)));
+}
+
 fn unique_download_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
     let name = std::path::Path::new(name)
         .file_name()
@@ -863,9 +874,14 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
             webview.inner(),
             Box::new(move |navigation| decide_navigation(&for_proxy, navigation)),
         );
+        let for_url = app.clone();
         webkit::observe_url(
             webview.inner(),
-            Box::new(move |url| on_url_change(&app, &url)),
+            Box::new(move |url| on_url_change(&for_url, &url)),
+        );
+        webkit::observe_theme_color(
+            webview.inner(),
+            Box::new(move |color| on_theme_color(&app, color)),
         );
     })?;
     Ok(window)

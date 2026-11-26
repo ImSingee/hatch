@@ -6,14 +6,15 @@ import { useSession } from '../../src/state/session';
 import { Card, Notice, errorText } from '../../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
-import { Text, type } from '../../src/ui/text';
-import { useAccent } from '../../src/ui/accent';
-import { palette as c } from '../../src/ui/theme';
+import { Text, useType } from '../../src/ui/text';
+import { useAccent, usePalette } from '../../src/ui/theme-context';
 
 /** Push switch and this phone's name on the connected instance. */
 export default function NotificationSettingsScreen() {
   const { origin, api } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const type = useType();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const local = useQuery({

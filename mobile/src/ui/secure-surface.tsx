@@ -21,7 +21,7 @@ import {
 } from '../core';
 import { useExternalLink } from '../state/use-external-link';
 import { Busy, Notice } from './primitives';
-import { palette } from './theme';
+import { usePalette } from './theme-context';
 
 // The published type omits the imperative ref the native view does forward.
 type WebViewHandle = {
@@ -96,6 +96,7 @@ export function SecureSurface({
   transparent?: boolean;
   ref?: Ref<SurfaceHandle>;
 }) {
+  const palette = usePalette();
   const [problem, setProblem] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [loadedPath, setLoadedPath] = useState<string | null>(null);

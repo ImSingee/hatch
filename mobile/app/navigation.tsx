@@ -16,16 +16,19 @@ import {
   readable,
   PageRoot,
 } from '../src/ui/screen';
-import { Text, type } from '../src/ui/text';
-import { useAccent } from '../src/ui/accent';
+import { Text, useType } from '../src/ui/text';
 import { meTab, tabDetails } from '../src/ui/navigation';
-import { palette as c, pill, radii, shadows, weights } from '../src/ui/theme';
+import { pill, weights } from '../src/ui/theme';
+import { useAccent, usePalette, useTheme } from '../src/ui/theme-context';
 
 type Start = TabId | 'more';
 
 export default function NavigationSettings() {
   const { preferences: p, save, saving, error } = useNavigationPreferences();
   const accent = useAccent();
+  const c = usePalette();
+  const { radii, shadows } = useTheme();
+  const type = useType();
   const move = (id: TabId, offset: number) => {
     const order = [...p.order];
     const from = order.indexOf(id);

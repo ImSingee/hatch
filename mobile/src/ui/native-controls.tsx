@@ -8,9 +8,8 @@ import type {
   ChoiceProps,
   RefreshMenuProps,
 } from './native-controls.types';
-import { Text, type } from './text';
-import { useAccent } from './accent';
-import { palette as c, radii } from './theme';
+import { Text, useType } from './text';
+import { useAccent, usePalette, useTheme } from './theme-context';
 
 /**
  * A sheet that lists every option. Android alerts keep only three buttons,
@@ -37,6 +36,9 @@ function OptionSheet({
   lead?: { label: string; onPress: () => void; disabled?: boolean };
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { radii } = useTheme();
+  const type = useType();
   return (
     <Modal
       visible={open}

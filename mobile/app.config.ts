@@ -70,7 +70,9 @@ const config: ExpoConfig = {
   icon: '../public/logo512.png',
   scheme: 'hatch',
   orientation: 'default',
-  userInterfaceStyle: 'light',
+  // The instance theme picks light, dark or the device's appearance at run
+  // time (`src/state/instance-theme.tsx`); the system must allow both.
+  userInterfaceStyle: 'automatic',
   ios: {
     buildNumber: '3',
     supportsTablet: true,

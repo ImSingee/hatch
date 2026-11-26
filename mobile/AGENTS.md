@@ -2,14 +2,18 @@
 
 The native app follows Desk, the visual system specified in the repository's
 `DESIGN.md`: a warm ground, white sheets on a soft ink-tinted shadow, heavy
-rounded type and one accent. `src/ui/theme.ts` reads every colour, radius,
-font, weight and shadow from `packages/hatch-design-tokens/tokens.json`; write
-no hex, `rgb()`, radius, font-family or font-weight literal anywhere else
-(pills use `pill`, circles `'50%'`; the ground shapes' sizes, positions and
-corner radii in `src/ui/ground.tsx` are drawing geometry, as `DESIGN.md` says). The accent is the theme's one input:
-components read it with `useAccent()` (`src/ui/accent.tsx`) while rendering,
-never at module scope, so the provider in `app/_layout.tsx` recolours the whole
-app. Text is Nunito, code and identifiers JetBrains Mono; both are linked into
+rounded type and one accent. Every colour, radius, font and shadow comes from
+the instance theme: the platform resolves it, the app caches it per instance
+and draws the built-in desk theme until then. Components read it with
+`useTheme()`, `usePalette()`, `useAccent()` or styles built with
+`themedStyles` (`src/ui/theme-context.tsx`) while rendering, never at module
+scope, so the provider in `app/_layout.tsx` restyles the whole app. Values that
+do not change with the theme (weights, sizes, tiles, motion) still come from
+`packages/hatch-design-tokens/tokens.json` through `src/ui/theme.ts`. Write no
+hex, `rgb()`, radius, font-family or font-weight literal anywhere else (pills
+use `pill`, circles `'50%'`; the ground shapes' sizes, positions and corner
+radii in `src/ui/ground.tsx` are drawing geometry, as `DESIGN.md` says). Text
+is Nunito, code and identifiers JetBrains Mono; both are linked into
 the binary by `expo-font` in `app.config.ts`, and neither has CJK glyphs (iOS
 falls back to PingFang, Android to Noto Sans CJK). Use weight 700 or heavier
 for names and titles that may hold CJK text, so the two faces sit level.

@@ -6,7 +6,6 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSession } from '../../src/state/session';
 import { useLinkedId } from '../../src/state/use-linked-id';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
-import { useAccent } from '../../src/ui/accent';
 import { Button } from '../../src/ui/button';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
 import { Facts, ResourceHeader, when } from '../../src/ui/resource';
@@ -18,8 +17,8 @@ import {
   PageRoot,
 } from '../../src/ui/screen';
 import { statusText } from '../../src/ui/status';
-import { Text, type } from '../../src/ui/text';
-import { palette as c, status as hue } from '../../src/ui/theme';
+import { Text, useType } from '../../src/ui/text';
+import { useAccent, usePalette, useStatus } from '../../src/ui/theme-context';
 
 /**
  * An App's own page: what it is, how it stands, and the way in. Data tables,
@@ -29,6 +28,9 @@ export default function ManageAppScreen() {
   const { id, slug } = useLocalSearchParams<{ id: string; slug?: string }>();
   const { api, origin } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const hue = useStatus();
+  const type = useType();
   const [problem, setProblem] = useState<string | null>(null);
   const linked = useLinkedId(id, slug);
   const query = useQuery({
