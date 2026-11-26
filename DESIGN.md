@@ -186,9 +186,10 @@ one by one gives unreadable combinations.
   `muted`; the primary text shade, and the same shade of the ramp built from
   `destructive` (native Apps' danger text), on `background` and `card`; and shade 8 on
   shades 1 and 2 of the `primary` ramp and of the ramp built from
-  `destructive` (tinted controls, also while pressed); and status text
-  (shades 7 and 8 of the amber, green, blue and orange ramps and shade 8 of
-  the destructive ramp) on `background` and `card`. The check
+  `destructive` (tinted controls, also while pressed); and coloured text on
+  `background` and `card`: shade 7 of every hue (the web's `c="red"` and error
+  colour, native Apps' status text) and shade 8 of the amber, green, blue,
+  orange and destructive ramps (Mobile's status text). The check
   runs with the theme's own `primary` and with the chosen accent.
 - The instance setting (`ui.theme`) holds the accent and the active theme:
   a preset name or the id of a custom theme. Custom themes live in the

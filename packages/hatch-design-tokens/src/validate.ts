@@ -54,10 +54,11 @@ const PRIMARY_TEXT = 'primary-text';
 /**
  * Shades of a ramp that clients draw as text. Tinted controls (light buttons
  * and badges, the mobile danger button) draw shade 8 on shade 1, and on
- * shade 2 while pressed or hovered (DESIGN.md "Ramps"). Status text is drawn
- * straight on the surfaces: shade 7 on the web and in native Apps
- * (`@hatch/ui` `*-strong`), shade 8 on Mobile (`ink`). The ramps are
- * `primary`, the one clients build from `destructive`, and the status hues.
+ * shade 2 while pressed or hovered (DESIGN.md "Ramps"). Coloured text is
+ * drawn straight on the surfaces: shade 7 of every hue on the web (`c="red"`,
+ * Mantine's error colour) and in native Apps (`@hatch/ui` `*-strong`), and
+ * shade 8 of the status ramps on Mobile (`ink`). The ramps are `primary`, the
+ * one clients build from `destructive`, and the hues.
  */
 const TINT_ROLES = {
   'primary-ink': ['primary', 8],
@@ -69,28 +70,36 @@ const TINT_ROLES = {
   'destructive-strong': ['destructive', TEXT_SHADE],
   'destructive-tint': ['destructive', 1],
   'destructive-tint-strong': ['destructive', 2],
-  'warning-text': ['amber', TEXT_SHADE],
+  'red-text': ['red', TEXT_SHADE],
+  'orange-text': ['orange', TEXT_SHADE],
+  'amber-text': ['amber', TEXT_SHADE],
+  'green-text': ['green', TEXT_SHADE],
+  'teal-text': ['teal', TEXT_SHADE],
+  'blue-text': ['blue', TEXT_SHADE],
+  'violet-text': ['violet', TEXT_SHADE],
+  'pink-text': ['pink', TEXT_SHADE],
   'warning-ink': ['amber', 8],
-  'success-text': ['green', TEXT_SHADE],
   'success-ink': ['green', 8],
-  'info-text': ['blue', TEXT_SHADE],
   'info-ink': ['blue', 8],
-  'working-text': ['orange', TEXT_SHADE],
   'working-ink': ['orange', 8],
 } as const;
 
 type TintRole = keyof typeof TINT_ROLES;
 
-/** Status text drawn straight on the background and on cards. */
+/** Coloured text drawn straight on the background and on cards. */
 const STATUS_TEXT: readonly TintRole[] = [
+  'red-text',
+  'orange-text',
+  'amber-text',
+  'green-text',
+  'teal-text',
+  'blue-text',
+  'violet-text',
+  'pink-text',
   'destructive-ink',
-  'warning-text',
   'warning-ink',
-  'success-text',
   'success-ink',
-  'info-text',
   'info-ink',
-  'working-text',
   'working-ink',
 ];
 

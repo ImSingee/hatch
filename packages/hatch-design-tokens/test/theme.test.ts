@@ -399,6 +399,21 @@ describe('validation', () => {
     );
   });
 
+  it('rejects a card the web error red cannot be read on', () => {
+    // The theme's own destructive colour reads, but the web draws error
+    // labels in the fixed red ramp's text shade (4.23:1 on this card).
+    const dark = THEME_PRESETS['desk-dark'].document;
+    const result = validateThemeDocument({
+      ...dark,
+      colors: { ...dark.colors, card: '#303030', destructive: '#0050E8' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.problems.map((problem) => problem.pair)).toContainEqual(
+      expect.objectContaining({ foreground: 'red-text', background: 'card' }),
+    );
+  });
+
   it('checks each named pair, including the derived text on primary', () => {
     expect(CONTRAST_PAIRS.slice(0, 4)).toEqual([
       ['foreground', 'background'],
