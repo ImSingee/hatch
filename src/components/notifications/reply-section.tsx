@@ -1,5 +1,6 @@
 import {
   Anchor,
+  Badge,
   Button,
   Checkbox,
   Group,
@@ -17,11 +18,14 @@ import { Trans } from 'react-i18next';
 import {
   ReplyAnswerError,
   answerOf,
+  defaultAnswers,
   describeAnswers,
+  submitsWithButtons,
   validateAnswers,
   type ReplyAnswers,
   type ReplyField,
   type ReplyForm,
+  type ReplyOption,
 } from '../../../packages/hatch-platform-api/notification-reply';
 import { translateError, useI18n, type PlainTranslationKey } from '~i18n';
 import { formatExact, formatRelativeTime } from '~lib/format';
@@ -177,7 +181,35 @@ function AnswerSummary({
   );
 }
 
-function ReplyFormView({
+/** A reply form being filled in, shared by the form below a notification's
+ * content and the inputs a card holds inline. */
+export type ReplyFormControl = {
+  reply: ReplyForm;
+  answers: ReplyAnswers;
+  pending: boolean;
+  set: (fieldId: string, value: string | string[] | undefined) => void;
+  /** Check the answers given so far and send them. */
+  submit: () => void;
+  /**
+   * Whether clicking one of this field's buttons sends the form: the
+   * trailing required buttons field replaces the submit button.
+   */
+  submitsWith: (field: ReplyField) => boolean;
+  /**
+   * A button of a buttons field: toggles it, or, when the field submits the
+   * form, confirms and sends every answer with it.
+   */
+  pick: (field: ReplyField, optionId: string) => void;
+  fieldError: (fieldId: string) => string | undefined;
+  /** A problem not tied to one field. */
+  formError: string | undefined;
+};
+
+/**
+ * One round of a reply form: answers start at the form's defaults, are
+ * checked against it before they go, and are sent once.
+ */
+export function useReplyForm({
   notificationId,
   reply,
   round,
@@ -185,9 +217,11 @@ function ReplyFormView({
   notificationId: string;
   reply: ReplyForm;
   round: number;
-}) {
+}): ReplyFormControl {
   const { t, locale } = useI18n();
-  const [answers, setAnswers] = useState<ReplyAnswers>({});
+  const [answers, setAnswers] = useState<ReplyAnswers>(() =>
+    defaultAnswers(reply),
+  );
   const [error, setError] = useState<{
     field: string | null;
     problem: AnswerProblem;
@@ -223,16 +257,13 @@ function ReplyFormView({
         );
     }
   };
-  // One required buttons field answers with a single click, like on the phone.
-  const [only] = reply.fields;
-  const instant =
-    reply.fields.length === 1 && only?.type === 'buttons' && only.required;
 
-  const submit = (input: ReplyAnswers) => {
+  /** The answers checked against the form, or null with the problem shown. */
+  const check = (input: ReplyAnswers): ReplyAnswers | null => {
     try {
       const checked = validateAnswers(reply, input);
       setError(null);
-      respond.mutate(checked);
+      return checked;
     } catch (caught) {
       if (!(caught instanceof ReplyAnswerError)) throw caught;
       // Shown under its field, so the reason alone reads best.
@@ -244,6 +275,7 @@ function ReplyFormView({
         problem.message = `${reason[0]?.toUpperCase() ?? ''}${reason.slice(1)}.`;
       }
       setError({ field: caught.field, problem });
+      return null;
     }
   };
 
@@ -259,59 +291,96 @@ function ReplyFormView({
     });
   };
 
+  const submitsWith = (field: ReplyField) =>
+    submitsWithButtons(reply) && reply.fields.at(-1)?.id === field.id;
+
+  return {
+    reply,
+    answers,
+    pending: respond.isPending,
+    set,
+    submit: () => {
+      const checked = check(answers);
+      if (checked) respond.mutate(checked);
+    },
+    submitsWith,
+    pick: (field, optionId) => {
+      if (!submitsWith(field)) {
+        set(
+          field.id,
+          answerOf(answers, field.id) === optionId ? undefined : optionId,
+        );
+        return;
+      }
+      const checked = check({ ...answers, [field.id]: optionId });
+      if (!checked) return;
+      const option =
+        field.type === 'text'
+          ? undefined
+          : field.options.find((entry) => entry.id === optionId);
+      modals.openConfirmModal({
+        title: field.label || t('notifications.reply.confirmTitle'),
+        children: (
+          <Text size="sm">
+            {t('notifications.reply.confirmAnswer', {
+              answer: option?.label ?? optionId,
+            })}
+          </Text>
+        ),
+        labels: {
+          confirm: t('notifications.reply.send'),
+          cancel: t('common.cancel'),
+        },
+        onConfirm: () => respond.mutate(checked),
+      });
+    },
+    fieldError: (fieldId) =>
+      error?.field === fieldId ? problemText(error.problem) : undefined,
+    formError:
+      error && error.field === null ? problemText(error.problem) : undefined,
+  };
+}
+
+function ReplyFormView({
+  notificationId,
+  reply,
+  round,
+}: {
+  notificationId: string;
+  reply: ReplyForm;
+  round: number;
+}) {
+  const { t } = useI18n();
+  const form = useReplyForm({ notificationId, reply, round });
   return (
     <Stack
       gap="md"
       component="form"
       onSubmit={(event) => {
         event.preventDefault();
-        submit(answers);
+        form.submit();
       }}
     >
       {reply.fields.map((field) => (
         <FieldInput
           key={field.id}
           field={field}
-          value={answerOf(answers, field.id)}
-          error={
-            error?.field === field.id ? problemText(error.problem) : undefined
-          }
-          disabled={respond.isPending}
-          onChange={(value) => set(field.id, value)}
-          onPick={
-            instant
-              ? (optionId) =>
-                  modals.openConfirmModal({
-                    title: field.label,
-                    children: (
-                      <Text size="sm">
-                        {t('notifications.reply.confirmAnswer', {
-                          answer:
-                            field.type === 'buttons'
-                              ? (field.options.find((o) => o.id === optionId)
-                                  ?.label ?? '')
-                              : optionId,
-                        })}
-                      </Text>
-                    ),
-                    labels: {
-                      confirm: t('notifications.reply.send'),
-                      cancel: t('common.cancel'),
-                    },
-                    onConfirm: () => submit({ [field.id]: optionId }),
-                  })
-              : undefined
-          }
+          value={answerOf(form.answers, field.id)}
+          error={form.fieldError(field.id)}
+          disabled={form.pending}
+          submits={form.submitsWith(field)}
+          onChange={(value) => form.set(field.id, value)}
+          onPick={(optionId) => form.pick(field, optionId)}
         />
       ))}
-      {error && error.field === null ? (
+      {form.formError ? (
         <Text size="sm" c="red.8">
-          {problemText(error.problem)}
+          {form.formError}
         </Text>
       ) : null}
-      {instant ? null : (
+      {submitsWithButtons(reply) ? null : (
         <Group>
-          <Button type="submit" loading={respond.isPending}>
+          <Button type="submit" loading={form.pending}>
             {reply.submitLabel}
           </Button>
           <Text size="xs" c="dimmed">
@@ -323,11 +392,60 @@ function ReplyFormView({
   );
 }
 
+/** An option's note and badge, beside its label. */
+export function OptionExtras({ option }: { option: ReplyOption }) {
+  if (!option.note && !option.badge) return null;
+  return (
+    <Group gap={8} wrap="nowrap" style={{ flex: 'none' }}>
+      {option.note ? (
+        <Text span size="xs" c="dimmed">
+          {option.note}
+        </Text>
+      ) : null}
+      {option.badge ? (
+        <Badge size="sm" radius="xl" variant="light" color="gray">
+          {option.badge}
+        </Badge>
+      ) : null}
+    </Group>
+  );
+}
+
+function OptionLabel({ option }: { option: ReplyOption }) {
+  return (
+    <Group gap="sm" wrap="nowrap" justify="space-between">
+      <span>{option.label}</span>
+      <OptionExtras option={option} />
+    </Group>
+  );
+}
+
+/**
+ * How a reply button is drawn: the primary action filled, a destructive one
+ * outlined in red. While its field only toggles (another control sends the
+ * form), the chosen button is the filled one and the primary is tinted.
+ */
+export function buttonVariant(
+  option: ReplyOption,
+  state: { selected: boolean; submits: boolean },
+): 'filled' | 'light' | 'outline' | 'default' {
+  if (state.selected) return 'filled';
+  if (option.primary) return state.submits ? 'filled' : 'light';
+  return option.destructive ? 'outline' : 'default';
+}
+
+/** A choice option's label takes the row, so its note sits at the end. */
+const OPTION_STYLES = {
+  body: { width: '100%' },
+  labelWrapper: { flex: 1 },
+} as const;
+
 function FieldInput({
   field,
   value,
   error,
   disabled,
+  submits,
   onChange,
   onPick,
 }: {
@@ -335,9 +453,10 @@ function FieldInput({
   value: string | string[] | undefined;
   error: string | undefined;
   disabled: boolean;
+  /** Choosing a button sends the form. */
+  submits: boolean;
   onChange: (value: string | string[] | undefined) => void;
-  /** Set when choosing a button submits the form at once. */
-  onPick?: (optionId: string) => void;
+  onPick: (optionId: string) => void;
 }) {
   const { t } = useI18n();
   const label = field.label;
@@ -385,8 +504,9 @@ function FieldInput({
             <Checkbox
               key={option.id}
               value={option.id}
-              label={option.label}
+              label={<OptionLabel option={option} />}
               disabled={disabled}
+              styles={OPTION_STYLES}
             />
           ))}
         </Stack>
@@ -409,8 +529,9 @@ function FieldInput({
             <Radio
               key={option.id}
               value={option.id}
-              label={option.label}
+              label={<OptionLabel option={option} />}
               disabled={disabled}
+              styles={OPTION_STYLES}
             />
           ))}
           {!required && typeof value === 'string' ? (
@@ -433,15 +554,17 @@ function FieldInput({
 
   return (
     <Stack gap={6}>
-      <Text size="sm" fw={600}>
-        {label}
-        {required && !onPick ? (
-          <Text span c="red.7">
-            {' '}
-            *
-          </Text>
-        ) : null}
-      </Text>
+      {label ? (
+        <Text size="sm" fw={600}>
+          {label}
+          {required && !submits ? (
+            <Text span c="red.7">
+              {' '}
+              *
+            </Text>
+          ) : null}
+        </Text>
+      ) : null}
       {description ? (
         <Text size="xs" c="dimmed">
           {description}
@@ -455,16 +578,10 @@ function FieldInput({
               key={option.id}
               type="button"
               color={option.destructive ? 'red' : undefined}
-              variant={
-                selected ? 'filled' : option.destructive ? 'light' : 'default'
-              }
+              variant={buttonVariant(option, { selected, submits })}
               disabled={disabled}
-              aria-pressed={onPick ? undefined : selected}
-              onClick={() =>
-                onPick
-                  ? onPick(option.id)
-                  : onChange(selected ? undefined : option.id)
-              }
+              aria-pressed={submits ? undefined : selected}
+              onClick={() => onPick(option.id)}
             >
               {option.label}
             </Button>

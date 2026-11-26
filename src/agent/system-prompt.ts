@@ -86,7 +86,7 @@ Users describe apps in natural language and you create, modify, and deploy them.
 
   const skillsPrompt = formatSkillsForSystemPrompt(skills);
   const skillsGuidance =
-    'Read the full `building-apps` Skill with `read_file` before running `hatch app` source and release commands (create, clone, adopt, update, push, deploy, rollback) or editing App source. Before importing an uploaded App source ZIP, read both `importing-apps` and `building-apps` before downloading or extracting the attachment. Read only the capability references linked by the selected Skill that apply to the task.';
+    'Read the full `building-apps` Skill with `read_file` before running `hatch app` source and release commands (create, clone, adopt, update, push, deploy, rollback) or editing App source. Before importing an uploaded App source ZIP, read both `importing-apps` and `building-apps` before downloading or extracting the attachment. Read the `notification-content` Skill before sending or updating a notification with Markdown or card content. Read only the capability references linked by the selected Skill that apply to the task.';
   return `${basePrompt}\n\n# Skills\n${skillsGuidance}
 Follow the selected Skill for source contracts, validation, and deployment.
 Read the matching compatibility Skill for version changes or unsupported deployments.

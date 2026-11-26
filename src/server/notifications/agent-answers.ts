@@ -14,6 +14,7 @@ import { db, schema } from '~/db';
 import { getAgentModelCatalog } from '~server/agent-model-catalog';
 import { enqueuePendingMessage } from '~server/agent-pending-messages';
 import { insertAgentSession } from '~server/agent-session-store';
+import { notificationHeadline } from '../../../packages/hatch-platform-api/notification-content';
 import type { NotificationResponseRecord } from './contract';
 import type { DeliveryOutcome } from './delivery';
 import type { AgentResponseRoute } from './responses';
@@ -92,7 +93,7 @@ async function chatForNotification(
   if (notification.agentSessionId) return notification.agentSessionId;
   const model = (await getAgentModelCatalog()).defaultModel;
   const { id } = await insertAgentSession({
-    title: notification.title.slice(0, SESSION_TITLE_MAX),
+    title: notificationHeadline(notification).slice(0, SESSION_TITLE_MAX),
     providerId: model?.providerId ?? null,
     modelId: model?.modelId ?? null,
   });

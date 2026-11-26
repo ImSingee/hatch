@@ -13,6 +13,7 @@ import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { db, schema, type TX } from '~/db';
 import { publishPlatformEvent } from '~server/platform-events';
 import type { NotificationUpdate } from './contract';
+import { ContentUpdateError, resolveContentUpdate } from './content';
 import { wakeNotificationDispatcher } from './dispatcher';
 
 /**
@@ -186,10 +187,19 @@ export async function updateNotification(
         409,
       );
     }
+    let content;
+    try {
+      content = resolveContentUpdate(current, update);
+    } catch (error) {
+      if (error instanceof ContentUpdateError) {
+        throw new NotificationLifecycleError(error.message, 400);
+      }
+      throw error;
+    }
     // A new question starts the next round; asking the same one again
     // changes nothing.
     const newRound =
-      update.reply !== undefined && !sameJson(update.reply, current.reply);
+      content.reply !== undefined && !sameJson(content.reply, current.reply);
     // Answers are delivered with `data`, which receivers use to tell what
     // was answered; changing it afterwards would pin the answer on something
     // else, unless the edit asks a new question for the new data.
@@ -205,15 +215,13 @@ export async function updateNotification(
       );
     }
     const next = {
-      title: update.title ?? current.title,
-      body: update.body === undefined ? current.body : update.body,
+      ...content.next,
       url: update.url === undefined ? current.url : update.url,
       autoOpenUrl:
         update.autoOpenUrl === undefined
           ? current.autoOpenUrl
           : update.autoOpenUrl,
       data: update.data === undefined ? current.data : update.data,
-      card: update.card === undefined ? current.card : update.card,
     };
     // Without an explicit choice, a link follows the push default: a new
     // link opens on tap, a cleared one stops, a replaced one keeps the setting.
@@ -226,12 +234,15 @@ export async function updateNotification(
     }
     const changed =
       newRound ||
+      next.format !== current.format ||
       next.title !== current.title ||
       next.body !== current.body ||
+      next.summary !== current.summary ||
+      next.markdown !== current.markdown ||
+      !sameJson(next.content, current.content) ||
       next.url !== current.url ||
       next.autoOpenUrl !== current.autoOpenUrl ||
-      !sameJson(next.data, current.data) ||
-      !sameJson(next.card, current.card);
+      !sameJson(next.data, current.data);
     if (!changed && update.silent === true) {
       return { id: current.id, revision: current.revision, changed: false };
     }
@@ -242,12 +253,15 @@ export async function updateNotification(
         .values({
           notificationId: current.id,
           revision: current.revision,
+          format: current.format,
           title: current.title,
           body: current.body,
+          summary: current.summary,
+          markdown: current.markdown,
+          content: current.content,
           url: current.url,
           autoOpenUrl: current.autoOpenUrl,
           data: current.data,
-          card: current.card,
           reply: current.reply,
           replyRound: current.replyRound,
           activityAt: current.activityAt,
@@ -266,7 +280,7 @@ export async function updateNotification(
         ...(changed ? { editedAt: now } : {}),
         ...(newRound
           ? {
-              reply: update.reply ?? null,
+              reply: content.reply ?? null,
               replyRound: current.replyRound + 1,
               respondedAt: null,
             }

@@ -23,6 +23,7 @@
     "agentRunner.runs.runner",
     "homepage.page.agent",
     "backends.column.app",
-    "agent.model.withLevel"
+    "agent.model.withLevel",
+    "notifications.format.markdown"
   ]
 }

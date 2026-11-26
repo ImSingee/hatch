@@ -172,6 +172,15 @@
   font-weight: var(--font-weight-label);
 }
 
+/* "Source · kind" gives way to the time on a narrow column. */
+.meta .source {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .time {
   flex: none;
   color: var(--mantine-color-dimmed);
@@ -235,6 +244,13 @@
   font-size: 13px;
   font-weight: var(--font-weight-strong);
   overflow-wrap: anywhere;
+}
+
+/* Below a card that asks inline: the outcome in its fixed place. */
+.answer[data-inline] {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-hairline);
+  color: var(--mantine-color-green-8);
 }
 
 .answer svg {

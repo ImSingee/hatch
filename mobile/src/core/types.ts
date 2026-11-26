@@ -11,7 +11,10 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '@hatch/platform-api';
-import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
+import type {
+  ContentNode,
+  NotificationFormat,
+} from '../../../packages/hatch-platform-api/notification-content';
 
 /** Remove Protobuf runtime metadata without duplicating the shared contract. */
 type Plain<T> = T extends (infer Item)[]
@@ -208,8 +211,21 @@ export type NotificationSummary = {
   sourceName: string;
   kind: string;
   kindName: string;
-  title: string;
+  /**
+   * text: title and body. markdown and card: the summary and the render tree;
+   * title and body are null. Name a notification with `notificationHeadline`.
+   */
+  format: NotificationFormat;
+  title: string | null;
   body: string | null;
+  /** One plain line for lists and pushes; always set for markdown and card. */
+  summary: string | null;
+  /** The Markdown source of a markdown notification. */
+  markdown: string | null;
+  /** The render tree of a markdown or card notification. */
+  content: ContentNode | null;
+  /** The content as plain text, shown when the tree cannot be read. */
+  text: string | null;
   url: string | null;
   occurredAt: string;
   status: string;
@@ -231,17 +247,20 @@ export type NotificationSummary = {
   response: NotificationAnswer | null;
   /** When its source last pushed or edited it: the timeline order. */
   activityAt: string;
-  /** Status and one block the timeline shows. */
-  card: NotificationCard | null;
 };
 /** The answer to one round of a notification's reply form. */
 /** A version an edit replaced, kept in the notification's history. */
 export type NotificationVersion = {
   revision: number;
-  title: string;
+  /** As on `NotificationSummary`. */
+  format: NotificationFormat;
+  title: string | null;
   body: string | null;
+  summary: string | null;
+  markdown: string | null;
+  content: ContentNode | null;
+  text: string | null;
   url: string | null;
-  card: NotificationCard | null;
   reply: ReplyForm | null;
   replyRound: number;
   /** When it became current, and when an edit replaced it. */

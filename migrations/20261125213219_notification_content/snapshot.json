@@ -1,0 +1,368 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "180a32b9-2ce8-4d77-b3e3-7748d5917356",
+  "prevIds": ["813c740c-2d42-4cfa-8eb1-e96298fe57da"],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_revisions",
+        "format"
+      ],
+      "writes": [
+        "s|col|public.notification_revisions.format",
+        "n|col|public.notification_revisions.format",
+        "e|col|public.notification_revisions.format"
+      ],
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_revisions",
+        "summary"
+      ],
+      "writes": [
+        "s|col|public.notification_revisions.summary",
+        "n|col|public.notification_revisions.summary",
+        "e|col|public.notification_revisions.summary"
+      ],
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_revisions",
+        "markdown"
+      ],
+      "writes": [
+        "s|col|public.notification_revisions.markdown",
+        "n|col|public.notification_revisions.markdown",
+        "e|col|public.notification_revisions.markdown"
+      ],
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_revisions",
+        "content"
+      ],
+      "writes": [
+        "s|col|public.notification_revisions.content",
+        "n|col|public.notification_revisions.content",
+        "e|col|public.notification_revisions.content"
+      ],
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "notifications", "format"],
+      "writes": [
+        "s|col|public.notifications.format",
+        "n|col|public.notifications.format",
+        "e|col|public.notifications.format"
+      ],
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "notifications", "summary"],
+      "writes": [
+        "s|col|public.notifications.summary",
+        "n|col|public.notifications.summary",
+        "e|col|public.notifications.summary"
+      ],
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "notifications", "markdown"],
+      "writes": [
+        "s|col|public.notifications.markdown",
+        "n|col|public.notifications.markdown",
+        "e|col|public.notifications.markdown"
+      ],
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "notifications", "content"],
+      "writes": [
+        "s|col|public.notifications.content",
+        "n|col|public.notifications.content",
+        "e|col|public.notifications.content"
+      ],
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": ["column", "public", "notification_revisions", "card"],
+      "writes": [
+        "s|col|public.notification_revisions.card",
+        "n|col|public.notification_revisions.card",
+        "e|col|public.notification_revisions.card"
+      ],
+      "reads": ["n|tbl|public.notification_revisions", "n|sch|public"]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": ["column", "public", "notifications", "card"],
+      "writes": [
+        "s|col|public.notifications.card",
+        "n|col|public.notifications.card",
+        "e|col|public.notifications.card"
+      ],
+      "reads": ["n|tbl|public.notifications", "n|sch|public"]
+    },
+    {
+      "statementType": "alter_column",
+      "statementTarget": ["column", "public", "notifications", "title"],
+      "writes": ["s|colprop|public.notifications.title.notNull"],
+      "reads": [
+        "n|tbl|public.notifications",
+        "n|sch|public",
+        "n|col|public.notifications.title"
+      ],
+      "sqlHash": "74923dfe2cca7b10"
+    },
+    {
+      "statementType": "alter_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "notification_revisions",
+        "title"
+      ],
+      "writes": ["s|colprop|public.notification_revisions.title.notNull"],
+      "reads": [
+        "n|tbl|public.notification_revisions",
+        "n|sch|public",
+        "n|col|public.notification_revisions.title"
+      ],
+      "sqlHash": "fc3d9e40fa98f230"
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": ["table", "public", "notification_revisions"],
+      "writes": [
+        "s|ck|public.notification_revisions.notification_revisions_content_check",
+        "n|ck|public.notification_revisions.notification_revisions_content_check",
+        "e|ck|public.notification_revisions.notification_revisions_content_check",
+        "n|con|public.notification_revisions.notification_revisions_content_check"
+      ],
+      "reads": [
+        "n|tbl|public.notification_revisions",
+        "n|sch|public",
+        "n|col|public.notification_revisions.format",
+        "n|col|public.notification_revisions.title",
+        "n|col|public.notification_revisions.markdown",
+        "n|col|public.notification_revisions.content",
+        "n|col|public.notification_revisions.body",
+        "n|col|public.notification_revisions.summary"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": ["table", "public", "notifications"],
+      "writes": [
+        "s|ck|public.notifications.notifications_content_check",
+        "n|ck|public.notifications.notifications_content_check",
+        "e|ck|public.notifications.notifications_content_check",
+        "n|con|public.notifications.notifications_content_check"
+      ],
+      "reads": [
+        "n|tbl|public.notifications",
+        "n|sch|public",
+        "n|col|public.notifications.format",
+        "n|col|public.notifications.title",
+        "n|col|public.notifications.markdown",
+        "n|col|public.notifications.content",
+        "n|col|public.notifications.body",
+        "n|col|public.notifications.summary"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_revisions",
+        "name": "format",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'text'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_revisions",
+        "name": "summary",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_revisions",
+        "name": "markdown",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_revisions",
+        "name": "content",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notifications",
+        "name": "format",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'text'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notifications",
+        "name": "summary",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notifications",
+        "name": "markdown",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notifications",
+        "name": "content",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notification_revisions",
+        "name": "notification_revisions_content_check",
+        "value": "(\n    (\"notification_revisions\".\"format\" = 'text' and \"notification_revisions\".\"title\" is not null and \"notification_revisions\".\"markdown\" is null and \"notification_revisions\".\"content\" is null)\n    or (\"notification_revisions\".\"format\" in ('markdown', 'card') and \"notification_revisions\".\"title\" is null and \"notification_revisions\".\"body\" is null and \"notification_revisions\".\"summary\" is not null and \"notification_revisions\".\"content\" is not null\n      and (\"notification_revisions\".\"format\" = 'markdown') = (\"notification_revisions\".\"markdown\" is not null))\n  )",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "notifications",
+        "name": "notifications_content_check",
+        "value": "(\n    (\"notifications\".\"format\" = 'text' and \"notifications\".\"title\" is not null and \"notifications\".\"markdown\" is null and \"notifications\".\"content\" is null)\n    or (\"notifications\".\"format\" in ('markdown', 'card') and \"notifications\".\"title\" is null and \"notifications\".\"body\" is null and \"notifications\".\"summary\" is not null and \"notifications\".\"content\" is not null\n      and (\"notifications\".\"format\" = 'markdown') = (\"notifications\".\"markdown\" is not null))\n  )",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"notification_revisions\",\"card\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"notifications\",\"card\"]"
+    },
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"notifications\",\"title\"]",
+      "set": {
+        "notNull": false
+      }
+    },
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"notification_revisions\",\"title\"]",
+      "set": {
+        "notNull": false
+      }
+    }
+  ]
+}

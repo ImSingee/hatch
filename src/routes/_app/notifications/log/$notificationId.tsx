@@ -15,6 +15,7 @@ import { usePlatformEvent } from '~components/system/platform-events';
 import { useI18n } from '~i18n';
 import { notificationDetailQueryOptions } from '~queries/notifications';
 import { useNotificationKindName } from '~components/notifications/status';
+import { notificationHeadline } from '../../../../../packages/hatch-platform-api/notification-content';
 
 export const Route = createFileRoute('/_app/notifications/log/$notificationId')(
   {
@@ -68,7 +69,7 @@ function NotificationDetailPage() {
     <>
       <header className={classes.detailHead}>
         <div className={classes.detailTitle}>
-          <h2>{notification.title}</h2>
+          <h2>{notificationHeadline(notification)}</h2>
           <span className={classes.detailMeta}>
             {t('notifications.detail.kindFromSource', {
               kind: kindName(notification),

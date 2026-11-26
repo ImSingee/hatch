@@ -15,7 +15,9 @@ import {
   MAX_CHOICE_OPTIONS,
   MAX_FIELD_DESCRIPTION,
   MAX_FIELD_LABEL,
+  MAX_OPTION_BADGE,
   MAX_OPTION_LABEL,
+  MAX_OPTION_NOTE,
   MAX_PLACEHOLDER,
   MAX_REPLY_BYTES,
   MAX_REPLY_FIELDS,
@@ -62,6 +64,9 @@ const optionInput = z
       ),
     label: trimmedText(MAX_OPTION_LABEL, 'option label'),
     destructive: optional(z.boolean()),
+    primary: optional(z.boolean()),
+    note: optional(trimmedText(MAX_OPTION_NOTE, 'option note')),
+    badge: optional(trimmedText(MAX_OPTION_BADGE, 'option badge')),
   })
   .strict();
 
@@ -76,7 +81,8 @@ const fieldInput = z
     type: z.enum(REPLY_FIELD_TYPES, {
       error: 'type must be one of buttons, single, multiple, text',
     }),
-    label: trimmedText(MAX_FIELD_LABEL, 'label'),
+    // Required except on buttons fields, checked with the type below.
+    label: optional(trimmedText(MAX_FIELD_LABEL, 'label')),
     description: optional(trimmedText(MAX_FIELD_DESCRIPTION, 'description')),
     required: z.preprocess(
       (value) => (value === null || value === undefined ? undefined : value),
@@ -91,6 +97,12 @@ const fieldInput = z
       z.boolean({ error: 'multiline must be a boolean' }).optional(),
     ),
     maxLength: optional(z.number().int()),
+    /** single: one option id; multiple: a list of them. */
+    default: optional(
+      z.union([z.string(), z.array(z.string())], {
+        error: 'default must be an option id or a list of option ids',
+      }),
+    ),
   })
   .strict();
 
@@ -105,9 +117,13 @@ function normalizeField(
   const issue = (key: string, message: string) => {
     ctx.addIssue({ code: 'custom', message, path: path(key) });
   };
+  if (input.label === undefined && input.type !== 'buttons') {
+    issue('label', 'label is required');
+    return null;
+  }
   const base: FieldBase = {
     id: input.id,
-    label: input.label,
+    label: input.label ?? '',
     ...(input.description ? { description: input.description } : {}),
     required: input.required ?? true,
   };
@@ -118,7 +134,12 @@ function normalizeField(
   };
 
   if (input.type === 'text') {
-    for (const key of ['options', 'minSelected', 'maxSelected'] as const) {
+    for (const key of [
+      'options',
+      'minSelected',
+      'maxSelected',
+      'default',
+    ] as const) {
       if (input[key] !== undefined) {
         reject(key, `${key} is only allowed on choice fields`);
       }
@@ -173,20 +194,42 @@ function normalizeField(
       });
       valid = false;
     }
-    if (!buttons && option.destructive !== undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'destructive is only allowed on buttons options',
-        path: [...optionPath, 'destructive'],
-      });
-      valid = false;
+    const misplaced = buttons
+      ? (['note', 'badge'] as const)
+      : (['destructive', 'primary'] as const);
+    for (const key of misplaced) {
+      if (option[key] !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          message: buttons
+            ? `${key} is only allowed on single and multiple options`
+            : `${key} is only allowed on buttons options`,
+          path: [...optionPath, key],
+        });
+        valid = false;
+      }
     }
   });
   const normalizedOptions: ReplyOption[] = options.map((option) => ({
     id: option.id,
     label: option.label,
     ...(buttons && option.destructive ? { destructive: true as const } : {}),
+    ...(buttons && option.primary ? { primary: true as const } : {}),
+    ...(!buttons && option.note ? { note: option.note } : {}),
+    ...(!buttons && option.badge ? { badge: option.badge } : {}),
   }));
+  const defaults =
+    input.default === undefined
+      ? []
+      : Array.isArray(input.default)
+        ? input.default
+        : [input.default];
+  const unknownDefault = defaults.find((id) => !seen.has(id));
+  if (unknownDefault !== undefined) {
+    reject('default', `default names unknown option "${unknownDefault}"`);
+  } else if (new Set(defaults).size !== defaults.length) {
+    reject('default', 'default lists an option twice');
+  }
 
   if (input.type !== 'multiple') {
     for (const key of ['minSelected', 'maxSelected'] as const) {
@@ -194,8 +237,21 @@ function normalizeField(
         reject(key, `${key} is only allowed on multiple fields`);
       }
     }
+    if (buttons && input.default !== undefined) {
+      reject(
+        'default',
+        'default is only allowed on single and multiple fields',
+      );
+    } else if (defaults.length > 1) {
+      reject('default', 'a single field has one default option');
+    }
     if (!valid) return null;
-    return { ...base, type: input.type, options: normalizedOptions };
+    return {
+      ...base,
+      type: input.type,
+      options: normalizedOptions,
+      ...(defaults[0] ? { default: defaults[0] } : {}),
+    };
   }
 
   const minSelected = input.minSelected ?? 1;
@@ -211,13 +267,21 @@ function normalizeField(
       'maxSelected must be between minSelected and the number of options',
     );
   }
+  if (valid && defaults.length > maxSelected) {
+    reject('default', 'default lists more options than maxSelected');
+  }
   if (!valid) return null;
+  // Kept in the form's option order, like answers.
+  const ordered = normalizedOptions
+    .map((option) => option.id)
+    .filter((id) => defaults.includes(id));
   return {
     ...base,
     type: 'multiple',
     options: normalizedOptions,
     minSelected,
     maxSelected,
+    ...(ordered.length > 0 ? { default: ordered } : {}),
   };
 }
 

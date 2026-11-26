@@ -15,6 +15,10 @@ import {
   type ScrollView,
 } from 'react-native';
 import {
+  cardHead,
+  notificationHeadline,
+} from '../../../packages/hatch-platform-api/notification-content';
+import {
   buildTimelineRows,
   nextMovedMarkers,
   type MovedMarker,
@@ -27,10 +31,15 @@ import {
 import { useSession } from '../../src/state/session';
 import { useDeleteNotification } from '../../src/state/use-delete-notification';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
+import { useRespondToNotification } from '../../src/state/use-respond-notification';
 import { Button } from '../../src/ui/button';
 import { Glyph } from '../../src/ui/glyph';
 import { glyphs } from '../../src/ui/glyph.types';
-import { CardBlock, CardStatus } from '../../src/ui/notification-card';
+import {
+  NotificationContent,
+  asksInline,
+} from '../../src/ui/notification-card';
+import { cardIconGlyph } from '../../src/ui/notification-content-model';
 import { notificationTime } from '../../src/ui/notification-status';
 import {
   Busy,
@@ -39,6 +48,7 @@ import {
   Tag,
   errorText,
 } from '../../src/ui/primitives';
+import { AnswerLine } from '../../src/ui/reply-card';
 import { ScrollScreen } from '../../src/ui/screen';
 import { Text, type } from '../../src/ui/text';
 import { useAccent } from '../../src/ui/accent';
@@ -56,13 +66,6 @@ const AT_END = 80;
 const READ_AFTER = 600;
 /** Older pages the unread jump loads before handing back to scrolling. */
 const JUMP_PAGES = 20;
-
-const VIA: Record<string, string> = {
-  web: 'on the web',
-  mobile: 'in the app',
-  push: 'from the notification',
-  cli: 'from the CLI',
-};
 
 /** Where notifications were before their source moved them, while open. */
 function useMovedMarkers(items: NotificationSummary[]): MovedMarker[] {
@@ -400,7 +403,8 @@ export default function NotificationsScreen() {
                     ]}
                   >
                     <Text style={[type.small, { flex: 1 }]}>
-                      {row.item.sourceName} recalled “{row.item.title}”
+                      {row.item.sourceName} recalled “
+                      {notificationHeadline(row.item)}”
                     </Text>
                     <Text
                       style={[
@@ -455,7 +459,7 @@ export default function NotificationsScreen() {
                           <Link.Trigger>
                             <Pressable
                               accessibilityRole="button"
-                              accessibilityLabel={`${item.title}, from ${item.sourceName}`}
+                              accessibilityLabel={`${notificationHeadline(item)}, from ${item.sourceName}`}
                               accessibilityHint="Touch and hold for more actions"
                             >
                               {/* Styled inside: the link trigger replaces the
@@ -476,7 +480,7 @@ export default function NotificationsScreen() {
                                     style={[type.small, { flex: 1 }]}
                                     numberOfLines={1}
                                   >
-                                    {item.title}
+                                    {notificationHeadline(item)}
                                   </Text>
                                   <Glyph
                                     name="chevron"
@@ -526,27 +530,52 @@ function TimelineEntry({
   onDelete: () => void;
 }) {
   const accent = useAccent();
-  const bubble = item.sourceType === 'user' && !item.reply && !item.url;
+  const respond = useRespondToNotification(item.id);
+  const bubble =
+    item.format === 'text' &&
+    item.sourceType === 'user' &&
+    !item.reply &&
+    !item.url;
+  const inline = asksInline(item.content, item.reply);
   const awaiting = Boolean(item.reply && !item.response && !item.recalledAt);
+  const icon = cardIconGlyph(cardHead(item.content).icon);
   return (
     <View style={styles.entry}>
-      <View
-        style={[
-          styles.tile,
-          {
-            backgroundColor: tileFor(item.sourceId ?? item.sourceName),
-            borderRadius: item.sourceType === 'user' ? pill : radii.sm,
-          },
-        ]}
-      >
-        <Text style={styles.tileText}>
-          {Array.from(item.sourceName.trim())[0]?.toUpperCase() ?? '?'}
-        </Text>
-      </View>
+      {icon ? (
+        // A card's icon takes the place of the source tile.
+        <View
+          style={[
+            styles.tile,
+            { backgroundColor: c.ink, borderRadius: radii.sm },
+          ]}
+        >
+          <Glyph name={icon} size={14} color={c.onFill} />
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.tile,
+            {
+              backgroundColor: tileFor(item.sourceId ?? item.sourceName),
+              borderRadius: item.sourceType === 'user' ? pill : radii.sm,
+            },
+          ]}
+        >
+          <Text style={styles.tileText}>
+            {Array.from(item.sourceName.trim())[0]?.toUpperCase() ?? '?'}
+          </Text>
+        </View>
+      )}
       <View style={styles.main}>
         <View style={styles.meta}>
-          <Text style={[type.caption, { color: c.ink }]} numberOfLines={1}>
-            {item.sourceName}
+          <Text
+            style={[type.caption, { flexShrink: 1, color: c.ink }]}
+            numberOfLines={1}
+          >
+            {/* A kind named like its source is said once. */}
+            {item.kindName === item.sourceName
+              ? item.sourceName
+              : `${item.sourceName} · ${item.kindName}`}
           </Text>
           <Text style={type.caption}>{notificationTime(item.activityAt)}</Text>
         </View>
@@ -555,9 +584,9 @@ function TimelineEntry({
           <Link.Trigger>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${item.title}, from ${item.sourceName}`}
+              accessibilityLabel={`${notificationHeadline(item)}, from ${item.sourceName}`}
               accessibilityHint={
-                awaiting
+                awaiting && !inline
                   ? 'Opens the question to answer'
                   : 'Touch and hold for more actions'
               }
@@ -569,23 +598,45 @@ function TimelineEntry({
                     pressed && { opacity: 0.85 },
                   ]}
                 >
-                  {item.card ? <CardStatus card={item.card} /> : null}
-                  <Text style={bubble ? type.body : type.heading}>
-                    {item.title}
-                  </Text>
-                  {item.body ? (
-                    <Text style={type.small} numberOfLines={4}>
-                      {item.body}
-                    </Text>
-                  ) : null}
-                  {item.card ? <CardBlock card={item.card} /> : null}
-                  {awaiting ? (
+                  {item.format !== 'text' && item.content ? (
+                    <NotificationContent
+                      // A new question is a new form: no draft carries over.
+                      key={item.replyRound}
+                      content={item.content}
+                      reply={item.reply}
+                      answer={item.response}
+                      editedAt={item.editedAt}
+                      respond={
+                        awaiting && inline
+                          ? {
+                              busy: respond.isPending,
+                              onSubmit: (answers) =>
+                                respond.mutate({
+                                  round: item.replyRound,
+                                  answers,
+                                }),
+                            }
+                          : null
+                      }
+                    />
+                  ) : (
+                    <>
+                      <Text style={bubble ? type.body : type.heading}>
+                        {notificationHeadline(item)}
+                      </Text>
+                      {/* Text, or the plain text of content this build
+                          cannot read. */}
+                      {(item.body ?? item.text) ? (
+                        <Text style={type.small} numberOfLines={4}>
+                          {item.body ?? item.text}
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+                  {awaiting && !inline ? (
                     <Tag label="Answer" tone="accent" glyph="question" />
-                  ) : item.response ? (
-                    <Text style={type.caption}>
-                      ✓ {item.response.respondedByName} answered{' '}
-                      {VIA[item.response.via] ?? ''}
-                    </Text>
+                  ) : item.reply && item.response ? (
+                    <AnswerLine reply={item.reply} answer={item.response} />
                   ) : null}
                 </View>
               )}

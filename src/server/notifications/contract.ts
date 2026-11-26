@@ -3,11 +3,7 @@
  * outbound delivery (webhook and App destinations).
  */
 import { z } from 'zod';
-import {
-  DEEP_LINK_SCHEME,
-  DOCUMENT_URL_SCHEMES,
-  parseHatchLink,
-} from '../../../packages/hatch-platform-api/deep-link';
+import { isNotificationUrl } from '../../../packages/hatch-platform-api/notification-url';
 import {
   NOTIFICATION_KIND_RE,
   notificationKindSchema,
@@ -16,8 +12,19 @@ import type {
   ReplyAnswers,
   ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
-import { optionalCardSchema } from '../../../packages/hatch-platform-api/notification-card-schema';
-import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
+import {
+  notificationHeadline,
+  type ContentNode,
+  type NotificationFormat,
+} from '../../../packages/hatch-platform-api/notification-content';
+import { contentToPlainText } from '../../../packages/hatch-platform-api/notification-content-text';
+import {
+  ContentError,
+  compileCard,
+  compileMarkdown,
+  optionalSummarySchema,
+  type CompiledCard,
+} from '../../../packages/hatch-platform-api/notification-content-schema';
 import {
   describeIssue,
   optionalReplySchema,
@@ -29,7 +36,7 @@ import type {
   NotificationSourceType,
 } from '~/db/schema';
 
-export { NOTIFICATION_KIND_RE, notificationKindSchema };
+export { NOTIFICATION_KIND_RE, notificationKindSchema, isNotificationUrl };
 
 /** Largest accepted push request body. */
 export const MAX_NOTIFICATION_BODY_BYTES = 64 * 1024;
@@ -116,12 +123,102 @@ const notificationIdField = z.string().regex(/^[0-9a-z]{26}$/, {
   message: 'id must be a notification id',
 });
 
+/** What a notification shows, as stored (see the content check in schema). */
+export type NotificationContentFields = {
+  format: NotificationFormat;
+  /** Text notifications only. */
+  title: string | null;
+  body: string | null;
+  /** Optional for text, always set for markdown and card. */
+  summary: string | null;
+  /** The Markdown source of a markdown notification. */
+  markdown: string | null;
+  /** The render tree of a markdown or card notification. */
+  content: ContentNode | null;
+};
+
+const SUMMARY_REQUIRED =
+  'summary is required for markdown and card notifications';
+const ONE_CONTENT =
+  'set only one content: title (with an optional body), markdown or card';
+const INLINE_REPLY = 'cannot be combined with inputs written in the card';
+
+/** `null`, `undefined` and `""` all mean "not given". */
+const isUnset = (value: unknown) =>
+  value === null || value === undefined || value === '';
+
+/** Empty spellings of a card: no card. */
+const isEmptyCard = (value: unknown) =>
+  isUnset(value) ||
+  (typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value as object).length === 0);
+
+const titleText = z
+  .string({ error: 'title must be a string' })
+  .trim()
+  .min(1, 'title must not be empty')
+  .max(
+    MAX_NOTIFICATION_TITLE,
+    `title must be at most ${MAX_NOTIFICATION_TITLE} characters`,
+  );
+
+/** A title, where `null` and `""` mean none. */
+const optionalTitle = z.preprocess(
+  (value) => (isUnset(value) ? undefined : value),
+  titleText.optional(),
+);
+
+const markdownText = z.preprocess(
+  (value) => (isUnset(value) ? undefined : value),
+  z.string({ error: 'markdown must be a string' }).optional(),
+);
+
+type ParsedCard = { kind: 'none' } | { kind: 'card'; compiled: CompiledCard };
+
+function issue(ctx: z.RefinementCtx, path: string, message: string) {
+  ctx.addIssue({ code: 'custom', message, path: [path] });
+}
+
+/** Card markup or a JSON tree; issues go to `card`. */
+function parseCard(value: unknown, ctx: z.RefinementCtx): ParsedCard | null {
+  if (isEmptyCard(value)) return { kind: 'none' };
+  try {
+    return { kind: 'card', compiled: compileCard(value) };
+  } catch (error) {
+    if (!(error instanceof ContentError)) throw error;
+    issue(ctx, 'card', `card: ${error.message}`);
+    return null;
+  }
+}
+
+function parseMarkdown(
+  source: string,
+  ctx: z.RefinementCtx,
+): ContentNode | null {
+  try {
+    return compileMarkdown(source);
+  } catch (error) {
+    if (!(error instanceof ContentError)) throw error;
+    issue(ctx, 'markdown', `markdown: ${error.message}`);
+    return null;
+  }
+}
+
 /** Body accepted from App backends and external Channel callers. */
-export const notificationPushSchema = z
+const notificationPushInput = z
   .object({
     kind: z.string().regex(NOTIFICATION_KIND_RE, 'invalid notification kind'),
-    title: z.string().trim().min(1).max(MAX_NOTIFICATION_TITLE),
+    /**
+     * The content is one of: `title` (with an optional `body`), `markdown`,
+     * or `card` (markup or a JSON tree).
+     */
+    title: optionalTitle,
     body: optionalText(MAX_NOTIFICATION_TEXT),
+    markdown: markdownText,
+    card: z.unknown().optional(),
+    /** One plain line for push and lists; required for markdown and card. */
+    summary: optionalSummarySchema.optional(),
     url: urlField,
     /**
      * Tapping the phone push opens `url` instead of the notification. Defaults
@@ -131,10 +228,11 @@ export const notificationPushSchema = z
     autoOpenUrl: z.boolean().nullish(),
     priority: priorityField,
     data: dataField,
-    /** Form people answer once; the answer goes to response routes. */
+    /**
+     * Form people answer once; the answer goes to response routes. A card
+     * may write its inputs inline instead.
+     */
     reply: optionalReplySchema.optional().transform((value) => value ?? null),
-    /** Status and one block for the timeline; phones show title and body. */
-    card: optionalCardSchema.optional().transform((value) => value ?? null),
     dedupeKey: optionalText(MAX_NOTIFICATION_DEDUPE_KEY),
     occurredAt: z
       .string()
@@ -144,54 +242,168 @@ export const notificationPushSchema = z
         message: 'occurredAt must be an ISO-8601 timestamp',
       }),
   })
-  .strict()
-  .superRefine((push, ctx) => {
-    if (push.autoOpenUrl === true && !push.url) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'autoOpenUrl requires url',
-        path: ['autoOpenUrl'],
-      });
+  .strict();
+
+export const notificationPushSchema = notificationPushInput.transform(
+  (push, ctx) => {
+    const {
+      title,
+      body,
+      markdown,
+      card: cardInput,
+      summary: givenSummary,
+      reply: givenReply,
+      autoOpenUrl,
+      ...rest
+    } = push;
+    const card = parseCard(cardInput, ctx);
+    const content =
+      markdown === undefined ? null : parseMarkdown(markdown, ctx);
+    if (!card || (markdown !== undefined && !content)) return z.NEVER;
+    const given = [
+      title !== undefined,
+      markdown !== undefined,
+      card.kind === 'card',
+    ].filter(Boolean).length;
+    if (given === 0) {
+      issue(
+        ctx,
+        'title',
+        'set the content: title (with an optional body), markdown or card',
+      );
+      return z.NEVER;
     }
-  })
-  .transform((push) => ({
-    ...push,
-    autoOpenUrl: push.autoOpenUrl ?? (push.url !== null && push.reply === null),
-  }));
+    if (given > 1) {
+      issue(ctx, 'title', ONE_CONTENT);
+      return z.NEVER;
+    }
+    if (body !== null && title === undefined) {
+      issue(
+        ctx,
+        'body',
+        'body goes with title; markdown and card notifications have no body',
+      );
+      return z.NEVER;
+    }
+    const summary = givenSummary ?? null;
+    let fields: NotificationContentFields;
+    let reply = givenReply;
+    if (title !== undefined) {
+      fields = {
+        format: 'text',
+        title,
+        body,
+        summary,
+        markdown: null,
+        content: null,
+      };
+    } else {
+      if (summary === null) {
+        issue(ctx, 'summary', SUMMARY_REQUIRED);
+        return z.NEVER;
+      }
+      if (card.kind === 'card') {
+        if (card.compiled.reply && givenReply) {
+          issue(ctx, 'reply', INLINE_REPLY);
+          return z.NEVER;
+        }
+        reply = card.compiled.reply ?? givenReply;
+        fields = {
+          format: 'card',
+          title: null,
+          body: null,
+          summary,
+          markdown: null,
+          content: card.compiled.content,
+        };
+      } else {
+        fields = {
+          format: 'markdown',
+          title: null,
+          body: null,
+          summary,
+          markdown: markdown!,
+          content,
+        };
+      }
+    }
+    if (autoOpenUrl === true && !rest.url) {
+      issue(ctx, 'autoOpenUrl', 'autoOpenUrl requires url');
+      return z.NEVER;
+    }
+    return {
+      ...rest,
+      ...fields,
+      reply,
+      autoOpenUrl: autoOpenUrl ?? (rest.url !== null && reply === null),
+    };
+  },
+);
 
 export type NotificationPush = z.output<typeof notificationPushSchema>;
 
 /**
  * One-line reason a push body was rejected. Reply form issues name the
- * field to fix (`reply.fields.0.options: …`).
+ * field to fix (`reply.fields.0.options: …`); content issues keep the
+ * position the parser reported (`card: 3:5: …`).
  */
 export function pushIssueMessage(error: z.ZodError): string {
-  const issue = error.issues[0];
-  if (!issue) return 'Invalid request';
-  return issue.path[0] === 'reply' ? describeIssue(error) : issue.message;
+  const first = error.issues[0];
+  if (!first) return 'Invalid request';
+  return first.path[0] === 'reply' ? describeIssue(error) : first.message;
 }
+
+/** New Markdown or card content an edit switches to. */
+export type NotificationContentReplacement =
+  | {
+      format: 'markdown';
+      markdown: string;
+      content: ContentNode;
+      /** Inline inputs never come from Markdown. */
+      reply: null;
+    }
+  | {
+      format: 'card';
+      markdown: null;
+      content: ContentNode;
+      /** The form the card's inline inputs make; null without inputs. */
+      reply: ReplyForm | null;
+    };
 
 /**
  * Edit of a notification the caller sent. An omitted field keeps its value;
- * `null` (or an empty value) clears `body`, `url` and `data`. Without
- * `autoOpenUrl`, a new `url` opens on tap like a push, a cleared one stops and
- * a replaced one keeps the setting. `reply` asks a new question: a form
- * replaces the current one and `null` removes it, either way starting the
- * next round, which takes its own answer. `kind`, `priority`, `dedupeKey`
+ * `null` (or an empty value) clears `body`, `url`, `data` and `summary`.
+ * Without `autoOpenUrl`, a new `url` opens on tap like a push, a cleared one
+ * stops and a replaced one keeps the setting. `reply` asks a new question: a
+ * form replaces the current one and `null` removes it, either way starting
+ * the next round, which takes its own answer. `kind`, `priority`, `dedupeKey`
  * and `occurredAt` never change. Updates alert again at the original
  * priority by default; `silent: true` only changes content. The id is part
  * of the signed body.
+ *
+ * Content: `markdown` or a `card` in markup or as a tree switches to that
+ * format (keeping the summary unless one is given). `title` and `body` edit
+ * a text notification; on a markdown or card one they switch it to text,
+ * need a `title` and drop the summary unless one is given. See `resolveContentUpdate`.
  */
 export const notificationUpdateSchema = z
   .object({
     id: notificationIdField,
-    title: z.string().trim().min(1).max(MAX_NOTIFICATION_TITLE).optional(),
+    title: z.preprocess(
+      (value) => (value === null ? undefined : value),
+      titleText.optional(),
+    ),
     body: z
       .string()
       .max(MAX_NOTIFICATION_TEXT)
       .nullable()
       .transform((value) => value || null)
       .optional(),
+    markdown: markdownText,
+    /** Card markup or a JSON tree. */
+    card: z.unknown().optional(),
+    /** A new summary, or null to remove a text notification's summary. */
+    summary: optionalSummarySchema.optional(),
     url: urlField.optional(),
     autoOpenUrl: z
       .boolean()
@@ -201,24 +413,64 @@ export const notificationUpdateSchema = z
     data: dataField.optional(),
     /** A new question (starting the next round), or null to ask none. */
     reply: optionalReplySchema.optional(),
-    /** A new card, or null to remove it. */
-    card: optionalCardSchema.optional(),
     /** Only replace content without alerting again. Defaults to false. */
     silent: z.boolean().optional(),
   })
   .strict()
-  .refine(
-    (update) =>
-      update.title !== undefined ||
-      update.reply !== undefined ||
-      update.card !== undefined ||
-      update.body !== undefined ||
-      update.url !== undefined ||
-      update.autoOpenUrl !== undefined ||
-      update.data !== undefined ||
-      update.silent !== true,
-    { message: 'a silent update must change at least one field' },
-  );
+  .transform((update, ctx) => {
+    const { markdown, card: cardInput, ...rest } = update;
+    const card = parseCard(cardInput, ctx);
+    const markdownContent =
+      markdown === undefined ? null : parseMarkdown(markdown, ctx);
+    if (!card || (markdown !== undefined && !markdownContent)) return z.NEVER;
+    const textEdit = update.title !== undefined || update.body !== undefined;
+    if (
+      [textEdit, markdown !== undefined, card.kind === 'card'].filter(Boolean)
+        .length > 1
+    ) {
+      issue(ctx, 'title', ONE_CONTENT);
+      return z.NEVER;
+    }
+    let content: NotificationContentReplacement | undefined;
+    if (markdownContent) {
+      content = {
+        format: 'markdown',
+        markdown: markdown!,
+        content: markdownContent,
+        reply: null,
+      };
+    } else if (card.kind === 'card') {
+      if (card.compiled.reply && update.reply !== undefined) {
+        issue(ctx, 'reply', INLINE_REPLY);
+        return z.NEVER;
+      }
+      content = {
+        format: 'card',
+        markdown: null,
+        content: card.compiled.content,
+        reply: card.compiled.reply,
+      };
+    }
+    const result = {
+      ...rest,
+      ...(content ? { content } : {}),
+    };
+    if (
+      result.silent === true &&
+      Object.entries(result).every(
+        ([key, value]) =>
+          key === 'id' || key === 'silent' || value === undefined,
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'a silent update must change at least one field',
+        path: [],
+      });
+      return z.NEVER;
+    }
+    return result;
+  });
 
 export type NotificationUpdate = z.output<typeof notificationUpdateSchema>;
 
@@ -246,29 +498,6 @@ export const channelKindsSchema = z
     });
   });
 
-/**
- * A notification links to anything a device can open: a web page, another
- * app by its own scheme (`mailto:`, `tel:`, `someapp://…`), or a Hatch page by
- * deep link (`hatch://app/<slug>#/route`), which phones open natively and the
- * web opens on the instance. A `hatch:` link must name a page. Schemes that
- * only run inside the current document (`javascript:`, `data:`, …) open
- * nothing and are rejected. Development loopback instances are accepted in
- * deep links; the phone decides whether it may open them.
- */
-export function isNotificationUrl(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (DOCUMENT_URL_SCHEMES.has(url.protocol)) return false;
-  return (
-    url.protocol !== `${DEEP_LINK_SCHEME}:` ||
-    parseHatchLink(value, { allowLoopbackHttp: true }) !== null
-  );
-}
-
 export function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -286,7 +515,7 @@ export function findKind(
 }
 
 /** Stored notification projected for delivery envelopes and read APIs. */
-export type NotificationRecord = {
+export type NotificationRecord = NotificationContentFields & {
   id: string;
   sourceType: NotificationSourceType;
   appId: string | null;
@@ -295,13 +524,10 @@ export type NotificationRecord = {
   sourceName: string;
   kind: string;
   kindName: string;
-  title: string;
-  body: string | null;
   url: string | null;
   autoOpenUrl: boolean;
   priority: number;
   data: JsonObject | null;
-  card: NotificationCard | null;
   dedupeKey: string | null;
   occurredAt: Date;
   revision: number;
@@ -366,16 +592,27 @@ export type NotificationEnvelope = {
     id: string;
     kind: string;
     kindName: string;
+    /**
+     * What names it: the title of a text notification, the summary of a
+     * markdown or card one. Always a string.
+     */
     title: string;
+    /** A text notification's body, or the content as plain text. */
     body: string | null;
+    /** `text`, `markdown` or `card`. */
+    format: NotificationFormat;
+    /** One plain line; always set for markdown and card. */
+    summary: string | null;
+    /** The Markdown source of a markdown notification. */
+    markdown: string | null;
+    /** The render tree of a markdown or card notification. */
+    content: ContentNode | null;
     url: string | null;
     /** Phone pushes open `url` on tap instead of the notification. */
     autoOpenUrl: boolean;
     /** -2 lowest, -1 low, 0 normal, 1 high. */
     priority: number;
     data: JsonObject | null;
-    /** Status and one block the timeline shows; null without one. */
-    card: NotificationCard | null;
     dedupeKey: string | null;
     occurredAt: string;
     revision: number;
@@ -449,6 +686,19 @@ export function contentRevision(
     : notification.revision;
 }
 
+/**
+ * A text notification's body, or a markdown or card notification's content
+ * as plain text: what channels that only show text show below the headline.
+ */
+export function notificationText(
+  notification: Pick<NotificationContentFields, 'format' | 'body' | 'content'>,
+): string | null {
+  if (notification.format === 'text' || !notification.content) {
+    return notification.body;
+  }
+  return contentToPlainText(notification.content) || null;
+}
+
 export function buildEnvelope(args: {
   event: NotificationEvent;
   notification: NotificationRecord;
@@ -481,13 +731,16 @@ export function buildEnvelope(args: {
       id: notification.id,
       kind: notification.kind,
       kindName: notification.kindName,
-      title: notification.title,
-      body: notification.body,
+      title: notificationHeadline(notification),
+      body: notificationText(notification),
+      format: notification.format,
+      summary: notification.summary,
+      markdown: notification.markdown,
+      content: notification.content,
       url: notification.url,
       autoOpenUrl: notification.autoOpenUrl,
       priority: notification.priority,
       data: notification.data,
-      card: notification.card,
       dedupeKey: notification.dedupeKey,
       occurredAt: notification.occurredAt.toISOString(),
       revision: contentRevision(notification),

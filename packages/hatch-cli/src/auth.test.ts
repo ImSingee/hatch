@@ -198,7 +198,9 @@ async function stored(token = sessionToken) {
   );
 }
 
-describe('CLI authentication boundary', () => {
+// Each case starts the CLI from source under tsx, often several times; a
+// start loads the whole command tree, which slow CI hosts need seconds for.
+describe('CLI authentication boundary', { timeout: 15000 }, () => {
   beforeAll(async () => {
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
@@ -475,7 +477,7 @@ describe('CLI authentication boundary', () => {
     expect(result.code).toBe(7);
     expect(polls).toBe(1);
     await expect(stat(config)).rejects.toMatchObject({ code: 'ENOENT' });
-  }, 15000);
+  });
 
   it('fails closed for unsafe files and concurrent login writes', async () => {
     await stored();

@@ -6,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { notificationHeadline } from '../../../packages/hatch-platform-api/notification-content';
 import { useErrorText, useI18n } from '~i18n';
 import { NOTIFICATIONS_KEY } from '~queries/notifications';
 import {
@@ -83,7 +84,7 @@ export function useDeleteNotification(
   const confirmDelete = (
     notification: Pick<
       NotificationSummaryView,
-      'id' | 'title' | 'recalledAt' | 'deliveries'
+      'id' | 'format' | 'title' | 'summary' | 'recalledAt' | 'deliveries'
     >,
   ) =>
     modals.openConfirmModal({
@@ -92,7 +93,7 @@ export function useDeleteNotification(
       children: (
         <Stack gap="xs">
           <Text size="sm" fw={600} lineClamp={2}>
-            {notification.title}
+            {notificationHeadline(notification)}
           </Text>
           <Text size="sm">{t('notifications.delete.body')}</Text>
           <Text size="sm" c="dimmed">

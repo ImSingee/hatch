@@ -2033,3 +2033,109 @@ describe('notification center authority', () => {
     ).toEqual([]);
   });
 });
+
+describe('notification content over the RPC', () => {
+  type Dto = {
+    title?: string;
+    body?: string;
+    format?: string;
+    summary?: string;
+    markdown?: string;
+    contentJson?: string;
+    text?: string;
+    flag?: string;
+    icon?: string;
+    cardStatus?: { label: string; tone?: string };
+  };
+  const json = async <T>(response: Response) => {
+    expect(response.status).toBe(200);
+    return (await response.json()) as T;
+  };
+
+  it('carries each format as its own fields, in versions too', async () => {
+    const { channel } = await json<{ channel: { id: string } }>(
+      await call('NotificationService/CreateChannel', {
+        body: {
+          name: 'CI',
+          kinds: { kinds: [{ kind: 'pr', name: 'Pull request' }] },
+        },
+      }),
+    );
+    const sent = async (body: Record<string, unknown>) =>
+      (
+        await json<{ notificationId: string }>(
+          await call('NotificationService/SendNotification', {
+            body: { channelId: channel.id, kind: 'pr', ...body },
+          }),
+        )
+      ).notificationId;
+    const get = async (id: string) =>
+      (
+        await json<{ notification: { summary: Dto } }>(
+          await call('NotificationService/GetNotification', { body: { id } }),
+        )
+      ).notification.summary;
+
+    const card = await sent({
+      summary: 'CI failed on PR #261',
+      cardMarkup:
+        '<Card icon="pr" status="CI failed" tone="danger" flag="Urgent"><Title>PR #261</Title><Progress label="Checks" value="12 / 14" percent="86" tone="danger" /></Card>',
+    });
+    const cardDto = await get(card);
+    expect(cardDto).toMatchObject({
+      format: 'card',
+      summary: 'CI failed on PR #261',
+      text: 'CI failed · Urgent\nPR #261\nChecks: 12 / 14',
+      flag: 'Urgent',
+      icon: 'pr',
+      cardStatus: { label: 'CI failed', tone: 'danger' },
+    });
+    // Title and body belong to text notifications; there is no #319 card.
+    expect(cardDto).not.toHaveProperty('title');
+    expect(cardDto).not.toHaveProperty('body');
+    expect(cardDto).not.toHaveProperty('card');
+    expect(JSON.parse(cardDto.contentJson!)).toMatchObject({
+      type: 'Card',
+      children: [{ type: 'Title' }, { type: 'Progress' }],
+    });
+
+    const markdown = await get(
+      await sent({
+        summary: 'v12 released',
+        markdown: '## v12\n\n- faster cold start',
+      }),
+    );
+    expect(markdown).toMatchObject({
+      format: 'markdown',
+      summary: 'v12 released',
+      text: 'v12\n- faster cold start',
+      markdown: '## v12\n\n- faster cold start',
+    });
+    expect(markdown).not.toHaveProperty('title');
+
+    // An edit to text keeps the card it replaced as a card version.
+    await json(
+      await call('NotificationService/UpdateNotification', {
+        body: { id: card, title: 'CI passed', body: 'All green', silent: true },
+      }),
+    );
+    const { revisions } = await json<{ revisions: Dto[] }>(
+      await call('NotificationService/ListNotificationRevisions', {
+        body: { id: card },
+      }),
+    );
+    expect(revisions[0]).toMatchObject({
+      format: 'card',
+      summary: 'CI failed on PR #261',
+      cardStatus: { label: 'CI failed', tone: 'danger' },
+    });
+    expect(revisions[0]).not.toHaveProperty('title');
+    expect(await get(card)).toMatchObject({
+      format: 'text',
+      title: 'CI passed',
+      body: 'All green',
+    });
+    // The card's summary named the card, so the text has none.
+    expect(await get(card)).not.toHaveProperty('summary');
+  });
+});

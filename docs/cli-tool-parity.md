@@ -140,10 +140,27 @@ asks a new question on the same notification (`UpdateNotification.reply` /
 every answer (`ListNotificationRevisions`), matching the timeline's "Earlier
 versions".
 
-`notification send|update --card <json> | --card-file <path|->` (and
-`update --clear-card`) set the timeline card (`SendNotification.card`,
-`UpdateNotification.card` / `clear_card`), checked locally with the platform's
-card schema before any request.
+`notification send|update` choose the content the web timeline, phones and
+destinations show, as the composer and the App SDK can: text (`--title`,
+`--body`), Markdown (`--markdown <source> | --markdown-file <path|->`) or a
+card (`--card <markup|json> | --card-file <path|->`), plus `--summary <line>`
+and on update `--clear-summary` (`SendNotification` / `UpdateNotification`
+`title`, `body`, `markdown`, `card_markup`, `card_json`, `summary`,
+`clear_summary`). Card text starting with `{` is a JSON render tree, anything
+else markup. The content is compiled locally with the platform's own compiler
+(`packages/hatch-platform-api/notification-content-schema.ts`) before any
+request, and problems are reported as `line:column` (or tree path) issues with
+the code `invalid_content`. `notification get` prints
+the format, summary and content (Markdown source, or a card's plain text and
+canonical markup); `--json` is the full `NotificationSummary` with `format`,
+`summary`, `markdown`, `content_json`, `text`, `flag`, `icon` and
+`card_status`.
+
+`notification card check (<markup|json> | --file <path|->)` and
+`notification card catalog` are offline: they run the platform's card compiler
+and print the component catalog without a credential or a request, so an Agent
+in a Run checks a card before sending it exactly as a user does. Neither is
+bound to a device or browser; there is no exception here.
 
 `notification response-route create|update --agent [--agent-session <id> |
 --chat-per-notification] [--agent-instructions <text> |

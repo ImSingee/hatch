@@ -14,7 +14,7 @@ import {
   type NotificationResponse as RpcNotificationResponse,
   type NotificationSummary as RpcNotificationSummary,
 } from '@hatch/platform-api';
-import { cardFromMessage } from '../../../packages/hatch-platform-api/notification-card-proto';
+import { contentFromJson, knownFormat } from './notification-content';
 import { MobileError } from './security';
 import type {
   AppSummary,
@@ -188,6 +188,39 @@ export function catalogProjection(
   };
 }
 
+/** The content of a notification or a kept version. */
+function contentProjection(value: {
+  format: string;
+  title?: string;
+  body?: string;
+  summary?: string;
+  markdown?: string;
+  contentJson?: string;
+  text?: string;
+}) {
+  const format = knownFormat(value.format);
+  if (format === 'text') {
+    return {
+      format,
+      title: value.title ?? '',
+      body: value.body ?? null,
+      summary: value.summary ?? null,
+      markdown: null,
+      content: null,
+      text: null,
+    };
+  }
+  return {
+    format,
+    title: null,
+    body: null,
+    summary: value.summary ?? '',
+    markdown: format === 'markdown' ? (value.markdown ?? null) : null,
+    content: contentFromJson(value.contentJson),
+    text: value.text ?? null,
+  };
+}
+
 export function notificationSummaryProjection(
   value: RpcNotificationSummary,
 ): NotificationSummary {
@@ -198,8 +231,7 @@ export function notificationSummaryProjection(
     sourceName: value.sourceName,
     kind: value.kind,
     kindName: value.kindName,
-    title: value.title,
-    body: value.body ?? null,
+    ...contentProjection(value),
     url: value.url ?? null,
     occurredAt: value.occurredAt,
     status: value.status,
@@ -214,7 +246,6 @@ export function notificationSummaryProjection(
     response: value.response ? answerProjection(value.response) : null,
     // Instances from before the timeline have no activity time.
     activityAt: value.activityAt || value.createdAt,
-    card: value.card ? cardFromMessage(value.card) : null,
   };
 }
 
@@ -224,10 +255,8 @@ export function versionsPageProjection(
   return {
     versions: value.revisions.map((revision) => ({
       revision: revision.revision,
-      title: revision.title,
-      body: revision.body ?? null,
+      ...contentProjection(revision),
       url: revision.url ?? null,
-      card: revision.card ? cardFromMessage(revision.card) : null,
       reply: revision.reply ? replyFromMessage(revision.reply) : null,
       replyRound: revision.replyRound || 1,
       activityAt: revision.activityAt,

@@ -20,6 +20,12 @@ export type NotificationReplyOption = {
   label: string;
   /** `buttons` only: shown as a destructive action. */
   destructive?: boolean;
+  /** `buttons` only: the main action. */
+  primary?: boolean;
+  /** `single` and `multiple` only: shown beside the label, such as "1 min" (at most 40 characters). */
+  note?: string;
+  /** `single` and `multiple` only: a small tag, such as "breaking" (at most 16 characters). */
+  badge?: string;
 };
 
 /**
@@ -47,6 +53,11 @@ export type NotificationReplyField = {
   multiline?: boolean;
   /** `text` only; defaults to 1000, at most 4000. */
   maxLength?: number;
+  /**
+   * Chosen to begin with: an option id for `single`, option ids for
+   * `multiple`.
+   */
+  default?: string | string[];
 };
 
 /**
@@ -94,44 +105,25 @@ export type NotificationResponse = {
 /** `-2` lowest, `-1` low, `0` normal, `1` high. */
 export type NotificationPriority = -2 | -1 | 0 | 1;
 
+/** How a notification's content is written. */
+export type NotificationFormat = 'text' | 'markdown' | 'card';
+
 /**
- * What the Hatch timeline shows besides the title and body: a short status
- * with a tone, and at most one block. Phones and destinations keep showing the
- * title and body, so put the essentials there too. Empty parts are left out.
+ * A node of the render tree that Markdown and card markup compile into, and
+ * the JSON form a card may be sent in: `{ type, props?, children? }` with
+ * strings as text leaves. Components are capitalized (`Card`, `Steps`),
+ * inline marks lowercase (`b`, `a`). A card's root is `{ type: 'Card' }`.
+ * Text in a tree is never read as markup.
  */
-export type NotificationCard = {
-  /** At most 24 characters, such as "CI failed". Tone defaults to neutral. */
-  status?: {
-    label: string;
-    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
-  };
-  block?:
-    | {
-        /** A bar filled to `percent` (0-100), with an optional "3 / 14". */
-        type: 'progress';
-        label: string;
-        percent: number;
-        value?: string;
-      }
-    | {
-        /** One to three figures side by side. */
-        type: 'stats';
-        items: { value: string; label: string }[];
-      }
-    | {
-        /** A comment someone made, such as a review note. */
-        type: 'quote';
-        author: string;
-        text: string;
-        location?: string;
-      };
+export type NotificationContentNode = {
+  type: string;
+  props?: { [name: string]: string | number | boolean | number[] };
+  children?: (NotificationContentNode | string)[];
 };
 
-/** A notification of a kind declared in `notifications.kinds`. */
-export type NotificationInput = {
+type NotificationInputBase = {
+  /** A kind declared in `notifications.kinds`. */
   kind: string;
-  title: string;
-  body?: string;
   /**
    * Opened from the notification: any absolute URL a device can open, such as
    * a web page, another app by its scheme (`mailto:`, `slack://…`), or a Hatch
@@ -160,16 +152,186 @@ export type NotificationInput = {
   data?: { [key: string]: NotificationJson };
   /**
    * Ask people to answer: one answer, from whoever answers first. Ask a later
-   * question with `updateNotification(id, { reply })`.
+   * question with `updateNotification(id, { reply })`. A card with inline
+   * inputs (`<Choice>`, `<Buttons>`, `<Input>`) makes its own form and cannot
+   * also take `reply` (400).
    */
   reply?: NotificationReplyInput;
-  /** Status and one block shown in the Hatch timeline. */
-  card?: NotificationCard;
   /** Repeated pushes with the same key are stored once. */
   dedupeKey?: string;
   /** When the event happened; defaults to the time the platform accepts it. */
   occurredAt?: string | Date;
 };
+
+/** A text notification: a title and an optional plain-text body. */
+export type NotificationTextInput = NotificationInputBase & {
+  /** At most 200 characters. */
+  title: string;
+  body?: string;
+  /**
+   * One plain line (at most 200 characters, no line breaks) that phone
+   * pushes show under the title instead of the body. Optional for text.
+   */
+  summary?: string;
+  card?: never;
+  markdown?: never;
+};
+
+/**
+ * A Markdown notification: headings, emphasis, lists, quotes, code, links
+ * and tables, at most 16 KiB. It has no title or body; its content carries
+ * its own heading.
+ */
+export type NotificationMarkdownInput = NotificationInputBase & {
+  markdown: string;
+  /**
+   * Required: one plain line (at most 200 characters, no line breaks) for
+   * phone pushes, lists and other places that show text only.
+   */
+  summary: string;
+  title?: never;
+  body?: never;
+  card?: never;
+};
+
+/**
+ * A card notification, composed from the card components: markup such as
+ * `<Card status="CI failed" tone="danger"><Title>…</Title></Card>` (build
+ * it with the `card` tag, which escapes interpolated values) or a
+ * `NotificationContentNode` tree rooted at `{ type: 'Card' }`, at most
+ * 16 KiB. It has no title or body. `hatch notification card catalog`
+ * lists the components and `hatch notification card check` checks a card.
+ */
+export type NotificationCardInput = NotificationInputBase & {
+  card: string | NotificationContentNode;
+  /**
+   * Required: one plain line (at most 200 characters, no line breaks) for
+   * phone pushes, lists and other places that show text only.
+   */
+  summary: string;
+  title?: never;
+  body?: never;
+  markdown?: never;
+};
+
+/**
+ * A notification of a kind declared in `notifications.kinds`: exactly one
+ * of text (`title`, `body`), `markdown` or a `card`. Markdown and card
+ * notifications need a `summary`.
+ */
+export type NotificationInput =
+  | NotificationTextInput
+  | NotificationMarkdownInput
+  | NotificationCardInput;
+
+/**
+ * Markup made by `cardFragment`: interpolated into `card` (or another
+ * fragment) as markup rather than as text.
+ */
+export class CardFragment {
+  readonly markup: string;
+
+  constructor(markup: string) {
+    this.markup = markup;
+  }
+
+  toString(): string {
+    return this.markup;
+  }
+}
+
+function escapeCardText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function cardScalar(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return escapeCardText(value);
+  if (
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value);
+  }
+  if (value instanceof Date) return value.toISOString();
+  throw new TypeError(
+    'card: interpolate strings, numbers, booleans, dates, arrays of them, or cardFragment results',
+  );
+}
+
+function cardValue(value: unknown): string {
+  if (value instanceof CardFragment) return value.markup;
+  if (!Array.isArray(value)) return cardScalar(value);
+  const fragments = value.filter((item) => item instanceof CardFragment);
+  if (fragments.length === 0) return value.map(cardScalar).join(',');
+  if (fragments.length !== value.length) {
+    throw new TypeError(
+      'card: an array mixes cardFragment results with plain values',
+    );
+  }
+  return fragments.map((fragment) => fragment.markup).join('');
+}
+
+function cardMarkup(
+  strings: TemplateStringsArray,
+  values: readonly unknown[],
+): string {
+  let markup = strings[0] ?? '';
+  values.forEach((value, index) => {
+    markup += cardValue(value) + (strings[index + 1] ?? '');
+  });
+  return markup;
+}
+
+/**
+ * Card markup from a template, with every interpolated value escaped
+ * (`&`, `<`, `>`, `"` and `'`) so user text can never add or change
+ * elements:
+ *
+ * ```ts
+ * await notify({
+ *   kind: 'build',
+ *   summary: `${branch} failed`,
+ *   card: card`<Card status="CI failed" tone="danger">
+ *     <Title>${title}</Title>
+ *     <Steps>${steps.map((step) => cardFragment`<Step state="${step.state}">${step.name}</Step>`)}</Steps>
+ *   </Card>`,
+ * });
+ * ```
+ *
+ * Interpolate only into text and quoted attribute values, never into a tag
+ * or attribute name. Strings are escaped; numbers, booleans and bigints are
+ * written as is; dates as ISO-8601 (for `<time datetime>`); `null` and
+ * `undefined` as nothing, so an empty attribute such as `status=""` is left
+ * out. An array of plain values becomes a comma-separated list (the form
+ * `<Trend values>` takes); an array of `cardFragment` results is joined as
+ * markup, to repeat elements. Other objects throw a `TypeError`. Returns the
+ * markup string; the platform checks it when the notification is sent.
+ */
+export function card(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): string {
+  return cardMarkup(strings, values);
+}
+
+/**
+ * A piece of card markup for `card`, escaped like `card`, such as one
+ * `<Step>` per item of a list: interpolate the fragment (or an array of
+ * them) into `card` and it is kept as markup.
+ */
+export function cardFragment(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): CardFragment {
+  return new CardFragment(cardMarkup(strings, values));
+}
 
 export type NotifyResult = { id: string; deduplicated: boolean };
 
@@ -245,7 +407,13 @@ export async function notify(
 
 /**
  * New content for a notification this App sent. Omitted fields keep their
- * value; `null` clears `body`, `url` or `data`. Without `autoOpenUrl`, adding
+ * value; `null` clears `body`, `url`, `data` or a text notification's
+ * `summary`. `markdown` or a `card` (markup or a tree) replaces the whole
+ * content and switches to that format; the current summary carries over
+ * unless `summary` gives a new one, and a notification without one needs
+ * it (400). They cannot be combined with `title` or `body`, which switch a
+ * Markdown or card notification back to text (then `title` is required) and
+ * drop its summary unless `summary` gives one. Without `autoOpenUrl`, adding
  * a `url` opens it on tap (as when pushing), clearing it turns that off, and
  * replacing it keeps the current setting. `reply` asks a new question: a
  * form replaces the current one and `null` removes it, either way starting
@@ -260,12 +428,23 @@ export type NotificationUpdateInput = {
   silent?: boolean;
   title?: string;
   body?: string | null;
-  url?: string | null;
+  /**
+   * One plain line (at most 200 characters, no line breaks) for pushes and
+   * lists; `null` removes a text notification's summary. Markdown and card
+   * notifications always keep one.
+   */
+  summary?: string | null;
+  /** New Markdown content. */
+  markdown?: string;
   autoOpenUrl?: boolean;
   data?: { [key: string]: NotificationJson } | null;
   reply?: NotificationReplyInput | null;
-  /** A new card (replaces the whole card), or null to remove it. */
-  card?: NotificationCard | null;
+  /**
+   * New card content: markup (see `card`) or a `NotificationContentNode`
+   * tree. A card with inline inputs asks a new question with the form they
+   * make; content without them removes such a form.
+   */
+  card?: string | NotificationContentNode;
 };
 
 /**
@@ -355,8 +534,26 @@ export type HatchNotificationEnvelope = {
     id: string;
     kind: string;
     kindName: string;
+    format: NotificationFormat;
+    /**
+     * The name it goes by, always a string: the title of a text
+     * notification, the summary of a Markdown or card one.
+     */
     title: string;
+    /**
+     * The body of a text notification; the content as plain text for
+     * Markdown and cards.
+     */
     body: string | null;
+    /** One plain line for pushes; always set for Markdown and cards. */
+    summary: string | null;
+    /** The Markdown source of a Markdown notification; null otherwise. */
+    markdown: string | null;
+    /**
+     * The render tree of a Markdown (`Document` root) or card (`Card` root)
+     * notification; null for text.
+     */
+    content: NotificationContentNode | null;
     url: string | null;
     /** Phone notifications open `url` on tap instead of the notification. */
     autoOpenUrl: boolean;
@@ -369,8 +566,6 @@ export type HatchNotificationEnvelope = {
     recalledAt: string | null;
     /** The form to answer, or null. */
     reply: NotificationReply | null;
-    /** The timeline card, or null; tones are always filled in. */
-    card: NotificationCard | null;
     /**
      * The answer, only in `hatch.notification.responded` (sent by a response
      * route); null in every other event.

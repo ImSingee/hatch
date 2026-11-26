@@ -33,14 +33,14 @@ signed-in user can see and change it.
   new question by replacing or removing the form, which starts the next
   round (`replyRound`). Each round takes one answer, from whoever answers
   first, and the answer never changes.
-- **Card**: an optional `card` the web timeline shows besides the title and
-  body: a `status` (`label`, `tone` neutral|info|success|warning|danger) and at
-  most one `block` (`progress` with `label`, `percent`, `value?`; `stats` with
-  one to three `{ value, label }`; `quote` with `author`, `text`,
-  `location?`). Phones and destinations keep showing the title and body, so a
-  card only adds to them; envelopes carry it as `notification.card`. Pushes
-  set it and edits replace or remove it (`card: null`); empty spellings mean
-  no card. The rules live in `packages/hatch-platform-api/notification-card*.ts`.
+- **Content**: a notification is text (`title` and `body`), Markdown
+  (`markdown`) or a card (`card`, written in card markup or as a JSON tree),
+  with a one-line `summary` for push banners and lists (optional for text,
+  required otherwise). Markdown and cards compile into one render tree
+  (`content`), and a card may put its questions inside it, which compile into
+  the reply form. Formats, the summary, what each surface shows, the
+  Markdown subset, the card markup and its component catalog are described in
+  [notification-content.md](notification-content.md).
 - **Response route**: `(sourceType, sourceId?, kind?) → target`, where the
   target is a webhook, an App that accepts responses, or the Agent. Every
   matching response route receives the answer once. An App may receive answers
@@ -96,6 +96,7 @@ Both endpoints accept the same JSON body (≤64 KiB):
   "kind": "order.shipped",
   "title": "Order 42 shipped",
   "body": "optional, ≤4000",
+  "summary": "optional one line, ≤200; required with markdown or card",
   "url": "https://optional.example/absolute",
   "autoOpenUrl": "optional boolean; defaults to whether url is set",
   "priority": "optional integer -2..1; default 0",
@@ -104,6 +105,12 @@ Both endpoints accept the same JSON body (≤64 KiB):
   "occurredAt": "optional ISO-8601"
 }
 ```
+
+That is a text notification. A Markdown notification sends `markdown` (the
+source, ≤16 KiB) and a card notification sends `card` (markup or a JSON tree)
+instead of `title` and `body`, both with a `summary`; see
+[notification-content.md](notification-content.md). `reply` (below) works
+with every format.
 
 `url` is any absolute URL a device can open: a web page, another app by its
 own scheme (`mailto:`, `tel:`, `slack://…`), since leaving for another app is
@@ -201,7 +208,9 @@ notification:
 }
 ```
 
-An edit changes any of `title`, `body`, `url`, `autoOpenUrl` and `data`.
+An edit changes any of `title`, `body`, `summary`, `markdown`, `card`,
+`url`, `autoOpenUrl`, `data` and `reply`, and may switch the format; the
+format rules are in [notification-content.md](notification-content.md#updating-a-notification).
 
 An edit that changes the content or alerts again also sets `activityAt`, so
 the notification moves to the end of the timeline. Answers and recalls leave
@@ -301,14 +310,21 @@ A push may carry `reply`, a form people answer once:
 ```
 
 The form has 1-10 fields with unique ids. Every field has `id`, `type` and
-`label`, plus optional `description` and `required` (default `true`).
+`label` (optional on `buttons` fields), plus optional `description` and
+`required` (default `true`).
 
-| Type       | Answer         | Rules                                                                                                    |
-| ---------- | -------------- | -------------------------------------------------------------------------------------------------------- |
-| `buttons`  | one option id  | A single choice shown as buttons: 1-4 options, labels up to 32 characters; options may be `destructive`. |
-| `single`   | one option id  | 2-50 options.                                                                                            |
-| `multiple` | option id list | 2-50 options, `minSelected` (default 1) to `maxSelected` (default all).                                  |
-| `text`     | text           | `placeholder`, `multiline`, `maxLength` (default 1000, at most 4000).                                    |
+| Type       | Answer         | Rules                                                                                                                                             |
+| ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buttons`  | one option id  | A single choice shown as buttons: 1-4 options, labels up to 32 characters; options may be `primary` (drawn filled) or `destructive`.              |
+| `single`   | one option id  | 2-50 options, each with an optional `note` (≤40) and `badge` (≤16); `default` names the option chosen to begin with.                              |
+| `multiple` | option id list | 2-50 options with `note` and `badge`, `minSelected` (default 1) to `maxSelected` (default all); `default` lists the options chosen to begin with. |
+| `text`     | text           | `placeholder`, `multiline`, `maxLength` (default 1000, at most 4000).                                                                             |
+
+When the last field is a required `buttons` field, its buttons replace the
+submit button and submit the whole form. A card may instead write its
+questions inside the card (`Choice`, `Buttons`, `Input`), which compile in
+document order into this same form; such a request cannot also carry
+`reply` (see [inline actions](notification-content.md#inline-actions)).
 
 The rules live in `packages/hatch-platform-api/notification-reply*.ts`, shared
 by ingress, the CLI and the mobile app. Empty values (`null`, `""`, `[]`, `0`)
@@ -326,7 +342,7 @@ per round (`notification_responses` keyed by notification and round), each
 `hatch.notification.responded` names its `response.round`, and receivers
 identify an answer by `(notification.id, response.round)`. An answer to an
 earlier round that is still being delivered goes out with that round's last
-version (its title, body, `data`, card and form, from
+version (its content, `data` and form, from
 `notification_revisions`), never with what a later question changed.
 
 An answer names the round it was given on: the web and the phone app send
@@ -340,10 +356,12 @@ from the push), even when the new form keeps the old field and option ids.
 Answers that no longer fit the current form are rejected (`400`).
 
 Every edit that changes content or asks a new question keeps the replaced
-version in `notification_revisions`: title, body, link and `autoOpenUrl`,
-`data`, card, form and round. A recall keeps the notification's content too,
+version in `notification_revisions`: format, title, body, summary,
+Markdown source and render tree, link and `autoOpenUrl`, `data`, form and
+round. A recall keeps the notification's content too,
 so nothing a notification ever showed is lost until it is deleted or passes
-retention. Summaries count the kept versions (`earlierVersions`).
+retention. List entries (`NotificationSummary`) count the kept versions
+(`earlierVersions`).
 `ListNotificationRevisions` (`hatch notification revisions <id>`) pages them
 newest first with the answers to their rounds. On the web timeline, an edited
 notification's "Edited N times · View history" and a recalled notification's
@@ -426,7 +444,7 @@ created (`response_revision`), on every attempt, even if the notification is
 edited or recalled before the answer is delivered. `notification` itself shows
 the current state of the answered round: an answer still being delivered when
 an edit asks a new question goes out with its own round's last version
-(title, body, `data`, card and `reply`), never with the new round's. No other event carries that revision: notification, edit
+(its content, `data` and `reply`), never with the new round's. No other event carries that revision: notification, edit
 and recall events use the content revision (`contentRevision`), which skips
 the answer's, so `(notification.id, revision)` stays unique per event. The
 dispatcher alternates which queue claims first, so a backlog of notification
@@ -488,8 +506,12 @@ Webhook and App destinations receive the same envelope:
     "id": "…",
     "kind": "…",
     "kindName": "…",
+    "format": "text",
     "title": "…",
     "body": null,
+    "summary": null,
+    "markdown": null,
+    "content": null,
     "url": null,
     "autoOpenUrl": false,
     "priority": 0,
@@ -504,6 +526,13 @@ Webhook and App destinations receive the same envelope:
   }
 }
 ```
+
+`title` is always a string: the title of a text notification, the summary of
+a Markdown or card notification. `body` is the body of a text notification
+and the plain-text version of the others; `markdown` is the source of a
+Markdown notification; `content` is the render tree of a Markdown or card
+notification. See
+[notification-content.md](notification-content.md#what-each-surface-shows).
 
 `source.type` is `app`, `channel`, `platform` or `user`; `source.id` is the
 App, Channel or sending user id (null for platform and deleted users) and
@@ -567,7 +596,11 @@ What the shared key does and does not protect:
 APNs responses: 410 / `BadDeviceToken` / `Unregistered` /
 `DeviceTokenNotForTopic` fail the delivery and disable the device; credential
 errors (403, `InvalidProviderToken`, …) fail without disabling and record the
-error on the destination; 429 and 5xx retry. Bodies are shortened to keep the
+error on the destination; 429 and 5xx retry. A text notification shows its
+title and its summary, or its body when it has no summary. A Markdown or card
+notification shows the source name as the title, its kind as the subtitle
+(`ks: 1`; extension builds without it show "source · kind") and its summary
+as the body. Bodies are shortened to keep the
 payload within 4 KiB, then the URL is dropped, then the title is shortened;
 the full text stays in the app's notification detail. When the URL opens on
 tap (`ao: true` in the encrypted content), the title is shortened before the
@@ -704,7 +737,7 @@ are time-ordered. The actions are:
 - `t`: a system text reply.
 - `f`: "Answer…", which opens the app.
 
-For `x` it adds the summary to the body and sets no category.
+For `x` it adds the answer summary (`s`) to the body and sets no category.
 
 Buttons and text replies are sent natively by `HatchReplyDelegate`
 (`modules/hatch-push-keys`). That delegate joins expo-notifications'
@@ -736,9 +769,10 @@ replaces the shown notification passively, without its actions.
 `activityAt` (`ListNotifications` with `order: "activity"`), oldest at the
 top. It opens at the newest, follows new notifications while the reader stays
 at the end, and loads older pages on scroll. A person's message shows as a
-bubble, everything else as a card with its reply form until someone answers;
-low-priority notifications without a form share one collapsed row, and a
-recalled notification becomes one line. When a source edits a notification
+bubble, everything else as a timeline entry (its text, rendered Markdown or
+card) with its reply form until someone answers; low-priority notifications
+without a form share one collapsed row, and a recalled notification becomes
+one line, named by its title or summary. When a source edits a notification
 while the page is open, a marker stays where it was.
 
 Each user has one read position in timeline order, shared by all their
@@ -758,14 +792,17 @@ since, the position stops at the version shown, so the edit and whatever
 arrived in between stay unread on every device.
 
 The phone app's Notifications screen is the same timeline (shared layout in
-`packages/hatch-platform-api/notification-timeline.ts`): activity order, cards,
+`packages/hatch-platform-api/notification-timeline.ts`): activity order, entries,
 the unread divider and jump, and reading at the end moves the same read
 position. Answering opens the notification's page, and the app icon's badge
 shows the unread count.
 
 `/notifications/log` is
 the delivery log (filters, deliveries, answer deliveries), and
-`/notifications/log/<id>` opens one notification there.
+`/notifications/log/<id>` opens one notification there. The list names each
+notification by its title (text) or summary (Markdown and cards); the detail
+shows the rendered content, the summary and the Markdown source or canonical
+card markup.
 
 ## Management API
 
@@ -799,9 +836,13 @@ The `user` source type is an additive envelope value: App destinations built
 against the earlier `app | channel | platform` set receive it as a plain
 string, so no compatibility version change is needed either.
 
-The timeline additions are additive too. `notification.card` and
-`notification.response.round` are new envelope fields, which
-`verifyNotificationRequest` ignores (it checks only `type`). A second
+The timeline additions are additive too. `notification.response.round` and
+the content fields `format`, `summary`, `markdown` and `content` are new
+envelope fields, which `verifyNotificationRequest` ignores (it checks only
+`type`), and `notification.title` stays a string for every format. The #319
+`card: { status, block }` input and the envelope's `notification.card` are
+gone: send a card notification instead (see
+[App compatibility](../skills/app-compatibility/SKILL.md)). A second
 `hatch.notification.responded` for the same notification arrives only after an
 edit asked a new question: the source itself with an SDK that has `reply` on
 `updateNotification`, or a member through `hatch notification update --reply`.

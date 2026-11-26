@@ -626,6 +626,8 @@ Read only the reference relevant to the requested capability:
   logo, and after the user accepts the icon offer from Core workflow step 8.
 - [Notifications](references/backend-integrations.md#notifications): declare
   notification kinds, push with `notify()` from `@hatch/app/notifications`
+  as text, Markdown or a card (the `card` tag escapes values; Markdown and
+  cards need a one-line `summary`; see the `notification-content` Skill)
   (edit or recall later with `updateNotification` / `recallNotification`, or
   ask a question with a `reply` form; an edit can ask the next one), and receive routed notifications
   (and, with `destination.responses`, answers) on `/__notification` when the

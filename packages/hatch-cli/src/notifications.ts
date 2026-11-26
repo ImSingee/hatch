@@ -15,12 +15,22 @@ import {
   describeIssue,
   notificationReplySchema,
 } from '../../hatch-platform-api/notification-reply-schema';
-import { notificationCardSchema } from '../../hatch-platform-api/notification-card-schema';
-import { cardToMessage } from '../../hatch-platform-api/notification-card-proto';
 import { configPath, resolveCredential } from './config';
 import { platformTransport } from './client';
 import { CliError } from './error';
 import { readTextInput } from './input';
+import {
+  cardCatalog,
+  cardCatalogText,
+  cardCheckText,
+  checkCard,
+  CONTENT_INPUT_MAX_BYTES,
+  contentLines,
+  contentPlan,
+  formatOf,
+  headlineOf,
+  replyFormLines,
+} from './notification-content';
 
 type Method = keyof typeof NotificationService.method;
 type Values = Record<string, string | boolean | string[] | undefined>;
@@ -225,29 +235,33 @@ export function parseReplyForm(value: unknown, flag = 'reply') {
   return parsed.data;
 }
 
-/** Validate a card exactly as the platform does; an empty card is rejected. */
-export function parseCard(value: unknown, flag = 'card') {
-  const parsed = notificationCardSchema.safeParse(value);
-  if (!parsed.success) invalid(`--${flag}: ${describeIssue(parsed.error)}`);
-  if (!parsed.data)
-    invalid(`--${flag}: give a status or a block, or use --clear-card.`);
-  return parsed.data;
-}
-
-/** Load and check `--card`/`--card-file` before any request is made. */
-function cardPreparation(
+/**
+ * The `prepare` step of send and update: read and check `--reply-file` (or
+ * `--reply`) and a content file before any request.
+ */
+function preparation(
   values: Values,
-):
-  | ((
-      signal: AbortSignal,
-    ) => Promise<{ card: ReturnType<typeof cardToMessage> }>)
-  | undefined {
-  const card = jsonInput(values, 'card');
-  if (!card) return undefined;
-  const flag = values.card === undefined ? 'card-file' : 'card';
-  return async (signal) => ({
-    card: cardToMessage(parseCard(await card(signal), flag)),
-  });
+  reply: ((signal: AbortSignal) => Promise<unknown>) | undefined,
+  content:
+    | ((signal: AbortSignal) => Promise<Record<string, unknown>>)
+    | undefined,
+): Pick<NotificationCall, 'prepare'> {
+  if (!reply && !content) return {};
+  return {
+    prepare: async (signal) => ({
+      ...(reply
+        ? {
+            reply: replyToMessage(
+              parseReplyForm(
+                await reply(signal),
+                values.reply === undefined ? 'reply-file' : 'reply',
+              ),
+            ),
+          }
+        : {}),
+      ...(content ? await content(signal) : {}),
+    }),
+  };
 }
 
 /**
@@ -327,17 +341,6 @@ function answerLines(reply: ReplyRow | undefined, answers: unknown): string[] {
             )
             .join(', ');
     return [`  ${replyField.label} [${replyField.id}]: ${value}`];
-  });
-}
-
-function replyLines(reply: ReplyRow | undefined): string[] {
-  return (reply?.fields ?? []).map((replyField) => {
-    const options = (replyField.options ?? [])
-      .map((option) => `${option.id}=${option.label}`)
-      .join(', ');
-    return `  ${replyField.id} (${replyField.type}${
-      replyField.required === false ? ', optional' : ''
-    }): ${replyField.label}${options ? ` — ${options}` : ''}`;
   });
 }
 
@@ -587,7 +590,8 @@ const specs: Record<string, Spec> = {
                   .filter(Boolean)
                   .join(', '),
                 `${field(row, 'sourceName')} / ${field(row, 'kind')}`,
-                field(row, 'title'),
+                formatOf(row),
+                headlineOf(row),
               ]),
             ),
             response,
@@ -622,7 +626,7 @@ const specs: Record<string, Spec> = {
           ? [
               '',
               `Reply form (round ${field(summary, 'replyRound') || 1}):`,
-              ...replyLines(reply),
+              ...replyFormLines(reply),
               ...(answered
                 ? [
                     `Answered by ${field(answered, 'respondedByName')} via ${field(answered, 'via')} at ${field(answered, 'respondedAt')}:`,
@@ -666,7 +670,7 @@ const specs: Record<string, Spec> = {
           ];
         });
         return [
-          `${field(summary, 'title')} (${revisionLabel(summary)})`,
+          `${headlineOf(summary)} (${revisionLabel(summary)})`,
           `Source: ${field(summary, 'sourceName')} (${field(summary, 'sourceType')}) · Kind: ${field(summary, 'kindName')} [${field(summary, 'kind')}]`,
           `Priority: ${priorityText(priorityOf(summary))}`,
           `Occurred: ${field(summary, 'occurredAt')}`,
@@ -681,7 +685,7 @@ const specs: Record<string, Spec> = {
           ...(field(summary, 'recalledAt')
             ? [`Recalled: ${field(summary, 'recalledAt')}`]
             : []),
-          ...(field(summary, 'body') ? ['', field(summary, 'body')] : []),
+          ...contentLines(summary),
           ...(field(summary, 'url')
             ? [
                 `URL: ${field(summary, 'url')}${
@@ -715,6 +719,11 @@ const specs: Record<string, Spec> = {
       kind: { type: 'string' },
       title: { type: 'string' },
       body: { type: 'string' },
+      summary: { type: 'string' },
+      markdown: { type: 'string' },
+      'markdown-file': { type: 'string' },
+      card: { type: 'string' },
+      'card-file': { type: 'string' },
       url: { type: 'string' },
       'no-auto-open-url': { type: 'boolean' },
       priority: { type: 'string' },
@@ -723,17 +732,13 @@ const specs: Record<string, Spec> = {
       'occurred-at': { type: 'string' },
       reply: { type: 'string' },
       'reply-file': { type: 'string' },
-      card: { type: 'string' },
-      'card-file': { type: 'string' },
     },
     build: (_positionals, values) => {
       const to = oneOf(values, ['channel', 'group', 'destination']);
-      const card = cardPreparation(values);
       if (!to) invalid('Supply one of --channel, --group or --destination.');
       const reply = jsonInput(values, 'reply');
+      const content = contentPlan(values, 'send', reply !== undefined);
       const kind = str(values, 'kind');
-      const title = str(values, 'title');
-      if (!title?.trim()) invalid('Supply --title.');
       // A Channel only accepts its declared kinds; elsewhere kind is a label.
       if (to.flag === 'channel' && !kind)
         invalid('Supply --kind when sending to a channel.');
@@ -748,8 +753,9 @@ const specs: Record<string, Spec> = {
         request: {
           [`${to.flag}Id`]: to.id,
           kind,
-          title,
+          title: str(values, 'title'),
           body: str(values, 'body'),
+          ...content.request,
           url: str(values, 'url'),
           // Unset lets the platform open --url on phone tap by default.
           autoOpenUrl: values['no-auto-open-url'] ? false : undefined,
@@ -759,23 +765,7 @@ const specs: Record<string, Spec> = {
           dedupeKey: str(values, 'dedupe-key'),
           occurredAt: str(values, 'occurred-at'),
         },
-        ...(reply || card
-          ? {
-              prepare: async (signal: AbortSignal) => ({
-                ...(reply
-                  ? {
-                      reply: replyToMessage(
-                        parseReplyForm(
-                          await reply(signal),
-                          values.reply === undefined ? 'reply-file' : 'reply',
-                        ),
-                      ),
-                    }
-                  : {}),
-                ...(card ? await card(signal) : {}),
-              }),
-            }
-          : {}),
+        ...preparation(values, reply, content.load),
         text: (response) => {
           const notificationId = field(response, 'notificationId');
           if (response.deduplicated === true)
@@ -803,6 +793,12 @@ const specs: Record<string, Spec> = {
       title: { type: 'string' },
       body: { type: 'string' },
       'clear-body': { type: 'boolean' },
+      summary: { type: 'string' },
+      'clear-summary': { type: 'boolean' },
+      markdown: { type: 'string' },
+      'markdown-file': { type: 'string' },
+      card: { type: 'string' },
+      'card-file': { type: 'string' },
       url: { type: 'string' },
       'clear-url': { type: 'boolean' },
       'auto-open-url': { type: 'boolean' },
@@ -812,9 +808,6 @@ const specs: Record<string, Spec> = {
       reply: { type: 'string' },
       'reply-file': { type: 'string' },
       'clear-reply': { type: 'boolean' },
-      card: { type: 'string' },
-      'card-file': { type: 'string' },
-      'clear-card': { type: 'boolean' },
     },
     build: ([id], values) => {
       exclusive(values, 'auto-open-url', 'no-auto-open-url');
@@ -822,19 +815,14 @@ const specs: Record<string, Spec> = {
       const clearReply = values['clear-reply'] === true;
       if (reply && clearReply)
         invalid('Use either --reply/--reply-file or --clear-reply, not both.');
-      const card = cardPreparation(values);
-      const clearCard = values['clear-card'] === true;
-      if (card && clearCard)
-        invalid('Use either --card/--card-file or --clear-card, not both.');
-      const title = str(values, 'title');
-      if (title !== undefined && !title.trim())
-        invalid('--title cannot be empty.');
+      const content = contentPlan(values, 'update', reply !== undefined);
       exclusive(values, 'data', 'clear-data');
       const request = {
         id,
         silent: values.silent === true,
-        title,
+        title: str(values, 'title'),
         body: clearable(values, 'body'),
+        ...content.request,
         url: clearable(values, 'url'),
         autoOpenUrl: values['auto-open-url']
           ? true
@@ -843,38 +831,21 @@ const specs: Record<string, Spec> = {
             : undefined,
         dataJson: values['clear-data'] ? '' : jsonObjectFlag(values, 'data'),
         clearReply: clearReply || undefined,
-        clearCard: clearCard || undefined,
       };
       const { id: _, silent, ...changes } = request;
       if (
         silent &&
         !reply &&
-        !card &&
+        !content.changes &&
         Object.values(changes).every((value) => value === undefined)
       )
         invalid(
-          'Supply at least one change: --title, --[clear-]body, --[clear-]url, --[no-]auto-open-url, --[clear-]data, --reply/--clear-reply or --card/--clear-card.',
+          'Supply at least one change: --title, --[clear-]body, --[clear-]summary, --markdown[-file], --card[-file], --[clear-]url, --[no-]auto-open-url, --[clear-]data or --reply/--clear-reply.',
         );
       return {
         method: 'updateNotification',
         request,
-        ...(reply || card
-          ? {
-              prepare: async (signal: AbortSignal) => ({
-                ...(reply
-                  ? {
-                      reply: replyToMessage(
-                        parseReplyForm(
-                          await reply(signal),
-                          values.reply === undefined ? 'reply-file' : 'reply',
-                        ),
-                      ),
-                    }
-                  : {}),
-                ...(card ? await card(signal) : {}),
-              }),
-            }
-          : {}),
+        ...preparation(values, reply, content.load),
         text: (response) =>
           response.changed === true
             ? `Updated notification ${id} (revision ${field(response, 'revision')}). ${silent ? 'Content changes without another phone alert.' : 'Phones alert again with the latest content.'} Destinations that take edits receive the update.`
@@ -957,7 +928,9 @@ const specs: Record<string, Spec> = {
         const answers = rows(response.responses);
         const lines = revisions.map(
           (row) =>
-            `revision ${field(row, 'revision')} (${field(row, 'activityAt')} → ${field(row, 'replacedAt')}, round ${field(row, 'replyRound')}): ${field(row, 'title')}`,
+            `revision ${field(row, 'revision')} (${field(row, 'activityAt')} → ${field(row, 'replacedAt')}, round ${field(row, 'replyRound')}): ${
+              formatOf(row) === 'text' ? '' : `[${formatOf(row)}] `
+            }${headlineOf(row)}`,
         );
         const answered = answers.map(
           (row) =>
@@ -1718,6 +1691,74 @@ export function parseNotificationCommand(
   return { call: spec.build(positionals, values), values };
 }
 
+/** An offline `notification card ...` command, resolved. */
+export type NotificationCardCommand = {
+  values: Values;
+  run: (signal: AbortSignal) => Promise<{ json: unknown; text: string }>;
+};
+
+/**
+ * `notification card check [--file <path|->] [<markup>]` and
+ * `notification card catalog`: offline, no credential, no request.
+ */
+export function parseNotificationCardCommand(
+  args: readonly string[],
+  offset: number,
+): NotificationCardCommand {
+  const verb = args[offset + 2];
+  if (verb !== 'check' && verb !== 'catalog')
+    throw new CliError('unknown_command', 'Unknown command. Use hatch help.');
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: [...args.slice(0, offset), ...args.slice(offset + 3)],
+      options: {
+        ...globalFlags,
+        ...(verb === 'check' ? { file: { type: 'string' } } : {}),
+      },
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (error) {
+    const detail =
+      error instanceof Error ? ` ${error.message.replaceAll('\n', ' ')}` : '';
+    invalid(
+      `Invalid notification arguments.${detail} Use hatch help notification card.`,
+    );
+  }
+  const values = parsed.values as Values;
+  const positionals = parsed.positionals;
+  if (verb === 'catalog') {
+    if (positionals.length > 0)
+      invalid('This command takes no positional arguments.');
+    return {
+      values,
+      run: async () => ({ json: cardCatalog(), text: cardCatalogText() }),
+    };
+  }
+  const path = str(values, 'file');
+  if (positionals.length > 1)
+    invalid(
+      'Supply the card as one argument (quote the markup) or with --file <path|->.',
+    );
+  if (path !== undefined && positionals.length > 0)
+    invalid('Use either <markup> or --file <path|->, not both.');
+  if (path === '') invalid('--file needs a path or -.');
+  if (path === undefined && positionals.length === 0)
+    invalid('Supply the card: <markup> or --file <path|->.');
+  return {
+    values,
+    run: async (signal) => {
+      const check = checkCard(
+        path === undefined
+          ? positionals[0]
+          : await readTextInput(path, signal, CONTENT_INPUT_MAX_BYTES),
+      );
+      return { json: check, text: cardCheckText(check) };
+    },
+  };
+}
+
 /** Execute a resolved call; JSON output is the RPC response in proto JSON. */
 export async function executeNotificationCall(
   transport: Transport,
@@ -1754,7 +1795,30 @@ export async function runNotification(
   offset: number,
   signal: AbortSignal,
 ) {
-  const { call, values } = parseNotificationCommand(args, offset);
+  if (args[offset + 1] === 'card') {
+    const command = parseNotificationCardCommand(args, offset);
+    const result = await command.run(signal);
+    process.stdout.write(
+      command.values.json
+        ? `${JSON.stringify(result.json)}\n`
+        : `${result.text}\n`,
+    );
+    return;
+  }
+  const parsed = parseNotificationCommand(args, offset);
+  const { values } = parsed;
+  // Read and check file inputs before looking for a credential, so bad
+  // content is reported as such even where no one is signed in.
+  const call: NotificationCall = parsed.call.prepare
+    ? {
+        ...parsed.call,
+        request: {
+          ...parsed.call.request,
+          ...(await parsed.call.prepare(signal)),
+        },
+        prepare: undefined,
+      }
+    : parsed.call;
   const seconds =
     values.timeout === undefined ? 30 : Number(values.timeout as string);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 3600)

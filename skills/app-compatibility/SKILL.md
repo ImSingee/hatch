@@ -120,6 +120,20 @@ above.
   automatically. A missing declaration will be rejected, and a restricted
   backend bound elsewhere will fail to start.
 
+## Status-and-block notification cards
+
+The status-and-block notification card (`card: { status, block }` beside
+`title` and `body`, the `NotificationCard` type of `@hatch/app/notifications`)
+is no longer accepted, whatever the App's `compatibilityVersion`: `notify`
+and `updateNotification` reject it with 400, and envelopes have no
+`notification.card` field. Stored notifications sent that way were converted
+to card notifications. To repair an App that still sends it, send a card
+notification instead: markup built with the `card` template tag (or a
+render tree) plus a `summary`, for example
+``card`<Card status="${label}" tone="danger"><Title>${title}</Title></Card>` ``
+with `summary: title`, following `notification-content`. Receivers read
+`format`, `summary` and `content` from envelopes.
+
 ## Moving from deno.lock to pnpm-lock.yaml
 
 The lockfile committed with an App selects its build toolchain, as

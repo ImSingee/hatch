@@ -47,7 +47,10 @@ import {
 } from './contract';
 import { ingestChannelPush } from './channel-ingress';
 import type { ReplyForm } from '../../../packages/hatch-platform-api/notification-reply';
-import type { NotificationCard } from '../../../packages/hatch-platform-api/notification-card';
+import type {
+  ContentNode,
+  NotificationFormat,
+} from '../../../packages/hatch-platform-api/notification-content';
 import {
   ingestNotification,
   newNotificationId,
@@ -181,8 +184,20 @@ export type NotificationSummaryView = {
   sourceName: string;
   kind: string;
   kindName: string;
-  title: string;
+  /** `text`, `markdown` or `card`. */
+  format: NotificationFormat;
+  /** Text notifications only. */
+  title: string | null;
   body: string | null;
+  /**
+   * One plain line naming it where the content is not shown (push, lists);
+   * always set for markdown and card, optional for text.
+   */
+  summary: string | null;
+  /** The Markdown source of a markdown notification. */
+  markdown: string | null;
+  /** The render tree of a markdown or card notification. */
+  content: ContentNode | null;
   url: string | null;
   autoOpenUrl: boolean;
   /** -2 lowest, -1 low, 0 normal, 1 high. */
@@ -200,8 +215,6 @@ export type NotificationSummaryView = {
   earlierVersions: number;
   editedAt: string | null;
   recalledAt: string | null;
-  /** Status and one block the timeline shows; null without one. */
-  card: NotificationCard | null;
   /**
    * The question the notification asks now; null when it asks nothing. Each
    * round takes one answer.
@@ -443,8 +456,12 @@ function summaryView(
     sourceName: row.sourceName,
     kind: row.kind,
     kindName: row.kindName,
+    format: row.format,
     title: row.title,
     body: row.body,
+    summary: row.summary,
+    markdown: row.markdown,
+    content: row.content,
     url: row.url,
     autoOpenUrl: row.autoOpenUrl,
     priority: row.priority,
@@ -455,7 +472,6 @@ function summaryView(
     earlierVersions,
     editedAt: isoOrNull(row.editedAt),
     recalledAt: isoOrNull(row.recalledAt),
-    card: row.card,
     reply: row.reply,
     replyRound: row.replyRound,
     respondedAt: isoOrNull(row.respondedAt),
@@ -661,13 +677,17 @@ export async function getNotification(
 export type NotificationRevisionView = {
   /** The revision while this version was current. */
   revision: number;
-  title: string;
+  /** Content as on NotificationSummaryView. */
+  format: NotificationFormat;
+  title: string | null;
   body: string | null;
+  summary: string | null;
+  markdown: string | null;
+  content: ContentNode | null;
   url: string | null;
   /** Whether tapping the phone push opened `url` (false before it was kept). */
   autoOpenUrl: boolean;
   data: Record<string, unknown> | null;
-  card: NotificationCard | null;
   reply: ReplyForm | null;
   replyRound: number;
   /** When this version became current. */
@@ -732,12 +752,15 @@ export async function listNotificationRevisions(
     nextCursor: more ? String(revisions.at(-1)!.revision) : null,
     revisions: revisions.map((revision) => ({
       revision: revision.revision,
+      format: revision.format,
       title: revision.title,
       body: revision.body,
+      summary: revision.summary,
+      markdown: revision.markdown,
+      content: revision.content,
       url: revision.url,
       autoOpenUrl: revision.autoOpenUrl,
       data: revision.data,
-      card: revision.card,
       reply: revision.reply,
       replyRound: revision.replyRound,
       activityAt: iso(revision.activityAt),
@@ -1932,14 +1955,17 @@ export async function sendTestNotification(
   }
   const push: NotificationPush = {
     kind: TEST_KIND.kind,
+    format: 'text',
     title: 'Test notification',
     body: `This is a test sent to "${destination.name}" from Hatch.`,
+    summary: null,
+    markdown: null,
+    content: null,
     url: null,
     autoOpenUrl: false,
     priority: DEFAULT_NOTIFICATION_PRIORITY,
     data: null,
     reply: null,
-    card: null,
     dedupeKey: null,
     occurredAt: null,
   };

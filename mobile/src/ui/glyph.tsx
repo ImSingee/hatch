@@ -46,6 +46,22 @@ const symbols: Record<GlyphName, AndroidSymbol> = {
   pause: 'pause',
   info: 'info',
   pinSlash: 'keep_off',
+  chevronDown: 'expand_more',
+  circle: 'radio_button_unchecked',
+  minus: 'remove',
+  square: 'check_box_outline_blank',
+  checkSquare: 'check_box',
+  pullRequest: 'merge',
+  deploy: 'rocket_launch',
+  task: 'checklist',
+  shield: 'verified_user',
+  chart: 'bar_chart',
+  clock: 'schedule',
+  database: 'database',
+  bug: 'bug_report',
+  message: 'chat_bubble',
+  package: 'inventory_2',
+  money: 'payments',
 };
 
 // Decorative symbol in a square box; the surrounding control owns its

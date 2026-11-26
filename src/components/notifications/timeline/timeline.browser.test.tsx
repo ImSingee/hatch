@@ -1,9 +1,11 @@
 /**
  * The timeline over several pages: it opens at the newest and marks it read,
  * keeps what is in view still while older pages load above, and the unread
- * jump loads older pages until it reaches where reading stopped.
+ * jump loads older pages until it reaches where reading stopped. A card that
+ * asks inline is answered in place and then shows the answer read-only.
  */
 import { MantineProvider } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
 import {
   QueryClient,
   QueryClientProvider,
@@ -12,6 +14,9 @@ import {
 } from '@tanstack/react-query';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { CARD_EXAMPLES } from '../../../../packages/hatch-platform-api/notification-content-examples';
+import { compileCardMarkup } from '../../../../packages/hatch-platform-api/notification-content-schema';
+import type { ReplyAnswers } from '../../../../packages/hatch-platform-api/notification-reply';
 import { appCssVariablesResolver, appTheme } from '~/ui/theme';
 import type { NotificationSummaryView } from '~server/notifications';
 import { NotificationTimeline } from './timeline';
@@ -29,6 +34,7 @@ const fixtures = vi.hoisted(() => ({
   pagesRequested: 0,
   markRead: [] as string[],
   revisions: {} as Record<string, unknown[]>,
+  answers: [] as { id: string; round: number; answers: ReplyAnswers }[],
 }));
 
 // Server Functions cannot load in the browser project.
@@ -41,7 +47,29 @@ vi.mock('~server/notifications', () => ({
     fixtures.markRead.push(data.notificationId);
     return { ...fixtures.readState, unreadCount: 0, firstUnreadId: null };
   },
-  respondToNotificationFn: async () => ({}),
+  respondToNotificationFn: async ({
+    data,
+  }: {
+    data: { id: string; round: number; answers: ReplyAnswers };
+  }) => {
+    fixtures.answers.push(data);
+    // A new object, as from the platform, so the refetch shows it.
+    const index = fixtures.items.findIndex((entry) => entry.id === data.id);
+    const respondedAt = new Date().toISOString();
+    fixtures.items[index] = {
+      ...fixtures.items[index]!,
+      respondedAt,
+      response: {
+        round: data.round,
+        answers: data.answers,
+        respondedBy: { userId: 'user-1', name: 'Ada' },
+        via: 'web',
+        destinationId: null,
+        respondedAt,
+      },
+    };
+    return {};
+  },
   retryDeliveryFn: async () => ({}),
 }));
 vi.mock('~queries/notifications', () => {
@@ -112,8 +140,12 @@ function notification(index: number): NotificationSummaryView {
     sourceName: 'GitHub',
     kind: 'pr',
     kindName: 'Pull request',
+    format: 'text',
     title: `Notification ${index}`,
     body: 'Two lines of body text so each card has some height to it.',
+    summary: null,
+    markdown: null,
+    content: null,
     url: null,
     autoOpenUrl: false,
     priority: 0,
@@ -124,7 +156,6 @@ function notification(index: number): NotificationSummaryView {
     earlierVersions: 0,
     editedAt: null,
     recalledAt: null,
-    card: null,
     reply: null,
     replyRound: 1,
     respondedAt: null,
@@ -147,6 +178,7 @@ beforeEach(() => {
   fixtures.pagesRequested = 0;
   fixtures.markRead = [];
   fixtures.revisions = {};
+  fixtures.answers = [];
 });
 
 async function renderTimeline(height = 600, width?: number) {
@@ -158,13 +190,15 @@ async function renderTimeline(height = 600, width?: number) {
       theme={appTheme}
       cssVariablesResolver={appCssVariablesResolver}
     >
-      <QueryClientProvider client={queryClient}>
-        <div
-          style={{ height, width, display: 'flex', flexDirection: 'column' }}
-        >
-          <NotificationTimeline />
-        </div>
-      </QueryClientProvider>
+      <ModalsProvider>
+        <QueryClientProvider client={queryClient}>
+          <div
+            style={{ height, width, display: 'flex', flexDirection: 'column' }}
+          >
+            <NotificationTimeline />
+          </div>
+        </QueryClientProvider>
+      </ModalsProvider>
     </MantineProvider>,
   );
   const scroller = () =>
@@ -252,21 +286,31 @@ test('gives paging back when the jump runs out of pages before the first unread'
 test('opens every version of an edited or recalled notification beside the timeline', async () => {
   fixtures.items = Array.from({ length: 3 }, (_, index) => notification(index));
   const edited = fixtures.items[2]!;
+  const ciCard = (status: string, tone: string, text: string) =>
+    compileCardMarkup(
+      `<Card icon="pr" status="${status}" tone="${tone}"><Title>PR #261</Title><Text>${text}</Text></Card>`,
+    ).content;
   Object.assign(edited, {
-    body: 'All 14 checks passed.',
-    card: { status: { label: 'CI passed', tone: 'success' } },
+    format: 'card',
+    title: null,
+    body: null,
+    summary: 'PR #261 can be merged',
+    content: ciCard('CI passed', 'success', 'All 14 checks passed.'),
     editedAt: edited.activityAt,
     earlierVersions: 1,
   });
   fixtures.revisions[edited.id] = [
     {
       revision: 1,
-      title: edited.title,
-      body: '2 checks failed.',
+      format: 'card',
+      title: null,
+      body: null,
+      summary: 'PR #261 failed CI',
+      markdown: null,
+      content: ciCard('CI failed', 'danger', '2 checks failed.'),
       url: null,
       autoOpenUrl: false,
       data: null,
-      card: { status: { label: 'CI failed', tone: 'danger' } },
       reply: null,
       replyRound: 1,
       activityAt: fixtures.items[0]!.activityAt,
@@ -281,11 +325,20 @@ test('opens every version of an edited or recalled notification beside the timel
     .getByRole('button', { name: 'Edited 1 time · View history' })
     .click();
   const panel = screen.getByRole('complementary', { name: 'Earlier versions' });
+  // A card is named by its summary where its content is not shown.
+  await expect
+    .element(panel.getByRole('heading', { name: 'PR #261 can be merged' }))
+    .toBeVisible();
   await expect.element(panel.getByText('Current')).toBeVisible();
   await expect.element(panel.getByText('Original')).toBeVisible();
   await expect.element(panel.getByText('2 checks failed.')).toBeVisible();
+  await expect.element(panel.getByText('CI failed')).toBeVisible();
   await expect
-    .element(panel.getByText('Changed from the version before: Status · Text'))
+    .element(
+      panel.getByText(
+        'Changed from the version before: Status · Summary · Content',
+      ),
+    )
     .toBeVisible();
 
   await screen
@@ -359,4 +412,81 @@ test('gives the timeline back when the shown notification goes away, and focus t
     .element(screen.getByRole('complementary', { name: 'Earlier versions' }))
     .not.toBeInTheDocument();
   await vi.waitFor(() => expect(scroller().inert).toBe(false));
+});
+
+test('answers the inputs a card holds inline, then shows the answer in place', async () => {
+  const alert = CARD_EXAMPLES.find((example) => example.id === 'alert')!;
+  const compiled = compileCardMarkup(alert.markup!);
+  const item = notification(0);
+  Object.assign(item, {
+    sourceName: alert.sourceName,
+    kindName: alert.kindName,
+    format: 'card',
+    title: null,
+    body: null,
+    summary: alert.summary,
+    content: compiled.content,
+    reply: compiled.reply,
+  });
+  fixtures.items = [item];
+  const { screen } = await renderTimeline();
+  const card = screen.getByRole('article', {
+    name: `${alert.sourceName}: ${alert.summary}`,
+  });
+  await expect.element(card.getByText('紧急')).toBeVisible();
+  const raise = card.getByRole('radio', { name: /把内存上限提到 1 GB/ });
+  await raise.click();
+  await card.getByRole('button', { name: '确认' }).click();
+
+  await vi.waitFor(() =>
+    expect(fixtures.answers).toEqual([
+      { id: item.id, round: 1, answers: { plan: 'raise' } },
+    ]),
+  );
+  // Answered: the choice stays in place read-only, the chosen option's
+  // status replaces the card's, and the outcome is drawn below it.
+  await expect
+    .element(card.getByText('You answered “把内存上限提到 1 GB” on the web'))
+    .toBeVisible();
+  await expect.element(raise).toBeChecked();
+  await expect.element(raise).toBeDisabled();
+  await expect.element(card.getByText('调整中')).toBeVisible();
+  await expect.element(card.getByText('紧急')).not.toBeInTheDocument();
+  await expect
+    .element(card.getByRole('button', { name: '确认' }))
+    .not.toBeInTheDocument();
+});
+
+test('a card whose last question is a row of buttons sends its other inputs with the button', async () => {
+  const review = CARD_EXAMPLES.find((example) => example.id === 'pr258')!;
+  const compiled = compileCardMarkup(review.markup!);
+  const item = notification(0);
+  Object.assign(item, {
+    format: 'card',
+    title: null,
+    body: null,
+    summary: review.summary,
+    content: compiled.content,
+    reply: compiled.reply,
+  });
+  fixtures.items = [item];
+  const { screen } = await renderTimeline();
+  const card = screen.getByRole('article', {
+    name: `GitHub: ${review.summary}`,
+  });
+  // The link button only opens the pull request.
+  await expect
+    .element(card.getByRole('link', { name: '查看 PR' }))
+    .toHaveAttribute('href', 'https://github.com/ImSingee/hatch/pull/258');
+  await card.getByRole('textbox').fill('上限 30 秒');
+  await card.getByRole('button', { name: '修复它' }).click();
+  await screen.getByRole('button', { name: 'Send answer' }).click();
+  await vi.waitFor(() =>
+    expect(fixtures.answers).toEqual([
+      { id: item.id, round: 1, answers: { how: '上限 30 秒', next: 'fix' } },
+    ]),
+  );
+  await expect.element(card.getByRole('textbox')).toHaveValue('上限 30 秒');
+  await expect.element(card.getByRole('textbox')).toHaveAttribute('readonly');
+  await expect.element(card.getByText('修复中')).toBeVisible();
 });

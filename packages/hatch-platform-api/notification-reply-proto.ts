@@ -37,7 +37,18 @@ export function replyInputFromMessage(message: NotificationReplyMessage) {
         id: option.id,
         label: option.label,
         destructive: option.destructive || undefined,
+        primary: option.primary || undefined,
+        note: option.note,
+        badge: option.badge,
       })),
+      default:
+        field.defaults.length === 0
+          ? undefined
+          : field.type === 'multiple'
+            ? field.defaults
+            : field.defaults.length === 1
+              ? field.defaults[0]
+              : field.defaults,
       minSelected: field.minSelected,
       maxSelected: field.maxSelected,
       placeholder: field.placeholder,
@@ -63,6 +74,9 @@ export function replyFromMessage(message: NotificationReplyMessage): ReplyForm {
         id: option.id,
         label: option.label,
         ...(option.destructive ? { destructive: true as const } : {}),
+        ...(option.primary ? { primary: true as const } : {}),
+        ...(option.note ? { note: option.note } : {}),
+        ...(option.badge ? { badge: option.badge } : {}),
       }));
       switch (field.type) {
         case 'text':
@@ -80,12 +94,16 @@ export function replyFromMessage(message: NotificationReplyMessage): ReplyForm {
             options,
             minSelected: field.minSelected || 1,
             maxSelected: field.maxSelected || options.length,
+            ...(field.defaults.length > 0 ? { default: field.defaults } : {}),
           };
         default:
           return {
             ...base,
             type: field.type === 'buttons' ? 'buttons' : 'single',
             options,
+            ...(field.type === 'single' && field.defaults[0]
+              ? { default: field.defaults[0] }
+              : {}),
           };
       }
     }),
@@ -110,8 +128,17 @@ export function replyToMessage(reply: ReplyForm): NotificationReplyMessage {
                   id: option.id,
                   label: option.label,
                   destructive: option.destructive === true,
+                  primary: option.primary === true,
+                  note: option.note,
+                  badge: option.badge,
                 }),
               ),
+        defaults:
+          field.type === 'multiple'
+            ? (field.default ?? [])
+            : field.type === 'single' && field.default
+              ? [field.default]
+              : [],
         ...(field.type === 'multiple'
           ? { minSelected: field.minSelected, maxSelected: field.maxSelected }
           : {}),

@@ -16,6 +16,11 @@ import type {
   NotificationSummaryView,
 } from '~server/notifications';
 import {
+  answeredCardHead,
+  cardHead,
+  hasInlineInputs,
+} from '../../../packages/hatch-platform-api/notification-content';
+import {
   describeAnswers,
   type ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
@@ -26,7 +31,7 @@ import {
   type VersionEntry,
 } from '../../../packages/hatch-platform-api/notification-versions';
 import { NotificationLink } from './notification-link';
-import { CardBlock, CardStatus } from './notification-card-view';
+import { NotificationContent } from './notification-content-view';
 import classes from './notification-history.module.css';
 
 type Version = VersionEntry<
@@ -35,10 +40,12 @@ type Version = VersionEntry<
 
 const CHANGE_LABELS = {
   status: 'notifications.versions.field.status',
+  format: 'notifications.versions.field.format',
   title: 'notifications.versions.field.title',
+  summary: 'notifications.versions.field.summary',
   body: 'notifications.versions.field.body',
+  content: 'notifications.versions.field.content',
   link: 'notifications.versions.field.link',
-  card: 'notifications.versions.field.card',
   data: 'notifications.versions.field.data',
   question: 'notifications.versions.field.question',
   questionRemoved: 'notifications.versions.field.questionRemoved',
@@ -77,10 +84,12 @@ export function NotificationHistory({
       key: 'current',
       from: item.activityAt,
       to: item.recalledAt,
+      format: item.format,
       title: item.title,
       body: item.body,
+      summary: item.summary,
+      content: item.content,
       url: item.url,
-      card: item.card,
       reply: item.reply,
       replyRound: item.replyRound,
       data,
@@ -89,10 +98,12 @@ export function NotificationHistory({
       key: String(revision.revision),
       from: revision.activityAt,
       to: revision.replacedAt,
+      format: revision.format,
       title: revision.title,
       body: revision.body,
+      summary: revision.summary,
+      content: revision.content,
       url: revision.url,
-      card: revision.card,
       reply: revision.reply,
       replyRound: revision.replyRound,
       data: revision.data,
@@ -131,6 +142,9 @@ export function NotificationHistory({
       <ol className={classes.versions}>
         {versions.map((version) => {
           const { changes } = version;
+          const answer = version.lastOfRound
+            ? (answers.get(version.replyRound) ?? null)
+            : undefined;
           return (
             <li key={version.key} className={classes.version}>
               <div className={classes.head}>
@@ -158,23 +172,38 @@ export function NotificationHistory({
                 </p>
               ) : null}
               <div className={classes.body} data-current={version.current}>
-                {version.card?.status ? (
-                  <CardStatus card={version.card} />
-                ) : null}
-                <h4 className={classes.title}>{version.title}</h4>
-                {version.body ? (
-                  <p className={classes.text}>{version.body}</p>
-                ) : null}
-                {version.card?.block ? <CardBlock card={version.card} /> : null}
+                {version.format === 'text' ? (
+                  <>
+                    <h4 className={classes.title}>{version.title}</h4>
+                    {version.body ? (
+                      <p className={classes.text}>{version.body}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <NotificationContent
+                    format={version.format}
+                    content={version.content}
+                    // The current version shows the status its answer set.
+                    head={
+                      version.current
+                        ? answeredCardHead({
+                            content: version.content,
+                            answers: item.response?.answers,
+                            respondedAt: item.response?.respondedAt,
+                            editedAt: item.editedAt,
+                          })
+                        : cardHead(version.content)
+                    }
+                    answers={answer?.answers ?? null}
+                  />
+                )}
                 {version.url ? <NotificationLink url={version.url} /> : null}
                 {version.reply ? (
                   <Question
                     reply={version.reply}
-                    answer={
-                      version.lastOfRound
-                        ? (answers.get(version.replyRound) ?? null)
-                        : undefined
-                    }
+                    // A card asking inline shows its questions itself.
+                    listFields={!hasInlineInputs(version.content)}
+                    answer={answer}
                     open={version.current && !item.recalledAt}
                   />
                 ) : null}
@@ -217,21 +246,26 @@ export function NotificationHistory({
  */
 function Question({
   reply,
+  listFields,
   answer,
   open,
 }: {
   reply: ReplyForm;
+  listFields: boolean;
   answer: NotificationResponseView | null | undefined;
   open: boolean;
 }): ReactNode {
   const { t } = useI18n();
+  if (!listFields && answer === undefined) return null;
   return (
     <div className={classes.question}>
-      {reply.fields.map((field) => (
+      {(listFields ? reply.fields : []).map((field) => (
         <div key={field.id} className={classes.field}>
-          <span className={classes.fieldLabel}>
-            {t('notifications.versions.question', { label: field.label })}
-          </span>
+          {field.label ? (
+            <span className={classes.fieldLabel}>
+              {t('notifications.versions.question', { label: field.label })}
+            </span>
+          ) : null}
           <span className={classes.options}>
             {field.type === 'text'
               ? t('notifications.versions.textAnswer')
