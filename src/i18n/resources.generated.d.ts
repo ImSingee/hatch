@@ -45,6 +45,7 @@ export type TranslationResource = {
   'appearance.themes.description': 'The colours, corners and type of Hatch and every App, on the web, in the apps and on every device. A dark theme is a theme like any other.';
   'appearance.themes.new': 'New theme';
   'appearance.themes.copyName': '{{name}} copy';
+  'appearance.themes.copyNameNumbered': '{{name}} copy {{number}}';
   'appearance.themes.actions': 'Actions for {{name}}';
   'appearance.themes.edit': 'Edit';
   'appearance.themes.duplicate': 'Duplicate';
@@ -1888,6 +1889,7 @@ export type TranslationResource = {
   'error.generic': 'Something went wrong. Please try again.';
   'error.theme_not_found': 'This theme no longer exists.';
   'error.theme_active': 'This theme is in use. Choose another theme before deleting it.';
+  'error.theme_name_taken': 'A theme named “{{name}}” already exists. Choose another name.';
   'error.theme_preset_readonly': 'Built-in themes cannot be changed. Duplicate it instead.';
   'error.theme_library_full': 'An instance keeps at most {{max}} custom themes. Delete one first.';
   'error.theme_invalid': 'The theme was rejected. Check its colours.';

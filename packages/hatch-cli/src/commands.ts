@@ -465,13 +465,13 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'create'],
     usage: 'theme create --file <path|->',
     description:
-      'Save a new custom theme from a theme document (JSON; see theme check) and print it with its id. It is not activated; use theme set --theme <id>. Rejected with THEME_INVALID, naming each problem, like theme check.',
+      'Save a new custom theme from a theme document (JSON; see theme check) and print it with its id. It is not activated; use theme set --theme <id>. Names are unique ignoring case (preset names included): a taken name is CONFLICT. Rejected with THEME_INVALID, naming each problem, like theme check.',
   },
   {
     path: ['theme', 'update'],
     usage: 'theme update <id> --file <path|->',
     description:
-      "Replace a custom theme's document whole (presets cannot be changed; create a copy instead). An active theme restyles every client at once and is also checked with the chosen accent. Rejected with THEME_INVALID like theme check; an unknown id is NOT_FOUND.",
+      "Replace a custom theme's document whole, its name included (presets cannot be changed; create a copy instead). A name another theme has is CONFLICT. An active theme restyles every client at once and is also checked with the chosen accent. Rejected with THEME_INVALID like theme check; an unknown id is NOT_FOUND.",
   },
   {
     path: ['theme', 'delete'],

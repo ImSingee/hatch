@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "6fd51b72-66cb-4284-9770-88fe776cd0e4",
+  "id": "5c154252-7ec5-46f8-9612-5cd54d261ed2",
   "prevIds": ["180a32b9-2ce8-4d77-b3e3-7748d5917356"],
   "footprints": [
     {
@@ -17,6 +17,17 @@
         "n|rel|public.themes_pkey"
       ],
       "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": ["index", "public", "themes", "themes_name_idx"],
+      "writes": [
+        "s|idx|public.themes_name_idx",
+        "n|idx|public.themes_name_idx",
+        "e|idx|public.themes_name_idx",
+        "n|rel|public.themes_name_idx"
+      ],
+      "reads": ["n|tbl|public.themes", "n|sch|public"]
     }
   ],
   "deltas": [
@@ -107,6 +118,29 @@
         "generated": null,
         "identity": null,
         "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "themes",
+        "name": "themes_name_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "lower(\"name\")",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "entityType": "indexes"
       }
     },
     {

@@ -30,7 +30,7 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { type PlainTranslationKey, useI18n } from '~i18n';
+import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
 import { themeQueryOptions, themesQueryOptions } from '~queries/theme';
 import {
   activateThemeFn,
@@ -129,10 +129,17 @@ export function ThemeLibraryPanel() {
   });
   const activeId = activate.isPending ? activate.variables : state.theme.id;
 
-  const copyOf = (theme: ThemeEntry): ThemeDocument => ({
-    ...theme.document,
-    name: t('appearance.themes.copyName', { name: theme.name }),
-  });
+  // Names are unique (ignoring case), so a copy takes the first free one.
+  const copyOf = (theme: ThemeEntry): ThemeDocument => {
+    const taken = new Set(themes.map((entry) => entry.name.toLowerCase()));
+    let name: string = t('appearance.themes.copyName', { name: theme.name });
+    for (let number = 2; taken.has(name.toLowerCase()); number++)
+      name = t('appearance.themes.copyNameNumbered', {
+        name: theme.name,
+        number,
+      });
+    return { ...theme.document, name };
+  };
   const confirmDelete = (theme: ThemeEntry) =>
     modals.openConfirmModal({
       title: t('appearance.themes.deleteTitle', { name: theme.name }),
@@ -330,16 +337,24 @@ function ThemeEditor({
   onSaved: () => void;
 }) {
   const { t } = useI18n();
+  const errorText = useErrorText();
   const [document, setDocument] = useState<ThemeDocument>(initial);
   const [problems, setProblems] = useState<ThemeProblem[]>([]);
   const save = useMutation({
     mutationFn: (): Promise<SaveThemeResult> =>
       saveThemeFn({ data: { id, document } }),
+    // Every failure shows in the editor, next to what it is about.
+    meta: { errorToast: false },
+    onMutate: () => setProblems([]),
     onSuccess: (result) => {
       if (result.ok) onSaved();
       else setProblems(result.problems);
     },
   });
+  const nameTaken =
+    (save.error as { code?: unknown } | null)?.code === 'theme_name_taken';
+  const saveError =
+    save.error && !nameTaken ? errorText(save.error, 'error.generic') : null;
   const setColor = (key: ThemeColorKey, value: string) =>
     setDocument((current) => ({
       ...current,
@@ -366,7 +381,11 @@ function ThemeEditor({
               label={t('appearance.themeEditor.name')}
               value={document.name ?? ''}
               maxLength={48}
-              error={fieldError('name')}
+              error={
+                nameTaken
+                  ? errorText(save.error, 'error.generic')
+                  : fieldError('name')
+              }
               onChange={(event) => {
                 const name = event.currentTarget.value;
                 setDocument((current) => ({ ...current, name }));
@@ -464,6 +483,11 @@ function ThemeEditor({
                 </Text>
               ))}
             </Stack>
+          </Alert>
+        ) : null}
+        {saveError ? (
+          <Alert color="red" variant="light">
+            {saveError}
           </Alert>
         ) : null}
         <Group justify="flex-end" gap="sm">

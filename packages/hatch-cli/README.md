@@ -751,7 +751,10 @@ custom themes oldest first, each as in `theme get`, plus `valid` and
 is listed with `valid: false` and cannot be activated until it is updated).
 `--limit` (1–100) pages and prints `nextCursor`. `theme create --file` saves a
 new custom theme (at most 100; one more is `CONFLICT`, exit 6) and prints it with its `id`; it is not
-activated. `theme update <id> --file` replaces a custom theme's document
+activated. Theme names are unique, ignoring case, and the preset names (`Desk`,
+`Desk dark`) are taken: `create` or `update` with a name another theme has is
+`CONFLICT` (exit 6) and the message names it; rename by updating the document's
+`name`. `theme update <id> --file` replaces a custom theme's document
 whole; presets cannot be changed (`BAD_REQUEST`, exit 2), copy one with
 `create` instead. `theme delete <id>` deletes a custom theme permanently; the
 active theme cannot be deleted (`CONFLICT`, exit 6), activate another first.

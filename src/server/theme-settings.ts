@@ -7,7 +7,7 @@
  * any other; clients draw the active theme whatever their device prefers.
  * An optional accent replaces the active theme's primary.
  */
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import {
   DEFAULT_THEME,
@@ -289,6 +289,47 @@ export async function listThemes(): Promise<ThemeEntry[]> {
   return [...THEME_PRESET_NAMES.map(presetEntry), ...rows.map(customEntry)];
 }
 
+function nameTaken(name: string): AppError {
+  return new AppError(
+    `A theme named "${name}" already exists; choose another name.`,
+    409,
+    { code: 'theme_name_taken', params: { name } },
+  );
+}
+
+/** Names pick one theme, ignoring case; preset names are taken too. */
+async function assertNameFree(name: string, exceptId?: string): Promise<void> {
+  const key = name.toLowerCase();
+  const preset = THEME_PRESET_NAMES.some(
+    (preset) => THEME_PRESETS[preset].document.name?.toLowerCase() === key,
+  );
+  const [row] = preset
+    ? []
+    : await db
+        .select({ id: schema.themes.id })
+        .from(schema.themes)
+        .where(sql`lower(${schema.themes.name}) = ${key}`)
+        .limit(1);
+  if (preset || (row && row.id !== exceptId)) throw nameTaken(name);
+}
+
+/** Two saves racing for one name: the unique index decides. */
+function isNameConflict(error: unknown): boolean {
+  const cause =
+    error && typeof error === 'object' && 'cause' in error && error.cause
+      ? error.cause
+      : error;
+  // postgres.js names the index `constraint_name`; PGlite `constraint`.
+  const { code, constraint, constraint_name } = (cause ?? {}) as {
+    code?: unknown;
+    constraint?: unknown;
+    constraint_name?: unknown;
+  };
+  return (
+    code === '23505' && (constraint_name ?? constraint) === 'themes_name_idx'
+  );
+}
+
 function checkedDocument(document: unknown): ThemeDocument {
   const result = validateThemeDocument(document);
   if (!result.ok) throw new ThemeValidationError(result.problems);
@@ -305,14 +346,15 @@ export async function createTheme(document: unknown): Promise<ThemeEntry> {
       409,
       { code: 'theme_library_full', params: { max: MAX_CUSTOM_THEMES } },
     );
+  const name = checked.name ?? CUSTOM_NAME;
+  await assertNameFree(name);
   const [row] = await db
     .insert(schema.themes)
-    .values({
-      id: ulid().toLowerCase(),
-      name: checked.name ?? CUSTOM_NAME,
-      document: checked,
-    })
-    .returning();
+    .values({ id: ulid().toLowerCase(), name, document: checked })
+    .returning()
+    .catch((error: unknown) => {
+      throw isNameConflict(error) ? nameTaken(name) : error;
+    });
   publishThemeUpdated(await getPlatformConfig('ui.theme'));
   return customEntry(row);
 }
@@ -343,6 +385,7 @@ export async function updateCustomTheme(
     });
   const config = await getPlatformConfig('ui.theme');
   const name = checked.name ?? CUSTOM_NAME;
+  await assertNameFree(name, id);
   if (config.theme === id)
     checkWithAccent(
       customEntry({ ...existing, name, document: checked }),
@@ -352,7 +395,10 @@ export async function updateCustomTheme(
     .update(schema.themes)
     .set({ name, document: checked, updatedAt: new Date() })
     .where(eq(schema.themes.id, id))
-    .returning();
+    .returning()
+    .catch((error: unknown) => {
+      throw isNameConflict(error) ? nameTaken(name) : error;
+    });
   if (!row)
     throw new AppError('No custom theme has this id.', 404, {
       code: 'theme_not_found',

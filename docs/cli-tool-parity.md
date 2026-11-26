@@ -203,7 +203,7 @@ page. Web operation to command:
 | ---------------------------------------------- | --------------------------------------------- | -------------------- |
 | Theme library: choose a card (any theme)       | `theme set --theme <id>`                      | SetTheme             |
 | New theme / Duplicate, then Save in the editor | `theme create --file <path\|->`               | CreateTheme          |
-| Edit a custom theme, then Save                 | `theme update <id> --file <path\|->`          | UpdateTheme          |
+| Edit (or rename) a custom theme, then Save     | `theme update <id> --file <path\|->`          | UpdateTheme          |
 | Delete a custom theme (confirmation)           | `theme delete <id>`                           | DeleteTheme          |
 | Editor problems shown on Save                  | `theme check --file <path\|->`                | ValidateTheme        |
 | Accent swatches, "Theme colour"                | `theme set --accent <name>`, `--clear-accent` | SetTheme             |

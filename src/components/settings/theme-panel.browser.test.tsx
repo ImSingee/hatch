@@ -162,6 +162,33 @@ test('creates a theme, showing each rejection translated next to the editor', as
     .not.toBeInTheDocument();
 });
 
+test('copies under a free name and shows a taken name under the field', async () => {
+  fixture.themes.push({ ...meadow, id: 'meadow-copy', name: 'Meadow copy' });
+  fixture.save.mockRejectedValueOnce(
+    Object.assign(new Error('A theme named "Meadow copy 2" already exists.'), {
+      code: 'theme_name_taken',
+      params: { name: 'Meadow copy 2' },
+    }),
+  );
+  const screen = await renderPanel();
+  await screen.getByRole('button', { name: 'Actions for Meadow' }).click();
+  await screen.getByRole('menuitem', { name: 'Duplicate' }).click();
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Name' }))
+    .toHaveValue('Meadow copy 2');
+  await screen.getByRole('button', { name: 'Save theme' }).click();
+  await expect
+    .element(
+      screen.getByText(
+        'A theme named “Meadow copy 2” already exists. Choose another name.',
+      ),
+    )
+    .toBeVisible();
+  await expect
+    .element(screen.getByRole('button', { name: 'Save theme' }))
+    .toBeVisible();
+});
+
 test('edits a custom theme and deletes it after confirming', async () => {
   fixture.save.mockResolvedValue({ ok: true, theme: meadow });
   const screen = await renderPanel();

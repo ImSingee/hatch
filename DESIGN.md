@@ -188,6 +188,7 @@ one by one gives unreadable combinations.
 - The instance setting (`ui.theme`) holds the accent and the active theme:
   a preset name or the id of a custom theme. Custom themes live in the
   `themes` table, a library of at most 100 documents beside the presets.
+  Names are unique, ignoring case, preset names included.
 - Light and dark are not modes. `appearance` is a property of a theme: a dark
   theme is activated like any other, and no client follows the device's or
   browser's light or dark setting. Each client draws the active theme's

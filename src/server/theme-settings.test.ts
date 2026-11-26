@@ -254,6 +254,37 @@ describe('the theme library', () => {
     await expect(deleteTheme(saved.id)).rejects.toMatchObject({ status: 404 });
   });
 
+  it('keeps theme names unique, ignoring case, presets included', async () => {
+    const saved = await createTheme(meadow);
+    const taken = { status: 409, code: 'theme_name_taken' };
+    for (const name of ['meadow', 'MEADOW', 'Desk', 'desk dark'])
+      await expect(createTheme({ ...meadow, name })).rejects.toMatchObject(
+        taken,
+      );
+    const other = await createTheme({ ...meadow, name: 'Moss' });
+    await expect(
+      updateCustomTheme(other.id, { ...meadow, name: 'Meadow' }),
+    ).rejects.toMatchObject(taken);
+    // A theme keeps its own name, in any case, when it is saved again.
+    await expect(
+      updateCustomTheme(saved.id, { ...meadow, name: 'MEADOW' }),
+    ).resolves.toMatchObject({ name: 'MEADOW' });
+    expect((await listThemes()).map((theme) => theme.name)).toEqual([
+      'Desk',
+      'Desk dark',
+      'MEADOW',
+      'Moss',
+    ]);
+    // Two saves racing past the check still cannot share a name.
+    await expect(
+      db
+        .insert(schema.themes)
+        .values({ id: 'race', name: 'moss', document: meadow }),
+    ).rejects.toMatchObject({
+      cause: { code: '23505', constraint: 'themes_name_idx' },
+    });
+  });
+
   it('rejects unusable themes and changes, keeping what is stored', async () => {
     const saved = await createTheme(meadow);
     const before = await getThemeState();

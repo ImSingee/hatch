@@ -939,13 +939,19 @@ export const platformConfig = snakeCase.table('platform_config', {
  * `document` is checked when it is saved; a row that no longer passes the
  * current rules is still listed (flagged) but cannot be activated.
  */
-export const themes = snakeCase.table('themes', {
-  id: text().primaryKey(),
-  name: text().notNull(),
-  document: jsonb().$type<JsonValue>().notNull(),
-  createdAt,
-  updatedAt,
-});
+export const themes = snakeCase.table(
+  'themes',
+  {
+    id: text().primaryKey(),
+    name: text().notNull(),
+    document: jsonb().$type<JsonValue>().notNull(),
+    createdAt,
+    updatedAt,
+  },
+  // A name picks one theme, ignoring case (the service also keeps the
+  // preset names free).
+  (table) => [uniqueIndex('themes_name_idx').on(sql`lower(${table.name})`)],
+);
 
 /**
  * Model catalogs fetched by the background refresh (`~server/model-catalog`),
