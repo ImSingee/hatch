@@ -12,9 +12,17 @@ export type Language = (typeof LANGUAGES)[number];
 type Flags = Record<string, string | boolean | undefined>;
 const invalid = (message: string) => new CliError('invalid_arguments', message);
 
+export const MIN_BACKGROUND_APP_MINUTES = 1;
+export const MAX_BACKGROUND_APP_MINUTES = 1440;
+
 export type PreferencesCommand =
   | { kind: 'get' }
-  | { kind: 'set'; agentMessageMode?: AgentMessageMode; language?: Language };
+  | {
+      kind: 'set';
+      agentMessageMode?: AgentMessageMode;
+      backgroundAppMinutes?: number;
+      language?: Language;
+    };
 
 const GLOBALS = {
   json: { type: 'boolean' },
@@ -41,6 +49,7 @@ export function parsePreferencesCommand(
         ...(operation === 'set'
           ? {
               'agent-message-mode': { type: 'string' },
+              'background-app-minutes': { type: 'string' },
               language: { type: 'string' },
             }
           : {}),
@@ -55,39 +64,49 @@ export function parsePreferencesCommand(
     throw invalid('This command takes no positional arguments.');
   const flags = parsed.values as Flags;
   if (operation === 'get') return { command: { kind: 'get' }, flags };
-  const once = (name: string) => {
-    const count = (parsed.tokens ?? []).filter(
+  const given = (name: string) =>
+    (parsed.tokens ?? []).filter(
       (token) => token.kind === 'option' && token.name === name,
     ).length;
-    if (count > 1) throw invalid(`Supply --${name} only once.`);
-    return flags[name] as string | undefined;
-  };
-  const mode = once('agent-message-mode');
-  const language = once('language');
-  if (mode === undefined && language === undefined)
+  if (given('agent-message-mode') > 1)
+    throw invalid('Supply --agent-message-mode only once.');
+  if (given('background-app-minutes') > 1)
+    throw invalid('Supply --background-app-minutes only once.');
+  if (given('language') > 1) throw invalid('Supply --language only once.');
+  const mode = flags['agent-message-mode'];
+  const minutes = flags['background-app-minutes'];
+  const language = flags.language;
+  if (mode === undefined && minutes === undefined && language === undefined)
     throw invalid(
-      'Supply --agent-message-mode queue|steer, --language en|zh-CN or both.',
+      'Supply at least one of --agent-message-mode queue|steer, --background-app-minutes <minutes> and --language en|zh-CN.',
     );
-  if (
-    mode !== undefined &&
-    !(AGENT_MESSAGE_MODES as readonly unknown[]).includes(mode)
-  )
-    throw invalid('--agent-message-mode must be queue or steer.');
-  if (
-    language !== undefined &&
-    !(LANGUAGES as readonly unknown[]).includes(language)
-  )
-    throw invalid('--language must be en or zh-CN.');
-  return {
-    command: {
-      kind: 'set',
-      ...(mode === undefined
-        ? {}
-        : { agentMessageMode: mode as AgentMessageMode }),
-      ...(language === undefined ? {} : { language: language as Language }),
-    },
-    flags,
+  const command: Extract<PreferencesCommand, { kind: 'set' }> = {
+    kind: 'set',
   };
+  if (mode !== undefined) {
+    if (!(AGENT_MESSAGE_MODES as readonly unknown[]).includes(mode))
+      throw invalid('--agent-message-mode must be queue or steer.');
+    command.agentMessageMode = mode as AgentMessageMode;
+  }
+  if (minutes !== undefined) {
+    const value = typeof minutes === 'string' ? Number(minutes) : Number.NaN;
+    if (
+      typeof minutes !== 'string' ||
+      !/^\d+$/.test(minutes) ||
+      value < MIN_BACKGROUND_APP_MINUTES ||
+      value > MAX_BACKGROUND_APP_MINUTES
+    )
+      throw invalid(
+        `--background-app-minutes must be a whole number from ${MIN_BACKGROUND_APP_MINUTES} to ${MAX_BACKGROUND_APP_MINUTES}.`,
+      );
+    command.backgroundAppMinutes = value;
+  }
+  if (language !== undefined) {
+    if (!(LANGUAGES as readonly unknown[]).includes(language))
+      throw invalid('--language must be en or zh-CN.');
+    command.language = language as Language;
+  }
+  return { command, flags };
 }
 
 export async function runPreferences(
@@ -119,6 +138,7 @@ export async function runPreferences(
       ? await client.preferences.get()
       : await client.preferences.update({
           agentMessageMode: command.agentMessageMode,
+          backgroundAppMinutes: command.backgroundAppMinutes,
           language: command.language,
         });
   process.stdout.write(

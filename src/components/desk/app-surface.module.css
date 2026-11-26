@@ -5,8 +5,9 @@
   min-height: 0;
 }
 
+/* Hidden but still laid out, so the App keeps its size and scroll. */
 .surface[hidden] {
-  display: none;
+  visibility: hidden;
 }
 
 .frame {

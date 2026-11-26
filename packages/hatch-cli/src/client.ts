@@ -589,13 +589,21 @@ export function cliClient(transport: Transport) {
   const preferences = createClient(PreferenceService, transport);
   const providers = createClient(ProviderService, transport);
   const catalog = createClient(CatalogService, transport);
-  /** One DTO for both preference groups; `language` is null until picked. */
-  const personalPreferences = (
-    agent: { messageMode: string } | undefined,
-    ui: { language?: string } | undefined,
-  ): { agentMessageMode: string; language: string | null } => ({
-    agentMessageMode: required(agent).messageMode,
-    language: required(ui).language ?? null,
+  const agentPreferences = (
+    value: { messageMode: string } | undefined,
+  ): { agentMessageMode: string } => ({
+    agentMessageMode: required(value).messageMode,
+  });
+  const deskPreferences = (
+    value: { backgroundAppMinutes: number } | undefined,
+  ): { backgroundAppMinutes: number } => ({
+    backgroundAppMinutes: required(value).backgroundAppMinutes,
+  });
+  /** `language` is null until the user picks one. */
+  const interfacePreferences = (
+    value: { language?: string } | undefined,
+  ): { language: string | null } => ({
+    language: required(value).language ?? null,
   });
   return {
     dashboards: {
@@ -929,31 +937,125 @@ export function cliClient(transport: Transport) {
       },
     },
     preferences: {
-      get: async () => {
-        const [agent, ui] = await Promise.all([
-          preferences.getAgentPreferences({}),
-          preferences.getInterfacePreferences({}),
-        ]);
-        return personalPreferences(agent.preferences, ui.preferences);
-      },
-      /** Changes only the given fields; the others keep their value. */
+      // One DTO for all of the caller's preferences, from every service.
+      get: async () => ({
+        ...agentPreferences(
+          (await preferences.getAgentPreferences({})).preferences,
+        ),
+        ...deskPreferences(
+          (await preferences.getDeskPreferences({})).preferences,
+        ),
+        ...interfacePreferences(
+          (await preferences.getInterfacePreferences({})).preferences,
+        ),
+      }),
+      /**
+       * Saves the given fields one service at a time; the others are read.
+       * When a later step fails after an earlier one saved, the error says
+       * what was saved and carries it as `details.applied`.
+       */
       update: async (input: {
         agentMessageMode?: string;
+        backgroundAppMinutes?: number;
         language?: string;
       }) => {
-        const agent =
-          input.agentMessageMode === undefined
-            ? await preferences.getAgentPreferences({})
-            : await preferences.updateAgentPreferences({
-                messageMode: input.agentMessageMode,
-              });
-        const ui =
-          input.language === undefined
-            ? await preferences.getInterfacePreferences({})
-            : await preferences.updateInterfacePreferences({
-                language: input.language,
-              });
-        return personalPreferences(agent.preferences, ui.preferences);
+        const steps: {
+          field: string;
+          /** How a failed read of the field is described. */
+          reading: string;
+          given: boolean;
+          run: () => Promise<Record<string, unknown>>;
+        }[] = [
+          {
+            field: 'agentMessageMode',
+            reading: 'reading the agent message mode failed.',
+            given: input.agentMessageMode !== undefined,
+            run: async () =>
+              agentPreferences(
+                input.agentMessageMode === undefined
+                  ? (await preferences.getAgentPreferences({})).preferences
+                  : (
+                      await preferences.updateAgentPreferences({
+                        messageMode: input.agentMessageMode,
+                      })
+                    ).preferences,
+              ),
+          },
+          {
+            field: 'backgroundAppMinutes',
+            reading: 'reading the background time failed.',
+            given: input.backgroundAppMinutes !== undefined,
+            run: async () =>
+              deskPreferences(
+                input.backgroundAppMinutes === undefined
+                  ? (await preferences.getDeskPreferences({})).preferences
+                  : (
+                      await preferences.updateDeskPreferences({
+                        backgroundAppMinutes: input.backgroundAppMinutes,
+                      })
+                    ).preferences,
+              ),
+          },
+          {
+            field: 'language',
+            reading: 'reading the language failed.',
+            given: input.language !== undefined,
+            run: async () =>
+              interfacePreferences(
+                input.language === undefined
+                  ? (await preferences.getInterfacePreferences({})).preferences
+                  : (
+                      await preferences.updateInterfacePreferences({
+                        language: input.language,
+                      })
+                    ).preferences,
+              ),
+          },
+        ];
+        const result: Record<string, unknown> = {};
+        const applied: Record<string, unknown> = {};
+        for (const [index, step] of steps.entries()) {
+          try {
+            const value = await step.run();
+            Object.assign(result, value);
+            if (step.given) Object.assign(applied, value);
+          } catch (error) {
+            const saved = Object.keys(applied);
+            if (saved.length === 0) throw error;
+            // What is already saved stays saved: say so, keeping the
+            // failure's own code and exit status. Whether the failed field
+            // was saved is known only when the platform refused it or the
+            // request never left; otherwise (a timeout, a dropped
+            // connection) it may have been.
+            const failure = publicError(error);
+            const failed = !step.given
+              ? step.reading
+              : failure.code === 'network_error' ||
+                  (failure.httpStatus !== undefined && failure.httpStatus < 500)
+                ? `${step.field} was not set.`
+                : `whether ${step.field} was set is unknown; read it with hatch preferences get.`;
+            const skipped = steps
+              .slice(index + 1)
+              .filter((later) => later.given)
+              .map((later) => later.field);
+            throw new CliError(
+              failure.code,
+              `${failure.message} ${saved.join(' and ')} ${
+                saved.length === 1 ? 'was' : 'were'
+              } already set; ${failed}${
+                skipped.length > 0
+                  ? ` ${skipped.join(' and ')} ${
+                      skipped.length === 1 ? 'was' : 'were'
+                    } not attempted.`
+                  : ''
+              }`,
+              failure.exitCode,
+              failure.httpStatus,
+              { applied },
+            );
+          }
+        }
+        return result;
       },
     },
     images: {

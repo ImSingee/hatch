@@ -808,6 +808,7 @@ deleting the last dashboard.
 ```sh
 hatch preferences get --json
 hatch preferences set --agent-message-mode queue
+hatch preferences set --background-app-minutes 15
 hatch preferences set --language zh-CN
 ```
 
@@ -817,15 +818,25 @@ answers. `agentMessageMode` decides how a chat message sent while the Agent is
 working is delivered: `steer` (the default) injects it into the running run
 after its current tool calls finish, and several waiting messages go together;
 `queue` waits until the run completes and then starts one run per message, in
-send order. A change applies to messages sent afterwards. `language` is the
-Web UI language (`en` or `zh-CN`) of every browser the user signs in to; it is
-`null` until the user picks one, and each browser then follows its own
-language. `set` changes only the flags it is given.
+send order. A change applies to messages sent afterwards.
+`backgroundAppMinutes` (1–1440, default 5) is how long a minimised App keeps
+running on the Desk, listeners and all; after that the Desk stops it and
+reopens it on the page it was left on when it is opened again. `language` is
+the Web UI language (`en` or `zh-CN`) of every browser the user signs in to; it
+is `null` until the user picks one, and each browser then follows its own
+language. `set` changes only the flags it is given and prints every preference.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
-neither `--agent-message-mode` nor `--language`, a flag given twice, a mode
-other than `queue` or `steer`, a language other than `en` or `zh-CN`, or a
-positional argument). Platform errors: `CONFLICT` (6) for a Run credential
+`set` without any flag, a flag given twice, a mode other than `queue` or
+`steer`, minutes that are not a whole number from 1 to 1440, a language other
+than `en` or `zh-CN`, or a positional argument). `set` saves the given flags in
+the order agent message mode, background time, language; if a later one fails
+after an earlier one was saved, the error keeps that failure's code and exit
+status, names what was already saved, and with `--json` carries
+`details.applied` (the saved fields). It says the failed field was not set only
+when the platform refused it or the request never left; after a timeout or a
+dropped connection (`outcome_unknown`) it says the outcome is unknown, so read
+it back with `hatch preferences get`. Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).
 

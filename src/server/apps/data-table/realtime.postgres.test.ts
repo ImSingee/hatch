@@ -47,6 +47,12 @@ describe.skipIf(!adminUrl)('Data Table realtime on PostgreSQL', () => {
         created_at timestamptz not null default now()
       )
     `);
+    // Subscribing starts the initial replay without awaiting it. Wait until it
+    // has delivered a change committed beforehand, so it cannot overlap the
+    // tests: an in-flight replay that picks up a test's change leaves that
+    // change's NOTIFY queued as one more replay, which would run after the
+    // next test's change and deliver it without any wake-up of its own.
+    await recordChange('seed', false);
     await subscribeDataChanges({
       id: appId,
       since: 0,
@@ -54,6 +60,14 @@ describe.skipIf(!adminUrl)('Data Table realtime on PostgreSQL', () => {
         if (!('reset' in event)) received.push(event);
       },
     });
+    await vi.waitFor(
+      () => {
+        if (!received.some((change) => change.rowId === 'seed')) {
+          throw new Error('The initial replay has not delivered the seed.');
+        }
+      },
+      { timeout: 10_000 },
+    );
   }, 30_000);
 
   afterAll(async () => {
@@ -98,6 +112,8 @@ describe.skipIf(!adminUrl)('Data Table realtime on PostgreSQL', () => {
   it('replays changes made while the LISTEN connection was down', async () => {
     // Committed without a NOTIFY, as when the hint is lost with its
     // connection: only the replay after the LISTEN reconnect delivers it.
+    // The hub is idle here: the seed's replay requested nothing more, and
+    // todo-1's single NOTIFY was consumed by the replay that delivered it.
     await recordChange('todo-2', false);
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(received.map((change) => change.rowId)).not.toContain('todo-2');

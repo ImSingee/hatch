@@ -542,8 +542,40 @@ describe('interactive Platform API contracts and authority', () => {
       await db.query.userPreferences.findFirst({ where: { userId } }),
     ).toMatchObject({ homepage: { kind: 'page', page: 'dashboard' } });
 
+    // The background time of minimised Apps, with each credential type.
+    const desk = async (
+      headers: Record<string, string>,
+      update?: { backgroundAppMinutes?: number },
+    ) => {
+      const response = await call(
+        update
+          ? 'PreferenceService/UpdateDeskPreferences'
+          : 'PreferenceService/GetDeskPreferences',
+        { headers, body: update ?? {} },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+    expect(
+      await desk({ 'x-api-key': key }, { backgroundAppMinutes: 20 }),
+    ).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 20 } },
+    });
+    expect(await desk(run)).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 20 } },
+    });
+    expect(await desk(run, { backgroundAppMinutes: 7 })).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 7 } },
+    });
+    expect((await desk({})).body).toEqual({
+      preferences: { backgroundAppMinutes: 7 },
+    });
+
     const orphan = await preferences(await runJwt(null));
     expect(orphan.status).toBe(409);
+    expect((await desk(await runJwt(null))).status).toBe(409);
 
     const ui = async (
       headers: Record<string, string>,
@@ -573,6 +605,53 @@ describe('interactive Platform API contracts and authority', () => {
     });
     expect((await ui(await runJwt(null))).status).toBe(409);
     await db.delete(schema.agentRuns);
+  });
+
+  it('reads and writes the background time of minimised Apps', async () => {
+    const owner = await auth.api.getSession({
+      headers: new Headers({ authorization: `Bearer ${token}` }),
+    });
+    const userId = owner!.user.id;
+    await db
+      .delete(schema.userPreferences)
+      .where(eq(schema.userPreferences.userId, userId));
+    const desk = async (update?: { backgroundAppMinutes?: number }) => {
+      const response = await call(
+        update
+          ? 'PreferenceService/UpdateDeskPreferences'
+          : 'PreferenceService/GetDeskPreferences',
+        { body: update ?? {} },
+      );
+      return { status: response.status, body: await response.json() };
+    };
+
+    // Five minutes before the user ever saved it.
+    expect(await desk()).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 5 } },
+    });
+    expect(await desk({ backgroundAppMinutes: 30 })).toEqual({
+      status: 200,
+      body: { preferences: { backgroundAppMinutes: 30 } },
+    });
+    // Omitting the field keeps it; out-of-range values are refused.
+    expect((await desk({})).body).toEqual({
+      preferences: { backgroundAppMinutes: 30 },
+    });
+    for (const backgroundAppMinutes of [0, 1441]) {
+      expect((await desk({ backgroundAppMinutes })).status).toBe(400);
+    }
+    expect((await desk()).body).toEqual({
+      preferences: { backgroundAppMinutes: 30 },
+    });
+    // The other preferences keep their values.
+    expect(
+      await db.query.userPreferences.findFirst({ where: { userId } }),
+    ).toMatchObject({
+      homepage: { kind: 'page', page: 'dashboard' },
+      agentMessageMode: 'steer',
+      deskBackgroundMinutes: 30,
+    });
   });
 
   it.each([false, true])(
