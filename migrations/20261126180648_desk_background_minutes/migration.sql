@@ -1,0 +1,2 @@
+ALTER TABLE "user_preferences" ADD COLUMN "desk_background_minutes" integer DEFAULT 5 NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_desk_background_minutes_check" CHECK ("user_preferences"."desk_background_minutes" between 1 and 1440);

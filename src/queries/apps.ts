@@ -20,12 +20,12 @@ export const appsQueryOptions = queryOptions({
 });
 
 /**
- * The App view's detail snapshot. Its deployment revision is the baseline the
- * running iframe was loaded from, so it must only change when the view also
- * remounts the iframe: the route loader (navigation) and the explicit reload
- * fetch it with `staleTime: 0`, and nothing refetches it in the background.
- * The key stays outside the `['apps']` prefix so list invalidations elsewhere
- * cannot silently advance the baseline and hide a pending update.
+ * The App view's detail snapshot. The route loader (navigation) and the
+ * explicit reload fetch it with `staleTime: 0`, and nothing refetches it in
+ * the background. A running App keeps the deployment revision it loaded as
+ * its own "has update" baseline (`AppSession.revision`), so a navigation that
+ * re-reads this snapshot never hides a pending update. The key stays outside
+ * the `['apps']` prefix so list invalidations elsewhere leave it alone.
  */
 export const appViewQueryOptions = (slug: string) =>
   queryOptions({

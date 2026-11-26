@@ -862,6 +862,7 @@ deleting the last dashboard.
 ```sh
 hatch preferences get --json
 hatch preferences set --agent-message-mode queue
+hatch preferences set --background-app-minutes 15
 ```
 
 `preferences` reads and writes the caller's personal preferences. With a Run
@@ -871,10 +872,21 @@ working is delivered: `steer` (the default) injects it into the running run
 after its current tool calls finish, and several waiting messages go together;
 `queue` waits until the run completes and then starts one run per message, in
 send order. A change applies to messages sent afterwards.
+`backgroundAppMinutes` (1–1440, default 5) is how long a minimised App keeps
+running on the Desk, listeners and all; after that the Desk stops it and
+reopens it on the page it was left on when it is opened again. `set` changes
+only the flags it is given and prints every preference.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
-a missing `--agent-message-mode`, a value other than `queue` or `steer`, or a
-positional argument). Platform errors: `CONFLICT` (6) for a Run credential
+`set` without either flag, a flag given twice, a value other than `queue` or
+`steer`, minutes that are not a whole number from 1 to 1440, or a positional
+argument). `set` with both flags saves `agentMessageMode` first; if the
+background time then fails, the error keeps that failure's code and exit
+status, says the agent preference was saved, and with `--json` carries
+`details.applied` (the saved `agentMessageMode`). It says the background time
+was not set only when the platform refused it or the request never left;
+after a timeout or a dropped connection (`outcome_unknown`) it says the
+outcome is unknown, so read it back with `hatch preferences get`. Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).
 

@@ -6,8 +6,14 @@ import {
   useRouterState,
 } from '@tanstack/react-router';
 import { useMemo } from 'react';
+import {
+  AppSessionsProvider,
+  WEB_RUNNING_APP_LIMIT,
+  useAppSessions,
+} from '~components/desk/app-sessions';
 import { DeskShell } from '~components/desk/desk-shell';
 import type { DockOpenItem } from '~components/desk/dock-item';
+import { RunningApps } from '~components/desk/running-apps';
 import { LivePins } from '~components/desk/use-live-pins';
 import { DesktopShell } from '~components/desktop-host/desktop-shell';
 import { isDesktopHost } from '~components/desktop-host/host';
@@ -36,37 +42,63 @@ const DESKTOP_HOST = isDesktopHost();
 /** Windows that keep the tab bar below 560 wide: the tab destinations. */
 const TAB_DESTINATIONS = ['/apps', '/settings'];
 
+/**
+ * Running Apps per window. The macOS app shows one page at a time in its
+ * sidebar layout and offers no way to stop an App, so it keeps only the
+ * last one running until its own session manager arrives (plan phase 6).
+ */
+const RUNNING_APP_LIMIT = DESKTOP_HOST ? 1 : WEB_RUNNING_APP_LIMIT;
+
 function AppLayout() {
-  // The URL is the only record of what is open. The shell derives the view
-  // and the dock's markers from it and hands them down; nothing below keeps a
-  // "current App" of its own.
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const route = useRouterState({ select: (s) => s.location.hash });
-  const { dashboardId, appSlug } = useParams({ strict: false });
-
-  const openItems = useMemo<DockOpenItem[]>(() => {
-    if (appSlug) return [{ kind: 'app', slug: appSlug, route }];
-    return [];
-  }, [appSlug, route]);
-
   return (
     <PlatformEventsProvider>
-      <LivePins />
-      {DESKTOP_HOST ? (
-        <DesktopShell openItems={openItems}>
-          <Outlet />
-        </DesktopShell>
-      ) : (
-        <DeskShell
-          view={dashboardId ? 'home' : 'window'}
-          tabDestination={TAB_DESTINATIONS.some(
-            (to) => pathname === to || pathname.startsWith(`${to}/`),
-          )}
-          openItems={openItems}
-        >
-          <Outlet />
-        </DeskShell>
-      )}
+      <AppSessionsProvider
+        limit={RUNNING_APP_LIMIT}
+        besideEnabled={!DESKTOP_HOST}
+      >
+        <LivePins />
+        <AppLayoutShell />
+      </AppSessionsProvider>
     </PlatformEventsProvider>
+  );
+}
+
+function AppLayoutShell() {
+  // The URL says which window is in front; the session manager says which
+  // Apps are running. The shell derives the view and the dock's markers from
+  // them and hands them down.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { dashboardId } = useParams({ strict: false });
+  const { sessions, front } = useAppSessions();
+
+  // The dock marks every running App. The macOS sidebar marks the row of the
+  // page on screen, so it gets only the App in front.
+  const openItems = useMemo<DockOpenItem[]>(
+    () =>
+      sessions
+        .filter((session) => !DESKTOP_HOST || session.slug === front)
+        .map((session) => ({
+          kind: 'app',
+          slug: session.slug,
+          route: session.route,
+        })),
+    [sessions, front],
+  );
+
+  return DESKTOP_HOST ? (
+    <DesktopShell openItems={openItems}>
+      <Outlet />
+      <RunningApps besideShown={false} />
+    </DesktopShell>
+  ) : (
+    <DeskShell
+      view={dashboardId ? 'home' : 'window'}
+      tabDestination={TAB_DESTINATIONS.some(
+        (to) => pathname === to || pathname.startsWith(`${to}/`),
+      )}
+      openItems={openItems}
+    >
+      <Outlet />
+    </DeskShell>
   );
 }

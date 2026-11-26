@@ -41,22 +41,10 @@ const config: NativePlayerConfig = {
   defaultAccent: 'indigo',
 };
 
-function setup(
-  fetchImpl: (url: string, init?: RequestInit) => Response,
-  visible = true,
-) {
+function setup(fetchImpl: (url: string, init?: RequestInit) => Response) {
   const calls: { url: string; init?: RequestInit }[] = [];
-  const hideListeners = new Set<() => void>();
   const shell = {
     theme: () => config.themes.indigo,
-    visibleWithin: () => Promise.resolve(visible),
-    onHidden: (listener: () => void) => {
-      hideListeners.add(listener);
-      return () => hideListeners.delete(listener);
-    },
-    hide: () => {
-      for (const listener of hideListeners) listener();
-    },
     post: vi.fn<(message: unknown) => boolean>(() => true),
     setTitle: vi.fn<(title: string | null) => void>(),
     setRoute: vi.fn<(route: string) => void>(),
@@ -201,34 +189,6 @@ describe('native App host', () => {
       events: [{ revision: 9, reset: false }],
     });
     expect(calls[0].url).toBe('/api/app/notes/data/events?since=4&table=notes');
-  });
-
-  it('answers no change events for a hidden App without a request', async () => {
-    const { host, calls } = setup(() => Response.json({}), false);
-    await expect(
-      host.call('hatch.data.events', { table: 'notes', since: 4 }),
-    ).resolves.toEqual({ ok: true, events: [] });
-    expect(calls).toEqual([]);
-  });
-
-  it('ends an open poll with no events when the App is hidden', async () => {
-    // A stream with no change yet, open until the poll is aborted.
-    const { host, shell } = setup((_url, init) => {
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          init?.signal?.addEventListener('abort', () =>
-            controller.error(new DOMException('aborted', 'AbortError')),
-          );
-        },
-      });
-      return new Response(body, {
-        headers: { 'content-type': 'text/event-stream' },
-      });
-    });
-    const answer = host.call('hatch.data.events', { table: 'notes', since: 4 });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    shell.hide();
-    await expect(answer).resolves.toEqual({ ok: true, events: [] });
   });
 
   it('validates navigation and refuses names that are not host functions', async () => {

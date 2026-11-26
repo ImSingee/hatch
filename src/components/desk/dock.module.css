@@ -47,6 +47,19 @@
   flex: none;
 }
 
+/* Running Apps that are not pinned, after the pins and set off from them. */
+.running {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+.running[data-after-pins] {
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-hairline);
+}
+
 .item {
   display: flex;
   flex-direction: column;

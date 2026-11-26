@@ -20,3 +20,18 @@ export function getAppViewState({
     canOpen: hasLiveDeployment && hasFrontend && runtimeSupported,
   };
 }
+
+/** Whether the App's live deployment can run its frontend here. */
+export function canRunApp(app: {
+  status: AppStatus;
+  deploymentRevision: string | null;
+  capabilities?: { frontend?: boolean } | null;
+  compatibility?: { isSupported: boolean } | null;
+}) {
+  return getAppViewState({
+    status: app.status,
+    deploymentRevision: app.deploymentRevision,
+    hasFrontend: Boolean(app.capabilities?.frontend),
+    runtimeSupported: app.compatibility?.isSupported ?? false,
+  }).canOpen;
+}

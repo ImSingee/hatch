@@ -405,7 +405,9 @@ The frame a page, a modal or the sign-in form is presented in.
 Every page is shown in this frame (`DeskWindow` in `src/components/desk/`).
 Its buttons, in order:
 
-- **Minimise** is shown but disabled until windows can wait on the desk.
+- **Minimise** sends a running App's window to wait on the desk: the App
+  keeps running and comes back as it was left. Other windows cannot wait, so
+  theirs is shown but disabled.
 - **Maximize / Restore** (double-clicking the title bar does the same).
   Maximized, the window fills the screen edge to edge, with no radius or
   shadow. With a mouse, the menu bar waits above the top edge and slides down
@@ -413,11 +415,21 @@ Its buttons, in order:
   focus enters it; there is no handle. It floats over the top of the window
   rather than pushing it down. The choice is the shell's and is
   remembered per browser, so the next window opens the same way.
-- **Close** leads to the window's parent or the desk.
+- **Close** leads to the window's parent or the desk. Closing a running App's
+  window also quits the App; it starts fresh next time.
 
-Escape closes the window unless a field or a layer above it wants the key.
-Below 560 wide the buttons become one back button at the start of the title
-bar.
+Escape closes the window unless a field or a layer above it wants the key; a
+running App's window minimises instead. Below 560 wide the buttons become one
+back button at the start of the title bar, which minimises an App likewise.
+
+Running Apps: up to 12 per browser window keep running while other windows are
+in front, listeners and all. Opening a running App brings it forward. An App
+that waits off screen longer than the user's background time (Settings ›
+Account, 5 minutes by default) quits, and so does the App shown least recently
+when a 13th opens; either reopens on the page it was left on. From 768 wide one
+running App can sit beside the window in front (the dock's Open beside): two
+windows of equal width, 16 apart, the App on the right, with Minimise (stop
+showing it there) and Close (quit). Narrower, only the window in front shows.
 
 ### Dock tile
 
@@ -432,6 +444,12 @@ bar.
   dot under the name, or 5 under the tile when names are hidden.
 - A tile has no button of its own: its actions are in the dock's right-click
   menu (a long press on touch, Shift+F10 or the Menu key from the keyboard).
+  A running App's menu starts with Open beside (from 768 wide, when it is not
+  in front) and Quit.
+- Running Apps that are not pinned follow the pins, set off by a 1 px
+  hairline with 4 before and 8 after it, each marked as running, with Open
+  beside, Quit, Pin to dock and Manage in their menu. Selecting a running
+  App's tile brings it forward as it was left.
 - Once anything is pinned, the Apps group ends with an All apps tile that is
   not a pin: four 10 dots (teal, orange, violet, blue, shade 6) on a white
   tile with the `card` shadow. It is never dragged and stays visible when the

@@ -1,0 +1,67 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "2682c654-0df9-4463-be10-e7edda881446",
+  "prevIds": ["180a32b9-2ce8-4d77-b3e3-7748d5917356"],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "user_preferences",
+        "desk_background_minutes"
+      ],
+      "writes": [
+        "s|col|public.user_preferences.desk_background_minutes",
+        "n|col|public.user_preferences.desk_background_minutes",
+        "e|col|public.user_preferences.desk_background_minutes"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": ["table", "public", "user_preferences"],
+      "writes": [
+        "s|ck|public.user_preferences.user_preferences_desk_background_minutes_check",
+        "n|ck|public.user_preferences.user_preferences_desk_background_minutes_check",
+        "e|ck|public.user_preferences.user_preferences_desk_background_minutes_check",
+        "n|con|public.user_preferences.user_preferences_desk_background_minutes_check"
+      ],
+      "reads": [
+        "n|tbl|public.user_preferences",
+        "n|sch|public",
+        "n|col|public.user_preferences.desk_background_minutes"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "desk_background_minutes",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "5",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "user_preferences_desk_background_minutes_check",
+        "value": "\"user_preferences\".\"desk_background_minutes\" between 1 and 1440",
+        "entityType": "checks"
+      }
+    }
+  ]
+}

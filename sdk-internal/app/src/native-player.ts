@@ -166,10 +166,6 @@ export function createNativeHost(
   shell: {
     /** The NSH theme to answer `hatch.theme.get` with. */
     theme(): unknown;
-    /** Resolves true once the App is visible, or false after `ms`. */
-    visibleWithin(ms: number): Promise<boolean>;
-    /** Calls `listener` when the App is hidden; returns the unsubscribe. */
-    onHidden(listener: () => void): () => void;
     post(message: PlayerMessage): boolean;
     setTitle(title: string | null): void;
     setRoute(route: string): void;
@@ -304,26 +300,10 @@ export function createNativeHost(
         'hatch.data.events needs { table, since }.',
       );
     }
-    // A hidden App gets no change events: the call answers "none" after the
-    // usual wait (well inside the App's call timeout) without touching the
-    // network, and the App catches up once shown, because the cursor it
-    // sends then still names what it last saw.
-    // One deadline for the whole call, the wait to be shown included.
-    const deadline = Date.now() + DATA_EVENTS_WAIT_MS;
-    if (!(await shell.visibleWithin(DATA_EVENTS_WAIT_MS))) {
-      return { ok: true, events: [] };
-    }
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return { ok: true, events: [] };
+    // A hidden App keeps getting change events like a shown one: the shell
+    // stops an App that waits too long instead (see the Desk's running Apps).
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), remaining);
-    // Hiding the App ends the poll and drops what it read, so the App's
-    // cursor stays at what it last saw and it catches up when shown.
-    let hidden = false;
-    const stopHidden = shell.onHidden(() => {
-      hidden = true;
-      abort.abort();
-    });
+    const timer = setTimeout(() => abort.abort(), DATA_EVENTS_WAIT_MS);
     const found: { revision?: number; reset: boolean }[] = [];
     try {
       const response = await fetchImpl(
@@ -374,10 +354,9 @@ export function createNativeHost(
       if (!abort.signal.aborted) return refuse('unavailable', String(error));
     } finally {
       clearTimeout(timer);
-      stopHidden();
       abort.abort();
     }
-    return { ok: true, events: hidden ? [] : found };
+    return { ok: true, events: found };
   }
 
   return {
@@ -628,9 +607,6 @@ export async function fetchInstanceTheme(
 export async function startNativePlayer(): Promise<void> {
   const config = readConfig();
   let accent = storedAccent() ?? config.defaultAccent;
-  let visible = true;
-  const showWaiters: (() => void)[] = [];
-  const hideListeners = new Set<() => void>();
   let player: Player | null = null;
   let port: MessagePort | null = null;
   const pending: SurfaceMessage[] = [];
@@ -682,14 +658,8 @@ export async function startNativePlayer(): Promise<void> {
         break;
       }
       case 'visibility':
-        visible = message.visible;
-        if (visible) {
-          themes.refreshIfStale();
-          for (const resolve of showWaiters.splice(0)) resolve();
-        } else {
-          for (const listener of hideListeners) listener();
-        }
-        player.hostEvent('hatch.visibility', { visible });
+        if (message.visible) themes.refreshIfStale();
+        player.hostEvent('hatch.visibility', { visible: message.visible });
         break;
       case 'update-available':
         player.hostEvent('hatch.update', {});
@@ -706,7 +676,6 @@ export async function startNativePlayer(): Promise<void> {
   if (connected.init?.type === 'init') {
     route = connected.init.route;
     accent = connected.init.accent;
-    visible = connected.init.visible;
     themeKey = connected.init.themeKey;
     if (rawHash() !== route) {
       history.replaceState(history.state, '', `#${route}`);
@@ -730,25 +699,6 @@ export async function startNativePlayer(): Promise<void> {
 
   const host = createNativeHost(config, {
     theme,
-    visibleWithin: (ms) =>
-      visible
-        ? Promise.resolve(true)
-        : new Promise<boolean>((resolve) => {
-            const waiter = () => {
-              clearTimeout(timer);
-              resolve(true);
-            };
-            const timer = setTimeout(() => {
-              const index = showWaiters.indexOf(waiter);
-              if (index >= 0) showWaiters.splice(index, 1);
-              resolve(false);
-            }, ms);
-            showWaiters.push(waiter);
-          }),
-    onHidden(listener) {
-      hideListeners.add(listener);
-      return () => hideListeners.delete(listener);
-    },
     post,
     setTitle(title) {
       document.title = title ?? config.name;
