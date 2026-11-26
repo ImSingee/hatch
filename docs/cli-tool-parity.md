@@ -38,20 +38,20 @@ read `deploy_app` calls before.
 
 The capabilities below never had an Agent Tool.
 
-| Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                     |
-| ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown       |
-| App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded           |
-| Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed  |
-| Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt    |
-| Models           | model list / add / update / enable / disable / remove / set-kind                                    | ModelService; chat and image models, catalog link, chat metadata overrides and resets, kind like the Web field   |
-| Model catalog    | model catalog list / status / refresh / settings                                                    | CatalogService/ListCatalogModels, GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings                        |
-| Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap      |
-| Instance theme   | theme get / set                                                                                     | ThemeService/GetTheme, SetTheme; accent (from the design tokens, clients recolour live) and dock labels          |
-| Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                      |
-| Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event |
-| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                  |
-| Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About          |
+| Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown                                                                      |
+| App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded                                                                          |
+| Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed                                                                 |
+| Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt                                                                   |
+| Models           | model list / add / update / enable / disable / remove / set-kind                                    | ModelService; chat and image models, catalog link, chat metadata overrides and resets, kind like the Web field                                                                  |
+| Model catalog    | model catalog list / status / refresh / settings                                                    | CatalogService/ListCatalogModels, GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings                                                                                       |
+| Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap                                                                     |
+| Instance theme   | theme get / set / check / presets / reset                                                           | ThemeService/GetTheme, SetTheme, ValidateTheme, ListThemePresets, ResetTheme; mode, light and dark theme (preset or custom document), accent, dock labels; clients restyle live |
+| Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                                                                                     |
+| Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event                                                                |
+| Preferences      | preferences get / set                                                                               | PreferenceService/GetAgentPreferences, UpdateAgentPreferences; the caller's queue/steer default                                                                                 |
+| Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About                                                                         |
 
 `frontend` in `app get` reports how the live deployment's frontend runs:
 `runtime` is `web` (a React page) or `native` (NSH TSX in the platform's
@@ -183,13 +183,30 @@ domain service and `silent: true` option. No Agent Tool is added.
 
 ## Theme and pins: CLI only, no Agent Tool
 
-`hatch theme get | set [--accent <name>] [--dock-labels | --no-dock-labels]`
-calls `ThemeService`, which reads and writes the `ui.theme` platform setting
-through `src/server/theme-settings.ts`, the same service as the Appearance
-settings page (accent swatches and the "Show names in the dock" switch). The accent list is
-`packages/hatch-design-tokens/tokens.json`; the CLI validates `--accent`
-against the copy it was built with and the platform validates again. A change
-is published as the `theme.updated` platform event. Every pin change, from
+`hatch theme get [--resolved [--appearance light|dark]]`,
+`hatch theme set [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels] [--mode light|dark|system] [--appearance light|dark (--preset <name> | --file <path|->)]`,
+`hatch theme check --file <path|->`, `hatch theme presets` and
+`hatch theme reset` call `ThemeService`, which reads and writes the `ui.theme`
+platform setting through `src/server/theme-settings.ts`, the same service as
+the Appearance settings page. Web operation to command:
+
+| Web UI (Settings · Appearance)            | CLI                                           | RPC                        |
+| ----------------------------------------- | --------------------------------------------- | -------------------------- |
+| Appearance: Light / Dark / Match device   | `theme set --mode light\|dark\|system`        | SetTheme                   |
+| Light theme / Dark theme: choose a preset | `theme set --appearance <a> --preset <name>`  | SetTheme                   |
+| Replace a custom theme (confirmation)     | `theme set --appearance <a> --preset <name>`  | SetTheme                   |
+| Accent swatches, "Theme colour"           | `theme set --accent <name>`, `--clear-accent` | SetTheme                   |
+| Show names in the dock                    | `theme set --dock-labels \| --no-dock-labels` | SetTheme                   |
+| (shown on the page)                       | `theme get [--resolved]`, `theme presets`     | GetTheme, ListThemePresets |
+
+The CLI goes further than the page: custom theme documents (`theme set
+--appearance <a> --file`, the Agent writes them from a description),
+`theme check` (ValidateTheme, nothing saved) and `theme reset` (ResetTheme).
+There is deliberately no per-token visual editor on the page. The accent list
+is `packages/hatch-design-tokens/tokens.json`; the CLI validates `--accent`
+and `--preset` against the copy it was built with and the platform validates
+again, as it does every document. A change is published as the
+`theme.updated` platform event. Every pin change, from
 the Web UI or the CLI, is published as `pins.updated`, so an open dock
 refetches without a reload.
 

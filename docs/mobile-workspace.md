@@ -23,8 +23,9 @@ The response contains:
 
 ## Native app structure
 
-The native app (`mobile/`) follows Desk, the visual system in `DESIGN.md`, and
-reads every colour, radius, font, weight and shadow from
+The native app (`mobile/`) follows Desk, the visual system in `DESIGN.md`. It
+draws every colour, radius, font and shadow from the instance theme (see
+below) and reads weights, sizes, tile fills and motion from
 `packages/hatch-design-tokens/tokens.json`. It uses the workspace like this:
 
 | Screen                 | Data                                             | Shows                                                                                        |
@@ -99,17 +100,23 @@ touch-and-hold menu unpins it at once, since pinning again undoes it. Pins are s
 re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
 offered on the phone yet (`ReorderAppPins` exists).
 
-### Accent and ground
+### Theme and ground
 
-The accent is the theme's single input. The app reads the instance's
-`ui.theme` accent through `ThemeService.GetTheme` after sign-in and again each
-time it returns to the foreground, and keeps the last value per instance on the
-phone so a cold start draws it from the first frame. An accent name the build's
-tokens do not define falls back to the default. The app does not consume the
-platform event stream, so a change made elsewhere shows on the next foreground.
+The app reads the instance theme (`ui.theme`) through `ThemeService.GetTheme`
+with both appearances resolved, after sign-in and again each time it returns
+to the foreground (`src/state/instance-theme.tsx`). It keeps the last answer
+per instance in a file in the app's documents (resolved themes are too large
+for the Keychain), so a cold start draws it from the first frame; signed out
+or before the first answer it draws the built-in `desk` themes. The mode sets
+the app's system appearance (`Appearance.setColorScheme`: light, dark, or the
+device's in `system` mode), so native controls, the status bar and web pages
+in the app match; `app.config.ts` allows both appearances. Components read the
+theme while rendering through `src/ui/theme-context.tsx`. The app does not
+consume the platform event stream, so a change made elsewhere shows on the
+next foreground.
 
 Every page draws the Desk ground shapes (`DESIGN.md`, "Ground shapes") from the
-`ground` tokens; the circle follows the accent.
+theme's ground colours; the circle follows the accent.
 
 ## Browser session and dashboard canvas
 

@@ -6,19 +6,24 @@ tokens and specifies the components built from them. It is written so that a
 second implementation (the planned `@hatch/ui` App component library) can be
 built from it without reading the platform's React code.
 
-Hatch is light-only. The tokens keep an empty `dark` slot; nothing reads it.
+The values below are those of `desk`, the default theme. A theme is data:
+the instance picks a theme for light appearance and one for dark (see
+[Themes](#themes)), and every client draws the resolved tokens at run time.
 
 ## Where values live
 
 | What                                   | Where                                                  |
 | -------------------------------------- | ------------------------------------------------------ |
-| Every colour, radius, font and shadow  | `packages/hatch-design-tokens/tokens.json`             |
-| Mantine theme built from the tokens    | `src/ui/theme/theme.ts`                                |
+| `desk` values, weights, sizes, motion  | `packages/hatch-design-tokens/tokens.json`             |
+| Theme documents, presets, derivation   | `packages/hatch-design-tokens/src/`                    |
+| Mantine theme built from a theme       | `src/ui/theme/theme.ts`                                |
 | CSS variables and Mantine colour roles | `src/ui/theme/cssVariableResolver.ts`                  |
 | Surface treatment of Mantine parts     | `src/ui/theme/desk.css`                                |
 | Font files                             | `@fontsource-variable/*`, imported in `src/styles.css` |
 
-`tokens.json` is imported as JSON; there is no generation step. Do not write a
+`tokens.json` is imported as JSON; there is no generation step. Clients draw
+the theme the platform resolves (`ThemeService.GetTheme`), never the token
+file directly; they keep built-in `desk` for the first frame. Do not write a
 hex, `rgb()`, radius, shadow or font-family literal in `src/**/*.css` or in
 component code. Use a Mantine variable (`--mantine-color-*`,
 `--mantine-radius-*`) or one of the Desk variables listed below. The only
@@ -79,29 +84,36 @@ the ground.
 ### Accent
 
 One accent at a time, default `indigo` `#3F51C7`; alternatives `teal`
-`#0F766E`, `clay` `#B4472A`, `violet` `#7A3FB8`. `accentRamp(name)` in
-`theme.ts` turns an accent into Mantine's `primary` ramp. The accent is used
+`#0F766E`, `clay` `#B4472A`, `violet` `#7A3FB8`. The accent is a quick pick that
+replaces the theme's `primary` in both appearances; with no accent chosen,
+each theme shows its own `primary`. The accent is used
 for the primary action of a view, the current navigation item, selection and
 links. It is not used for decoration.
 
 ### Ramps
 
 Mantine needs ten shades per colour. Tokens store one value per colour and
-`colorRamp()` derives the rest: the token is shade 6; shades 0–5 mix it with
-white (92, 86, 72, 50, 30, 14 %), shades 7–9 mix it with black (16, 32, 48 %).
+`colorRamp()` derives the rest, ordered from the surface to the ink: the token
+is shade 6; on a light theme shades 0–5 mix it with white (92, 86, 72, 50, 30,
+14 %) and shades 7–9 with black (16, 32, 48 %). On a dark theme shades 0–5 mix
+it with the card (85, 75, 60, 42, 25, 12 %) and shades 7–9 with white (40, 60,
+75 %), so text shades stay readable on the dark surfaces. A filled control's
+hover and pressed shade is one step darker than the fill: shade 7 on light,
+shade 5 on dark (`FILL_PRESSED_SHADE`).
 
 | Variant      | Fill                 | Text                    |
 | ------------ | -------------------- | ----------------------- |
 | filled       | shade 6              | white                   |
-| filled hover | shade 7              | white                   |
+| filled hover | shade 7 (dark: 5)    | white                   |
 | light (tint) | shade 1, hover 2     | shade 8                 |
 | outline      | transparent, hover 0 | shade 7, border shade 7 |
 | text, link   | —                    | shade 7                 |
 
 Every pairing in this table is at least 4.5:1 for all accents and hues.
 
-`neutral` is written out in full (ten steps from `#FAF9F6` to ink) and backs
-Mantine's `gray` and `dark`. Its tint variant is the hover wash with shade-7
+`neutral` backs Mantine's `gray` (and `dark` on a light theme). `desk` writes
+it out in full (ten steps from `#FAF9F6` to ink); other themes derive it from
+`secondary` (1), `border` (2), `muted-foreground` (6) and `foreground` (9). Its tint variant is the hover wash with shade-7
 text, so a neutral badge reads on the ground and on a sheet.
 
 ### Hues and status
@@ -115,6 +127,63 @@ icon or a word.
 `tiles` holds eleven saturated fills for monogram tiles. All carry white text
 at 4.5:1 or better, also under `tileLight`, the top-lit overlay (white 12% to
 black 18%) painted over them.
+
+### Themes
+
+A theme document holds a small set of semantic values; `resolveTheme`
+(`packages/hatch-design-tokens/src/theme.ts`) derives every other token from
+it. There is no per-token editor: the translucent surfaces, dividers, washes,
+shadows and ground tints are tuned against the base colours, and editing them
+one by one gives unreadable combinations.
+
+```json
+{
+  "name": "Meadow",
+  "appearance": "light",
+  "colors": {
+    "background": "#F3F6EF",
+    "foreground": "#1C2A1F",
+    "card": "#FFFFFF",
+    "primary": "#2F6B3A",
+    "secondary": "#E8EFE3",
+    "muted": "#E8EFE3",
+    "muted-foreground": "#4B5B4E",
+    "border": "#D9E3D3",
+    "destructive": "#B91C1C"
+  },
+  "radius": 6,
+  "fonts": { "sans": "Nunito", "mono": "JetBrains Mono" }
+}
+```
+
+- `appearance` and all nine `colors` are required; colours are opaque
+  (`#RRGGBB`, `#RGB`, `rgb(r g b)`). `radius` (px, 0–32, default 12) scales
+  every radius; `fonts` name a bundled face or `system` (default Nunito and
+  JetBrains Mono).
+- Derived: `card-foreground`, `popover`, `secondary-foreground` and `ring` are
+  `foreground`; `primary-foreground` and `destructive-foreground` are white,
+  or the theme's dark ink when white reads worse; `input` is `border` 12 %
+  towards `foreground`; `hairline`, `surface-hover`, `surface-pressed` are
+  `foreground` at 14, 6, 10 %; panel, dock and widget surfaces are `card` at
+  72, 82, 80 %; the ground shapes tint `card` with the accent (18 %), orange
+  (18 %) and green (16 %); shadows use `foreground` (light) or `background`
+  (dark) as ink. `glass-edge`, the 1 px edge of translucent panels, is `card`
+  on light and `foreground` at 8 % on dark.
+- Presets: `desk` (light, the default; it pins the hand-tuned values its
+  derivation only approximates: the neutral ramp, `input`, window, bubble,
+  sunken and composer surfaces, and the warm and fresh ground shapes) and
+  `desk-dark` (dark, fully derived from `tokens.json` `dark`).
+- Saving a theme rejects unknown keys, unparsable colours, fonts that are not
+  bundled, and text below 4.5:1 on its surface: `foreground` on `background`,
+  `card`, `secondary` and `muted`; `muted-foreground` on `background`, `card`
+  and `muted`; `primary-foreground` on `primary`; `destructive-foreground` on
+  `destructive`; the primary text shade on `background` and `card`. The check
+  runs with the theme's own `primary` and with the chosen accent.
+- The instance setting (`ui.theme`) holds the accent, a `mode` (`light`,
+  `dark`, or `system` for each device's appearance) and the light and dark
+  theme (a preset name or a document). The appearance settings page sets mode,
+  presets and accent; custom themes are set with `hatch theme set --appearance
+  <light|dark> --file <path>`.
 
 ## Typography
 
@@ -200,10 +269,14 @@ Besides Mantine's own variables, `cssVariableResolver.ts` sets:
 `--size-dock-tile`, `--size-widget-icon`, `--radius-tile`,
 `--surface-window`, `--surface-bubble`, `--border-composer`, `--surface-raised`, `--surface-muted`, `--surface-sunken`,
 `--surface-hover`, `--surface-pressed`, `--surface-scrim`, `--border-hairline`,
-`--border-input`, `--focus-ring`, `--radius-window`, `--shadow-card`,
+`--border-input`, `--border-glass`, `--on-fill`, `--focus-ring`, `--radius-window`, `--shadow-card`,
 `--shadow-dock`, `--shadow-window`, `--font-weight-body`,
 `--font-weight-strong`, `--font-weight-label`, `--font-weight-heading`,
 `--ease-out-quart`, `--transition-fast`, `--transition-base`, `--transition-slow`.
+
+A surface that would be white on `desk` uses `--surface-raised` (the card) and
+its light edge `--border-glass`; `--mantine-color-white` is only for text and
+glyphs on a fill, which stay white on every theme.
 
 ## Component specification
 

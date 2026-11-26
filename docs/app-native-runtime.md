@@ -253,11 +253,24 @@ the one in the frame.
 
 ## Theme
 
-`nshTheme(accent)` (`src/server/apps/native/nsh-theme.ts`) is the theme every
-shell applies: the UI library's own complete theme when a definition in
-`NATIVE_APP_SDK_DEFINITIONS` provides `nsh.theme`, otherwise the shadcn
-tokens filled from `packages/hatch-design-tokens/tokens.json` with `primary`
-from the accent. `nsh.json` gets the default accent's theme; the player gets
-one per accent and pushes `hatch.theme` when the surface reports a new
-accent, so `hatch theme set --accent teal` recolours open Apps without a
-redeploy.
+`nshThemeFor(resolved)` (`src/server/apps/native/nsh-theme.ts`) turns a
+resolved instance theme into the theme every shell applies: the UI library's
+own complete theme when a definition in `NATIVE_APP_SDK_DEFINITIONS` provides
+`nsh.resolvedTheme` (or, for the built-in `desk`, `nsh.theme(accent)`),
+otherwise the shadcn tokens filled from the resolved theme. NSH applies the
+`light` block as the theme, so a dark theme's values go there too, and every
+theme names the same tokens (`setTheme` replaces the whole theme).
+
+`nsh.json` and the player's built-in themes are `desk` with each accent, for
+the first frame and for a platform that does not answer. The player then
+reads the instance theme from `GET /api/theme/native` (public, like the theme
+itself): with `appearance=light|dark` when its surface names the appearance
+it draws (`init` and `theme` messages carry `appearance` and a `themeKey`
+that changes with the resolved theme), or with `prefers=light|dark` when it
+runs alone (the mobile app's WebView), where the instance's mode decides. It
+asks again when the surface reports a change and, alone, when the page
+returns to the foreground or the device's appearance changes, and pushes
+`hatch.theme` when the answer differs. So `hatch theme set --accent teal` or
+`--mode dark` restyles open Apps without a redeploy. Players built before
+this (deployments made before themes became data) follow only the accent
+until the App is deployed again.
