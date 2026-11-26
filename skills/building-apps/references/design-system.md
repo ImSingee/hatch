@@ -147,6 +147,50 @@ The same source runs everywhere; the components adapt:
 | A narrow pane with a pointer    | `AppShell` shows a row of tabs at the top                                                        |
 | Compact panes (below 600)       | `Grid` shows one column, `Row collapse` stacks, page padding shrinks                             |
 
+## Addresses and titles
+
+The library keeps the App's address and title in the shell; App code does
+not call the bridge for them.
+
+- `AppShell`'s selected section is the first part of the address,
+  `/<section id>`: a link, a pin or a reload opens that section, and the
+  shell's back button and links move between sections. Use short, stable,
+  lowercase section ids.
+- A `NavStack` given `routes` keeps its pages in the rest of the address.
+  `path` turns the stack into an address and `parse` turns an address back
+  into the stack, first page included; `null` shows the first page. Write
+  the return type on `parse`, so the routes' literal types are kept:
+
+  ```tsx
+  type Route = { name: 'list' } | { name: 'note'; id: string };
+  const notes = createNavStack<Route>([{ name: 'list' }]);
+
+  <NavStack
+    stack={notes}
+    routes={{
+      path: (stack) => {
+        const top = stack[stack.length - 1];
+        return top?.name === 'note' ? `/${top.id}` : '';
+      },
+      parse: (path): Route[] | null => {
+        const id = /^\/([\w-]+)$/.exec(path)?.[1];
+        return id ? [{ name: 'list' }, { name: 'note', id }] : null;
+      },
+    }}
+  >
+    {(route) => (route.name === 'note' ? <Note id={route.id} /> : <Notes />)}
+  </NavStack>;
+  ```
+
+  Inside an `AppShell` section the stack's address follows the section's:
+  `/notes/42`. Each page shows its own data from the route (`Note` loads note
+  `42`), because a deep link opens it without the pages before it running.
+
+- The title of the `Page` on screen is the App's title in the shell: the
+  selected section's page, the top page of a stack, an item's page in a
+  `ListDetailPage`. Give each `Page` the specific name of what it shows
+  ("Tomato seedlings", not "Detail").
+
 ## Catalogue
 
 Generated from the component types by `sdk-internal/ui/scripts/generate.ts`;

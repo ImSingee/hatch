@@ -27,6 +27,39 @@ app: { entry: 'app/main.tsx', runtime: 'native', routes: [...] }
 
 `hatch app get` reports both as `frontend.runtime` and `frontend.nshVersion`.
 
+`templates/default-app` is native, so every App `hatch app create` makes
+starts on this runtime with `@hatch/ui`; the manifest default stays `web`,
+so existing and imported Apps keep their runtime.
+
+## UI library
+
+`@hatch/ui` (`sdk-internal/ui`) is a source-form SDK (`form: 'source'` on
+`UI_SDK` in `sdk-internal/definitions.ts`): `pnpm hatch-sdk:build` copies
+`src/` to `dist/` byte for byte, because NSH compiles the library with the
+App, and its entry is `runtime: 'native'`, so it is in `nsh.json` and never in
+the web/Deno import map or `.hatch/tsconfig.json`. Its `nsh` field supplies
+the theme (`buildAppTheme`) and the Tailwind extension every native App gets.
+
+The library keeps the App's address and title in the shell itself
+(`src/core/shell.ts`): `AppShell`'s selected section is the first segment of
+the route and a `NavStack` given `routes` maps its pages to the rest; both
+start from `host.params.route`, report with `hatch.nav.setRoute` and follow
+`hatch.nav`; the title of the deepest shown `Page` goes to
+`hatch.nav.setTitle`. Hidden content (an unselected section, a page under the
+top of its stack) reports neither.
+
+## Checkouts
+
+A native App's checkout gets the same generated files a deploy writes. The
+SDK payload (`SdkService/GetSdk`) carries `.hatch/native/nsh.json` (every key
+but the App's own) and `.hatch/native/app-tsconfig.json`; the CLI's
+preparation adds the App's name, id and entry (`src/app-native-config.ts`),
+writes the root `nsh.json` and `app/tsconfig.json`, and lists both and `.nsh/`
+in `.git/info/exclude`. `.hatch/tsconfig.native.json` type-checks every other
+authored file (backend, widgets, schema). In the Agent's shell, `PATH` holds
+the pinned `nsh` and `NSH_TSC` the platform's TypeScript, so its local checks
+use the same release and compiler as a deploy.
+
 ## Toolchain
 
 The platform runs one pinned NSH release, `NSH_VERSION` in
