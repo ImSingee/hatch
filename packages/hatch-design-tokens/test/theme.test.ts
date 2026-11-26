@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import tokens from '../tokens.json';
 import {
   CONTRAST_PAIRS,
-  FILL_PRESSED_SHADE,
   HUE_NAMES,
   THEME_COLOR_KEYS,
   THEME_PRESETS,
@@ -11,6 +10,7 @@ import {
   contrastProblems,
   luminance,
   parseColor,
+  pressedShade,
   resolvePreset,
   resolveTheme,
   validateThemeDocument,
@@ -168,7 +168,7 @@ describe('derivation', () => {
         // A light badge: shade-8 text on the shade-1 tint.
         expect(contrast(ramp[8], ramp[1])).toBeGreaterThanOrEqual(4.5);
         // Filled controls carry white text, also while pressed.
-        for (const shade of [6, FILL_PRESSED_SHADE[theme.appearance]])
+        for (const shade of [6, pressedShade(ramp, theme.colors['on-fill'])])
           expect(
             contrast(theme.colors['on-fill'], ramp[shade]),
           ).toBeGreaterThanOrEqual(4.5);
@@ -188,6 +188,31 @@ describe('derivation', () => {
           ).toBe(towardsInk);
     },
   );
+
+  it('steps a pressed fill away from its label, also for a pale primary', () => {
+    for (const [document, primary] of [
+      [THEME_PRESETS['desk-dark'].document, '#818181'],
+      [deskDocument, '#FACC15'],
+      [deskDocument, '#3F51C7'],
+    ] as const) {
+      const theme = resolveTheme(document, {
+        name: 'x',
+        source: 'custom',
+        accent: primary,
+      });
+      const label = theme.colors['primary-foreground'];
+      const ramp = theme.ramps.primary;
+      expect(
+        contrast(label, ramp[pressedShade(ramp, label)]),
+      ).toBeGreaterThanOrEqual(contrast(label, ramp[6]));
+    }
+    // Desk keeps the shade it always used: darker under white text.
+    const desk = resolvePreset('desk');
+    expect(pressedShade(desk.ramps.primary, '#FFFFFF')).toBe(7);
+    expect(
+      pressedShade(resolvePreset('desk-dark').ramps.primary, '#FFFFFF'),
+    ).toBe(5);
+  });
 
   it('replaces primary with the accent and derives its pair from it', () => {
     const theme = resolvePreset('desk-dark', tokens.accents.teal);

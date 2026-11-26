@@ -1,10 +1,10 @@
 import type { CSSVariablesResolver } from '@mantine/core';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import {
-  FILL_PRESSED_SHADE,
-  type ThemeAppearance,
+  pressedShade,
+  type ResolvedTheme,
 } from '../../../packages/hatch-design-tokens/src';
-import { HUE_COLOR_NAMES, resolvedThemeOf } from './theme';
+import { HUE_COLOR_NAMES, rampOf, resolvedThemeOf } from './theme';
 
 /**
  * How each chromatic palette fills Mantine's variants. Mantine's own defaults
@@ -12,21 +12,18 @@ import { HUE_COLOR_NAMES, resolvedThemeOf } from './theme';
  * solid light tint with shade-8 text, and shade 7 wherever a hue is used as a
  * text or outline colour.
  */
-function hueRoles(
-  name: string,
-  appearance: ThemeAppearance,
-): Record<string, string> {
+function hueRoles(name: string, theme: ResolvedTheme): Record<string, string> {
   const shade = (step: number) => `var(--mantine-color-${name}-${step})`;
+  // Filled controls carry the theme's paired foreground on `primary` and
+  // white on the hues; a hovered fill steps away from that label.
+  const label =
+    name === 'primary'
+      ? theme.colors['primary-foreground']
+      : theme.colors['on-fill'];
   return {
-    // A dark ramp's shade 7 is lighter (it is the text shade there), so a
-    // hovered fill steps towards the surface instead.
-    ...(appearance === 'dark'
-      ? {
-          [`--mantine-color-${name}-filled-hover`]: shade(
-            FILL_PRESSED_SHADE.dark,
-          ),
-        }
-      : {}),
+    [`--mantine-color-${name}-filled-hover`]: shade(
+      pressedShade(rampOf(theme, name), label),
+    ),
     [`--mantine-color-${name}-text`]: shade(7),
     [`--mantine-color-${name}-light`]: shade(1),
     [`--mantine-color-${name}-light-hover`]: shade(2),
@@ -72,7 +69,7 @@ export const cssVariablesResolver: CSSVariablesResolver = (mantineTheme) => {
 
     ...Object.assign(
       {},
-      ...HUE_COLOR_NAMES.map((name) => hueRoles(name, theme.appearance)),
+      ...HUE_COLOR_NAMES.map((name) => hueRoles(name, theme)),
     ),
   };
   return {

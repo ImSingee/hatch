@@ -59,6 +59,13 @@ export const HUE_COLOR_NAMES: readonly string[] = [
   ...Object.keys(HUE_BY_COLOR_NAME),
 ];
 
+/** The resolved ramp behind one of the chromatic Mantine palettes. */
+export function rampOf(theme: ResolvedTheme, name: string): string[] {
+  return name === 'primary'
+    ? theme.ramps.primary
+    : theme.ramps[HUE_BY_COLOR_NAME[name as keyof typeof HUE_BY_COLOR_NAME]];
+}
+
 const tuple = (shades: readonly string[]) =>
   shades as unknown as MantineColorsTuple;
 

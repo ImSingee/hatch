@@ -8,7 +8,7 @@
  * the resolved set; none of them derives tokens itself.
  */
 import tokens from '../tokens.json' with { type: 'json' };
-import { mix, mostLegible, normalizeColor, withAlpha } from './color';
+import { contrast, mix, mostLegible, normalizeColor, withAlpha } from './color';
 
 export const THEME_APPEARANCES = ['light', 'dark'] as const;
 export type ThemeAppearance = (typeof THEME_APPEARANCES)[number];
@@ -307,14 +307,18 @@ export function resolveTheme(
 export const TEXT_SHADE = 7;
 
 /**
- * The shade a filled control takes while hovered or pressed: one step
- * darker than the fill, so its text stays readable. On a light ramp that is
- * towards the ink (7); on a dark ramp, towards the surface (5).
+ * The shade a filled control takes while hovered or pressed: one step from
+ * the fill (5 or 7), whichever moves away from its label colour, so the label
+ * reads at least as well as on the fill. White labels get the darker step
+ * (7 on a light ramp, 5 on a dark one); a dark label on a pale fill, the
+ * lighter one.
  */
-export const FILL_PRESSED_SHADE: Record<ThemeAppearance, number> = {
-  light: 7,
-  dark: 5,
-};
+export function pressedShade(
+  ramp: readonly string[],
+  foreground: string,
+): 5 | 7 {
+  return contrast(foreground, ramp[7]) >= contrast(foreground, ramp[5]) ? 7 : 5;
+}
 
 /**
  * Whether a value read from a cache or the network is a complete resolved

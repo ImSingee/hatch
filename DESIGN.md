@@ -98,13 +98,14 @@ is shade 6; on a light theme shades 0–5 mix it with white (92, 86, 72, 50, 30,
 14 %) and shades 7–9 with black (16, 32, 48 %). On a dark theme shades 0–5 mix
 it with the card (85, 75, 60, 42, 25, 12 %) and shades 7–9 with white (40, 60,
 75 %), so text shades stay readable on the dark surfaces. A filled control's
-hover and pressed shade is one step darker than the fill: shade 7 on light,
-shade 5 on dark (`FILL_PRESSED_SHADE`).
+hover and pressed shade is one step from the fill, away from its label
+(`pressedShade`): under white text that is shade 7 on light and shade 5 on
+dark; a pale fill with dark text steps lighter.
 
 | Variant      | Fill                 | Text                    |
 | ------------ | -------------------- | ----------------------- |
 | filled       | shade 6              | white                   |
-| filled hover | shade 7 (dark: 5)    | white                   |
+| filled hover | away from the label  | white                   |
 | light (tint) | shade 1, hover 2     | shade 8                 |
 | outline      | transparent, hover 0 | shade 7, border shade 7 |
 | text, link   | —                    | shade 7                 |

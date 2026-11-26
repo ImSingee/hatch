@@ -6,9 +6,9 @@
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import {
   BUILT_IN_THEME,
-  FILL_PRESSED_SHADE,
   colorRamp,
   mix,
+  pressedShade,
   resolvePreset,
   type ResolvedTheme,
   type ThemeAppearance,
@@ -20,18 +20,13 @@ import {
  * steps as the web, so a tint or a label is the same colour on every
  * platform; on a dark theme the tints darken and the inks lighten.
  */
-function rampRoles(
-  ramp: readonly string[],
-  onFill: string,
-  card: string,
-  appearance: ThemeAppearance,
-) {
+function rampRoles(ramp: readonly string[], onFill: string, card: string) {
   return {
     fill: ramp[6],
     tint: ramp[1],
     tintStrong: ramp[2],
-    /** One step darker than the fill: shade 7 on light, 5 on dark. */
-    pressed: ramp[FILL_PRESSED_SHADE[appearance]],
+    /** One step from the fill, away from `onFill` (`pressedShade`). */
+    pressed: ramp[pressedShade(ramp, onFill)],
     ink: ramp[8],
     onFill,
     /** The colour's ground shape: a faint tint of it on the card. */
@@ -80,13 +75,12 @@ export type Palette = ReturnType<typeof paletteOf>;
 function statusOf(theme: ResolvedTheme) {
   const c = theme.colors;
   const roles = (ramp: readonly string[]) =>
-    rampRoles(ramp, c['on-fill'], c.card, theme.appearance);
+    rampRoles(ramp, c['on-fill'], c.card);
   return {
     danger: rampRoles(
       colorRamp(c.destructive, theme.appearance, c.card),
       c['destructive-foreground'],
       c.card,
-      theme.appearance,
     ),
     success: roles(theme.ramps.green),
     warning: roles(theme.ramps.amber),
@@ -135,7 +129,6 @@ export function mobileThemeOf(theme: ResolvedTheme): MobileTheme {
         theme.ramps.primary,
         theme.colors['primary-foreground'],
         theme.colors.card,
-        theme.appearance,
       ),
       radii: theme.radius,
       fonts: fontsOf(theme),
