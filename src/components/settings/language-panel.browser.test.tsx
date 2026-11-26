@@ -1,5 +1,9 @@
 import { MantineProvider } from '@mantine/core';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+} from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { LocaleSync } from '~components/system/locale-sync';
@@ -117,4 +121,36 @@ test('the language on screen can be saved while the account has none', async () 
   await expect
     .element(screen.getByText(/not saved to your account yet/i))
     .not.toBeInTheDocument();
+});
+
+test('a failed save keeps a language the account saved meanwhile', async () => {
+  fixture.saved = { userId: 'a', language: 'en' };
+  let fail = () => {};
+  fixture.update.mockImplementation(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = () => reject(new Error('Save request failed'));
+      }),
+  );
+  const screen = await mount(
+    <>
+      <LocaleSync />
+      <LanguagePanel />
+    </>,
+  );
+  await expect
+    .element(screen.getByRole('radio', { name: 'English' }))
+    .toBeChecked();
+  await screen.getByText('简体中文').click();
+  await vi.waitFor(() => expect(fixture.update).toHaveBeenCalledOnce());
+
+  // Another device saves Chinese while this save is still in flight.
+  fixture.saved = { userId: 'a', language: 'zh-CN' };
+  focusManager.setFocused(false);
+  focusManager.setFocused(true);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  fail();
+  await vi.waitFor(() => expect(fixture.error).toHaveBeenCalledOnce());
+  expect(i18n.resolvedLanguage).toBe('zh-CN');
+  focusManager.setFocused(undefined);
 });

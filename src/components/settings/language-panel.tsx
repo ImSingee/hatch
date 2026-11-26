@@ -52,10 +52,18 @@ export function LanguagePanel() {
       }
     },
     // The only thing a reader can act on is that the switch did not stick,
-    // so say that, once the previous language is back, instead of the raw
-    // request error.
+    // so say that, once the language is back, instead of the raw request
+    // error. "Back" is the account's language when it has one, which may
+    // have been saved elsewhere while this request was in flight; only
+    // without one does the language from before the click return.
     onError: async (_error, _language, context) => {
-      if (context) await changeLocale(context.previous);
+      const account = userId
+        ? queryClient.getQueryData(
+            interfacePreferencesQueryOptions(userId).queryKey,
+          )?.language
+        : null;
+      const restore = account ?? context?.previous;
+      if (restore) await changeLocale(restore);
       toast.error(i18n.t('appearance.language.saveFailed'));
     },
   });
