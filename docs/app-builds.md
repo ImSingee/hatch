@@ -99,11 +99,16 @@ without it, a compromised Builder (which holds `HATCH_BUILDER_TOKEN` and can
 claim any queued build) could give any App's release any permission.
 
 What the platform still takes from the builder, because checking it would
-mean building the App, is the code: bundles, the RPC descriptor, the Data
-Table descriptor and docs, within the checks above. This is inherent to
-delegating a build, as with a compromised CI runner: a forged backend bundle
-does whatever it likes within the permissions its commit's manifest grants,
-and no more. A forged Data Table
+mean building the App, is the code: the frontend page and its scripts,
+widgets, backend bundles, the RPC descriptor, the Data Table descriptor and
+docs, within the checks above. This is inherent to delegating a build, as
+with a compromised CI runner. A forged backend bundle does whatever it likes
+within the permissions its commit's manifest grants, and no more. A forged
+frontend runs with whatever reach App frontends have: today App pages are
+same-origin with the platform (see the trust model in
+[Native App runtime](app-native-runtime.md)), so that is the reach of the
+signed-in viewer, the same reach any App code its authors deploy already
+has. Giving App pages their own origin is the change that narrows both. A forged Data Table
 schema can change only that App's tables, and a destructive change still
 needs the approval token of its plan. Run Builders only where you would run
 the platform, and keep their token as secret as the platform's own. A build
