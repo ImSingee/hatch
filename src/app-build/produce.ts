@@ -420,6 +420,12 @@ async function copyDeclaredDocs(
   }
 }
 
+/**
+ * Scratch directory for tool output inside the build copy (reserved: an
+ * App's own directory of this name is not copied).
+ */
+const BUILD_STAGING_DIR = '.hatch-build';
+
 /** Shared esbuild define for browser bundles (app + widgets). */
 function browserDefine(
   id: string,
@@ -753,6 +759,7 @@ async function copySource(
         return ![
           '.git',
           '.hatch',
+          BUILD_STAGING_DIR,
           'gen',
           'node_modules',
           // pnpm writes this file itself; install never reads it.
@@ -870,6 +877,12 @@ export async function buildAppSource(
   });
 
   try {
+    // Tool output that becomes part of the package (the backend bundle) is
+    // written here first. It exists before the hand-over below, so it is
+    // the sandbox identity's as well; a directory made later by this process
+    // (in `out`, say) would not be writable for a sandboxed tool.
+    const staging = path.join(src, BUILD_STAGING_DIR);
+    await fs.mkdir(staging);
     // The host may hand the copy to the sandbox identity for the whole
     // build: every tool then runs as that identity and can write only here.
     const withSource =
@@ -1118,12 +1131,14 @@ export async function buildAppSource(
 
         const bundledEntry = backendBundleEntry(manifest.backend.entry);
         const bundlePath = path.join(out, bundledEntry);
-        await fs.mkdir(path.dirname(bundlePath), { recursive: true });
+        const staged = path.join(staging, 'backend.bundle.js');
         await toolchain.bundle({
           entry: manifest.backend.entry,
-          outfile: bundlePath,
-          outputRoot: out,
+          outfile: staged,
+          outputRoot: staging,
         });
+        await fs.mkdir(path.dirname(bundlePath), { recursive: true });
+        await fs.copyFile(staged, bundlePath);
         logs.push(`bundled backend -> ${bundledEntry}`);
       }
 
