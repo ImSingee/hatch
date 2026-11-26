@@ -196,7 +196,10 @@ domain service and `silent: true` option. No Agent Tool is added.
 The theme and pins are personal: each user has their own accent, dock labels,
 App pins, dashboard pinned flags and App pin and dashboard order. A new user
 starts from the built-in defaults: the default accent, no dock labels, no App
-pins and no pinned dashboards (apart from a dashboard they create).
+pins, and one pinned dashboard, the default (oldest) one, which the first read
+or change of their dashboards pins. Once they have any dashboard pin or order
+of their own it is never pinned again, so unpinning it sticks. Dashboards
+created later stay pinned for their creator only.
 
 `hatch theme get | set [--accent <name>] [--dock-labels | --no-dock-labels]`
 calls `ThemeService`, which reads and writes the caller's

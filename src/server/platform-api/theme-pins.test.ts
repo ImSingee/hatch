@@ -201,11 +201,12 @@ describe('theme and pin RPCs', () => {
     fixture.credential = CREDENTIALS['api-key'];
     expect((await call('PinService/ListPins')).data).toMatchObject({
       appPins: [{ label: 'session' }, { label: 'api-key' }, { label: 'run' }],
-      dashboards: [{ id: 'd2' }],
+      // d1, the oldest, was pinned on the user's first visit.
+      dashboards: [{ id: 'd2' }, { id: 'd1' }],
     });
     expect(await dashboardPins()).toEqual([
       { id: 'd2', pinned: true },
-      { id: 'd1', pinned: false },
+      { id: 'd1', pinned: true },
     ]);
 
     fixture.credential = OTHER_SESSION;
@@ -223,6 +224,7 @@ describe('theme and pin RPCs', () => {
   });
 
   it('pin a new dashboard for the user who created it', async () => {
+    await db.insert(schema.dashboards).values({ id: 'd1', name: 'Home' });
     fixture.credential = CREDENTIALS.run;
     const created = await call('DashboardService/CreateDashboard', {
       name: 'Mine',

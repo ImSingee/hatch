@@ -45,7 +45,7 @@ it is gone and shows its own sign-in screen. **Hatch → Sign Out** ends the
 session on the instance and removes it from the Keychain.
 
 `settings.json` in `~/Library/Application Support/app.hatch.desktop/` holds
-only the instance origin and its accent colour.
+only the instance origin and the signed-in user's accent colour.
 
 Passkeys cannot work inside the window: WKWebView in an app without Apple's
 browser entitlement reports no platform authenticator. That is why sign-in is

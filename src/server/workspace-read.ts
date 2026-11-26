@@ -11,28 +11,38 @@ export type Dashboard = {
   autoRefreshSeconds: number;
 };
 
-/**
- * Make sure at least one dashboard always exists for the UI to land on. The
- * user whose visit creates it has it pinned, as a new dashboard is for its
- * creator.
- */
-async function ensureDefaultDashboard(userId: string | null): Promise<void> {
+/** Make sure at least one dashboard always exists for the UI to land on. */
+async function ensureDefaultDashboard(): Promise<void> {
   const existing = await db.query.dashboards.findFirst({
     columns: { id: true },
   });
   if (existing) return;
-  await db.transaction(async (tx) => {
-    const created = await tx
-      .insert(schema.dashboards)
-      .values({ id: 'default', name: 'My Dashboard' })
-      .onConflictDoNothing()
-      .returning({ id: schema.dashboards.id });
-    if (created.length && userId)
-      await tx
-        .insert(schema.userDashboards)
-        .values({ userId, dashboardId: 'default', pinned: true })
-        .onConflictDoNothing();
-  });
+  await db
+    .insert(schema.dashboards)
+    .values({ id: 'default', name: 'My Dashboard' })
+    .onConflictDoNothing();
+}
+
+/**
+ * A user who has no dashboard rows yet (a new user) starts with one pinned
+ * dashboard: the default one, first in the order they see (the oldest, which
+ * the homepage also falls back to). Once they have rows this does nothing,
+ * so unpinning it sticks. Concurrent first visits insert the same row once.
+ */
+export async function pinDefaultDashboardForNewUser(
+  database: Pick<TX, 'execute'>,
+  userId: string,
+): Promise<void> {
+  const view = schema.userDashboards;
+  await database.execute(sql`
+    insert into ${view} (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}, ${sql.identifier('pinned')}, ${sql.identifier('sort_order')})
+    select ${userId}::text, ${schema.dashboards.id}, true, 0
+    from ${schema.dashboards}
+    where not exists (select 1 from ${view} where ${view.userId} = ${userId}::text)
+    order by ${schema.dashboards.createdAt} asc, ${schema.dashboards.id} asc
+    limit 1
+    on conflict do nothing
+  `);
 }
 
 /**
@@ -71,7 +81,8 @@ export async function readUserDashboards(
 export async function readDashboards(
   userId: string | null,
 ): Promise<Dashboard[]> {
-  await ensureDefaultDashboard(userId);
+  await ensureDefaultDashboard();
+  if (userId) await pinDefaultDashboardForNewUser(db, userId);
   const rows = await readUserDashboards(db, userId);
   return rows.map((d) => ({
     id: d.id,

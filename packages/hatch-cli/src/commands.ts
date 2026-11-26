@@ -491,7 +491,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['dashboard', 'list'],
     usage: 'dashboard list [--limit <n>] [--cursor <cursor>]',
     description:
-      "Without --limit, list every dashboard in your order: id, name, description, pinned (by you) and autoRefreshSeconds (0 is off). Dashboards are shared; the pinned flag and order are each user's own, and dashboards you never pinned or ordered come last, oldest first. Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.",
+      "Without --limit, list every dashboard in your order: id, name, description, pinned (by you) and autoRefreshSeconds (0 is off). Dashboards are shared; the pinned flag and order are each user's own, and dashboards you never pinned or ordered come last, oldest first. A new user starts with only the oldest dashboard pinned. Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.",
   },
   {
     path: ['dashboard', 'get'],

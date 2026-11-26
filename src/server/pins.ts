@@ -18,6 +18,7 @@ import { AppError } from './errors';
 import { publishPlatformEvent } from './platform-events';
 import { persistSortOrder } from './sort-order';
 import {
+  pinDefaultDashboardForNewUser,
   readDashboards,
   readSidebarItems,
   readUserDashboards,
@@ -254,7 +255,8 @@ export async function reorderAppPins(
 /**
  * Store the user's whole dashboard order, with each dashboard's pinned flag:
  * once a user changes anything, every dashboard has a row, so the ones a
- * change does not name keep their place.
+ * change does not name keep their place. A listed dashboard someone deleted
+ * since the order was read is skipped rather than failing the change.
  */
 export async function writeDashboardOrder(
   tx: TX,
@@ -263,27 +265,32 @@ export async function writeDashboardOrder(
 ): Promise<void> {
   if (!order.length) return;
   const view = schema.userDashboards;
-  await tx
-    .insert(view)
-    .values(
-      order.map(({ id, pinned }, sortOrder) => ({
-        userId,
-        dashboardId: id,
-        pinned,
-        sortOrder,
-      })),
-    )
-    .onConflictDoUpdate({
-      target: [view.userId, view.dashboardId],
-      set: {
-        pinned: sql`excluded.${sql.identifier('pinned')}`,
-        sortOrder: sql`excluded.${sql.identifier('sort_order')}`,
-      },
-    });
+  const listed = sql.join(
+    order.map(
+      ({ id, pinned }, position) =>
+        sql`(${id}::text, ${pinned}::boolean, ${position}::integer)`,
+    ),
+    sql`, `,
+  );
+  // Inserting from the dashboards that still exist, in one statement, keeps
+  // the foreign key satisfied however the order went stale.
+  await tx.execute(sql`
+    insert into ${view} (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}, ${sql.identifier('pinned')}, ${sql.identifier('sort_order')})
+    select ${userId}::text, ${schema.dashboards.id}, listed.pinned, listed.position
+    from (values ${listed}) as listed (id, pinned, position)
+    join ${schema.dashboards} on ${schema.dashboards.id} = listed.id
+    on conflict (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}) do update set
+      ${sql.identifier('pinned')} = excluded.${sql.identifier('pinned')},
+      ${sql.identifier('sort_order')} = excluded.${sql.identifier('sort_order')}
+  `);
 }
 
-/** The user's dashboard order as `writeDashboardOrder` stores it. */
+/**
+ * The user's dashboard order as `writeDashboardOrder` stores it. A new user
+ * gets the default dashboard pinned first, as on their first visit.
+ */
 export async function currentDashboardOrder(tx: TX, userId: string) {
+  await pinDefaultDashboardForNewUser(tx, userId);
   return (await readUserDashboards(tx, userId)).map((row) => ({
     id: row.id,
     pinned: row.pinned ?? false,

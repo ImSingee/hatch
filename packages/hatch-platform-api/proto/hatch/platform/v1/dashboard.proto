@@ -102,7 +102,8 @@ message ListDashboardsRequest {
 
 message ListDashboardsResponse {
   // In the caller's dashboard order, pinned or not. Dashboards the caller
-  // never pinned or ordered come last, oldest first.
+  // never pinned or ordered come last, oldest first. A new user starts with
+  // only the oldest dashboard pinned.
   repeated Dashboard dashboards = 1;
   // Set when more dashboards follow this page.
   optional string next_cursor = 2;

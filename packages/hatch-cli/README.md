@@ -729,7 +729,8 @@ hatch pin remove --dashboard <dashboard-id>
 The theme and pins are personal: each user has their own, and a command acts
 for the signed-in user, the API key's user or, in a Run, the user who sent the
 prompt. A Run no user prompted gets `CONFLICT` (6). A new user starts from the
-default accent, no dock labels and no pins.
+default accent, no dock labels, no App pins and only the default (oldest)
+dashboard pinned.
 
 `theme get` prints the chosen `accent`, the `defaultAccent`, every accent
 with its colour and `dockLabels`. `theme set` changes only the settings it is
@@ -799,8 +800,9 @@ new position move down and empty rows close up, so read the printed layouts.
 `update` leaves omitted fields unchanged; `--auto-refresh` takes seconds
 (1 to 3600). Dashboards are shared, but each user has their own pinned flags
 and order: `dashboard list` prints them for the caller (dashboards they never
-pinned or ordered last, oldest first), and `dashboard create` pins the new
-dashboard last for the caller only. Pin, unpin and reorder dashboards with
+pinned or ordered last, oldest first; a new user has only the oldest one
+pinned), and `dashboard create` pins the new dashboard last for the caller
+only. Pin, unpin and reorder dashboards with
 `hatch pin`.
 
 Local rejections exit 2 with `invalid_arguments`: no field to change, a blank

@@ -294,8 +294,10 @@ describe('per-user theme and pins migration on PGlite', () => {
   scenarios(pglite);
 });
 
+// Each scenario applies every migration over the network.
 describe.skipIf(!adminUrl)(
   'per-user theme and pins migration on PostgreSQL',
+  { timeout: 60_000 },
   () => {
     scenarios(server);
   },

@@ -352,7 +352,8 @@ export type ListDashboardsResponse =
   Message<'hatch.platform.v1.ListDashboardsResponse'> & {
     /**
      * In the caller's dashboard order, pinned or not. Dashboards the caller
-     * never pinned or ordered come last, oldest first.
+     * never pinned or ordered come last, oldest first. A new user starts with
+     * only the oldest dashboard pinned.
      *
      * @generated from field: repeated hatch.platform.v1.Dashboard dashboards = 1;
      */

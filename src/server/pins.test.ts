@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('~/db', async () => {
@@ -14,6 +15,8 @@ const {
   setDashboardPinned,
   unpinApp,
   updateAppPin,
+  currentDashboardOrder,
+  writeDashboardOrder,
 } = await import('./pins');
 const { subscribePlatformEvents } = await import('./platform-events');
 
@@ -187,6 +190,34 @@ describe('Dashboard pins', () => {
     });
   });
 
+  it('drops a dashboard another user deleted while the order was written', async () => {
+    await db.insert(schema.dashboards).values([
+      { id: 'd1', name: 'One', createdAt: new Date('2026-01-01') },
+      { id: 'd2', name: 'Two', createdAt: new Date('2026-01-02') },
+      { id: 'd3', name: 'Three', createdAt: new Date('2026-01-03') },
+    ]);
+    // The order is read, then the dashboard goes before it is written.
+    const order = await db.transaction((tx) => currentDashboardOrder(tx, U));
+    await db.delete(schema.dashboards).where(eq(schema.dashboards.id, 'd2'));
+    await db.transaction((tx) =>
+      writeDashboardOrder(
+        tx,
+        U,
+        order.map((entry) => ({ ...entry, pinned: entry.id !== 'd1' })),
+      ),
+    );
+    expect(
+      await db.query.userDashboards.findMany({
+        where: { userId: U },
+        columns: { dashboardId: true, pinned: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    ).toEqual([
+      { dashboardId: 'd1', pinned: false },
+      { dashboardId: 'd3', pinned: true },
+    ]);
+  });
+
   it('keeps the order of dashboards a change does not name', async () => {
     await db.insert(schema.dashboards).values([
       { id: 'd1', name: 'One', createdAt: new Date('2026-01-01') },
@@ -240,30 +271,71 @@ describe('Per-user pins', () => {
       { id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') },
       { id: 'd2', name: 'Ops', createdAt: new Date('2026-01-02') },
     ]);
+    await setDashboardPinned(U, 'd1', false);
     await setDashboardPinned(U, 'd2', true);
     await reorderDashboards(U, ['d2']);
     expect(await readDashboards(U)).toMatchObject([
       { id: 'd2', pinned: true },
       { id: 'd1', pinned: false },
     ]);
-    // Nothing is pinned for a user who never pinned anything; the order is
-    // oldest first.
+    // The other user still has only the default dashboard pinned, oldest
+    // first.
     expect(await readDashboards(OTHER)).toMatchObject([
-      { id: 'd1', pinned: false },
+      { id: 'd1', pinned: true },
       { id: 'd2', pinned: false },
     ]);
-    expect((await listPins(OTHER)).dashboards).toEqual([]);
+    expect((await listPins(OTHER)).dashboards).toEqual([
+      { id: 'd1', name: 'Home' },
+    ]);
+  });
+
+  it('starts a new user with only the oldest dashboard pinned', async () => {
+    await db.insert(schema.dashboards).values([
+      { id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') },
+      { id: 'd2', name: 'Ops', createdAt: new Date('2026-01-02') },
+      { id: 'd3', name: 'Later', createdAt: new Date('2026-01-03') },
+    ]);
+    // A user migrated from the instance-wide pins keeps exactly their rows.
+    await db.insert(schema.userDashboards).values([
+      { userId: OTHER, dashboardId: 'd1', pinned: false, sortOrder: 0 },
+      { userId: OTHER, dashboardId: 'd2', pinned: true, sortOrder: 1 },
+      { userId: OTHER, dashboardId: 'd3', pinned: false, sortOrder: 2 },
+    ]);
+    const pinned = async (userId: string | null) =>
+      (await readDashboards(userId)).filter((d) => d.pinned).map((d) => d.id);
+
+    const [first, concurrent] = await Promise.all([pinned(U), pinned(U)]);
+    expect({ first, concurrent }).toEqual({
+      first: ['d1'],
+      concurrent: ['d1'],
+    });
+    expect((await listPins(U)).dashboards).toEqual([
+      { id: 'd1', name: 'Home' },
+    ]);
+    // Unpinning it sticks: the default is only pinned on a first visit.
+    await setDashboardPinned(U, 'd1', false);
+    expect(await pinned(U)).toEqual([]);
+    expect(await pinned(U)).toEqual([]);
+
+    expect(await pinned(OTHER)).toEqual(['d2']);
+    // A Run nobody prompted pins nothing and stores nothing.
+    expect(await pinned(null)).toEqual([]);
+    expect(
+      await db.query.userDashboards.findMany({
+        where: { userId: { notIn: [U, OTHER] } },
+      }),
+    ).toEqual([]);
   });
 
   it('pins a new dashboard for its creator only, at the end of their order', async () => {
     await db
       .insert(schema.dashboards)
       .values([{ id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') }]);
-    await setDashboardPinned(OTHER, 'd1', true);
     const created = await createDashboard(U, { name: 'Mine' });
     expect(created).toMatchObject({ name: 'Mine', pinned: true });
+    // The default dashboard is pinned for every new user.
     expect(await readDashboards(U)).toMatchObject([
-      { id: 'd1', pinned: false },
+      { id: 'd1', pinned: true },
       { id: created.id, pinned: true },
     ]);
     expect(await readDashboards(OTHER)).toMatchObject([
@@ -276,12 +348,12 @@ describe('Per-user pins', () => {
     });
   });
 
-  it('pins the first dashboard for the user whose visit creates it', async () => {
+  it('creates the first dashboard on a visit and pins it for every user', async () => {
     expect(await readDashboards(U)).toMatchObject([
       { id: 'default', pinned: true },
     ]);
     expect(await readDashboards(OTHER)).toMatchObject([
-      { id: 'default', pinned: false },
+      { id: 'default', pinned: true },
     ]);
   });
 });
