@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>@hatch/ui gallery</title>
+  <style>
+    /* The fonts the Desk theme names. A shell supplies them to every App. */
+    @font-face {
+      font-family: 'Nunito';
+      font-weight: 200 1000;
+      src: url('/fonts/nunito-latin-wght-normal.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'JetBrains Mono';
+      font-weight: 100 800;
+      src: url('/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+    }
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+    }
+    #app {
+      position: fixed;
+      inset: 0;
+    }
+  </style>
+  <div id="app"></div>
+  <script type="module">
+    // A stand-in for the platform's web player: it hosts the App, answers
+    // hatch.theme.get and sends hatch.theme when the accent changes.
+    import { createPlayer } from '/runtime/nsh.js';
+
+    const params = new URLSearchParams(location.search);
+    const themes = await (await fetch('/themes.json')).json();
+    let accent = params.get('accent') ?? 'indigo';
+    const idiom = params.get('idiom') ?? undefined;
+
+    const player = await createPlayer(document.getElementById('app'), {
+      wasm: '/runtime/nsh-browser.wasm',
+      assetBase: '/bundle/assets/',
+      ...(idiom ? { idiom } : {}),
+      host: {
+        async call(name) {
+          if (name === 'hatch.theme.get')
+            return { ok: true, theme: themes[accent] };
+          throw new Error(`The gallery host does not handle ${name}`);
+        },
+      },
+    });
+    window.setAccent = (next) => {
+      accent = next;
+      player.hostEvent('hatch.theme', { theme: themes[next] });
+    };
+    // Load the fonts before the App measures its first frame.
+    await Promise.all(
+      [
+        '500 14px Nunito',
+        '700 14px Nunito',
+        '800 14px Nunito',
+        '500 14px "JetBrains Mono"',
+      ].map((font) => document.fonts.load(font)),
+    );
+    const capabilities = await (
+      await fetch('/bundle/capabilities.json')
+    ).text();
+    await player.runModule(new URL('/bundle/bundle.js', location.href).href, {
+      capabilities,
+      appId: 'dev.hatch.app.ui-gallery',
+    });
+    window.galleryReady = true;
+  </script>
+</html>
