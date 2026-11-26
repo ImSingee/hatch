@@ -118,6 +118,45 @@ function codeForStatus(status: number): string {
 }
 
 /**
+ * Font assets for `readAsset`: text is measured with a font, so NSH reads it
+ * before the code that registers it runs (the entry's fonts at start, a
+ * chunk's in `prepareChunk`). Callers share one request per font; a failed
+ * one (no answer, or not OK) is forgotten, so a chunk prepared later, after
+ * a retried `import()`, fetches the font again.
+ */
+export function createFontLoader(
+  urlOf: (font: string) => string | null,
+  fetchFont: (url: string) => Promise<Response>,
+): {
+  fonts: Map<string, Uint8Array>;
+  loadFont(font: string): Promise<void>;
+} {
+  const fonts = new Map<string, Uint8Array>();
+  const loads = new Map<string, Promise<void>>();
+  const loadFont = (font: string): Promise<void> => {
+    const pending = loads.get(font);
+    if (pending) return pending;
+    const forget = () => {
+      if (loads.get(font) === load) loads.delete(font);
+    };
+    const load = (async () => {
+      const url = urlOf(font);
+      if (!url) return;
+      const response = await fetchFont(url);
+      if (response.ok) {
+        fonts.set(font, new Uint8Array(await response.arrayBuffer()));
+      } else {
+        forget();
+      }
+    })();
+    void load.catch(forget);
+    loads.set(font, load);
+    return load;
+  };
+  return { fonts, loadFont };
+}
+
+/**
  * The App-scoped host. Every handler validates its arguments, reaches only
  * this App's own endpoints, and answers with an envelope (a rejected host
  * call would lose its code on the way to the App).
@@ -624,7 +663,6 @@ export async function startNativePlayer(): Promise<void> {
       )
     : new URL(location.href);
   const appUrl = (file: string) => new URL(file, appBase).href;
-  const fonts = new Map<string, Uint8Array>();
   const mapValues = (
     record: Record<string, string>,
     resolve: (file: string) => string,
@@ -633,32 +671,13 @@ export async function startNativePlayer(): Promise<void> {
       Object.entries(record).map(([key, file]) => [key, resolve(file)]),
     );
 
-  // A font asset, fetched once; text is measured with it, so NSH reads it
-  // (`readAsset`) before the code that registers it runs. Callers share one
-  // request; a failed one is forgotten, so a chunk prepared later (a retried
-  // `import()`) fetches the font again.
-  const fontLoads = new Map<string, Promise<void>>();
-  const loadFont = (font: string): Promise<void> => {
-    let load = fontLoads.get(font);
-    if (!load) {
-      const forget = () => {
-        if (fontLoads.get(font) === load) fontLoads.delete(font);
-      };
-      load = (async () => {
-        const url = config.app.assets[font];
-        if (!url) return;
-        const response = await fetch(appUrl(url));
-        if (response.ok) {
-          fonts.set(font, new Uint8Array(await response.arrayBuffer()));
-        } else {
-          forget();
-        }
-      })();
-      void load.catch(forget);
-      fontLoads.set(font, load);
-    }
-    return load;
-  };
+  const { fonts, loadFont } = createFontLoader(
+    (font) => {
+      const url = config.app.assets[font];
+      return url ? appUrl(url) : null;
+    },
+    (url) => fetch(url),
+  );
   const sides = Object.fromEntries(
     Object.entries(config.runtime.sides).map(([key, side]) => [
       key,
