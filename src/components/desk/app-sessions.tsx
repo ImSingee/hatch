@@ -153,8 +153,10 @@ export class AppSessionStore {
   private visible = new Set<string>();
   /** When each session off screen was last hidden (ms since the epoch). */
   private readonly hiddenAt = new Map<string, number>();
-  /** Fixed background time for tests; otherwise the browser preference. */
+  /** Fixed background time for tests; otherwise the user's preference. */
   readonly backgroundTimeoutMs: number | undefined;
+  /** The clock background time is measured on (replaceable in tests). */
+  readonly now: () => number;
   /** By session key. */
   private readonly handles = new Map<string, AppSessionHandle>();
   private readonly listeners = new Set<() => void>();
@@ -165,14 +167,17 @@ export class AppSessionStore {
     storage = sessionStorageOrNull(),
     besideEnabled = true,
     backgroundTimeoutMs,
+    now = Date.now,
   }: {
     limit?: number;
     storage?: Storage | null;
     besideEnabled?: boolean;
     backgroundTimeoutMs?: number;
+    now?: () => number;
   } = {}) {
     this.limit = Math.max(1, limit);
     this.backgroundTimeoutMs = backgroundTimeoutMs;
+    this.now = now;
     this.storage = storage;
     const persisted = readPersisted(storage);
     this.remembered = persisted.remembered;
@@ -325,7 +330,7 @@ export class AppSessionStore {
    * disappear are stamped, so "least recently shown" counts an App as shown
    * until it was hidden, and an App off screen starts its background time.
    */
-  setVisible(keys: readonly string[], now = Date.now()) {
+  setVisible(keys: readonly string[], now = this.now()) {
     const next = new Set(keys);
     for (const session of this.snapshot.sessions) {
       if (next.has(session.key)) this.hiddenAt.delete(session.key);
@@ -352,7 +357,7 @@ export class AppSessionStore {
    * remembering its route, as the limit does. Returns when the next waiting
    * App is due, or `null` when none waits.
    */
-  stopWaiting(timeoutMs: number, now = Date.now()): number | null {
+  stopWaiting(timeoutMs: number, now = this.now()): number | null {
     const due = (session: AppSession) => {
       const since = this.hiddenAt.get(session.key);
       return since === undefined ? null : since + timeoutMs;
@@ -516,17 +521,21 @@ export function AppSessionsProvider({
   limit,
   besideEnabled,
   backgroundTimeoutMs,
+  now,
   children,
 }: {
   limit?: number;
   /** Whether an App can be shown beside another window here. */
   besideEnabled?: boolean;
-  /** Overrides the browser's background-time preference (tests). */
+  /** Overrides the user's background-time preference (tests). */
   backgroundTimeoutMs?: number;
+  /** Overrides the clock background time is measured on (tests). */
+  now?: () => number;
   children: ReactNode;
 }) {
   const [store] = useState(
-    () => new AppSessionStore({ limit, besideEnabled, backgroundTimeoutMs }),
+    () =>
+      new AppSessionStore({ limit, besideEnabled, backgroundTimeoutMs, now }),
   );
   return (
     <AppSessionsContext.Provider value={store}>

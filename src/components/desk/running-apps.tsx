@@ -82,7 +82,12 @@ export function RunningApps({ besideShown }: { besideShown: boolean }) {
     const check = () => {
       const due = store.stopWaiting(timeoutMs);
       if (due !== null) {
-        timer = setTimeout(check, Math.max(0, due - Date.now()));
+        // Re-check at least every second: timers drift and stall while the
+        // computer sleeps, and the clock may jump meanwhile.
+        timer = setTimeout(
+          check,
+          Math.min(Math.max(0, due - store.now()), 1000),
+        );
       }
     };
     check();

@@ -179,6 +179,8 @@ class TestEventSource extends EventTarget {
 let limit = 12;
 /** Long enough that no test but the background-time one sees it. */
 let backgroundTimeoutMs = 600_000;
+/** The clock background time is measured on; tests move it by hand. */
+let clock = 0;
 
 function Shell() {
   const { dashboardId } = useParams({ strict: false }) as Record<
@@ -190,6 +192,7 @@ function Shell() {
       <AppSessionsProvider
         limit={limit}
         backgroundTimeoutMs={backgroundTimeoutMs}
+        now={() => clock}
       >
         <OpenItemsShell view={dashboardId ? 'home' : 'window'} />
       </AppSessionsProvider>
@@ -312,6 +315,7 @@ beforeEach(() => {
   fixtures.owners.clear();
   limit = 12;
   backgroundTimeoutMs = 600_000;
+  clock = 0;
   vi.stubGlobal('EventSource', TestEventSource);
 });
 
@@ -433,9 +437,9 @@ test('past the limit the App shown least recently stops, and reopens where it wa
 });
 
 test('a minimised App stops after its background time and reopens where it was left', async () => {
-  // Real time, with margins well beyond a frame load: the exact clock
-  // arithmetic is covered by the store test (`stopWaiting`).
-  backgroundTimeoutMs = 2500;
+  // The background time runs on a clock the test moves by hand, so a slow
+  // machine can neither stop the App early nor keep it running late.
+  backgroundTimeoutMs = 60_000;
   const { router } = await renderDesk('/app/notes');
   await loaded('notes');
   const notes = frameOf('notes');
@@ -443,16 +447,16 @@ test('a minimised App stops after its background time and reopens where it was l
   await vi.waitFor(() => expect(router.state.location.hash).toBe('/drafts'));
 
   await router.navigate({ to: '/app/$appSlug', params: { appSlug: 'ledger' } });
-  const hiddenAt = Date.now();
-  // Within its time it keeps running in the background.
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  expect(Date.now() - hiddenAt).toBeLessThan(2500);
-  expect(frameOf('notes')).toBe(notes);
   await loaded('ledger');
+  clock += 59_999;
+  // Within its time it keeps running in the background.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(frameOf('notes')).toBe(notes);
+
+  clock += 1;
   await vi.waitFor(() => expect(frameOf('notes')).toBeNull(), {
-    timeout: 8000,
+    timeout: 3000,
   });
-  expect(Date.now() - hiddenAt).toBeGreaterThanOrEqual(2000);
   // The App in front is never stopped.
   expect(placementOf('ledger')).toBe('front');
 
