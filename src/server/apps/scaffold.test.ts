@@ -161,9 +161,10 @@ describe('createApp', () => {
       expect(
         JSON.parse(renderedFile(result.files, 'package.json')),
       ).toMatchObject({ name: '123-test-app' });
-      expect(renderedFile(result.files, 'app/index.html')).toContain(
-        '<title>Hello "World"</title>',
-      );
+      // The native entry names the App in a string literal, quotes escaped.
+      const main = renderedFile(result.files, 'app/main.tsx');
+      expect(main).toContain('title={"Hello \\"World\\""}');
+      expect(main).not.toContain('__APP_NAME__');
       expect(result.files.some((file) => file.path.startsWith('gen/'))).toBe(
         false,
       );

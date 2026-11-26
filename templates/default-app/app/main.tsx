@@ -73,13 +73,11 @@ function Counter() {
         />
       }
     >
-      <Card>
-        <Stat
-          label="Count"
-          value={count() === null ? '…' : String(count())}
-          icon={IconHash}
-        />
-      </Card>
+      <Stat
+        label="Count"
+        value={count() === null ? '…' : String(count())}
+        icon={IconHash}
+      />
     </Page>
   );
 }
