@@ -15,12 +15,11 @@ import {
 import { Toaster } from 'sonner';
 import { NavigationProgress } from '@mantine/nprogress';
 import { ModalsProvider } from '@mantine/modals';
-import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import type { QueryClient } from '@tanstack/react-query';
 import appCss from '~styles.css?url';
 // Starts the UI language (and <html lang>) before any route renders.
 import { useI18n } from '~i18n';
-import { themeQueryOptions } from '~queries/theme';
+import { AccentSync } from '~components/system/accent-sync';
 import { LocaleSync } from '~components/system/locale-sync';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
@@ -28,7 +27,6 @@ import {
   ACCENT_CSS,
   NATIVE_HOST_BOOT_SCRIPT,
   appCssVariablesResolver,
-  applyAccent,
   deskThemeFor,
   useAccent,
 } from '~ui/theme';
@@ -92,19 +90,6 @@ export const Route = createRootRouteWithContext<{
 
   shellComponent: RootDocument,
 });
-
-/**
- * Keeps this browser on the instance accent: applies the stored setting as
- * soon as it is fetched, and again whenever the query is refreshed.
- */
-function AccentSync() {
-  const { data } = useQuery(themeQueryOptions);
-  const accent = data?.accent;
-  useEffect(() => {
-    if (accent) applyAccent(accent);
-  }, [accent]);
-  return null;
-}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();

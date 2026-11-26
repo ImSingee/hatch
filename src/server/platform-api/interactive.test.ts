@@ -61,6 +61,8 @@ const { createHandoff, handleHandoffRequest, handleHandoffCompletion } =
 const { authenticateSessionRequest } = await import('../session-http-auth');
 const origin = 'https://hatch.example.test';
 let cookie = '';
+/** The user behind `cookie` and `token`. */
+let sessionUserId = '';
 let token = '';
 let sessionId = '';
 
@@ -184,6 +186,7 @@ beforeAll(async () => {
     headers: new Headers({ authorization: `Bearer ${token}` }),
   });
   sessionId = session!.session.id;
+  sessionUserId = session!.user.id;
 });
 beforeEach(async () => {
   await db.delete(schema.agentSessions);
@@ -1419,8 +1422,9 @@ describe('session workspace navigation', () => {
       ).toMatchObject({ seconds: 5 });
       const { readDashboards } = await import('../workspace-read');
       expect(
-        (await readDashboards()).find((d) => d.id === 'refresh-test')
-          ?.autoRefreshSeconds,
+        (await readDashboards(sessionUserId)).find(
+          (d) => d.id === 'refresh-test',
+        )?.autoRefreshSeconds,
       ).toBe(5);
       await api.setDashboardAutoRefresh({ id: 'refresh-test', seconds: 0 });
       expect(
@@ -1472,22 +1476,25 @@ describe('session workspace navigation', () => {
     async (useBinaryFormat) => {
       await db.delete(schema.dashboards);
       await db.insert(schema.dashboards).values([
-        { id: 'last', name: 'Last', sortOrder: 5, pinned: false },
+        { id: 'last', name: 'Last' },
         {
           id: 'first',
           name: 'Overview',
           description: 'Daily view',
-          sortOrder: 1,
-          pinned: true,
           autoRefresh: 30,
           createdAt: new Date('2026-01-01'),
         },
         {
           id: 'second',
           name: 'Second',
-          sortOrder: 1,
           createdAt: new Date('2026-02-01'),
         },
+      ]);
+      const userId = sessionUserId;
+      await db.insert(schema.userDashboards).values([
+        { userId, dashboardId: 'last', sortOrder: 5 },
+        { userId, dashboardId: 'first', sortOrder: 1, pinned: true },
+        { userId, dashboardId: 'second', sortOrder: 1 },
       ]);
       await db.insert(schema.apps).values({
         id: 'archived',
@@ -1496,9 +1503,10 @@ describe('session workspace navigation', () => {
         status: 'archived',
       });
       await db.insert(schema.sidebarItems).values([
-        { id: 'root', appId: 'app-one', label: '', sortOrder: 5 },
+        { id: 'root', userId, appId: 'app-one', label: '', sortOrder: 5 },
         {
           id: 'today',
+          userId,
           appId: 'app-one',
           label: 'Today',
           entryHash: '/today?filter=mine',
@@ -1507,14 +1515,41 @@ describe('session workspace navigation', () => {
         },
         {
           id: 'archive',
+          userId,
           appId: 'app-one',
           label: 'Archive',
           entryHash: '/archive',
           sortOrder: 1,
           createdAt: new Date('2026-02-01'),
         },
-        { id: 'hidden', appId: 'archived', label: 'Hidden', sortOrder: 0 },
+        {
+          id: 'hidden',
+          userId,
+          appId: 'archived',
+          label: 'Hidden',
+          sortOrder: 0,
+        },
       ]);
+      // Another user's pins and order never reach this user's navigation.
+      await db
+        .insert(schema.user)
+        .values({
+          id: 'workspace-other',
+          name: 'Other',
+          email: `${randomUUID()}@other.test`,
+        })
+        .onConflictDoNothing();
+      await db.insert(schema.userDashboards).values({
+        userId: 'workspace-other',
+        dashboardId: 'last',
+        pinned: true,
+      });
+      await db.insert(schema.sidebarItems).values({
+        id: 'theirs',
+        userId: 'workspace-other',
+        appId: 'app-one',
+        label: 'Theirs',
+      });
       const workspace = await client(useBinaryFormat).workspace.getWorkspace(
         {},
       );
@@ -1569,11 +1604,11 @@ describe('session workspace navigation', () => {
       expect(serialized).not.toContain('/private/repo');
       const { readDashboards, readSidebarItems } =
         await import('../workspace-read');
-      expect((await readDashboards()).map((d) => d.id)).toEqual(
+      expect((await readDashboards(userId)).map((d) => d.id)).toEqual(
         workspace.dashboards.map((d) => d.id),
       );
       expect(
-        (await readSidebarItems())
+        (await readSidebarItems(userId))
           .filter((p) => p.status !== 'archived')
           .map((p) => p.id),
       ).toEqual(workspace.appPins.map((p) => p.id));
@@ -1585,7 +1620,7 @@ describe('session workspace navigation', () => {
     await db.delete(schema.apps);
     const { readDashboards } = await import('../workspace-read');
     const [web, native, repeated] = await Promise.all([
-      readDashboards(),
+      readDashboards(sessionUserId),
       client(false).workspace.getWorkspace({}),
       client(true).workspace.getWorkspace({}),
     ]);

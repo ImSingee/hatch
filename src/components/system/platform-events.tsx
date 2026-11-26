@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { themeQueryOptions } from '~queries/theme';
+import { themeQueries } from '~queries/theme';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { PlatformEvent } from '~server/platform-events';
 
@@ -58,11 +58,16 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       return { type, notificationId, deliveryId } satisfies PlatformEvent;
     }
     if (type === 'theme.updated') {
+      const userId = stringField(value, 'userId');
       const accent = stringField(value, 'accent');
-      if (!accent) return null;
-      return { type, accent } satisfies PlatformEvent;
+      if (!userId || !accent) return null;
+      return { type, userId, accent } satisfies PlatformEvent;
     }
-    if (type === 'pins.updated') return { type } satisfies PlatformEvent;
+    if (type === 'pins.updated') {
+      const userId = stringField(value, 'userId');
+      if (!userId) return null;
+      return { type, userId } satisfies PlatformEvent;
+    }
     if (type === 'dashboards.updated')
       return {
         type,
@@ -103,17 +108,14 @@ export function PlatformEventsProvider({
       const event = parsePlatformEvent(rawEvent as MessageEvent<string>);
       if (!event) return;
       // The theme is applied above every route, outside this provider, so it
-      // is refreshed here instead of through a subscriber.
+      // is refreshed here instead of through a subscriber. The server only
+      // sends the signed-in user their own theme changes.
       if (event.type === 'theme.updated')
-        void queryClient.invalidateQueries({
-          queryKey: themeQueryOptions.queryKey,
-        });
+        void queryClient.invalidateQueries(themeQueries);
       for (const listener of listeners.current) listener(event);
     };
     const onResync = () => {
-      void queryClient.invalidateQueries({
-        queryKey: themeQueryOptions.queryKey,
-      });
+      void queryClient.invalidateQueries(themeQueries);
       for (const listener of resyncListeners.current) listener();
     };
 

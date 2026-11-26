@@ -1,16 +1,17 @@
 /** Server functions for sidebar app pins; the domain logic is in `pins.ts`. */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { authMiddleware } from './auth';
+import { authMiddleware, requireSession } from './auth';
 import { pinApp, reorderAppPins, unpinApp, updateAppPin } from './pins';
 import { readSidebarItems } from './workspace-read';
 import { idListSchema, idSchema, nameSchema } from './validation';
 
 export type { SidebarItem } from './workspace-read';
 
+/** The signed-in user's App pins; every function here acts on their own. */
 export const listSidebarItems = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .handler(() => readSidebarItems());
+  .handler(async () => readSidebarItems((await requireSession()).user.id));
 
 /**
  * App-level pin toggle used by the app page: `pinned: true` ensures the app has
@@ -22,9 +23,10 @@ export const setSidebarPin = createServerFn({ method: 'POST' })
     z.object({ appId: idSchema, pinned: z.boolean() }).parse(input),
   )
   .handler(async ({ data }) => {
+    const { user } = await requireSession();
     if (data.pinned)
-      return (await pinApp({ app: data.appId, ifAbsent: true })).pin;
-    await unpinApp({ app: data.appId });
+      return (await pinApp(user.id, { app: data.appId, ifAbsent: true })).pin;
+    await unpinApp(user.id, { app: data.appId });
     return { ok: true };
   });
 
@@ -34,14 +36,18 @@ export const addSidebarItem = createServerFn({ method: 'POST' })
   .validator((input: { appId: string }) =>
     z.object({ appId: idSchema }).parse(input),
   )
-  .handler(async ({ data }) => (await pinApp({ app: data.appId })).pin);
+  .handler(async ({ data }) => {
+    const { user } = await requireSession();
+    return (await pinApp(user.id, { app: data.appId })).pin;
+  });
 
 /** Remove a single sidebar pin by its id (leaves the app's other pins). */
 export const removeSidebarItem = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((input: { id: string }) => z.object({ id: idSchema }).parse(input))
   .handler(async ({ data }) => {
-    await unpinApp({ pinId: data.id });
+    const { user } = await requireSession();
+    await unpinApp(user.id, { pinId: data.id });
     return { ok: true };
   });
 
@@ -58,8 +64,9 @@ export const updateSidebarItem = createServerFn({ method: 'POST' })
       .parse(input),
   )
   .handler(async ({ data }) => {
+    const { user } = await requireSession();
     // An empty entry point means the app root; an absent one is left as is.
-    await updateAppPin(data.id, {
+    await updateAppPin(user.id, data.id, {
       label: data.label,
       entryHash:
         data.entryHash === undefined ? undefined : data.entryHash || null,
@@ -71,6 +78,7 @@ export const reorderSidebarItems = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((orderedIds: string[]) => idListSchema.parse(orderedIds))
   .handler(async ({ data: orderedIds }) => {
-    await reorderAppPins(orderedIds);
+    const { user } = await requireSession();
+    await reorderAppPins(user.id, orderedIds);
     return { ok: true };
   });

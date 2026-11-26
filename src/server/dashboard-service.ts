@@ -33,6 +33,12 @@ import {
 import { liveAppManifests } from './apps/access';
 import { reservedShortcuts } from './apps/manifest';
 import { AppError } from './errors';
+import {
+  currentDashboardOrder,
+  lockUserPins,
+  pinsChanged,
+  writeDashboardOrder,
+} from './pins';
 import { publishPlatformEvent } from './platform-events';
 import { readDashboards, type Dashboard } from './workspace-read';
 
@@ -58,8 +64,12 @@ async function lockDashboard(tx: TX, dashboardId: string): Promise<void> {
 const dashboardsChanged = (dashboardId?: string) =>
   publishPlatformEvent({ type: 'dashboards.updated', dashboardId });
 
-async function dashboard(id: string): Promise<Dashboard> {
-  const found = (await readDashboards()).find((item) => item.id === id);
+/** One dashboard as `viewerId` sees it (their pinned flag). */
+async function dashboard(
+  viewerId: string | null,
+  id: string,
+): Promise<Dashboard> {
+  const found = (await readDashboards(viewerId)).find((item) => item.id === id);
   if (!found)
     throw new AppError('Dashboard not found.', 404, {
       code: 'dashboard.notFound',
@@ -91,34 +101,51 @@ function dashboardDescription(description: string): string | null {
 
 export const listDashboards = readDashboards;
 
-/** Create a dashboard at the end of the order; it starts pinned and empty. */
-export async function createDashboard(input: {
-  name: string;
-  description?: string;
-}): Promise<Dashboard> {
-  const [row] = await db
-    .insert(schema.dashboards)
-    .values({
-      name: dashboardName(input.name),
-      description:
-        input.description === undefined
-          ? null
-          : dashboardDescription(input.description),
-      pinned: true,
-      // Append at the end via max+1, not a row count: counts shrink after
-      // deletions and would hand out an order a surviving row already uses.
-      sortOrder: sql`(select coalesce(max(${schema.dashboards.sortOrder}), -1) + 1 from ${schema.dashboards})`,
-    })
-    .returning({ id: schema.dashboards.id });
-  dashboardsChanged(row.id);
-  return dashboard(row.id);
+/**
+ * Create an empty dashboard. It is pinned for its creator only, at the end of
+ * their order; everyone else finds it unpinned after their own dashboards.
+ * Without a creator (a Run nobody prompted) it is pinned for nobody.
+ */
+export async function createDashboard(
+  creatorId: string | null,
+  input: { name: string; description?: string },
+): Promise<Dashboard> {
+  const values = {
+    name: dashboardName(input.name),
+    description:
+      input.description === undefined
+        ? null
+        : dashboardDescription(input.description),
+  };
+  const id = await db.transaction(async (tx) => {
+    if (creatorId) await lockUserPins(tx, creatorId);
+    const [row] = await tx
+      .insert(schema.dashboards)
+      .values(values)
+      .returning({ id: schema.dashboards.id });
+    if (creatorId) {
+      const order = (await currentDashboardOrder(tx, creatorId)).filter(
+        (entry) => entry.id !== row.id,
+      );
+      await writeDashboardOrder(tx, creatorId, [
+        ...order,
+        { id: row.id, pinned: true },
+      ]);
+    }
+    return row.id;
+  });
+  dashboardsChanged(id);
+  if (creatorId) pinsChanged(creatorId);
+  return dashboard(creatorId, id);
 }
 
 /**
  * Change a dashboard's name, description or auto-refresh interval.
  * `undefined` leaves a field unchanged; an empty description clears it.
+ * Returns the dashboard as `viewerId` sees it.
  */
 export async function updateDashboard(
+  viewerId: string | null,
   id: string,
   changes: {
     name?: string;
@@ -154,7 +181,7 @@ export async function updateDashboard(
       code: 'dashboard.notFound',
     });
   dashboardsChanged(id);
-  return dashboard(id);
+  return dashboard(viewerId, id);
 }
 
 /** Delete a dashboard and its placements. The last dashboard cannot go. */

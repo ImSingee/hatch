@@ -798,15 +798,15 @@ export const agentRunEvents = snakeCase.table(
 
 /**
  * A dashboard is a named board the user arranges widgets on. Users can create
- * multiple dashboards; each owns its own set of widget placements.
+ * multiple dashboards; each owns its own set of widget placements. Dashboards
+ * are shared; whether each user pins one, and where it sits in their order,
+ * is in `user_dashboards`.
  */
 export const dashboards = snakeCase.table('dashboards', {
   id: ulid().$defaultFn(genUlid).primaryKey(),
   name: text().notNull(),
   /** Optional free-form subtitle shown in the dashboard page header. */
   description: text(),
-  /** Whether this dashboard is pinned to the sidebar for quick access. */
-  pinned: boolean().notNull().default(true),
   /**
    * Auto-refresh interval in seconds; 0 disables it. When > 0 the dashboard
    * periodically refreshes every widget (Grafana-style).
@@ -814,10 +814,29 @@ export const dashboards = snakeCase.table('dashboards', {
   autoRefresh: integer('auto_refresh').notNull().default(0),
   /** Monotonic version for widget membership and breakpoint layout drafts. */
   editorRevision: integer('editor_revision').notNull().default(0),
-  sortOrder: integer().notNull().default(0),
   createdAt,
   updatedAt,
 });
+
+/**
+ * One user's view of a dashboard: whether it is pinned to their navigation
+ * and its place in their dashboard order. A dashboard without a row for a
+ * user is unpinned and sorts after that user's rows, oldest first.
+ */
+export const userDashboards = snakeCase.table(
+  'user_dashboards',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    dashboardId: text()
+      .notNull()
+      .references(() => dashboards.id, { onDelete: 'cascade' }),
+    pinned: boolean().notNull().default(false),
+    sortOrder: integer().notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.dashboardId] })],
+);
 
 export const dashboardBreakpoint = pgEnum('dashboard_breakpoint', [
   'desktop',
@@ -869,10 +888,14 @@ export const dashboardWidgetLayouts = snakeCase.table(
   ],
 );
 
+/** One App shortcut in a user's navigation; each user has their own. */
 export const sidebarItems = snakeCase.table(
   'sidebar_items',
   {
     id: ulid().$defaultFn(genUlid).primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
     appId: text()
       .notNull()
       .references(() => apps.id, { onDelete: 'cascade' }),
@@ -891,6 +914,7 @@ export const sidebarItems = snakeCase.table(
     // Apps may be pinned multiple times (each pin carries its own label and
     // entry hash), so this is a plain lookup index, not a unique constraint.
     index('sidebar_items_app_idx').on(table.appId),
+    index('sidebar_items_user_order_idx').on(table.userId, table.sortOrder),
   ],
 );
 
@@ -975,6 +999,14 @@ export const userPreferences = snakeCase.table(
     deskBackgroundMinutes: integer('desk_background_minutes')
       .notNull()
       .default(5),
+    /**
+     * The accent the user picked (an `AccentName`); null keeps the built-in
+     * default. Validated by the service, so retiring an accent needs no
+     * migration: a stored one the tokens no longer define reads as null.
+     */
+    accent: text(),
+    /** Whether the web dock shows tile names; null keeps the default (off). */
+    dockLabels: boolean('dock_labels'),
     updatedAt,
   },
   () => [

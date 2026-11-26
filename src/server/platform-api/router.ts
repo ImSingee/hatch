@@ -105,7 +105,7 @@ import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/pla
 import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import { buildInfo } from '~/build-info';
 import { registerModelServices } from './model-rpc';
-import { getThemeState, updateTheme } from '~server/theme-settings';
+import { readTheme, updateTheme } from '~server/theme-settings';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
   listPins,
@@ -142,9 +142,13 @@ const dashboardMessage = (dashboard: Dashboard) => ({
   autoRefreshSeconds: dashboard.autoRefreshSeconds,
 });
 
-async function dashboardDetail(id: string, data?: DashboardData) {
+async function dashboardDetail(
+  viewerId: string | null,
+  id: string,
+  data?: DashboardData,
+) {
   const [dashboards, current] = await Promise.all([
-    listDashboards(),
+    listDashboards(viewerId),
     data ?? getDashboardData(id),
   ]);
   const dashboard = dashboards.find((item) => item.id === id);
@@ -248,16 +252,16 @@ const pinMessage = (pin: SidebarItem) => ({
   appStatus: pin.status,
 });
 const jsonValue = (value: unknown) => fromJson(ValueSchema, value as JsonValue);
-/**
- * Whose personal preferences a call reads and writes: the user behind a
- * session or API key, or for a Run credential the user who sent the prompt
- * the run answers.
- */
 function interfacePreferencesMessage({ language }: InterfacePreferences) {
   return { preferences: { language: language ?? undefined } };
 }
 
-async function preferenceUserId(context: HandlerContext): Promise<string> {
+/**
+ * The user a call acts for: the user behind a session or API key, or for a
+ * Run credential the user who sent the prompt the run answers. Null for a Run
+ * no user prompted; shared resources still work for it, seen by nobody.
+ */
+async function actingUserId(context: HandlerContext): Promise<string | null> {
   const { status, run } = context.values.get(publicApiContext);
   if (
     status?.credentialType === 'session' ||
@@ -271,13 +275,22 @@ async function preferenceUserId(context: HandlerContext): Promise<string> {
         columns: { userId: true },
       })
     : null;
-  if (!row?.userId) {
+  return row?.userId ?? null;
+}
+
+/**
+ * Whose personal settings a call reads and writes (preferences, theme,
+ * pins): the acting user, or a 409 for a Run no user prompted.
+ */
+async function preferenceUserId(context: HandlerContext): Promise<string> {
+  const userId = await actingUserId(context);
+  if (!userId) {
     throw publicApiError(
       'CONFLICT',
       'This Run has no user whose preferences it can use.',
     );
   }
-  return row.userId;
+  return userId;
 }
 async function associate(id: string, context: HandlerContext) {
   const run = context.values.get(publicApiContext).run;
@@ -388,10 +401,11 @@ const apps = {
     context: HandlerContext,
   ) => {
     const { run } = context.values.get(publicApiContext);
-    const created = await createApp(
-      input,
-      run ? { sessionId: run.sessionId } : {},
-    );
+    const creatorId = await actingUserId(context);
+    const created = await createApp(input, {
+      ...(run ? { sessionId: run.sessionId } : {}),
+      ...(creatorId ? { creatorId } : {}),
+    });
     return { ...created, files: files(created) };
   },
   get: async (input: { id: string }) => {
@@ -491,7 +505,12 @@ export function registerPlatformApi(
   router.service(
     WorkspaceService,
     {
-      getWorkspace: () => readWorkspace(),
+      getWorkspace: async (_input, context) => {
+        const { status } = context.values.get(publicApiContext);
+        if (status?.credentialType !== 'session')
+          throw publicApiError('SESSION_REQUIRED');
+        return readWorkspace(status.user.id);
+      },
       setDashboardAutoRefresh: (input) =>
         updateDashboardAutoRefresh(input.id, input.seconds),
     },
@@ -878,9 +897,11 @@ export function registerPlatformApi(
   });
   registerModelServices(router);
   router.service(ThemeService, {
-    getTheme: async () => ({ theme: await getThemeState() }),
-    setTheme: async (input) => ({
-      theme: await updateTheme({
+    getTheme: async (_input, context) => ({
+      theme: await readTheme(await preferenceUserId(context)),
+    }),
+    setTheme: async (input, context) => ({
+      theme: await updateTheme(await preferenceUserId(context), {
         accent: input.accent,
         dockLabels: input.dockLabels,
       }),
@@ -895,8 +916,8 @@ export function registerPlatformApi(
     }),
   });
   router.service(PinService, {
-    listPins: async (input) => {
-      const pins = await listPins();
+    listPins: async (input, context) => {
+      const pins = await listPins(await preferenceUserId(context));
       // One sequence across both lists, in the documented order.
       const entries = [
         ...pins.appPins.map((pin) => ({ kind: 'app' as const, pin })),
@@ -913,13 +934,13 @@ export function registerPlatformApi(
         nextCursor: page.nextCursor,
       };
     },
-    pinApp: async (input) => {
-      const result = await pinApp(input);
+    pinApp: async (input, context) => {
+      const result = await pinApp(await preferenceUserId(context), input);
       return { pin: pinMessage(result.pin), created: result.created };
     },
-    updateAppPin: async (input) => ({
+    updateAppPin: async (input, context) => ({
       pin: pinMessage(
-        await updateAppPin(input.id, {
+        await updateAppPin(await preferenceUserId(context), input.id, {
           label: input.label,
           // Present but empty clears the entry point.
           entryHash:
@@ -927,39 +948,60 @@ export function registerPlatformApi(
         }),
       ),
     }),
-    unpinApp: async (input) => {
-      if (input.target.case === 'pinId')
-        return { removedPinIds: await unpinApp({ pinId: input.target.value }) };
-      if (input.target.case === 'app')
-        return { removedPinIds: await unpinApp({ app: input.target.value }) };
-      throw publicApiError('BAD_REQUEST');
+    unpinApp: async (input, context) => {
+      const { target } = input;
+      if (target.case !== 'pinId' && target.case !== 'app')
+        throw publicApiError('BAD_REQUEST');
+      const userId = await preferenceUserId(context);
+      return {
+        removedPinIds: await unpinApp(
+          userId,
+          target.case === 'pinId'
+            ? { pinId: target.value }
+            : { app: target.value },
+        ),
+      };
     },
-    reorderAppPins: async (input) => ({
-      appPins: (await reorderAppPins(input.pinIds)).map(pinMessage),
+    reorderAppPins: async (input, context) => ({
+      appPins: (
+        await reorderAppPins(await preferenceUserId(context), input.pinIds)
+      ).map(pinMessage),
     }),
-    reorderDashboards: async (input) => ({
-      dashboardIds: await reorderDashboards(input.dashboardIds),
+    reorderDashboards: async (input, context) => ({
+      dashboardIds: await reorderDashboards(
+        await preferenceUserId(context),
+        input.dashboardIds,
+      ),
     }),
-    setDashboardPinned: (input) =>
-      setDashboardPinned(input.dashboardId, input.pinned),
+    setDashboardPinned: async (input, context) =>
+      setDashboardPinned(
+        await preferenceUserId(context),
+        input.dashboardId,
+        input.pinned,
+      ),
   });
   router.service(DashboardService, {
-    listDashboards: async (input) => {
-      const page = listPage(await listDashboards(), input);
+    listDashboards: async (input, context) => {
+      const page = listPage(
+        await listDashboards(await actingUserId(context)),
+        input,
+      );
       return {
         dashboards: page.items.map(dashboardMessage),
         nextCursor: page.nextCursor,
       };
     },
-    getDashboard: async (input) => ({
-      detail: await dashboardDetail(input.id),
+    getDashboard: async (input, context) => ({
+      detail: await dashboardDetail(await actingUserId(context), input.id),
     }),
-    createDashboard: async (input) => ({
-      dashboard: dashboardMessage(await createDashboard(input)),
-    }),
-    updateDashboard: async (input) => ({
+    createDashboard: async (input, context) => ({
       dashboard: dashboardMessage(
-        await updateDashboard(input.id, {
+        await createDashboard(await actingUserId(context), input),
+      ),
+    }),
+    updateDashboard: async (input, context) => ({
+      dashboard: dashboardMessage(
+        await updateDashboard(await actingUserId(context), input.id, {
           name: input.name,
           description: input.description,
           autoRefreshSeconds: input.autoRefreshSeconds,
@@ -985,21 +1027,26 @@ export function registerPlatformApi(
         nextCursor: page.nextCursor,
       };
     },
-    addDashboardWidget: async (input) => {
+    addDashboardWidget: async (input, context) => {
       const result = await addDashboardWidget(input.dashboardId, {
         app: input.app,
         widgetId: input.widgetId,
         position: input.position && widgetPosition(input.position),
       });
       return {
-        detail: await dashboardDetail(input.dashboardId, result.data),
+        detail: await dashboardDetail(
+          await actingUserId(context),
+          input.dashboardId,
+          result.data,
+        ),
         placementId: result.placementId,
       };
     },
-    setDashboardWidgetLayout: async (input) => {
+    setDashboardWidgetLayout: async (input, context) => {
       if (!input.position) throw publicApiError('BAD_REQUEST');
       return {
         detail: await dashboardDetail(
+          await actingUserId(context),
           input.dashboardId,
           await setDashboardWidgetLayout(
             input.dashboardId,
@@ -1009,8 +1056,9 @@ export function registerPlatformApi(
         ),
       };
     },
-    removeDashboardWidget: async (input) => ({
+    removeDashboardWidget: async (input, context) => ({
       detail: await dashboardDetail(
+        await actingUserId(context),
         input.dashboardId,
         await removeDashboardWidget(input.dashboardId, input.placementId),
       ),

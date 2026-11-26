@@ -1,36 +1,83 @@
-import { db, schema } from '~/db';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { db, schema, type TX } from '~/db';
 
 export type Dashboard = {
   id: string;
   name: string;
   description: string | null;
+  /** Whether the viewing user pinned it to their navigation. */
   pinned: boolean;
-  sortOrder: number;
   /** Auto-refresh interval in seconds; 0 disables auto-refresh. */
   autoRefreshSeconds: number;
 };
 
-/** Make sure at least one dashboard always exists for the UI to land on. */
-async function ensureDefaultDashboard(): Promise<void> {
-  const existing = await db.query.dashboards.findFirst();
+/**
+ * Make sure at least one dashboard always exists for the UI to land on. The
+ * user whose visit creates it has it pinned, as a new dashboard is for its
+ * creator.
+ */
+async function ensureDefaultDashboard(userId: string | null): Promise<void> {
+  const existing = await db.query.dashboards.findFirst({
+    columns: { id: true },
+  });
   if (existing) return;
-  await db
-    .insert(schema.dashboards)
-    .values({ id: 'default', name: 'My Dashboard', pinned: true, sortOrder: 0 })
-    .onConflictDoNothing();
+  await db.transaction(async (tx) => {
+    const created = await tx
+      .insert(schema.dashboards)
+      .values({ id: 'default', name: 'My Dashboard' })
+      .onConflictDoNothing()
+      .returning({ id: schema.dashboards.id });
+    if (created.length && userId)
+      await tx
+        .insert(schema.userDashboards)
+        .values({ userId, dashboardId: 'default', pinned: true })
+        .onConflictDoNothing();
+  });
 }
 
-export async function readDashboards(): Promise<Dashboard[]> {
-  await ensureDefaultDashboard();
-  const rows = await db.query.dashboards.findMany({
-    orderBy: { sortOrder: 'asc', createdAt: 'asc' },
-  });
+/**
+ * Every dashboard in the user's order, with their pinned flag. Dashboards the
+ * user has no row for are unpinned and come after the rest, oldest first;
+ * without a user (a Run nobody prompted) that is every dashboard.
+ */
+export async function readUserDashboards(
+  database: Pick<TX, 'select'>,
+  userId: string | null,
+) {
+  const view = schema.userDashboards;
+  return database
+    .select({
+      id: schema.dashboards.id,
+      name: schema.dashboards.name,
+      description: schema.dashboards.description,
+      autoRefresh: schema.dashboards.autoRefresh,
+      pinned: view.pinned,
+    })
+    .from(schema.dashboards)
+    .leftJoin(
+      view,
+      and(
+        eq(view.dashboardId, schema.dashboards.id),
+        userId === null ? sql`false` : eq(view.userId, userId),
+      ),
+    )
+    .orderBy(
+      sql`${view.sortOrder} asc nulls last`,
+      asc(schema.dashboards.createdAt),
+      asc(schema.dashboards.id),
+    );
+}
+
+export async function readDashboards(
+  userId: string | null,
+): Promise<Dashboard[]> {
+  await ensureDefaultDashboard(userId);
+  const rows = await readUserDashboards(db, userId);
   return rows.map((d) => ({
     id: d.id,
     name: d.name,
     description: d.description,
-    pinned: d.pinned,
-    sortOrder: d.sortOrder,
+    pinned: d.pinned ?? false,
     autoRefreshSeconds: d.autoRefresh,
   }));
 }
@@ -45,8 +92,10 @@ export type SidebarItem = {
   status: schema.AppStatus;
 };
 
-export async function readSidebarItems(): Promise<SidebarItem[]> {
+/** The user's App pins in their navigation order. */
+export async function readSidebarItems(userId: string): Promise<SidebarItem[]> {
   const pins = await db.query.sidebarItems.findMany({
+    where: { userId },
     orderBy: { sortOrder: 'asc', createdAt: 'asc' },
   });
   if (pins.length === 0) return [];
@@ -71,11 +120,11 @@ export async function readSidebarItems(): Promise<SidebarItem[]> {
   return items;
 }
 
-/** Shared navigation projections, called only behind a user-session boundary. */
-export async function readWorkspace() {
+/** The user's navigation: every dashboard and their App pins. */
+export async function readWorkspace(userId: string) {
   const [dashboards, pins] = await Promise.all([
-    readDashboards(),
-    readSidebarItems(),
+    readDashboards(userId),
+    readSidebarItems(userId),
   ]);
   return {
     dashboards: dashboards.map((dashboard) => ({

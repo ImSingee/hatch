@@ -17,12 +17,14 @@ in [`DESIGN.md`](../../../DESIGN.md).
 - `accents.ts` lists the accents from the tokens without importing Mantine,
   so the server and the CLI validate against the same list.
 - `accent-store.ts` holds the accent this browser applies and caches it in
-  `localStorage`. The instance setting (`ui.theme`, read through
-  `~queries/theme`) is the source of truth; `__root.tsx` applies it with
-  `applyAccent()` and builds the theme with `deskThemeFor(accent)`. The
-  prerendered shell carries `ACCENT_CSS` and a boot script that sets
-  `<html data-accent>` from the cache, so a reload paints in the chosen
-  accent before the setting is fetched.
+  `localStorage`. The signed-in user's setting (`user_preferences.accent`,
+  read through `~queries/theme`) is the source of truth; `AccentSync`
+  (`~components/system/accent-sync`) applies it with `applyAccent()` and
+  `__root.tsx` builds the theme with `deskThemeFor(accent)`. The prerendered
+  shell carries `ACCENT_CSS` and a boot script that sets `<html data-accent>`
+  from the cache, so a reload paints in the chosen accent before the setting
+  is fetched. Signed out (the login page), the cache from the last user of
+  this browser stays, else the default accent.
 - `index.ts` exports `appTheme` (the default accent) and
   `appCssVariablesResolver` for `MantineProvider`, plus `TILE_COLORS` for
   monogram tiles.

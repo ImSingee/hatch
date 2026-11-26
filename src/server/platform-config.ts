@@ -17,21 +17,8 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
-import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
 import { db, schema } from '../db';
 import type { JsonValue } from '../db/schema';
-
-/**
- * The accents come from the design tokens; nothing else lists them. Each
- * field falls back on its own, so a retired accent does not also reset the
- * dock labels, and rows written before `dockLabels` existed stay valid.
- */
-const uiThemeConfigSchema = z.object({
-  accent: z.enum(ACCENT_NAMES).catch(DEFAULT_ACCENT),
-  /** Whether the web dock shows each tile's name under it. */
-  dockLabels: z.boolean().catch(false),
-});
-export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
 
 /** Model catalog refresh settings (`~server/model-catalog/refresh`). */
 const modelCatalogConfigSchema = z.object({
@@ -93,14 +80,6 @@ const REGISTRY = {
     fallback: true,
     invalidFallback: false,
   } satisfies ConfigEntry<boolean>,
-  /**
-   * The instance-wide look every client applies. A stored accent that the
-   * tokens no longer define falls back to the default accent.
-   */
-  'ui.theme': {
-    schema: uiThemeConfigSchema,
-    fallback: { accent: DEFAULT_ACCENT, dockLabels: false },
-  } satisfies ConfigEntry<UiThemeConfig>,
   'models.catalog': {
     schema: modelCatalogConfigSchema,
     fallback: { autoUpdate: true, sourceUrl: null },

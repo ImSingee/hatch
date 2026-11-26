@@ -14,6 +14,7 @@ import {
 // Server Functions cannot load in the browser project.
 vi.mock('~server/theme', () => ({
   getThemeFn: async () => ({
+    userId: 'owner',
     accent: 'indigo',
     defaultAccent: 'indigo',
     accents: [],
@@ -370,10 +371,11 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
   );
   await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
   const source = FakeEventSource.instances[0];
-  const stale = () =>
-    queryClient.getQueryState(themeQueryOptions.queryKey)?.isInvalidated;
+  const { queryKey } = themeQueryOptions('owner');
+  const stale = () => queryClient.getQueryState(queryKey)?.isInvalidated;
   const markFresh = () =>
-    queryClient.setQueryData(themeQueryOptions.queryKey, {
+    queryClient.setQueryData(queryKey, {
+      userId: 'owner',
       accent: 'indigo',
       defaultAccent: 'indigo',
       accents: [],
@@ -383,6 +385,7 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
   markFresh();
   source?.emit('platform', {
     type: 'theme.updated',
+    userId: 'owner',
     accent: 'teal',
   } satisfies PlatformEvent);
   await vi.waitFor(() => expect(stale()).toBe(true));
