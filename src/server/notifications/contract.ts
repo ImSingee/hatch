@@ -383,8 +383,8 @@ export type NotificationContentReplacement =
  *
  * Content: `markdown` or a `card` in markup or as a tree switches to that
  * format (keeping the summary unless one is given). `title` and `body` edit
- * a text notification; on a markdown or card one they switch it to text and
- * need a `title`. See `resolveContentUpdate`.
+ * a text notification; on a markdown or card one they switch it to text,
+ * need a `title` and drop the summary unless one is given. See `resolveContentUpdate`.
  */
 export const notificationUpdateSchema = z
   .object({

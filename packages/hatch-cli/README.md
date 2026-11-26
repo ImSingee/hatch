@@ -899,7 +899,9 @@ that phone pushes and lists show. Markdown and card notifications need it on
 `send`; a text notification may have one, shown in its push instead of the
 body. On `update`, `--markdown`/`--card` keep the current summary unless
 `--summary` replaces it (the platform rejects the edit naming `summary` when
-there is none), and `--clear-summary` removes a text notification's summary.
+there is none). `--title`/`--body` switching a Markdown or card notification
+to text drop its summary unless `--summary` gives one, and `--clear-summary`
+removes a text notification's summary.
 `get` prints the format and summary, then the body (text), the Markdown
 source, or a card's plain text and canonical markup, which `--card` takes
 back; `list` shows each format with the title or summary, and `revisions`

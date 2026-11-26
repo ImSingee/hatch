@@ -1593,14 +1593,14 @@ describe('content', () => {
         expected: { format: 'card', title: null, summary: 'Deploy queued' },
       },
       {
-        name: 'markdown to text, keeping the summary',
+        name: 'markdown to text, dropping the summary that named it',
         push: MARKDOWN_PUSH,
         update: { title: 'Released' },
         expected: {
           format: 'text',
           title: 'Released',
           body: null,
-          summary: 'v12 released',
+          summary: null,
           markdown: null,
           content: null,
         },
@@ -1624,15 +1624,25 @@ describe('content', () => {
         expected: { format: 'text', summary: null },
       },
       {
-        name: 'a card turned into text, keeping the summary',
+        name: 'a card turned into text with a summary of its own',
         push: CARD_PUSH,
-        update: { title: 'Fixed', body: 'All checks pass' },
+        update: { title: 'Fixed', body: 'All checks pass', summary: 'Fixed' },
         expected: {
           format: 'text',
           title: 'Fixed',
           body: 'All checks pass',
-          summary: 'PR #261 CI failed',
+          summary: 'Fixed',
           content: null,
+        },
+      },
+      {
+        name: 'text retitled, keeping its summary',
+        push: { ...TEXT_PUSH, summary: 'Deploy queued' },
+        update: { title: 'Deploy #89' },
+        expected: {
+          format: 'text',
+          title: 'Deploy #89',
+          summary: 'Deploy queued',
         },
       },
       {

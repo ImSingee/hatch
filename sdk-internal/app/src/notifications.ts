@@ -412,7 +412,8 @@ export async function notify(
  * content and switches to that format; the current summary carries over
  * unless `summary` gives a new one, and a notification without one needs
  * it (400). They cannot be combined with `title` or `body`, which switch a
- * Markdown or card notification back to text (then `title` is required). Without `autoOpenUrl`, adding
+ * Markdown or card notification back to text (then `title` is required) and
+ * drop its summary unless `summary` gives one. Without `autoOpenUrl`, adding
  * a `url` opens it on tap (as when pushing), clearing it turns that off, and
  * replacing it keeps the current setting. `reply` asks a new question: a
  * form replaces the current one and `null` removes it, either way starting

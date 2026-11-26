@@ -2134,7 +2134,8 @@ describe('notification content over the RPC', () => {
       format: 'text',
       title: 'CI passed',
       body: 'All green',
-      summary: 'CI failed on PR #261',
     });
+    // The card's summary named the card, so the text has none.
+    expect(await get(card)).not.toHaveProperty('summary');
   });
 });

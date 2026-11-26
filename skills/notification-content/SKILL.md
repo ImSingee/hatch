@@ -130,7 +130,9 @@ hatch notification update <id> --card-file card.xml --silent --json   # correcti
   the whole card back; check it first. Do not send back the `content` tree
   from `--json` output.
 - An update may switch formats. Markdown and cards keep the current summary
-  unless you pass `--summary`; switching back to text needs `--title`.
+  unless you pass `--summary`. Switching back to text needs `--title` and
+  drops the summary (it named the old content); pass `--summary` to give the
+  text one.
 - Changing the inputs inside a card asks a new question (a new round).
   Removing them closes the question. Keep the inputs unchanged in a card
   update that should not ask again. While the card has inputs, `--reply`

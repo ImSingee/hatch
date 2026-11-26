@@ -26,7 +26,10 @@ export type ContentUpdate = {
  * - `markdown` or a card in markup or as a tree switches to that format.
  * - `title` and `body` edit a text notification. On a markdown or card
  *   notification they switch it to text, which needs `title`.
- * - The summary is the one given, else the current one. Markdown and card
+ * - The summary is the one given, else the current one, except when a
+ *   markdown or card notification becomes text: its summary named the old
+ *   content, and a text notification's summary replaces the body in pushes,
+ *   so it is dropped unless the edit gives one. Markdown and card
  *   notifications always need a summary.
  *
  * Inline inputs are the question of a card that has them: new content with
@@ -61,7 +64,7 @@ export function resolveContentUpdate(
       title: update.title ?? current.title!,
       body:
         update.body !== undefined ? update.body : text ? current.body : null,
-      summary: given !== undefined ? given : current.summary,
+      summary: given !== undefined ? given : text ? current.summary : null,
       markdown: null,
       content: null,
     };

@@ -538,10 +538,12 @@ stay in its history. An edit may switch to any format:
   is the one given, otherwise the current one; with neither, the edit is
   rejected naming `summary`.
 - `title` and `body` on a text notification change those fields. On a
-  Markdown or card notification they switch it to text and need `title`.
+  Markdown or card notification they switch it to text and need `title`; the
+  summary is dropped unless the edit gives one, since it named the old
+  content and a text notification's summary replaces the body in pushes.
 - `summary` replaces the summary; `clear_summary` (`--clear-summary`) removes
   it, which only a text notification allows.
-- Without `summary`, the current summary is kept.
+- Otherwise, without `summary`, the current summary is kept.
 - Inline inputs are recompiled with the card. A different form starts a new
   round; the same form again changes nothing. An edit whose content no
   longer has inline inputs removes their form and starts a new round, unless
