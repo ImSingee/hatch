@@ -10,3 +10,9 @@ pnpm-workspace.yaml
 
 # Connect codegen output (regenerated from proto/ by the platform on build).
 gen/
+
+# Native runtime configuration the platform generates on checkout and deploy,
+# and NSH's caches.
+/nsh.json
+/app/tsconfig.json
+.nsh/

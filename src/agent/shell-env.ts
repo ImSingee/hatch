@@ -19,14 +19,51 @@
  * `.env`, and containerized deployments rely on the container boundary.
  */
 
-import { mkdirSync, realpathSync, statSync } from 'node:fs';
+import {
+  mkdirSync,
+  readlinkSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  symlinkSync,
+} from 'node:fs';
 import path from 'node:path';
+import { nshBinary, nshEnv } from '~server/apps/native/nsh-toolchain';
 import {
   AGENT_HOME_DIR,
   agentHomeDir,
   REPO_ROOT,
   WORKSPACE_ROOT,
 } from './paths';
+
+/**
+ * A platform-owned directory holding one entry, `nsh`: a link to the pinned
+ * binary the platform builds native Apps with (`HATCH_NSH_BIN` may name it
+ * `nsh-0.7.0`, and its own directory may hold other tools). The Agent checks
+ * a native App (`nsh check`, `nsh test`, `nsh build`) with the same release a
+ * deploy uses. Empty where none is installed.
+ */
+const NSH_LINK_DIR = path.join(WORKSPACE_ROOT, 'cache', 'nsh-bin');
+
+function nshBinDir(): string[] {
+  let binary: string;
+  try {
+    binary = nshBinary();
+  } catch {
+    return [];
+  }
+  const link = path.join(NSH_LINK_DIR, 'nsh');
+  try {
+    if (readlinkSync(link) === binary) return [NSH_LINK_DIR];
+  } catch {
+    // Not made yet, or not a link: replace it below.
+  }
+  mkdirSync(NSH_LINK_DIR, { recursive: true, mode: 0o755 });
+  const next = `${link}.${process.pid}.${Date.now()}`;
+  symlinkSync(binary, next);
+  renameSync(next, link);
+  return [NSH_LINK_DIR];
+}
 
 /** Author and committer of every commit the Agent makes. */
 const AGENT_GIT_NAME = 'Hatch Agent';
@@ -138,9 +175,13 @@ export function agentTrustedPath(): string {
   } catch {
     // No development CLI build: rely on an installed `hatch` (production).
   }
+  const nshDir = nshBinDir();
+  // Platform-owned, inside the data directory the filter below excludes.
+  const nshLinkDir = nshDir.length ? realpathSync(NSH_LINK_DIR) : null;
   const entries = [
     PLATFORM_NODE_BIN_DIR,
     ...cliBin,
+    ...nshDir,
     ...inheritedPath().split(path.delimiter),
   ];
   const seen = new Set<string>();
@@ -157,7 +198,9 @@ export function agentTrustedPath(): string {
     .filter((entry): entry is string => entry !== null)
     .filter(
       (entry) =>
-        entry === platformBin || !isInside(canonicalWorkspaceRoot, entry),
+        entry === platformBin ||
+        entry === nshLinkDir ||
+        !isInside(canonicalWorkspaceRoot, entry),
     )
     .filter((entry) => {
       if (seen.has(entry)) return false;
@@ -199,6 +242,9 @@ export function agentShellEnv(sessionId?: string): NodeJS.ProcessEnv {
   env.DENO_DIR = path.join(home, '.cache', 'deno');
   env.PNPM_HOME = path.join(home, '.local', 'share', 'pnpm');
   env.PATH = agentTrustedPath();
+  // `nsh check` uses the platform's TypeScript, as deploys do, instead of
+  // downloading one from npm.
+  env.NSH_TSC = nshEnv().NSH_TSC;
   // The sandbox home has no Git identity, and a container host name gives Git
   // nothing to derive one from, so every Agent commit names the Agent.
   env.GIT_AUTHOR_NAME = AGENT_GIT_NAME;

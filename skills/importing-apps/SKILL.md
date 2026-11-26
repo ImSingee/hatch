@@ -119,6 +119,14 @@ while replacing the authored source, so the root never holds lockfiles of both
 toolchains. Do not switch the toolchain as part of an import unless the user
 asks.
 
+The imported frontend keeps its runtime. A React App stays a web App: keep
+its manifest's `app.html` and its `app.runtime` (absent means `web`), even
+though `hatch app create` scaffolds a native frontend. When the imported
+manifest is not native, also delete the scaffold's generated `nsh.json` and
+`app/tsconfig.json` from the worktree. Moving an imported App to the native
+runtime is a separate migration the user must ask for (`building-apps`,
+Migrating a web App to native).
+
 Update the imported manifest to the newly created immutable App id. Adapt the
 authored source to the current contract in `building-apps`, including explicit
 `.ts`/`.tsx` relative imports and the fixed App module/compiler configuration

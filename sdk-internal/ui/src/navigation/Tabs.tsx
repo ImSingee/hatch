@@ -2,6 +2,8 @@ import { Scroll, Text, View, computed, effect, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
 import { Each, If } from '../core/control';
+import { ShellScopeContext } from '../core/shell';
+import type { ShellScope } from '../core/shell';
 import { FOCUS_RING } from '../core/styles';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
@@ -60,12 +62,17 @@ export function selection(props: {
 
 /**
  * The panels of the items with `content`: each mounts the first time it is
- * selected and stays mounted, hidden while another is selected.
+ * selected and stays mounted, hidden while another is selected. A hidden
+ * panel counts as not shown (`ShellScope.active`), so its pages never name
+ * the App's title; `scope` lets `AppShell` give each section its part of
+ * the route as well.
  */
 export function Panels(props: {
   items: readonly TabItem[];
   selected: () => string;
+  scope?: (id: string, shown: () => boolean) => ShellScope;
 }): JSX.Element {
+  const parent = ShellScopeContext();
   const visited = signal<ReadonlySet<string>>(new Set([props.selected()]));
   effect(() => {
     const id = props.selected();
@@ -94,7 +101,16 @@ export function Panels(props: {
               classList={{ hidden: !shown(), invisible: !shown() }}
               accessibilityElementsHidden={!shown()}
             >
-              {content()?.()}
+              <ShellScopeContext.Provider
+                value={
+                  props.scope?.(untracked(item).id, shown) ?? {
+                    ...parent,
+                    active: () => parent.active() && shown(),
+                  }
+                }
+              >
+                {content()?.()}
+              </ShellScopeContext.Provider>
             </View>
           </If>
         );

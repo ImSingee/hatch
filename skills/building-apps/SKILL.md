@@ -1,6 +1,6 @@
 ---
 name: building-apps
-description: Design, build, validate, and deploy Hatch Apps with React frontends, Connect/Deno backends, widgets, managed Data Tables, storage, integrations, and App icons. Use whenever creating, modifying, debugging, or deploying an App, or designing, changing, or removing its icon.
+description: Design, build, validate, and deploy Hatch Apps with native (@hatch/ui) or React frontends, Connect/Deno backends, widgets, managed Data Tables, storage, integrations, and App icons. Use whenever creating, modifying, debugging, or deploying an App, or designing, changing, or removing its icon.
 ---
 
 # Build a Hatch App
@@ -74,7 +74,9 @@ Do not import generated files or execution modules from the manifest.
    backend, frontend, widgets, and capabilities synchronized.
 4. If dependencies changed, refresh the lockfile as described in Dependencies.
    Follow Local validation: check `manifest.ts` when selected, generate RPC
-   code, type-check the source, and run relevant tests.
+   code, type-check the source (for a native frontend, also the NSH checks in
+   [Native frontend](references/frontend-native.md#checks-before-deploying)),
+   and run relevant tests.
 5. In the checkout, inspect `git status`, stage only intended authored files,
    and commit. Do not push Git tags: the platform rejects tag pushes and
    creates the `deploy/*` tags itself when it deploys.
@@ -132,15 +134,17 @@ and deploys that commit again.
 
 ## Source contract
 
-`hatch app create` produces a prepared, runnable Counter App:
+`hatch app create` produces a prepared, runnable Counter App with a native
+frontend:
 
 ```text
 manifest.ts            App entries, capabilities, routes, widgets, integrations
 proto/service.proto    Connect RPC service; proto files stay under proto/
 backend/main.ts        bundled Deno Fetch backend
 backend/assets/        optional read-only runtime assets
-app/index.html         SPA host
-app/main.tsx           React SPA entry
+app/main.tsx           native frontend entry, built from @hatch/ui
+nsh.json               native runtime configuration; generated and ignored
+app/tsconfig.json      native type-check configuration; generated and ignored
 data/schema.ts         managed Data Table schema
 widgets/counter.tsx    default demo widget
 docs/                  optional external docs declared in the manifest (not
@@ -206,7 +210,11 @@ declaration entry for `@hatch/app/data` is the `exports` map in
 
 Use `@hatch/app` for `defineAppManifest`, `@hatch/app/data` for Data Tables,
 `@hatch/app/data/react` for the React adapter, and `@hatch/app/storage` (with
-`@hatch/app/storage/react`) to list or watch the App's browser storage. Hatch
+`@hatch/app/storage/react`) to list or watch the App's browser storage. A
+native frontend imports its UI from `@hatch/ui` and reaches the backend and
+Data Tables through `@hatch/app/native` and `@hatch/app/native/rpc`; those
+three resolve only in the native frontend, through the generated `nsh.json`,
+never in the backend or widgets. Hatch
 installs `@hatch/app/storage/install` itself; never import it. Existing
 `@hatch/data` imports remain supported by platform-generated re-export stubs for current
 compatibility versions. Do not author those stubs or rewrite historical source
@@ -238,6 +246,55 @@ owns the listener, so source must not call `listen()` or read `PORT`. The field
 does not change `backendMode`, which controls lazy versus long-running lifecycle.
 Runtime selection is preserved in each deployment artifact and on rollback.
 
+## Frontend runtime
+
+`app.runtime` in the manifest selects how the App's page runs:
+
+- `native` (what `hatch app create` scaffolds): TypeScript JSX on Hatch's
+  native runtime, with every screen built from `@hatch/ui`. It looks like the
+  Hatch platform, follows the instance's theme and accent, and the same source
+  runs in the Web Desk and Hatch's apps. Build new Apps this way. Read
+  [Native frontend](references/frontend-native.md) and
+  [Design system](references/design-system.md) before writing a screen.
+- `web` (the default when `runtime` is absent): a React SPA served from
+  `app.html`. Apps created before the native runtime and imported Apps are
+  web Apps. Keep an existing App's runtime during ordinary changes; read
+  [Web frontend and widgets](references/frontend-web.md).
+
+Widgets are React in both. The backend, proto, Data Tables and the rest of
+the manifest do not depend on the runtime, and each deployment records its
+own runtime, so rolling back across a runtime change works.
+
+### Migrating a web App to native
+
+Migrate only when the user asks. The backend, proto, schema, widgets and data
+stay as they are; only the frontend is rewritten:
+
+1. Read the React frontend and list its screens, navigation, and the RPC and
+   Data Table calls each screen makes.
+2. Map each screen to a pattern in the design system, and the navigation to
+   `AppShell` sections and `NavStack` routes. Keep the addresses in
+   `app.routes` working where you can: an `AppShell` section id is the first
+   part of the address (`/notes`).
+3. Replace the files under `app/` with the native frontend (entry
+   `app/main.tsx`), using the clients from `@hatch/app/native` and
+   `@hatch/app/native/rpc`. Delete `app/index.html` and the React-only
+   frontend code.
+4. In the manifest, set `app.runtime: 'native'` and remove `app.html`.
+5. Remove packages only the old frontend used from `package.json` (keep
+   those the widgets, backend and the Connect client still import:
+   `@connectrpc/connect` and `@bufbuild/protobuf` stay) and refresh the
+   lockfile.
+6. Add these lines to `.gitignore`: `/nsh.json`, `/app/tsconfig.json` and
+   `.nsh/`.
+7. Commit, then run `hatch app update --directory <path> --json`: it
+   prepares the checkout again and writes `nsh.json` and `app/tsconfig.json`.
+   Run the checks in [Native frontend](references/frontend-native.md#checks-before-deploying),
+   fix, commit, and deploy.
+
+Rolling back to a version from before the migration brings the React
+frontend back.
+
 ## Links to Hatch pages
 
 Give an App page its own address with hash routing: the web host at
@@ -248,7 +305,10 @@ Hatch phone app these links open the matching
 native page; `hatch://<same path>` names the same page from outside Hatch.
 Follow them as normal links in the same window: `target="_blank"` and
 `window.open` always leave for the system browser, and navigation a page
-starts on its own before it has loaded is ignored.
+starts on its own before it has loaded is ignored. A native frontend has no
+links or `window`: its address comes from `AppShell` and `NavStack` (see
+[Native frontend](references/frontend-native.md#addresses-deep-links-and-titles)),
+and `openApp(slug, route)` from `@hatch/app/native` opens another App.
 
 ## Persistent Storage
 
@@ -301,7 +361,7 @@ in `manifest.ts`:
   },
   "app": {
     "entry": "app/main.tsx",
-    "html": "app/index.html",
+    "runtime": "native",
     "routes": [{ "path": "/", "description": "Todo list" }]
   },
   "widgets": [
@@ -316,8 +376,9 @@ in `manifest.ts`:
 ```
 
 Use the generated immutable App id. `rpc.service` is the fully qualified proto
-service name. Each `app.routes` item is discoverability metadata and uses
-TanStack Router `$param` syntax for dynamic paths. Widget ids are stable URL and
+service name. A web App sets `"html": "app/index.html"` in place of
+`"runtime": "native"`. Each `app.routes` item is discoverability metadata and
+uses `$param` syntax for dynamic paths (`/notes/$id`). Widget ids are stable URL and
 dashboard identifiers.
 
 ### Backend network access
@@ -460,14 +521,25 @@ it from the App root with Hatch's platform-owned template. Do not run bare
 buf generate --template .hatch/buf.gen.yaml
 ```
 
-Then type-check the whole App:
+Then type-check the whole App. For a web App:
 
 ```bash
 tsc -p .hatch/tsconfig.json
 ```
 
+For a native App, check everything but the native frontend with `tsc`, then
+the native frontend with `nsh` (see
+[Native frontend](references/frontend-native.md#checks-before-deploying) for
+`nsh build --release` and the start-up check):
+
+```bash
+tsc -p .hatch/tsconfig.native.json
+nsh check
+```
+
 `tsc` is the platform's compiler and `.hatch/tsconfig.json` is its only
-configuration. The check covers every authored `.ts` and `.tsx` file,
+configuration (`.hatch/tsconfig.native.json` extends it and leaves out
+`app/`). The check covers every authored `.ts` and `.tsx` file,
 including `data/schema.ts` and `gen/`. Relative imports keep their `.ts` or
 `.tsx` extension. Types for Node built-ins (`node:*` imports) need
 `@types/node` in `devDependencies`; `@types/*` packages listed in the App's own
@@ -597,9 +669,15 @@ existing flag.
 
 Read only the reference relevant to the requested capability:
 
-- [Frontend and widgets](references/frontend-widgets.md): React Router/Query,
-  Connect clients, App-scoped browser storage, responsive widget sizing, and
-  refresh behavior.
+- [Native frontend](references/frontend-native.md): the default frontend of
+  new Apps: files, backend and Data Table clients, addresses and titles,
+  deploy rules, and the `nsh` checks. Read it with
+  [Design system](references/design-system.md): rules, screen patterns and
+  every `@hatch/ui` component.
+- [Web frontend and widgets](references/frontend-web.md): React SPA (web
+  runtime) with Router/Query, Connect clients and App-scoped browser storage;
+  keyboard shortcuts; and widgets, which are React in every App: responsive
+  sizing and refresh behavior.
 - [Backend integrations](references/backend-integrations.md): Connect backend,
   cron authentication, webhooks, long-running mode, and enqueuing tasks.
   Webhooks always strip Authorization and x-api-key (all casing), including
