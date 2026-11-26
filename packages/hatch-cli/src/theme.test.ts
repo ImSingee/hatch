@@ -14,7 +14,7 @@ const rejected = (...args: string[]) => {
 
 describe('theme command arguments', () => {
   it('maps get and set, accepting every accent the tokens define', () => {
-    expect(command('theme', 'get')).toEqual({ kind: 'get' });
+    expect(command('theme', 'get')).toEqual({ kind: 'get', resolve: [] });
     for (const accent of Object.keys(tokens.accents))
       expect(command('theme', 'set', '--accent', accent)).toEqual({
         kind: 'set',
@@ -60,7 +60,7 @@ describe('theme command arguments', () => {
     // Every rejection names the flag to fix, including the ones Node's
     // argument parser raises before the command sees the flags.
     for (const [args, message] of [
-      [['theme', 'set'], 'Supply --accent, --dock-labels or --no-dock-labels'],
+      [['theme', 'set'], 'Supply --accent, --clear-accent, --dock-labels'],
       [
         ['theme', 'set', '--dock-labels', '--no-dock-labels'],
         'at most one of --dock-labels and --no-dock-labels',
@@ -72,5 +72,139 @@ describe('theme command arguments', () => {
       [['theme', 'get', '--json=yes'], '--json does not take a value'],
     ] as const)
       expect(rejected(...args).message).toContain(message);
+  });
+});
+
+describe('theme modes, presets and custom themes', () => {
+  it('maps get --resolved to the mode or to one appearance', () => {
+    expect(command('theme', 'get', '--resolved')).toEqual({
+      kind: 'get',
+      resolve: 'mode',
+    });
+    expect(
+      command('theme', 'get', '--resolved', '--appearance', 'dark'),
+    ).toEqual({ kind: 'get', resolve: ['dark'] });
+  });
+
+  it('maps set, leaving out every field that is not given', () => {
+    expect(command('theme', 'set', '--mode', 'system')).toEqual({
+      kind: 'set',
+      mode: 'system',
+    });
+    expect(command('theme', 'set', '--clear-accent')).toEqual({
+      kind: 'set',
+      clearAccent: true,
+    });
+    expect(
+      command(
+        'theme',
+        'set',
+        '--mode',
+        'dark',
+        '--appearance',
+        'dark',
+        '--preset',
+        'desk-dark',
+      ),
+    ).toEqual({
+      kind: 'set',
+      mode: 'dark',
+      appearance: 'dark',
+      preset: 'desk-dark',
+    });
+    expect(
+      command('theme', 'set', '--appearance', 'light', '--file', '-'),
+    ).toEqual({ kind: 'set', appearance: 'light', file: '-' });
+    expect(
+      command(
+        'theme',
+        'set',
+        '--accent',
+        'clay',
+        '--appearance',
+        'light',
+        '--file',
+        'meadow.json',
+        '--dock-labels',
+      ),
+    ).toEqual({
+      kind: 'set',
+      accent: 'clay',
+      dockLabels: true,
+      appearance: 'light',
+      file: 'meadow.json',
+    });
+    expect(command('theme', 'check', '--file', 'meadow.json')).toEqual({
+      kind: 'check',
+      file: 'meadow.json',
+    });
+    expect(command('theme', 'presets')).toEqual({ kind: 'presets' });
+    expect(command('theme', 'reset')).toEqual({ kind: 'reset' });
+  });
+
+  it('rejects contradictory or incomplete input before any request and names the flag', () => {
+    for (const [args, message] of [
+      [['theme', 'set', '--preset', 'desk'], '--preset needs --appearance'],
+      [['theme', 'set', '--file', 'a.json'], '--file needs --appearance'],
+      [
+        ['theme', 'set', '--appearance', 'light'],
+        '--appearance needs --preset',
+      ],
+      [
+        [
+          'theme',
+          'set',
+          '--appearance',
+          'light',
+          '--preset',
+          'desk',
+          '--file',
+          '-',
+        ],
+        'at most one of --preset and --file',
+      ],
+      [
+        ['theme', 'set', '--accent', 'teal', '--clear-accent'],
+        'at most one of --accent and --clear-accent',
+      ],
+      [
+        ['theme', 'set', '--mode', 'dim'],
+        '--mode must be light, dark or system',
+      ],
+      [['theme', 'set', '--mode', ''], '--mode must not be empty'],
+      [
+        ['theme', 'set', '--appearance', 'sepia', '--preset', 'desk'],
+        '--appearance must be light or dark',
+      ],
+      [
+        ['theme', 'set', '--appearance', 'light', '--preset', 'ocean'],
+        '--preset must be one of: desk, desk-dark',
+      ],
+      [
+        ['theme', 'set', '--appearance', 'light', '--file', ''],
+        '--file must not be empty',
+      ],
+      [
+        ['theme', 'get', '--appearance', 'dark'],
+        '--appearance needs --resolved',
+      ],
+      [['theme', 'check'], 'Supply --file'],
+      [['theme', 'check', '--preset', 'desk'], '--preset is not a flag'],
+      [['theme', 'presets', 'desk'], 'no positional arguments'],
+      [['theme', 'reset', '--mode', 'light'], '--mode is not a flag'],
+      [
+        ['theme', 'set', '--clear-accent=yes'],
+        '--clear-accent does not take a value',
+      ],
+    ] as const)
+      expect({
+        args,
+        code: rejected(...args).code,
+        message: rejected(...args).message,
+      }).toMatchObject({
+        args,
+        code: 'invalid_arguments',
+        message: expect.stringContaining(message),
+      });
   });
 });
