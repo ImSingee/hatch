@@ -433,19 +433,26 @@ test('past the limit the App shown least recently stops, and reopens where it wa
 });
 
 test('a minimised App stops after its background time and reopens where it was left', async () => {
-  backgroundTimeoutMs = 600;
+  // Real time, with margins well beyond a frame load: the exact clock
+  // arithmetic is covered by the store test (`stopWaiting`).
+  backgroundTimeoutMs = 2500;
   const { router } = await renderDesk('/app/notes');
-  const notes = await loaded('notes');
-  notes.history.pushState(null, '', '#/drafts');
+  await loaded('notes');
+  const notes = frameOf('notes');
+  notes!.contentWindow!.history.pushState(null, '', '#/drafts');
   await vi.waitFor(() => expect(router.state.location.hash).toBe('/drafts'));
 
   await router.navigate({ to: '/app/$appSlug', params: { appSlug: 'ledger' } });
-  await loaded('ledger');
+  const hiddenAt = Date.now();
   // Within its time it keeps running in the background.
-  expect(frameOf('notes')!.contentWindow).toBe(notes);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  expect(Date.now() - hiddenAt).toBeLessThan(2500);
+  expect(frameOf('notes')).toBe(notes);
+  await loaded('ledger');
   await vi.waitFor(() => expect(frameOf('notes')).toBeNull(), {
-    timeout: 3000,
+    timeout: 8000,
   });
+  expect(Date.now() - hiddenAt).toBeGreaterThanOrEqual(2000);
   // The App in front is never stopped.
   expect(placementOf('ledger')).toBe('front');
 
@@ -685,4 +692,21 @@ test("Open beside on another App's pin never shows a renamed App under its old s
   expect(frameOf('notes')).not.toBe(old);
   expect(old!.isConnected).toBe(false);
   expect(framesOf('notes')).toBe(1);
+});
+
+test('a reused slug opens its new App, not the renamed App still running', async () => {
+  const { router } = await renderDesk('/app/notes');
+  await loaded('notes');
+  const old = frameOf('notes');
+  await router.navigate({ to: '/agent' });
+  // Notes was renamed elsewhere; its old slug now belongs to a backend-only
+  // App.
+  fixtures.owners.set('notes', 'id-other');
+  fixtures.frontendless.add('notes');
+
+  await router.navigate({ to: '/app/$appSlug', params: { appSlug: 'notes' } });
+
+  await expect.element(page.getByText('Backend-only app')).toBeVisible();
+  expect(old!.isConnected).toBe(false);
+  expect(framesOf('notes')).toBe(0);
 });

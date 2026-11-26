@@ -952,14 +952,29 @@ export function cliClient(transport: Transport) {
                   messageMode: input.agentMessageMode,
                 })
               ).preferences;
-        const desk =
-          input.backgroundAppMinutes === undefined
-            ? (await preferences.getDeskPreferences({})).preferences
-            : (
-                await preferences.updateDeskPreferences({
-                  backgroundAppMinutes: input.backgroundAppMinutes,
-                })
-              ).preferences;
+        let desk;
+        try {
+          desk =
+            input.backgroundAppMinutes === undefined
+              ? (await preferences.getDeskPreferences({})).preferences
+              : (
+                  await preferences.updateDeskPreferences({
+                    backgroundAppMinutes: input.backgroundAppMinutes,
+                  })
+                ).preferences;
+        } catch (error) {
+          if (input.agentMessageMode === undefined) throw error;
+          // The agent preference is already saved: say so, keeping the
+          // failure's own code and exit status.
+          const failure = publicError(error);
+          throw new CliError(
+            failure.code,
+            `${failure.message} agentMessageMode was already set; backgroundAppMinutes was not.`,
+            failure.exitCode,
+            failure.httpStatus,
+            { applied: agentPreferences(agent) },
+          );
+        }
         return { ...agentPreferences(agent), ...deskPreferences(desk) };
       },
     },

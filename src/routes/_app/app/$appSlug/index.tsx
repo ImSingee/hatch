@@ -69,8 +69,10 @@ function AppView() {
 
   // A running copy is brought forward as it is, whatever the live
   // deployment: a deployment that cannot run here applies on its reload.
-  const running = useAppSessions().sessions.some(
-    (session) => session.slug === appSlug || session.appId === app.id,
+  // This App's own session: by id where known, else (a session restored
+  // before its details were read) by slug.
+  const running = useAppSessions().sessions.some((session) =>
+    session.appId ? session.appId === app.id : session.slug === appSlug,
   );
   if (running) return <OpenApp app={app} />;
 

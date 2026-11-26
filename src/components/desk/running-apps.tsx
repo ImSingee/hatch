@@ -119,7 +119,12 @@ function SessionWindow({
   // Deleted, renamed away or archived: stop it (in front, the App's page
   // then says why). A new deployment that cannot run here does not stop a
   // running frame: it keeps the bundle it loaded until a reload.
-  const gone = isNotFound(error) || app?.status === 'archived';
+  // Also gone: the slug now names another App (this one was renamed and
+  // its old slug reused before the session followed it).
+  const gone =
+    isNotFound(error) ||
+    app?.status === 'archived' ||
+    Boolean(app && session.appId && app.id !== session.appId);
   useEffect(() => {
     if (gone) store.quit(slug);
   }, [gone, store, slug]);
@@ -243,6 +248,14 @@ function RunningAppWindow({
         ...appViewQueryOptions(slug),
         staleTime: 0,
       });
+      // The slug now names another App: stop this one rather than load the
+      // other App's bundle into its window; in front, the route shows it.
+      if (session.appId && fresh.id !== session.appId) {
+        const front = store.getSnapshot().front === slug;
+        store.quit(slug);
+        if (front) await router.invalidate();
+        return;
+      }
       // A reload applies the live deployment: one that cannot run here stops
       // the App (in front, its page then says why).
       if (!canRunApp(fresh)) {

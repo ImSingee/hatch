@@ -1,4 +1,8 @@
+import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { describe, expect, it } from 'vitest';
+import { PreferenceService } from '../../hatch-platform-api/gen/hatch/platform/v1/preference_pb';
+import { cliClient } from './client';
+import { CliError } from './error';
 import { parsePreferencesCommand } from './preferences';
 
 const command = (...args: string[]) => parsePreferencesCommand(args, 0).command;
@@ -78,5 +82,37 @@ describe('preferences command arguments', () => {
           `--agent-message-mode=${second}`,
         ),
       ).toMatch(/only once/);
+  });
+
+  it('says the agent preference was saved when the background time then fails', async () => {
+    const transport = createRouterTransport(({ service }) => {
+      service(PreferenceService, {
+        getAgentPreferences: () => ({ preferences: { messageMode: 'steer' } }),
+        updateAgentPreferences: (request) => ({
+          preferences: { messageMode: request.messageMode ?? 'steer' },
+        }),
+        getDeskPreferences: () => ({
+          preferences: { backgroundAppMinutes: 5 },
+        }),
+        updateDeskPreferences: () => {
+          throw new ConnectError('down for maintenance', Code.Unavailable);
+        },
+      });
+    });
+
+    const error = await cliClient(transport)
+      .preferences.update({
+        agentMessageMode: 'queue',
+        backgroundAppMinutes: 9,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(CliError);
+    expect((error as CliError).message).toMatch(
+      /agentMessageMode was already set; backgroundAppMinutes was not/,
+    );
+    expect((error as CliError).details).toEqual({
+      applied: { agentMessageMode: 'queue' },
+    });
   });
 });

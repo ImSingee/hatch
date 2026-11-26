@@ -826,7 +826,10 @@ only the flags it is given and prints every preference.
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
 `set` without either flag, a flag given twice, a value other than `queue` or
 `steer`, minutes that are not a whole number from 1 to 1440, or a positional
-argument). Platform errors: `CONFLICT` (6) for a Run credential
+argument). `set` with both flags saves `agentMessageMode` first; if the
+background time then fails, the error keeps that failure's code and exit
+status, says the agent preference was saved, and with `--json` carries
+`details.applied` (the saved `agentMessageMode`). Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).
 
