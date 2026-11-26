@@ -9,6 +9,8 @@ import "buf/validate/validate.proto";
 service PreferenceService {
   rpc GetAgentPreferences(GetAgentPreferencesRequest) returns (GetAgentPreferencesResponse);
   rpc UpdateAgentPreferences(UpdateAgentPreferencesRequest) returns (UpdateAgentPreferencesResponse);
+  rpc GetDeskPreferences(GetDeskPreferencesRequest) returns (GetDeskPreferencesResponse);
+  rpc UpdateDeskPreferences(UpdateDeskPreferencesRequest) returns (UpdateDeskPreferencesResponse);
 }
 
 message AgentPreferences {
@@ -36,4 +38,28 @@ message UpdateAgentPreferencesRequest {
 
 message UpdateAgentPreferencesResponse {
   AgentPreferences preferences = 1;
+}
+
+message DeskPreferences {
+  // Minutes a minimised App keeps running in the background before the Desk
+  // stops it; it then reopens on the page it was left on.
+  int32 background_app_minutes = 1;
+}
+
+message GetDeskPreferencesRequest {}
+
+message GetDeskPreferencesResponse {
+  DeskPreferences preferences = 1;
+}
+
+message UpdateDeskPreferencesRequest {
+  // Unset leaves the value unchanged.
+  optional int32 background_app_minutes = 1 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 1440
+  }];
+}
+
+message UpdateDeskPreferencesResponse {
+  DeskPreferences preferences = 1;
 }

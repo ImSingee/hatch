@@ -2,8 +2,10 @@ import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   type AnyRootRoute,
+  Outlet,
   RouterProvider,
   createMemoryHistory,
+  createRootRouteWithContext,
   createRouter,
 } from '@tanstack/react-router';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -22,28 +24,17 @@ const mocks = vi.hoisted(() => ({
 
 // Mount the real route module on a real router so loaders, reloads and error
 // boundaries behave as in the app; only the file-route registration differs.
+// The root (made below, once modules load) holds the desk's session manager
+// and its running Apps, as `src/routes/_app.tsx` does.
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@tanstack/react-router')>();
-  const { createElement } = await import('react');
-  const rootRoute = actual.createRootRouteWithContext<{
-    queryClient: QueryClient;
-  }>()({
-    component: () =>
-      createElement(
-        'div',
-        null,
-        createElement('nav', null, 'App shell'),
-        createElement(actual.Outlet),
-      ),
-  });
-  mocks.rootRoute = rootRoute;
   return {
     ...actual,
     createFileRoute: () => (options: object) =>
       actual.createRoute({
         ...options,
-        getParentRoute: () => rootRoute,
+        getParentRoute: () => mocks.rootRoute!,
         path: '/app/$appSlug',
       }),
   };
@@ -62,6 +53,10 @@ vi.mock('~components/apps/use-app-deployment-update', () => ({
   }),
 }));
 
+vi.mock('~server/desk-preference-settings', () => ({
+  getDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+  updateDeskPreferenceSettings: async () => ({ backgroundAppMinutes: 5 }),
+}));
 vi.mock('~server/apps', () => {
   const unused = vi.fn<() => void>();
   return {
@@ -84,6 +79,20 @@ vi.mock('sonner', () => ({
 }));
 
 import { Route } from '~/routes/_app/app/$appSlug';
+import { AppSessionsProvider } from '~components/desk/app-sessions';
+import { RunningApps } from '~components/desk/running-apps';
+
+mocks.rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  component: () => (
+    <AppSessionsProvider>
+      <div>
+        <nav>App shell</nav>
+        <Outlet />
+        <RunningApps besideShown={false} />
+      </div>
+    </AppSessionsProvider>
+  ),
+});
 
 const frontendCapabilities = {
   database: false,
@@ -122,6 +131,7 @@ function app(overrides: Partial<AppDetail> = {}): AppDetail {
 }
 
 async function renderAppView(initialEntry = '/app/app-one') {
+  sessionStorage.clear();
   const queryClient = new QueryClient();
   const router = createRouter({
     routeTree: mocks.rootRoute!.addChildren([Route]),
@@ -146,7 +156,9 @@ type Screen = Awaited<ReturnType<typeof renderAppView>>['screen'];
 async function loadedFrame(screen: Screen, slug: string) {
   let win: Window | null = null;
   await vi.waitFor(() => {
-    const frame = screen.container.querySelector('iframe');
+    const frame = screen.container.querySelector<HTMLIFrameElement>(
+      `iframe[src="/app/${slug}/embed/"]`,
+    );
     expect(frame).toHaveAttribute('src', `/app/${slug}/embed/`);
     expect(frame?.contentWindow?.location.pathname).toBe(`/app/${slug}/embed/`);
     expect(frame?.contentDocument?.readyState).toBe('complete');
@@ -388,7 +400,9 @@ test('opens another app at its own entry point, not the previous page', async ()
     params: { appSlug: 'app-one' },
     hash: '/settings',
   });
+  // Still running, so the same App moves to the page the URL names.
   const reopened = await loadedFrame(screen, 'app-one');
+  expect(reopened).toBe(first);
   expect(reopened.location.hash).toBe('#/settings');
   expect(router.state.location.hash).toBe('/settings');
 });

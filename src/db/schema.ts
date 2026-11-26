@@ -964,12 +964,20 @@ export const userPreferences = snakeCase.table(
       .$type<AgentMessageMode>()
       .notNull()
       .default('steer'),
+    /** Minutes a minimised App keeps running before the Desk stops it. */
+    deskBackgroundMinutes: integer('desk_background_minutes')
+      .notNull()
+      .default(5),
     updatedAt,
   },
   () => [
     check(
       'user_preferences_agent_message_mode_check',
       sql`"user_preferences"."agent_message_mode" in ('queue', 'steer')`,
+    ),
+    check(
+      'user_preferences_desk_background_minutes_check',
+      sql`"user_preferences"."desk_background_minutes" between 1 and 1440`,
     ),
   ],
 );

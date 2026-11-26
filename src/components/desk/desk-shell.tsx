@@ -1,3 +1,4 @@
+import { useMediaQuery } from '@mantine/hooks';
 import { type ReactNode, useState } from 'react';
 import { useI18n } from '~i18n';
 import {
@@ -8,8 +9,15 @@ import { DeskGround } from './desk-ground';
 import { Dock } from './dock';
 import type { DockOpenItem } from './dock-item';
 import { MenuBar } from './menu-bar';
+import { RunningApps, useVisibleBeside } from './running-apps';
 import { TabBar } from './tab-bar';
 import classes from './desk-shell.module.css';
+
+/**
+ * From tablet width an App can sit beside the window in front; narrower,
+ * only the window in front shows (plan section 3.6).
+ */
+const SIDE_BY_SIDE_QUERY = '(min-width: 48em)';
 
 /** A per-browser convenience: windows open the way the last one was left. */
 const MAXIMIZED_KEY = 'hatch.desk.windowMaximized';
@@ -46,7 +54,9 @@ type DeskShellProps = {
 
 /**
  * The desk every signed-in page lives on: menu bar on top, then the stage
- * (the desk home, or one window) down to the bottom edge. With a mouse the
+ * (the desk home, or the window in front, with a running App beside it from
+ * tablet width) down to the bottom edge. Running Apps keep their windows on
+ * the stage while they wait (see `RunningApps`). With a mouse the
  * dock floats over the stage and stays below the edge until the pointer
  * reaches the bottom or keyboard focus enters it; on touch it keeps its own
  * row under the stage. A maximized window fills the screen, and with a mouse
@@ -64,6 +74,11 @@ export function DeskShell({
     storeMaximized(!maximized);
     setMaximized(!maximized);
   };
+  const wide = useMediaQuery(SIDE_BY_SIDE_QUERY, true, {
+    getInitialValueInEffect: false,
+  });
+  const besideShown = view === 'window' && wide;
+  const split = useVisibleBeside(besideShown) !== null;
 
   return (
     <DeskGround
@@ -71,6 +86,7 @@ export function DeskShell({
       data-view={view}
       data-tabs={tabDestination ? 'true' : undefined}
       data-maximized={view === 'window' && maximized ? 'true' : undefined}
+      data-split={split ? 'true' : undefined}
     >
       <a href="#desk-stage" className={classes.skip}>
         {t('desktop.skipToContent')}
@@ -85,6 +101,7 @@ export function DeskShell({
             value={{ maximized, toggle: toggleMaximized }}
           >
             {children}
+            <RunningApps besideShown={besideShown} />
           </WindowMaximizeProvider>
         </InsideDeskShellProvider>
       </main>
@@ -92,7 +109,7 @@ export function DeskShell({
         <div aria-hidden className={classes.dockEdge} />
         <div aria-hidden className={classes.dockHandle} />
         <div className={classes.dockPanel}>
-          <Dock openItems={openItems} />
+          <Dock openItems={openItems} besideAvailable={besideShown} />
         </div>
       </footer>
       <footer className={classes.tabs}>

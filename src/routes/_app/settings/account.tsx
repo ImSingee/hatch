@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Column, Columns, GroupCard } from '~components/page/page';
 import { AgentPreferencesPanel } from '~components/settings/agent-preferences-panel';
 import { ApiKeysPanel } from '~components/settings/api-keys-panel';
+import { BackgroundAppsPanel } from '~components/settings/background-apps-panel';
 import { AccountProfilePanel } from '~components/settings/account-profile-panel';
 import { ActiveSessionsPanel } from '~components/settings/active-sessions-panel';
 import { HomepagePanel } from '~components/settings/homepage-panel';
@@ -36,6 +37,9 @@ function AccountRoute() {
           </GroupCard>
           <GroupCard padded>
             <AgentPreferencesPanel />
+          </GroupCard>
+          <GroupCard padded>
+            <BackgroundAppsPanel />
           </GroupCard>
           <GroupCard padded>
             <ChangePasswordPanel />
