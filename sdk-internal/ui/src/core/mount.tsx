@@ -3,6 +3,7 @@ import type { Component, JSX, Theme } from 'nsh';
 import { AlertDialogHost } from '../feedback/Dialog';
 import { ToastRegion } from '../feedback/Toast';
 import builtInTheme from '../theme.json';
+import { followTitle } from './shell';
 
 type ThemeVars = Record<string, string | number>;
 type ThemeDocument = { cssVars?: { theme?: ThemeVars; light?: ThemeVars } };
@@ -63,6 +64,7 @@ function followHostTheme(): void {
 
 function Root(props: { app: Component }): JSX.Element {
   const App = props.app;
+  followTitle();
   return (
     <View class="flex-1 bg-surface-window text-foreground font-sans">
       <App />
@@ -73,8 +75,9 @@ function Root(props: { app: Component }): JSX.Element {
 }
 
 /**
- * Starts the App: renders `app` into the shell, follows the shell's theme and
- * hosts toasts. Call it once, in `app/main.tsx`.
+ * Starts the App: renders `app` into the shell, follows the shell's theme,
+ * keeps the shell's title on the shown page's and hosts toasts. Call it
+ * once, in `app/main.tsx`.
  */
 export function mount(app: Component): () => void {
   followHostTheme();

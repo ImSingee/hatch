@@ -13,6 +13,11 @@ import { isAbsolute, join, relative, delimiter, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sourceManifestSchema } from '../../hatch-manifest/src/app-schema.js';
 import { isAppManagedPathSegment } from '../../../src/app-managed-path';
+import {
+  NATIVE_ENTRY_TSCONFIG_FILE,
+  NATIVE_NSH_BASE_FILE,
+  composeNativeNshJson,
+} from '../../../src/app-native-config';
 import { validateDenoDependencySource } from '../../../src/deno-dependencies';
 import {
   MANIFEST_SERIALIZER,
@@ -296,6 +301,51 @@ export async function readWorkspaceManifest(
   if (!line) throw new Error('Manifest did not produce JSON data.');
   return parse(JSON.parse(line.slice(MANIFEST_RESULT.length)));
 }
+/** What `.git/info/exclude` gains in a native App's checkout. */
+const NATIVE_EXCLUDES = ['/nsh.json', '/app/tsconfig.json', '.nsh/'];
+
+/**
+ * A native App's checkout gets the NSH configuration a deploy generates, so
+ * `nsh check`, `nsh test` and `nsh build` run from the App root: the root
+ * `nsh.json` (the delivered base plus the App's name, id and entry) and
+ * `app/tsconfig.json`. Both are regenerated on every preparation and kept
+ * out of Git, also in an App whose `.gitignore` predates the native runtime.
+ */
+export async function writeNativeConfig(
+  root: string,
+  app: { id: string; name: string; entry: string },
+) {
+  const delivered = async (file: string) => {
+    try {
+      return await readFile(join(root, '.hatch', ...file.split('/')), 'utf8');
+    } catch {
+      throw new Error(
+        `The platform SDK has no ${file}; update the platform or the hatch CLI.`,
+      );
+    }
+  };
+  const base = JSON.parse(await delivered(NATIVE_NSH_BASE_FILE)) as Record<
+    string,
+    unknown
+  >;
+  await writeFile(join(root, 'nsh.json'), composeNativeNshJson(app, base));
+  await mkdir(join(root, 'app'), { recursive: true });
+  await writeFile(
+    join(root, 'app', 'tsconfig.json'),
+    await delivered(NATIVE_ENTRY_TSCONFIG_FILE),
+  );
+  const exclude = join(root, '.git', 'info', 'exclude');
+  const current = await readFile(exclude, 'utf8').catch(() => null);
+  if (current === null) return;
+  const lines = new Set(current.split('\n'));
+  const missing = NATIVE_EXCLUDES.filter((line) => !lines.has(line));
+  if (missing.length)
+    await writeFile(
+      exclude,
+      `${current.endsWith('\n') ? current : `${current}\n`}${missing.join('\n')}\n`,
+    );
+}
+
 export async function prepareApp(
   root: string,
   signal: AbortSignal,
@@ -337,6 +387,19 @@ export async function prepareApp(
     const manifest = await readWorkspaceManifest(root, signal, tooling, {
       installed: true,
     });
+    const source = manifest as {
+      id: string;
+      name?: string;
+      app?: { entry: string; runtime?: string };
+    };
+    if (source.app?.runtime === 'native') {
+      stage = 'native configuration';
+      await writeNativeConfig(root, {
+        id: source.id,
+        name: source.name ?? source.id,
+        entry: source.app.entry,
+      });
+    }
     stage = 'Connect codegen';
     if ('rpc' in manifest && manifest.rpc) {
       if (!tooling) throw new Error('Platform codegen versions are missing.');

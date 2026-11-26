@@ -1,8 +1,10 @@
-import { Scroll, Text, View } from 'nsh';
+import { Scroll, Text, View, effect, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
 import { Each, If } from '../core/control';
 import { SIDEBAR_MIN, paneWidth, touch } from '../core/env';
+import { ShellScopeContext, firstSegment } from '../core/shell';
+import type { RoutePath, ShellScope } from '../core/shell';
 import { FOCUS_RING, FOCUS_RING_INSET } from '../core/styles';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
@@ -23,7 +25,8 @@ export type AppShellProps = {
   sections: readonly AppSection[];
   /** The selected section's id, when the App controls it. */
   value?: string;
-  /** The section shown first, when the App does not control it. */
+  /** The section shown first, when the App does not control it and the
+   * address names none. */
   defaultValue?: string;
   onChange?: (id: string) => void;
   /** Buttons at the foot of the sidebar, or at the end of the top tab row:
@@ -177,13 +180,31 @@ function BottomBar(props: AppShellProps & { selected: Selected }): JSX.Element {
   );
 }
 
+/** The section id an address names: its first segment, decoded. */
+function sectionOf(path: RoutePath): string {
+  const [segment] = firstSegment(path);
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return '';
+  }
+}
+
 /**
  * The frame of an App with top-level sections. It decides the navigation
  * from the App's own pane: a sidebar when the pane is wide, a bottom tab bar
  * on narrow touch screens, a row of tabs at the top in a narrow desktop
  * window. Each section's `content` is usually a `Page` or a `NavStack`.
+ *
+ * The selected section is the first segment of the App's address
+ * (`/<section id>`, then the section's `NavStack` path), so a deep link or a
+ * reload opens the same section and the shell can navigate between them.
  */
 export function AppShell(props: AppShellProps): JSX.Element {
+  const scope = ShellScopeContext();
+  const known = (id: string) =>
+    props.sections.some((section) => section.id === id && !section.disabled);
+  const opened = sectionOf(untracked(scope.route));
   const selected = selection({
     get items() {
       return props.sections;
@@ -191,16 +212,60 @@ export function AppShell(props: AppShellProps): JSX.Element {
     get value() {
       return props.value;
     },
-    get defaultValue() {
-      return props.defaultValue;
-    },
+    defaultValue: untracked(() => known(opened)) ? opened : props.defaultValue,
     onChange: (id) => props.onChange?.(id),
+  });
+
+  // Each section's own part of the address, remembered while it is hidden so
+  // switching back restores its pages' address too.
+  const subPaths = new Map<string, RoutePath>();
+  const sectionPath = (id: string) =>
+    `/${encodeURIComponent(id)}${subPaths.get(id) ?? ''}`;
+  const sectionScope = (id: string, shown: () => boolean): ShellScope => ({
+    route: () => {
+      const path = scope.route();
+      const [segment, rest] = firstSegment(path);
+      if (segment === '' || sectionOf(path) !== id)
+        return subPaths.get(id) ?? '';
+      subPaths.set(id, rest);
+      return rest;
+    },
+    report: (path) => {
+      subPaths.set(id, path);
+      if (untracked(selected.get) === id) scope.report(sectionPath(id));
+    },
+    active: () => scope.active() && shown(),
+    depth: scope.depth,
+  });
+
+  // The shell asked for another address: show the section it names, or the
+  // starting one for the App's home.
+  effect(() => {
+    const id = sectionOf(scope.route());
+    untracked(() => {
+      const target = known(id) ? id : id === '' ? props.defaultValue : null;
+      if (target && target !== selected.get()) selected.set(target);
+    });
+  });
+  // The selected section is the address.
+  effect(() => {
+    const id = selected.get();
+    if (id === '' || !scope.active()) return;
+    untracked(() => {
+      if (sectionOf(scope.route()) !== id) scope.report(sectionPath(id));
+    });
   });
   const layout = (): 'sidebar' | 'bottom' | 'top' => {
     if (paneWidth() >= SIDEBAR_MIN) return 'sidebar';
     return touch ? 'bottom' : 'top';
   };
-  const panels = <Panels items={props.sections} selected={selected.get} />;
+  const panels = (
+    <Panels
+      items={props.sections}
+      selected={selected.get}
+      scope={sectionScope}
+    />
+  );
   return (
     <View
       class={`flex-1 self-stretch bg-surface-window ${layout() === 'sidebar' ? 'flex-row' : 'flex-col'}`}

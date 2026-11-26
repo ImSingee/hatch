@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync, realpathSync } from 'node:fs';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,8 @@ const dataDir = await mkdtemp(path.join(tmpdir(), 'hatch-shell-env-test-'));
 vi.stubEnv('HATCH_DATA_DIR', dataDir);
 const { agentShellEnv, agentTrustedPath } = await import('./shell-env');
 const { REPO_ROOT } = await import('./paths');
+const { NSH_VERSION, resetNshBinary } =
+  await import('~server/apps/native/nsh-toolchain');
 
 afterAll(async () => {
   vi.unstubAllEnvs();
@@ -43,6 +45,33 @@ describe('Agent shell environment', () => {
     expect(
       git('log', '-1', '--format=%an <%ae> / %cn <%ce>').stdout.trim(),
     ).toBe('Hatch Agent <agent@hatch.local> / Hatch Agent <agent@hatch.local>');
+  });
+
+  it('runs the pinned nsh a deploy uses, with the platform TypeScript', async () => {
+    // Outside the workspace: the Agent PATH never lists a directory in it.
+    const release = await mkdtemp(path.join(tmpdir(), 'hatch-nsh-release-'));
+    const bin = path.join(release, 'bin');
+    await mkdir(bin, { recursive: true });
+    const nsh = path.join(bin, 'nsh');
+    await writeFile(nsh, `#!/bin/sh\necho "nsh ${NSH_VERSION} (test)"\n`);
+    await chmod(nsh, 0o755);
+    vi.stubEnv('HATCH_NSH_BIN', nsh);
+    resetNshBinary();
+    try {
+      const env = commandEnv('nsh-session');
+      const found = spawnSync('sh', ['-c', 'command -v nsh'], {
+        env,
+        encoding: 'utf8',
+      });
+      expect(found.stdout.trim()).toBe(path.join(realpathSync(bin), 'nsh'));
+      expect(env.NSH_TSC).toBe(
+        path.join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
+      );
+    } finally {
+      vi.stubEnv('HATCH_NSH_BIN', '');
+      resetNshBinary();
+      await rm(release, { recursive: true, force: true });
+    }
   });
 
   it.runIf(

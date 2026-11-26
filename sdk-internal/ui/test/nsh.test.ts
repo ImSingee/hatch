@@ -3,9 +3,11 @@
  * `style`, forms keep drafts through the App's storage, tabs keep a selection
  * while their items change, list pages open any item, follow their items,
  * keep the detail and survive resizes, toast actions run, the library follows
- * the shell's theme, and the gallery builds for release with every class
- * resolved. Skipped where `nsh` is not installed (not on `PATH`,
- * `~/.local/bin` or `~/.nsh/bin`); set `NSH_BIN` to use another binary.
+ * the shell's theme, sections and stack pages keep the shell's route and
+ * title, and the gallery builds for release with every class resolved.
+ * Skipped where `nsh` is not installed (not on `PATH`, `~/.local/bin` or
+ * `~/.nsh/bin`), except in CI, which installs the pinned release; set
+ * `NSH_BIN` (or the platform's `HATCH_NSH_BIN`) to use another binary.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -17,8 +19,9 @@ import { prepareAppRoot } from '../gallery/prepare.ts';
 /** `NSH_BIN`, else `nsh` on `PATH` (an empty entry is the current
  * directory), else the install script's places. Absolute, because the tests
  * run it from each fixture's directory. */
-const nsh = process.env.NSH_BIN
-  ? path.resolve(process.env.NSH_BIN)
+const configured = process.env.NSH_BIN || process.env.HATCH_NSH_BIN;
+const nsh = configured
+  ? path.resolve(configured)
   : [
       ...(process.env.PATH ?? '')
         .split(path.delimiter)
@@ -60,6 +63,10 @@ function fixture(name: string): string {
   return root;
 }
 
+// CI installs the pinned release: a missing one there is a failure.
+if (!nsh && process.env.CI)
+  throw new Error('nsh is not installed; CI must install the pinned NSH.');
+
 describe.skipIf(!nsh)('with NSH', () => {
   it('rejects class and style on every component', () => {
     expect(run(['check', 'app/main.tsx'], fixture('rules'))).toMatch(/^ok\n/);
@@ -98,6 +105,12 @@ describe.skipIf(!nsh)('with NSH', () => {
   it('follows the shell theme, over the built-in one', () => {
     expect(run(['test', 'app/theme.test.tsx'], fixture('theme'))).toMatch(
       /^ok\n[\s\S]*2 passed/,
+    );
+  }, 240_000);
+
+  it('keeps the route and title in the shell for sections and stack pages', () => {
+    expect(run(['test', 'app/route.test.tsx'], fixture('route'))).toMatch(
+      /^ok\n[\s\S]*4 passed/,
     );
   }, 240_000);
 

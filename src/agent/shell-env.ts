@@ -21,12 +21,26 @@
 
 import { mkdirSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { nshBinary, nshEnv } from '~server/apps/native/nsh-toolchain';
 import {
   AGENT_HOME_DIR,
   agentHomeDir,
   REPO_ROOT,
   WORKSPACE_ROOT,
 } from './paths';
+
+/**
+ * The directory of the pinned `nsh` the platform builds native Apps with, so
+ * the Agent checks a native App (`nsh check`, `nsh test`, `nsh build`) with
+ * the same release a deploy uses. Empty where none is installed.
+ */
+function nshBinDir(): string[] {
+  try {
+    return [path.dirname(nshBinary())];
+  } catch {
+    return [];
+  }
+}
 
 /** Author and committer of every commit the Agent makes. */
 const AGENT_GIT_NAME = 'Hatch Agent';
@@ -141,6 +155,7 @@ export function agentTrustedPath(): string {
   const entries = [
     PLATFORM_NODE_BIN_DIR,
     ...cliBin,
+    ...nshBinDir(),
     ...inheritedPath().split(path.delimiter),
   ];
   const seen = new Set<string>();
@@ -199,6 +214,9 @@ export function agentShellEnv(sessionId?: string): NodeJS.ProcessEnv {
   env.DENO_DIR = path.join(home, '.cache', 'deno');
   env.PNPM_HOME = path.join(home, '.local', 'share', 'pnpm');
   env.PATH = agentTrustedPath();
+  // `nsh check` uses the platform's TypeScript, as deploys do, instead of
+  // downloading one from npm.
+  env.NSH_TSC = nshEnv().NSH_TSC;
   // The sandbox home has no Git identity, and a container host name gives Git
   // nothing to derive one from, so every Agent commit names the Agent.
   env.GIT_AUTHOR_NAME = AGENT_GIT_NAME;

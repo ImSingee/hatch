@@ -18,8 +18,12 @@
     // `nsh` module; this declares the part it uses.
     "sdk-internal/app/src/nsh-host.d.ts"
   ],
-  // NSH TSX fixtures are checked by `nsh check` in the tests that build them.
-  "exclude": ["src/**/test-fixtures/native-*/**"],
+  // App source fixtures are checked by the App build in the tests that build
+  // them (`nsh check` for NSH TSX, the App's own `.hatch` tsconfig for web).
+  "exclude": [
+    "src/**/test-fixtures/native-*/**",
+    "src/**/test-fixtures/web-app/**"
+  ],
 
   "compilerOptions": {
     "target": "ES2022",
