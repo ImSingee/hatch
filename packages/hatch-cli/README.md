@@ -748,7 +748,8 @@ and signed-in clients and open native Apps restyle without a reload:
 theme show its own; `--mode` picks the appearance; `--appearance` names the
 theme to replace, with `--preset` (clears that appearance's custom theme) or
 `--file` (replaces it whole with a custom document, whose own `appearance`
-must match); `--dock-labels` / `--no-dock-labels` shows or hides the names
+must match; while an accent is chosen it replaces the document's `primary`,
+so add `--clear-accent` to show the document's own); `--dock-labels` / `--no-dock-labels` shows or hides the names
 under the web dock tiles (hidden by default). Give at least one. `theme
 check --file` validates a document without saving it and prints it resolved.
 `theme reset` returns to `desk` and `desk-dark`, light mode and the default
