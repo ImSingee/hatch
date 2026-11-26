@@ -7,6 +7,7 @@ import {
   acceptArtifact,
   cancelDeployment,
   createDeployment,
+  findDeploymentByRequest,
   getDeployment,
   isFinishedBuild,
   listDeployments,
@@ -118,6 +119,8 @@ export function registerAppDeploymentApi(
         allowDestructiveDataMigration: input.allowDestructiveDataMigration,
         dataMigrationApprovalToken: input.dataMigrationApprovalToken,
         notify: input.notify,
+        requestId: input.requestId,
+        signal: context.signal,
       });
       return { deployment: await deploymentMessage(row, app.slug) };
     } catch (error) {
@@ -156,6 +159,13 @@ export function registerAppDeploymentApi(
   router.rpc(AppService.method.listAppDeployments, async (input) => {
     try {
       const app = await appRow(input.id);
+      if (input.requestId) {
+        const row = await findDeploymentByRequest(app.id, input.requestId);
+        return {
+          deployments: row ? [await deploymentMessage(row, app.slug)] : [],
+          nextCursor: undefined,
+        };
+      }
       const page = await listDeployments(app.id, {
         limit: input.limit ?? 20,
         cursor: input.cursor,
@@ -223,6 +233,8 @@ export function registerAppDeploymentApi(
           ) {
             lastState = state;
             lastYieldAt = Date.now();
+            // By its immutable id: the App may be renamed while followed.
+            const current = await appRow(app.id);
             yield {
               lines: lines.map((line) => ({
                 seq: line.seq,
@@ -230,7 +242,7 @@ export function registerAppDeploymentApi(
                 text: line.text,
                 at: line.at.toISOString(),
               })),
-              deployment: await deploymentMessage(row, app.slug),
+              deployment: await deploymentMessage(row, current.slug),
             };
           }
           if (finished) return;

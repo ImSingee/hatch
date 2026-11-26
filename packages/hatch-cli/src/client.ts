@@ -1065,6 +1065,8 @@ export function cliClient(transport: Transport) {
           allowDestructiveDataMigration?: boolean;
           dataMigrationApprovalToken?: string;
           notify?: boolean;
+          /** Repeating it returns the deployment it already made. */
+          requestId?: string;
         }) =>
           deploymentView(
             required((await apps.createAppDeployment(input)).deployment),
@@ -1087,6 +1089,8 @@ export function cliClient(transport: Transport) {
           id: string;
           limit?: number;
           cursor?: number;
+          /** Only the deployment this create request made. */
+          requestId?: string;
         }) => {
           const result = await apps.listAppDeployments(input);
           return {
@@ -1108,10 +1112,11 @@ export function cliClient(transport: Transport) {
         /** Lines and state changes until the deployment finishes. */
         async *watch(
           input: { id: string; deploymentId: string; afterSeq?: number },
-          options: { timeoutMs?: number } = {},
+          options: { timeoutMs?: number; signal?: AbortSignal } = {},
         ) {
           for await (const message of apps.watchAppDeploymentLogs(input, {
             timeoutMs: options.timeoutMs,
+            signal: options.signal,
           })) {
             yield {
               lines: message.lines.map((line) => ({
@@ -1410,17 +1415,7 @@ export function platformTransport(
           contextValues,
         );
       } catch (error) {
-        // Connect reports a rejected fetch as Unknown with the TypeError.
-        const safe =
-          error instanceof ConnectError &&
-          error.code === Code.Unknown &&
-          error.cause instanceof TypeError
-            ? fetchFailure(credential.url, error.cause)
-            : publicError(error);
-        let message = safe.message;
-        for (const value of [credential.token, credential.apiKey])
-          if (value) message = message.replaceAll(value, '[redacted]');
-        throw new CliError(safe.code, message, safe.exitCode, safe.httpStatus);
+        throw convert(error);
       }
     },
   };

@@ -116,9 +116,11 @@ and schema). In the disposable build copy it:
 Source diagnostics (types, source rules, unknown classes, a start-up throw)
 name App-relative files and lines (`app/main.tsx:12:7`); other failures name
 the step or rule that failed (an entry outside `app/`, a missing toolchain).
-A failed build fails its deployment with `app_build_failed` and the build
-output as its message, so `hatch app deploy` exits 2 and prints it, and
-nothing was released.
+A build that rejects the source fails its deployment with `app_build_failed`
+and the build output as its message, so `hatch app deploy` exits 2 and prints
+it, and nothing was released. A local build that fails for another reason
+exits differently: a missing tool or a build that times out or stops without
+a result exits 7, and an unexpected error while preparing it exits 6.
 
 The build package carries the release bundle, the App's linked module, its
 `nsh package` description and the runtime files. The platform makes the
@@ -143,7 +145,8 @@ trust, so it publishes their runtime files (the runtime module, the engine
 `<HATCH_DATA_DIR>/app-runtime/nsh/<version>/sets/<digest>/`, named by the
 SHA-256 over every file name and its bytes, write-once
 (`publishRuntimeSet`). No package can replace or add a file another App's
-player loads, and Apps with the same engine still share one set. Deployments
+player loads. Deployments share a set only when every runtime file name and
+its bytes match, as with the same NSH release and the same side modules. Deployments
 built before sets keep their flat `<version>/` files.
 
 ## The web player

@@ -144,7 +144,9 @@ services:
       - app
     environment:
       HATCH_PLATFORM_URL: http://app:3701
-      HATCH_BUILDER_TOKEN: ${HATCH_BUILDER_TOKEN:?set HATCH_BUILDER_TOKEN in .env (e.g. openssl rand -hex 32)}
+      # Compose reads this file before it applies profiles, so an unset token
+      # must not fail it; the Builder itself refuses to start without one.
+      HATCH_BUILDER_TOKEN: ${HATCH_BUILDER_TOKEN:-}
       HATCH_BUILDER_ID: builder-1
       BUILDER_CONCURRENCY: ${BUILDER_CONCURRENCY:-1}
       # Scratch space for builds (nothing here outlives a build).

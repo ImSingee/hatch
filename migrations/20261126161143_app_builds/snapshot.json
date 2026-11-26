@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "1a7b3aa2-7973-45b5-8e51-a13af8b7f218",
+  "id": "e6d97dda-2bfc-4c04-a426-39f9f12cd89f",
   "prevIds": ["180a32b9-2ce8-4d77-b3e3-7748d5917356"],
   "footprints": [
     {
@@ -70,6 +70,47 @@
         "n|sch|public",
         "n|col|public.app_builds.app_id",
         "n|col|public.app_builds.seq"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "app_builds",
+        "app_builds_app_request_idx"
+      ],
+      "writes": [
+        "s|idx|public.app_builds_app_request_idx",
+        "n|idx|public.app_builds_app_request_idx",
+        "e|idx|public.app_builds_app_request_idx",
+        "n|rel|public.app_builds_app_request_idx"
+      ],
+      "reads": [
+        "n|tbl|public.app_builds",
+        "n|sch|public",
+        "n|col|public.app_builds.app_id",
+        "n|col|public.app_builds.request_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "app_builds",
+        "app_builds_one_building_idx"
+      ],
+      "writes": [
+        "s|idx|public.app_builds_one_building_idx",
+        "n|idx|public.app_builds_one_building_idx",
+        "e|idx|public.app_builds_one_building_idx",
+        "n|rel|public.app_builds_one_building_idx"
+      ],
+      "reads": [
+        "n|tbl|public.app_builds",
+        "n|sch|public",
+        "n|col|public.app_builds.app_id"
       ]
     },
     {
@@ -465,6 +506,22 @@
       "row": {
         "schema": "public",
         "table": "app_builds",
+        "name": "request_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builds",
         "name": "builder_id",
         "type": "text",
         "typeSchema": null,
@@ -725,6 +782,59 @@
         ],
         "isUnique": true,
         "where": null,
+        "with": "",
+        "method": "btree",
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builds",
+        "name": "app_builds_app_request_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "app_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "request_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": "\"request_id\" is not null",
+        "with": "",
+        "method": "btree",
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builds",
+        "name": "app_builds_one_building_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "app_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": "\"status\" = 'building'",
         "with": "",
         "method": "btree",
         "entityType": "indexes"

@@ -168,6 +168,10 @@ async function prepareDeploy(
   try {
     remoteGit('-C', dir, 'push', appRemote(id), 'HEAD:refs/heads/master');
   } catch (error) {
+    // Only the platform refusing a non-fast-forward push is that outcome;
+    // any other push failure fails the test.
+    const output = `${String(error)}\n${String((error as { stderr?: unknown }).stderr ?? '')}`;
+    if (!/non-fast-forward|fetch first|\[rejected\]/.test(output)) throw error;
     return {
       failed: {
         response: { status: 409 },

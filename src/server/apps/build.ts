@@ -97,8 +97,12 @@ export async function buildApp(
   } catch (error) {
     throw asBuildError(error);
   } finally {
-    await fs.rm(packageDir, { recursive: true, force: true });
-    await fs.rm(stage, { recursive: true, force: true });
+    // Each removal on its own; a failed one never replaces the result.
+    for (const dir of [packageDir, stage]) {
+      await fs.rm(dir, { recursive: true, force: true }).catch((cleanup) => {
+        console.error(`[apps] could not remove ${dir}:`, cleanup);
+      });
+    }
   }
 }
 

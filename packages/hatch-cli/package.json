@@ -12,6 +12,7 @@
   },
   "files": [
     "dist/main.mjs",
+    "dist/build-driver.mjs",
     "dist/licenses",
     "README.md"
   ]

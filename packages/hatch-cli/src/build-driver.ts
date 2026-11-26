@@ -10,7 +10,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
@@ -92,7 +92,81 @@ function nshBinary(version: string): string {
   );
 }
 
+/** A tool the build needs is missing or not the platform's version. */
+function toolUnavailable(message: string): Error {
+  return Object.assign(new Error(message), { code: 'tool_unavailable' });
+}
+
+/** Whether `name` is an executable on PATH (with PATHEXT on Windows). */
+function onPath(name: string, env: NodeJS.ProcessEnv): boolean {
+  const extensions =
+    process.platform === 'win32'
+      ? (env.PATHEXT ?? '.EXE;.CMD').split(';').filter(Boolean)
+      : [''];
+  return (env.PATH ?? '')
+    .split(path.delimiter)
+    .filter(Boolean)
+    .some((dir) =>
+      extensions.some((extension) =>
+        executable(path.join(dir, `${name}${extension}`)),
+      ),
+    );
+}
+
+/**
+ * The pnpm that installs App dependencies: the platform's exact version,
+ * from the toolchain (the cache installs it) or else PATH, never another
+ * version recorded as the pinned one.
+ */
+async function pinnedPnpm(
+  modules: string,
+  version: string,
+  env: NodeJS.ProcessEnv,
+): Promise<{ executable: string; prefix: string[] }> {
+  const installed = await readFile(
+    path.join(modules, 'pnpm', 'package.json'),
+    'utf8',
+  )
+    .then((text) => (JSON.parse(text) as { version?: string }).version)
+    .catch(() => undefined);
+  if (installed === version) {
+    // pnpm's Node entry point (the cache installs it without its native
+    // binary): bin/pnpm.mjs since pnpm 11, bin/pnpm.cjs before.
+    for (const name of ['pnpm.mjs', 'pnpm.cjs']) {
+      const entry = path.join(modules, 'pnpm', 'bin', name);
+      if (
+        await access(entry).then(
+          () => true,
+          () => false,
+        )
+      )
+        return { executable: process.execPath, prefix: [entry] };
+    }
+  }
+  const onPathPnpm = await pnpmInvocation(process.platform, env);
+  const probe = spawnSync(
+    onPathPnpm.executable,
+    [...onPathPnpm.prefix, '--version'],
+    { encoding: 'utf8', env, timeout: 30_000 },
+  );
+  const found = probe.status === 0 ? probe.stdout.trim() : undefined;
+  if (found === version) return onPathPnpm;
+  throw toolUnavailable(
+    `The local build needs pnpm ${version}, the platform's version, but ` +
+      (found ? `found ${found}.` : 'found none on PATH.') +
+      ' Install it (for example `npm install --global pnpm@' +
+      `${version}\`) or build on the platform with --build builder.`,
+  );
+}
+
 async function main(): Promise<void> {
+  // The CLI sends SIGTERM to cancel: every tool started below stops with it
+  // (each runs in its own process group), before the CLI removes the work
+  // directory they write to.
+  const stopping = new AbortController();
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => stopping.abort());
+  }
   const request = requestSchema.parse(
     JSON.parse(await readFile(process.argv[2]!, 'utf8')),
   );
@@ -100,11 +174,18 @@ async function main(): Promise<void> {
     .array(z.object({ path: z.string(), contentBase64: z.string() }))
     .parse(JSON.parse(await readFile(request.sdkFiles, 'utf8')));
   const env = childEnvironment();
-  const pnpm = await pnpmInvocation(process.platform, env);
   const print = (text: string) => process.stderr.write(`${text}\n`);
   const modules = path.join(request.toolchainDir, 'node_modules');
   const TSC = path.join(modules, 'typescript', 'bin', 'tsc');
+  // buf's bin entry is a Node script: run it with Node on every OS.
+  const BUF = path.join(modules, '@bufbuild', 'buf', 'bin', 'buf');
   const bin = path.join(modules, '.bin');
+  let pnpm: Promise<{ executable: string; prefix: string[] }> | undefined;
+  const tool = (
+    command: string,
+    args: string[],
+    options: Omit<Parameters<typeof run>[2], 'signal'>,
+  ) => run(command, args, { ...options, signal: stopping.signal });
 
   const host: BuildHost = {
     workDir: request.workDir,
@@ -118,16 +199,28 @@ async function main(): Promise<void> {
       return {
         root,
         logs,
-        async run({ tool, args, cwd, input, timeoutMs, env: extra }) {
-          const [command, commandArgs] =
-            tool === 'tsc'
-              ? [process.execPath, [TSC, ...args]]
-              : tool === 'node'
-                ? [process.execPath, args]
-                : tool === 'pnpm'
-                  ? [pnpm.executable, [...pnpm.prefix, ...args]]
-                  : ['deno', args];
-          return run(command, commandArgs, {
+        async run({ tool: name, args, cwd, input, timeoutMs, env: extra }) {
+          let command: string;
+          let commandArgs: string[];
+          if (name === 'tsc')
+            [command, commandArgs] = [process.execPath, [TSC, ...args]];
+          else if (name === 'node')
+            [command, commandArgs] = [process.execPath, args];
+          else if (name === 'pnpm') {
+            pnpm ??= pinnedPnpm(modules, request.tooling.pnpm, env);
+            const resolved = await pnpm;
+            [command, commandArgs] = [
+              resolved.executable,
+              [...resolved.prefix, ...args],
+            ];
+          } else {
+            if (!onPath('deno', env))
+              throw toolUnavailable(
+                'Deno Apps build with deno, which is not on PATH. Install it from https://deno.com, or build on the platform with --build builder.',
+              );
+            [command, commandArgs] = ['deno', args];
+          }
+          return tool(command, commandArgs, {
             cwd: cwd ?? root,
             env: { ...env, ...extra },
             input,
@@ -137,7 +230,8 @@ async function main(): Promise<void> {
       };
     },
     async runBuf(args, cwd) {
-      return run(path.join(bin, 'buf'), args, {
+      // protoc-gen-es is found by buf on PATH, from the toolchain's bin.
+      return tool(process.execPath, [BUF, ...args], {
         cwd,
         env: { ...env, PATH: `${bin}${path.delimiter}${env.PATH ?? ''}` },
       });
@@ -176,7 +270,7 @@ async function main(): Promise<void> {
       return {
         version,
         run: (args, { cwd, timeoutMs }) =>
-          run(binary, args, { cwd, env: nshEnv, timeoutMs }),
+          tool(binary, args, { cwd, env: nshEnv, timeoutMs }),
         withSandboxOwnership: (_targets, task) => task(),
       };
     },
@@ -196,10 +290,11 @@ async function main(): Promise<void> {
     process.stdout.write(
       `${JSON.stringify({
         ok: false,
-        code:
-          error instanceof AppManifestValidationError
+        code: stopping.signal.aborted
+          ? 'cancelled'
+          : error instanceof AppManifestValidationError
             ? 'APP_MANIFEST_INVALID'
-            : code === 'nsh_unavailable'
+            : code === 'nsh_unavailable' || code === 'tool_unavailable'
               ? code
               : 'app_build_failed',
         message: error instanceof Error ? error.message : String(error),

@@ -139,7 +139,10 @@ async function readPackageManifest(
 ): Promise<BuildPackageManifest> {
   const text = await fs
     .readFile(path.join(root, BUILD_PACKAGE_MANIFEST), 'utf8')
-    .catch(() => {
+    .catch((error: NodeJS.ErrnoException) => {
+      // Only a missing file is the package's fault; another read error is
+      // the platform's.
+      if (error.code !== 'ENOENT' && error.code !== 'EISDIR') throw error;
       throw new BuildPackageError(
         `The build package has no ${BUILD_PACKAGE_MANIFEST}.`,
         'app_build_invalid',
@@ -440,7 +443,10 @@ export async function finalizeBuild(
       );
     }
   } catch (error) {
-    await fs.rm(out, { recursive: true, force: true });
+    // The rejection is what the deployment reports, not a failed cleanup.
+    await fs.rm(out, { recursive: true, force: true }).catch((cleanup) => {
+      console.error(`[apps] could not remove ${out}:`, cleanup);
+    });
     throw error;
   }
 

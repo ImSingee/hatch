@@ -103,15 +103,31 @@ describe('build archives', () => {
   });
 
   it('never lets a later entry replace an earlier one', async () => {
+    const destination = target();
     await expect(
       unpackBuildArchive(
         archive(
           entry('build.json', '0', Buffer.from('first')),
           entry('build.json', '0', Buffer.from('second')),
         ),
-        target(),
+        destination,
       ),
     ).rejects.toThrow(/repeats/);
+    expect(await readFile(path.join(destination, 'build.json'), 'utf8')).toBe(
+      'first',
+    );
+  });
+
+  it('rejects an archive cut short of its padding or terminator', async () => {
+    const whole = entry('build.json', '0', Buffer.from('{"format":1}'));
+    // The body is complete, the padding to the next block is not.
+    await expect(
+      unpackBuildArchive(gzipSync(whole.subarray(0, 512 + 12)), target()),
+    ).rejects.toThrow(/truncated/);
+    // Every entry is complete, the end-of-archive blocks are missing.
+    await expect(unpackBuildArchive(gzipSync(whole), target())).rejects.toThrow(
+      /truncated/,
+    );
   });
 
   it('rejects data that is not a gzipped archive', async () => {

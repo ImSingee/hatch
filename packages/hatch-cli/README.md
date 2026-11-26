@@ -23,7 +23,8 @@ pnpm exec hatch help
 published. `scripts/build-cli.ts` bundles the pure contract and client, and
 rejects server-only imports in its build graph. The production Dockerfile
 installs `/usr/local/bin/hatch` in the shared Platform/Runner image, executable
-from any workdir with Node alone. The image also provides the pinned pnpm needed
+from any workdir with Node alone; it links to `/usr/local/lib/hatch-cli/`,
+where the build driver that local builds run sits next to it. The image also provides the pinned pnpm needed
 for workspace dependency installation/codegen. CLI/SDK outputs must be rebuilt
 before packing. On Windows, npm-global/Corepack pnpm shims are resolved to their
 Node entry point; standalone `pnpm.exe` is supported directly. Batch scripts
@@ -194,16 +195,20 @@ is rejected with `workspace_instance_mismatch`.
     `--no-wait` prints the queued deployment instead and asks the platform
     for a notification when it finishes. A platform without a Builder
     rejects it with `BUILDER_UNAVAILABLE`.
-  - `--build local` builds here: the CLI exports the commit with
-    `git archive`, runs the platform's build with its pinned esbuild,
-    TypeScript, buf and protoc-gen-es (installed once into
+  - `--build local` builds here: the CLI checks the commit out into a
+    scratch directory (every tracked file; archive attributes such as
+    `export-ignore` do not apply), runs the platform's build with its pinned
+    esbuild, TypeScript, buf, protoc-gen-es and pnpm (installed once into
     `$XDG_CACHE_HOME/hatch/toolchain`, default `~/.cache/hatch`; or taken
     from `HATCH_BUILD_TOOLCHAIN_DIR` when that directory's `node_modules`
-    holds exactly those versions, as in the platform image), and uploads the
-    package (`UploadAppDeploymentArtifact`, at most 200 MiB compressed). A
-    native frontend also needs `nsh` of the platform's version (`HATCH_NSH_BIN`
-    or `PATH`). Build output goes to stderr. A build that fails here is
-    recorded as a failed deployment.
+    holds exactly those versions and `PATH` has the pinned pnpm, as in the
+    platform image), and uploads the package (`UploadAppDeploymentArtifact`,
+    at most 200 MiB compressed). A Deno source also needs `deno` on `PATH`,
+    and a native frontend `nsh` of the platform's version (`HATCH_NSH_BIN` or
+    `PATH`); a missing or mismatched tool fails with `tool_unavailable` or
+    `nsh_unavailable` (exit 7). A build that outlives `--timeout` stops with
+    `local_build_timeout` (exit 7). Build output goes to stderr. A build that
+    fails here is recorded as a failed deployment.
   - `--build auto` (default) is `builder` where the platform has one, else
     `local`.
 
@@ -367,8 +372,9 @@ refused the package), `superseded`, `canceled`, `builder_lost`,
 
 Create/deploy/rollback are never automatically retried. Every deployment is a
 platform record, so an interrupted deploy is settled rather than guessed. The
-checkout records a deploy before creating it, and the deployment id once the
-platform answers:
+checkout records a deploy before creating it, with the id of its create
+request (which the platform stores and finds it by), and the deployment id
+once the platform answers:
 
 ```sh
 hatch app deploy --directory notes-copy --reconcile --json
@@ -377,11 +383,15 @@ hatch app deployments logs <id> <deployment-id> --follow
 hatch app deploy --directory notes-copy --retry-after-confirming '<pending-commit>' --json
 ```
 
-`--reconcile` reports the pending deployment as `not-created`, `in-progress`
-or `finished` (with the deployment) and forgets it unless it is still in
-progress. The next deploy does the same on its own: a finished one is
-settled, one still in progress fails with `deployment_in_progress` (exit 6)
-until it finishes or is canceled. A deploy whose `--timeout` passes while the
+`--reconcile` reports the pending deployment as `not-created`, `in-progress`,
+`finished` (with the deployment) or `unconfirmed`, and forgets it only when
+`finished` or `not-created`. `not-created` is reported only after the create
+request's own deadline (its `--timeout`) and a minute more have passed: the
+platform creates nothing for a request whose call has ended, so the
+deployment cannot appear later. Until then the request is `unconfirmed`. The
+next deploy does the same on its own: a finished one is settled, one still in
+progress or unconfirmed fails with `deployment_in_progress` (exit 6) until it
+finishes, is canceled or can be confirmed absent. A deploy whose `--timeout` passes while the
 Builder is working exits 7 with `deployment_in_progress` and the deployment in
 the error details; it keeps running on the platform. The push that precedes a
 deployment is safe to repeat.

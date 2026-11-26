@@ -81,17 +81,53 @@ export const deploymentRequestsQueryOptions = (id: string) =>
         : 15000,
   });
 
-/** A deployment's log, refetched while the deployment is still running. */
+type DeploymentRequestLogPage = Awaited<
+  ReturnType<typeof getAppDeploymentLogFn>
+>;
+
+export type DeploymentRequestLog = {
+  deployment: DeploymentRequestLogPage['deployment'];
+  lines: DeploymentRequestLogPage['lines'];
+  /** Every line the deployment will write has been read. */
+  complete: boolean;
+};
+
+/**
+ * A deployment's whole log. Each fetch continues after the last cached line
+ * and reads pages until the server has no more, so long logs arrive in full.
+ * Polls while the deployment runs, and once more after it finishes: the
+ * platform writes some closing lines just after the final status.
+ */
 export const deploymentRequestLogQueryOptions = (
   appId: string,
   deploymentId: string,
 ) =>
   queryOptions({
     queryKey: ['apps', appId, 'deployment-requests', deploymentId, 'log'],
-    queryFn: () =>
-      getAppDeploymentLogFn({ data: { id: appId, deploymentId, afterSeq: 0 } }),
-    refetchInterval: (query) =>
-      query.state.data && query.state.data.deployment.finished ? false : 1500,
+    queryFn: async ({ client, queryKey, signal }) => {
+      const cached = client.getQueryData<DeploymentRequestLog>(queryKey);
+      const lines = [...(cached?.lines ?? [])];
+      let page: DeploymentRequestLogPage;
+      do {
+        page = await getAppDeploymentLogFn({
+          data: {
+            id: appId,
+            deploymentId,
+            afterSeq: lines.at(-1)?.seq ?? 0,
+          },
+          signal,
+        });
+        lines.push(...page.lines);
+      } while (page.more && page.lines.length > 0);
+      return {
+        deployment: page.deployment,
+        lines,
+        complete: Boolean(cached?.deployment.finished),
+      } satisfies DeploymentRequestLog;
+    },
+    refetchInterval: (query) => (query.state.data?.complete ? false : 1500),
+    staleTime: (query) =>
+      query.state.data?.complete ? Number.POSITIVE_INFINITY : 0,
   });
 
 export const appOpsQueryOptions = (id: string) =>

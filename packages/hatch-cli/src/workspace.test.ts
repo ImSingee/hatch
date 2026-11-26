@@ -58,6 +58,7 @@ type DeploymentRecord = {
   finished: boolean;
   createdAt: string;
   logSeq: number;
+  requestId?: string;
 };
 let deployments: DeploymentRecord[];
 function deploymentMessage(record: DeploymentRecord) {
@@ -159,6 +160,11 @@ const rpc = connectNodeAdapter({
         association: 'not-applicable',
       }),
       createAppDeployment: async (data) => {
+        // A repeated create request answers with what it made.
+        const repeated = deployments.find(
+          (item) => data.requestId && item.requestId === data.requestId,
+        );
+        if (repeated) return { deployment: deploymentMessage(repeated) };
         deploys++;
         const id = `deployment-${deploys}`;
         const record = {
@@ -175,6 +181,7 @@ const rpc = connectNodeAdapter({
           finished: !loseResponse,
           createdAt: new Date().toISOString(),
           logSeq: 0,
+          requestId: data.requestId,
         };
         deployments.push(record);
         if (loseResponse) {
@@ -192,8 +199,13 @@ const rpc = connectNodeAdapter({
         if (!record) throw new ConnectError('missing', Code.NotFound);
         return { deployment: deploymentMessage(record) };
       },
-      listAppDeployments: () => ({
-        deployments: [...deployments].reverse().map(deploymentMessage),
+      listAppDeployments: (data) => ({
+        deployments: [...deployments]
+          .reverse()
+          .filter(
+            (item) => !data.requestId || item.requestId === data.requestId,
+          )
+          .map(deploymentMessage),
       }),
     });
     router.service(SdkService, {
@@ -812,6 +824,54 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     expect(
       JSON.parse(await readFile(join(root, '.git/hatch-cli.json'), 'utf8'))
         .pending,
+    ).toBeUndefined();
+  });
+  it('never takes another deployment of the same commit for an unconfirmed create', async () => {
+    const root = await create();
+    const workspace = join(root, '.git/hatch-cli.json');
+    // An earlier deployment of this commit finished just now.
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const metadata = JSON.parse(await readFile(workspace, 'utf8'));
+    const commit = git(root, 'rev-parse', 'HEAD');
+    // A redeploy whose create never reached the platform, still within the
+    // create request's deadline.
+    const pending = {
+      command: 'deploy',
+      commit,
+      startedAt: new Date().toISOString(),
+      requestId: 'lost-request',
+      createDeadline: new Date(Date.now() + 60_000).toISOString(),
+    };
+    await writeFile(workspace, JSON.stringify({ ...metadata, pending }));
+    const unconfirmed = (
+      await run(['app', 'deploy', '--directory', root, '--reconcile']).result
+    ).data;
+    expect(unconfirmed).toMatchObject({
+      state: 'unconfirmed',
+      deployment: null,
+    });
+    expect(JSON.parse(await readFile(workspace, 'utf8')).pending).toEqual(
+      pending,
+    );
+    // Once the request can no longer land, it was not created.
+    await writeFile(
+      workspace,
+      JSON.stringify({
+        ...metadata,
+        pending: {
+          ...pending,
+          createDeadline: new Date(Date.now() - 120_000).toISOString(),
+        },
+      }),
+    );
+    expect(
+      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
+        .data,
+    ).toMatchObject({ state: 'not-created', deployment: null });
+    expect(
+      JSON.parse(await readFile(workspace, 'utf8')).pending,
     ).toBeUndefined();
   });
   it('uses a cross-process lock and releases it after completion or POSIX cancellation', async () => {

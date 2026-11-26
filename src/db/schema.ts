@@ -354,6 +354,11 @@ export const appBuilds = snakeCase.table(
     dataMigrationApprovalToken: text('data_migration_approval_token'),
     /** Post a platform notification when it is released or fails. */
     notifyOnFinish: boolean('notify_on_finish').notNull().default(false),
+    /**
+     * Client-chosen id of the create request, so a retried or uncertain
+     * create finds the deployment it made instead of making another.
+     */
+    requestId: text('request_id'),
     /** Builder holding the build, and until when (builder mode). */
     builderId: text('builder_id'),
     leaseExpiresAt: msTimestamp('lease_expires_at'),
@@ -375,6 +380,13 @@ export const appBuilds = snakeCase.table(
   },
   (table) => [
     uniqueIndex('app_builds_app_seq_idx').on(table.appId, table.seq),
+    uniqueIndex('app_builds_app_request_idx')
+      .on(table.appId, table.requestId)
+      .where(sql`${table.requestId} is not null`),
+    // One build per App at a time, whatever claims race (see leaseBuild).
+    uniqueIndex('app_builds_one_building_idx')
+      .on(table.appId)
+      .where(sql`${table.status} = 'building'`),
     index('app_builds_app_created_idx').on(table.appId, table.createdAt),
     // Builder leases and the sweeper scan only unfinished builds.
     index('app_builds_active_idx')

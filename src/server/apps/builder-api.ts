@@ -10,6 +10,8 @@ import {
   BUILD_TOKEN_HEADER,
   BUILDER_PROTOCOL_VERSION,
   LEASE_WAIT_MS,
+  LOG_BATCH_MAX_BYTES,
+  LOG_BATCH_MAX_LINES,
   type LeasedBuild,
 } from '../../builder/protocol';
 import { BUILD_PACKAGE_MAX_COMPRESSED_BYTES } from '../../app-build/format';
@@ -18,8 +20,9 @@ import { platformSdkDigest } from '../platform-api/sdk';
 import { buildLeaseToken, readBuildLeaseToken } from './build-tokens';
 import {
   acceptArtifact,
-  appendBuildLog,
+  appendLeasedBuildLog,
   BUILD_QUEUE_CHANNEL,
+  type BuildLease,
   failBuild,
   leaseBuild,
   leasedBuild,
@@ -28,16 +31,25 @@ import {
 } from './builds';
 import { archiveAppCommit } from './git';
 
-const MAX_JSON_BYTES = 1024 * 1024;
+const MAX_JSON_BYTES = LOG_BATCH_MAX_BYTES;
 
+/**
+ * Buffer a body of at most `limit` bytes actually read. Past the limit it
+ * stops buffering (the rest is drained) and rejects with 413, which the
+ * internal API answers before closing the connection, so the Builder reads
+ * the 413 instead of a dropped connection.
+ */
 function readBody(req: http.IncomingMessage, limit: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
+    let over = false;
     req.on('data', (chunk: Buffer) => {
+      if (over) return;
       total += chunk.length;
       if (total > limit) {
-        req.destroy();
+        over = true;
+        chunks.length = 0;
         reject(new AppError('Payload too large.', 413));
         return;
       }
@@ -75,17 +87,31 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-/** The leased build a request's token names, while it is still leased. */
+/**
+ * The leased build a request's token names, while it is still leased. Every
+ * write the request makes is checked against the same lease (builder and
+ * attempt) again, atomically, so a request whose attempt expires meanwhile
+ * changes nothing of the next attempt.
+ */
 async function leasedFor(req: http.IncomingMessage, buildId: string) {
-  const lease = readBuildLeaseToken(
+  const token = readBuildLeaseToken(
     req.headers[BUILD_TOKEN_HEADER] as string | undefined,
   );
-  if (!lease || lease.buildId !== buildId) {
+  if (!token || token.buildId !== buildId) {
     throw new AppError('Invalid build token.', 401);
   }
-  const build = await leasedBuild(buildId, lease.builderId);
-  if (!build || build.attempts !== lease.attempt) return null;
-  return { build, builderId: lease.builderId };
+  const build = await leasedBuild(buildId, token.builderId);
+  if (!build || build.attempts !== token.attempt) return null;
+  const lease: BuildLease = {
+    builderId: token.builderId,
+    attempt: token.attempt,
+  };
+  return { build, lease };
+}
+
+function notLeased(res: http.ServerResponse): void {
+  // Canceled, superseded or no longer this Builder's: stop building.
+  json(res, 409, { error: 'build_not_leased', continue: false });
 }
 
 export async function handleBuilderApiRequest(
@@ -109,21 +135,26 @@ export async function handleBuilderApiRequest(
       });
       return;
     }
+    // The Builder left when the response closes before it was sent (the
+    // request's own `close` fires as soon as its body has been read).
     const abort = new AbortController();
-    req.once('close', () => abort.abort());
+    res.once('close', () => {
+      if (!res.writableFinished) abort.abort();
+    });
     const deadline = Date.now() + LEASE_WAIT_MS;
     let build = await leaseBuild(body.builderId);
-    while (!build && !abort.signal.aborted && Date.now() < deadline) {
+    while (!build && Date.now() < deadline) {
       await waitForBuildChange(
         BUILD_QUEUE_CHANNEL,
         Math.min(5_000, deadline - Date.now()),
         abort.signal,
       );
+      if (abort.signal.aborted) return;
       build = await leaseBuild(body.builderId);
     }
-    if (abort.signal.aborted && build) {
-      // The Builder left; its lease simply expires and the build is queued
-      // again by the sweeper.
+    if (abort.signal.aborted) {
+      // The Builder left after the claim; its lease expires and the
+      // sweeper queues the build again.
       return;
     }
     const leased: LeasedBuild | null = build
@@ -147,11 +178,10 @@ export async function handleBuilderApiRequest(
   if (!buildId || rest.length !== 2) throw new AppError('Not found.', 404);
   const leased = await leasedFor(req, buildId);
   if (!leased) {
-    // Canceled, superseded or no longer this Builder's: stop building.
-    json(res, 409, { error: 'build_not_leased', continue: false });
+    notLeased(res);
     return;
   }
-  const { build, builderId } = leased;
+  const { build, lease } = leased;
 
   if (action === 'source' && method === 'GET') {
     const archive = await archiveAppCommit(build.appId, build.commit);
@@ -164,15 +194,18 @@ export async function handleBuilderApiRequest(
     return;
   }
   if (action === 'heartbeat' && method === 'POST') {
-    json(res, 200, { continue: await renewBuildLease(build.id, builderId) });
+    json(res, 200, { continue: await renewBuildLease(build.id, lease) });
     return;
   }
   if (action === 'logs' && method === 'POST') {
     const body = await readJson(
       req,
-      z.object({ lines: z.array(z.string()).max(5_000) }),
+      z.object({ lines: z.array(z.string()).max(LOG_BATCH_MAX_LINES) }),
     );
-    await appendBuildLog(build.id, 'build', body.lines);
+    if (!(await appendLeasedBuildLog(build.id, lease, body.lines))) {
+      notLeased(res);
+      return;
+    }
     json(res, 200, { ok: true });
     return;
   }
@@ -184,7 +217,10 @@ export async function handleBuilderApiRequest(
         code: z.enum(['app_build_failed', 'APP_MANIFEST_INVALID']).optional(),
       }),
     );
-    await failBuild(build.id, builderId, body.message, body.code);
+    if (!(await failBuild(build.id, lease, body.message, body.code))) {
+      notLeased(res);
+      return;
+    }
     json(res, 200, { ok: true });
     return;
   }
@@ -194,7 +230,7 @@ export async function handleBuilderApiRequest(
       appId: build.appId,
       buildId: build.id,
       archive,
-      builderId,
+      lease,
     });
     json(res, 200, {
       status: final.status,

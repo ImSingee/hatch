@@ -11,8 +11,18 @@
  */
 import { spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
+import { checkoutCommit } from '../app-build/checkout';
 import { AppError } from './errors';
 
 export const SOURCE_BRANCH = 'master';
@@ -298,30 +308,38 @@ export function createGitSource(cfg: GitSourceConfig) {
   }
 
   /**
-   * The tree of `commit` as a gzipped tar archive (`git archive`), for a
-   * build elsewhere. Reads only Git objects; nothing is checked out.
+   * The tree of `commit` as a gzipped tar archive, for a build elsewhere: a
+   * checkout (src/app-build/checkout.ts), so archive-only attributes such as
+   * `export-ignore` leave the source intact.
    */
   async function archiveCommit(id: string, commit: string): Promise<Buffer> {
     const repoDir = await ensureRepo(id);
     if (!/^[0-9a-f]{40}$/.test(commit)) {
       throw new AppError('Commit must be a full commit id.', 400);
     }
-    return new Promise((resolve, reject) => {
-      const child = spawn(
-        'git',
-        ['--git-dir', repoDir, 'archive', '--format=tar.gz', commit],
-        { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
-      );
-      const chunks: Buffer[] = [];
-      let stderr = '';
-      child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-      child.stderr.on('data', (chunk) => (stderr += chunk.toString()));
-      child.on('error', reject);
-      child.on('close', (code) => {
-        if (code === 0) resolve(Buffer.concat(chunks));
-        else reject(new Error(`git archive failed: ${stderr.trim()}`));
+    const scratch = await mkdtemp(path.join(os.tmpdir(), 'hatch-source-'));
+    try {
+      const tree = path.join(scratch, 'tree');
+      await checkoutCommit({ repo: { gitDir: repoDir }, commit, target: tree });
+      return await new Promise<Buffer>((resolve, reject) => {
+        const child = spawn('tar', ['-czf', '-', '-C', tree, '.'], {
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        const chunks: Buffer[] = [];
+        let stderr = '';
+        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+        child.stderr.on('data', (chunk) => (stderr += chunk.toString()));
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (code === 0) resolve(Buffer.concat(chunks));
+          else
+            reject(new Error(`Could not archive the source: ${stderr.trim()}`));
+        });
       });
-    });
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
+    }
   }
 
   return {

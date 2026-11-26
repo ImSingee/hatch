@@ -149,6 +149,15 @@ message CreateAppDeploymentRequest {
   // Post a platform notification when the deployment is released or fails,
   // for a caller that does not follow it.
   optional bool notify = 8;
+  // Client-chosen id of this create request (a UUID, say). Repeating it
+  // returns the deployment it already made instead of making another, and
+  // ListAppDeployments finds it by this id. A request whose call has ended
+  // (deadline or disconnect) before the deployment was stored creates none.
+  optional string request_id = 9 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^[A-Za-z0-9._:-]+$"
+  }];
 }
 
 message CreateAppDeploymentResponse {
@@ -198,6 +207,12 @@ message ListAppDeploymentsRequest {
   }];
   // The `next_cursor` of the previous page.
   optional uint32 cursor = 3 [(buf.validate.field).uint32.gt = 0];
+  // Only the deployment the create request with this `request_id` made
+  // (none or one); `limit` and `cursor` do not apply.
+  optional string request_id = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
 }
 
 message ListAppDeploymentsResponse {

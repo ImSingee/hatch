@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { mkdtemp, rename, writeFile, lstat, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -28,6 +29,12 @@ import { adopt } from './adopt';
 import { refreshRunEnvironment } from './run-credential';
 import type { DeploymentView } from './client';
 import { buildLocally, localBuildTooling } from './local-build';
+
+/**
+ * How long after its deadline a create request is still taken to be able
+ * to land (clock skew, the commit in flight).
+ */
+const CREATE_SETTLE_GRACE_MS = 60_000;
 
 export async function runLifecycle(
   args: readonly string[],
@@ -561,6 +568,8 @@ export async function runLifecycle(
       // The platform records every deployment, so a deploy this checkout
       // lost track of is settled from its state rather than guessed.
       const pending = metadata.pending;
+      // Only the platform's own record of this create request settles it:
+      // by the deployment id once known, else by the request id it sent.
       const found = pending.deploymentId
         ? await api.deployments
             .get({ id: metadata.id, deploymentId: pending.deploymentId })
@@ -569,26 +578,33 @@ export async function runLifecycle(
                 return null;
               throw error;
             })
-        : (
-            await api.deployments.list({ id: metadata.id, limit: 20 })
-          ).deployments.find(
-            (item) =>
-              item.commit === pending.commit &&
-              Date.parse(item.createdAt) >=
-                Date.parse(pending.startedAt) - 60_000,
-          );
+        : pending.requestId
+          ? ((
+              await api.deployments.list({
+                id: metadata.id,
+                requestId: pending.requestId,
+              })
+            ).deployments[0] ?? null)
+          : null;
+      // Nothing found is final only once the create request can no longer
+      // complete: the platform creates nothing for it after its deadline.
+      const settled =
+        found !== null ||
+        (!!pending.requestId &&
+          !pending.deploymentId &&
+          Date.now() >
+            Date.parse(pending.createDeadline ?? pending.startedAt) +
+              CREATE_SETTLE_GRACE_MS);
+      const state = found
+        ? found.finished
+          ? 'finished'
+          : 'in-progress'
+        : settled
+          ? 'not-created'
+          : 'unconfirmed';
       if (values.reconcile) {
-        output({
-          id: metadata.id,
-          state: !found
-            ? 'not-created'
-            : found.finished
-              ? 'finished'
-              : 'in-progress',
-          pending,
-          deployment: found ?? null,
-        });
-        if (!found || found.finished) {
+        output({ id: metadata.id, state, pending, deployment: found ?? null });
+        if (state === 'finished' || state === 'not-created') {
           delete metadata.pending;
           await saveWorkspace(root, metadata);
         }
@@ -597,10 +613,20 @@ export async function runLifecycle(
       if (found && !found.finished)
         throw new CliError(
           'deployment_in_progress',
-          `Deployment ${found.deploymentId} of ${found.commit} is still ${found.status}. Follow it with hatch app deployments logs ${found.deploymentId} --follow, or cancel it with hatch app deployments cancel ${found.deploymentId}.`,
+          `Deployment ${found.deploymentId} of ${found.commit} is still ${found.status}. Follow it with hatch app deployments logs ${metadata.id} ${found.deploymentId} --follow, or cancel it with hatch app deployments cancel ${metadata.id} ${found.deploymentId}.`,
           6,
           undefined,
           { deployment: found },
+        );
+      if (state === 'unconfirmed')
+        throw new CliError(
+          'deployment_in_progress',
+          pending.requestId
+            ? `The deploy of ${pending.commit} started at ${pending.startedAt} may still be created. Run hatch app deploy --reconcile after ${new Date(Date.parse(pending.createDeadline ?? pending.startedAt) + CREATE_SETTLE_GRACE_MS).toISOString()}.`
+            : `The platform cannot tell whether the deploy of ${pending.commit} started at ${pending.startedAt} was created. Inspect hatch app deployments list ${metadata.id}, then retry with --retry-after-confirming ${pending.commit}.`,
+          6,
+          undefined,
+          { pending },
         );
       if (found?.status === 'ready')
         metadata.lastDeployment = {
@@ -641,10 +667,14 @@ export async function runLifecycle(
       signal,
     );
     const deployments = releaseClient.apps.deployments;
+    const startedAt = Date.now();
     metadata.pending = {
       command: 'deploy',
       commit,
-      startedAt: new Date().toISOString(),
+      startedAt: new Date(startedAt).toISOString(),
+      requestId: randomUUID(),
+      // The create call's deadline is the client timeout.
+      createDeadline: new Date(startedAt + timeout).toISOString(),
     };
     await saveWorkspace(root, metadata);
     let created;
@@ -655,6 +685,7 @@ export async function runLifecycle(
         generation: metadata.generation,
         commit,
         build: (values.build as 'auto' | 'builder' | 'local') ?? 'auto',
+        requestId: metadata.pending.requestId,
         // Nobody follows a --no-wait deployment: the platform says how it ends.
         ...(values['no-wait'] ? { notify: true } : {}),
         ...(approved
@@ -678,7 +709,11 @@ export async function runLifecycle(
       `Deployment ${created.deploymentId} of ${commit} (${created.build} build): ${created.status}\n`,
     );
     const deadline = Date.now() + timeout;
-    const follow = (options: { afterSeq: number; platformOnly: boolean }) =>
+    const follow = (options: {
+      afterSeq: number;
+      platformOnly: boolean;
+      signal?: AbortSignal;
+    }) =>
       followDeployment(deployments, {
         id: metadata.id,
         deploymentId: created.deploymentId,
@@ -713,15 +748,26 @@ export async function runLifecycle(
                   | 'APP_MANIFEST_INVALID',
               }
             : {};
-        await deployments
+        const settled = await deployments
           .cancel({
             id: metadata.id,
             deploymentId: created.deploymentId,
             ...failure,
           })
-          .catch(() => {});
-        delete metadata.pending;
-        await saveWorkspace(root, metadata);
+          .then(
+            () => true,
+            () => false,
+          );
+        // Keep the deployment id while the platform may still be waiting
+        // for this package; --reconcile or deployments cancel settles it.
+        if (settled) {
+          delete metadata.pending;
+          await saveWorkspace(root, metadata);
+        } else {
+          process.stderr.write(
+            `Deployment ${created.deploymentId} could not be canceled; cancel it with hatch app deployments cancel ${metadata.id} ${created.deploymentId}.\n`,
+          );
+        }
         throw error;
       }
       process.stderr.write(
@@ -729,15 +775,23 @@ export async function runLifecycle(
       );
       // The platform verifies and releases during the upload; show its
       // progress meanwhile. The local build already printed its own output.
+      const watch = new AbortController();
       const watching = follow({
         afterSeq: created.logSeq,
         platformOnly: true,
+        signal: watch.signal,
       }).catch(() => null);
-      final = await deployments.upload({
-        id: metadata.id,
-        deploymentId: created.deploymentId,
-        artifact: archive,
-      });
+      try {
+        final = await deployments.upload({
+          id: metadata.id,
+          deploymentId: created.deploymentId,
+          artifact: archive,
+        });
+      } catch (error) {
+        watch.abort();
+        await watching;
+        throw error;
+      }
       await watching;
     } else if (!created.finished && !values['no-wait']) {
       final = await follow({ afterSeq: 0, platformOnly: false });
@@ -799,17 +853,20 @@ export async function followDeployment(
     afterSeq: number;
     deadline: number;
     platformOnly?: boolean;
+    /** Stops following (the caller no longer needs it). */
+    signal?: AbortSignal;
   },
 ): Promise<DeploymentView> {
   let after = options.afterSeq;
   let last: DeploymentView | null = null;
   for (;;) {
+    options.signal?.throwIfAborted();
     const remaining = options.deadline - Date.now();
     if (remaining <= 0) break;
     try {
       for await (const message of deployments.watch(
         { id: options.id, deploymentId: options.deploymentId, afterSeq: after },
-        { timeoutMs: remaining },
+        { timeoutMs: remaining, signal: options.signal },
       )) {
         for (const line of message.lines) {
           after = line.seq;
@@ -826,21 +883,23 @@ export async function followDeployment(
     } catch (error) {
       // A dropped or timed-out stream (exit 7) resumes from the last line
       // seen; any other failure is the caller's to report.
+      if (options.signal?.aborted) throw error;
       if (!(error instanceof CliError) || error.exitCode !== 7) throw error;
       if (options.deadline - Date.now() <= 0) break;
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
-  const state =
-    last ??
-    (await deployments.get({
-      id: options.id,
-      deploymentId: options.deploymentId,
-    }));
+  // The last frame may be older than the deployment: read it now.
+  const state = last?.finished
+    ? last
+    : await deployments.get({
+        id: options.id,
+        deploymentId: options.deploymentId,
+      });
   if (state.finished) return state;
   throw new CliError(
     'deployment_in_progress',
-    `Deployment ${state.deploymentId} is still ${state.status}. Follow it with hatch app deployments logs ${state.deploymentId} --follow.`,
+    `Deployment ${state.deploymentId} is still ${state.status}. Follow it with hatch app deployments logs ${options.id} ${state.deploymentId} --follow.`,
     7,
     undefined,
     { deployment: state },

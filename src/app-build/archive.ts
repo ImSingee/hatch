@@ -77,15 +77,13 @@ export async function packBuildDirectory(root: string): Promise<Buffer> {
         parts.push(header(child, 0, true));
         await walk(child);
       } else if (entry.isFile()) {
-        const body = await fs.readFile(path.join(root, child));
         files += 1;
-        bytes += body.length;
-        if (
-          files > BUILD_PACKAGE_MAX_FILES ||
-          bytes > BUILD_PACKAGE_MAX_EXPANDED_BYTES
-        ) {
+        const remaining = BUILD_PACKAGE_MAX_EXPANDED_BYTES - bytes;
+        if (files > BUILD_PACKAGE_MAX_FILES) {
           throw new BuildArchiveError('The build package is too large.');
         }
+        const body = await readAtMost(path.join(root, child), remaining);
+        bytes += body.length;
         parts.push(header(child, body.length, false), body);
         const padding = (BLOCK - (body.length % BLOCK)) % BLOCK;
         if (padding) parts.push(Buffer.alloc(padding, 0));
@@ -103,6 +101,37 @@ export async function packBuildDirectory(root: string): Promise<Buffer> {
     throw new BuildArchiveError('The build package is too large.');
   }
   return archive;
+}
+
+/**
+ * Read a file of at most `limit` bytes, checked before reading and on the
+ * bytes read (a file that grows meanwhile is still caught).
+ */
+async function readAtMost(file: string, limit: number): Promise<Buffer> {
+  const handle = await fs.open(file, 'r');
+  try {
+    if ((await handle.stat()).size > limit) {
+      throw new BuildArchiveError('The build package is too large.');
+    }
+    const body = Buffer.alloc(limit + 1);
+    let read = 0;
+    for (;;) {
+      const { bytesRead } = await handle.read(
+        body,
+        read,
+        body.length - read,
+        null,
+      );
+      if (bytesRead === 0) break;
+      read += bytesRead;
+      if (read > limit) {
+        throw new BuildArchiveError('The build package is too large.');
+      }
+    }
+    return body.subarray(0, read);
+  } finally {
+    await handle.close();
+  }
 }
 
 function readString(block: Buffer, offset: number, length: number): string {
@@ -168,9 +197,13 @@ export async function unpackBuildArchive(
   let files = 0;
   let bytes = 0;
   let offset = 0;
+  let terminated = false;
   while (offset + BLOCK <= tar.length) {
     const block = tar.subarray(offset, offset + BLOCK);
-    if (block.every((byte) => byte === 0)) break;
+    if (block.every((byte) => byte === 0)) {
+      terminated = true;
+      break;
+    }
     let sum = 0;
     for (let index = 0; index < BLOCK; index++) {
       sum += index >= 148 && index < 156 ? 0x20 : block[index];
@@ -206,7 +239,8 @@ export async function unpackBuildArchive(
     ) {
       throw new BuildArchiveError('The build package is too large.');
     }
-    if (offset + size > tar.length) {
+    // The body and its padding to the next block must all be there.
+    if (offset + Math.ceil(size / BLOCK) * BLOCK > tar.length) {
       throw new BuildArchiveError('The build archive is truncated.');
     }
     await fs.mkdir(path.dirname(target), { recursive: true });
@@ -215,6 +249,10 @@ export async function unpackBuildArchive(
       flag: 'wx',
     });
     offset += Math.ceil(size / BLOCK) * BLOCK;
+  }
+  // A complete archive ends with its zero-block terminator.
+  if (!terminated) {
+    throw new BuildArchiveError('The build archive is truncated.');
   }
   return files;
 }

@@ -30,7 +30,11 @@ let origin: string;
 let sessionToken: string;
 let platform: ChildProcess;
 let builder: ChildProcess | undefined;
+/** Settles when the current Builder exits, however early. */
+let builderExit: Promise<unknown> = Promise.resolve();
 let databaseUrl: string;
+/** The database this suite created, dropped again in teardown. */
+let createdDatabase: string | undefined;
 let platformLog = '';
 
 async function freePort() {
@@ -60,6 +64,7 @@ function startBuilder(): ChildProcess {
   });
   child.stdout?.on('data', (data) => (platformLog += `[builder] ${data}`));
   child.stderr?.on('data', (data) => (platformLog += `[builder] ${data}`));
+  builderExit = once(child, 'close');
   return child;
 }
 
@@ -113,15 +118,22 @@ describe.runIf(Boolean(adminUrl))('the dedicated Builder', () => {
     );
     const database = `builder_${randomUUID().replaceAll('-', '')}`;
     const admin = postgres(adminUrl!);
-    await admin.unsafe(`create database ${database}`);
-    await admin.end();
+    try {
+      await admin.unsafe(`create database ${database}`);
+      createdDatabase = database;
+    } finally {
+      await admin.end();
+    }
     const url = new URL(adminUrl!);
     url.pathname = `/${database}`;
     databaseUrl = url.toString();
     // The platform answers before its own startup migrations finish.
     const client = postgres(databaseUrl, { onnotice: () => {} });
-    await migrate(drizzle({ client }), { migrationsFolder: 'migrations' });
-    await client.end();
+    try {
+      await migrate(drizzle({ client }), { migrationsFolder: 'migrations' });
+    } finally {
+      await client.end();
+    }
     const port = await freePort();
     internalPort = await freePort();
     origin = `http://127.0.0.1:${port}`;
@@ -198,8 +210,23 @@ describe.runIf(Boolean(adminUrl))('the dedicated Builder', () => {
 
   afterAll(async () => {
     builder?.kill('SIGKILL');
-    platform?.kill('SIGKILL');
-    await rm(root, { recursive: true, force: true });
+    await builderExit;
+    if (platform && platform.exitCode === null) {
+      const exited = once(platform, 'close');
+      platform.kill('SIGKILL');
+      await exited;
+    }
+    if (root) await rm(root, { recursive: true, force: true });
+    if (createdDatabase) {
+      const admin = postgres(adminUrl!);
+      try {
+        await admin.unsafe(
+          `drop database if exists ${createdDatabase} with (force)`,
+        );
+      } finally {
+        await admin.end();
+      }
+    }
   });
 
   it('builds on the Builder, streams its log and releases the package', async () => {
@@ -241,8 +268,9 @@ describe.runIf(Boolean(adminUrl))('the dedicated Builder', () => {
   }, 600_000);
 
   it('queues while no Builder runs, cancels and supersedes', async () => {
+    // Stopped here, or already gone (its output says why).
     builder?.kill('SIGKILL');
-    await once(builder!, 'close');
+    await builderExit;
     builder = undefined;
     await writeFile(path.join(directory, 'note.txt'), 'second');
     commit(directory, 'Second');

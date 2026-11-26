@@ -104,8 +104,9 @@ Agent tool arguments keep their own Zod validation.
 
 Lists return a `resources` array. Resource metadata contains only public identity,
 status and ISO timestamps. Optional fields have explicit presence; omitted and
-explicit `false` remain distinguishable. Files and the deprecated Deploy
-`bundle` are bytes, represented as base64 in Protobuf JSON. The CLI projects
+explicit `false` remain distinguishable. Files and the build package of
+`UploadAppDeploymentArtifact` (`artifact`) are bytes, represented as base64
+in Protobuf JSON. The CLI projects
 messages into its existing JSON output and workspace format, including nullable
 fields and base64 file contents.
 
@@ -155,7 +156,10 @@ CORS headers/preflight are added. Interactive methods preserve the existing
 session origin policy: canonical `APP_URL` or the current trusted Tailscale
 origin, and no `Sec-Fetch-Site: cross-site` request even with an explicit token.
 Ordinary request messages are capped at 16 KiB;
-build package uploads at 256 MiB (the package itself at 200 MiB). Limits apply to actual received and decompressed
+build package uploads at 256 MiB (the package itself at 200 MiB). In Protobuf
+JSON the package is base64, a third larger, so a JSON client can upload
+packages up to about 190 MiB; use the binary Protobuf encoding (as the CLI
+does) for larger ones. Limits apply to actual received and decompressed
 bytes, including chunked requests. Responses use `no-store`, `nosniff` and
 `no-referrer`.
 

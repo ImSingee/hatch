@@ -7,7 +7,7 @@
  *   - the internal REST API the runner's PlatformClient calls.
  *
  * Runner REST/WS requests must present AGENT_RUNNER_TOKEN; the Builder API
- * (BUILDER_API_PREFIX) accepts only HATCH_BUILDER_TOKEN.
+ * (`/internal/api/builds/`) accepts only HATCH_BUILDER_TOKEN.
  */
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
@@ -24,8 +24,7 @@ import {
 } from '~server/agent-runs';
 import { reconcileRunnerWorkspaces } from '~server/agent-workspaces';
 import { secretsMatch } from '~server/secrets';
-import { BUILDER_API_PREFIX } from '../../builder/protocol';
-import { handleInternalApiRequest } from './internal-api';
+import { handleInternalApiRequest, internalApiRoute } from './internal-api';
 import { handleRunnerSocket, type RunnerHubHandlers } from './hub';
 
 /** Control-plane persistence the Runner Hub drives from runner messages. */
@@ -57,9 +56,7 @@ export function createInternalHttpHandler(
   // The Builder API takes only the Builder's token, and Runner routes only
   // the Runner's: neither service can act as the other.
   const authorized = (req: http.IncomingMessage): boolean => {
-    const builds = (req.url ?? '')
-      .split('?')[0]
-      .startsWith(`${BUILDER_API_PREFIX}/`);
+    const builds = internalApiRoute(req.url)?.resource === 'builds';
     return secretsMatch(
       bearerToken(req.headers.authorization),
       builds ? builderToken : token,

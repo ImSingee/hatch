@@ -268,7 +268,15 @@ export const listAppDeploymentRequestsFn = createServerFn({ method: 'GET' })
     };
   });
 
-/** A deployment's log lines after `afterSeq`, and its current state. */
+/** Log lines one `getAppDeploymentLogFn` response carries at most. */
+const DEPLOYMENT_LOG_PAGE = 2000;
+
+/**
+ * A deployment's current state and its log lines after `afterSeq`, in `seq`
+ * order. `more` says the page is full and later lines exist: ask again from
+ * the last returned `seq`. The state is read before the lines, so a finished
+ * deployment's response holds every line written before it finished.
+ */
 export const getAppDeploymentLogFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .validator((input: { id: string; deploymentId: string; afterSeq: number }) =>
@@ -282,10 +290,15 @@ export const getAppDeploymentLogFn = createServerFn({ method: 'GET' })
   )
   .handler(async ({ data }) => {
     const row = await getBuildRequest(data.id, data.deploymentId);
-    const lines = await readBuildLog(row.id, data.afterSeq, 2000);
+    const lines = await readBuildLog(
+      row.id,
+      data.afterSeq,
+      DEPLOYMENT_LOG_PAGE + 1,
+    );
     return {
       deployment: deploymentRequestView(row),
-      lines: lines.map((line) => ({
+      more: lines.length > DEPLOYMENT_LOG_PAGE,
+      lines: lines.slice(0, DEPLOYMENT_LOG_PAGE).map((line) => ({
         seq: line.seq,
         stream: line.stream,
         text: line.text,

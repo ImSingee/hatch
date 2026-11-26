@@ -42,6 +42,14 @@ export type Workspace = {
     command: string;
     commit: string;
     startedAt: string;
+    /** Id of the create request, repeated to find what it made. */
+    requestId?: string;
+    /**
+     * When the create request's own deadline ends: the platform creates
+     * nothing for it after that, so a lookup that finds nothing later means
+     * none was made.
+     */
+    createDeadline?: string;
     deploymentId?: string;
   };
   lastDeployment?: { version: number; deploymentId: string };

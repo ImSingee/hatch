@@ -133,6 +133,41 @@ describe('creating deployments', () => {
     expect(
       await db.query.appBuilds.findMany({ where: { appId: APP } }),
     ).toHaveLength(1);
+    // A joiner that asks to be notified is; another release note does not
+    // join (the note is the deployment's).
+    expect((await create({ build: 'builder', notify: true })).id).toBe(
+      first.id,
+    );
+    expect((await builds.getDeployment(APP, first.id)).notifyOnFinish).toBe(
+      true,
+    );
+    const other = await create({ build: 'builder', message: 'Other note' });
+    expect(other.id).not.toBe(first.id);
+  });
+
+  it('answers a repeated create request with the deployment it made', async () => {
+    const first = await create({ requestId: 'req-1' });
+    // Even after a newer deployment superseded it.
+    await create();
+    const again = await create({ requestId: 'req-1' });
+    expect(again.id).toBe(first.id);
+    expect(again.status).toBe('superseded');
+    expect((await builds.findDeploymentByRequest(APP, 'req-1'))?.id).toBe(
+      first.id,
+    );
+    expect(await builds.findDeploymentByRequest(APP, 'req-2')).toBeNull();
+  });
+
+  it('creates nothing for a caller that has already given up', async () => {
+    const waiting = await create();
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      create({ requestId: 'req-gone', signal: abort.signal }),
+    ).rejects.toThrow(/canceled/);
+    expect(await builds.findDeploymentByRequest(APP, 'req-gone')).toBeNull();
+    // Nor did it supersede anything.
+    expect(await status(waiting.id)).toBe('awaiting_artifact');
   });
 });
 
@@ -182,10 +217,37 @@ describe('accepting build packages', () => {
       appId: APP,
       buildId: older.id,
       archive: packageArchive,
-      builderId: 'builder-1',
+      lease: { builderId: 'builder-1', attempt: 1 },
     });
     expect(final.status).toBe('superseded');
     expect(mocks.releases).toEqual([newer.id]);
+  });
+
+  it('counts a newer release from its committed deployment row', async () => {
+    // The newer release committed, but its request was never marked ready
+    // (the platform stopped, or is still finishing it).
+    mocks.builderToken = 'token';
+    const older = await create({ build: 'builder', commit: 'b'.repeat(40) });
+    await builds.leaseBuild('builder-1');
+    const newer = await create();
+    await db
+      .update(schema.appBuilds)
+      .set({ status: 'releasing' })
+      .where(eq(schema.appBuilds.id, newer.id));
+    await db.insert(schema.deployments).values({
+      id: newer.id,
+      appId: APP,
+      status: 'deployed',
+      buildId: newer.id,
+    });
+    const final = await builds.acceptArtifact({
+      appId: APP,
+      buildId: older.id,
+      archive: packageArchive,
+      lease: { builderId: 'builder-1', attempt: 1 },
+    });
+    expect(final.status).toBe('superseded');
+    expect(mocks.releases).toEqual([]);
   });
 
   it('cannot cancel a deployment that is already verifying', async () => {
@@ -251,11 +313,21 @@ describe('builder leases', () => {
     await expire();
     await builds.sweepBuilds();
     expect(await status(deployment.id)).toBe('queued');
-    await builds.leaseBuild('builder-2');
-    // The first Builder's lease no longer holds the build.
-    expect(await builds.renewBuildLease(deployment.id, 'builder-1')).toBe(
-      false,
-    );
+    // The same Builder takes the next attempt; its first attempt's lease no
+    // longer holds the build, so a late call from it changes nothing.
+    await builds.leaseBuild('builder-1');
+    const first = { builderId: 'builder-1', attempt: 1 };
+    expect(await builds.renewBuildLease(deployment.id, first)).toBe(false);
+    expect(await builds.failBuild(deployment.id, first, 'late')).toBe(false);
+    expect(
+      await builds.appendLeasedBuildLog(deployment.id, first, ['late line']),
+    ).toBe(false);
+    expect(
+      await builds.renewBuildLease(deployment.id, {
+        builderId: 'builder-1',
+        attempt: 2,
+      }),
+    ).toBe(true);
     await expire();
     await builds.sweepBuilds();
     expect(

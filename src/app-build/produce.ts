@@ -31,6 +31,10 @@ import {
 } from '../server/apps/manifest';
 import { manifestInvalid } from '../server/apps/manifest-validation';
 import {
+  APP_DOC_MAX_BYTES,
+  APP_DOCS_MAX_TOTAL_BYTES,
+} from '../server/apps/docs-build';
+import {
   BUILD_PACKAGE_API_DESCRIPTOR,
   BUILD_PACKAGE_DOCS_DIR,
   BUILD_PACKAGE_FORMAT,
@@ -367,12 +371,18 @@ async function copyProtoFiles(src: string, out: string): Promise<number> {
  * Copy the files the manifest declares as docs. The platform reads and
  * checks them (size, UTF-8, digest) when it accepts the package.
  */
+/**
+ * Copy the declared docs into the package. The platform checks them again,
+ * but a doc over the limits fails here, before the App is bundled and the
+ * package uploaded.
+ */
 async function copyDeclaredDocs(
   src: string,
   out: string,
   docs: SourceManifest['docs'],
 ): Promise<void> {
-  for (const entry of docs) {
+  let total = 0;
+  for (const [index, entry] of docs.entries()) {
     const relative = path.posix.normalize(entry.path);
     if (relative.startsWith('../') || path.posix.isAbsolute(relative)) {
       // The platform reports the declaration; the file is not copied.
@@ -381,6 +391,19 @@ async function copyDeclaredDocs(
     const source = path.join(src, relative);
     const stat = await fs.lstat(source).catch(() => null);
     if (!stat?.isFile()) continue;
+    if (stat.size > APP_DOC_MAX_BYTES) {
+      throw manifestInvalid(
+        ['docs', index, 'path'],
+        `${entry.path} is ${stat.size} bytes; the limit is ${APP_DOC_MAX_BYTES} bytes.`,
+      );
+    }
+    total += stat.size;
+    if (total > APP_DOCS_MAX_TOTAL_BYTES) {
+      throw manifestInvalid(
+        ['docs'],
+        `The declared docs exceed ${APP_DOCS_MAX_TOTAL_BYTES} bytes in total.`,
+      );
+    }
     const target = path.join(out, BUILD_PACKAGE_DOCS_DIR, relative);
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.copyFile(source, target);

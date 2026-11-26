@@ -83,18 +83,38 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/**
+ * The resource an internal request addresses, as dispatch reads it. The
+ * internal server authenticates by this same reading, so a path whose raw
+ * text names one resource (`/internal/api/builds/../runs/...`, `//`) cannot
+ * be authenticated as that resource and dispatched to another.
+ */
+export function internalApiRoute(
+  rawUrl: string | undefined,
+): { resource: string; rest: string[] } | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl ?? '/', 'http://internal');
+  } catch {
+    return null;
+  }
+  const segments = url.pathname.split('/').filter(Boolean);
+  // Expect ['internal', 'api', resource, ...rest].
+  if (segments[0] !== 'internal' || segments[1] !== 'api' || !segments[2]) {
+    return null;
+  }
+  const [, , resource, ...rest] = segments;
+  return { resource, rest };
+}
+
 export async function handleInternalApiRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
 ): Promise<void> {
   try {
-    const url = new URL(req.url ?? '/', 'http://internal');
-    const segments = url.pathname.split('/').filter(Boolean);
-    // Expect ['internal', 'api', resource, ...rest].
-    if (segments[0] !== 'internal' || segments[1] !== 'api') {
-      throw new AppError('Not found.', 404);
-    }
-    const [, , resource, ...rest] = segments;
+    const route = internalApiRoute(req.url);
+    if (!route) throw new AppError('Not found.', 404);
+    const { resource, rest } = route;
     const method = req.method ?? 'GET';
 
     // POST /internal/api/runs/:runId/token {runnerId}: a fresh short-lived
@@ -137,6 +157,8 @@ export async function handleInternalApiRequest(
     }
     const status = error instanceof AppError ? error.status : 500;
     if (status >= 500) console.error('[agent-internal] request failed:', error);
+    // The rest of an oversized body is not read: answer, then close.
+    if (status === 413) res.setHeader('connection', 'close');
     json(res, status, {
       error: error instanceof Error ? error.message : String(error),
     });

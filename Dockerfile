@@ -134,7 +134,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 # Standalone CLI, available to both the Platform and Runner image entrypoints.
 # It needs only Node and never receives the Runner fleet token automatically.
-COPY --from=build --chmod=755 /app/packages/hatch-cli/dist/main.mjs /usr/local/bin/hatch
+# Local builds run the build driver that sits next to the CLI's real path,
+# so both files live in one directory and `hatch` links to the CLI there.
+COPY --from=build --chmod=755 /app/packages/hatch-cli/dist/main.mjs /usr/local/lib/hatch-cli/main.mjs
+COPY --from=build /app/packages/hatch-cli/dist/build-driver.mjs /usr/local/lib/hatch-cli/build-driver.mjs
+RUN ln -s /usr/local/lib/hatch-cli/main.mjs /usr/local/bin/hatch
 COPY --from=build /app/packages/hatch-cli/dist/licenses /usr/local/share/hatch-cli/licenses
 # The Agent Runner and the optional Builder: same image, alternate
 # entrypoints (`node dist/runner/main.mjs`, `node dist/builder/main.mjs`),

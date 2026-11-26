@@ -146,7 +146,11 @@ function DeploymentRequest({
       <Group justify="space-between" wrap="nowrap" gap="sm" align="flex-start">
         <Stack gap={4} style={{ minWidth: 0 }}>
           <Group gap={8} wrap="nowrap">
+            {/* <output> is a status live region: changes are announced. */}
             <Badge
+              component="output"
+              aria-live="polite"
+              aria-atomic
               size="sm"
               variant="light"
               color={status.color}
@@ -225,30 +229,50 @@ export function DeploymentActivity({ appId }: { appId: string }) {
   const data = query.data;
 
   // A deployment released while the page is open changes the version
-  // history, the operations panel and the API panel.
-  const seen = useRef(new Map<string, string>());
+  // history, the operations panel and the API panel. It may start and finish
+  // between two polls, so any release that was not ready in the previous
+  // snapshot counts, including one this page never saw building. The first
+  // snapshot fetched for this App is only the baseline: those releases are
+  // already reflected in the rest of the page.
+  const seen = useRef<{ appId: string; statuses: Map<string, string> | null }>({
+    appId,
+    statuses: null,
+  });
+  const fetched = query.isFetchedAfterMount;
   useEffect(() => {
-    if (!data) return;
-    let released = false;
+    if (seen.current.appId !== appId) {
+      seen.current = { appId, statuses: null };
+    }
+    // Cached data from an earlier visit is not a baseline: the release
+    // history may have moved on since.
+    if (!data || !fetched) return;
+    const previous = seen.current.statuses;
+    const released: AppDeploymentRequestView[] = [];
+    const statuses = new Map<string, string>();
     for (const deployment of data.deployments) {
-      const before = seen.current.get(deployment.id);
-      if (before && before !== 'ready' && deployment.status === 'ready') {
-        released = true;
-        toast.success(
-          t('deployments.request.released', {
-            version: deployment.version ?? 0,
-          }),
-        );
+      statuses.set(deployment.id, deployment.status);
+      if (
+        previous &&
+        deployment.status === 'ready' &&
+        previous.get(deployment.id) !== 'ready'
+      ) {
+        released.push(deployment);
       }
-      seen.current.set(deployment.id, deployment.status);
     }
-    if (released) {
-      void qc.invalidateQueries(deploymentsQueryOptions(appId));
-      void qc.invalidateQueries(appOpsQueryOptions(appId));
-      void qc.invalidateQueries(normalizedManifestQueryOptions(appId));
-      void router.invalidate();
+    seen.current.statuses = statuses;
+    if (released.length === 0) return;
+    for (const deployment of released) {
+      toast.success(
+        t('deployments.request.released', {
+          version: deployment.version ?? 0,
+        }),
+      );
     }
-  }, [data, appId, qc, router, t]);
+    void qc.invalidateQueries(deploymentsQueryOptions(appId));
+    void qc.invalidateQueries(appOpsQueryOptions(appId));
+    void qc.invalidateQueries(normalizedManifestQueryOptions(appId));
+    void router.invalidate();
+  }, [data, fetched, appId, qc, router, t]);
 
   const shown = (data?.deployments ?? []).filter(
     (item) => item.status !== 'ready',

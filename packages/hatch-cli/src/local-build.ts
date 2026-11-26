@@ -3,7 +3,7 @@
  * commit, run the build driver with the platform's pinned toolchain and pack
  * the build package for upload.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   access,
@@ -20,6 +20,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packBuildDirectory } from '../../../src/app-build/archive';
+import {
+  CommitCheckoutError,
+  checkoutCommit,
+} from '../../../src/app-build/checkout';
 import { CliError } from './error';
 import { pnpmInvocation } from './pnpm';
 import { childEnvironment, command } from './process';
@@ -95,12 +99,32 @@ async function installedToolchain(
       .catch(() => null);
     if (manifest?.version !== version) return null;
   }
-  return modules;
+  // The build also needs the platform's pnpm: in that node_modules or on
+  // PATH (the image installs it globally). Otherwise the cache, which
+  // installs it, is used instead.
+  const bundled = await readFile(
+    path.join(modules, 'pnpm', 'package.json'),
+    'utf8',
+  )
+    .then((text) => (JSON.parse(text) as { version?: string }).version)
+    .catch(() => undefined);
+  if (bundled === tooling.pnpmVersion) return modules;
+  const env = childEnvironment();
+  const pnpm = await pnpmInvocation(process.platform, env);
+  const probe = spawnSync(pnpm.executable, [...pnpm.prefix, '--version'], {
+    encoding: 'utf8',
+    env,
+    timeout: 30_000,
+  });
+  if (probe.status === 0 && probe.stdout.trim() === tooling.pnpmVersion)
+    return modules;
+  return null;
 }
 
 /**
- * node_modules with the platform's exact esbuild, TypeScript, buf and
- * protoc-gen-es: an installed one, or a cache installed once per version set.
+ * node_modules with the platform's exact esbuild, TypeScript, buf,
+ * protoc-gen-es and pnpm: an installed one, or a cache installed once per
+ * version set.
  */
 async function ensureToolchain(
   tooling: LocalBuildTooling,
@@ -109,7 +133,12 @@ async function ensureToolchain(
 ): Promise<string> {
   const installed = await installedToolchain(tooling);
   if (installed) return installed;
-  const dependencies = toolchainDependencies(tooling);
+  // The cache also carries the platform's pnpm, which the build then uses
+  // for App dependencies whatever pnpm this machine has.
+  const dependencies = {
+    ...toolchainDependencies(tooling),
+    pnpm: tooling.pnpmVersion,
+  };
   const key = createHash('sha256')
     .update(JSON.stringify(dependencies))
     .digest('hex')
@@ -130,10 +159,11 @@ async function ensureToolchain(
       JSON.stringify({ private: true, type: 'module', dependencies }, null, 2),
     );
     // The platform's own build-script policy: esbuild verifies its binary,
-    // buf's platform binary needs no script.
+    // buf's platform binary needs no script, and pnpm runs from its
+    // bin/pnpm.mjs without one.
     await writeFile(
       path.join(stage, 'pnpm-workspace.yaml'),
-      "allowBuilds:\n  esbuild: true\n  '@bufbuild/buf': false\n",
+      "allowBuilds:\n  esbuild: true\n  '@bufbuild/buf': false\n  pnpm: false\n",
     );
     const env = childEnvironment();
     const pnpm = await pnpmInvocation(process.platform, env);
@@ -168,16 +198,22 @@ async function ensureToolchain(
       await rm(configHome, { recursive: true, force: true });
     }
     await writeFile(path.join(stage, '.ready'), '');
-    await rm(directory, { recursive: true, force: true });
+    // Publish by one atomic rename of the complete install, never replacing
+    // a directory: another CLI may already be building from the one it
+    // published, which this install then reuses.
     await rename(stage, directory).catch(async (error) => {
-      // Another CLI finished the same install first.
       if (
         await access(ready)
           .then(() => true)
           .catch(() => false)
       )
         return;
-      throw error;
+      throw new CliError(
+        'tool_unavailable',
+        `Could not publish the build toolchain cache at ${directory} ` +
+          `(${(error as Error).message}); remove that directory and retry.`,
+        7,
+      );
     });
     return path.join(directory, 'node_modules');
   } finally {
@@ -185,51 +221,73 @@ async function ensureToolchain(
   }
 }
 
-/** Export `commit` from the workspace repository into `target`. */
+/**
+ * Check out `commit` from the workspace repository into `target`, as the
+ * Builder gets it (src/app-build/checkout.ts): every tracked file, whatever
+ * archive-only attributes say.
+ */
 async function exportCommit(
   root: string,
   commit: string,
   target: string,
   signal: AbortSignal,
 ): Promise<void> {
-  const archive = `${target}.tar`;
-  const exported = await command(
-    'git',
-    ['archive', '--format=tar', '-o', archive, commit],
-    root,
-    signal,
-    true,
-  );
-  if (exported.code !== 0)
-    throw new CliError(
-      'source_unavailable',
-      `Commit ${commit} is not in this checkout. Run hatch app update first.`,
-      6,
-    );
-  await mkdir(target);
-  const unpacked = await command(
-    'tar',
-    ['-xf', archive, '-C', target],
-    root,
-    signal,
-    true,
-  );
-  await rm(archive, { force: true });
-  if (unpacked.code !== 0)
+  try {
+    await checkoutCommit({
+      repo: { cwd: root },
+      commit,
+      target,
+      env: childEnvironment(),
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    if (error instanceof CommitCheckoutError && error.missingCommit)
+      throw new CliError(
+        'source_unavailable',
+        `Commit ${commit} is not in this checkout. Run hatch app update first.`,
+        6,
+      );
     throw new CliError(
       'tool_unavailable',
-      `Could not unpack the source export: ${unpacked.stderr.trim()}`,
+      `Could not check out the source: ${(error as Error).message}`,
       7,
     );
+  }
 }
 
-/** Run the driver, forwarding its build output to stderr. */
+/** How long the driver has to stop its tools before it is killed. */
+const DRIVER_STOP_GRACE_MS = 10_000;
+
+/** Kill a process and everything it started. */
+function killTree(pid: number): void {
+  try {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+      });
+    } else {
+      process.kill(-pid, 'SIGKILL');
+    }
+  } catch {
+    /* already stopped */
+  }
+}
+
+/**
+ * Run the driver, forwarding its build output to stderr. Cancellation and
+ * the timeout ask it to stop (it stops the tools it started, each in its own
+ * process group), then kill what is left; the caller removes the work
+ * directory only once the driver has exited.
+ */
 function runDriver(
   argv: string[],
   cwd: string,
   signal: AbortSignal,
   timeoutMs: number,
 ): Promise<{ ok: boolean; code?: string; message?: string }> {
+  if (signal.aborted)
+    return Promise.reject(new CliError('cancelled', 'Cancelled.', 130));
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, argv, {
       cwd,
@@ -237,25 +295,60 @@ function runDriver(
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'inherit'],
     });
-    const kill = () => {
+    let stopped: 'cancelled' | 'timeout' | null = null;
+    let forced: NodeJS.Timeout | undefined;
+    const stop = (reason: 'cancelled' | 'timeout') => {
+      if (stopped || !child.pid) return;
+      stopped = reason;
+      if (process.platform === 'win32') {
+        // No signals to handle on Windows: end the whole tree now.
+        killTree(child.pid);
+        return;
+      }
       try {
-        if (child.pid) process.kill(-child.pid, 'SIGKILL');
+        child.kill('SIGTERM');
       } catch {
         /* already stopped */
       }
+      forced = setTimeout(() => killTree(child.pid!), DRIVER_STOP_GRACE_MS);
     };
-    const timer = setTimeout(kill, timeoutMs);
+    const onAbort = () => stop('cancelled');
+    const timer = setTimeout(() => stop('timeout'), timeoutMs);
     timer.unref();
-    signal.addEventListener('abort', kill, { once: true });
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
     let stdout = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (data) => (stdout += data));
-    child.once('error', reject);
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      reject(
+        new CliError(
+          'tool_unavailable',
+          `Could not start the local build: ${error.message}`,
+          7,
+        ),
+      );
+    });
     child.once('close', () => {
       clearTimeout(timer);
-      signal.removeEventListener('abort', kill);
-      if (signal.aborted) {
+      clearTimeout(forced);
+      signal.removeEventListener('abort', onAbort);
+      // Whatever the driver's group still holds goes with it.
+      if (process.platform !== 'win32' && child.pid) killTree(child.pid);
+      if (stopped === 'cancelled') {
         reject(new CliError('cancelled', 'Cancelled.', 130));
+        return;
+      }
+      if (stopped === 'timeout') {
+        reject(
+          new CliError(
+            'local_build_timeout',
+            `The local build did not finish within ${Math.round(timeoutMs / 1000)}s; raise --timeout or build with --build builder.`,
+            7,
+          ),
+        );
         return;
       }
       const line = stdout.trim().split('\n').at(-1) ?? '';
@@ -352,15 +445,17 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
         result.message ?? 'The App manifest is invalid.',
         2,
       );
-    if (!result.ok)
+    if (!result.ok) {
+      // A missing or mismatched tool is this machine's to fix (exit 7); a
+      // source the build rejects is an input error (exit 2).
+      const tool =
+        result.code === 'nsh_unavailable' || result.code === 'tool_unavailable';
       throw new CliError(
-        result.code === 'nsh_unavailable'
-          ? 'nsh_unavailable'
-          : 'app_build_failed',
+        tool ? (result.code as string) : 'app_build_failed',
         `The local build failed: ${result.message ?? 'unknown error'}`,
-        // A source the build rejects is an input error (exit 2).
-        result.code === 'nsh_unavailable' ? 7 : 2,
+        tool ? 7 : 2,
       );
+    }
     return await packBuildDirectory(outDir);
   } catch (error) {
     if (error instanceof CliError) throw error;
