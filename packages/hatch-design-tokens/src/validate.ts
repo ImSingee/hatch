@@ -52,10 +52,12 @@ export type ThemeValidation =
 const PRIMARY_TEXT = 'primary-text';
 
 /**
- * Tinted controls (light buttons and badges, the mobile danger button) draw
- * shade 8 of a ramp on its shade 1, and on shade 2 while pressed or hovered
- * (DESIGN.md "Ramps"). The pairs name those shades of the `primary` ramp and
- * of the ramp clients build from `destructive`.
+ * Shades of a ramp that clients draw as text. Tinted controls (light buttons
+ * and badges, the mobile danger button) draw shade 8 on shade 1, and on
+ * shade 2 while pressed or hovered (DESIGN.md "Ramps"). Status text is drawn
+ * straight on the surfaces: shade 7 on the web and in native Apps
+ * (`@hatch/ui` `*-strong`), shade 8 on Mobile (`ink`). The ramps are
+ * `primary`, the one clients build from `destructive`, and the status hues.
  */
 const TINT_ROLES = {
   'primary-ink': ['primary', 8],
@@ -67,9 +69,30 @@ const TINT_ROLES = {
   'destructive-strong': ['destructive', TEXT_SHADE],
   'destructive-tint': ['destructive', 1],
   'destructive-tint-strong': ['destructive', 2],
+  'warning-text': ['amber', TEXT_SHADE],
+  'warning-ink': ['amber', 8],
+  'success-text': ['green', TEXT_SHADE],
+  'success-ink': ['green', 8],
+  'info-text': ['blue', TEXT_SHADE],
+  'info-ink': ['blue', 8],
+  'working-text': ['orange', TEXT_SHADE],
+  'working-ink': ['orange', 8],
 } as const;
 
 type TintRole = keyof typeof TINT_ROLES;
+
+/** Status text drawn straight on the background and on cards. */
+const STATUS_TEXT: readonly TintRole[] = [
+  'destructive-ink',
+  'warning-text',
+  'warning-ink',
+  'success-text',
+  'success-ink',
+  'info-text',
+  'info-ink',
+  'working-text',
+  'working-ink',
+];
 
 type PairRole = ResolvedColorKey | typeof PRIMARY_TEXT | TintRole;
 
@@ -98,6 +121,10 @@ export const CONTRAST_PAIRS: readonly (readonly [PairRole, PairRole])[] = [
   ['destructive-strong', 'card'],
   ['destructive-ink', 'destructive-tint'],
   ['destructive-ink', 'destructive-tint-strong'],
+  ...STATUS_TEXT.flatMap((role) => [
+    [role, 'background'] as const,
+    [role, 'card'] as const,
+  ]),
 ];
 
 /** The ramp clients build from `destructive` (mobile status colours). */
@@ -113,9 +140,9 @@ function roleColor(theme: ResolvedTheme, role: PairRole): string {
   if (role === PRIMARY_TEXT) return theme.ramps.primary[TEXT_SHADE];
   if (role in TINT_ROLES) {
     const [ramp, shade] = TINT_ROLES[role as TintRole];
-    return (ramp === 'primary' ? theme.ramps.primary : destructiveRamp(theme))[
-      shade
-    ];
+    return (
+      ramp === 'destructive' ? destructiveRamp(theme) : theme.ramps[ramp]
+    )[shade];
   }
   return theme.colors[role as ResolvedColorKey];
 }

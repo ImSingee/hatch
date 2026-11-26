@@ -373,6 +373,32 @@ describe('validation', () => {
     );
   });
 
+  it('rejects a ground status text cannot be read on', () => {
+    // Every named colour reads on the grey card, but the status inks the
+    // clients draw straight on it (success shade 8: 1.94:1) do not.
+    const desk = THEME_PRESETS.desk.document;
+    const result = validateThemeDocument({
+      ...desk,
+      colors: {
+        ...desk.colors,
+        background: '#777777',
+        card: '#777777',
+        foreground: '#000000',
+        'muted-foreground': '#000000',
+        primary: '#000000',
+        destructive: '#000000',
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.problems.map((problem) => problem.pair)).toContainEqual(
+      expect.objectContaining({
+        foreground: 'success-ink',
+        background: 'card',
+      }),
+    );
+  });
+
   it('checks each named pair, including the derived text on primary', () => {
     expect(CONTRAST_PAIRS.slice(0, 4)).toEqual([
       ['foreground', 'background'],

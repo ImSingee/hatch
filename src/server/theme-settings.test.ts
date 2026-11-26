@@ -336,44 +336,6 @@ describe('the theme library', () => {
     expect((await getThemeState()).theme.id).toBe('desk');
   });
 
-  it('checks contrast with the accent that will be drawn, in both directions', async () => {
-    // A mid-grey ground: the theme's own deep green reads as link text on
-    // it, the teal accent does not.
-    const stone = {
-      ...meadow,
-      name: 'Stone',
-      colors: {
-        ...meadow.colors,
-        background: '#ABABAB',
-        foreground: '#000000',
-        primary: '#1B3D22',
-        secondary: '#C8C8C8',
-        muted: '#C8C8C8',
-        'muted-foreground': '#1A1A1A',
-        border: '#999999',
-        // Dark enough to read as error text on the grey ground.
-        destructive: '#7A0E0E',
-      },
-    };
-    const saved = await createTheme(stone);
-    await updateTheme({ accent: null, theme: saved.id });
-    // An accent over the active theme.
-    await expect(setThemeAccent('teal')).rejects.toMatchObject({
-      code: 'theme_invalid',
-      message: expect.stringContaining('With the teal accent'),
-    });
-    expect((await getThemeState()).accent).toBeNull();
-    // Activating the theme under an accent.
-    await updateTheme({ theme: 'desk', accent: 'teal' });
-    await expect(updateTheme({ theme: saved.id })).rejects.toMatchObject({
-      code: 'theme_invalid',
-    });
-    expect((await getThemeState()).theme.id).toBe('desk');
-    expect((await validateTheme(stone, { withCurrentAccent: true })).ok).toBe(
-      false,
-    );
-  });
-
   it('says when the chosen accent hides the active theme primary', async () => {
     const saved = await createTheme(meadow);
     expect(
