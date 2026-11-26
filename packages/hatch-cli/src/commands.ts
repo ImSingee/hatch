@@ -459,7 +459,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'check'],
     usage: 'theme check --file <path|->',
     description:
-      'Validate a custom theme document without changing anything, and print it resolved into every token. A document is {"name"?, "appearance": "light"|"dark", "colors": {background, foreground, card, primary, secondary, muted, muted-foreground, border, destructive}, "radius"?: px 0-32, "fonts"?: {sans, mono}}; colours are #RRGGBB, #RGB or rgb(r g b), fonts one of the bundled faces or system. Unknown keys, unparsable colours, other fonts and text below 4.5:1 contrast are rejected (exit 2, theme_invalid) with every problem in error.details.problems.',
+      'Validate a custom theme document without changing anything, and print it resolved into every token. A document is {"name"?, "appearance": "light"|"dark", "colors": {background, foreground, card, primary, secondary, muted, muted-foreground, border, destructive}, "radius"?: px 0-32, "fonts"?: {sans, mono}}; colours are #RRGGBB, #RGB or rgb(r g b), fonts one of the bundled faces or system. Unknown keys, unparsable colours, other fonts and text below 4.5:1 contrast are rejected (exit 2, THEME_INVALID) with every problem in error.details.problems.',
   },
   {
     path: ['theme', 'presets'],

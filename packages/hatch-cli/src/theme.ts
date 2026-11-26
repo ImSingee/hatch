@@ -220,8 +220,9 @@ export async function runTheme(
     case 'check': {
       const result = await client.theme.validate(document!);
       if (!result.ok)
+        // The code `set` gets from the platform for the same document.
         throw new CliError(
-          'theme_invalid',
+          'THEME_INVALID',
           [
             'The theme was rejected:',
             ...result.problems.map((problem) => `- ${problem.message}`),

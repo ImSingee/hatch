@@ -137,8 +137,14 @@ export function useActiveTheme(): ResolvedTheme {
   return state[activeAppearance(state.mode, prefersDark)];
 }
 
-function rootRule(theme: ResolvedTheme): string {
-  return `:root{background-color:${theme.colors.background};color-scheme:${theme.appearance}}`;
+/**
+ * The document's own ground. `body` is listed too: before React mounts, the
+ * prerendered shell's Mantine variables are the built-in light ones, and
+ * Mantine paints `body` from them. A native-host page keeps its transparent
+ * ground (`desk.css` outranks these selectors).
+ */
+function rootRule(background: string, appearance: ThemeAppearance): string {
+  return `:root{background-color:${background};color-scheme:${appearance}}body{background-color:${background}}`;
 }
 
 /**
@@ -153,7 +159,7 @@ export function applyDocumentTheme(theme: ResolvedTheme): void {
     style.id = BOOT_STYLE_ID;
     document.head.append(style);
   }
-  style.textContent = rootRule(theme);
+  style.textContent = rootRule(theme.colors.background, theme.appearance);
   let meta = document.querySelector<HTMLMetaElement>(
     'meta[name="theme-color"]',
   );
@@ -170,7 +176,7 @@ export function applyDocumentTheme(theme: ResolvedTheme): void {
  * theme's ground and colour scheme, so a dark theme never flashes light.
  * Anything unreadable leaves the built-in light ground.
  */
-export const THEME_BOOT_SCRIPT = `try{var t=JSON.parse(localStorage.getItem(${JSON.stringify(STORAGE_KEY)}));var d=t.mode==='system'?matchMedia(${JSON.stringify(DARK_QUERY)}).matches:t.mode==='dark';var r=d?t.dark:t.light;var b=String(r.colors.background);if(/^#[0-9A-Fa-f]{6}$/.test(b)&&(r.appearance==='light'||r.appearance==='dark')){var e=document.documentElement;e.dataset.mantineColorScheme=r.appearance;var s=document.createElement('style');s.id=${JSON.stringify(BOOT_STYLE_ID)};s.textContent=':root{background-color:'+b+';color-scheme:'+r.appearance+'}';document.head.appendChild(s);var m=document.createElement('meta');m.name='theme-color';m.content=b;document.head.appendChild(m)}}catch(x){}`;
+export const THEME_BOOT_SCRIPT = `try{var t=JSON.parse(localStorage.getItem(${JSON.stringify(STORAGE_KEY)}));var d=t.mode==='system'?matchMedia(${JSON.stringify(DARK_QUERY)}).matches:t.mode==='dark';var r=d?t.dark:t.light;var b=String(r.colors.background);if(/^#[0-9A-Fa-f]{6}$/.test(b)&&(r.appearance==='light'||r.appearance==='dark')){var e=document.documentElement;e.dataset.mantineColorScheme=r.appearance;var s=document.createElement('style');s.id=${JSON.stringify(BOOT_STYLE_ID)};s.textContent=':root{background-color:'+b+';color-scheme:'+r.appearance+'}body{background-color:'+b+'}';document.head.appendChild(s);var m=document.createElement('meta');m.name='theme-color';m.content=b;document.head.appendChild(m)}}catch(x){}`;
 
 /** A short, stable fingerprint of a resolved theme (FNV-1a over its JSON). */
 function themeKeyOf(theme: ResolvedTheme): string {
