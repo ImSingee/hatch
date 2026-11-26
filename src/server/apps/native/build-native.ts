@@ -88,10 +88,18 @@ export function nativeSdkAliases(): Record<string, string> {
 }
 
 /** The platform-generated `nsh.json` at the App root. */
-export function nativeNshJson(app: { id: string; name: string }): string {
+export function nativeNshJson(app: {
+  id: string;
+  name: string;
+  entry: string;
+}): string {
   return `${JSON.stringify(
     {
       name: app.name,
+      // Names the App root as NSH's app directory for this entry. Without
+      // it, an `App.tsx` beside the entry would make `app/` the app
+      // directory, where the SDK aliases under `.hatch/` cannot be reached.
+      entry: app.entry,
       id: nshAppId(app.id),
       version: '1.0.0',
       build: 1,
@@ -217,6 +225,13 @@ export function createHost() {
 }
 `;
 
+/**
+ * Files of the page `nsh package --target web` writes for itself (its HTML,
+ * start script, styles and icons). The player page replaces that page.
+ */
+const NSH_PAGE_FILE =
+  /^(?:index\.html|manifest\.webmanifest|nsh-(?:start|prefetch)\.[0-9a-f]{8,}\.js|nsh-page\.[0-9a-f]{8,}\.css|icons\/[\w.-]+\.png)$/;
+
 /** How long the start-up check may run before the deploy fails. */
 const SMOKE_TIMEOUT_MS = 60_000;
 
@@ -232,6 +247,9 @@ type PackagedApp = {
   assets?: Record<string, string>;
   fonts?: string[];
   chunks?: Record<string, string>;
+  chunkFonts?: Record<string, string[]>;
+  chunkSides?: Record<string, string[]>;
+  entryChunks?: string[];
   nativeExports?: Record<string, string[]>;
   glue?: string;
 };
@@ -441,9 +459,10 @@ export async function buildNativeFrontend(
     );
     await fs.chmod(work, 0o755);
     await fs.chmod(smokeHost, 0o644);
-    // `nsh test` writes its step harness to `<entry dir>/.nsh/test/`; start
-    // from a fresh one.
-    await fs.rm(path.join(src, entryDir, '.nsh', 'test'), {
+    // `nsh test` writes its step harness to `.nsh/test/` in the app
+    // directory, the App root (nsh.json names the entry); start from a
+    // fresh one.
+    await fs.rm(path.join(src, '.nsh', 'test'), {
       recursive: true,
       force: true,
     });
@@ -524,9 +543,6 @@ export async function buildNativeFrontend(
         runtimeFiles.add(file);
       }
     }
-    for (const file of runtimeFiles) {
-      await publishRuntimeFile(NSH_VERSION, file, path.join(site, file));
-    }
     const appRefs = new Set(
       [
         packaged.code,
@@ -534,6 +550,34 @@ export async function buildNativeFrontend(
         ...Object.values(packaged.assets ?? {}),
       ].map((file) => file.replace(/^\.\//, '')),
     );
+    // Every file `nsh package` wrote is served (runtime or App) or belongs
+    // to its own page, which the player page replaces. A file of another
+    // kind (a new NSH release loading more on demand, say) would 404 only
+    // when the App first needs it, so it fails the build here instead.
+    const unplaced = allFiles.filter((file) => {
+      const base = file.replace(/\.(?:br|gz)$/, '');
+      return !(
+        runtimeFiles.has(file) ||
+        appRefs.has(base) ||
+        file.startsWith('facades/') ||
+        NSH_PAGE_FILE.test(base)
+      );
+    });
+    const missing = [...runtimeRefs, ...appRefs].filter(
+      (file) => !allFiles.includes(file),
+    );
+    if (unplaced.length || missing.length) {
+      throw new NativeBuildError(
+        `nsh ${NSH_VERSION} package output does not match what the player ` +
+          `serves: ${[
+            ...unplaced.map((file) => `unexpected ${file}`),
+            ...missing.map((file) => `missing ${file}`),
+          ].join(', ')}`,
+      );
+    }
+    for (const file of runtimeFiles) {
+      await publishRuntimeFile(NSH_VERSION, file, path.join(site, file));
+    }
     for (const file of allFiles) {
       const base = file.replace(/\.(?:br|gz)$/, '');
       if (file.endsWith('.br') || file.endsWith('.gz')) continue;
@@ -587,6 +631,9 @@ export async function buildNativeFrontend(
           ]),
         ),
         fonts: packaged.fonts ?? [],
+        chunkFonts: packaged.chunkFonts ?? {},
+        chunkSides: packaged.chunkSides ?? {},
+        entryChunks: packaged.entryChunks ?? [],
         nativeExports: packaged.nativeExports ?? {},
       },
       grant: nativeGrant(),

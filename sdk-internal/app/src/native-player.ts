@@ -37,7 +37,14 @@ export type NativePlayerConfig = {
     code: string;
     chunks: Record<string, string>;
     assets: Record<string, string>;
+    /** Font assets (`assets` keys) the entry needs before it starts. */
     fonts: string[];
+    /** Font assets each chunk needs before it runs, by chunk id. */
+    chunkFonts: Record<string, string[]>;
+    /** Side modules (`runtime.sides` keys) each chunk needs, by chunk id. */
+    chunkSides: Record<string, string[]>;
+    /** Chunks the entry imports statically: their fonts load at start. */
+    entryChunks: string[];
     nativeExports: Record<string, string[]>;
   };
   /** The App's grant, as the JSON text of an NSH capabilities document. */
@@ -57,6 +64,15 @@ type Answer =
 type Player = {
   runModule(url: string, options: Record<string, unknown>): Promise<void>;
   hostEvent(event: string, payload: unknown): void;
+  /** Loads the named side modules (and what they need) into the engine. */
+  loadSides(
+    names: string[] | undefined,
+    sides: NativePlayerConfig['runtime']['sides'],
+  ): Promise<void>;
+  /** Downloads, behind the first screen, the side modules not on demand. */
+  prefetchSides(sides: NativePlayerConfig['runtime']['sides']): void;
+  /** Warms the on-demand side modules once the App runs. */
+  preloadSides(sides: NativePlayerConfig['runtime']['sides']): void;
 };
 
 type CreatePlayer = (
@@ -617,17 +633,41 @@ export async function startNativePlayer(): Promise<void> {
       Object.entries(record).map(([key, file]) => [key, resolve(file)]),
     );
 
-  try {
-    await Promise.all(
-      config.app.fonts.map(async (font) => {
+  // A font asset, fetched once; text is measured with it, so NSH reads it
+  // (`readAsset`) before the code that registers it runs.
+  const fontLoads = new Map<string, Promise<void>>();
+  const loadFont = (font: string): Promise<void> => {
+    let load = fontLoads.get(font);
+    if (!load) {
+      load = (async () => {
         const url = config.app.assets[font];
         if (!url) return;
         const response = await fetch(appUrl(url));
         if (response.ok) {
           fonts.set(font, new Uint8Array(await response.arrayBuffer()));
         }
-      }),
-    );
+      })();
+      fontLoads.set(font, load);
+    }
+    return load;
+  };
+  const sides = Object.fromEntries(
+    Object.entries(config.runtime.sides).map(([key, side]) => [
+      key,
+      { ...side, url: runtimeUrl(side.url) },
+    ]),
+  );
+  // Set once `createPlayer` resolves; chunks are prepared only after that.
+  let engine: Player | null = null;
+
+  try {
+    await Promise.all([
+      ...config.app.fonts.map(loadFont),
+      // The fonts of the chunks the entry imports statically.
+      ...config.app.entryChunks.flatMap((id) =>
+        (config.app.chunkFonts[id] ?? []).map(loadFont),
+      ),
+    ]);
     // The shared runtime's URL is known only from the page's config.
     // oxlint-disable-next-line local/no-dynamic-import
     const { createPlayer } = (await import(
@@ -638,20 +678,27 @@ export async function startNativePlayer(): Promise<void> {
     const created = await createPlayer(document.getElementById('app')!, {
       wasm: runtimeUrl(config.runtime.wasm),
       data: mapValues(config.runtime.data, runtimeUrl),
-      sides: Object.fromEntries(
-        Object.entries(config.runtime.sides).map(([key, side]) => [
-          key,
-          { ...side, url: runtimeUrl(side.url) },
-        ]),
-      ),
+      sides,
       assets: mapValues(config.app.assets, appUrl),
       readAsset: (uri: string) =>
         fonts.get(uri.replace(/^asset:\/+/, '')) ?? null,
+      // A chunk (`import()`) runs once its fonts and the side modules of
+      // the runtime it uses (`nsh/base` parts beyond the first screen) are
+      // in; without them its components are missing from the engine.
+      prepareChunk: (id: string) =>
+        Promise.all([
+          ...(config.app.chunkFonts[id] ?? []).map(loadFont),
+          engine?.loadSides(config.app.chunkSides[id], sides),
+        ]),
       history: false,
       overlay: false,
       host: { call: (name: string, args: unknown) => host.call(name, args) },
       onError: (message: string) => fail(message),
     });
+    engine = created;
+    // Side modules not marked on demand download behind the first screen
+    // (`nsh package` marks every one it writes on demand; as NSH's page).
+    created.prefetchSides(sides);
     // Text NSH draws before a face has loaded stays invisible until the next
     // repaint, so the Desk faces (player fonts.css) load first, briefly.
     await Promise.race([
@@ -685,6 +732,7 @@ export async function startNativePlayer(): Promise<void> {
       linked: true,
       params: { route },
     });
+    created.preloadSides(sides);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }

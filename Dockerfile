@@ -17,11 +17,11 @@ RUN CGO_ENABLED=0 go build -trimpath -o /hatch-tailscale .
 # runtime component is installed beside it so deploys never download it.
 FROM debian:trixie-slim AS nsh
 ARG TARGETARCH
-ARG NSH_VERSION=0.6.1
-ARG NSH_COMMIT=2f51d86
-ARG NSH_LINUX_X86_64_SHA256=9a7ac692f1c229df476be8ff83a3c5912d271453b644e313f02cb19d18696070
-ARG NSH_LINUX_ARM64_SHA256=d7d54b8a62aa8bd4a9fb73fcc0abce8cc565185926f226aa90f48622f3e410a3
-ARG NSH_WEB_SHA256=e509e35fbad261a4a5e27a9225c364ff0d9ddd202a638b02bbfd13fb5cd1b9f1
+ARG NSH_VERSION=0.7.0
+ARG NSH_COMMIT=3f8ecd8
+ARG NSH_LINUX_X86_64_SHA256=d281bfa3d93d84e9831e1a97dfdb63104329fcc87a0a48c78db5aeabb00c0073
+ARG NSH_LINUX_ARM64_SHA256=8392ec026bd32d1554b22f5ae8b574abcb746b502bc6ac93bcdca1436fdbbffc
+ARG NSH_WEB_SHA256=e951e78966a65af4d7a0bbcd08a4a5eef4f3b6b4adaec3b4b502df7c4fe8b4e6
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*

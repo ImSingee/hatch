@@ -88,8 +88,9 @@ export function Panels(props: {
           >
             <View
               class="flex-1 self-stretch"
-              // `invisible` as well: NSH's web runtime lays a hidden view
-              // out at zero size but leaves it in the focus order.
+              // `invisible` as well: NSH 0.6.1's web runtime laid a hidden
+              // view out at zero size but left it in the focus order (0.7.0
+              // skips it); deployments built on 0.6.1 keep that runtime.
               classList={{ hidden: !shown(), invisible: !shown() }}
               accessibilityElementsHidden={!shown()}
             >

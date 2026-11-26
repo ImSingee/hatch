@@ -153,6 +153,9 @@ describe.skipIf(!nshAvailable())(
       });
       expect(result.log).toContain('native custom files');
       expect(result.log).toContain('app/custom/ui.tsx');
+      // NSH reads every key of the generated nsh.json: one it ignored
+      // (a theme or Tailwind key of another release) would warn here.
+      expect(result.log).not.toMatch(/^warn\b.*nsh\.json/m);
       // Widgets stay on the web runtime.
       await fs.access(path.join(outputDir, 'widgets', 'counter.js'));
       await fs.access(path.join(outputDir, 'app', 'bundle.js'));
@@ -201,6 +204,134 @@ describe.skipIf(!nshAvailable())(
       expect(config.runtime.base).toBe(`/api/app-runtime/nsh/${NSH_VERSION}/`);
       for (const file of [config.runtime.module, config.runtime.wasm]) {
         await fs.access(path.join(nshRuntimeDir(NSH_VERSION), file));
+      }
+    });
+
+    it('builds an App that also has an App.tsx beside its entry', async () => {
+      // NSH takes a directory holding `App.tsx` as the app directory unless
+      // the root nsh.json names the entry; then `.hatch/` is outside it and
+      // no SDK import resolves.
+      const { sourceDir, outputDir } = await nativeSource({
+        'app/App.tsx': "export const unused = 'App.tsx is only a module';\n",
+      });
+      const result = await buildApp('demo', { sourceDir, outputDir });
+      expect(result.normalized.app).toMatchObject({ runtime: 'native' });
+      await fs.access(path.join(outputDir, 'app', 'index.html'));
+    });
+
+    it('gives the player the side modules a lazily loaded screen needs', async () => {
+      // `nsh package` moves `nsh/base` parts only a chunk uses into side
+      // modules; the player loads them before the chunk runs.
+      const main = (await fixtureFile('app/main.tsx'))
+        .replace(
+          '  const go = (next: string) => {',
+          [
+            '  const later = signal<null | (() => unknown)>(null);',
+            "  const openLater = () => import('./custom/later.tsx').then(",
+            '    (module) => later.set(() => module.Later),',
+            '  );',
+            '  const go = (next: string) => {',
+          ].join('\n'),
+        )
+        .replace(
+          '    </Page>',
+          '      <Button label="Later" onPress={() => void openLater()} />\n    </Page>',
+        );
+      const { sourceDir, outputDir } = await nativeSource({
+        'app/main.tsx': main,
+        'app/custom/later.tsx': [
+          "import { Text, View } from 'nsh';",
+          "import { DatePicker } from 'nsh/base';",
+          'export function Later() {',
+          '  return (',
+          '    <View>',
+          '      <Text>Later</Text>',
+          '      <DatePicker value="2026-10-28" onChange={() => {}} />',
+          '    </View>',
+          '  );',
+          '}',
+          '',
+        ].join('\n'),
+      });
+      await buildApp('demo', { sourceDir, outputDir, deploymentId: 'd-2' });
+      const page = await fs.readFile(
+        path.join(outputDir, 'app', 'index.html'),
+        'utf8',
+      );
+      const config = JSON.parse(
+        /<script type="application\/json" id="hatch-player">([\s\S]*?)<\/script>/.exec(
+          page,
+        )![1],
+      ) as {
+        runtime: { sides: Record<string, { url: string }> };
+        app: {
+          chunks: Record<string, string>;
+          chunkSides: Record<string, string[]>;
+        };
+      };
+      const [chunk, ...others] = Object.keys(config.app.chunks);
+      expect(others).toEqual([]);
+      await fs.access(path.join(outputDir, 'app', config.app.chunks[chunk]));
+      const needed = config.app.chunkSides[chunk] ?? [];
+      expect(needed.length).toBeGreaterThan(0);
+      for (const name of needed) {
+        const side = config.runtime.sides[name];
+        expect(side).toBeDefined();
+        await fs.access(path.join(nshRuntimeDir(NSH_VERSION), side.url));
+      }
+    });
+
+    it('ships the images and fonts the App imports', async () => {
+      // Every file `nsh package` writes must be placed (runtime, App or its
+      // own page); pixel-density variants and fonts are App assets.
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwAEAQH/7n8fCwAAAABJRU5ErkJggg==',
+        'base64',
+      );
+      const ui = (await fixtureFile('app/custom/ui.tsx'))
+        .replace(
+          "import { mount as nshMount, signal, Scroll, Text, View } from 'nsh';",
+          [
+            "import { Image, mount as nshMount, signal, Scroll, Text, View } from 'nsh';",
+            "import leaf from './assets/leaf.png';",
+            "import Nunito from './assets/Nunito.woff2';",
+          ].join('\n'),
+        )
+        .replace(
+          '<Text class="text-2xl font-bold text-foreground">{props.title}</Text>',
+          '<Image src={leaf} />\n        <Text class="text-2xl font-bold text-foreground" style={{ fontFamily: Nunito }}>\n          {props.title}\n        </Text>',
+        );
+      const { sourceDir, outputDir } = await nativeSource({
+        'app/custom/ui.tsx': ui,
+      });
+      const assets = path.join(sourceDir, 'app', 'custom', 'assets');
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(path.join(assets, 'leaf.png'), png);
+      await fs.writeFile(path.join(assets, 'leaf@2x.png'), png);
+      await fs.copyFile(
+        path.resolve(
+          'node_modules/@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2',
+        ),
+        path.join(assets, 'Nunito.woff2'),
+      );
+      await buildApp('demo', { sourceDir, outputDir, deploymentId: 'd-3' });
+      const page = await fs.readFile(
+        path.join(outputDir, 'app', 'index.html'),
+        'utf8',
+      );
+      const config = JSON.parse(
+        /<script type="application\/json" id="hatch-player">([\s\S]*?)<\/script>/.exec(
+          page,
+        )![1],
+      ) as { app: { assets: Record<string, string>; fonts: string[] } };
+      expect(Object.keys(config.app.assets).sort()).toEqual([
+        'app/custom/assets/Nunito.woff2',
+        'app/custom/assets/leaf.png',
+        'app/custom/assets/leaf@2x.png',
+      ]);
+      expect(config.app.fonts).toEqual(['app/custom/assets/Nunito.woff2']);
+      for (const file of Object.values(config.app.assets)) {
+        await fs.access(path.join(outputDir, 'app', file));
       }
     });
 

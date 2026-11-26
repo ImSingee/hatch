@@ -11,7 +11,7 @@ import path from 'node:path';
 import { REPO_ROOT, WORKSPACE_ROOT } from '~agent/paths';
 
 /** The NSH release native Apps are built with and the web player serves. */
-export const NSH_VERSION = '0.6.1';
+export const NSH_VERSION = '0.7.0';
 
 /**
  * Release archives the Docker image installs, by SHA-256. Keep in sync with
@@ -19,11 +19,11 @@ export const NSH_VERSION = '0.6.1';
  */
 export const NSH_RELEASE_SHA256 = {
   'nsh-linux-x86_64.tar.gz':
-    '9a7ac692f1c229df476be8ff83a3c5912d271453b644e313f02cb19d18696070',
+    'd281bfa3d93d84e9831e1a97dfdb63104329fcc87a0a48c78db5aeabb00c0073',
   'nsh-linux-arm64.tar.gz':
-    'd7d54b8a62aa8bd4a9fb73fcc0abce8cc565185926f226aa90f48622f3e410a3',
+    '8392ec026bd32d1554b22f5ae8b574abcb746b502bc6ac93bcdca1436fdbbffc',
   'nsh-web.tar.gz':
-    'e509e35fbad261a4a5e27a9225c364ff0d9ddd202a638b02bbfd13fb5cd1b9f1',
+    'e951e78966a65af4d7a0bbcd08a4a5eef4f3b6b4adaec3b4b502df7c4fe8b4e6',
 } as const;
 
 export class NshToolchainError extends Error {
