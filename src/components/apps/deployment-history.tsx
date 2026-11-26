@@ -80,6 +80,12 @@ export function DeploymentHistory({ appId }: { appId: string }) {
       );
       void qc.invalidateQueries(deploymentRequestsQueryOptions(appId));
     },
+    // A refused redeploy usually means the history this page shows is stale
+    // (a restore elsewhere took the commit off master): read it again, so
+    // the version no longer offering Redeploy explains the error toast.
+    onError: () => {
+      void qc.invalidateQueries(deploymentsQueryOptions(appId));
+    },
   });
 
   const rollback = useMutation({

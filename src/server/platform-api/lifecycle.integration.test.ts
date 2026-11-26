@@ -700,6 +700,18 @@ describe.runIf(Boolean(databaseUrl))(
           code: 'app_build_invalid',
           message: expect.stringMatching(/is not the one commit/),
         });
+        // A commit that is not on master is refused by its own code.
+        const offMaster = await api(
+          `${collection}/${id}/deploy`,
+          credentials[0],
+          {
+            ...body,
+            commit: 'f'.repeat(40),
+            build: 'local',
+          },
+        );
+        expect(offMaster.response.status).toBe(409);
+        expect(offMaster.data.code).toBe('COMMIT_NOT_ON_MASTER');
         const deployments = await database.db.query.deployments.findMany({
           where: { appId: id },
         });

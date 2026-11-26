@@ -188,7 +188,9 @@ is rejected with `workspace_instance_mismatch`.
   with the recorded generation (`AppService/CreateAppDeployment`).
   `--commit <full-commit-id>` skips the push and deploys a commit that is
   already on platform `master` (its tip or an ancestor); any other commit is
-  rejected. Source always comes first: a deployment only ever names a pushed
+  rejected with `COMMIT_NOT_ON_MASTER` (exit 6). After a rollback moved
+  `master` back, the commits of newer versions are such commits until pushed
+  again. Source always comes first: a deployment only ever names a pushed
   commit, and its build package is uploaded to that deployment.
   - `--build builder` builds on the platform's dedicated Builder and follows
     its log (`WatchAppDeploymentLogs`) until the deployment finishes;

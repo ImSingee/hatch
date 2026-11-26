@@ -46,6 +46,11 @@ const definitions = {
     409,
     'The deployment does not accept a build package now.',
   ],
+  COMMIT_NOT_ON_MASTER: [
+    Code.Aborted,
+    409,
+    'The commit is not on master. Push it, or deploy a commit on master.',
+  ],
   GATEWAY_TIMEOUT: [
     Code.DeadlineExceeded,
     504,
@@ -53,6 +58,11 @@ const definitions = {
   ],
 } as const;
 export type PublicErrorCode = keyof typeof definitions;
+
+/** `AppError.code`s that are public codes too. */
+const DOMAIN_CODES = {
+  'deployments.commitNotOnMaster': 'COMMIT_NOT_ON_MASTER',
+} as const satisfies Record<string, PublicErrorCode>;
 
 export function publicApiError(code: PublicErrorCode, message?: string) {
   const [connectCode, httpStatus, fallback] = definitions[code];
@@ -89,6 +99,13 @@ export function publicError(
   if (error instanceof RunTokenError)
     return publicApiError(
       error.code === 'invalid_token' ? 'INVALID_TOKEN' : 'RUN_ENDED',
+    );
+  // Domain errors with a stable code of their own keep it, as the Web UI
+  // sees it, instead of collapsing into their HTTP status.
+  if (error instanceof AppError && error.code && error.code in DOMAIN_CODES)
+    return publicApiError(
+      DOMAIN_CODES[error.code as keyof typeof DOMAIN_CODES],
+      redactDomain ? undefined : error.message,
     );
   if (error instanceof AppError && error.status < 500) {
     const codes: Record<number, PublicErrorCode> = {
