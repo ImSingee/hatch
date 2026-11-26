@@ -41,7 +41,14 @@ function hueRoles(name: string, theme: ResolvedTheme): Record<string, string> {
 export const cssVariablesResolver: CSSVariablesResolver = (mantineTheme) => {
   const theme = resolvedThemeOf(mantineTheme);
   const c = theme.colors;
+  // Text on a filled primary control: the validated pair. Kept as Mantine's
+  // own `white` variable when it is that colour, as on desk.
+  const onPrimary = c['primary-foreground'];
   const roles: Record<string, string> = {
+    '--mantine-primary-color-contrast':
+      onPrimary.toUpperCase() === mantineTheme.white.toUpperCase()
+        ? 'var(--mantine-color-white)'
+        : onPrimary,
     '--mantine-color-body': c.background,
     '--mantine-color-text': c.foreground,
     '--mantine-color-dimmed': c['muted-foreground'],

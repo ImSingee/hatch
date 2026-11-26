@@ -11,7 +11,11 @@ import {
 import { describe, expect, it } from 'vitest';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import golden from '../../../packages/hatch-design-tokens/test/desk-golden.json';
-import { resolvePreset } from '../../../packages/hatch-design-tokens/src';
+import {
+  THEME_PRESETS,
+  resolvePreset,
+  resolveTheme,
+} from '../../../packages/hatch-design-tokens/src';
 import { cssVariablesResolver } from './cssVariableResolver';
 import { deskThemeFor } from './theme';
 
@@ -91,5 +95,40 @@ describe('the web desk theme', () => {
     expect(ours.dark).toEqual(ours.light);
     expect(theme.colors.dark[7]).toBe(tokens.dark.background);
     expect(theme.white).toBe('#FFFFFF');
+  });
+
+  it('labels a filled primary with the validated foreground, also on a pale primary', () => {
+    const pale = resolveTheme(
+      {
+        ...THEME_PRESETS['desk-dark'].document,
+        colors: {
+          ...THEME_PRESETS['desk-dark'].document.colors,
+          primary: '#818181',
+        },
+      },
+      { name: 'Pale', source: 'custom' },
+    );
+    const theme = mergeMantineTheme(DEFAULT_THEME, deskThemeFor(pale));
+    const roles = cssVariablesResolver(theme).dark;
+    // A dark label, not Mantine's white guess, and a hover that steps away
+    // from it (lighter).
+    expect(pale.colors['primary-foreground']).toBe(tokens.dark.background);
+    expect(roles['--mantine-primary-color-contrast']).toBe(
+      tokens.dark.background,
+    );
+    expect(roles['--mantine-color-primary-filled-hover']).toBe(
+      'var(--mantine-color-primary-7)',
+    );
+    expect(
+      theme.variantColorResolver({
+        color: 'primary',
+        theme,
+        variant: 'filled',
+      }).color,
+    ).toBe('var(--mantine-primary-color-contrast)');
+    expect(
+      theme.variantColorResolver({ color: 'red', theme, variant: 'filled' })
+        .color,
+    ).toBe('var(--mantine-color-white)');
   });
 });

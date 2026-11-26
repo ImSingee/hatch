@@ -9,8 +9,11 @@ import {
   Select,
   Tooltip,
   createTheme,
+  defaultVariantColorsResolver,
+  parseThemeColor,
   rem,
 } from '@mantine/core';
+import type { VariantColorsResolver } from '@mantine/core';
 import type { MantineColorsTuple, MantineThemeOverride } from '@mantine/core';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json';
 import {
@@ -111,6 +114,26 @@ const MONO_FALLBACK = `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, mo
 const fontStack = (face: string, fallback: string) =>
   face === 'system' ? fallback : `'${face} Variable', '${face}', ${fallback}`;
 
+/**
+ * Filled `primary` controls carry the theme's own `primary-foreground` (the
+ * pair validation checked) instead of Mantine's luminance guess, which can
+ * put white on a pale primary. `--mantine-primary-color-contrast` holds it
+ * (see `cssVariableResolver.ts`).
+ */
+const filledPrimaryLabel: VariantColorsResolver = (input) => {
+  const colors = defaultVariantColorsResolver(input);
+  if (input.variant !== 'filled') return colors;
+  const parsed = parseThemeColor({
+    color: input.color ?? input.theme.primaryColor,
+    theme: input.theme,
+  });
+  return parsed.isThemeColor &&
+    parsed.color === 'primary' &&
+    parsed.shade === undefined
+    ? { ...colors, color: 'var(--mantine-primary-color-contrast)' }
+    : colors;
+};
+
 const buildDeskTheme = (resolved: ResolvedTheme): MantineThemeOverride => {
   const light = resolved.appearance === 'light';
   const radius = resolved.radius;
@@ -131,6 +154,7 @@ const buildDeskTheme = (resolved: ResolvedTheme): MantineThemeOverride => {
       ) as Record<keyof typeof HUE_BY_COLOR_NAME, MantineColorsTuple>),
     },
     primaryColor: 'primary',
+    variantColorResolver: filledPrimaryLabel,
     primaryShade: 6,
     autoContrast: true,
     luminanceThreshold: 0.3,
