@@ -97,3 +97,24 @@ test('saves the picked language to the account and reverts when saving fails', a
     i18n.t('appearance.language.saveFailed'),
   );
 });
+
+test('the language on screen can be saved while the account has none', async () => {
+  const screen = await mount(
+    <>
+      <LocaleSync />
+      <LanguagePanel />
+    </>,
+  );
+  const english = screen.getByRole('radio', { name: 'English' });
+  await expect
+    .element(screen.getByText(/not saved to your account yet/i))
+    .toBeVisible();
+  await expect.element(english).not.toBeChecked();
+
+  await screen.getByText('English').click();
+  expect(fixture.update).toHaveBeenCalledWith({ data: { language: 'en' } });
+  await expect.element(english).toBeChecked();
+  await expect
+    .element(screen.getByText(/not saved to your account yet/i))
+    .not.toBeInTheDocument();
+});

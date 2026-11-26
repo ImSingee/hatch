@@ -43,6 +43,7 @@ export type TranslationResource = {
   'appearance.dockLabels.description': 'Print each App name under its tile. Pointing at a tile shows its full name either way.';
   'appearance.language.title': 'Language';
   'appearance.language.description': 'The language of the Hatch interface for your account, in every browser you sign in to. Other people keep their own choice.';
+  'appearance.language.notSaved': "Not saved to your account yet. Hatch follows this browser's language until you pick one.";
   'appearance.language.saveFailed': "Couldn't save your language. It switched back.";
   'mention.label': 'Apps';
   'mention.loading': 'Loading Apps…';

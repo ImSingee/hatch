@@ -1,5 +1,5 @@
 import { Group, SegmentedControl, Stack, Text } from '@mantine/core';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { authClient } from '~auth/client';
 import {
@@ -22,6 +22,10 @@ export function LanguagePanel() {
   const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const userId = authClient.useSession().data?.user.id;
+  const saved = useQuery({
+    ...interfacePreferencesQueryOptions(userId ?? ''),
+    enabled: !!userId,
+  }).data;
   const save = useMutation({
     mutationFn: (language: Locale) =>
       updateInterfacePreferenceSettings({ data: { language } }),
@@ -56,6 +60,15 @@ export function LanguagePanel() {
     },
   });
 
+  // Until the account has a language, nothing is selected: the one on screen
+  // only comes from this browser, and picking it is how it gets saved.
+  const unsaved = saved !== undefined && saved.language === null;
+  const value = save.isPending
+    ? save.variables
+    : unsaved
+      ? null
+      : (saved?.language ?? locale);
+
   return (
     <Group justify="space-between" gap="md">
       <Stack gap={2}>
@@ -65,17 +78,22 @@ export function LanguagePanel() {
         <Text size="sm" c="dimmed">
           {t('appearance.language.description')}
         </Text>
+        {unsaved && !save.isPending ? (
+          <Text size="sm" c="dimmed">
+            {t('appearance.language.notSaved')}
+          </Text>
+        ) : null}
       </Stack>
       <SegmentedControl
         aria-labelledby="language-label"
-        value={save.isPending ? (save.variables ?? locale) : locale}
+        value={value ?? ''}
         disabled={save.isPending}
         data={LOCALES.map((value) => ({
           value,
           label: <span lang={value}>{LANGUAGE_NAMES[value]}</span>,
         }))}
         onChange={(value) => {
-          if (isLocale(value) && value !== locale) save.mutate(value);
+          if (isLocale(value)) save.mutate(value);
         }}
       />
     </Group>
