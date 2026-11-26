@@ -341,7 +341,8 @@ beside the window in front and the route each App was left on, so after a
 reload the App beside reopens and the others open where they were left.
 Nothing reaches the server; like open tabs, this is the state of one browser
 window.
-It is a named CLI exception (plan `docs/native-app-ui-plan.md` section 5).
+It is a named CLI exception: the list and layout of running Apps are the
+state of one shell window, like a browser's open tabs.
 What an App opens to is covered elsewhere: its URL (`/app/<slug>#<route>`)
 deep-links into it, and its dock pins (name and entry route) are `hatch pin`
 commands.
