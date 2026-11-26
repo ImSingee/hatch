@@ -2,6 +2,8 @@ import { Scroll, Text, View, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Each, If } from '../core/control';
 import { WIDE_MIN, paneWidth } from '../core/env';
+import { ShellScopeContext, claimTitle } from '../core/shell';
+import type { ShellScope } from '../core/shell';
 import { EmptyState, Stat } from '../display/Display';
 import type { EmptyStateProps, StatProps } from '../display/Display';
 import { List, ListItem } from '../display/List';
@@ -64,6 +66,15 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
     props.items.find((item) => props.getKey(item) === selectedKey()) ?? null;
   const wide = () => paneWidth() >= WIDE_MIN;
   const nav = PageNavContext();
+  // Wide, the list column draws the page title itself: it names the App's
+  // title until an item's page (one level deeper) is shown beside it.
+  const scope = ShellScopeContext();
+  const column: ShellScope = {
+    ...scope,
+    depth: scope.depth + 1,
+    active: () => scope.active() && wide(),
+  };
+  claimTitle(column, () => props.title);
 
   // `If`, not ternaries: the App passes a new `search` object and a new
   // `items` array as they change, and a ternary would rebuild the search
@@ -152,53 +163,61 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
           </If>
         }
       >
-        <View class="flex-1 flex-row">
-          <View class="w-90 border-r border-hairline">
-            <Scroll class="flex-1" contentClass="pt-[env(safe-area-inset-top)]">
-              <View class="gap-4 p-5">
-                <Row justify="between" align="start">
-                  {nav?.canGoBack() ? (
-                    <View class="-ml-2">
-                      <IconButton
-                        icon={IconChevronLeft}
-                        label="Back"
-                        onPress={nav.back}
-                      />
-                    </View>
-                  ) : null}
-                  <View class="flex-1 gap-1 pt-1">
-                    <HeadingText level={1} class="text-section text-foreground">
-                      {props.title}
-                    </HeadingText>
-                    {props.description ? (
-                      <Text class="text-body text-muted-foreground">
-                        {props.description}
-                      </Text>
+        <ShellScopeContext.Provider value={column}>
+          <View class="flex-1 flex-row">
+            <View class="w-90 border-r border-hairline">
+              <Scroll
+                class="flex-1"
+                contentClass="pt-[env(safe-area-inset-top)]"
+              >
+                <View class="gap-4 p-5">
+                  <Row justify="between" align="start">
+                    {nav?.canGoBack() ? (
+                      <View class="-ml-2">
+                        <IconButton
+                          icon={IconChevronLeft}
+                          label="Back"
+                          onPress={nav.back}
+                        />
+                      </View>
                     ) : null}
-                  </View>
-                  {props.actions ?? null}
-                </Row>
-                {list(true)}
-              </View>
-            </Scroll>
-          </View>
-          <View class="flex-1">
-            <If
-              when={selected() !== null}
-              else={
-                <View class="flex-1 items-center justify-center">
-                  <EmptyState
-                    title="Nothing selected"
-                    description="Choose an item to see it here."
-                    compact
-                  />
+                    <View class="flex-1 gap-1 pt-1">
+                      <HeadingText
+                        level={1}
+                        class="text-section text-foreground"
+                      >
+                        {props.title}
+                      </HeadingText>
+                      {props.description ? (
+                        <Text class="text-body text-muted-foreground">
+                          {props.description}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {props.actions ?? null}
+                  </Row>
+                  {list(true)}
                 </View>
-              }
-            >
-              {detail()}
-            </If>
+              </Scroll>
+            </View>
+            <View class="flex-1">
+              <If
+                when={selected() !== null}
+                else={
+                  <View class="flex-1 items-center justify-center">
+                    <EmptyState
+                      title="Nothing selected"
+                      description="Choose an item to see it here."
+                      compact
+                    />
+                  </View>
+                }
+              >
+                {detail()}
+              </If>
+            </View>
           </View>
-        </View>
+        </ShellScopeContext.Provider>
       </If>
     </View>
   );

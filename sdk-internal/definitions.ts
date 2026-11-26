@@ -1,6 +1,9 @@
 /** Public SDK exports are the shared build and resolution contract. */
 import appManifest from './app/package.json' with { type: 'json' };
 import dataManifest from './data/package.json' with { type: 'json' };
+import uiManifest from './ui/package.json' with { type: 'json' };
+import uiTailwind from './ui/src/tailwind.json' with { type: 'json' };
+import { buildAppTheme, type AccentName } from './ui/theme/build.ts';
 
 type SdkManifest = {
   name: string;
@@ -34,6 +37,13 @@ export type SdkDefinition = {
   directory: string;
   manifest: SdkManifest;
   entries: Record<string, SdkEntry>;
+  /**
+   * `bundle` (the default): `src/` is bundled by esbuild into `dist/` with
+   * declarations. `source`: `src/` is copied to `dist/` verbatim, for a
+   * library NSH compiles together with the App (its TSX output is reactive
+   * only when NSH compiles it).
+   */
+  form?: 'bundle' | 'source';
   /**
    * What a native UI library contributes to every native App: the generated
    * `nsh.json` "theme" and "tailwind", and the theme shells push with
@@ -76,7 +86,26 @@ export const LEGACY_DATA_SDK: SdkDefinition = {
   },
 };
 
-/** Every SDK a source receives: `@hatch/app` and its legacy alias. */
+/**
+ * `@hatch/ui`, the component library of native Apps: NSH TSX source that
+ * NSH compiles with the App. Its theme and Tailwind extension become every
+ * native App's `nsh.json` "theme" and "tailwind", and the theme shells push.
+ */
+export const UI_SDK: SdkDefinition = {
+  directory: 'ui',
+  manifest: uiManifest,
+  form: 'source',
+  entries: { '.': { source: 'index.ts', runtime: 'native' } },
+  nsh: {
+    theme: (accent) => buildAppTheme({ accent: accent as AccentName }),
+    tailwind: uiTailwind,
+  },
+};
+
+/**
+ * Every SDK a web or Deno source resolves: `@hatch/app` and its legacy
+ * alias. They feed the import map and the `.hatch/tsconfig.json` paths.
+ */
 export const SDK_DEFINITIONS = [APP_SDK, LEGACY_DATA_SDK];
 
 /**
@@ -84,7 +113,10 @@ export const SDK_DEFINITIONS = [APP_SDK, LEGACY_DATA_SDK];
  * exact `nsh.json` alias per entry of these, so adding a library here is all
  * it takes to make it importable. They are materialized with the App SDK.
  */
-export const NATIVE_APP_SDK_DEFINITIONS: readonly SdkDefinition[] = [APP_SDK];
+export const NATIVE_APP_SDK_DEFINITIONS: readonly SdkDefinition[] = [
+  APP_SDK,
+  UI_SDK,
+];
 
 /**
  * Public specifier -> target below `.hatch/` for every entry `runtime` may
@@ -110,7 +142,7 @@ export function sdkImports(
   );
 }
 
-/** Every SDK package materialized into an App root. */
+/** Every SDK package materialized into an App root, and built by `pnpm hatch-sdk:build`. */
 export function appMaterializedSdkDefinitions(): SdkDefinition[] {
   return [...new Set([...SDK_DEFINITIONS, ...NATIVE_APP_SDK_DEFINITIONS])];
 }
@@ -121,6 +153,12 @@ export const SDK_DENO_TYPES_LICENSE = 'types/deno.LICENSE';
 export const SDK_TSCONFIG = 'tsconfig.json';
 export const SDK_MANIFEST_TSCONFIG = 'tsconfig.manifest.json';
 export const SDK_SCHEMA_TSCONFIG = 'tsconfig.schema.json';
+/**
+ * For a native App: every authored file except its NSH frontend in `app/`
+ * (backend, widgets, schema, generated RPC code), which `nsh check` checks
+ * against `app/tsconfig.json`.
+ */
+export const SDK_NATIVE_APP_TSCONFIG = 'tsconfig.native.json';
 
 /**
  * A tsconfig that checks only `files`, with the platform compiler options.
@@ -178,10 +216,16 @@ export function sdkToolchainFiles(): Record<string, string> {
     },
     files: [`./${SDK_DENO_TYPES}`],
     include: ['../**/*.ts', '../**/*.tsx'],
-    exclude: ['../node_modules', '../.hatch', '../.git'],
+    // `.nsh/` holds NSH's generated types and test harnesses.
+    exclude: ['../node_modules', '../.hatch', '../.git', '../**/.nsh'],
+  };
+  const nativeApp = {
+    extends: `./${SDK_TSCONFIG}`,
+    exclude: [...tsconfig.exclude, '../app'],
   };
   return {
     [SDK_TSCONFIG]: `${JSON.stringify(tsconfig, null, 2)}\n`,
+    [SDK_NATIVE_APP_TSCONFIG]: `${JSON.stringify(nativeApp, null, 2)}\n`,
     [SDK_MANIFEST_TSCONFIG]: sdkEntryTsconfig(['../manifest.ts']),
     [SDK_SCHEMA_TSCONFIG]: sdkEntryTsconfig(['../data/schema.ts']),
   };

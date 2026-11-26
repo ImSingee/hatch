@@ -44,9 +44,19 @@
       assetBase: '/bundle/assets/',
       ...(idiom ? { idiom } : {}),
       host: {
-        async call(name) {
+        async call(name, data) {
           if (name === 'hatch.theme.get')
             return { ok: true, theme: themes[accent] };
+          // The library reports the shown section and page title; the
+          // gallery keeps them where a check can read them.
+          if (name === 'hatch.nav.setRoute') {
+            window.galleryRoute = data?.route;
+            return { ok: true };
+          }
+          if (name === 'hatch.nav.setTitle') {
+            window.galleryTitle = data?.title;
+            return { ok: true };
+          }
           throw new Error(`The gallery host does not handle ${name}`);
         },
       },

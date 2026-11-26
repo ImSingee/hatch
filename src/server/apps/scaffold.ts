@@ -161,7 +161,8 @@ export async function createApp(
       // package.json `name` is never published; the kebab-case slug is a
       // valid, readable npm name, so a plain substitution is safe.
       'package.json': { __APP_ID__: slug },
-      'app/index.html': { __APP_NAME__: name },
+      // A JSON string is a TS string literal: the name renders as written.
+      'app/main.tsx': { __APP_NAME__: JSON.stringify(name) },
     },
     // Generated dependencies, stubs, and platform-owned SDK files are prepared
     // in the Agent worktree. Never let stale template artifacts enter source.

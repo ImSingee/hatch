@@ -1,132 +1,116 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import {
-  createHashHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Link,
-  Outlet,
-  RouterProvider,
-} from '@tanstack/react-router';
-import {
-  QueryClient,
-  QueryClientProvider,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+/**
+ * The App's frontend on Hatch's native runtime: the whole UI comes from
+ * `@hatch/ui` (see the design system reference in the building-apps skill),
+ * and every request goes through the shell (`@hatch/app/native`), which holds
+ * the session. The same source renders in the Web Desk and in Hatch's apps.
+ */
 import { createClient } from '@connectrpc/connect';
-import { createConnectTransport } from '@connectrpc/connect-web';
-import { IconPlus } from '@tabler/icons-react';
-import { z } from 'zod';
+import { createAppDataClient } from '@hatch/app/native';
+import { createAppTransport } from '@hatch/app/native/rpc';
+import {
+  AppShell,
+  Button,
+  Card,
+  IconInfoCircle,
+  IconPlus,
+  IconHash,
+  Page,
+  Stat,
+  Text,
+  Toast,
+  mount,
+  signal,
+} from '@hatch/ui';
+import type schema from '../data/schema.ts';
 import { CounterService } from '../gen/service_pb.ts';
 
-declare const __RPC_BASE_URL__: string;
-declare const __APP_NAME__: string;
+// Connect RPC to this App's backend, through the shell.
+const client = createClient(CounterService, createAppTransport());
+// This App's Data Tables, through the shell: live queries without a backend.
+const data = createAppDataClient<typeof schema>();
 
-const client = createClient(
-  CounterService,
-  createConnectTransport({ baseUrl: __RPC_BASE_URL__ }),
-);
-
-// Validate RPC responses at the edge so the UI fails loudly on shape drift.
-const countSchema = z.object({ count: z.number().int() });
-
-const queryKey = ['count'] as const;
-
-function Home() {
-  const queryClient = useQueryClient();
-  const { data, isPending } = useQuery({
-    queryKey,
-    queryFn: async () => countSchema.parse(await client.getCount({})).count,
-  });
-  const increment = useMutation({
-    mutationFn: async () =>
-      countSchema.parse(await client.increment({ amount: 1 })).count,
-    onSuccess: (next) => queryClient.setQueryData(queryKey, next),
-  });
-
+function Counter() {
+  const count = signal<number | null>(null);
+  const saving = signal(false);
+  const report = (cause: unknown) =>
+    Toast.error(
+      'Could not reach the counter',
+      cause instanceof Error ? cause.message : String(cause),
+    );
+  client.getCount({}).then((reply) => count.set(reply.count), report);
+  // The stored row changes whenever any client increments it.
+  data.watch(
+    { table: 'counters', limit: 1 },
+    (result) => {
+      const row = result.items[0];
+      if (row) count.set(row.value);
+    },
+    report,
+  );
+  const increment = async () => {
+    saving.set(true);
+    try {
+      count.set((await client.increment({ amount: 1 })).count);
+    } catch (cause) {
+      report(cause);
+    } finally {
+      saving.set(false);
+    }
+  };
   return (
-    <div className="card">
-      <div className="muted">Persistent counter</div>
-      <div className="count">{isPending ? '—' : data}</div>
-      <button
-        type="button"
-        disabled={isPending || increment.isPending}
-        onClick={() => increment.mutate()}
-      >
-        <IconPlus size={16} />
-        Increment
-      </button>
-    </div>
+    <Page
+      title="Counter"
+      description="A number kept by the App's backend in a Data Table."
+      width="narrow"
+      actions={
+        <Button
+          label="Increment"
+          kind="primary"
+          icon={IconPlus}
+          loading={saving()}
+          disabled={count() === null}
+          onPress={increment}
+        />
+      }
+    >
+      <Stat
+        label="Count"
+        value={count() === null ? '…' : String(count())}
+        icon={IconHash}
+      />
+    </Page>
   );
 }
 
 function About() {
   return (
-    <div className="card">
-      <h1>About</h1>
-      <p className="muted">
-        Scaffolded by Hatch: a React SPA (TanStack Router hash history +
-        TanStack Query), a Deno Connect backend, and a managed Data Table. Add
-        npm packages to package.json and import them from anywhere.
-      </p>
-    </div>
+    <Page title="About" width="narrow">
+      <Card title="How this App is made">
+        <Text tone="muted">
+          A native frontend built from Hatch's component library, a Deno Connect
+          backend and a managed Data Table. The same source runs in the Web Desk
+          and in Hatch's apps, and follows the instance's theme.
+        </Text>
+      </Card>
+    </Page>
   );
 }
 
-const rootRoute = createRootRoute({
-  component: () => (
-    <div className="app">
-      <h1>{__APP_NAME__}</h1>
-      <nav>
-        <Link
-          to="/"
-          activeOptions={{ exact: true }}
-          activeProps={{ className: 'active' }}
-        >
-          Home
-        </Link>
-        <Link to="/about" activeProps={{ className: 'active' }}>
-          About
-        </Link>
-      </nav>
-      <Outlet />
-    </div>
-  ),
-});
-
-const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/',
-  component: Home,
-});
-
-const aboutRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/about',
-  component: About,
-});
-
-const routeTree = rootRoute.addChildren([indexRoute, aboutRoute]);
-
-// Hash history keeps routing entirely client-side, which is required for apps
-// served inside the platform's /app/<slug> page with no server router.
-const router = createRouter({ routeTree, history: createHashHistory() });
-
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router;
-  }
+function App() {
+  return (
+    <AppShell
+      title={__APP_NAME__}
+      sections={[
+        {
+          id: 'counter',
+          label: 'Counter',
+          icon: IconHash,
+          content: Counter,
+        },
+        { id: 'about', label: 'About', icon: IconInfoCircle, content: About },
+      ]}
+    />
+  );
 }
 
-const queryClient = new QueryClient();
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  </StrictMode>,
-);
+mount(App);

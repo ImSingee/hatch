@@ -142,6 +142,8 @@ COPY --from=build /app/sdk-internal/app/package.json ./sdk-internal/app/package.
 COPY --from=build /app/sdk-internal/app/dist ./sdk-internal/app/dist
 COPY --from=build /app/sdk-internal/data/package.json ./sdk-internal/data/package.json
 COPY --from=build /app/sdk-internal/data/dist ./sdk-internal/data/dist
+COPY --from=build /app/sdk-internal/ui/package.json ./sdk-internal/ui/package.json
+COPY --from=build /app/sdk-internal/ui/dist ./sdk-internal/ui/dist
 
 # Runtime data lives in /app/workspace; dependency/tool caches live in /cache.
 RUN mkdir -p /app/workspace /cache/deno /cache/pnpm-store

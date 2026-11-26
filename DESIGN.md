@@ -446,6 +446,21 @@ or the Menu key on a focused tile, so it has a keyboard path on every
 platform. A tile carries no ⋯ button; a hover card (500 ms delay, 280 wide)
 may describe it, and is hidden while the menu is open.
 
+## Apps
+
+Native-runtime Apps draw these components from `@hatch/ui`
+(`sdk-internal/ui`), whose theme `buildAppTheme` builds from the same
+`tokens.json` and the instance accent. The App-side rules, screen patterns
+and the catalogue are in `skills/building-apps/references/design-system.md`.
+
+- `AppShell` follows the App's own pane, not the screen: a sidebar from 720
+  points wide, below that a bottom tab bar on touch screens and a row of
+  tabs at the top with a pointer. An App in a narrow Desk window lays out as
+  on a phone.
+- The selected section and the pages of a `NavStack` are the App's address,
+  and the shown `Page`'s title is the window's title, so deep links and
+  reloads land on the same screen.
+
 ## Conventions
 
 - Links are underlined, accent shade 7, weight 700.
