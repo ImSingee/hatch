@@ -877,8 +877,8 @@ export async function buildAppSource(
   });
 
   try {
-    // Tool output that becomes part of the package (the backend bundle) is
-    // written here first. It exists before the hand-over below, so it is
+    // Tool output that becomes part of the package (the API descriptor, the
+    // backend bundle) is written here first. It exists before the hand-over below, so it is
     // the sandbox identity's as well; a directory made later by this process
     // (in `out`, say) would not be writable for a sandboxed tool.
     const staging = path.join(src, BUILD_STAGING_DIR);
@@ -964,16 +964,22 @@ export async function buildAppSource(
         }
         // Written to a file (not stdout) so buf warnings on stderr never corrupt
         // the descriptor. The binary form keeps custom options (task input
-        // hints) and source comments.
-        const built = await host.runBuf(
-          ['build', '-o', path.join(out, BUILD_PACKAGE_API_DESCRIPTOR)],
-          src,
+        // hints) and source comments. Like the backend bundle, it is staged:
+        // a sandboxed buf cannot write to `out`.
+        const stagedDescriptor = path.join(
+          staging,
+          BUILD_PACKAGE_API_DESCRIPTOR,
         );
+        const built = await host.runBuf(['build', '-o', stagedDescriptor], src);
         if (built.code !== 0) {
           throw new Error(
             `buf build (API descriptor) failed:\n${built.output}`,
           );
         }
+        await fs.copyFile(
+          stagedDescriptor,
+          path.join(out, BUILD_PACKAGE_API_DESCRIPTOR),
+        );
         const protoFiles = await copyProtoFiles(src, out);
         logs.push(`captured app API: ${protoFiles} proto file(s)`);
       }
