@@ -1097,14 +1097,15 @@ export type SendNotificationRequest =
     markdown?: string | undefined;
 
     /**
-     * A card notification in card markup (`<Card>…</Card>`), at most 16 KiB.
+     * A card notification in card markup (`<Card>…</Card>`): at most 64 KiB as
+     * sent, and at most 16 KiB of content measured as compact canonical markup.
      *
      * @generated from field: optional string card_markup = 18;
      */
     cardMarkup?: string | undefined;
 
     /**
-     * A card notification as a render tree in JSON, at most 16 KiB.
+     * A card notification as a render tree in JSON, with the same limits.
      *
      * @generated from field: optional string card_json = 19;
      */

@@ -288,9 +288,28 @@ function attributes(node: ContentNode): string {
       if (value === true) return ` ${name}`;
       if (value === false) return ` ${name}="false"`;
       const text = Array.isArray(value) ? value.join(',') : String(value);
-      return ` ${name}="${escapeMarkupAttribute(text)}"`;
+      // A value holding double quotes but no single ones reads shorter in
+      // single quotes, as a sender may have written it.
+      return text.includes('"') && !text.includes("'")
+        ? ` ${name}='${escapeMarkupText(text)}'`
+        : ` ${name}="${escapeMarkupAttribute(text)}"`;
     })
     .join('');
+}
+
+function cdata(text: string): string {
+  return `<![CDATA[${text.replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
+}
+
+/**
+ * Text as markup: escaped, or as CDATA when that is shorter (text full of
+ * `&` or `<`), so canonical markup is never much longer than the content.
+ */
+function textMarkup(text: string): string {
+  const escaped = escapeMarkupText(text);
+  if (escaped.length === text.length) return escaped;
+  const literal = cdata(text);
+  return literal.length < escaped.length ? literal : escaped;
 }
 
 /**
@@ -299,22 +318,28 @@ function attributes(node: ContentNode): string {
  * where those matter is written as CDATA, which is read exactly.
  */
 function rawMarkup(text: string): string {
-  if (dedentRaw(text) === text) return escapeMarkupText(text);
-  return `<![CDATA[${text.replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
+  return dedentRaw(text) === text ? textMarkup(text) : cdata(text);
 }
 
+type Layout = { compact: boolean };
+
+/** Inline content: always on one line, so no layout of its own. */
 function inlineMarkup(children: readonly ContentChild[]): string {
   return children
     .map((child) =>
       typeof child === 'string'
-        ? escapeMarkupText(child)
-        : elementMarkup(child),
+        ? textMarkup(child)
+        : elementMarkup(child, 0, { compact: true }),
     )
     .join('');
 }
 
-function elementMarkup(node: ContentNode, depth = 0): string {
-  const pad = '  '.repeat(depth);
+function elementMarkup(
+  node: ContentNode,
+  depth: number,
+  layout: Layout,
+): string {
+  const pad = layout.compact ? '' : '  '.repeat(depth);
   if (node.type === 'Markdown') {
     // Its compiled children are derived; the source is what was written.
     const source = propString(node, 'source') ?? '';
@@ -338,6 +363,15 @@ function elementMarkup(node: ContentNode, depth = 0): string {
   ) {
     return `${pad}${open}>${inlineMarkup(children)}</${node.type}>`;
   }
+  if (layout.compact) {
+    return `${open}>${children
+      .map((child) =>
+        typeof child === 'string'
+          ? textMarkup(child)
+          : elementMarkup(child, 0, layout),
+      )
+      .join('')}</${node.type}>`;
+  }
   // Blocks (and flow content holding blocks) go one per line; a run of
   // inline content keeps one line of its own.
   const lines: string[] = [];
@@ -352,7 +386,7 @@ function elementMarkup(node: ContentNode, depth = 0): string {
       continue;
     }
     flush();
-    lines.push(elementMarkup(child as ContentNode, depth + 1));
+    lines.push(elementMarkup(child as ContentNode, depth + 1, layout));
   }
   flush();
   return `${pad}${open}>\n${lines.join('\n')}\n${pad}</${node.type}>`;
@@ -361,7 +395,13 @@ function elementMarkup(node: ContentNode, depth = 0): string {
 /**
  * Canonical markup: two-space indentation, attributes in catalog order,
  * inline content on one line. Parsing it gives the same tree back.
+ * `compact` leaves out the layout whitespace; the content size limit is
+ * measured on that form, so a card's canonical markup can always be sent
+ * back.
  */
-export function contentToMarkup(content: ContentNode): string {
-  return elementMarkup(content);
+export function contentToMarkup(
+  content: ContentNode,
+  options: { compact?: boolean } = {},
+): string {
+  return elementMarkup(content, 0, { compact: options.compact ?? false });
 }

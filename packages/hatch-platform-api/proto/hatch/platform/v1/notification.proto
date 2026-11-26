@@ -425,9 +425,10 @@ message SendNotificationRequest {
   optional string summary = 16 [(buf.validate.field).string.max_len = 1000];
   // A Markdown notification: the source, at most 16 KiB.
   optional string markdown = 17 [(buf.validate.field).string.max_len = 65536];
-  // A card notification in card markup (`<Card>…</Card>`), at most 16 KiB.
+  // A card notification in card markup (`<Card>…</Card>`): at most 64 KiB as
+  // sent, and at most 16 KiB of content measured as compact canonical markup.
   optional string card_markup = 18 [(buf.validate.field).string.max_len = 65536];
-  // A card notification as a render tree in JSON, at most 16 KiB.
+  // A card notification as a render tree in JSON, with the same limits.
   optional string card_json = 19 [(buf.validate.field).string.max_len = 65536];
 
   // From the sending user, never routed: the group's enabled members.

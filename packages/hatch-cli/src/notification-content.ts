@@ -44,7 +44,10 @@ import { readTextInput } from './input';
 type Values = Record<string, string | boolean | string[] | undefined>;
 type Row = Record<string, unknown>;
 
-/** `--*-file` content is read up to this; the compilers allow 16 KiB. */
+/**
+ * `--*-file` content is read up to this, the size the compilers accept as
+ * sent (a card's content and Markdown are then held to 16 KiB).
+ */
 export const CONTENT_INPUT_MAX_BYTES = 64 * 1024;
 
 const CATALOG_HINT = 'Components and props: hatch notification card catalog.';

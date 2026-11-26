@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CONTENT_BYTES } from './notification-content';
 import { CARD_EXAMPLES } from './notification-content-examples';
 import {
   compileCard,
@@ -153,6 +152,21 @@ describe('card markup', () => {
     ).toBe('<Card>\n  <Code>a\n  b</Code>\n</Card>');
   });
 
+  it('accepts every accepted card again as its canonical markup', () => {
+    // Text full of characters that need escaping, written as CDATA.
+    const ampersands = `<Card><Code><![CDATA[${'&'.repeat(4000)}]]></Code><Text><![CDATA[${'<'.repeat(4000)}]]></Text></Card>`;
+    // Near the limit, minified: the indented form is longer than the source.
+    const minified = `<Card>${Array.from({ length: 95 }, (_, i) => `<Box><Text>${'y'.repeat(140)}${i}</Text></Box>`).join('')}</Card>`;
+    // A value holding double quotes, written in single quotes.
+    const quoted = `<Card><Callout title='${'"'.repeat(100)}'>x</Callout></Card>`;
+    for (const markup of [ampersands, minified, quoted]) {
+      const { content } = compileCardMarkup(markup);
+      const canonical = contentToMarkup(content);
+      expect(compileCardMarkup(canonical).content).toEqual(content);
+      expect(compileCard(content).content).toEqual(content);
+    }
+  });
+
   it('names what is allowed where a component, prop or value is wrong', () => {
     expect(issues('<Card>\n  <Badges />\n</Card>')[0]).toBe(
       '2:3: <Badges> is not a component; allowed inside <Card>: Column, Row, Grid, Box, Divider, Spacer, Collapse, Title, Text, Caption, Markdown, Badge, Icon, Progress, Stat, Fields, Steps, List, Table, Quote, Code, Trend, Callout, Choice, Buttons, Button, Input, Submit',
@@ -190,8 +204,14 @@ describe('card markup', () => {
   });
 
   it('holds markup to the size, element and depth limits', () => {
-    const big = `<Card><Text>${'x'.repeat(MAX_CONTENT_BYTES)}</Text></Card>`;
-    expect(issues(big)).toEqual(['card markup must be at most 16 KiB']);
+    // Content is measured as compact canonical markup, source before parsing.
+    const big = `<Card>${`<Code>${'x'.repeat(3900)}</Code>`.repeat(5)}</Card>`;
+    expect(issues(big)).toEqual([
+      'the card must be at most 16 KiB as compact markup; it is 20 KiB',
+    ]);
+    expect(issues(`<Card>${' '.repeat(64 * 1024)}</Card>`)).toEqual([
+      'card markup must be at most 64 KiB',
+    ]);
     // The card is the first of the 200 elements.
     const many = `<Card>${'<Divider />'.repeat(200)}</Card>`;
     expect(issues(many)).toEqual([

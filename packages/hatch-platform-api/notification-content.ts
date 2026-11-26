@@ -40,8 +40,17 @@ export const CARD_ROOT = 'Card';
 export const DOCUMENT_ROOT = 'Document';
 
 export const MAX_SUMMARY_LENGTH = 200;
-/** Markup, Markdown source and JSON trees, in UTF-8 bytes. */
+/**
+ * A card's content as compact canonical markup, and Markdown source, in
+ * UTF-8 bytes.
+ */
 export const MAX_CONTENT_BYTES = 16 * 1024;
+/**
+ * Card markup or a JSON tree as sent, in UTF-8 bytes, checked before
+ * parsing. Larger than the content limit, so the indented canonical markup
+ * of any accepted card can be sent back as it is.
+ */
+export const MAX_CARD_SOURCE_BYTES = 64 * 1024;
 /** Element nodes in one tree, the root included. */
 export const MAX_CONTENT_NODES = 200;
 /** Nesting below the root. */

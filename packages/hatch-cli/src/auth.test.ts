@@ -564,6 +564,7 @@ describe('CLI authentication boundary', () => {
     expect(result.stdout + result.stderr).not.toContain('fixture-key-secret');
   });
 
+  // Six CLI startups from source: give it the budget of the other multi-start cases.
   it('uses API keys with their own header and preserves the config/env boundary', async () => {
     const key = join(directory, 'key');
     await writeFile(key, 'fixture-key-secret', { mode: 0o600 });
@@ -612,7 +613,7 @@ describe('CLI authentication boundary', () => {
       revoked: false,
     });
     expect(JSON.parse(await readFile(config, 'utf8')).profiles).toEqual({});
-  });
+  }, 15000);
 
   it('confirms session revocation before local removal, and retains profiles on failure', async () => {
     await stored();

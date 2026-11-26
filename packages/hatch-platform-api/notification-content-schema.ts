@@ -19,6 +19,7 @@ import {
   CARD_ROOT,
   CONTENT_COMPONENTS,
   DOCUMENT_ROOT,
+  MAX_CARD_SOURCE_BYTES,
   MAX_CONTENT_BYTES,
   MAX_CONTENT_DEPTH,
   MAX_CONTENT_NODES,
@@ -835,17 +836,30 @@ function finishCard(root: InputNode): CompiledCard {
   }
   const reply = compileInlineForm(content, state);
   if (state.issues.length > 0) throw new ContentError(state.issues);
+  // Measured on the compact canonical form, so a card is judged by its
+  // content however it was written, and its canonical markup (the compact
+  // form plus layout whitespace) always fits the source limit when sent back.
+  const size = byteLength(contentToMarkup(content, { compact: true }));
+  if (size > MAX_CONTENT_BYTES) {
+    throw new ContentError([
+      {
+        message: `the card must be at most ${MAX_CONTENT_BYTES / 1024} KiB as compact markup; it is ${Math.ceil(size / 1024)} KiB`,
+      },
+    ]);
+  }
   return { content, reply };
+}
+
+function tooLarge(what: string): ContentError {
+  return new ContentError([
+    { message: `${what} must be at most ${MAX_CARD_SOURCE_BYTES / 1024} KiB` },
+  ]);
 }
 
 /** Card markup to its tree and inline form; throws `ContentError`. */
 export function compileCardMarkup(markup: string): CompiledCard {
-  if (byteLength(markup) > MAX_CONTENT_BYTES) {
-    throw new ContentError([
-      {
-        message: `card markup must be at most ${MAX_CONTENT_BYTES / 1024} KiB`,
-      },
-    ]);
+  if (byteLength(markup) > MAX_CARD_SOURCE_BYTES) {
+    throw tooLarge('card markup');
   }
   let element: MarkupElement;
   try {
@@ -867,6 +881,9 @@ export function compileCardMarkup(markup: string): CompiledCard {
 
 /** A card given as a JSON tree; throws `ContentError`. */
 export function compileCardTree(tree: unknown): CompiledCard {
+  if (byteLength(JSON.stringify(tree) ?? '') > MAX_CARD_SOURCE_BYTES) {
+    throw tooLarge('the card tree');
+  }
   const parsed = jsonNodeSchema.safeParse(tree);
   if (!parsed.success) {
     throw new ContentError(
@@ -876,15 +893,7 @@ export function compileCardTree(tree: unknown): CompiledCard {
       })),
     );
   }
-  const compiled = finishCard(fromJson(parsed.data, ''));
-  if (byteLength(contentToMarkup(compiled.content)) > MAX_CONTENT_BYTES) {
-    throw new ContentError([
-      {
-        message: `the card must be at most ${MAX_CONTENT_BYTES / 1024} KiB as markup`,
-      },
-    ]);
-  }
-  return compiled;
+  return finishCard(fromJson(parsed.data, ''));
 }
 
 /**

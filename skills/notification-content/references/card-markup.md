@@ -38,7 +38,8 @@ card against it.
 
 ## Limits
 
-- At most 16 KiB of markup, 200 elements (a `<Markdown>` block's compiled
+- At most 16 KiB of content (measured as compact canonical markup; what you
+  send may be up to 64 KiB), 200 elements (a `<Markdown>` block's compiled
   elements count), 8 levels of nesting below `<Card>`, and 4000 characters
   of text per element unless the catalog says less.
 - Inputs: at most 10 `Choice`, `Buttons` and `Input` in one card, with

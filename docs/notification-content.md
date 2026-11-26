@@ -250,8 +250,11 @@ Markup is indented freely, so text is tidied the way HTML reads it:
 
 ### Limits
 
-- Markup (and a JSON tree, measured as its canonical markup) at most 16 KiB
-  of UTF-8, checked before parsing.
+- A card's content is at most 16 KiB of UTF-8, measured as its compact
+  canonical markup (no layout whitespace, each run of text written escaped
+  or as CDATA, whichever is shorter), however it was written. Markup or a
+  JSON tree as sent may be up to 64 KiB, checked before parsing, so the
+  indented canonical markup `get` prints can always be sent back.
 - At most 200 elements, the root and the elements a `Markdown` block compiles
   to included.
 - At most 8 levels below the root.
