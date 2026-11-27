@@ -345,6 +345,25 @@ describe('App AI endpoint boundary', () => {
     expect(await errorCode(disabled)).toBe('ai_model_unavailable');
   });
 
+  it('never passes the provider key on in an error', async () => {
+    await seed();
+    provider.responses = [
+      fauxAssistantMessage('', {
+        stopReason: 'error',
+        errorMessage: 'Invalid API key: alpha-key',
+      }),
+    ];
+    const response = await call('chat', {
+      role: 'summarize',
+      stream: false,
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(response.status).toBe(502);
+    const text = await response.text();
+    expect(text).toContain('[redacted]');
+    expect(text).not.toContain('alpha-key');
+  });
+
   it('refuses calls once the monthly budget is spent', async () => {
     await seed({ budgetMicros: 1000 });
     await db.insert(schema.appAiUsage).values({

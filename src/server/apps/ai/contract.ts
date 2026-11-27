@@ -10,6 +10,8 @@ import { z } from 'zod';
 export const MAX_AI_BODY_BYTES = 8 * 1024 * 1024;
 /** Calls one App may have in flight at once. */
 export const MAX_AI_CONCURRENT_CALLS = 4;
+/** Largest monthly budget accepted, in US dollars. */
+export const MAX_AI_BUDGET_USD = 1_000_000;
 /** Longest an image prompt may be. */
 export const MAX_IMAGE_PROMPT_CHARS = 4000;
 

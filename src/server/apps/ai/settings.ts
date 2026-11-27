@@ -8,11 +8,9 @@ import { db, schema } from '~/db';
 import type { AppAiCallKind, AppAiCallStatus } from '~/db/schema';
 import type { AiRole, NormalizedManifest } from '~server/apps/manifest';
 import { AppError } from '~server/errors';
+import { MAX_AI_BUDGET_USD } from './contract';
 import { listAiModelOptions, type AiModelOption } from './models';
 import { monthStart } from './usage';
-
-/** Largest monthly budget accepted, in US dollars. */
-export const MAX_AI_BUDGET_USD = 1_000_000;
 
 export type AppAiRoleView = {
   name: string;

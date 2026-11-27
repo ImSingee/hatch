@@ -10,6 +10,7 @@ import {
 import {
   chatContext,
   generateImage,
+  providerErrorText,
   streamChat,
   type ChatStreamEvent,
 } from '../ai/call';
@@ -188,7 +189,10 @@ async function handleChat(
 
   const controller = new AbortController();
   const onAbort = () => controller.abort();
-  requestSignal.addEventListener('abort', onAbort, { once: true });
+  // Abort events are not replayed: a caller that left while the role, model
+  // or budget was being checked must not start a provider call.
+  if (requestSignal.aborted) controller.abort();
+  else requestSignal.addEventListener('abort', onAbort, { once: true });
   const startedAt = performance.now();
   const base = {
     appId: app.id,
@@ -362,7 +366,10 @@ async function handleImage(
     });
     throw new AiCallError(
       'ai_provider_error',
-      error instanceof Error ? error.message : 'Image generation failed.',
+      providerErrorText(
+        error instanceof Error ? error.message : 'Image generation failed.',
+        resolved.provider.apiKey,
+      ),
     );
   } finally {
     release();

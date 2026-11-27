@@ -29,6 +29,22 @@ vi.mock('~queries/app-tasks', () => ({
   }),
 }));
 
+vi.mock('~queries/app-ai', () => ({
+  appAiQueryOptions: (id: string) => ({
+    queryKey: ['test-app-ai', id],
+    queryFn: async () => null,
+  }),
+  appAiUsageQueryOptions: (id: string) => ({
+    queryKey: ['test-app-ai-usage', id],
+    queryFn: async () => null,
+  }),
+}));
+
+vi.mock('~server/app-ai', () => ({
+  setAppAiBudgetFn: vi.fn<() => Promise<null>>(),
+  setAppAiRoleModelFn: vi.fn<() => Promise<null>>(),
+}));
+
 vi.mock('~queries/apps', () => ({
   appBackendsQueryOptions: {
     queryKey: ['test-app-backends'],

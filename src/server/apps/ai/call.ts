@@ -30,6 +30,17 @@ import {
 import type { ResolvedImageRole } from './models';
 
 const IMAGE_TIMEOUT_MS = 120_000;
+/** Longest provider error text passed on to the App. */
+const PROVIDER_MESSAGE_LIMIT = 500;
+
+/**
+ * Provider error text as the App may see it: without the provider key (a
+ * provider or proxy may echo it back) and bounded.
+ */
+export function providerErrorText(text: string, apiKey: string): string {
+  const clean = apiKey ? text.replaceAll(apiKey, '[redacted]') : text;
+  return clean.slice(0, PROVIDER_MESSAGE_LIMIT);
+}
 
 const zeroUsage = (): Usage => ({
   input: 0,
@@ -260,6 +271,8 @@ export async function* streamChat(
 ): AsyncGenerator<ChatStreamEvent> {
   const { models, picked } = buildRunModels(config);
   const priced = Boolean(config.model.cost);
+  // Every error text the App receives passes through here.
+  const redact = (text: string) => providerErrorText(text, config.apiKey);
   const maxTokens = Math.min(
     request.maxTokens ?? config.model.maxTokens,
     config.model.maxTokens,
@@ -280,7 +293,7 @@ export async function* streamChat(
     yield {
       type: 'error',
       aborted: false,
-      message: error instanceof Error ? error.message : String(error),
+      message: redact(error instanceof Error ? error.message : String(error)),
       usage: usageView(undefined, priced),
     };
     return;
@@ -328,11 +341,12 @@ export async function* streamChat(
         yield {
           type: 'error',
           aborted: event.reason === 'aborted' || signal.aborted,
-          message:
+          message: redact(
             event.error.errorMessage ??
-            (event.reason === 'aborted'
-              ? 'The call was cancelled.'
-              : 'The provider returned an error.'),
+              (event.reason === 'aborted'
+                ? 'The call was cancelled.'
+                : 'The provider returned an error.'),
+          ),
           usage: usageView(event.error.usage, priced),
         };
         return;
@@ -342,7 +356,7 @@ export async function* streamChat(
     yield {
       type: 'error',
       aborted: signal.aborted,
-      message: error instanceof Error ? error.message : String(error),
+      message: redact(error instanceof Error ? error.message : String(error)),
       usage: usageView(undefined, priced),
     };
     return;

@@ -2,12 +2,12 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { authMiddleware } from './auth';
+import { MAX_AI_BUDGET_USD } from './apps/ai/contract';
 import { idSchema } from './validation';
 import {
   type AppAiUsageItem,
   type AppAiUsageSummaryRow,
   type AppAiView,
-  MAX_AI_BUDGET_USD,
   getAppAiSettings,
   listAppAiUsage,
   setAppAiBudget,
