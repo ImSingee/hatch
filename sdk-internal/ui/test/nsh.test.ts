@@ -127,7 +127,7 @@ describe.skipIf(!nsh)('with NSH', () => {
     const root = fixture('card');
     writeCardCases(path.join(root, 'app'));
     expect(run(['test', 'app/card.test.tsx'], root)).toMatch(
-      /^ok\n[\s\S]*10 passed/,
+      /^ok\n[\s\S]*12 passed/,
     );
   }, 240_000);
 

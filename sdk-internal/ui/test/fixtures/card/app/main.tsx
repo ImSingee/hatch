@@ -87,6 +87,24 @@ function PendingCard() {
   );
 }
 
+/** Columns of any block, and a link button whose address changes. */
+function LayoutCard() {
+  const page = signal('one');
+  return (
+    <Card.Card onLinkPress={(href) => submitted.set(`link ${href}`)}>
+      <Card.Grid columns={2}>
+        <Card.Column>
+          <Card.Text>Cell one</Card.Text>
+        </Card.Column>
+        <Card.Text>Cell two</Card.Text>
+        <Card.Caption>Cell three</Card.Caption>
+      </Card.Grid>
+      <Card.Button onPress={() => page.set('two')}>Next page</Card.Button>
+      <Card.Button href={`hatch://app/notes#/${page()}`}>Open page</Card.Button>
+    </Card.Card>
+  );
+}
+
 function App() {
   const params = host.available() ? host.params : {};
   const id = typeof params.example === 'string' ? params.example : '';
@@ -103,6 +121,7 @@ function App() {
           {id === 'form-repeatable' ? <FormCard repeatable /> : null}
           {id === 'form-removable' ? <RemovableCard /> : null}
           {id === 'form-pending' ? <PendingCard /> : null}
+          {id === 'layout' ? <LayoutCard /> : null}
           {example ? (
             <Card.CardMarkup
               source={example.markup}

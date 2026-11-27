@@ -22,7 +22,7 @@ import { FieldErrorLine } from '../input/Field';
 import { TextArea, TextField } from '../input/TextField';
 import type { ContentTone } from './content/catalog.gen';
 import type { ReplyOptionInput } from './content/reply-form.gen';
-import { CardContext } from './form';
+import { CardContext, linkAction } from './form';
 import type { CardScope, CardTransition } from './form';
 import { CardWidthContext, RowContext } from './parts';
 import {
@@ -458,15 +458,21 @@ export function Button(props: ButtonProps): JSX.Element {
     return 'default';
   };
   if (props.href) {
-    const open = card?.linkAction(props.href) ?? null;
+    // Resolved from the current href and handler on every read.
+    const open = () =>
+      props.href
+        ? card
+          ? card.linkAction(props.href)
+          : linkAction(props.href, undefined)
+        : null;
     return (
       <UiButton
         label={props.children ?? props.href}
         kind="default"
         iconEnd={IconArrowUpRight}
         fullWidth={stacked()}
-        disabled={!open}
-        onPress={() => open?.()}
+        disabled={!open()}
+        onPress={() => open()?.()}
       />
     );
   }

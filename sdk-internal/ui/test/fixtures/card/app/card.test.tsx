@@ -172,6 +172,24 @@ test('takes no other answer while a submit is pending', async () => {
   expect(app.enabled('label:Option A')).toBe(false);
 });
 
+test('lays every block of a grid out in its columns', async () => {
+  const app = await openCard('web', { example: 'layout' });
+  const one = app.layout('text:Cell one')!;
+  const two = app.layout('text:Cell two')!;
+  const three = app.layout('text:Cell three')!;
+  expect(two.x).toBeGreaterThan(one.x);
+  expect(two.y).toBe(one.y);
+  expect(three.x).toBe(one.x);
+  expect(three.y).toBeGreaterThan(one.y);
+});
+
+test('opens the address a link button shows now', async () => {
+  const app = await openCard('web', { example: 'layout' });
+  await app.press('label:Next page');
+  await app.press('label:Open page');
+  await app.waitFor('text:submitted: link hatch://app/notes#/two');
+});
+
 test('shows an answer given elsewhere read-only, with its status', async () => {
   const app = await openCard('web', {
     example: 'perm',

@@ -214,13 +214,13 @@ export type GridProps = {
   gap?: Spacing;
 };
 
-const GRID_BASIS: Record<number, string> = {
-  2: 'basis-[48%]',
-  3: 'basis-[31%]',
-  4: 'basis-[22%]',
+const GRID_COLUMNS: Record<number, string> = {
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-4',
 };
 
-/** Equal columns. */
+/** Equal columns; four become two on a narrow card. */
 export function Grid(props: GridProps): JSX.Element {
   const width = CardWidthContext();
   const columns = () => {
@@ -228,21 +228,12 @@ export function Grid(props: GridProps): JSX.Element {
     return wanted === 4 && width() < 360 ? 2 : wanted;
   };
   return (
-    <GridContext.Provider value={() => GRID_BASIS[columns()]!}>
-      <View class={`min-w-0 flex-row flex-wrap ${CARD_GAP[props.gap ?? 'sm']}`}>
-        {props.children}
-      </View>
-    </GridContext.Provider>
+    <View
+      class={`min-w-0 grid ${GRID_COLUMNS[columns()]} ${CARD_GAP[props.gap ?? 'sm']}`}
+    >
+      {props.children}
+    </View>
   );
-}
-
-/** The share of a grid row a child takes, when it sits in a `Grid`. */
-const GridContext = context<(() => string) | null>(null);
-
-/** A grid cell's classes: its share of the row, grown to fill it. */
-function cell(): string {
-  const grid = GridContext();
-  return grid ? `${grid()} grow` : 'self-stretch';
 }
 
 export type BoxProps = {
@@ -265,7 +256,7 @@ export function Box(props: BoxProps): JSX.Element {
         : 'bg-muted';
   return (
     <View
-      class={`min-w-0 flex-col gap-2 ${BLOCK_RADIUS} ${surface()} ${BOX_PADDING[props.padding ?? 'md']} ${cell()}`}
+      class={`min-w-0 flex-col gap-2 ${BLOCK_RADIUS} ${surface()} ${BOX_PADDING[props.padding ?? 'md']}`}
     >
       {props.children}
     </View>
@@ -608,9 +599,7 @@ export type StatProps = {
 /** One figure with its label, on a muted tile. */
 export function Stat(props: StatProps): JSX.Element {
   return (
-    <View
-      class={`min-w-0 gap-0.5 ${BLOCK_RADIUS} bg-muted px-3 py-2 ${cell()}`}
-    >
+    <View class={`min-w-0 gap-0.5 ${BLOCK_RADIUS} bg-muted px-3 py-2`}>
       <NshText class={`${TYPE.small} text-muted-foreground`}>
         {props.label}
       </NshText>
