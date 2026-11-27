@@ -3202,7 +3202,8 @@ export type AppPackage = Message<'hatch.platform.v1.AppPackage'> & {
   keyId: string;
 
   /**
-   * Whether it carries bytecode (only packages of a Builder's build do).
+   * Whether it carries the build's bytecode, which shells load as trusted
+   * input (every deployment built since signed packages does).
    *
    * @generated from field: bool bytecode = 10;
    */

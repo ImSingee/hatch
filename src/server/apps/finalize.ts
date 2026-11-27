@@ -109,13 +109,6 @@ export type FinalizeBuildOptions = {
    * capabilities). Omitted only for a build the platform made itself.
    */
   committedManifest?: () => Promise<SourceManifest>;
-  /**
-   * Whether a native package's bytecode is kept. Shells load bytecode as
-   * trusted input (crafted bytecode corrupts memory), so only a build the
-   * platform trusts like itself supplies it: its Builder, or the platform.
-   * Packages of other builds (`--local`) ship their source only.
-   */
-  trustBytecode: boolean;
 };
 
 /** Stable JSON: the same value always prints the same text. */
@@ -315,7 +308,6 @@ async function extractNativePackageInput(options: {
   out: string;
   appId: string;
   manifest: SourceManifest;
-  trustBytecode: boolean;
 }): Promise<{ bytecode: boolean; files: number }> {
   const packageFile = path.join(options.root, BUILD_PACKAGE_NATIVE_PACKAGE);
   const packageRoot = path.join(
@@ -361,7 +353,6 @@ async function extractNativePackageInput(options: {
       NSH_VERSION,
       '--capabilities',
       capabilities,
-      ...(options.trustBytecode ? [] : ['--drop-bytecode']),
     ]);
     return {
       bytecode: Boolean(input.bytecodeVersion),
@@ -517,15 +508,10 @@ export async function finalizeBuild(
         out,
         appId: id,
         manifest,
-        trustBytecode: options.trustBytecode,
       });
       logs.push(
         `kept the native package input: ${input.files} file(s), ` +
-          (input.bytecode
-            ? 'with bytecode'
-            : options.trustBytecode
-              ? 'without bytecode'
-              : 'source only (bytecode is kept only from a Builder)'),
+          (input.bytecode ? 'with bytecode' : 'without bytecode'),
       );
     } else if (manifest.capabilities.frontend && manifest.app) {
       const html = path.join(root, 'app', 'index.html');

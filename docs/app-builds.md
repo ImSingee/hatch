@@ -76,9 +76,9 @@ input and runs none of it:
   [Native App runtime](app-native-runtime.md));
 - a native frontend's `nsh publish` package must declare exactly the
   capabilities the platform derives from the committed manifest
-  (`app_build_invalid` otherwise); its files are kept as the input of the
-  packages the platform signs, with the platform's capabilities, and its
-  bytecode only from the Builder (see
+  (`app_build_invalid` otherwise); its files, bytecode included, are kept as
+  the input of the packages the platform signs, with the platform's
+  capabilities (see
   [Signed packages](app-native-runtime.md#signed-packages)). A package
   without one was built by an older CLI or Builder (`toolchain_mismatch`).
 
@@ -131,6 +131,10 @@ only, not frontend content:
   scripts act as the signed-in user on the platform. An App's authors are
   that user or their Agent; a Builder is a separate service, so for frontend
   content a Builder is trusted as much as the platform itself.
+- A native frontend's bytecode is kept as the build made it, and shells load
+  it as trusted input. The same holds for a `--local` deploy, which uploads
+  bytecode the `hatch` CLI built: whoever can deploy the App is trusted with
+  its code (see [Signed packages](app-native-runtime.md#signed-packages)).
 - A forged Data Table schema can change only that App's tables, and a
   destructive change still needs the approval token of its plan.
 
