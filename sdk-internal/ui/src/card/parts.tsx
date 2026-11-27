@@ -49,6 +49,7 @@ import {
   CARD_GAP,
   INK,
   SPACER,
+  TONE_DOT,
   TONE_FILL,
   TONE_GLYPH,
   TONE_ON_TINT,
@@ -1122,7 +1123,7 @@ export function CardHead(props: {
           class={`h-6 flex-row items-center gap-1.5 rounded-full px-2.5 ${TONE_TINT[props.status.tone]}`}
         >
           <View
-            class={`size-1.5 rounded-full ${TONE_FILL[props.status.tone]}`}
+            class={`size-1.5 rounded-full ${TONE_DOT[props.status.tone]}`}
           />
           <NshText class={`${TYPE.pill} ${TONE_ON_TINT[props.status.tone]}`}>
             {props.status.label}

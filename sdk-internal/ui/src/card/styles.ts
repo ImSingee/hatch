@@ -47,7 +47,17 @@ export const TONE_TEXT: Record<ContentTone, string> = {
   working: 'text-working-strong',
 };
 
-/** A tone as a bar or a dot. Neutral is the accent: never grey on grey. */
+/** A status pill's dot: the pill's ink, as the Desk draws it. */
+export const TONE_DOT: Record<ContentTone, string> = {
+  neutral: 'bg-neutral-strong',
+  info: 'bg-info-tint-foreground',
+  success: 'bg-success-tint-foreground',
+  warning: 'bg-warning-tint-foreground',
+  danger: 'bg-danger-tint-foreground',
+  working: 'bg-working-tint-foreground',
+};
+
+/** A tone as a bar. Neutral is the accent: never grey on grey. */
 export const TONE_FILL: Record<ContentTone, string> = {
   neutral: 'bg-primary',
   info: 'bg-info',
