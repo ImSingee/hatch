@@ -515,6 +515,14 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
  * Chords the live deployment reserves for the App itself. Historical
  * deployments recorded none, so every platform shortcut stays active there.
  */
+/** How a deployment's frontend runs; null when it has none. */
+export function frontendRuntime(
+  manifest: Pick<NormalizedManifest, 'app'> | null | undefined,
+): 'web' | 'native' | null {
+  if (!manifest?.app) return null;
+  return manifest.app.runtime === 'native' ? 'native' : 'web';
+}
+
 export function reservedShortcuts(
   manifest: Pick<NormalizedManifest, 'keyboard'> | null | undefined,
 ): string[] {

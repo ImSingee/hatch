@@ -122,6 +122,7 @@ function app(overrides: Partial<AppDetail> = {}): AppDetail {
       isLatest: true,
     },
     reservedShortcuts: [],
+    frontendRuntime: 'web',
     currentSourceCommit: null,
     dbName: null,
     createdAt: '2026-08-13T00:00:00.000Z',

@@ -10,6 +10,13 @@ fn main() {
             "change_instance",
             "retry",
             "open_instance_in_browser",
+            "native_app_open",
+            "native_app_place",
+            "native_app_cover",
+            "native_app_snapshot",
+            "native_app_focus",
+            "native_app_message",
+            "native_app_close",
         ]),
     ))
     .expect("tauri build");

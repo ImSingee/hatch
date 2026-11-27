@@ -3,7 +3,7 @@ name = "hatch-desktop"
 version = "0.1.0"
 description = "Hatch for macOS"
 edition = "2021"
-rust-version = "1.90"
+rust-version = "1.97"
 publish = false
 
 [lib]
@@ -29,7 +29,7 @@ reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "sync"] }
 url = "2"
 security-framework = "3"
 objc2 = "0.6"
@@ -37,6 +37,36 @@ objc2-foundation = "0.3"
 block2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-web-kit = "0.3"
+# NSH, exactly the release the platform pins (src/server/apps/native/nsh-toolchain.ts).
+# Every nsh crate is named so that `^0.7.0` requirements inside NSH cannot
+# resolve to a newer patch release.
+nsh-platform-macos = "=0.7.0"
+nsh-engine = { version = "=0.7.0", default-features = false, features = [
+  "js-core",
+] }
+nsh-core = "=0.7.0"
+nsh-base = { version = "=0.7.0", default-features = false }
+nsh-js = "=0.7.0"
+nsh-i18n = "=0.7.0"
+nsh-macros = "=0.7.0"
+nsh-updater = "=0.7.0"
+nsh-package = "=0.7.0"
+objc2-quartz-core = { version = "0.3", features = [
+  "CALayer",
+  "objc2-core-graphics",
+] }
+objc2-core-graphics = { version = "0.3", features = [
+  "CGContext",
+  "CGBitmapContext",
+  "CGImage",
+  "CGColorSpace",
+] }
+log = { version = "0.4", features = ["std"] }
+sha2 = "0.10"
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 codegen-units = 1
@@ -48,3 +78,4 @@ strip = true
 # proc-macro dylib fails to load ("mis-aligned LINKEDIT string pool").
 [profile.release.build-override]
 strip = false
+

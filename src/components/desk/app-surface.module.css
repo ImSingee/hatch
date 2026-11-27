@@ -25,3 +25,29 @@
   justify-content: center;
   background: var(--surface-raised);
 }
+
+/* Where the macOS app places a native App's view. */
+.native {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The App as it looked when one of the page's overlays came over it. */
+.picture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mantine-spacing-sm);
+  max-width: 28rem;
+  padding: var(--mantine-spacing-md);
+  text-align: center;
+}

@@ -2235,4 +2235,6 @@ export type TranslationResource = {
   'notifications.versions.openRecalled': 'View original';
   'notifications.versions.sectionTitle': 'Version history';
   'notifications.versions.loadFailed': 'Couldn’t load earlier versions.';
+  'desktop.nativeApp.failed': 'This App could not start: {{message}}';
+  'desktop.pinApp': 'Pin to sidebar';
 };

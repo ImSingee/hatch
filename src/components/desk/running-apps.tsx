@@ -192,6 +192,9 @@ function RunningAppWindow({
   const surface = useRef<AppSurfaceHandle>(null);
   const [reloading, setReloading] = useState(false);
   const [pageTitle, setPageTitle] = useState<string | null>(null);
+  // How the running App's frontend runs, as it was loaded: a new deployment
+  // that changes it applies on reload, like any new deployment.
+  const [runtime, setRuntime] = useState(app.frontendRuntime);
   const { slug } = session;
   const { pendingRevision, updateAvailable } = useAppDeploymentUpdate({
     appId: app.id,
@@ -269,6 +272,7 @@ function RunningAppWindow({
       }
       const renamed = session.frameSlug !== slug;
       store.reloaded(slug, fresh.deploymentRevision);
+      setRuntime(fresh.frontendRuntime);
       // A renamed App's frame source changes, which loads it afresh anyway.
       if (!renamed) surface.current?.reload();
     } catch (error) {
@@ -313,7 +317,12 @@ function RunningAppWindow({
         ref={surface}
         // The slug the running frame was loaded from: renaming the App keeps
         // the frame; the next reload uses the new slug.
-        app={{ slug: session.frameSlug, name: app.name }}
+        app={{
+          slug: session.frameSlug,
+          name: app.name,
+          id: app.id,
+          runtime,
+        }}
         route={session.route}
         visible={placement !== 'hidden'}
         reservedShortcuts={app.reservedShortcuts}

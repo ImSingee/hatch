@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-app-focus"
+description = "Enables the native_app_focus command without any pre-configured scope."
+commands.allow = ["native_app_focus"]
+
+[[permission]]
+identifier = "deny-native-app-focus"
+description = "Denies the native_app_focus command without any pre-configured scope."
+commands.deny = ["native_app_focus"]
