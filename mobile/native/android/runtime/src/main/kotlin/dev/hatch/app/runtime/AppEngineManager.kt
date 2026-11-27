@@ -113,7 +113,12 @@ object AppEngineManager {
     private val network = Executors.newFixedThreadPool(4) { Thread(it, "hatch-app-engine").apply { isDaemon = true } }
     private val transport = UrlConnectionTransport()
     private val engines = mutableMapOf<String, Engine>()
+    /**
+     * Where each App is shown now; kept when its engine stops, so an App
+     * stopped while its page stayed open starts again when the app returns.
+     */
     private val containers = mutableMapOf<String, ViewGroup>()
+    private val listeners = mutableMapOf<String, java.lang.ref.WeakReference<AppEngineListener>>()
     private var ledger: RunLedger? = null
     private var application: Application? = null
     private var started = 0
@@ -137,7 +142,19 @@ object AppEngineManager {
             object : Application.ActivityLifecycleCallbacks {
                 override fun onActivityStarted(activity: Activity) {
                     started += 1
-                    if (started == 1) updateVisibility(refresh = true)
+                    if (started == 1) {
+                        // A frozen process runs no timer: settle the background
+                        // time first, while every App still counts as hidden.
+                        ledger().stopWaiting(now()).first.forEach { stopEngine(it) }
+                        // Apps whose page stayed open while they waited out their
+                        // time in the background start again where they were.
+                        for ((appId, container) in containers.toMap()) {
+                            if (appId in engines || !container.isAttachedToWindow) continue
+                            open(container.context, appId, null, listeners[appId]?.get())
+                            attach(appId, container)
+                        }
+                        updateVisibility(refresh = true)
+                    }
                 }
 
                 override fun onActivityStopped(activity: Activity) {
@@ -174,6 +191,8 @@ object AppEngineManager {
     fun configure(origin: String?, token: String?) {
         if (origin != this.origin || token == null) {
             stopAll()
+            containers.clear()
+            listeners.clear()
             ledger().reset()
             trust?.close()
             trust = null
@@ -203,6 +222,7 @@ object AppEngineManager {
 
     /** The state of `appId`'s engine, starting it (at its remembered route) in `context`'s activity if it does not run. */
     fun open(context: Context, appId: String, route: String?, listener: AppEngineListener?): AppEngineState {
+        listeners[appId] = java.lang.ref.WeakReference(listener)
         engines[appId]?.let { engine ->
             engine.listener = listener
             if (route != null) navigate(appId, route)
@@ -396,7 +416,6 @@ object AppEngineManager {
 
     private fun stopEngine(appId: String) {
         val engine = engines.remove(appId) ?: return
-        containers.remove(appId)
         engine.moveTo(AppEngineState.Failed("stopped", "The App was stopped."))
         engine.listener = null
         // Off the current dispatch: the view may be inside a detaching container.

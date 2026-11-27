@@ -84,7 +84,10 @@ public final class AppEngineManager {
     private var token: String?
     private let transport = URLSessionTransport()
     private var engines: [String: AppEngine] = [:]
+    /// Where each App is shown now; kept when its engine stops, so an App
+    /// stopped while its page stayed open starts again when the app returns.
     private var containers: [String: UIView] = [:]
+    private var listeners: [String: WeakListener] = [:]
     private let ledger: RunLedger
     private var appActive = UIApplication.shared.applicationState != .background
     private var waitTimer: Timer?
@@ -126,6 +129,8 @@ public final class AppEngineManager {
     public func configure(origin: URL?, token: String?) {
         if origin != self.origin || token == nil {
             stopAll()
+            containers = [:]
+            listeners = [:]
             ledger.reset()
             trust = nil
             trustLoaded = false
@@ -161,6 +166,7 @@ public final class AppEngineManager {
     /// if it does not run.
     @discardableResult
     public func open(_ appId: String, route: String? = nil, listener: AppEngineListener?) -> AppEngineState {
+        listeners[appId] = WeakListener(listener)
         if let engine = engines[appId] {
             engine.listener = listener
             if let route { navigate(appId, to: route) }
@@ -348,7 +354,6 @@ public final class AppEngineManager {
         engine.task?.cancel()
         engine.view.removeFromSuperview()
         engine.setState(.failed(code: "stopped", message: "The App was stopped."))
-        containers[appId] = nil
         // The engine stops when its view is released.
     }
 
@@ -356,6 +361,17 @@ public final class AppEngineManager {
 
     private func setAppActive(_ active: Bool) {
         appActive = active
+        if active {
+            // A suspended app runs no timer: settle the background time first,
+            // while every App still counts as hidden.
+            for appId in ledger.stopWaiting().stopped { stopEngine(appId) }
+            // Apps whose page stayed open while they waited out their time in
+            // the background start again, at the route they were left on.
+            for (appId, container) in containers where engines[appId] == nil {
+                open(appId, listener: listeners[appId]?.listener)
+                attach(appId, to: container)
+            }
+        }
         updateVisibility()
         if active { refreshDeployments() }
     }
@@ -425,6 +441,11 @@ public final class AppEngineManager {
     fileprivate func engineDeploymentStale(_ appId: String) {
         refreshDeployments(appId)
     }
+}
+
+private struct WeakListener {
+    weak var listener: AppEngineListener?
+    init(_ listener: AppEngineListener?) { self.listener = listener }
 }
 
 /// The bridge's view of the manager for one App.

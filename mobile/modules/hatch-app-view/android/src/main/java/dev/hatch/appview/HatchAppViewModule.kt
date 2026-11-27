@@ -19,6 +19,9 @@ import expo.modules.kotlin.views.ExpoView
  * Native shows the view, so the App keeps running when its screen goes.
  */
 class HatchAppView(context: Context, appContext: AppContext) : ExpoView(context, appContext), AppEngineListener {
+    // The engine's view is added after React Native laid this view out (on
+    // every return to a running App): lay it out ourselves.
+    override val shouldUseAndroidLayout = true
     private val onEngineState by EventDispatcher()
     private val onEngineTitle by EventDispatcher()
     private val onEngineRoute by EventDispatcher()
