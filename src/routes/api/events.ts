@@ -15,7 +15,15 @@ function encodeEvent(
   return encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function eventStream(request: Request): Response {
+/**
+ * Whether an event goes to a user's stream: an event that names a user (their
+ * theme or pins changed) only goes to that user's clients.
+ */
+function isFor(event: PlatformEvent, userId: string): boolean {
+  return !('userId' in event) || event.userId === userId;
+}
+
+function eventStream(request: Request, userId: string): Response {
   const encoder = new TextEncoder();
   let closeStream = () => {};
 
@@ -61,7 +69,8 @@ function eventStream(request: Request): Response {
       // that happened while no in-memory subscription existed.
       if (!enqueue(encodeEvent(encoder, 'resync', {}))) return;
       unsubscribe = subscribePlatformEvents((event: PlatformEvent) => {
-        enqueue(encodeEvent(encoder, 'platform', event));
+        if (isFor(event, userId))
+          enqueue(encodeEvent(encoder, 'platform', event));
       });
 
       heartbeat = setInterval(() => {
@@ -91,7 +100,7 @@ export async function handle({
 }): Promise<Response> {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) return new Response('Unauthorized', { status: 401 });
-  return eventStream(request);
+  return eventStream(request, session.user.id);
 }
 
 export const Route = createFileRoute('/api/events')({

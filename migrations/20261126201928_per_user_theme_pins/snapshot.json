@@ -1,0 +1,406 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "1a19c4cf-0890-4c3b-86cc-984115506a57",
+  "prevIds": ["bbaadf53-e782-4955-9ec0-f7f9760398ba"],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": ["table", "public", "user_dashboards"],
+      "writes": [
+        "s|tbl|public.user_dashboards",
+        "n|tbl|public.user_dashboards",
+        "e|tbl|public.user_dashboards",
+        "n|rel|public.user_dashboards",
+        "n|type|public.user_dashboards",
+        "n|rel|public.user_dashboards_pkey"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "sidebar_items", "user_id"],
+      "writes": [
+        "s|col|public.sidebar_items.user_id",
+        "n|col|public.sidebar_items.user_id",
+        "e|col|public.sidebar_items.user_id"
+      ],
+      "reads": ["n|tbl|public.sidebar_items", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": ["column", "public", "user_preferences", "accent"],
+      "writes": [
+        "s|col|public.user_preferences.accent",
+        "n|col|public.user_preferences.accent",
+        "e|col|public.user_preferences.accent"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "user_preferences",
+        "dock_labels"
+      ],
+      "writes": [
+        "s|col|public.user_preferences.dock_labels",
+        "n|col|public.user_preferences.dock_labels",
+        "e|col|public.user_preferences.dock_labels"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "user_preferences",
+        "dashboard_defaults_applied"
+      ],
+      "writes": [
+        "s|col|public.user_preferences.dashboard_defaults_applied",
+        "n|col|public.user_preferences.dashboard_defaults_applied",
+        "e|col|public.user_preferences.dashboard_defaults_applied"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": ["column", "public", "dashboards", "pinned"],
+      "writes": [
+        "s|col|public.dashboards.pinned",
+        "n|col|public.dashboards.pinned",
+        "e|col|public.dashboards.pinned"
+      ],
+      "reads": ["n|tbl|public.dashboards", "n|sch|public"]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": ["column", "public", "dashboards", "sort_order"],
+      "writes": [
+        "s|col|public.dashboards.sort_order",
+        "n|col|public.dashboards.sort_order",
+        "e|col|public.dashboards.sort_order"
+      ],
+      "reads": ["n|tbl|public.dashboards", "n|sch|public"]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "sidebar_items",
+        "sidebar_items_user_order_idx"
+      ],
+      "writes": [
+        "s|idx|public.sidebar_items_user_order_idx",
+        "n|idx|public.sidebar_items_user_order_idx",
+        "e|idx|public.sidebar_items_user_order_idx",
+        "n|rel|public.sidebar_items_user_order_idx"
+      ],
+      "reads": [
+        "n|tbl|public.sidebar_items",
+        "n|sch|public",
+        "n|col|public.sidebar_items.user_id",
+        "n|col|public.sidebar_items.sort_order"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "sidebar_items"],
+      "writes": [
+        "s|fk|public.sidebar_items.sidebar_items_user_id_user_id_fkey",
+        "n|fk|public.sidebar_items.sidebar_items_user_id_user_id_fkey",
+        "e|fk|public.sidebar_items.sidebar_items_user_id_user_id_fkey",
+        "n|con|public.sidebar_items.sidebar_items_user_id_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.sidebar_items",
+        "n|sch|public",
+        "n|tbl|public.user",
+        "n|sch|public",
+        "n|col|public.sidebar_items.user_id",
+        "n|col|public.user.id",
+        "e|uniqueness|public.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "user_dashboards"],
+      "writes": [
+        "s|fk|public.user_dashboards.user_dashboards_user_id_user_id_fkey",
+        "n|fk|public.user_dashboards.user_dashboards_user_id_user_id_fkey",
+        "e|fk|public.user_dashboards.user_dashboards_user_id_user_id_fkey",
+        "n|con|public.user_dashboards.user_dashboards_user_id_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.user_dashboards",
+        "n|sch|public",
+        "n|tbl|public.user",
+        "n|sch|public",
+        "n|col|public.user_dashboards.user_id",
+        "n|col|public.user.id",
+        "e|uniqueness|public.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "user_dashboards"],
+      "writes": [
+        "s|fk|public.user_dashboards.user_dashboards_dashboard_id_dashboards_id_fkey",
+        "n|fk|public.user_dashboards.user_dashboards_dashboard_id_dashboards_id_fkey",
+        "e|fk|public.user_dashboards.user_dashboards_dashboard_id_dashboards_id_fkey",
+        "n|con|public.user_dashboards.user_dashboards_dashboard_id_dashboards_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.user_dashboards",
+        "n|sch|public",
+        "n|tbl|public.dashboards",
+        "n|sch|public",
+        "n|col|public.user_dashboards.dashboard_id",
+        "n|col|public.dashboards.id",
+        "e|uniqueness|public.dashboards.id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "user_dashboards",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "sidebar_items",
+        "name": "user_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "user_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "dashboard_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "pinned",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "sort_order",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "accent",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "dock_labels",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "dashboard_defaults_applied",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "sidebar_items",
+        "name": "sidebar_items_user_order_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "user_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "sort_order",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "sidebar_items",
+        "name": "sidebar_items_user_id_user_id_fkey",
+        "nameExplicit": false,
+        "columns": ["user_id"],
+        "schemaTo": "public",
+        "tableTo": "user",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "user_dashboards_user_id_user_id_fkey",
+        "nameExplicit": false,
+        "columns": ["user_id"],
+        "schemaTo": "public",
+        "tableTo": "user",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "user_dashboards_dashboard_id_dashboards_id_fkey",
+        "nameExplicit": false,
+        "columns": ["dashboard_id"],
+        "schemaTo": "public",
+        "tableTo": "dashboards",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_dashboards",
+        "name": "user_dashboards_pkey",
+        "columns": ["user_id", "dashboard_id"],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"dashboards\",\"pinned\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"dashboards\",\"sort_order\"]"
+    }
+  ]
+}

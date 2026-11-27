@@ -19,11 +19,11 @@ const ACCENT_LABELS = {
   violet: 'appearance.accent.violet',
 } as const satisfies Record<AccentName, PlainTranslationKey>;
 
-/** Choose the instance accent; the change shows at once and is then saved. */
-export function AccentPanel() {
+/** Choose the user's accent; the change shows at once and is then saved. */
+export function AccentPanel({ userId }: { userId: string }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const { data: theme } = useSuspenseQuery(themeQueryOptions);
+  const { data: theme } = useSuspenseQuery(themeQueryOptions(userId));
   const save = useMutation({
     mutationFn: (accent: AccentName) => setThemeAccentFn({ data: accent }),
     onMutate: (accent) => {
@@ -32,7 +32,7 @@ export function AccentPanel() {
       return { previous };
     },
     onSuccess: (saved) =>
-      queryClient.setQueryData(themeQueryOptions.queryKey, saved),
+      queryClient.setQueryData(themeQueryOptions(saved.userId).queryKey, saved),
     onError: (_error, _accent, context) => {
       if (context) applyAccent(context.previous);
     },

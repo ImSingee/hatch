@@ -1,7 +1,7 @@
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { Appearance } from 'react-native';
 import { useEffect, type PropsWithChildren } from 'react';
-import { InstanceAccent } from '../src/state/accent';
+import { UserAccent } from '../src/state/accent';
 import { useAccent } from '../src/ui/accent';
 import { palette as c } from '../src/ui/theme';
 import { SessionProvider, useSession } from '../src/state/session';
@@ -98,15 +98,15 @@ export default function RootLayout() {
     return () => Appearance.setColorScheme('auto');
   }, []);
   return (
-    // The accent is the theme's one input: InstanceAccent provides the
-    // instance's `ui.theme` accent, or the token default while signed out.
+    // The accent is the theme's one input: UserAccent provides the signed-in
+    // user's accent, or the token default while signed out.
     <NavigationProvider>
       <SessionProvider>
-        <InstanceAccent>
+        <UserAccent>
           <Themed>
             <Navigation />
           </Themed>
-        </InstanceAccent>
+        </UserAccent>
       </SessionProvider>
     </NavigationProvider>
   );

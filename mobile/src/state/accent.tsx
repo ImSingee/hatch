@@ -12,13 +12,13 @@ const options = {
 };
 
 /**
- * The instance's accent (`ui.theme`, read through ThemeService) as the app's
+ * The signed-in user's accent (read through ThemeService) as the app's
  * accent. The last value is kept on the phone, per instance, and shown from
  * the first frame of a cold start; the instance is asked again on sign-in and
  * whenever the app returns to the foreground. Signed out, or before an
  * instance has answered once, the token default applies.
  */
-export function InstanceAccent({ children }: PropsWithChildren) {
+export function UserAccent({ children }: PropsWithChildren) {
   const { api, origin } = useSession();
   // What the phone remembered at launch, per instance; drawn until the
   // instance answers. `stored` is what is written back.

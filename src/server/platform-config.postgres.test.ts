@@ -37,16 +37,16 @@ describe.skipIf(!adminUrl)('Platform settings on PostgreSQL', () => {
     // over separate pooled connections.
     await Promise.all(
       Array.from({ length: 16 }, (_, index) =>
-        config.updatePlatformConfig('ui.theme', (current) =>
+        config.updatePlatformConfig('models.catalog', (current) =>
           index % 2 === 0
-            ? { ...current, accent: 'teal' }
-            : { ...current, dockLabels: true },
+            ? { ...current, autoUpdate: false }
+            : { ...current, sourceUrl: 'https://models.example.test/m.json' },
         ),
       ),
     );
-    expect(await config.getPlatformConfig('ui.theme')).toEqual({
-      accent: 'teal',
-      dockLabels: true,
+    expect(await config.getPlatformConfig('models.catalog')).toEqual({
+      autoUpdate: false,
+      sourceUrl: 'https://models.example.test/m.json',
     });
   });
 });

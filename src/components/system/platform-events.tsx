@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { themeQueryOptions } from '~queries/theme';
+import { authClient } from '~auth/client';
+import { themeQueries } from '~queries/theme';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { PlatformEvent } from '~server/platform-events';
 
@@ -58,11 +59,16 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       return { type, notificationId, deliveryId } satisfies PlatformEvent;
     }
     if (type === 'theme.updated') {
+      const userId = stringField(value, 'userId');
       const accent = stringField(value, 'accent');
-      if (!accent) return null;
-      return { type, accent } satisfies PlatformEvent;
+      if (!userId || !accent) return null;
+      return { type, userId, accent } satisfies PlatformEvent;
     }
-    if (type === 'pins.updated') return { type } satisfies PlatformEvent;
+    if (type === 'pins.updated') {
+      const userId = stringField(value, 'userId');
+      if (!userId) return null;
+      return { type, userId } satisfies PlatformEvent;
+    }
     if (type === 'dashboards.updated')
       return {
         type,
@@ -97,23 +103,36 @@ export function PlatformEventsProvider({
     [],
   );
 
+  // The stream is bound to the user who opened it: the server only sends
+  // that user their personal events. A sign-out or sign-in in another tab
+  // reaches this one through the session (`useSession` re-reads it on a
+  // Better Auth broadcast and when the tab becomes visible), so the stream
+  // follows the session's user.
+  const userId = authClient.useSession().data?.user.id ?? null;
+  const streamUser = useRef<string | null>(null);
+
   useEffect(() => {
+    // Signed out, here or in another tab: nothing to stream.
+    if (!userId) return;
+    // Another account signed in: none of the previous user's data may stay
+    // on screen, including the pins and dashboards that are not keyed by
+    // user. Active queries refetch as the new user.
+    if (streamUser.current && streamUser.current !== userId)
+      void queryClient.resetQueries();
+    streamUser.current = userId;
     const source = new EventSource('/api/events');
     const onPlatformEvent = (rawEvent: Event) => {
       const event = parsePlatformEvent(rawEvent as MessageEvent<string>);
       if (!event) return;
       // The theme is applied above every route, outside this provider, so it
-      // is refreshed here instead of through a subscriber.
+      // is refreshed here instead of through a subscriber. The server only
+      // sends the signed-in user their own theme changes.
       if (event.type === 'theme.updated')
-        void queryClient.invalidateQueries({
-          queryKey: themeQueryOptions.queryKey,
-        });
+        void queryClient.invalidateQueries(themeQueries);
       for (const listener of listeners.current) listener(event);
     };
     const onResync = () => {
-      void queryClient.invalidateQueries({
-        queryKey: themeQueryOptions.queryKey,
-      });
+      void queryClient.invalidateQueries(themeQueries);
       for (const listener of resyncListeners.current) listener();
     };
 
@@ -125,7 +144,7 @@ export function PlatformEventsProvider({
       source.removeEventListener('resync', onResync);
       source.close();
     };
-  }, [queryClient]);
+  }, [queryClient, userId]);
 
   return (
     <PlatformEventsContext.Provider value={context}>

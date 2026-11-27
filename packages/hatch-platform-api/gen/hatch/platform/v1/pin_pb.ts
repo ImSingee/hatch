@@ -473,9 +473,11 @@ export const SetDashboardPinnedResponseSchema: GenMessage<SetDashboardPinnedResp
   messageDesc(file_hatch_platform_v1_pin, 15);
 
 /**
- * Pins are the shortcuts in the platform navigation: App pins (an App can
- * have several, each with its own label and entry point), and the pinned flag
- * of dashboards.
+ * Pins are the shortcuts in the caller's platform navigation: App pins (an
+ * App can have several, each with its own label and entry point), the pinned
+ * flag of dashboards, and the order of both. Every user has their own; another
+ * user's pin id is not found. A Run acts for the user who sent the prompt it
+ * answers; a Run no user prompted is rejected as a conflict (aborted).
  *
  * @generated from service hatch.platform.v1.PinService
  */

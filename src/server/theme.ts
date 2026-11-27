@@ -1,23 +1,37 @@
-/** Server Functions for the instance theme (Web UI). */
+/** Server Functions for the signed-in user's theme (Web UI). */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { authMiddleware } from './auth';
-import { getThemeState, setThemeAccent, updateTheme } from './theme-settings';
+import { authMiddleware, requireSession } from './auth';
+import { readTheme, updateTheme, type ThemeState } from './theme-settings';
 
-/**
- * Public on purpose: the login page is drawn in the chosen accent, and the
- * accent names are not private.
- */
-export const getThemeFn = createServerFn({ method: 'GET' }).handler(() =>
-  getThemeState(),
-);
+/** The theme, with the user it belongs to so a cached copy can be checked. */
+export type ThemeSettings = ThemeState & { userId: string };
+
+export const getThemeFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async (): Promise<ThemeSettings> => {
+    const { user } = await requireSession();
+    return { userId: user.id, ...(await readTheme(user.id)) };
+  });
 
 export const setThemeAccentFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((accent: string) => z.string().min(1).max(32).parse(accent))
-  .handler(({ data }) => setThemeAccent(data));
+  .handler(async ({ data }): Promise<ThemeSettings> => {
+    const { user } = await requireSession();
+    return {
+      userId: user.id,
+      ...(await updateTheme(user.id, { accent: data })),
+    };
+  });
 
 export const setDockLabelsFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((shown: boolean) => z.boolean().parse(shown))
-  .handler(({ data }) => updateTheme({ dockLabels: data }));
+  .handler(async ({ data }): Promise<ThemeSettings> => {
+    const { user } = await requireSession();
+    return {
+      userId: user.id,
+      ...(await updateTheme(user.id, { dockLabels: data })),
+    };
+  });

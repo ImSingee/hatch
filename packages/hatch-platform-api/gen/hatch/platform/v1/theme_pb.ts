@@ -26,7 +26,7 @@ export const file_hatch_platform_v1_theme: GenFile =
   );
 
 /**
- * One accent the instance can choose.
+ * One accent that can be chosen.
  *
  * @generated from message hatch.platform.v1.Accent
  */
@@ -173,7 +173,10 @@ export const SetThemeResponseSchema: GenMessage<SetThemeResponse> =
   messageDesc(file_hatch_platform_v1_theme, 5);
 
 /**
- * The instance-wide look that the web, mobile and desktop clients apply.
+ * The caller's own look, which their web, mobile and desktop clients apply.
+ * Every user has their own; a new user starts from the defaults. A Run acts
+ * for the user who sent the prompt it answers; a Run no user prompted is
+ * rejected as a conflict (aborted).
  *
  * @generated from service hatch.platform.v1.ThemeService
  */

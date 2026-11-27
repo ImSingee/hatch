@@ -4,7 +4,6 @@ import { db, schema } from '~/db';
 import { AppError } from './errors';
 
 type SortableTable =
-  | typeof schema.dashboards
   | typeof schema.sidebarItems
   | typeof schema.agentProviders
   | typeof schema.agentModels;
@@ -19,8 +18,8 @@ type SortableTable =
  * concurrent reorders acquire row locks in the same sequence (no deadlock);
  * whichever transaction commits last wins wholesale.
  *
- * `scope` limits the list to the rows one order covers (a provider's models);
- * an id outside it counts as unknown.
+ * `scope` limits the list to the rows one order covers (a provider's models,
+ * a user's App pins); an id outside it counts as unknown.
  *
  * Returns every row id in its new order. Rejects duplicate and unknown ids.
  */

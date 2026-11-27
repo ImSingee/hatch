@@ -7,113 +7,124 @@ vi.mock('~/db', async () => {
 });
 
 const { db, schema } = await import('~/db');
-const { getThemeState, setThemeAccent, updateTheme } =
-  await import('./theme-settings');
+const { readTheme, updateTheme } = await import('./theme-settings');
+const { readInterfacePreferences, updateInterfacePreferences } =
+  await import('./interface-preferences');
 const { subscribePlatformEvents } = await import('./platform-events');
 
+const USER = 'user-1';
+const OTHER = 'user-2';
+const other = Object.keys(tokens.accents).find(
+  (name) => name !== tokens.defaultAccent,
+)!;
+
 beforeEach(async () => {
-  await db.delete(schema.platformConfig);
+  await db.delete(schema.userPreferences);
+  await db.delete(schema.user);
+  for (const id of [USER, OTHER])
+    await db.insert(schema.user).values({
+      id,
+      name: id,
+      email: `${id}@example.com`,
+      emailVerified: true,
+    });
 });
 
-describe('instance theme', () => {
-  it('starts on the default accent and offers every token accent', async () => {
-    const state = await getThemeState();
-    expect(state.accent).toBe(tokens.defaultAccent);
-    expect(state.defaultAccent).toBe(tokens.defaultAccent);
+async function recordEvents(action: () => Promise<unknown>) {
+  const events: unknown[] = [];
+  const unsubscribe = subscribePlatformEvents((event) => events.push(event));
+  try {
+    await action();
+  } finally {
+    unsubscribe();
+  }
+  return events;
+}
+
+describe('personal theme', () => {
+  it('starts on the built-in defaults and offers every token accent', async () => {
+    const state = await readTheme(USER);
+    expect(state).toMatchObject({
+      accent: tokens.defaultAccent,
+      defaultAccent: tokens.defaultAccent,
+      dockLabels: false,
+    });
     expect(state.accents).toEqual(
       Object.entries(tokens.accents).map(([name, color]) => ({ name, color })),
     );
   });
 
-  it('stores a chosen accent and tells connected clients', async () => {
-    const events: unknown[] = [];
-    const unsubscribe = subscribePlatformEvents((event) => events.push(event));
-    try {
-      const other = Object.keys(tokens.accents).find(
-        (name) => name !== tokens.defaultAccent,
-      )!;
-      expect((await setThemeAccent(other)).accent).toBe(other);
-      expect((await getThemeState()).accent).toBe(other);
-      expect(events).toEqual([{ type: 'theme.updated', accent: other }]);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  it('rejects an accent the tokens do not define and keeps the stored one', async () => {
-    const events: unknown[] = [];
-    const unsubscribe = subscribePlatformEvents((event) => events.push(event));
-    try {
-      for (const accent of ['orange', '', 'toString', 'Indigo'])
-        await expect(setThemeAccent(accent)).rejects.toMatchObject({
-          status: 400,
-        });
-      expect((await getThemeState()).accent).toBe(tokens.defaultAccent);
-      expect(events).toEqual([]);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  it('falls back to the default accent when the stored one is no longer defined', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await db.insert(schema.platformConfig).values({
-        key: 'ui.theme',
-        value: { accent: 'retired-accent', dockLabels: true },
+  it('keeps each user’s accent and dock labels to that user', async () => {
+    const events = await recordEvents(async () => {
+      expect(await updateTheme(USER, { accent: other })).toMatchObject({
+        accent: other,
+        dockLabels: false,
       });
-      const state = await getThemeState();
-      expect(state.accent).toBe(tokens.defaultAccent);
-      // The other setting survives the retired accent.
-      expect(state.dockLabels).toBe(true);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it('hides dock names by default and changes them without touching the accent', async () => {
-    const other = Object.keys(tokens.accents).find(
-      (name) => name !== tokens.defaultAccent,
-    )!;
-    // A row written before dock names existed.
-    await db
-      .insert(schema.platformConfig)
-      .values({ key: 'ui.theme', value: { accent: other } });
-    expect(await getThemeState()).toMatchObject({
-      accent: other,
-      dockLabels: false,
-    });
-
-    const events: unknown[] = [];
-    const unsubscribe = subscribePlatformEvents((event) => events.push(event));
-    try {
-      expect(await updateTheme({ dockLabels: true })).toMatchObject({
+      expect(await updateTheme(USER, { dockLabels: true })).toMatchObject({
         accent: other,
         dockLabels: true,
       });
-      expect(await setThemeAccent(tokens.defaultAccent)).toMatchObject({
-        accent: tokens.defaultAccent,
-        dockLabels: true,
-      });
-      expect(events).toHaveLength(2);
-      await expect(updateTheme({})).rejects.toMatchObject({ status: 400 });
-      expect(events).toHaveLength(2);
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  it('keeps both of two theme changes made at the same moment', async () => {
-    const other = Object.keys(tokens.accents).find(
-      (name) => name !== tokens.defaultAccent,
-    )!;
-    await Promise.all([
-      updateTheme({ accent: other }),
-      updateTheme({ dockLabels: true }),
-    ]);
-    expect(await getThemeState()).toMatchObject({
+    });
+    expect(await readTheme(USER)).toMatchObject({
       accent: other,
       dockLabels: true,
     });
+    expect(await readTheme(OTHER)).toMatchObject({
+      accent: tokens.defaultAccent,
+      dockLabels: false,
+    });
+    // Only the user's own clients are told to re-read it.
+    expect(events).toEqual([
+      { type: 'theme.updated', userId: USER, accent: other },
+      { type: 'theme.updated', userId: USER, accent: other },
+    ]);
+  });
+
+  it('rejects an accent the tokens do not define and keeps the stored one', async () => {
+    await updateTheme(USER, { accent: other });
+    const events = await recordEvents(async () => {
+      for (const accent of ['orange', '', 'toString', 'Indigo'])
+        await expect(updateTheme(USER, { accent })).rejects.toMatchObject({
+          status: 400,
+        });
+      await expect(updateTheme(USER, {})).rejects.toMatchObject({
+        status: 400,
+      });
+    });
+    expect((await readTheme(USER)).accent).toBe(other);
+    expect(events).toEqual([]);
+  });
+
+  it('reads a stored accent the tokens no longer define as the default', async () => {
+    await db.insert(schema.userPreferences).values({
+      userId: USER,
+      homepage: { kind: 'page', page: 'dashboard' },
+      accent: 'retired-accent',
+      dockLabels: true,
+    });
+    expect(await readTheme(USER)).toMatchObject({
+      accent: tokens.defaultAccent,
+      // The other setting survives the retired accent.
+      dockLabels: true,
+    });
+  });
+
+  it('keeps both of two theme changes made at the same moment', async () => {
+    await Promise.all([
+      updateTheme(USER, { accent: other }),
+      updateTheme(USER, { dockLabels: true }),
+    ]);
+    expect(await readTheme(USER)).toMatchObject({
+      accent: other,
+      dockLabels: true,
+    });
+  });
+
+  it('shares the preference row without clobbering the language', async () => {
+    await updateInterfacePreferences(USER, { language: 'zh-CN' });
+    await updateTheme(USER, { accent: other });
+    expect(await readInterfacePreferences(USER)).toEqual({ language: 'zh-CN' });
+    await updateInterfacePreferences(USER, { language: 'en' });
+    expect((await readTheme(USER)).accent).toBe(other);
   });
 });

@@ -95,14 +95,14 @@ Icons are kept in memory only.
 The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
 (`ifAbsent`) and `UnpinApp` (by pin id). An "Add" tile
 after each grid opens a picker of what is not pinned yet; a tile's
-touch-and-hold menu unpins it at once, since pinning again undoes it. Pins are shared by every client, so a change
-re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
+touch-and-hold menu unpins it at once, since pinning again undoes it. Pins belong to the signed-in user and are
+the same on every client they use, so a change re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
 offered on the phone yet (`ReorderAppPins` exists).
 
 ### Accent and ground
 
-The accent is the theme's single input. The app reads the instance's
-`ui.theme` accent through `ThemeService.GetTheme` after sign-in and again each
+The accent is the theme's single input. The app reads the signed-in user's
+accent through `ThemeService.GetTheme` after sign-in and again each
 time it returns to the foreground, and keeps the last value per instance on the
 phone so a cold start draws it from the first frame. An accent name the build's
 tokens do not define falls back to the default. The app does not consume the

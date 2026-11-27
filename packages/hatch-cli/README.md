@@ -726,9 +726,15 @@ hatch pin add --dashboard <dashboard-id>
 hatch pin remove --dashboard <dashboard-id>
 ```
 
+The theme and pins are personal: each user has their own, and a command acts
+for the signed-in user, the API key's user or, in a Run, the user who sent the
+prompt. A Run no user prompted gets `CONFLICT` (6). A new user starts from the
+default accent, no dock labels, no App pins and only the default (oldest)
+dashboard pinned.
+
 `theme get` prints the chosen `accent`, the `defaultAccent`, every accent
 with its colour and `dockLabels`. `theme set` changes only the settings it is
-given, for the whole instance: `--accent` replaces the accent and signed-in
+given, for that user only: `--accent` replaces the accent and their signed-in
 clients recolour without a reload; `--dock-labels` / `--no-dock-labels` shows
 or hides the names under the web dock tiles (hidden by default). Give at least
 one; `--dock-labels` and `--no-dock-labels` together are rejected.
@@ -757,7 +763,8 @@ shortening it),
 repeated id in `pin reorder`, a `--limit` outside 1–100, a `--cursor` that
 is not a printed `nextCursor`, a flag the command does not take and a flag
 given without its value (the message names the flag). Platform errors: `NOT_FOUND` (5) for an unknown
-App, dashboard or pin id, and `BAD_REQUEST` (2).
+App, dashboard or pin id (another user's pin id included), `CONFLICT` (6) in a
+Run no user prompted, and `BAD_REQUEST` (2).
 
 ## Dashboards
 
@@ -791,7 +798,12 @@ other breakpoints follow. `widget layout` changes one breakpoint (desktop
 unless `--breakpoint` is given) and keeps omitted numbers; widgets under the
 new position move down and empty rows close up, so read the printed layouts.
 `update` leaves omitted fields unchanged; `--auto-refresh` takes seconds
-(1 to 3600). Pin, unpin and reorder dashboards with `hatch pin`.
+(1 to 3600). Dashboards are shared, but each user has their own pinned flags
+and order: `dashboard list` prints them for the caller (dashboards they never
+pinned or ordered last, oldest first; a new user has only the oldest one
+pinned), and `dashboard create` pins the new dashboard last for the caller
+only. Pin, unpin and reorder dashboards with
+`hatch pin`.
 
 Local rejections exit 2 with `invalid_arguments`: no field to change, a blank
 `--name` or `--description`, `--description` with `--clear-description`,

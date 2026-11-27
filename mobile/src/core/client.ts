@@ -373,7 +373,7 @@ export class HatchApiClient {
       signal,
     );
   }
-  /** The instance's accent name (`ui.theme`), shared by every client. */
+  /** The signed-in user's accent name, the same on every client. */
   async themeAccent(signal?: AbortSignal): Promise<string> {
     const response = await this.rpcRequest(
       (signal) => this.themeRpc.getTheme({}, { signal }),
@@ -386,7 +386,7 @@ export class HatchApiClient {
       );
     return response.theme.accent;
   }
-  /** Pinned Apps, in the order every client shows them. */
+  /** The user's pinned Apps, in the order every client shows them. */
   async pins(signal?: AbortSignal): Promise<Pins> {
     const response = await this.rpcRequest(
       (signal) => this.pinRpc.listPins({}, { signal }),

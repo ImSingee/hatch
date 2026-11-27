@@ -1,4 +1,6 @@
-/** Server-only: the instance-wide theme every client applies. */
+/** Server-only: the theme a user's clients apply, kept per user. */
+import { db, schema } from '~/db';
+import { DEFAULT_HOMEPAGE } from '~/homepage';
 import {
   ACCENT_COLORS,
   ACCENT_NAMES,
@@ -7,10 +9,6 @@ import {
   type AccentName,
 } from '~/ui/theme/accents';
 import { AppError } from '~server/errors';
-import {
-  getPlatformConfig,
-  updatePlatformConfig,
-} from '~server/platform-config';
 import { publishPlatformEvent } from '~server/platform-events';
 
 export type ThemeState = {
@@ -22,30 +20,38 @@ export type ThemeState = {
   dockLabels: boolean;
 };
 
-function themeState(config: {
-  accent: AccentName;
-  dockLabels: boolean;
+function themeState(row?: {
+  accent: string | null;
+  dockLabels: boolean | null;
 }): ThemeState {
   return {
-    accent: config.accent,
+    // An accent the tokens no longer define reads as never picked.
+    accent: isAccentName(row?.accent) ? row.accent : DEFAULT_ACCENT,
     defaultAccent: DEFAULT_ACCENT,
     accents: ACCENT_NAMES.map((name) => ({ name, color: ACCENT_COLORS[name] })),
-    dockLabels: config.dockLabels,
+    dockLabels: row?.dockLabels ?? false,
   };
 }
 
-export async function getThemeState(): Promise<ThemeState> {
-  return themeState(await getPlatformConfig('ui.theme'));
+/** The user's theme; a field they never set is the built-in default. */
+export async function readTheme(userId: string): Promise<ThemeState> {
+  return themeState(
+    await db.query.userPreferences.findFirst({
+      where: { userId },
+      columns: { accent: true, dockLabels: true },
+    }),
+  );
 }
 
 /**
- * Change the instance theme. Each field left out keeps its stored value; at
- * least one must be given. Connected clients are told to re-read the theme.
+ * Change the user's theme. Each field left out keeps its stored value; at
+ * least one must be given. The user's connected clients are told to re-read
+ * the theme.
  */
-export async function updateTheme(change: {
-  accent?: string;
-  dockLabels?: boolean;
-}): Promise<ThemeState> {
+export async function updateTheme(
+  userId: string,
+  change: { accent?: string; dockLabels?: boolean },
+): Promise<ThemeState> {
   if (change.accent === undefined && change.dockLabels === undefined)
     throw new AppError('Give an accent or the dock labels setting.', 400);
   if (change.accent !== undefined && !isAccentName(change.accent))
@@ -53,17 +59,28 @@ export async function updateTheme(change: {
       `Unknown accent. Use one of: ${ACCENT_NAMES.join(', ')}.`,
       400,
     );
-  // Fields left out keep their latest stored value, even when another change
-  // to the theme lands at the same moment.
-  const next = await updatePlatformConfig('ui.theme', (current) => ({
-    accent: (change.accent as AccentName | undefined) ?? current.accent,
-    dockLabels: change.dockLabels ?? current.dockLabels,
-  }));
-  publishPlatformEvent({ type: 'theme.updated', accent: next.accent });
-  return themeState(next);
-}
-
-/** Choose the accent and keep the other theme settings. */
-export function setThemeAccent(accent: string): Promise<ThemeState> {
-  return updateTheme({ accent });
+  const set = {
+    ...(change.accent === undefined ? {} : { accent: change.accent }),
+    ...(change.dockLabels === undefined
+      ? {}
+      : { dockLabels: change.dockLabels }),
+  };
+  // One upsert that only names the given columns: a field left out keeps its
+  // latest stored value, even when another change lands at the same moment.
+  const [row] = await db
+    .insert(schema.userPreferences)
+    // A first preference row needs a homepage; the default is what the
+    // user already gets without one.
+    .values({ userId, homepage: DEFAULT_HOMEPAGE, ...set })
+    .onConflictDoUpdate({
+      target: schema.userPreferences.userId,
+      set: { ...set, updatedAt: new Date() },
+    })
+    .returning({
+      accent: schema.userPreferences.accent,
+      dockLabels: schema.userPreferences.dockLabels,
+    });
+  const next = themeState(row);
+  publishPlatformEvent({ type: 'theme.updated', userId, accent: next.accent });
+  return next;
 }

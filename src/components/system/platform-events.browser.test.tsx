@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render as renderBare } from 'vitest-browser-react';
 import { themeQueryOptions } from '~queries/theme';
@@ -14,10 +14,36 @@ import {
 // Server Functions cannot load in the browser project.
 vi.mock('~server/theme', () => ({
   getThemeFn: async () => ({
+    userId: 'owner',
     accent: 'indigo',
     defaultAccent: 'indigo',
     accents: [],
   }),
+}));
+
+/** The signed-in user the provider sees; tests switch it like another tab. */
+const session = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  let userId: string | null = 'owner';
+  return {
+    get: () => userId,
+    set(next: string | null) {
+      userId = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+});
+vi.mock('~auth/client', () => ({
+  authClient: {
+    useSession: () => {
+      const userId = useSyncExternalStore(session.subscribe, session.get);
+      return { data: userId ? { user: { id: userId } } : null };
+    },
+  },
 }));
 
 let queryClient = new QueryClient();
@@ -57,6 +83,44 @@ function installEventSource() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  session.set('owner');
+});
+
+test('reconnects as the new user and drops the old user’s data when the account changes', async () => {
+  installEventSource();
+  await render(
+    <PlatformEventsProvider>
+      <SubscriptionProbe name="probe" />
+    </PlatformEventsProvider>,
+  );
+  await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+  const first = FakeEventSource.instances[0]!;
+  // Pins and dashboards are not keyed by user.
+  queryClient.setQueryData(['sidebar', 'items'], ['owner-pin']);
+  queryClient.setQueryData(['dashboards'], ['owner-dashboard']);
+
+  // Signed out in another tab: the stream stops and nothing reconnects.
+  session.set(null);
+  await vi.waitFor(() => expect(first.close).toHaveBeenCalledOnce());
+  expect(FakeEventSource.instances).toHaveLength(1);
+
+  // Signed in as someone else: a fresh stream, and none of owner's data.
+  session.set('other');
+  await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2));
+  await vi.waitFor(() =>
+    expect(queryClient.getQueryData(['sidebar', 'items'])).toBeUndefined(),
+  );
+  expect(queryClient.getQueryData(['dashboards'])).toBeUndefined();
+
+  // The same user coming back keeps the cache.
+  queryClient.setQueryData(['dashboards'], ['other-dashboard']);
+  session.set(null);
+  await vi.waitFor(() =>
+    expect(FakeEventSource.instances[1]!.close).toHaveBeenCalledOnce(),
+  );
+  session.set('other');
+  await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(3));
+  expect(queryClient.getQueryData(['dashboards'])).toEqual(['other-dashboard']);
 });
 
 function SubscriptionProbe({ name }: { name: string }) {
@@ -370,10 +434,11 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
   );
   await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
   const source = FakeEventSource.instances[0];
-  const stale = () =>
-    queryClient.getQueryState(themeQueryOptions.queryKey)?.isInvalidated;
+  const { queryKey } = themeQueryOptions('owner');
+  const stale = () => queryClient.getQueryState(queryKey)?.isInvalidated;
   const markFresh = () =>
-    queryClient.setQueryData(themeQueryOptions.queryKey, {
+    queryClient.setQueryData(queryKey, {
+      userId: 'owner',
       accent: 'indigo',
       defaultAccent: 'indigo',
       accents: [],
@@ -383,6 +448,7 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
   markFresh();
   source?.emit('platform', {
     type: 'theme.updated',
+    userId: 'owner',
     accent: 'teal',
   } satisfies PlatformEvent);
   await vi.waitFor(() => expect(stale()).toBe(true));
