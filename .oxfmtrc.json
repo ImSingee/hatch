@@ -15,6 +15,7 @@
     ".nitro",
     ".output",
     ".tanstack",
-    ".turbo"
+    ".turbo",
+    "desktop/src-tauri/vendor"
   ]
 }

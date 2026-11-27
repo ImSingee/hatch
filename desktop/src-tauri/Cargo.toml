@@ -79,3 +79,8 @@ strip = true
 [profile.release.build-override]
 strip = false
 
+
+# NSH's macOS backend with one line changed so an embedded AppView draws a JS
+# App inside itself: see vendor/nsh-platform-macos/HATCH-VENDOR.md.
+[patch.crates-io]
+nsh-platform-macos = { path = "vendor/nsh-platform-macos" }
