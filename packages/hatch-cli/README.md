@@ -754,6 +754,48 @@ Errors: a malformed doc id, a missing App or doc id, extra arguments, or a bad
 unknown App or doc exits 5 with `NOT_FOUND`. An archived App, or one that has
 never been deployed, exits 6 with `CONFLICT`.
 
+## Native App packages
+
+```sh
+hatch app package <id-or-slug> --out notes.nshpkg --json
+hatch app package <id-or-slug> --out - > notes.nshpkg
+hatch app runtime-trust --out-dir trust --json
+nsh verify --root trust/root-<keyId>.pub --revocations trust/revocations.json notes.nshpkg
+```
+
+`app package` downloads the signed package (`.nshpkg`) of the App's live
+native frontend, the file native shells load, and writes it to `--out` in one
+rename after its size and SHA-256 match what the platform announced. It
+prints `{ appId, deploymentId, version, build, nshAppId, nshVersion, sha256,
+size, keyId, bytecode, path }`. `build` grows with every deploy and rollback
+of the App, so a rolled-back version is a newer build of the older code;
+`bytecode` is false for packages of a `--local` build, which keep their
+source only. `--out -` writes the bytes to stdout instead. The platform signs
+the package the first time it is asked if it has not yet, so the command
+needs no other step. `hatch app get` shows `frontend.runtime`,
+`frontend.nshVersion` and `frontend.packageBuild`.
+
+`app runtime-trust` prints what shells verify packages with: `{ initialized,
+appIdPattern, roots, releaseKeys, revocations }`, each root and release key
+with its `keyId` and base64 `publicKey`, release keys with their
+`certificate` (the JSON nsh-package writes), `apps`, `notBefore`, `notAfter`,
+`active` and `revoked`, and the revocation list's `sequence`, `issuedAt`,
+`keyIds`, `packageSha256s` and `signed` JSON. It is public material; no
+private key is returned. `initialized` is false and the lists are empty until
+the first native deployment created the instance's keys. `--out-dir` writes
+`root-<keyId>.pub`, `release-<keyId>.cert` and `revocations.json` there,
+replacing files of those names, and adds their paths as `files`.
+
+Errors: a missing App or `--out`, extra arguments, an empty `--out` or
+`--out-dir`, `--out -` with `--json` or `--force`, and `runtime-trust` with an
+App exit 2 with `invalid_arguments` before any request. An existing `--out`
+file without `--force` exits 6 with `output_exists`. An unknown App exits 5
+with `NOT_FOUND`. `APP_NOT_DEPLOYED` (no live deployment), `APP_NOT_NATIVE` (a
+web frontend) and `APP_PACKAGE_UNAVAILABLE` (a native deployment released
+before the platform signed packages: deploy the App again) exit 6. A download
+that does not match its announced size and SHA-256 writes nothing and exits 7
+with `package_incomplete`.
+
 ## App icons and image generation
 
 ```sh

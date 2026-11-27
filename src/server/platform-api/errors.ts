@@ -58,6 +58,21 @@ const definitions = {
     409,
     'The commit is not on master. Push it, or deploy a commit on master.',
   ],
+  APP_NOT_DEPLOYED: [
+    Code.FailedPrecondition,
+    409,
+    'The App has no live deployment.',
+  ],
+  APP_NOT_NATIVE: [
+    Code.FailedPrecondition,
+    409,
+    'The live deployment has no native frontend.',
+  ],
+  APP_PACKAGE_UNAVAILABLE: [
+    Code.FailedPrecondition,
+    409,
+    'The live deployment has no native package. Deploy the App again.',
+  ],
   GATEWAY_TIMEOUT: [
     Code.DeadlineExceeded,
     504,
@@ -69,6 +84,9 @@ export type PublicErrorCode = keyof typeof definitions;
 /** `AppError.code`s that are public codes too. */
 const DOMAIN_CODES = {
   'deployments.commitNotOnMaster': 'COMMIT_NOT_ON_MASTER',
+  'nativePackages.appNotDeployed': 'APP_NOT_DEPLOYED',
+  'nativePackages.appNotNative': 'APP_NOT_NATIVE',
+  'nativePackages.unavailable': 'APP_PACKAGE_UNAVAILABLE',
 } as const satisfies Record<string, PublicErrorCode>;
 
 export function publicApiError(code: PublicErrorCode, message?: string) {

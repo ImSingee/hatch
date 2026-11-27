@@ -2,7 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { signActivatedPackage } from './native/packages';
 import { resolveAppDeployCompatibilityVersion } from '~/app-compatibility';
 import {
   BUILD_WORK_DIR,
@@ -958,6 +959,8 @@ async function releaseDeploymentInner(
             webhookSecret,
             signingSecret,
             currentDeploymentId: deploymentId,
+            // The build number of a native package; see native/packages.ts.
+            activationSeq: sql`${schema.apps.activationSeq} + 1`,
           })
           .where(eq(schema.apps.id, id));
         await syncAppNotificationDestination(
@@ -995,6 +998,8 @@ async function releaseDeploymentInner(
       build.source.backendMode === 'long-running' &&
         build.source.capabilities.backend,
     );
+    // A native frontend's signed package, under this activation's build.
+    await signActivatedPackage(id, build.normalized);
 
     return {
       deploymentId,

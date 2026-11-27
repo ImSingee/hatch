@@ -958,6 +958,8 @@ export async function acceptArtifact(
           deploymentId: row.id,
           commit: row.commit,
           tooling: platformBuildHost({ sdkDigest }).tooling,
+          // Bytecode is trusted input to native shells: only the Builder's.
+          trustBytecode: row.mode === 'builder',
           // The privilege the release gets comes from the commit, never from
           // the package: the platform evaluates the manifest itself.
           committedManifest: async () => {

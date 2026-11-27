@@ -58,6 +58,18 @@ const definitions: readonly CliCommandDefinition[] = [
     description: 'Inspect an App.',
   },
   {
+    path: ['app', 'package'],
+    usage: 'app package <id-or-slug> --out <path|-> [--force] [--json]',
+    description:
+      "Read-only. Download the signed package (.nshpkg) of the App's live native frontend, the file native shells load, to --out (- writes the bytes to stdout and cannot be combined with --json). An existing file is refused with output_exists (exit 6) unless --force replaces it; the file is written whole or not at all, after its size and SHA-256 match what the platform announced (otherwise package_incomplete, exit 7). The package's build number grows with every deploy and rollback, so a rolled-back version is a newer build of older code. The platform signs the package the first time it is asked if it was not signed yet (and creates the instance's signing keys with the first one). Prints {appId, deploymentId, version, build, nshAppId, nshVersion, sha256, size, keyId, bytecode, path}. APP_NOT_DEPLOYED, APP_NOT_NATIVE (a web frontend) and APP_PACKAGE_UNAVAILABLE (deployed before the platform signed packages: deploy again) exit 6.",
+  },
+  {
+    path: ['app', 'runtime-trust'],
+    usage: 'app runtime-trust [--out-dir <dir>] [--json]',
+    description:
+      "Read-only. Print what native shells verify App packages with: the instance's root public keys, its release keys with their certificates (validity, app ids, active, revoked) and the signed revocation list. Public material only; no private key is ever returned. initialized is false (and the lists empty) until the first native deployment created the keys. --out-dir writes root-<keyId>.pub, release-<keyId>.cert and revocations.json there (replacing files of the same name), the files `nsh verify --root <file> --revocations <file> <package>` reads, and adds their paths as files.",
+  },
+  {
     path: ['app', 'create'],
     usage: 'app create --file <path|-> [--directory <path>]',
     description: 'Create an App and its local checkout.',

@@ -1,0 +1,1 @@
+ALTER TABLE "apps" ADD COLUMN "activation_seq" integer DEFAULT 0 NOT NULL;

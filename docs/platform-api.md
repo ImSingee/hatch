@@ -308,6 +308,20 @@ or never-deployed App answers `CONFLICT`; an unknown doc answers `NOT_FOUND`.
 Rollback serves the docs of the restored deployment. See `hatch app docs` in
 the [CLI README](../packages/hatch-cli/README.md).
 
+### Native App packages
+
+`AppService` adds `GetAppPackage`, a server-streaming method whose first
+message describes the live deployment's signed `.nshpkg` (deployment,
+version, build number, NSH app id, SHA-256, size, release key, bytecode) and
+whose following messages carry its bytes in order, and `GetAppRuntimeTrust`,
+which returns only public material: root public keys, release key
+certificates and the signed revocation list. Both accept every credential
+type. `GetAppPackage` answers `APP_NOT_DEPLOYED`, `APP_NOT_NATIVE` or
+`APP_PACKAGE_UNAVAILABLE` (a native deployment released before packages were
+signed; deploy again), all `failed_precondition` with logical status 409. See
+[Signed packages](app-native-runtime.md#signed-packages) and `hatch app
+package` in the [CLI README](../packages/hatch-cli/README.md).
+
 ## Errors and recovery
 
 Errors use the standard Connect envelope and canonical codes. Protovalidate

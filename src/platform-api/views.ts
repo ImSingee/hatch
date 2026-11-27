@@ -192,6 +192,7 @@ export const appDetailSchema = appSummarySchema
       .object({
         runtime: z.enum(['web', 'native']),
         nshVersion: nullable,
+        packageBuild: z.number().int().nullable(),
       })
       .strict()
       .nullable(),

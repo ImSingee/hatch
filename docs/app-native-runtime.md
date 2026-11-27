@@ -155,19 +155,20 @@ exits differently: a missing tool or a build that times out or stops without
 a result exits 7, and an unexpected error while preparing it exits 6.
 
 The build package carries the release bundle, the App's linked module, its
-`nsh package` description and the runtime files. The platform makes the
+`nsh package` description, the runtime files and the App's `nsh publish`
+package (`app/native/package.nshpkg`, see [Signed packages](#signed-packages)). The platform makes the
 player from them (`src/server/apps/native/player.ts`): it copies only the
 App files the description references, and writes the player script, styles,
 fonts, configuration and page itself.
 
 Outputs, in the deployment's `app/` directory:
 
-| File                                                                                  | What                                                                                                                      |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `index.html`                                                                          | The player page (below).                                                                                                  |
-| `player.js`, `player.css`, `fonts.css`, `fonts/`                                      | The player script (`@hatch/app/native/player`, bundled per deployment) and the Desk fonts under the names the theme uses. |
-| `web/app.<digest>.js`, `web/facades/`, chunks, assets                                 | The App's linked module for the web runtime.                                                                              |
-| `bundle.js`, `native/bundle.nshc`, `native/bundle.js.map`, `native/capabilities.json` | The release bundle native shells will load (packaged and signed in a later phase).                                        |
+| File                                                  | What                                                                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`                                          | The player page (below).                                                                                                  |
+| `player.js`, `player.css`, `fonts.css`, `fonts/`      | The player script (`@hatch/app/native/player`, bundled per deployment) and the Desk fonts under the names the theme uses. |
+| `web/app.<digest>.js`, `web/facades/`, chunks, assets | The App's linked module for the web runtime.                                                                              |
+| `bundle.js`                                           | The release bundle.                                                                                                       |
 
 `nsh package` links each App its own engine, but every runtime file it writes
 is named by its content. Packages come from builds the platform does not
@@ -180,6 +181,87 @@ SHA-256 over every file name and its bytes, write-once
 player loads. Deployments share a set only when every runtime file name and
 its bytes match, as with the same NSH release and the same side modules. Deployments
 built before sets keep their flat `<version>/` files.
+
+## Signed packages
+
+Native shells (iOS, Android, macOS) load an App as a signed `.nshpkg`. The
+signature protects the package in transit and in a shell's cache, lets a
+shell load its bytecode, and keeps a shell from going back to an older
+build. It is not a security boundary: a shell trusts the instance its user
+signed in to, and what an App may do is decided by the capabilities the
+shell grants.
+
+**Keys.** The instance has a root key and a release key the root certifies
+for `dev.hatch.app.*`, for ten years of signing (a package signed in that
+window stays valid after it). They are created when the first native
+deployment goes live, in `<HATCH_DATA_DIR>/keys/` (the directory `0700`, the
+secret keys `0600`), as one set generated beside its place and moved there in
+one rename under an advisory lock, so platform processes racing to create it
+end with one set and a set that exists is never replaced. No secret key leaves
+that directory: the platform hands their paths to `hatch-nshpkg` and never
+reads them otherwise, and the Builder never receives them.
+`GetAppRuntimeTrust` (`hatch app runtime-trust`) returns the public material:
+the root public keys, each release key with its certificate (active,
+revoked), and the newest revocation list the root signed (sequence 1, empty,
+at creation).
+
+**Package input.** A build runs `nsh publish` with `--id`, `--app-version`
+and `--build` always explicit, signed with a key the build makes for itself
+and throws away, and puts the package and that key's root in the build
+package. The platform trusts neither. When it accepts the build
+(`finalizeBuild`), `hatch-nshpkg extract` opens the package with that root
+(the files arrived as the build wrote them), checks it is this App (its NSH
+id, name and version `1.0.0`, minimum runtime `0.7.0`, bytecode for this
+runtime) and that it declares exactly the capabilities the platform derives
+from the manifest it evaluated from the committed source
+(`nativePackageCapabilities`). A package that declares anything else fails
+the deployment with `app_build_invalid`: a Builder cannot give an App a
+capability its commit does not. The files are kept unsigned in the
+deployment's immutable artifact (`native-package/`, never served) with the
+platform's capabilities, which every package signed from them carries.
+Shells load bytecode as trusted input, so it is kept only from a build the
+platform trusts like itself, its Builder; a `--local` build's package keeps
+its source only.
+
+**Activation counter and repacking.** `apps.activation_seq` grows by one in
+the transaction that makes a deployment live, deploy or rollback. A signed
+package is the deployment's package input packed by `hatch-nshpkg pack` with
+that value as its build number and signed with the active release key. A
+rollback therefore ships the older code, byte for byte, as a newer build,
+which shells accept: they refuse a build older than one they accepted. A
+package is repacked rather than signed again, because signing again keeps a
+package's build number. Packing needs no build environment. The package is
+made right after the activation commits and again on request whenever it is
+missing (a crash, a new release key), under
+`<HATCH_DATA_DIR>/native-packages/<app>/<build>-<deployment>-<key>.nshpkg`,
+where the first one written for a name wins.
+
+`GetAppPackage` (`hatch app package`) streams the live package: a
+description (deployment, version, build, NSH id, SHA-256, size, release key,
+whether it carries bytecode), then its bytes in 256 KiB chunks. Streaming
+keeps the download on the same Connect API and credential as everything
+else, with no download URL to sign, expire or leak into logs; packages are
+small. Any valid credential may call it, an Agent Run's included. An App
+without a live deployment answers `APP_NOT_DEPLOYED`, a web frontend
+`APP_NOT_NATIVE`.
+
+**Deployments before signed packages.** A native deployment released before
+this has no package input, and the platform does not build App code to make
+one. It keeps working on the web; `GetAppPackage` answers
+`APP_PACKAGE_UNAVAILABLE` until the App is deployed again (or rolled back to
+a version deployed since). Deploying is safe to repeat and needs nothing
+else.
+
+**Key rotation.** The key set and the trust response hold several release
+keys and a sequenced revocation list, so a release key can be replaced under
+the same root: certify a new one, make it active (live packages are then
+made with it on request), and revoke the old one in a newer list. There is no
+command for it yet.
+
+`hatch-nshpkg` (`packages/hatch-nshpkg`) is built on the `nsh-package` crate
+of the pinned release (`=0.7.0`) from the repository's source and
+`Cargo.lock`, in the Dockerfile's `nshpkg` stage and in CI; locally,
+`pnpm nshpkg:build` puts it in `bin/` (or set `HATCH_NSHPKG_BIN`).
 
 ## The web player
 
