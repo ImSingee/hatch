@@ -62,6 +62,8 @@ const SEARCH_FIELD = byLook({
   web: `mb-1.5 ${WELL} ${WELL_HEIGHT} border-input ${WELL_TEXT}`,
   ios: `mb-1.5 ${SEARCH_WELL} ${WELL_TEXT}`,
   android: `mb-1.5 ${WELL} ${WELL_HEIGHT} border-control-border ${WELL_TEXT}`,
+  macos: `mb-1 ${WELL} ${WELL_HEIGHT} border-input ${WELL_TEXT}`,
+  windows: `mb-1 ${WELL} ${WELL_HEIGHT} border-input border-b-control-border ${WELL_TEXT}`,
 });
 
 export type SelectProps = FieldProps & {

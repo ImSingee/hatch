@@ -7,7 +7,7 @@ import {
   type ToastEntry,
 } from 'nsh/base';
 import { Each } from '../core/control';
-import { byLook, look, paneSize } from '../core/env';
+import { byLook, look, mobileLook, paneSize } from '../core/env';
 import { FOCUS_RING } from '../core/styles';
 import { bottomBarShown } from '../navigation/nav-context';
 import type { Action } from '../core/types';
@@ -63,7 +63,9 @@ const TONE_COLOR: Record<ToastTone, GlyphColor> = {
 
 /**
  * A toast on each look: the Desk's card; on iOS a borderless card; on
- * Android Material's snackbar, inverse colours and its action as text.
+ * Android Material's snackbar, inverse colours and its action as text; on
+ * macOS a notification banner of translucent material, on Windows Fluent's
+ * toast card.
  */
 const CARD = byLook({
   web: {
@@ -80,6 +82,16 @@ const CARD = byLook({
     card: 'min-h-12 flex-row items-center gap-3 rounded-(--radius-xs) bg-foreground px-4 py-3 shadow-dock transition-all duration-200',
     title: 'text-m3-body-md font-regular text-background',
     description: 'text-m3-body-md font-regular text-background',
+  },
+  macos: {
+    card: 'flex-row items-start gap-2.5 rounded-(--radius-lg) border border-hairline bg-surface-dock px-3.5 py-3 shadow-window backdrop-blur-xl transition-all duration-200',
+    title: 'text-mac-body font-semibold text-popover-foreground',
+    description: 'text-mac-callout font-regular text-muted-foreground',
+  },
+  windows: {
+    card: 'flex-row items-start gap-3 rounded-(--radius-sm) border border-hairline bg-popover px-4 py-3 shadow-dock transition-all duration-200',
+    title: 'text-win-body font-semibold text-popover-foreground',
+    description: 'text-win-caption font-regular text-muted-foreground',
   },
 });
 
@@ -216,7 +228,7 @@ function ToastCard(props: { entry: () => ToastEntry }): JSX.Element {
 export function ToastRegion(): JSX.Element {
   const compact = () => paneSize() === 'compact';
   // On iOS and Android toasts rise above an `AppShell`'s bottom bar.
-  const clear = () => look !== 'web' && bottomBarShown();
+  const clear = () => mobileLook && bottomBarShown();
   return (
     <Overlay
       class={`pointer-events-none inset-x-0 bottom-0 p-4 pb-[env(safe-area-inset-bottom)] ${compact() ? 'items-center' : 'items-end'} ${clear() ? 'mb-20' : ''}`}

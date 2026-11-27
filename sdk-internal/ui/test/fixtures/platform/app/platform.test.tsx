@@ -55,6 +55,59 @@ const ANDROID = {
   tab: 80,
 };
 
+// The desktops keep the pointer sizes: macOS's 13-point body and 28-point
+// controls, Fluent's 32-point ones and 28-point page title. NSH reports no
+// family for the system font (SF Pro); Windows names Segoe UI Variable.
+const MACOS = {
+  title: [22, 700],
+  font: '',
+  button: 28,
+  // The input inside the well's 1-point border.
+  field: 26,
+  row: 40,
+  tab: 30,
+};
+const WINDOWS = {
+  title: [28, 600],
+  font: 'Segoe UI Variable',
+  button: 32,
+  field: 30,
+  row: 40,
+  tab: 36,
+};
+
+/** Opens the App in a pane wide enough for the sidebar. */
+async function openWide(platform: Platform, params: Record<string, unknown>) {
+  const app = await open('./main.tsx', {
+    platform,
+    width: 1024,
+    height: 768,
+    host: { params, handlers },
+  });
+  await app.waitFor('text:Garden notes');
+  return app;
+}
+
+test('takes the macOS and Windows looks from NSH on those desktops', async () => {
+  expect(look(await openWide('macos', {}))).toEqual(MACOS);
+  expect(look(await openWide('windows', {}))).toEqual(WINDOWS);
+});
+
+test('takes macOS and Windows from the web shell', async () => {
+  expect(look(await openWide('web', { platform: 'macos' }))).toEqual(MACOS);
+  expect(look(await openWide('web', { platform: 'windows' }))).toEqual(WINDOWS);
+});
+
+test('hides and shows the sidebar on macOS only', async () => {
+  const app = await openWide('macos', {});
+  await app.press('label:Hide sidebar');
+  await app.waitUntil(() => !app.shows('role:tab >> text:Settings'));
+  await app.press('label:Show sidebar');
+  await app.waitFor('role:tab >> text:Settings');
+  const windows = await openWide('windows', {});
+  expect(windows.shows('label:Hide sidebar')).toBe(false);
+});
+
 test('takes the iOS look from NSH on iOS', async () => {
   expect(look(await openOn('ios', {}))).toEqual(IOS);
 });
@@ -79,7 +132,7 @@ test('takes the platform the web shell passes', async () => {
 });
 
 test('keeps the web look in a browser and for other shells', async () => {
-  for (const params of [{}, { platform: 'windows' }, { platform: 7 }]) {
+  for (const params of [{}, { platform: 'linux' }, { platform: 7 }]) {
     const app = await openOn('web', params);
     const title = app.spanStyle('text:Garden notes');
     expect([title.fontWeight, String(title.fontFamily).split(',')[0]]).toEqual([

@@ -68,6 +68,16 @@ const BADGE = byLook({
     text: 'text-m3-label-lg font-medium',
     outlined: true,
   },
+  macos: {
+    chip: 'h-5 flex-row items-center gap-1.5 rounded-full px-2',
+    text: 'text-mac-callout font-semibold',
+    outlined: false,
+  },
+  windows: {
+    chip: 'h-5 flex-row items-center gap-1.5 rounded-(--radius-xs) px-2',
+    text: 'text-win-caption font-semibold',
+    outlined: false,
+  },
 });
 
 /** A figure's sheet: on iOS and Android, as a `Card` there, without an
@@ -76,6 +86,10 @@ const STAT = byLook({
   web: 'self-stretch gap-1.5 rounded-(--radius-lg) border border-hairline bg-card p-4',
   ios: 'self-stretch gap-1.5 rounded-(--radius-lg) bg-card p-4',
   android: 'self-stretch gap-1.5 rounded-(--radius-lg) bg-card p-4',
+  macos:
+    'self-stretch gap-1.5 rounded-(--radius-lg) border border-hairline bg-card p-4',
+  windows:
+    'self-stretch gap-1.5 rounded-(--radius-sm) border border-hairline bg-card p-4',
 });
 
 export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';

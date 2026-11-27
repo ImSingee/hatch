@@ -26,3 +26,16 @@ export const BottomChromeContext = context<() => string>(() => '');
 
 /** Whether an `AppShell` shows its bottom tab bar, which toasts rise above. */
 export const bottomBarShown = signal(false);
+
+/** The sidebar of an `AppShell` that people can hide (macOS): while the
+ * sidebar layout is on, a `Page` puts its toggle at the start of its title
+ * row, where macOS keeps it in a window's toolbar. */
+export type SidebarToggle = {
+  /** True while the pane is wide enough for the sidebar. */
+  available: () => boolean;
+  /** True while the sidebar shows. */
+  shown: () => boolean;
+  toggle: () => void;
+};
+
+export const SidebarToggleContext = context<SidebarToggle | null>(null);

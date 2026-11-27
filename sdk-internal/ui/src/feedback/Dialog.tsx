@@ -6,7 +6,7 @@ import {
   Sheet as BaseSheet,
 } from 'nsh/base';
 import { Button as BaseButton } from 'nsh/base';
-import { look, phone, touch } from '../core/env';
+import { byLook, look, mobileLook, phone, touch } from '../core/env';
 import { InOverlayContext, StackedActionsContext } from '../core/overlay';
 import { BACKDROP, FOCUS_RING } from '../core/styles';
 import { SurfaceContext } from '../core/surface';
@@ -61,12 +61,55 @@ function OverlayHeader(props: {
   );
 }
 
+/** The window of a dialog and its footer on each look: the Desk's window
+ * with a muted footer; macOS's, its buttons at the end of the content;
+ * Fluent's content dialog with its button bar. iOS and Android show sheets
+ * on phones and keep the Desk's window elsewhere. */
+const WINDOW = byLook({
+  web: {
+    window:
+      'overflow-hidden rounded-(--radius-window) bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none',
+    body: 'gap-4 px-6 pb-6 pt-5 max-sm:flex-1 max-sm:pt-[env(safe-area-inset-top)]',
+    footer:
+      'border-t border-hairline bg-muted pb-[env(safe-area-inset-bottom)]',
+    footerRow: 'flex-row flex-wrap items-center justify-end gap-2 px-6 py-3',
+  },
+  ios: {
+    window:
+      'overflow-hidden rounded-(--radius-window) bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none',
+    body: 'gap-4 px-6 pb-6 pt-5 max-sm:flex-1 max-sm:pt-[env(safe-area-inset-top)]',
+    footer:
+      'border-t border-hairline bg-muted pb-[env(safe-area-inset-bottom)]',
+    footerRow: 'flex-row flex-wrap items-center justify-end gap-2 px-6 py-3',
+  },
+  android: {
+    window:
+      'overflow-hidden rounded-(--radius-window) bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none',
+    body: 'gap-4 px-6 pb-6 pt-5 max-sm:flex-1 max-sm:pt-[env(safe-area-inset-top)]',
+    footer:
+      'border-t border-hairline bg-muted pb-[env(safe-area-inset-bottom)]',
+    footerRow: 'flex-row flex-wrap items-center justify-end gap-2 px-6 py-3',
+  },
+  macos: {
+    window:
+      'overflow-hidden rounded-(--radius-lg) border border-hairline bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none',
+    body: 'gap-3 px-5 pb-4 pt-4 max-sm:flex-1',
+    footer: '',
+    footerRow: 'flex-row flex-wrap items-center justify-end gap-2 px-5 pb-5',
+  },
+  windows: {
+    window:
+      'overflow-hidden rounded-(--radius-sm) border border-hairline bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none',
+    body: 'gap-4 px-6 pb-6 pt-6 max-sm:flex-1',
+    footer: 'border-t border-hairline bg-muted',
+    footerRow: 'flex-row flex-wrap items-center justify-end gap-2 p-6',
+  },
+});
+
 function Footer(props: { children?: JSX.Element }): JSX.Element {
   return (
-    <View class="border-t border-hairline bg-muted pb-[env(safe-area-inset-bottom)]">
-      <View class="flex-row flex-wrap items-center justify-end gap-2 px-6 py-3">
-        {props.children}
-      </View>
+    <View class={WINDOW.footer}>
+      <View class={WINDOW.footerRow}>{props.children}</View>
     </View>
   );
 }
@@ -109,10 +152,10 @@ export function Dialog(props: DialogProps): JSX.Element {
       accessibilityDescription={props.description}
       onOpenChange={(event) => props.onOpenChange(event.open)}
       backdropClass={BACKDROP}
-      class={`m-auto w-full ${DIALOG_WIDTH[props.size ?? 'md']} overflow-hidden rounded-(--radius-window) bg-card shadow-window max-sm:m-0 max-sm:h-full max-sm:max-w-none max-sm:rounded-none`}
+      class={`m-auto w-full ${DIALOG_WIDTH[props.size ?? 'md']} ${WINDOW.window}`}
     >
       <InOverlayContext.Provider value>
-        <View class="gap-4 px-6 pb-6 pt-5 max-sm:flex-1 max-sm:pt-[env(safe-area-inset-top)]">
+        <View class={WINDOW.body}>
           <OverlayHeader
             title={props.title}
             description={props.description}
@@ -223,7 +266,7 @@ function PlatformSheet(props: SheetProps): JSX.Element {
  * compact panes, from the end edge on desktops.
  */
 export function Sheet(props: SheetProps): JSX.Element {
-  if (look !== 'web' && touch) return <PlatformSheet {...props} />;
+  if (mobileLook && touch) return <PlatformSheet {...props} />;
   const bottom = touch;
   const close = () => props.onOpenChange(false);
   return (
@@ -468,6 +511,111 @@ function AndroidAlert(props: {
   );
 }
 
+/** macOS's alert: 260 points, the message centred, the buttons side by
+ * side across its width, the action at the end. */
+function MacAlert(props: {
+  answer: (confirmed: boolean) => void;
+}): JSX.Element {
+  return (
+    <BaseDialog
+      open={pending() !== null}
+      animation="fade"
+      role="alertdialog"
+      accessibilityLabel={pending()?.title ?? ''}
+      accessibilityDescription={pending()?.description}
+      onOpenChange={(event) => {
+        if (!event.open) props.answer(false);
+      }}
+      backdropClass={BACKDROP}
+      class="m-auto w-65 items-stretch gap-3 overflow-hidden rounded-(--radius-lg) border border-hairline bg-popover p-4 shadow-window"
+    >
+      <View class="items-center gap-1 pt-1">
+        <HeadingText
+          level={2}
+          class="text-center text-mac-body font-bold tracking-normal text-foreground"
+        >
+          {pending()?.title ?? ''}
+        </HeadingText>
+        {pending()?.description ? (
+          <Text class="text-center text-mac-callout font-regular text-foreground">
+            {pending()?.description ?? ''}
+          </Text>
+        ) : null}
+      </View>
+      <View class="flex-row gap-2 pt-1">
+        {pending()?.cancelLabel ? (
+          <View class="flex-1">
+            <Button
+              label={pending()?.cancelLabel ?? 'Cancel'}
+              fullWidth
+              onPress={() => props.answer(false)}
+            />
+          </View>
+        ) : null}
+        <View class="flex-1">
+          <Button
+            label={pending()?.confirmLabel ?? 'OK'}
+            kind={pending()?.destructive ? 'danger' : 'primary'}
+            fullWidth
+            onPress={() => props.answer(true)}
+          />
+        </View>
+      </View>
+    </BaseDialog>
+  );
+}
+
+/** Fluent's content dialog: the message on the card, the buttons in the
+ * bar under it at equal widths, the action first. */
+function WindowsAlert(props: {
+  answer: (confirmed: boolean) => void;
+}): JSX.Element {
+  return (
+    <BaseDialog
+      open={pending() !== null}
+      animation="fade"
+      role="alertdialog"
+      accessibilityLabel={pending()?.title ?? ''}
+      accessibilityDescription={pending()?.description}
+      onOpenChange={(event) => {
+        if (!event.open) props.answer(false);
+      }}
+      backdropClass={BACKDROP}
+      class="m-auto w-full max-w-sm overflow-hidden rounded-(--radius-sm) border border-hairline bg-card shadow-window"
+    >
+      <View class="gap-3 p-6">
+        <HeadingText level={2} class={`${TITLE.modal} text-foreground`}>
+          {pending()?.title ?? ''}
+        </HeadingText>
+        {pending()?.description ? (
+          <Text class="text-win-body font-regular text-foreground text-pretty">
+            {pending()?.description ?? ''}
+          </Text>
+        ) : null}
+      </View>
+      <View class="flex-row gap-2 border-t border-hairline bg-muted p-6">
+        <View class="flex-1">
+          <Button
+            label={pending()?.confirmLabel ?? 'OK'}
+            kind={pending()?.destructive ? 'danger' : 'primary'}
+            fullWidth
+            onPress={() => props.answer(true)}
+          />
+        </View>
+        {pending()?.cancelLabel ? (
+          <View class="flex-1">
+            <Button
+              label={pending()?.cancelLabel ?? 'Cancel'}
+              fullWidth
+              onPress={() => props.answer(false)}
+            />
+          </View>
+        ) : null}
+      </View>
+    </BaseDialog>
+  );
+}
+
 /** Shows `AlertDialog` on desktops, and in the web player on iOS and
  * Android. `mount` renders it; Apps do not. */
 export function AlertDialogHost(): JSX.Element {
@@ -478,6 +626,8 @@ export function AlertDialogHost(): JSX.Element {
   };
   if (look === 'ios') return <IosAlert answer={answer} />;
   if (look === 'android') return <AndroidAlert answer={answer} />;
+  if (look === 'macos') return <MacAlert answer={answer} />;
+  if (look === 'windows') return <WindowsAlert answer={answer} />;
   return (
     <BaseDialog
       open={pending() !== null}

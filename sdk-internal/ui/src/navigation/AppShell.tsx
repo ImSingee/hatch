@@ -1,14 +1,19 @@
-import { Scroll, Text, View, effect, untracked } from 'nsh';
+import { Scroll, Text, View, effect, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
 import { Each, If } from '../core/control';
-import { SIDEBAR_MIN, look, paneWidth, touch } from '../core/env';
+import { SIDEBAR_MIN, byLook, look, paneWidth, touch } from '../core/env';
 import { ShellScopeContext, firstSegment } from '../core/shell';
 import type { RoutePath, ShellScope } from '../core/shell';
 import { FOCUS_RING, FOCUS_RING_INSET } from '../core/styles';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
-import { BottomChromeContext, bottomBarShown } from './nav-context';
+import type { GlyphColor, IconSize } from '../icons/Icon';
+import {
+  BottomChromeContext,
+  SidebarToggleContext,
+  bottomBarShown,
+} from './nav-context';
 import { Panels, selection } from './Tabs';
 import type { TabItem } from './Tabs';
 
@@ -41,18 +46,151 @@ function badgeLabel(item: TabItem): string {
   return item.badge ? `${item.label}, ${item.badge}` : item.label;
 }
 
+/**
+ * The sidebar and the top tab row on the web and the desktops. The Desk's:
+ * a muted column, the selected section tinted. macOS's: a source list on
+ * the window's ground, 30-point rows, the selection a neutral fill with the icon in
+ * the accent; the pages' title rows hold the button that hides it. Fluent's
+ * navigation pane: on the window's own fill, 36-point rows, the selection
+ * marked by an accent line, the content on a lighter layer with a rounded
+ * corner. In a narrow pane the sections move to the top: the Desk's tab
+ * row, macOS's segmented control in a toolbar, Fluent's top navigation.
+ */
+const WEB_SHELL: DeskShell = {
+  root: 'bg-surface-window',
+  sidebar:
+    'w-60 self-stretch border-r border-hairline bg-muted pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]',
+  header: 'px-4 pb-2 pt-5',
+  title: 'text-control font-heading text-foreground truncate',
+  list: 'px-2.5 py-1',
+  rows: 'flex-col gap-0.5',
+  row: `group h-9 flex-row items-center gap-2.5 rounded-(--radius-md) px-2.5 disabled:opacity-50 pointer-coarse:h-11 ${FOCUS_RING}`,
+  rowSelected: 'bg-primary-tint',
+  rowRest: 'hover:bg-surface-hover',
+  rowGlyph: 'lg' as IconSize,
+  rowGlyphSelected: 'primary-tint-foreground' as GlyphColor,
+  rowText:
+    'flex-1 truncate text-body font-label text-foreground group-selected:text-primary-tint-foreground',
+  rowBadge:
+    'text-caption font-label text-muted-foreground group-selected:text-primary-tint-foreground',
+  marker: false,
+  actions: 'flex-row flex-wrap gap-1 border-t border-hairline p-2.5',
+  content: 'flex-1 self-stretch',
+  topBar:
+    'flex-row items-center gap-2 border-b border-hairline bg-surface-window px-3 py-2',
+  topTabs: 'flex-row gap-1',
+  topIndicator: 'inset-y-0 rounded-(--radius-md) bg-card shadow-card',
+  topTab: `group h-9 flex-row items-center gap-2 rounded-(--radius-md) px-3 disabled:opacity-50 ${FOCUS_RING}`,
+  topTabRest: 'hover:bg-surface-hover',
+  topGlyph: 'md' as IconSize,
+  topText:
+    'text-body font-label text-muted-foreground group-selected:text-foreground',
+  topContent: 'flex-1 self-stretch',
+};
+
+const SHELL = byLook<DeskShell>({
+  web: WEB_SHELL,
+  // iOS and Android keep the Desk's sidebar and top tabs on wide panes.
+  ios: WEB_SHELL,
+  android: WEB_SHELL,
+  macos: {
+    root: 'bg-background',
+    sidebar: 'w-58 self-stretch border-r border-hairline bg-background',
+    header: 'h-13 justify-center px-4',
+    title: 'text-mac-body font-bold text-foreground truncate',
+    list: 'px-2.5 pb-2',
+    rows: 'flex-col gap-px',
+    row: `group h-7.5 flex-row items-center gap-2.5 rounded-(--radius-xs) px-2.5 disabled:opacity-50 ${FOCUS_RING}`,
+    rowSelected: 'bg-surface-pressed',
+    rowRest: 'hover:bg-surface-hover',
+    rowGlyph: 'md' as IconSize,
+    rowGlyphSelected: 'primary-strong' as GlyphColor,
+    rowText:
+      'flex-1 truncate text-mac-body font-medium text-foreground group-selected:font-semibold',
+    rowBadge: 'text-mac-callout font-medium text-muted-foreground',
+    marker: false,
+    actions: 'flex-row flex-wrap gap-1 border-t border-hairline p-2.5',
+    content: 'flex-1 self-stretch bg-surface-window',
+    topBar:
+      'flex-row items-center justify-center gap-2 border-b border-hairline bg-background px-3 py-2.5',
+    topTabs: 'flex-row gap-0.5 rounded-(--radius-xs) bg-surface-sunken p-0.5',
+    topIndicator: 'inset-y-0.5 rounded-(--radius-xs) bg-card shadow-card',
+    topTab: `group h-6 flex-row items-center gap-1.5 rounded-(--radius-xs) px-2.5 disabled:opacity-50 ${FOCUS_RING}`,
+    topTabRest: 'active:bg-surface-pressed',
+    topGlyph: 'sm' as IconSize,
+    topText: 'text-mac-body font-medium text-foreground',
+    topContent: 'flex-1 self-stretch bg-surface-window',
+  },
+  windows: {
+    root: 'bg-background',
+    sidebar: 'w-62 self-stretch bg-background',
+    header: 'px-4 pb-2 pt-3',
+    title: 'text-win-body font-semibold text-foreground truncate',
+    list: 'px-2 pb-2',
+    rows: 'flex-col gap-0.5',
+    row: `group h-9 flex-row items-center gap-3 rounded-(--radius-xs) px-3 disabled:opacity-50 ${FOCUS_RING}`,
+    rowSelected: 'bg-surface-hover',
+    rowRest: 'hover:bg-surface-hover',
+    rowGlyph: 'md' as IconSize,
+    rowGlyphSelected: 'foreground' as GlyphColor,
+    rowText:
+      'flex-1 truncate text-win-label font-semibold text-foreground group-selected:font-bold',
+    rowBadge: 'text-win-caption font-semibold text-muted-foreground',
+    marker: true,
+    actions: 'flex-row flex-wrap gap-1 border-t border-hairline p-2',
+    content:
+      'flex-1 self-stretch overflow-hidden rounded-tl-(--radius-sm) border-l border-t border-hairline bg-surface-window',
+    topBar: 'flex-row items-center gap-2 bg-background px-2 py-1',
+    topTabs: 'flex-row gap-1',
+    topIndicator: 'bottom-0.5 h-0.75 rounded-full bg-primary',
+    topTab: `group h-10 flex-row items-center gap-2 rounded-(--radius-xs) px-3 disabled:opacity-50 ${FOCUS_RING}`,
+    topTabRest: 'hover:bg-surface-hover',
+    topGlyph: 'md' as IconSize,
+    topText:
+      'text-win-label font-semibold text-muted-foreground group-selected:text-foreground',
+    topContent:
+      'flex-1 self-stretch border-t border-hairline bg-surface-window',
+  },
+});
+
+type DeskShell = {
+  root: string;
+  sidebar: string;
+  header: string;
+  title: string;
+  list: string;
+  rows: string;
+  row: string;
+  rowSelected: string;
+  rowRest: string;
+  rowGlyph: IconSize;
+  rowGlyphSelected: GlyphColor;
+  rowText: string;
+  rowBadge: string;
+  /** Fluent's accent line at the start of the selected row. */
+  marker: boolean;
+  actions: string;
+  content: string;
+  topBar: string;
+  topTabs: string;
+  topIndicator: string;
+  topTab: string;
+  topTabRest: string;
+  topGlyph: IconSize;
+  topText: string;
+  topContent: string;
+};
+
 function Sidebar(props: AppShellProps & { selected: Selected }): JSX.Element {
   return (
-    <View class="w-60 self-stretch border-r border-hairline bg-muted pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      <View class="px-4 pb-2 pt-5">
-        <Text class="text-control font-heading text-foreground truncate">
-          {props.title}
-        </Text>
+    <View class={SHELL.sidebar}>
+      <View class={SHELL.header}>
+        <Text class={SHELL.title}>{props.title}</Text>
       </View>
-      <Scroll class="flex-1" contentClass="px-2.5 py-1">
+      <Scroll class="flex-1" contentClass={SHELL.list}>
         <BaseTabs
           accessibilityLabel="Sections"
-          class="flex-col gap-0.5"
+          class={SHELL.rows}
           indicatorClass="hidden"
         >
           <Each of={props.sections} key={(item) => item.id}>
@@ -62,28 +200,29 @@ function Sidebar(props: AppShellProps & { selected: Selected }): JSX.Element {
                 disabled={item().disabled}
                 onPress={() => props.selected.set(item().id)}
                 accessibilityLabel={badgeLabel(item())}
-                class={`group h-9 flex-row items-center gap-2.5 rounded-(--radius-md) px-2.5 disabled:opacity-50 pointer-coarse:h-11 ${FOCUS_RING}`}
+                class={SHELL.row}
                 classList={{
-                  'bg-primary-tint': props.selected.get() === item().id,
-                  'hover:bg-surface-hover': props.selected.get() !== item().id,
+                  [SHELL.rowSelected]: props.selected.get() === item().id,
+                  [SHELL.rowRest]: props.selected.get() !== item().id,
                 }}
               >
+                {SHELL.marker ? (
+                  <View class="pointer-events-none absolute inset-y-0 left-0 justify-center opacity-0 group-selected:opacity-100">
+                    <View class="h-4 w-0.75 rounded-full bg-primary" />
+                  </View>
+                ) : null}
                 <Glyph
                   icon={item().icon as IconData}
-                  size="lg"
+                  size={SHELL.rowGlyph}
                   color={
                     props.selected.get() === item().id
-                      ? 'primary-tint-foreground'
+                      ? SHELL.rowGlyphSelected
                       : 'muted-foreground'
                   }
                 />
-                <Text class="flex-1 truncate text-body font-label text-foreground group-selected:text-primary-tint-foreground">
-                  {item().label}
-                </Text>
+                <Text class={SHELL.rowText}>{item().label}</Text>
                 {item().badge ? (
-                  <Text class="text-caption font-label text-muted-foreground group-selected:text-primary-tint-foreground">
-                    {item().badge ?? ''}
-                  </Text>
+                  <Text class={SHELL.rowBadge}>{item().badge ?? ''}</Text>
                 ) : null}
               </Tab>
             )}
@@ -91,9 +230,7 @@ function Sidebar(props: AppShellProps & { selected: Selected }): JSX.Element {
         </BaseTabs>
       </Scroll>
       {props.actions ? (
-        <View class="flex-row flex-wrap gap-1 border-t border-hairline p-2.5">
-          {props.actions}
-        </View>
+        <View class={SHELL.actions}>{props.actions}</View>
       ) : null}
     </View>
   );
@@ -101,12 +238,16 @@ function Sidebar(props: AppShellProps & { selected: Selected }): JSX.Element {
 
 function TopTabs(props: AppShellProps & { selected: Selected }): JSX.Element {
   return (
-    <View class="flex-row items-center gap-2 border-b border-hairline bg-surface-window px-3 py-2">
-      <Scroll horizontal scrollbar={false} class="flex-1">
+    <View class={SHELL.topBar}>
+      <Scroll
+        horizontal
+        scrollbar={false}
+        class={look === 'macos' ? 'shrink grow-0' : 'flex-1'}
+      >
         <BaseTabs
           accessibilityLabel="Sections"
-          class="flex-row gap-1"
-          indicatorClass="inset-y-0 rounded-(--radius-md) bg-card shadow-card"
+          class={SHELL.topTabs}
+          indicatorClass={SHELL.topIndicator}
         >
           <Each of={props.sections} key={(item) => item.id}>
             {(item) => (
@@ -115,23 +256,21 @@ function TopTabs(props: AppShellProps & { selected: Selected }): JSX.Element {
                 disabled={item().disabled}
                 onPress={() => props.selected.set(item().id)}
                 accessibilityLabel={badgeLabel(item())}
-                class={`group h-9 flex-row items-center gap-2 rounded-(--radius-md) px-3 disabled:opacity-50 ${FOCUS_RING}`}
+                class={SHELL.topTab}
                 classList={{
-                  'hover:bg-surface-hover': props.selected.get() !== item().id,
+                  [SHELL.topTabRest]: props.selected.get() !== item().id,
                 }}
               >
                 <Glyph
                   icon={item().icon as IconData}
-                  size="md"
+                  size={SHELL.topGlyph}
                   color={
                     props.selected.get() === item().id
                       ? 'foreground'
                       : 'muted-foreground'
                   }
                 />
-                <Text class="text-body font-label text-muted-foreground group-selected:text-foreground">
-                  {item().label}
-                </Text>
+                <Text class={SHELL.topText}>{item().label}</Text>
               </Tab>
             )}
           </Each>
@@ -283,7 +422,8 @@ function sectionOf(path: RoutePath): string {
  * The frame of an App with top-level sections. It decides the navigation
  * from the App's own pane: a sidebar when the pane is wide, a bottom tab bar
  * on narrow touch screens, a row of tabs at the top in a narrow desktop
- * window. Each section's `content` is usually a `Page` or a `NavStack`.
+ * window. On macOS people can hide the sidebar. Each section's `content` is
+ * usually a `Page` or a `NavStack`.
  *
  * The selected section is the first segment of the App's address
  * (`/<section id>`, then the section's `NavStack` path), so a deep link or a
@@ -391,27 +531,47 @@ export function AppShell(props: AppShellProps): JSX.Element {
       </View>
     );
   }
-  const panels = (
-    <Panels
-      items={props.sections}
-      selected={selected.get}
-      scope={sectionScope}
-    />
-  );
+  // macOS lets people hide the sidebar; the pages' title rows hold the
+  // button (`SidebarToggleContext`).
+  const sidebarShown = signal(true);
+  const panels =
+    look === 'macos' ? (
+      <SidebarToggleContext.Provider
+        value={{
+          available: () => layout() === 'sidebar',
+          shown: sidebarShown,
+          toggle: () => sidebarShown.set(!untracked(sidebarShown)),
+        }}
+      >
+        <Panels
+          items={props.sections}
+          selected={selected.get}
+          scope={sectionScope}
+        />
+      </SidebarToggleContext.Provider>
+    ) : (
+      <Panels
+        items={props.sections}
+        selected={selected.get}
+        scope={sectionScope}
+      />
+    );
   return (
     <View
-      class={`flex-1 self-stretch bg-surface-window ${layout() === 'sidebar' ? 'flex-row' : 'flex-col'}`}
+      class={`flex-1 self-stretch ${SHELL.root} ${layout() === 'sidebar' ? 'flex-row' : 'flex-col'}`}
     >
       {/* `If`, not ternaries: `layout()` reads the pane width, and a
           ternary would rebuild the navigation (losing its focus) on every
           resize instead of only when the layout changes. */}
-      <If when={layout() === 'sidebar'}>
+      <If when={layout() === 'sidebar' && sidebarShown()}>
         <Sidebar {...props} selected={selected} />
       </If>
       <If when={layout() === 'top'}>
         <TopTabs {...props} selected={selected} />
       </If>
-      <View class="flex-1 self-stretch">{panels}</View>
+      <View class={layout() === 'top' ? SHELL.topContent : SHELL.content}>
+        {panels}
+      </View>
       <If when={layout() === 'bottom'}>
         {look === 'android' ? (
           <AndroidNavigationBar {...props} selected={selected} />
