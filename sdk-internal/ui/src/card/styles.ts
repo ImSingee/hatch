@@ -260,14 +260,14 @@ export const BLOCK_RADIUS = byLook({
 /** A choice's option row: a bordered row on the web and the desktops, the
  * platform's own row height on touch. */
 export const OPTION = byLook({
-  web: 'min-h-11 flex-row items-center gap-2.5 rounded-(--radius-md) border border-hairline bg-card px-3',
-  ios: 'min-h-11 flex-row items-center gap-3 rounded-(--radius-md) border border-hairline bg-card px-3',
+  web: 'group min-h-11 flex-row items-center gap-2.5 rounded-(--radius-md) border border-hairline bg-card px-3',
+  ios: 'group min-h-11 flex-row items-center gap-3 rounded-(--radius-md) border border-hairline bg-card px-3',
   android:
-    'min-h-12 flex-row items-center gap-3 rounded-(--radius-md) border border-hairline bg-card px-3',
+    'group min-h-12 flex-row items-center gap-3 rounded-(--radius-md) border border-hairline bg-card px-3',
   macos:
-    'min-h-8 flex-row items-center gap-2 rounded-(--radius-sm) border border-hairline bg-card px-2.5',
+    'group min-h-8 flex-row items-center gap-2 rounded-(--radius-sm) border border-hairline bg-card px-2.5',
   windows:
-    'min-h-9 flex-row items-center gap-3 rounded-(--radius-xs) border border-hairline bg-card px-3',
+    'group min-h-9 flex-row items-center gap-3 rounded-(--radius-xs) border border-hairline bg-card px-3',
 });
 
 /** A chosen option's row. */

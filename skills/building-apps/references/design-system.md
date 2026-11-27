@@ -922,6 +922,494 @@ The state of a `NavStack`: its routes, with `push`, `pop`, `popToRoot`, `replace
 
 `createNavStack(routes: R[]): NavStackState<R>`
 
+### Cards (`@hatch/ui/card`)
+
+The cards notifications show, for an App to compose in TSX or to show from markup. The names are the card markup's tags: import them as one namespace, `import * as Card from '@hatch/ui/card'`, and write `<Card.Card>`, `<Card.Title>`. Props are the markup's attributes in camelCase (`then-status` is `thenStatus`).
+
+#### The card
+
+##### Card.Card
+
+A card. Its questions (`Choice`, `Buttons`, `Input`) are one form whose answers reach `onSubmit`. A card written in TSX is drawn, not stored: to send or store a card, write it as markup.
+
+| Prop          | Type                                               | Description                                                                                                                                                                                                                                                                |
+| ------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onSubmit`    | `(answers: ReplyAnswers) => void \| Promise<void>` | Called with the answers when the card is submitted: its submit button, or the last row of `Buttons`. A returned promise shows the card busy until it settles; a rejection shows its message on the card. Without it the card's inputs are only shown, with their defaults. |
+| `onChange`    | `(answers: ReplyAnswers) => void`                  | Called with the answers as people change them.                                                                                                                                                                                                                             |
+| `answers`     | `ReplyAnswers \| null`                             | An answer already given: the inputs show it read-only, and the status becomes the chosen option's `thenStatus`.                                                                                                                                                            |
+| `busy`        | `boolean`                                          | Shows the card busy, as while `onSubmit`'s promise runs.                                                                                                                                                                                                                   |
+| `submitLabel` | `string`                                           | The submit button's text when the card adds one; default "Submit".                                                                                                                                                                                                         |
+| `repeatable`  | `boolean`                                          | Keeps the card answerable after a submit, with its inputs reset. Without it a submitted card shows its answers read-only.                                                                                                                                                  |
+| `onLinkPress` | `(href: string) => void`                           | Opens a link of the card (`Link`, `Step href`, `Button href`). Without it the card opens links to other Apps (`hatch://app/<slug>#route`) and shows other links as text.                                                                                                   |
+| `children`    | `JSX.Element`                                      | The card's content.                                                                                                                                                                                                                                                        |
+| `icon`        | `CardIconName`                                     | Shown at the start of the card's head.                                                                                                                                                                                                                                     |
+| `status`      | `string`                                           | A short state shown as a pill, such as "CI failed".                                                                                                                                                                                                                        |
+| `tone`        | `ContentTone`                                      | Tone of the status; default `neutral`.                                                                                                                                                                                                                                     |
+| `flag`        | `string`                                           | An urgent marker beside the status, such as "Urgent".                                                                                                                                                                                                                      |
+
+##### Card.CardMarkup
+
+A card from markup, drawn as the Desk and the phone draw a notification card.
+
+| Prop                | Type                                               | Description                                                                                                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onSubmit`          | `(answers: ReplyAnswers) => void \| Promise<void>` | Called with the answers when the card is submitted: its submit button, or the last row of `Buttons`. A returned promise shows the card busy until it settles; a rejection shows its message on the card. Without it the card's inputs are only shown, with their defaults. |
+| `onChange`          | `(answers: ReplyAnswers) => void`                  | Called with the answers as people change them.                                                                                                                                                                                                                             |
+| `answers`           | `ReplyAnswers \| null`                             | An answer already given: the inputs show it read-only, and the status becomes the chosen option's `thenStatus`.                                                                                                                                                            |
+| `busy`              | `boolean`                                          | Shows the card busy, as while `onSubmit`'s promise runs.                                                                                                                                                                                                                   |
+| `submitLabel`       | `string`                                           | The submit button's text when the card adds one; default "Submit".                                                                                                                                                                                                         |
+| `repeatable`        | `boolean`                                          | Keeps the card answerable after a submit, with its inputs reset. Without it a submitted card shows its answers read-only.                                                                                                                                                  |
+| `onLinkPress`       | `(href: string) => void`                           | Opens a link of the card (`Link`, `Step href`, `Button href`). Without it the card opens links to other Apps (`hatch://app/<slug>#route`) and shows other links as text.                                                                                                   |
+| `source` (required) | `string`                                           | Card markup, as `hatch notification card catalog` lists it, such as an Agent or the App's backend wrote.                                                                                                                                                                   |
+| `onError`           | `(issues: ContentIssue[]) => void`                 | Called with the problems when the markup cannot be shown.                                                                                                                                                                                                                  |
+| `fallback`          | `JSX.Element`                                      | Shown in place of an unusable card; default a short notice with the first problems.                                                                                                                                                                                        |
+
+##### Card.CardTree
+
+A card from its render tree.
+
+| Prop              | Type                                               | Description                                                                                                                                                                                                                                                                |
+| ----------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onSubmit`        | `(answers: ReplyAnswers) => void \| Promise<void>` | Called with the answers when the card is submitted: its submit button, or the last row of `Buttons`. A returned promise shows the card busy until it settles; a rejection shows its message on the card. Without it the card's inputs are only shown, with their defaults. |
+| `onChange`        | `(answers: ReplyAnswers) => void`                  | Called with the answers as people change them.                                                                                                                                                                                                                             |
+| `answers`         | `ReplyAnswers \| null`                             | An answer already given: the inputs show it read-only, and the status becomes the chosen option's `thenStatus`.                                                                                                                                                            |
+| `busy`            | `boolean`                                          | Shows the card busy, as while `onSubmit`'s promise runs.                                                                                                                                                                                                                   |
+| `submitLabel`     | `string`                                           | The submit button's text when the card adds one; default "Submit".                                                                                                                                                                                                         |
+| `repeatable`      | `boolean`                                          | Keeps the card answerable after a submit, with its inputs reset. Without it a submitted card shows its answers read-only.                                                                                                                                                  |
+| `onLinkPress`     | `(href: string) => void`                           | Opens a link of the card (`Link`, `Step href`, `Button href`). Without it the card opens links to other Apps (`hatch://app/<slug>#route`) and shows other links as text.                                                                                                   |
+| `tree` (required) | `ContentNode`                                      | A card's render tree, such as a notification's stored content.                                                                                                                                                                                                             |
+| `onError`         | `(issues: ContentIssue[]) => void`                 | Called with the problems when the tree cannot be shown.                                                                                                                                                                                                                    |
+| `fallback`        | `JSX.Element`                                      | Shown in place of an unusable card.                                                                                                                                                                                                                                        |
+
+##### Card.compileCard
+
+Compiles card markup or a tree as the platform does: the tree and its form, or the problems that make it unusable (`line:column` for markup, a path for a tree).
+
+`Card.compileCard(source: string | ContentNode): | { ok: true; content: ContentNode; reply: CompiledCard['reply'] } | { ok: false; issues: ContentIssue[] }`
+
+#### Card layout
+
+##### Card.Column
+
+Children stacked vertically.
+
+| Prop       | Type                                        | Description                            |
+| ---------- | ------------------------------------------- | -------------------------------------- |
+| `children` | `JSX.Element`                               | The content.                           |
+| `gap`      | `Spacing`                                   | Space between children; default `sm`.  |
+| `align`    | `'start' \| 'center' \| 'end' \| 'stretch'` | Cross-axis alignment; default stretch. |
+
+##### Card.Row
+
+Children side by side; a row of buttons stacks on a narrow card.
+
+| Prop       | Type                                                      | Description                           |
+| ---------- | --------------------------------------------------------- | ------------------------------------- |
+| `children` | `JSX.Element`                                             | The content.                          |
+| `gap`      | `Spacing`                                                 |                                       |
+| `justify`  | `'start' \| 'center' \| 'end' \| 'between'`               | Main-axis distribution.               |
+| `align`    | `'start' \| 'center' \| 'end' \| 'baseline' \| 'stretch'` | Cross-axis alignment; default center. |
+| `wrap`     | `boolean`                                                 | Wraps children onto more lines.       |
+
+##### Card.Grid
+
+Equal columns.
+
+| Prop       | Type          | Description              |
+| ---------- | ------------- | ------------------------ |
+| `children` | `JSX.Element` | The content.             |
+| `columns`  | `2 \| 3 \| 4` | Columns, 2-4; default 2. |
+| `gap`      | `Spacing`     |                          |
+
+##### Card.Box
+
+A group on a tinted surface.
+
+| Prop       | Type                   | Description                           |
+| ---------- | ---------------------- | ------------------------------------- |
+| `children` | `JSX.Element`          | The content.                          |
+| `surface`  | `'muted' \| 'outline'` | A muted fill (default) or an outline. |
+| `padding`  | `'sm' \| 'md' \| 'lg'` | Inner spacing; default `md`.          |
+| `tone`     | `ContentTone`          | Tints the surface.                    |
+
+##### Card.Divider
+
+A hairline between sections.
+
+`Card.Divider(): JSX.Element`
+
+##### Card.Spacer
+
+Extra vertical space.
+
+| Prop   | Type      | Description                   |
+| ------ | --------- | ----------------------------- |
+| `size` | `Spacing` | How much space; default `md`. |
+
+##### Card.Collapse
+
+Content hidden behind a toggle until opened.
+
+| Prop                 | Type          | Description                                      |
+| -------------------- | ------------- | ------------------------------------------------ |
+| `children`           | `JSX.Element` | The content.                                     |
+| `summary` (required) | `string`      | The toggle's label, such as "Show 12 log lines". |
+
+#### Card text
+
+##### Card.Title
+
+A heading.
+
+| Prop       | Type                           | Description                 |
+| ---------- | ------------------------------ | --------------------------- |
+| `children` | `JSX.Element`                  | The content.                |
+| `size`     | `'sm' \| 'md' \| 'lg' \| 'xl'` | Heading size; default `md`. |
+| `align`    | `'start' \| 'center' \| 'end'` |                             |
+| `lines`    | `number`                       | Clamps to this many lines.  |
+
+##### Card.Text
+
+A paragraph. Large or bold text is a figure or a lead: full ink.
+
+| Prop       | Type                              | Description                                            |
+| ---------- | --------------------------------- | ------------------------------------------------------ |
+| `children` | `JSX.Element`                     | The content.                                           |
+| `size`     | `Spacing`                         | Text size, xs-xl; default `md`.                        |
+| `weight`   | `'regular' \| 'medium' \| 'bold'` | Default `regular`.                                     |
+| `tone`     | `'dimmed' \| ContentTone`         | Ink: dimmed, or a tone's colour; default the body ink. |
+| `align`    | `'start' \| 'center' \| 'end'`    |                                                        |
+| `mono`     | `boolean`                         | Monospaced, for identifiers.                           |
+| `lines`    | `number`                          | Clamps to this many lines.                             |
+
+##### Card.Caption
+
+Small dimmed text, such as "Updated 10:52".
+
+| Prop       | Type                           | Description          |
+| ---------- | ------------------------------ | -------------------- |
+| `children` | `JSX.Element`                  | The content.         |
+| `tone`     | `'dimmed' \| ContentTone`      | Ink; default dimmed. |
+| `align`    | `'start' \| 'center' \| 'end'` |                      |
+| `lines`    | `number`                       |                      |
+
+##### Card.Markdown
+
+Markdown inside a card, read as the platform reads it.
+
+| Prop       | Type     | Description                                                              |
+| ---------- | -------- | ------------------------------------------------------------------------ |
+| `children` | `string` | The Markdown: headings, emphasis, lists, quotes, code, links and tables. |
+
+##### Card.Bold
+
+Bold text inside a paragraph.
+
+| Prop       | Type          | Description  |
+| ---------- | ------------- | ------------ |
+| `children` | `JSX.Element` | The content. |
+
+##### Card.Italic
+
+Italic text inside a paragraph.
+
+| Prop       | Type          | Description  |
+| ---------- | ------------- | ------------ |
+| `children` | `JSX.Element` | The content. |
+
+##### Card.Strike
+
+Struck-through text inside a paragraph.
+
+| Prop       | Type          | Description  |
+| ---------- | ------------- | ------------ |
+| `children` | `JSX.Element` | The content. |
+
+##### Card.InlineCode
+
+Inline code inside a paragraph.
+
+| Prop       | Type     | Description  |
+| ---------- | -------- | ------------ |
+| `children` | `string` | The content. |
+
+##### Card.Link
+
+A link inside a paragraph; opened only when pressed. A link the card cannot open (see `onLinkPress`) shows as its text.
+
+| Prop              | Type          | Description                              |
+| ----------------- | ------------- | ---------------------------------------- |
+| `children`        | `JSX.Element` | The content.                             |
+| `href` (required) | `string`      | http(s), another app or a hatch:// page. |
+
+##### Card.Time
+
+A time inside a paragraph, in the reader's language and time zone.
+
+| Prop                  | Type                             | Description                                                   |
+| --------------------- | -------------------------------- | ------------------------------------------------------------- |
+| `datetime` (required) | `string`                         | An ISO-8601 time.                                             |
+| `format`              | `'datetime' \| 'date' \| 'time'` | What to show; default the time today, else the date and time. |
+
+##### Card.LineBreak
+
+A line break inside a paragraph.
+
+`Card.LineBreak(): JSX.Element`
+
+#### Card markers and data
+
+##### Card.Badge
+
+A small tinted label, among blocks or inside a paragraph.
+
+| Prop       | Type          | Description            |
+| ---------- | ------------- | ---------------------- |
+| `children` | `string`      | The label.             |
+| `tone`     | `ContentTone` | What its colour means. |
+
+##### Card.Icon
+
+An icon from the card's set, decorative: the text around it says what it means.
+
+| Prop              | Type           | Description            |
+| ----------------- | -------------- | ---------------------- |
+| `name` (required) | `CardIconName` | One of the card icons. |
+| `tone`            | `ContentTone`  | What its colour means. |
+
+##### Card.Progress
+
+A bar filled to `percent`.
+
+| Prop                 | Type          | Description                          |
+| -------------------- | ------------- | ------------------------------------ |
+| `label`              | `string`      | What is measured.                    |
+| `value`              | `string`      | The value as text, such as "3 / 14". |
+| `percent` (required) | `number`      | 0-100.                               |
+| `tone`               | `ContentTone` | What its colour means.               |
+
+##### Card.Stat
+
+One figure with its label, on a muted tile.
+
+| Prop               | Type          | Description             |
+| ------------------ | ------------- | ----------------------- |
+| `value` (required) | `string`      | The figure.             |
+| `label` (required) | `string`      | What it counts.         |
+| `delta`            | `string`      | Change, such as "+62%". |
+| `tone`             | `ContentTone` | Tone of the delta.      |
+
+##### Card.Fields
+
+Label and value pairs.
+
+| Prop       | Type          | Description        |
+| ---------- | ------------- | ------------------ |
+| `children` | `JSX.Element` | The content.       |
+| `mono`     | `boolean`     | Monospaced values. |
+
+##### Card.Field
+
+One label and its value, inside `Fields`.
+
+| Prop               | Type          | Description       |
+| ------------------ | ------------- | ----------------- |
+| `children`         | `JSX.Element` | The value.        |
+| `label` (required) | `string`      | The label.        |
+| `mono`             | `boolean`     | Monospaced value. |
+
+##### Card.Steps
+
+A checklist of steps or checks.
+
+| Prop       | Type          | Description                                       |
+| ---------- | ------------- | ------------------------------------------------- |
+| `children` | `JSX.Element` | The content.                                      |
+| `mono`     | `boolean`     | Monospaced names in an outlined list, for checks. |
+
+##### Card.Step
+
+One step of `Steps`.
+
+| Prop       | Type          | Description                                                |
+| ---------- | ------------- | ---------------------------------------------------------- |
+| `children` | `JSX.Element` | The step's name.                                           |
+| `state`    | `StepState`   | Default `pending`.                                         |
+| `detail`   | `string`      | Shown at the end, such as "2m 14s".                        |
+| `at`       | `string`      | When it happened; shown as a time when there is no detail. |
+| `href`     | `string`      | Opens the step, such as its log.                           |
+
+##### Card.List
+
+A bulleted, numbered or task list.
+
+| Prop       | Type          | Description  |
+| ---------- | ------------- | ------------ |
+| `children` | `JSX.Element` | The content. |
+| `ordered`  | `boolean`     | Numbered.    |
+
+##### Card.Item
+
+One item of `List`.
+
+| Prop       | Type          | Description                                  |
+| ---------- | ------------- | -------------------------------------------- |
+| `children` | `JSX.Element` | The content.                                 |
+| `checked`  | `boolean`     | A task item: true when done, false when not. |
+
+##### Card.Table
+
+Rows of cells; leading rows of header cells form the head.
+
+| Prop       | Type          | Description  |
+| ---------- | ------------- | ------------ |
+| `children` | `JSX.Element` | The content. |
+
+##### Card.Tr
+
+A table row.
+
+| Prop       | Type          | Description  |
+| ---------- | ------------- | ------------ |
+| `children` | `JSX.Element` | The content. |
+
+##### Card.Th
+
+A header cell.
+
+| Prop       | Type                           | Description  |
+| ---------- | ------------------------------ | ------------ |
+| `children` | `JSX.Element`                  | The content. |
+| `align`    | `'start' \| 'center' \| 'end'` |              |
+
+##### Card.Td
+
+A cell.
+
+| Prop       | Type                           | Description  |
+| ---------- | ------------------------------ | ------------ |
+| `children` | `JSX.Element`                  | The content. |
+| `align`    | `'start' \| 'center' \| 'end'` |              |
+
+##### Card.Quote
+
+Something someone said, such as a review comment.
+
+| Prop       | Type          | Description                            |
+| ---------- | ------------- | -------------------------------------- |
+| `children` | `JSX.Element` | The content.                           |
+| `author`   | `string`      | Who said it.                           |
+| `location` | `string`      | Where, such as "idle-shutdown.ts:142". |
+
+##### Card.Code
+
+Preformatted text, such as a log excerpt or a diff; scrolls sideways.
+
+| Prop       | Type               | Description                             |
+| ---------- | ------------------ | --------------------------------------- |
+| `children` | `string`           | The text, kept as written.              |
+| `language` | `'text' \| 'diff'` | `diff` colours added and removed lines. |
+
+##### Card.Trend
+
+A small bar chart; bars over the threshold are highlighted.
+
+| Prop                | Type       | Description                |
+| ------------------- | ---------- | -------------------------- |
+| `values` (required) | `number[]` | The numbers, oldest first. |
+| `threshold`         | `number`   | Highlights bars above it.  |
+| `unit`              | `string`   | Such as "¥" or "ms".       |
+| `label`             | `string`   | What is charted.           |
+
+##### Card.Callout
+
+A highlighted note.
+
+| Prop       | Type          | Description            |
+| ---------- | ------------- | ---------------------- |
+| `children` | `JSX.Element` | The content.           |
+| `tone`     | `ContentTone` | What its colour means. |
+| `title`    | `string`      | A bold first line.     |
+
+#### Card questions
+
+##### Card.Choice
+
+A single or multiple choice question, its options as rows.
+
+| Prop               | Type          | Description                               |
+| ------------------ | ------------- | ----------------------------------------- |
+| `children`         | `JSX.Element` | The options.                              |
+| `id` (required)    | `string`      | The answer's key in `onSubmit`'s answers. |
+| `label` (required) | `string`      | The question.                             |
+| `description`      | `string`      | Help text.                                |
+| `required`         | `boolean`     | Must be answered.                         |
+| `multiple`         | `boolean`     | Several options may be chosen.            |
+| `min`              | `number`      | With `multiple`: the fewest options.      |
+| `max`              | `number`      | With `multiple`: the most options.        |
+
+##### Card.Option
+
+One option of a `Choice`.
+
+| Prop            | Type          | Description                                |
+| --------------- | ------------- | ------------------------------------------ |
+| `children`      | `string`      | The option's label.                        |
+| `id` (required) | `string`      | The answer's value.                        |
+| `note`          | `string`      | Shown beside it, such as "about 1 minute". |
+| `badge`         | `string`      | A tag, such as "breaking".                 |
+| `default`       | `boolean`     | Chosen to begin with.                      |
+| `thenStatus`    | `string`      | The card's status once this is chosen.     |
+| `thenTone`      | `ContentTone` | Tone of `thenStatus`.                      |
+
+##### Card.Buttons
+
+A row of buttons answering one question: pressing one answers it. When the row is the card's last question, a press submits the card.
+
+| Prop            | Type          | Description                               |
+| --------------- | ------------- | ----------------------------------------- |
+| `children`      | `JSX.Element` | The buttons.                              |
+| `id` (required) | `string`      | The answer's key in `onSubmit`'s answers. |
+| `label`         | `string`      | The question.                             |
+| `description`   | `string`      | Help text.                                |
+
+##### Card.Button
+
+A button: with `id` inside `Buttons`, an answer; with `href`, a link; with `onPress`, an action of the App's.
+
+| Prop          | Type          | Description                                                                        |
+| ------------- | ------------- | ---------------------------------------------------------------------------------- |
+| `children`    | `string`      | The button's text.                                                                 |
+| `id`          | `string`      | Inside `Buttons`: the answer's value.                                              |
+| `href`        | `string`      | Opens this link instead of answering.                                              |
+| `primary`     | `boolean`     | The main action.                                                                   |
+| `destructive` | `boolean`     | A destructive action.                                                              |
+| `thenStatus`  | `string`      | The card's status once this is chosen.                                             |
+| `thenTone`    | `ContentTone` | Tone of `thenStatus`.                                                              |
+| `onPress`     | `() => void`  | An action of the App's own, not an answer (TSX only: card markup has no handlers). |
+
+##### Card.Input
+
+A text answer.
+
+| Prop               | Type      | Description                               |
+| ------------------ | --------- | ----------------------------------------- |
+| `id` (required)    | `string`  | The answer's key in `onSubmit`'s answers. |
+| `label` (required) | `string`  | The question.                             |
+| `description`      | `string`  | Help text.                                |
+| `placeholder`      | `string`  | An example of an answer.                  |
+| `multiline`        | `boolean` | Several lines.                            |
+| `maxLength`        | `number`  | The longest answer; default 1000.         |
+| `required`         | `boolean` | Must be answered.                         |
+
+##### Card.Submit
+
+The card's submit button; the card adds one when it needs one and has none. Gone once the card shows an answer.
+
+| Prop       | Type     | Description                                          |
+| ---------- | -------- | ---------------------------------------------------- |
+| `children` | `string` | The button's text; default the card's `submitLabel`. |
+
 ### Shared types
 
 #### Action

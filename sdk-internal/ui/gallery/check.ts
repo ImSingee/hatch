@@ -45,6 +45,7 @@ const sections = [
   'Basics',
   'Inputs',
   'Data',
+  'Cards',
   'Feedback',
   'Navigation',
   'Patterns',

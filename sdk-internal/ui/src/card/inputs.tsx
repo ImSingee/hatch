@@ -410,6 +410,9 @@ export type ButtonProps = {
 export function Button(props: ButtonProps): JSX.Element {
   const card = useCard();
   const group = GroupContext();
+  const width = CardWidthContext();
+  // A narrow card stacks its buttons, each the card's width.
+  const stacked = () => width() < 400;
   const answer = () => Boolean(group && props.id && !props.href);
   if (group && props.id && !props.href) {
     group.add(() => ({
@@ -441,6 +444,7 @@ export function Button(props: ButtonProps): JSX.Element {
         label={props.children ?? props.href}
         kind="default"
         iconEnd={IconArrowUpRight}
+        fullWidth={stacked()}
         disabled={!open}
         onPress={() => open?.()}
       />
@@ -451,24 +455,32 @@ export function Button(props: ButtonProps): JSX.Element {
       <UiButton
         label={props.children ?? ''}
         kind={kind()}
+        fullWidth={stacked()}
         disabled={!props.onPress}
         onPress={() => props.onPress?.()}
       />
     );
   }
+  // Once answered, the chosen button stays as it was pressed and the others
+  // fade; a press then does nothing.
   return (
     <View
       class={
-        mode() !== 'live' && !(mode() === 'answered' && selected())
+        mode() === 'answered' && !selected()
           ? 'opacity-55'
-          : ''
+          : mode() === 'preview'
+            ? 'opacity-55'
+            : ''
       }
     >
       <UiButton
         label={props.children ?? ''}
         kind={kind()}
+        fullWidth={stacked()}
         loading={submits() && card?.busy()}
-        disabled={mode() !== 'live' || card?.busy()}
+        disabled={
+          mode() === 'preview' || (mode() === 'answered' && !selected())
+        }
         onPress={() => card?.pick(fieldId(), props.id!)}
       />
     </View>
@@ -557,10 +569,12 @@ export function SubmitButton(props: {
   label?: string;
 }): JSX.Element {
   RowContext()?.holdButtons();
+  const width = CardWidthContext();
   return (
     <UiButton
       label={props.label || props.card.submitLabel()}
       kind="primary"
+      fullWidth={width() < 400}
       loading={props.card.busy()}
       onPress={() => props.card.submit()}
     />

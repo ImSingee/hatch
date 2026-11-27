@@ -7,6 +7,7 @@ import { host } from 'nsh';
 import {
   AppShell,
   IconButton,
+  IconChecklist,
   IconLayoutGrid,
   IconTypography,
   IconLayoutSidebar,
@@ -17,6 +18,7 @@ import {
   mount,
 } from '@hatch/ui';
 import { Basics } from './sections/basics';
+import { Cards } from './sections/cards';
 import { Data } from './sections/data';
 import { Feedback } from './sections/feedback';
 import { Inputs } from './sections/inputs';
@@ -38,6 +40,7 @@ function Gallery() {
         },
         { id: 'inputs', label: 'Inputs', icon: IconPencil, content: Inputs },
         { id: 'data', label: 'Data', icon: IconTable, content: Data },
+        { id: 'cards', label: 'Cards', icon: IconChecklist, content: Cards },
         {
           id: 'feedback',
           label: 'Feedback',

@@ -97,6 +97,73 @@ export const CATEGORIES: readonly {
   },
 ];
 
+/** The card components of `@hatch/ui/card` (`src/card/index.ts`), whose
+ * names are the card markup's tags: Apps import them as one namespace. */
+export const CARD_CATEGORIES: readonly {
+  title: string;
+  names: readonly string[];
+}[] = [
+  {
+    title: 'The card',
+    names: ['Card', 'CardMarkup', 'CardTree', 'compileCard'],
+  },
+  {
+    title: 'Card layout',
+    names: ['Column', 'Row', 'Grid', 'Box', 'Divider', 'Spacer', 'Collapse'],
+  },
+  {
+    title: 'Card text',
+    names: [
+      'Title',
+      'Text',
+      'Caption',
+      'Markdown',
+      'Bold',
+      'Italic',
+      'Strike',
+      'InlineCode',
+      'Link',
+      'Time',
+      'LineBreak',
+    ],
+  },
+  {
+    title: 'Card markers and data',
+    names: [
+      'Badge',
+      'Icon',
+      'Progress',
+      'Stat',
+      'Fields',
+      'Field',
+      'Steps',
+      'Step',
+      'List',
+      'Item',
+      'Table',
+      'Tr',
+      'Th',
+      'Td',
+      'Quote',
+      'Code',
+      'Trend',
+      'Callout',
+    ],
+  },
+  {
+    title: 'Card questions',
+    names: ['Choice', 'Option', 'Buttons', 'Button', 'Input', 'Submit'],
+  },
+];
+
+/** The entry files the catalogue reads, with their categories. */
+const ENTRIES = {
+  main: { index: 'index.ts', categories: CATEGORIES },
+  card: { index: 'card/index.ts', categories: CARD_CATEGORIES },
+} as const;
+
+type EntryName = keyof typeof ENTRIES;
+
 /** Props no component may take: variation is by typed props only. */
 export const FORBIDDEN_PROPS = ['class', 'classList', 'style'] as const;
 
@@ -360,12 +427,13 @@ function membersOf(type: TypeNode, module: Module): Prop[] {
   );
 }
 
-/** The value exports of `src/index.ts`: name -> the module that declares it. */
-function exportedValues(): Map<
-  string,
-  { module: Module; local: string } | 'nsh'
-> {
-  const index = load(path.join(LIB, 'index.ts'));
+/** The value exports of an entry file: name -> the module that declares
+ * it. */
+function exportedValues(
+  entry: EntryName,
+): Map<string, { module: Module; local: string } | 'nsh'> {
+  const indexFile = path.join(LIB, ENTRIES[entry].index);
+  const index = load(indexFile);
   const found = new Map<string, { module: Module; local: string } | 'nsh'>();
   for (const statement of index.source.statements) {
     if (
@@ -385,7 +453,10 @@ function exportedValues(): Map<
       found.set(
         element.name.text,
         specifier.startsWith('.')
-          ? { module: load(path.join(LIB, specifier)), local }
+          ? {
+              module: load(path.join(path.dirname(indexFile), specifier)),
+              local,
+            }
           : 'nsh',
       );
     }
@@ -483,10 +554,15 @@ function describe(
   throw new Error(`${name} is a value the catalogue cannot describe`);
 }
 
-/** Every catalogue entry, checked against the categories. */
-export function catalogueEntries(): Map<string, ComponentEntry> {
-  const values = exportedValues();
-  const listed = new Set(CATEGORIES.flatMap((category) => category.names));
+/** Every catalogue entry of an entry file, checked against its
+ * categories. */
+export function catalogueEntries(
+  entry: EntryName = 'main',
+): Map<string, ComponentEntry> {
+  const values = exportedValues(entry);
+  const listed = new Set(
+    ENTRIES[entry].categories.flatMap((category) => category.names),
+  );
   for (const name of values.keys()) {
     if (!listed.has(name)) {
       throw new Error(`${name} is exported but in no catalogue category`);
@@ -567,6 +643,25 @@ export function renderCatalogue(icons: readonly GeneratedIcon[]): string {
       } else if (entry.props.length > 0) {
         lines.push(...propTable(entry.props), '');
       }
+    }
+  }
+  const cards = catalogueEntries('card');
+  lines.push(
+    '### Cards (`@hatch/ui/card`)',
+    '',
+    "The cards notifications show, for an App to compose in TSX or to show from markup. The names are the card markup's tags: import them as one namespace, `import * as Card from '@hatch/ui/card'`, and write `<Card.Card>`, `<Card.Title>`. Props are the markup's attributes in camelCase (`then-status` is `thenStatus`).",
+    '',
+  );
+  for (const category of CARD_CATEGORIES) {
+    lines.push(`#### ${category.title}`, '');
+    for (const name of category.names) {
+      const entry = cards.get(name) as ComponentEntry;
+      lines.push(`##### Card.${name}`, '');
+      if (entry.doc) lines.push(entry.doc, '');
+      if (entry.signature) {
+        lines.push(`\`Card.${entry.signature}\``, '');
+      }
+      if (entry.props.length > 0) lines.push(...propTable(entry.props), '');
     }
   }
   lines.push('### Shared types', '');
