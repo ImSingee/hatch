@@ -107,6 +107,12 @@ it('draws a shared theme with its own primary for a user whose accent stopped re
   });
   expect(resolved?.colors.primary).toBe(meadow.colors.primary);
   expect(contrastProblems(resolved!)).toEqual([]);
+  // Changing something else is not held up by an accent the user did not
+  // just choose.
+  expect(await updateTheme(OTHER, { dockLabels: true })).toMatchObject({
+    dockLabels: true,
+    accent: 'teal',
+  });
   // An editor who has it active is checked with their own accent.
   const dusk = await createTheme({
     ...THEME_PRESETS['desk-dark'].document,

@@ -196,6 +196,12 @@ describe('the shared theme library', () => {
     });
     await storeSettings(U, { themePreset: 'deleted-theme' });
     expect((await getThemeState(U)).theme.id).toBe('desk');
+    // A setting that touches neither the theme nor the accent keeps the
+    // stored name as it is.
+    expect(await updateTheme(U, { dockLabels: true })).toMatchObject({
+      dockLabels: true,
+      theme: { id: 'desk' },
+    });
   });
 
   it('lists the presets, then custom themes, and activates a dark preset like any theme', async () => {

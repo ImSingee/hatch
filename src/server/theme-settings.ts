@@ -280,14 +280,21 @@ function withThemeLock<T>(work: (tx: TX) => Promise<T>): Promise<T> {
 async function writePersonal(
   tx: TX,
   userId: string,
-  next: PersonalTheme,
+  next: Partial<PersonalTheme>,
 ): Promise<void> {
-  const preset = isThemePresetName(next.theme);
+  // Only the settings a change names are written: a stored theme name that
+  // no longer names a theme (kept from the instance setting) stays as it is
+  // until the user picks a theme.
+  const preset = next.theme !== undefined && isThemePresetName(next.theme);
   const set = {
-    accent: next.accent,
-    dockLabels: next.dockLabels,
-    themePreset: preset ? next.theme : null,
-    customThemeId: preset ? null : next.theme,
+    ...(next.accent === undefined ? {} : { accent: next.accent }),
+    ...(next.dockLabels === undefined ? {} : { dockLabels: next.dockLabels }),
+    ...(next.theme === undefined
+      ? {}
+      : {
+          themePreset: preset ? next.theme : null,
+          customThemeId: preset ? null : next.theme,
+        }),
   };
   await tx
     .insert(schema.userPreferences)
@@ -363,14 +370,21 @@ export async function updateTheme(
       change.accent === undefined
         ? stored.accent
         : (change.accent as AccentName | null);
-    checkWithAccent(next ?? (await activeEntry(stored, tx)), accent);
-    const written: PersonalTheme = {
+    // Only a change of theme or accent is checked: an accent that stopped
+    // reading on a theme someone else edited is drawn as the theme's own
+    // primary, and must not hold up changing anything else.
+    if (change.theme !== undefined || change.accent !== undefined)
+      checkWithAccent(next ?? (await activeEntry(stored, tx)), accent);
+    await writePersonal(tx, userId, {
+      accent: change.accent === undefined ? undefined : accent,
+      dockLabels: change.dockLabels,
+      theme: change.theme,
+    });
+    return {
       accent,
       dockLabels: change.dockLabels ?? stored.dockLabels,
       theme: change.theme ?? stored.theme,
     };
-    await writePersonal(tx, userId, written);
-    return written;
   });
   publishThemeUpdated(userId, personal);
   return stateOf(personal, await activeEntry(personal));
