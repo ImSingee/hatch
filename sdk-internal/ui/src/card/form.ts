@@ -168,7 +168,11 @@ export function createCardScope(
   const current = (): ReplyAnswers => {
     const reply = form();
     const answers: ReplyAnswers = reply ? defaultAnswers(reply) : {};
+    // Only the questions the card asks now: an input taken away keeps no
+    // answer.
+    const asked = new Set(reply?.fields.map((field) => field.id));
     for (const id of touched()) {
+      if (!asked.has(id)) continue;
       const value = answerOf(draft(), id);
       if (value === undefined) delete answers[id];
       else answers[id] = value;
@@ -253,7 +257,7 @@ export function createCardScope(
     },
     set,
     pick: (fieldId, optionId) => {
-      if (mode() !== 'live') return;
+      if (mode() !== 'live' || pending() || props.busy) return;
       if (!submitsWith(fieldId)) {
         set(
           fieldId,

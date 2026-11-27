@@ -155,6 +155,23 @@ test('takes answers again after a submit when repeatable', async () => {
   expect(app.enabled('label:Water now')).toBe(true);
 });
 
+test('sends no answer for an input the App took away', async () => {
+  const app = await openCard('web', { example: 'form-removable' });
+  await app.type('label:Extra', 'typed before it went');
+  await app.press('label:Skip the note');
+  await app.waitFor('text:No note needed');
+  await app.press('label:Send');
+  await app.waitFor('text:submitted: {}');
+});
+
+test('takes no other answer while a submit is pending', async () => {
+  const app = await openCard('web', { example: 'form-pending' });
+  await app.press('label:Option A');
+  await app.press('label:Send');
+  await app.waitUntil(() => !app.enabled('label:Option B'));
+  expect(app.enabled('label:Option A')).toBe(false);
+});
+
 test('shows an answer given elsewhere read-only, with its status', async () => {
   const app = await openCard('web', {
     example: 'perm',

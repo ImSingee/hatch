@@ -495,7 +495,9 @@ export function Button(props: ButtonProps): JSX.Element {
         fullWidth={stacked()}
         loading={submits() && card?.busy()}
         disabled={
-          mode() === 'preview' || (mode() === 'answered' && !selected())
+          mode() === 'preview' ||
+          (mode() === 'answered' && !selected()) ||
+          (mode() === 'live' && card?.busy() && !submits())
         }
         onPress={() => card?.pick(fieldId(), props.id!)}
       />

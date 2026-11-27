@@ -55,6 +55,38 @@ function FormCard(props: { fail?: boolean; repeatable?: boolean }) {
   );
 }
 
+/** A note the App takes away after it was typed in. */
+function RemovableCard() {
+  const asking = signal(true);
+  return (
+    <Card.Card
+      onSubmit={(answers: ReplyAnswers) => {
+        submitted.set(JSON.stringify(answers));
+      }}
+    >
+      <Card.Input id="note" label="Note" />
+      {asking() ? null : <Card.Text>No note needed</Card.Text>}
+      <Card.Button onPress={() => asking.set(false)}>Skip the note</Card.Button>
+      {asking() ? <Card.Input id="extra" label="Extra" /> : null}
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
+/** A card whose App takes its time: the submit stays pending. */
+function PendingCard() {
+  return (
+    <Card.Card onSubmit={() => new Promise<void>(() => {})}>
+      <Card.Buttons id="first">
+        <Card.Button id="a">Option A</Card.Button>
+        <Card.Button id="b">Option B</Card.Button>
+      </Card.Buttons>
+      <Card.Input id="note" label="Note" />
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
 function App() {
   const params = host.available() ? host.params : {};
   const id = typeof params.example === 'string' ? params.example : '';
@@ -69,6 +101,8 @@ function App() {
           {id === 'form' ? <FormCard /> : null}
           {id === 'form-failing' ? <FormCard fail /> : null}
           {id === 'form-repeatable' ? <FormCard repeatable /> : null}
+          {id === 'form-removable' ? <RemovableCard /> : null}
+          {id === 'form-pending' ? <PendingCard /> : null}
           {example ? (
             <Card.CardMarkup
               source={example.markup}
