@@ -82,4 +82,38 @@ describe.skipIf(!adminUrl)('Dashboard order on PostgreSQL', () => {
       { id: 'd1', pinned: true },
     ]);
   });
+
+  it('pins the next dashboard on a first visit that races the oldest one being deleted', async () => {
+    const { db, schema } = platform;
+    for (let round = 0; round < 12; round++) {
+      const userId = `first-${round}`;
+      await db
+        .insert(schema.user)
+        .values({ id: userId, name: userId, email: `${userId}@pins.test` });
+      await db.insert(schema.dashboards).values([
+        { id: `old-${round}`, name: 'Old', createdAt: new Date('2000-01-01') },
+        {
+          id: `next-${round}`,
+          name: 'Next',
+          createdAt: new Date('2000-01-02'),
+        },
+      ]);
+      const [visit] = await Promise.allSettled([
+        read.readDashboards(userId),
+        db
+          .delete(schema.dashboards)
+          .where(eq(schema.dashboards.id, `old-${round}`)),
+      ]);
+      // The first visit never fails over the deleted dashboard, and the user
+      // ends with exactly one pinned dashboard.
+      expect(visit.status).toBe('fulfilled');
+      const pinned = (await read.readDashboards(userId)).filter(
+        (dashboard) => dashboard.pinned,
+      );
+      expect(pinned).toHaveLength(1);
+      await db
+        .delete(schema.dashboards)
+        .where(eq(schema.dashboards.id, `next-${round}`));
+    }
+  });
 });

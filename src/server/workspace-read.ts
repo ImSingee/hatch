@@ -36,6 +36,17 @@ export async function pinDefaultDashboardForNewUser(
   tx: TX,
   userId: string,
 ): Promise<void> {
+  // The oldest dashboard nobody is deleting right now; the lock keeps it
+  // from being deleted until this transaction ends, so the pin cannot fail.
+  const [candidate] = await tx
+    .select({ id: schema.dashboards.id })
+    .from(schema.dashboards)
+    .orderBy(asc(schema.dashboards.createdAt), asc(schema.dashboards.id))
+    .limit(1)
+    .for('key share', { skipLocked: true });
+  // Nothing to pin yet (an empty instance): the default waits for a later
+  // visit instead of being used up.
+  if (!candidate) return;
   const preferences = schema.userPreferences;
   const flipped = await tx
     .insert(preferences)
@@ -53,15 +64,10 @@ export async function pinDefaultDashboardForNewUser(
     })
     .returning({ userId: preferences.userId });
   if (!flipped.length) return;
-  const view = schema.userDashboards;
-  await tx.execute(sql`
-    insert into ${view} (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}, ${sql.identifier('pinned')}, ${sql.identifier('sort_order')})
-    select ${userId}::text, ${schema.dashboards.id}, true, 0
-    from ${schema.dashboards}
-    order by ${schema.dashboards.createdAt} asc, ${schema.dashboards.id} asc
-    limit 1
-    on conflict do nothing
-  `);
+  await tx
+    .insert(schema.userDashboards)
+    .values({ userId, dashboardId: candidate.id, pinned: true, sortOrder: 0 })
+    .onConflictDoNothing();
 }
 
 /**

@@ -333,6 +333,21 @@ describe('Per-user pins', () => {
     ).toEqual([]);
   });
 
+  it('keeps the first-visit default for later when there is no dashboard to pin yet', async () => {
+    // An empty instance: the user's first change (an empty reorder) has
+    // nothing to pin, so it does not use up the default.
+    expect(await reorderDashboards(U, [])).toEqual([]);
+    expect(
+      await db.query.userPreferences.findFirst({
+        where: { userId: U },
+        columns: { dashboardDefaultsApplied: true },
+      }),
+    ).toBeUndefined();
+    expect(await readDashboards(U)).toMatchObject([
+      { id: 'default', pinned: true },
+    ]);
+  });
+
   it('never pins a default again once the first visit pinned one', async () => {
     await db
       .insert(schema.dashboards)
