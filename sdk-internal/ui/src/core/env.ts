@@ -28,10 +28,6 @@ export const look: Look = lookOf(hostPlatform);
 /** iOS or Android: the touch looks, with their own page and list trees. */
 export const mobileLook: boolean = look === 'ios' || look === 'android';
 
-/** macOS or Windows: the web's components, with the desktop's metrics,
- * type and habits. */
-export const desktopLook: boolean = look === 'macos' || look === 'windows';
-
 /** The value for the App's look. */
 export function byLook<T>(values: Record<Look, T>): T {
   return values[look];

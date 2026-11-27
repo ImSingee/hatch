@@ -34,7 +34,8 @@ export type MobileLook = 'ios' | 'android';
 export type DesktopLook = 'macos' | 'windows';
 
 /** The platforms a web shell may name in `host.params.platform`: the Mobile
- * app's WebView (`ios`, `android`) and the macOS app (`macos`). */
+ * app's WebView (`ios`, `android`), the macOS app (`macos`) and a Windows
+ * shell (`windows`). */
 const SHELL_PLATFORMS: readonly string[] = [
   'ios',
   'android',

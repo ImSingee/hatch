@@ -7,15 +7,16 @@ import { byLook } from './env';
 import type { Align, Justify, Space, Tone } from './types';
 
 /** DESIGN.md "Focus": a 2-point ink outline, 2 points out, on keyboard
- * focus. macOS draws its focus ring in the accent, hugging the control;
- * Windows its ink focus rectangle, 1 point out. */
+ * focus. macOS draws its focus ring in the accent, 1 point out so it shows
+ * on accent-filled buttons too; Windows its ink focus rectangle, 1 point
+ * out. */
 export const FOCUS_RING = byLook({
   web: 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
   ios: 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
   android:
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
   macos:
-    'focus-visible:outline-3 focus-visible:outline-offset-0 focus-visible:outline-primary',
+    'focus-visible:outline-3 focus-visible:outline-offset-1 focus-visible:outline-primary',
   windows:
     'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
 });
