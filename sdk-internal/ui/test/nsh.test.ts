@@ -104,7 +104,13 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('follows the shell theme, over the built-in one', () => {
     expect(run(['test', 'app/theme.test.tsx'], fixture('theme'))).toMatch(
-      /^ok\n[\s\S]*2 passed/,
+      /^ok\n[\s\S]*4 passed/,
+    );
+  }, 240_000);
+
+  it('takes the look of the platform NSH or the web shell names', () => {
+    expect(run(['test', 'app/platform.test.tsx'], fixture('platform'))).toMatch(
+      /^ok\n[\s\S]*9 passed/,
     );
   }, 240_000);
 

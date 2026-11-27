@@ -7,14 +7,18 @@ import {
   POPUP_ENDING,
   POPUP_GROUP,
   POPUP_ITEM,
+  POPUP_ITEM_TEXT,
   POPUP_STARTING,
 } from '../core/styles';
 import { Glyph } from '../icons/Icon';
 import { IconCheck, IconSearch, IconSelector, IconX } from '../icons/icons.gen';
+import { byLook } from '../core/env';
 import {
   Field,
+  SEARCH_WELL,
   WELL,
   WELL_HEIGHT,
+  TRIGGER_STATE,
   WELL_TEXT,
   fieldError,
   wellState,
@@ -43,7 +47,7 @@ function items(options: readonly SelectOption[]) {
 function OptionRow(props: { title: string }): JSX.Element {
   return (
     <View class="flex-1 flex-row items-center gap-2">
-      <Text class="flex-1 text-body font-strong text-popover-foreground">
+      <Text class={`flex-1 ${POPUP_ITEM_TEXT} text-popover-foreground`}>
         {props.title}
       </Text>
       <View class="opacity-0 group-selected:opacity-100">
@@ -52,6 +56,13 @@ function OptionRow(props: { title: string }): JSX.Element {
     </View>
   );
 }
+
+/** The search field above a long list of options. */
+const SEARCH_FIELD = byLook({
+  web: `mb-1.5 ${WELL} ${WELL_HEIGHT} border-input ${WELL_TEXT}`,
+  ios: `mb-1.5 ${SEARCH_WELL} ${WELL_TEXT}`,
+  android: `mb-1.5 ${WELL} ${WELL_HEIGHT} border-control-border ${WELL_TEXT}`,
+});
 
 export type SelectProps = FieldProps & {
   options: readonly SelectOption[];
@@ -104,7 +115,7 @@ export function Select(props: SelectProps): JSX.Element {
         listClass="gap-0.5"
         itemClass={POPUP_ITEM}
         groupClass={POPUP_GROUP}
-        searchClass={`mb-1.5 ${WELL} ${WELL_HEIGHT} border-input ${WELL_TEXT}`}
+        searchClass={SEARCH_FIELD}
         empty={
           <Text class="px-2.5 py-6 text-center text-body text-muted-foreground">
             No matches
@@ -113,7 +124,7 @@ export function Select(props: SelectProps): JSX.Element {
         renderItem={(item) => <OptionRow title={item.title} />}
         trigger={
           <View
-            class={`${WELL} ${WELL_HEIGHT} justify-between ${wellState(error() !== undefined, disabled())} enabled:hover:bg-muted`}
+            class={`${WELL} ${WELL_HEIGHT} justify-between ${wellState(error() !== undefined, disabled())} ${TRIGGER_STATE}`}
           >
             <Text
               class={`flex-1 truncate ${WELL_TEXT} ${chosen() ? '' : 'text-muted-foreground'}`}

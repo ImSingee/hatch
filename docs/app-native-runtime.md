@@ -251,7 +251,12 @@ the bridge to authorize what web App code can reach. The grant is exactly these 
   registers a listener for it, so one the shell sends while the App starts
   (an update notice, say) is delivered when the App subscribes; a navigation
   that arrives before the App starts becomes its start route instead.
-- Start parameters (`host.params`): `{ route }`.
+- Start parameters (`host.params`): `{ route, platform? }`. `platform` is
+  `ios` or `android` when the web player runs inside the Mobile app: its
+  WebView opens `/app/<slug>/embed/?platform=<os>` and the player passes the
+  value on (any other value is dropped). `@hatch/ui` takes that platform's
+  look from it; NSH's own `platform.os` wins in a native NSH host, and a
+  browser (phones included) keeps the web look.
 
 Apps do not call these names directly. `@hatch/app/native` wraps them:
 `followShellTheme`, `initialRoute`, `setRoute`, `onNavigate`, `setTitle`,

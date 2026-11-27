@@ -9,3 +9,16 @@ import { context } from 'nsh';
  * stays until the shells are checked with the library's icon buttons.)
  */
 export const InOverlayContext = context(false);
+
+/**
+ * True in the actions of a sheet on iOS and Android: there each button
+ * fills the width at the large size, the main action on top.
+ */
+export const StackedActionsContext = context(false);
+
+/**
+ * True in the actions of a page's bar on iOS and Android (`Page`): there a
+ * button is the bar's plain kind, its icon alone when it has one, else its
+ * label in the accent.
+ */
+export const BarActionsContext = context(false);

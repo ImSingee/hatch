@@ -161,17 +161,28 @@ export function validateHandoff(origin: string, handoff: SessionHandoff): void {
 }
 
 /** The authenticated page a WebView opens after the handoff completes. */
-export type BrowserDestination = { path: string; hash?: string };
+export type BrowserDestination = {
+  path: string;
+  hash?: string;
+  search?: string;
+};
 
+/**
+ * An App's page. `platform` names this device's platform to the App's web
+ * player (`?platform=`), so a native-runtime App takes its look: the
+ * player passes it to the App as `host.params.platform`.
+ */
 export function appDestination(
   slug: string,
   hash?: string,
+  platform?: 'ios' | 'android',
 ): BrowserDestination {
   if (!/^[A-Za-z0-9_-]{1,191}$/.test(slug))
     throw new MobileError('invalid_id', 'Invalid App address.');
   return {
     path: `/app/${slug}/embed/`,
     hash: hash?.replace(/^#/, '') || undefined,
+    search: platform ? `platform=${platform}` : undefined,
   };
 }
 
@@ -188,6 +199,7 @@ export function destinationUrl(
   const url = new URL(destination.path, origin);
   if (url.origin !== origin || url.pathname !== destination.path)
     throw new MobileError('invalid_path', 'Invalid page address.');
+  if (destination.search) url.search = destination.search;
   if (destination.hash) url.hash = destination.hash;
   return url.href;
 }

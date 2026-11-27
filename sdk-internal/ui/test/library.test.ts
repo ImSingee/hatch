@@ -14,7 +14,7 @@ import {
   catalogueEntries,
 } from '../scripts/catalogue.ts';
 import { UI_ROOT, generatedFiles } from '../scripts/outputs.ts';
-import { typeScale } from '../theme/tailwind.ts';
+import { platformTypeScale, typeScale } from '../theme/tailwind.ts';
 import { ACCENT_NAMES, buildAppTheme, colorRamp } from '../theme/build.ts';
 
 const LIB = path.join(UI_ROOT, 'src');
@@ -126,7 +126,10 @@ describe('styling uses tokens only', () => {
   });
 
   it('names a theme token in every colour class', () => {
-    const typeSizes = new Set(Object.keys(typeScale));
+    const typeSizes = new Set([
+      ...Object.keys(typeScale),
+      ...Object.keys(platformTypeScale),
+    ]);
     const nonColour: Record<string, RegExp> = {
       text: /^(start|center|end|left|right|justify|pretty|balance|wrap|nowrap|ellipsis|clip)$/,
       border: /^(t|b|l|r|x|y|\d+|none|solid|dashed|dotted|hidden)(-\d+)?$/,

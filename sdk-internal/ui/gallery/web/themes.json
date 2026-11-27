@@ -10,6 +10,7 @@
         "radius-tile": "18px",
         "radius-xl": "20px",
         "radius-window": "24px",
+        "radius-sheet": "24px",
         "font-sans": "Nunito, PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif",
         "font-mono": "JetBrains Mono, ui-monospace, Menlo, Consolas, monospace"
       },
@@ -120,6 +121,7 @@
         "radius-tile": "18px",
         "radius-xl": "20px",
         "radius-window": "24px",
+        "radius-sheet": "24px",
         "font-sans": "Nunito, PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif",
         "font-mono": "JetBrains Mono, ui-monospace, Menlo, Consolas, monospace"
       },
@@ -230,6 +232,7 @@
         "radius-tile": "18px",
         "radius-xl": "20px",
         "radius-window": "24px",
+        "radius-sheet": "24px",
         "font-sans": "Nunito, PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif",
         "font-mono": "JetBrains Mono, ui-monospace, Menlo, Consolas, monospace"
       },
@@ -340,6 +343,7 @@
         "radius-tile": "18px",
         "radius-xl": "20px",
         "radius-window": "24px",
+        "radius-sheet": "24px",
         "font-sans": "Nunito, PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif",
         "font-mono": "JetBrains Mono, ui-monospace, Menlo, Consolas, monospace"
       },

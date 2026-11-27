@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useId, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   appDestination,
@@ -17,6 +17,10 @@ import { useWebHistoryBack } from '../../src/state/use-web-history-back';
 import { glyphs } from '../../src/ui/glyph.types';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
 import { usePalette } from '../../src/ui/theme-context';
+
+/** The platform this app names to the Apps it opens. */
+const shellPlatform =
+  Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : undefined;
 
 export default function AppScreen() {
   const c = usePalette();
@@ -49,7 +53,9 @@ export default function AppScreen() {
   let destination: BrowserDestination | null = null;
   let invalid: unknown = null;
   try {
-    destination = appSlug ? appDestination(appSlug, entryHash) : null;
+    destination = appSlug
+      ? appDestination(appSlug, entryHash, shellPlatform)
+      : null;
   } catch (error) {
     invalid = error;
   }

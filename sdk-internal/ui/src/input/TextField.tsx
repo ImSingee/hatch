@@ -4,8 +4,10 @@ import { Input, NumberInput } from 'nsh/base';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
 import { IconMinus, IconPlus } from '../icons/icons.gen';
+import { look } from '../core/env';
 import {
   Field,
+  SEARCH_WELL,
   WELL,
   WELL_HEIGHT,
   WELL_TEXT,
@@ -115,7 +117,11 @@ export function TextField(props: TextFieldProps): JSX.Element {
       labelHidden={props.labelHidden}
     >
       <View
-        class={`${WELL} ${WELL_HEIGHT} ${wellState(error() !== undefined, disabled())}`}
+        class={
+          props.labelHidden && look === 'ios'
+            ? SEARCH_WELL
+            : `${WELL} ${WELL_HEIGHT} ${wellState(error() !== undefined, disabled())}`
+        }
       >
         {props.icon ? (
           <Glyph icon={props.icon} size="md" color="muted-foreground" />

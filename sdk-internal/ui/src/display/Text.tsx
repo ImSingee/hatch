@@ -1,5 +1,6 @@
 import { Text as NshText, View } from 'nsh';
 import type { JSX } from 'nsh';
+import { byLook } from '../core/env';
 
 export type TextTone =
   | 'default'
@@ -28,17 +29,30 @@ export type TextProps = {
   selectable?: boolean;
 };
 
-const SIZE: Record<NonNullable<TextProps['size']>, string> = {
-  sm: 'text-caption',
-  md: 'text-body',
-  lg: 'text-body-lg',
-};
+type TextSize = NonNullable<TextProps['size']>;
+type TextWeight = NonNullable<TextProps['weight']>;
 
-const WEIGHT: Record<NonNullable<TextProps['weight']>, string> = {
-  regular: 'font-body',
-  strong: 'font-strong',
-  bold: 'font-label',
-};
+/** Body text on each look: the Desk's 12/14/16, iOS's footnote, body and
+ * title 3, Material's body medium, body large and title large. */
+const SIZE = byLook<Record<TextSize, string>>({
+  web: { sm: 'text-caption', md: 'text-body', lg: 'text-body-lg' },
+  ios: { sm: 'text-ios-footnote', md: 'text-ios-body', lg: 'text-ios-title-3' },
+  android: {
+    sm: 'text-m3-body-md',
+    md: 'text-m3-body-lg',
+    lg: 'text-m3-title-lg',
+  },
+});
+
+const WEIGHT = byLook<Record<TextWeight, string>>({
+  web: { regular: 'font-body', strong: 'font-strong', bold: 'font-label' },
+  ios: { regular: 'font-regular', strong: 'font-semibold', bold: 'font-bold' },
+  android: {
+    regular: 'font-regular',
+    strong: 'font-medium',
+    bold: 'font-bold',
+  },
+});
 
 const TONE: Record<TextTone, string> = {
   default: 'text-foreground',
@@ -94,12 +108,65 @@ export type HeadingProps = {
   lines?: 1 | 2;
 };
 
-const LEVEL: Record<NonNullable<HeadingProps['level']>, string> = {
-  1: 'text-display',
-  2: 'text-title',
-  3: 'text-section',
-  4: 'text-subsection',
-};
+type Level = NonNullable<HeadingProps['level']>;
+
+/** Headings on each look: iOS's large title, title 1, title 2 and headline;
+ * Material's headlines and title medium. */
+const LEVEL = byLook<Record<Level, string>>({
+  web: {
+    1: 'text-display',
+    2: 'text-title',
+    3: 'text-section',
+    4: 'text-subsection',
+  },
+  ios: {
+    1: 'text-ios-large-title font-bold',
+    2: 'text-ios-title-1 font-bold',
+    3: 'text-ios-title-2 font-bold',
+    4: 'text-ios-body font-semibold tracking-normal',
+  },
+  android: {
+    1: 'text-m3-headline-lg font-regular tracking-normal',
+    2: 'text-m3-headline-md font-regular tracking-normal',
+    3: 'text-m3-headline-sm font-regular tracking-normal',
+    4: 'text-m3-title-md font-medium tracking-normal',
+  },
+});
+
+/**
+ * The type of a title a component draws (a card's, a dialog's, an empty
+ * state's), on the App's look. Internal.
+ */
+export const TITLE = byLook({
+  web: {
+    card: 'text-subsection',
+    modal: 'text-modal',
+    section: 'text-section',
+  },
+  ios: {
+    card: 'text-ios-body font-semibold tracking-normal',
+    modal: 'text-ios-title-2 font-bold',
+    section: 'text-ios-title-3 font-semibold',
+  },
+  android: {
+    card: 'text-m3-title-md font-medium tracking-normal',
+    modal: 'text-m3-headline-sm font-regular tracking-normal',
+    section: 'text-m3-title-lg font-regular tracking-normal',
+  },
+});
+
+/** Body and secondary text components draw around content. Internal. */
+export const BODY = byLook({
+  web: { body: 'text-body', caption: 'text-caption' },
+  ios: {
+    body: 'text-ios-body font-regular',
+    caption: 'text-ios-footnote font-regular',
+  },
+  android: {
+    body: 'text-m3-body-lg font-regular',
+    caption: 'text-m3-body-md font-regular',
+  },
+});
 
 /**
  * Heading text with the `header` role and its level. Internal: `Heading`,

@@ -106,6 +106,9 @@ export function buildAppTheme(
         'radius-tile': px(theme.radius.tile),
         'radius-xl': px(theme.radius.xl),
         'radius-window': px(theme.radius.window),
+        // A sheet's corner: the window's here; iOS and Android draw their
+        // own (`platformTheme` in `src/core/platform.ts`).
+        'radius-sheet': px(theme.radius.window),
         'font-sans': family(theme.fonts.sans, SANS_FALLBACK),
         'font-mono': family(theme.fonts.mono, MONO_FALLBACK),
       },
