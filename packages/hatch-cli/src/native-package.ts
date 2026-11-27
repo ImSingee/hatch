@@ -17,17 +17,28 @@ export type NativePackageCommand =
   | { kind: 'package'; app: string; out: string; force: boolean }
   | { kind: 'runtime-trust'; outDir: string | undefined };
 
+/** Relative paths are read against `--workdir` (default: the cwd). */
+function local(flags: Flags, file: string): string {
+  return path.resolve(textFlag(flags, 'workdir') ?? '.', file);
+}
+
 /** Map argv to one command; rejects anything unusable before any RPC. */
 export function parseNativePackageCommand(
   args: readonly string[],
   offset: number,
 ): { command: NativePackageCommand; flags: Flags } {
   const operation = args[offset + 1];
+  const checked = (parsed: { flags: Flags; positionals: string[] }) => {
+    textFlag(parsed.flags, 'workdir');
+    return parsed;
+  };
   if (operation === 'package') {
-    const { flags, positionals } = parseCommandArgs(args, offset, 2, {
-      out: { type: 'string' },
-      force: { type: 'boolean' },
-    });
+    const { flags, positionals } = checked(
+      parseCommandArgs(args, offset, 2, {
+        out: { type: 'string' },
+        force: { type: 'boolean' },
+      }),
+    );
     const app = onePositional(positionals, 'App ID or slug to app package');
     const out = textFlag(flags, 'out');
     if (out === undefined)
@@ -44,9 +55,11 @@ export function parseNativePackageCommand(
     };
   }
   if (operation === 'runtime-trust') {
-    const { flags, positionals } = parseCommandArgs(args, offset, 2, {
-      'out-dir': { type: 'string' },
-    });
+    const { flags, positionals } = checked(
+      parseCommandArgs(args, offset, 2, {
+        'out-dir': { type: 'string' },
+      }),
+    );
     if (positionals.length)
       throw invalid(
         'app runtime-trust takes no App: the trust is the instance’s.',
@@ -120,7 +133,7 @@ export async function runNativePackage(
 ): Promise<void> {
   const { command, flags } = parseNativePackageCommand(args, offset);
   if (command.kind === 'package') {
-    const target = command.out === '-' ? null : path.resolve(command.out);
+    const target = command.out === '-' ? null : local(flags, command.out);
     // Checked before the download, and again by the final rename's target.
     if (target && !command.force && (await exists(target)))
       throw new CliError(
@@ -157,7 +170,7 @@ export async function runNativePackage(
   const trust = await client.apps.nativePackage.trust();
   const written: string[] = [];
   if (command.outDir) {
-    const dir = path.resolve(command.outDir);
+    const dir = local(flags, command.outDir);
     await mkdir(dir, { recursive: true });
     for (const [name, content] of Object.entries(trustFiles(trust))) {
       const file = path.join(dir, name);

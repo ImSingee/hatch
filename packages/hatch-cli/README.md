@@ -784,7 +784,9 @@ with its `keyId` and base64 `publicKey`, release keys with their
 private key is returned. `initialized` is false and the lists are empty until
 the first native deployment created the instance's keys. `--out-dir` writes
 `root-<keyId>.pub`, `release-<keyId>.cert` and `revocations.json` there,
-replacing files of those names, and adds their paths as `files`.
+replacing files of those names, and adds their paths as `files`. Relative
+`--out` and `--out-dir` paths are read against `--workdir` (default: the
+current directory).
 
 Errors: a missing App or `--out`, extra arguments, an empty `--out` or
 `--out-dir`, `--out -` with `--json` or `--force`, and `runtime-trust` with an

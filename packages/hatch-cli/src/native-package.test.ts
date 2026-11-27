@@ -50,6 +50,7 @@ describe('hatch app package and runtime-trust arguments', () => {
     [['runtime-trust', 'notes']],
     [['runtime-trust', '--out-dir', '']],
     [['runtime-trust', '--out', 'x']],
+    [['package', 'notes', '--out', 'a.nshpkg', '--workdir', '']],
   ])('rejects %j before any request', (args) => {
     expect(() => parse(...args)).toThrow(
       expect.objectContaining({ code: 'invalid_arguments' }),
