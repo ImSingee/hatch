@@ -15,13 +15,15 @@ describe.skipIf(!adminUrl)('Dashboard order on PostgreSQL', () => {
   let platform: typeof import('~/db');
   let pins: typeof import('./pins');
   let read: typeof import('./workspace-read');
+  let databaseUrl = '';
 
   beforeAll(async () => {
     admin = postgres(adminUrl!, { max: 1, onnotice: () => {} });
     await admin.unsafe(`create database "${database}"`);
     const url = new URL(adminUrl!);
     url.pathname = `/${database}`;
-    vi.stubEnv('DATABASE_URL', url.toString());
+    databaseUrl = url.toString();
+    vi.stubEnv('DATABASE_URL', databaseUrl);
     const { runMigrations } = await import('~/db/migrate');
     await runMigrations();
     platform = await import('~/db');
@@ -122,19 +124,86 @@ describe.skipIf(!adminUrl)('Dashboard order on PostgreSQL', () => {
     for (let round = 0; round < 12; round++) {
       const id = `gone-${round}`;
       await db.insert(schema.dashboards).values({ id, name: 'Gone' });
+      // The user already has a row for it, unpinned.
+      await db.insert(schema.userDashboards).values({
+        userId: 'u1',
+        dashboardId: id,
+        pinned: false,
+        sortOrder: 99,
+      });
+      let pinnedWhenDeleted: boolean | undefined;
       const [pin] = await Promise.allSettled([
         pins.setDashboardPinned('u1', id, true),
-        db.delete(schema.dashboards).where(eq(schema.dashboards.id, id)),
+        db.transaction(async (tx) => {
+          // Waits for a pin holding the dashboard, then sees what it wrote.
+          await tx
+            .select({ id: schema.dashboards.id })
+            .from(schema.dashboards)
+            .where(eq(schema.dashboards.id, id))
+            .for('update');
+          pinnedWhenDeleted = (
+            await tx.query.userDashboards.findFirst({
+              where: { userId: 'u1', dashboardId: id },
+              columns: { pinned: true },
+            })
+          )?.pinned;
+          await tx
+            .delete(schema.dashboards)
+            .where(eq(schema.dashboards.id, id));
+        }),
       ]);
-      // Either it was pinned before the delete, or the pin says not found;
-      // never a success for a dashboard that was not pinned.
+      // A success means the pin was written before the delete; otherwise
+      // the pin says not found.
       expect(
         pin.status === 'fulfilled'
-          ? 'pinned before the delete'
-          : (pin.reason as { status?: number }).status,
-      ).toSatisfy(
-        (outcome) => outcome === 'pinned before the delete' || outcome === 404,
+          ? { pinned: pinnedWhenDeleted }
+          : { status: (pin.reason as { status?: number }).status },
+      ).toEqual(
+        pin.status === 'fulfilled' ? { pinned: true } : { status: 404 },
       );
+    }
+  });
+
+  it('says not found, and publishes nothing, for a pin whose dashboard a pending delete holds', async () => {
+    const { db, schema } = platform;
+    const { subscribePlatformEvents } = await import('./platform-events');
+    await db.insert(schema.dashboards).values({ id: 'held', name: 'Held' });
+    await db.insert(schema.userDashboards).values({
+      userId: 'u1',
+      dashboardId: 'held',
+      pinned: false,
+      sortOrder: 99,
+    });
+    const other = postgres(databaseUrl, { max: 1, onnotice: () => {} });
+    const events: unknown[] = [];
+    const stop = subscribePlatformEvents((event) => events.push(event));
+    try {
+      let release = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let deleting = () => {};
+      const deleted = new Promise<void>((resolve) => {
+        deleting = resolve;
+      });
+      const deletion = other.begin(async (sql) => {
+        await sql`delete from dashboards where id = 'held'`;
+        deleting();
+        await released;
+      });
+      await deleted;
+      const pin = pins.setDashboardPinned('u1', 'held', true);
+      const outcome = await pin.then(
+        () => 'pinned',
+        (error: { status?: number }) => error.status,
+      );
+      release();
+      await deletion;
+      expect(outcome).toBe(404);
+      expect(events).toEqual([]);
+    } finally {
+      stop();
+      await other.end({ timeout: 1 });
     }
   });
 });

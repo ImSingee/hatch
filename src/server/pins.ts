@@ -7,7 +7,7 @@
  * pinned flag and order of the shared dashboards is in `user_dashboards`.
  * Every function acts for one user and never sees another user's pins.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, schema, type TX } from '~/db';
 import {
   cleanEntryHash,
@@ -256,39 +256,48 @@ export async function reorderAppPins(
  * Store the user's whole dashboard order, with each dashboard's pinned flag:
  * once a user changes anything, every dashboard has a row, so the ones a
  * change does not name keep their place. A listed dashboard someone deleted
- * since the order was read is skipped rather than failing the change.
+ * since the order was read, or is deleting right now, is skipped rather than
+ * failing the change. Returns the ids of the dashboards it wrote.
  */
 export async function writeDashboardOrder(
   tx: TX,
   userId: string,
   order: { id: string; pinned: boolean }[],
-): Promise<void> {
-  if (!order.length) return;
-  const view = schema.userDashboards;
-  const listed = sql.join(
-    order.map(
-      ({ id, pinned }, position) =>
-        sql`(${id}::text, ${pinned}::boolean, ${position}::integer)`,
-    ),
-    sql`, `,
+): Promise<string[]> {
+  if (!order.length) return [];
+  // The dashboards that still exist and nobody is deleting; the lock keeps
+  // them until this transaction ends, so the foreign key holds.
+  const kept = new Set(
+    (
+      await tx
+        .select({ id: schema.dashboards.id })
+        .from(schema.dashboards)
+        .where(
+          inArray(
+            schema.dashboards.id,
+            order.map((entry) => entry.id),
+          ),
+        )
+        .for('key share', { skipLocked: true })
+    ).map((row) => row.id),
   );
-  // Inserting from the dashboards that still exist, in one statement, keeps
-  // the foreign key satisfied however the order went stale. A dashboard being
-  // deleted right now is skipped too: the rows written are locked against
-  // deletion until this transaction ends, the others are left out.
-  await tx.execute(sql`
-    with ${sql.identifier('kept')} as (
-      select ${schema.dashboards.id} as id, listed.pinned, listed.position
-      from (values ${listed}) as listed (id, pinned, position)
-      join ${schema.dashboards} on ${schema.dashboards.id} = listed.id
-      for key share of ${schema.dashboards} skip locked
-    )
-    insert into ${view} (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}, ${sql.identifier('pinned')}, ${sql.identifier('sort_order')})
-    select ${userId}::text, kept.id, kept.pinned, kept.position from ${sql.identifier('kept')} as kept
-    on conflict (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}) do update set
-      ${sql.identifier('pinned')} = excluded.${sql.identifier('pinned')},
-      ${sql.identifier('sort_order')} = excluded.${sql.identifier('sort_order')}
-  `);
+  const rows = order.flatMap(({ id, pinned }, sortOrder) =>
+    kept.has(id) ? [{ userId, dashboardId: id, pinned, sortOrder }] : [],
+  );
+  if (!rows.length) return [];
+  const view = schema.userDashboards;
+  const written = await tx
+    .insert(view)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [view.userId, view.dashboardId],
+      set: {
+        pinned: sql`excluded.${sql.identifier('pinned')}`,
+        sortOrder: sql`excluded.${sql.identifier('sort_order')}`,
+      },
+    })
+    .returning({ id: view.dashboardId });
+  return written.map((row) => row.id);
 }
 
 /**
@@ -346,18 +355,14 @@ export async function setDashboardPinned(
       throw new AppError('Dashboard not found.', 404, {
         code: 'shell.dashboardNotFound',
       });
-    await writeDashboardOrder(
+    const written = await writeDashboardOrder(
       tx,
       userId,
       current.map((entry) => (entry.id === id ? { id, pinned } : entry)),
     );
-    // Deleted while this change was being made: say so rather than report a
-    // pin nobody can see.
-    const written = await tx.query.userDashboards.findFirst({
-      where: { userId, dashboardId: id },
-      columns: { dashboardId: true },
-    });
-    if (!written)
+    // Deleted, or being deleted, while this change was made: say so rather
+    // than report a pin nobody can see.
+    if (!written.includes(id))
       throw new AppError('Dashboard not found.', 404, {
         code: 'shell.dashboardNotFound',
       });
