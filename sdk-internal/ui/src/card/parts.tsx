@@ -816,12 +816,18 @@ export function Item(props: ItemProps): JSX.Element {
   const list = ListContext();
   const number = list.next();
   const text = `${TYPE.text.md} ${TYPE.regular} text-neutral-strong`;
+  const task = typeof props.checked === 'boolean';
+  // A task item is one checkbox, named by its text.
   return (
-    <View class="min-w-0 flex-row items-start gap-2">
-      {typeof props.checked === 'boolean' ? (
+    <View
+      class="min-w-0 flex-row items-start gap-2"
+      role={task ? 'checkbox' : undefined}
+      accessibilityState={
+        task ? { checked: props.checked, disabled: true } : undefined
+      }
+    >
+      {task ? (
         <View
-          role="checkbox"
-          accessibilityState={{ checked: props.checked, disabled: true }}
           class={`mt-0.5 size-4 items-center justify-center rounded-(--radius-xs) border-2 ${props.checked ? 'border-primary bg-primary' : 'border-control-border bg-card'}`}
         >
           {props.checked ? (

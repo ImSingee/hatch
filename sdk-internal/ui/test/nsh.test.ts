@@ -4,7 +4,9 @@
  * while their items change, list pages open any item, follow their items,
  * keep the detail and survive resizes, toast actions run, the library follows
  * the shell's theme, sections and stack pages keep the shell's route and
- * title, and the gallery builds for release with every class resolved.
+ * title, notification cards draw what the platform compiles on every look
+ * and take answers, and the gallery builds for release with every class
+ * resolved.
  * Skipped where `nsh` is not installed (not on `PATH`, `~/.local/bin` or
  * `~/.nsh/bin`), except in CI, which installs the pinned release; set
  * `NSH_BIN` (or the platform's `HATCH_NSH_BIN`) to use another binary.
@@ -15,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { prepareAppRoot } from '../gallery/prepare.ts';
+import { writeCardCases } from './card-cases.ts';
 
 /** `NSH_BIN`, else `nsh` on `PATH` (an empty entry is the current
  * directory), else the install script's places. Absolute, because the tests
@@ -117,6 +120,14 @@ describe.skipIf(!nsh)('with NSH', () => {
   it('keeps the route and title in the shell for sections and stack pages', () => {
     expect(run(['test', 'app/route.test.tsx'], fixture('route'))).toMatch(
       /^ok\n[\s\S]*5 passed/,
+    );
+  }, 240_000);
+
+  it('draws notification cards as the platform compiles them, on every look', () => {
+    const root = fixture('card');
+    writeCardCases(path.join(root, 'app'));
+    expect(run(['test', 'app/card.test.tsx'], root)).toMatch(
+      /^ok\n[\s\S]*8 passed/,
     );
   }, 240_000);
 
