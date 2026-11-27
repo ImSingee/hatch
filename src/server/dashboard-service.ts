@@ -102,8 +102,9 @@ function dashboardDescription(description: string): string | null {
 export const listDashboards = readDashboards;
 
 /**
- * Create an empty dashboard. It is pinned for its creator only, at the end of
- * their order; everyone else finds it unpinned after their own dashboards.
+ * Create an empty dashboard. It is pinned for its creator, at the end of
+ * their order, and for nobody else; other users find it after their own
+ * dashboards, unpinned unless their first visit pins it as the oldest.
  * Without a creator (a Run nobody prompted) it is pinned for nobody.
  */
 export async function createDashboard(

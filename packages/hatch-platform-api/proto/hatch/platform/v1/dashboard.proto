@@ -102,8 +102,8 @@ message ListDashboardsRequest {
 
 message ListDashboardsResponse {
   // In the caller's dashboard order, pinned or not. Dashboards the caller
-  // never pinned or ordered come last, oldest first. A new user starts with
-  // only the oldest dashboard pinned.
+  // never pinned or ordered come last, oldest first. A new user's first visit
+  // pins the oldest dashboard, whoever created it.
   repeated Dashboard dashboards = 1;
   // Set when more dashboards follow this page.
   optional string next_cursor = 2;
@@ -133,8 +133,10 @@ message CreateDashboardRequest {
 
 message CreateDashboardResponse {
   // The new dashboard has no widgets. It is pinned and last in order for the
-  // caller only; other users find it unpinned. A Run no user prompted pins it
-  // for nobody.
+  // caller; it is not pinned for anyone else, so other users find it
+  // unpinned, except that a new user's first visit pins the oldest dashboard,
+  // which can be one someone else created. A Run no user prompted pins it for
+  // nobody.
   Dashboard dashboard = 1;
 }
 

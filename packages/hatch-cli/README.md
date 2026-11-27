@@ -861,9 +861,9 @@ new position move down and empty rows close up, so read the printed layouts.
 `update` leaves omitted fields unchanged; `--auto-refresh` takes seconds
 (1 to 3600). Dashboards are shared, but each user has their own pinned flags
 and order: `dashboard list` prints them for the caller (dashboards they never
-pinned or ordered last, oldest first; a new user has only the oldest one
-pinned), and `dashboard create` pins the new dashboard last for the caller
-only. Pin, unpin and reorder dashboards with
+pinned or ordered last, oldest first; a new user's first visit pins the
+oldest one, whoever created it), and `dashboard create` pins the new
+dashboard last for the caller and for nobody else. Pin, unpin and reorder dashboards with
 `hatch pin`.
 
 Local rejections exit 2 with `invalid_arguments`: no field to change, a blank

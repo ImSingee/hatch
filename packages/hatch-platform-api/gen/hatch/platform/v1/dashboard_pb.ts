@@ -352,8 +352,8 @@ export type ListDashboardsResponse =
   Message<'hatch.platform.v1.ListDashboardsResponse'> & {
     /**
      * In the caller's dashboard order, pinned or not. Dashboards the caller
-     * never pinned or ordered come last, oldest first. A new user starts with
-     * only the oldest dashboard pinned.
+     * never pinned or ordered come last, oldest first. A new user's first visit
+     * pins the oldest dashboard, whoever created it.
      *
      * @generated from field: repeated hatch.platform.v1.Dashboard dashboards = 1;
      */
@@ -444,8 +444,10 @@ export type CreateDashboardResponse =
   Message<'hatch.platform.v1.CreateDashboardResponse'> & {
     /**
      * The new dashboard has no widgets. It is pinned and last in order for the
-     * caller only; other users find it unpinned. A Run no user prompted pins it
-     * for nobody.
+     * caller; it is not pinned for anyone else, so other users find it
+     * unpinned, except that a new user's first visit pins the oldest dashboard,
+     * which can be one someone else created. A Run no user prompted pins it for
+     * nobody.
      *
      * @generated from field: hatch.platform.v1.Dashboard dashboard = 1;
      */

@@ -528,7 +528,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['dashboard', 'list'],
     usage: 'dashboard list [--limit <n>] [--cursor <cursor>]',
     description:
-      "Without --limit, list every dashboard in your order: id, name, description, pinned (by you) and autoRefreshSeconds (0 is off). Dashboards are shared; the pinned flag and order are each user's own, and dashboards you never pinned or ordered come last, oldest first. A new user starts with only the oldest dashboard pinned. Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.",
+      "Without --limit, list every dashboard in your order: id, name, description, pinned (by you) and autoRefreshSeconds (0 is off). Dashboards are shared; the pinned flag and order are each user's own, and dashboards you never pinned or ordered come last, oldest first. A new user's first visit pins the oldest dashboard, whoever created it. Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.",
   },
   {
     path: ['dashboard', 'get'],
@@ -540,7 +540,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['dashboard', 'create'],
     usage: 'dashboard create --name <text> [--description <text>]',
     description:
-      'Create an empty dashboard and print its id. It is pinned and placed last for you (in a Run, the user who sent the prompt); other users find it unpinned.',
+      "Create an empty dashboard and print its id. It is pinned and placed last for you (in a Run, the user who sent the prompt) and not pinned for anyone else; a new user's first visit still pins the oldest dashboard, which can be this one.",
   },
   {
     path: ['dashboard', 'update'],

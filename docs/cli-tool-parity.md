@@ -269,8 +269,9 @@ the prompt it answers. A Run no user prompted gets `CONFLICT`, since there is
 nobody whose settings it could change. Neither has a device- or browser-bound
 operation, so there is no CLI exception. Another user's pin id is `NOT_FOUND`.
 `hatch app create` pins the new App for the same user (none for a Run no user
-prompted), and `hatch dashboard create` pins the new dashboard for them only;
-other users find it unpinned at the end of their order. `dashboard list` and
+prompted), and `hatch dashboard create` pins the new dashboard for them and
+for nobody else, so other users find it at the end of their order, unpinned
+unless their first visit pins it as the oldest dashboard. `dashboard list` and
 `get` report the caller's pinned flag and order (a Run no user prompted sees
 every dashboard unpinned, oldest first). Reordering moves the listed ids to
 the front and keeps the rest in their relative order; unknown or repeated ids
