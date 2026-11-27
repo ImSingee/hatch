@@ -26,6 +26,22 @@ describe('native App themes', () => {
         (library.cssVars.light as Record<string, string>)[`${tone}-strong`],
       ]),
     );
+    // Added since: the working tone (orange) of a card's "in progress"
+    // status, with the roles every tone has.
+    const orange = resolvePreset('desk', tokens.accents[accent]).ramps.orange;
+    const working = Object.fromEntries(
+      Object.entries(buildAppTheme({ accent }).cssVars.light).filter(([name]) =>
+        name.startsWith('working'),
+      ),
+    );
+    expect(working).toEqual({
+      working: orange[6],
+      'working-strong': orange[7],
+      'working-pressed': expect.stringMatching(/^#/),
+      'working-tint': orange[1],
+      'working-tint-hover': orange[2],
+      'working-tint-foreground': orange[8],
+    });
     const expected = {
       cssVars: {
         // Added since: a sheet's corner, which iOS and Android set to their
@@ -34,7 +50,7 @@ describe('native App themes', () => {
           ...library.cssVars.theme,
           'radius-sheet': library.cssVars.theme['radius-window'],
         },
-        light: { ...library.cssVars.light, ...pressed },
+        light: { ...library.cssVars.light, ...pressed, ...working },
       },
     };
     expect(buildAppTheme({ accent })).toEqual(expected);

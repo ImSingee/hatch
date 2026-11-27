@@ -193,12 +193,12 @@ describe('theme', () => {
         ['muted-foreground', 'card'],
         ['muted-foreground', 'surface-window'],
         ['destructive-foreground', 'danger'],
-        ...(['danger', 'warning', 'success', 'info'] as const).flatMap(
-          (tone): [string, string][] => [
-            [`${tone}-tint-foreground`, `${tone}-tint`],
-            [`${tone}-strong`, 'card'],
-          ],
-        ),
+        ...(
+          ['danger', 'warning', 'success', 'info', 'working'] as const
+        ).flatMap((tone): [string, string][] => [
+          [`${tone}-tint-foreground`, `${tone}-tint`],
+          [`${tone}-strong`, 'card'],
+        ]),
         ...tokens.tiles.map((_, index): [string, string] => [
           'tile-foreground',
           `tile-${index}`,

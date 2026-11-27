@@ -147,6 +147,9 @@ const PLATFORM_TEXT_PAIRS: readonly (readonly [string, string])[] = [
   ['warning-strong', 'card'],
   ['info-strong', 'background'],
   ['info-strong', 'card'],
+  // Cards' working tone.
+  ['working-strong', 'background'],
+  ['working-strong', 'card'],
 ];
 
 /** The validation's name of a library colour token. */
@@ -158,6 +161,7 @@ const VALIDATED_ROLE: Record<string, string> = {
   'success-strong': 'green-text',
   'warning-strong': 'amber-text',
   'info-strong': 'blue-text',
+  'working-strong': 'orange-text',
 };
 
 describe('platform looks and the theme validation', () => {
