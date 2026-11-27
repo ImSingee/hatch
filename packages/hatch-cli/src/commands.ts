@@ -238,6 +238,33 @@ const definitions: readonly CliCommandDefinition[] = [
       'Cancel a queued or running run; a running run has its instance killed and its open steps marked failed. Prints canceled=false with the final status when the run had already finished. Idempotent.',
   },
   {
+    path: ['app', 'ai', 'show'],
+    usage: 'app ai show <id-or-slug> [--json]',
+    description:
+      "Show the AI roles the App's live deployment declares (name, kind chat or image, description, declared needs) with the model each one calls: its id and <provider>/<model> ref; bound when the owner picked it for the role, otherwise defaultSource setting (the default model for Apps, see app ai defaults) or order (the first usable model of that kind); unavailable when that model is disabled; needs the model lacks. Also lists every chat and image model a role may be set to. available is false when the deployment declares no AI roles.",
+  },
+  {
+    path: ['app', 'ai', 'set-model'],
+    usage:
+      'app ai set-model <id-or-slug> --role <name> (--model <model-id|provider/model> | --clear) [--json]',
+    description:
+      "Pick the model one declared AI role calls, by the model id or <provider>/<model> ref that app ai show lists, or --clear the pick so the role uses the default model for Apps. Side effect: the App's next calls with that role go to the new model. Refused with NOT_FOUND for a role the live deployment does not declare and BAD_REQUEST for a model that is not a usable model of the role's kind or matches several. Prints the App's AI settings.",
+  },
+  {
+    path: ['app', 'ai', 'usage'],
+    usage:
+      'app ai usage <id-or-slug> [--limit <1-200>] [--cursor <call-id>] [--json]',
+    description:
+      "List the App's AI calls newest first, 50 per page by default; pass the printed nextCursor as --cursor for the next page (null on the last). Each call carries id, time, role, kind, provider and model, status (ok, error, aborted) with its error code, token counts, images and duration. monthTotals sums this UTC month per role and model. Prompts and replies are never stored.",
+  },
+  {
+    path: ['app', 'ai', 'defaults'],
+    usage:
+      'app ai defaults [--chat-model <model-id|provider/model> | --clear-chat-model] [--image-model <model-id|provider/model> | --clear-image-model] [--json]',
+    description:
+      "Show or set the default chat and image models for Apps: every App's AI role without its own pick (app ai set-model) calls the default of its kind. Without flags it prints both defaults, each with source setting (chosen) or order (not set: the first usable model of that kind), unavailable when the chosen model is disabled, and the models each may be set to. A model flag sets that default by model id or <provider>/<model> ref; a --clear flag removes it so the first usable model applies; a kind without a flag stays unchanged. Side effect: unpicked roles of every App switch to the new default on their next call.",
+  },
+  {
     path: ['app', 'kv', 'list'],
     usage:
       'app kv list <app-id> [--cursor <key>] [--limit <count>] [--reveal-secrets]',
@@ -904,6 +931,7 @@ export const commandGroups: Readonly<Record<string, string>> = {
     'List, follow and cancel App deployments and read their logs.',
   'app docs':
     'Read the docs an App publishes for the services that call it, and the reference generated from its RPC proto.',
+  'app ai': "Choose the models Apps' AI roles use and read an App's AI calls.",
   'app kv': 'Read and write App key-value data.',
   'app data-table': 'Inspect and change App data tables.',
   'app db': 'Query App databases.',

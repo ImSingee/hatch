@@ -372,7 +372,8 @@ in `manifest.ts`:
     "kv": false,
     "dataTable": false,
     "notifications": false,
-    "tasks": false
+    "tasks": false,
+    "ai": false
   },
   "backendMode": "serverless",
   "rpc": {
@@ -728,6 +729,11 @@ Read only the reference relevant to the requested capability:
   model and let the user choose, upload a user-supplied file, or remove the
   icon (`hatch app icon`). Read it whenever the user asks for an App icon or
   logo, and after the user accepts the icon offer from Core workflow step 8.
+- [AI](references/ai.md): call the platform's chat and image models from the
+  backend with `@hatch/app/ai` through roles declared in `ai.roles`
+  (`capabilities.ai`, requires `backend`): streaming, tool loops with the App's
+  own functions, image generation, error codes and the default models. Never ask
+  the user for a provider API key or open network access to a provider.
 - [Notifications](references/backend-integrations.md#notifications): declare
   notification kinds, push with `notify()` from `@hatch/app/notifications`
   as text, Markdown or a card (the `card` tag escapes values; Markdown and

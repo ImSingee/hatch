@@ -727,6 +727,71 @@ describe('notifications manifest', () => {
   });
 });
 
+describe('ai manifest', () => {
+  const roles = [
+    {
+      name: 'summarize',
+      kind: 'chat',
+      description: 'Summarize',
+      needs: ['tools'],
+    },
+    { name: 'cover', kind: 'image', description: 'Draw a cover' },
+  ];
+  const base = {
+    id: 'writer',
+    name: 'Writer',
+    capabilities: { backend: true, ai: true },
+    backend: { entry: 'backend/main.ts' },
+  };
+
+  it('normalizes declared roles and the signed endpoint', () => {
+    const normalized = normalizeManifest(
+      parseSourceManifest({ ...base, ai: { roles } }),
+    );
+    expect(normalized.capabilities.ai).toBe(true);
+    expect(normalized.ai).toEqual({ url: '/api/app/writer/ai', roles });
+    expect(
+      projectAppManifestUrls(normalized, 'writer', 'renamed').ai?.url,
+    ).toBe('/api/app/writer/ai');
+  });
+
+  it('requires a backend, a matching capability, and valid unique roles', () => {
+    expect(() =>
+      parseSourceManifest({
+        ...base,
+        capabilities: { ai: true },
+        backend: undefined,
+        ai: { roles },
+      }),
+    ).toThrow(/capabilities.ai requires capabilities.backend/);
+    expect(() =>
+      parseSourceManifest({
+        ...base,
+        capabilities: { backend: true },
+        ai: { roles },
+      }),
+    ).toThrow(/capabilities.ai is false/);
+    expect(() => parseSourceManifest(base)).toThrow(/ai is not declared/);
+    expect(() =>
+      parseSourceManifest({ ...base, ai: { roles: [...roles, roles[0]] } }),
+    ).toThrow(/duplicate AI role name/);
+    expect(() =>
+      parseSourceManifest({
+        ...base,
+        ai: { roles: [{ name: 'Bad Name', kind: 'chat', description: 'x' }] },
+      }),
+    ).toThrow(/name must be/);
+    expect(() =>
+      parseSourceManifest({
+        ...base,
+        ai: {
+          roles: [{ ...roles[1], needs: ['tools'] }],
+        },
+      }),
+    ).toThrow(/needs applies only to chat roles/);
+  });
+});
+
 describe('tasks manifest', () => {
   const task = { name: 'digest', method: 'RunDigest' };
   const manifest = (overrides: Record<string, unknown> = {}) => ({

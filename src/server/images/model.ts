@@ -138,6 +138,8 @@ export async function resolveImageModel(imageModelId?: string): Promise<{
   id: string;
   driver: ImageDriver;
   provider: ImageProvider;
+  /** Display name of the provider, for attribution. Never a key. */
+  providerName: string;
   modelId: string;
 }> {
   const { ordered } = await load();
@@ -159,6 +161,7 @@ export async function resolveImageModel(imageModelId?: string): Promise<{
     id: model.id,
     driver,
     provider: { baseUrl: provider.baseUrl, apiKey: provider.apiKey },
+    providerName: provider.name,
     modelId: model.modelId,
   };
 }

@@ -9,6 +9,7 @@ import {
   type WebhookAuth,
   type BackendRuntime,
   type NotificationsConfig,
+  type AiConfig,
 } from '../../../packages/hatch-manifest/src/app-schema.js';
 import type { JsonObject } from '~/db/schema';
 import {
@@ -290,6 +291,11 @@ export type NormalizedManifest = {
     destination?: NotificationsConfig['destination'];
   };
   /**
+   * Declared AI model roles plus the base URL the backend calls, when the ai
+   * capability is enabled. Absent on historical deployments.
+   */
+  ai?: { url: string; roles: AiConfig['roles'] };
+  /**
    * The app's declared RPC API, captured from its proto at build time. Absent
    * for apps without an RPC service. Lets the platform (and the manage UI) know
    * exactly which services + methods an app exposes.
@@ -353,6 +359,7 @@ export function projectAppManifestUrls(
           },
         }
       : {}),
+    ...(manifest.ai ? { ai: { ...manifest.ai, url: aiUrl(appId) } } : {}),
     ...(manifest.capabilities?.webhook || manifest.webhook
       ? {
           webhook: {
@@ -385,6 +392,11 @@ export function dataTableUrl(id: string): string {
 /** Per-app notification push endpoint, called by the backend with HMAC. */
 export function notificationsUrl(id: string): string {
   return `${appBasePath(id)}/notifications`;
+}
+
+/** Per-app AI endpoint base, called by the backend with HMAC. */
+export function aiUrl(id: string): string {
+  return `${appBasePath(id)}/ai`;
 }
 
 /** Public inbound webhook URL (token appended at call time as `?secret=`). */
@@ -519,6 +531,24 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
       ...(src.notifications.destination
         ? { destination: src.notifications.destination }
         : {}),
+    };
+  }
+  // AI calls are signed with the backend's signing secret, so roles are
+  // meaningful only when a backend is staged.
+  if (
+    src.capabilities.ai &&
+    src.capabilities.backend &&
+    src.backend &&
+    src.ai
+  ) {
+    out.ai = {
+      url: aiUrl(src.id),
+      roles: src.ai.roles.map((role) => ({
+        name: role.name,
+        kind: role.kind,
+        description: role.description,
+        ...(role.needs?.length ? { needs: role.needs } : {}),
+      })),
     };
   }
   // Tasks run the backend's own RPC methods, so they need a staged backend

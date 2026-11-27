@@ -98,6 +98,8 @@ export type AppCapabilities = {
   notifications?: boolean;
   /** Declares runnable backend RPC methods (tasks) with run history. */
   tasks?: boolean;
+  /** Calls the platform's configured AI models through declared roles. */
+  ai?: boolean;
 };
 
 export type AppStatus =
@@ -599,6 +601,64 @@ export const appKv = snakeCase.table(
         ("app_kv"."secret" and (("app_kv"."value" is not null) <> ("app_kv"."value_ciphertext" is not null)))
       )`,
     ),
+  ],
+);
+
+/** ================== app AI ================== */
+
+/**
+ * The model the owner picked for one of an App's declared AI roles. A role
+ * without a row, or whose model was deleted, uses the default model of its
+ * kind.
+ */
+export const appAiRoleBindings = snakeCase.table(
+  'app_ai_role_bindings',
+  {
+    appId: text()
+      .notNull()
+      .references(() => apps.id, { onDelete: 'cascade' }),
+    role: text().notNull(),
+    /** `agent_models.id` of a model whose kind matches the role's kind. */
+    modelRowId: ulid()
+      .notNull()
+      .references(() => agentModels.id, { onDelete: 'cascade' }),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.appId, table.role] })],
+);
+
+export type AppAiCallKind = 'chat' | 'image';
+export type AppAiCallStatus = 'ok' | 'error' | 'aborted';
+
+/**
+ * One AI call an App backend made. Metadata only: prompts and responses are
+ * never stored.
+ */
+export const appAiUsage = snakeCase.table(
+  'app_ai_usage',
+  {
+    id: ulid().$defaultFn(genUlid).primaryKey(),
+    appId: text()
+      .notNull()
+      .references(() => apps.id, { onDelete: 'cascade' }),
+    deploymentId: ulid(),
+    role: text().notNull(),
+    kind: text().$type<AppAiCallKind>().notNull(),
+    /** Provider and model at call time; kept as text so history survives deletes. */
+    providerName: text().notNull(),
+    modelId: text().notNull(),
+    inputTokens: integer().notNull().default(0),
+    outputTokens: integer().notNull().default(0),
+    cacheReadTokens: integer().notNull().default(0),
+    cacheWriteTokens: integer().notNull().default(0),
+    images: integer().notNull().default(0),
+    status: text().$type<AppAiCallStatus>().notNull(),
+    errorCode: text(),
+    durationMs: integer().notNull().default(0),
+    createdAt,
+  },
+  (table) => [
+    index('app_ai_usage_app_created_idx').on(table.appId, table.createdAt),
   ],
 );
 

@@ -79,6 +79,7 @@ import {
   notificationsUrl,
   kvUrl,
   taskEnqueueUrl,
+  aiUrl,
 } from './manifest';
 import {
   type BackendRuntimeSnapshot,
@@ -1183,6 +1184,11 @@ async function spawnBackendProcess(
   const tasksEnqueueUrl = appRow.capabilities?.tasks
     ? internalPlatformUrl(taskEnqueueUrl(id))
     : null;
+  // AI calls run in the platform process with the provider key; the backend
+  // only ever sees this signed endpoint.
+  const aiBaseUrl = appRow.capabilities?.ai
+    ? internalPlatformUrl(aiUrl(id))
+    : null;
   const automaticNetworkDestinations = [
     `127.0.0.1:${port}`,
     ...(databaseEnv.DATABASE_URL
@@ -1194,6 +1200,7 @@ async function spawnBackendProcess(
       ? [networkDestinationFromUrl(notificationsBaseUrl)]
       : []),
     ...(tasksEnqueueUrl ? [networkDestinationFromUrl(tasksEnqueueUrl)] : []),
+    ...(aiBaseUrl ? [networkDestinationFromUrl(aiBaseUrl)] : []),
   ];
 
   // Bundles may read only their fixed asset directory and, when enabled, the
@@ -1242,6 +1249,7 @@ async function spawnBackendProcess(
         ? { HATCH_NOTIFICATIONS_URL: notificationsBaseUrl }
         : {}),
       ...(tasksEnqueueUrl ? { HATCH_TASKS_URL: tasksEnqueueUrl } : {}),
+      ...(aiBaseUrl ? { HATCH_AI_URL: aiBaseUrl } : {}),
       HATCH_DEPLOYMENT_ID: backendDeploymentId,
       ...extraEnv,
     }),

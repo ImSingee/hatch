@@ -29,6 +29,7 @@ import { DataTableSection } from './data-table-section';
 import { DatabaseSection } from './database-section';
 import { KvSection } from './kv-section';
 import { NotificationsSection } from './notifications-section';
+import { AiSection } from './ai-section';
 import { RetainedDataTableSection } from './retained-data-table-section';
 import { SectionHeader } from './section-header';
 import { TasksSection } from './tasks-section';
@@ -177,6 +178,7 @@ export function OperationsPanel({
   const query = useQuery(appOpsQueryOptions(appId));
   const manifestQuery = useQuery(normalizedManifestQueryOptions(appId));
   const notifications = manifestQuery.data?.notifications;
+  const hasAi = Boolean(manifestQuery.data?.ai?.roles.length);
   const { data: tasks } = useQuery({
     ...appTasksQueryOptions(appId),
     enabled: Boolean(manifestQuery.data?.tasks),
@@ -233,6 +235,7 @@ export function OperationsPanel({
     ops.kv.enabled ||
     dataTableVisible ||
     Boolean(notifications) ||
+    hasAi ||
     Boolean(tasks);
 
   return (
@@ -311,6 +314,11 @@ export function OperationsPanel({
           {notifications ? (
             <GroupCard padded id="notifications">
               <NotificationsSection notifications={notifications} />
+            </GroupCard>
+          ) : null}
+          {hasAi ? (
+            <GroupCard padded id="ai">
+              <AiSection appId={appId} />
             </GroupCard>
           ) : null}
         </Stack>

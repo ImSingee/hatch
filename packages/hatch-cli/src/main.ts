@@ -8,6 +8,7 @@ import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
+import { parseAiCommand, runAi } from './ai';
 import { parseDeploymentsCommand, runDeployments } from './deployments';
 import { parseDocsCommand, runDocs } from './docs';
 import { parseNativePackageCommand, runNativePackage } from './native-package';
@@ -86,6 +87,8 @@ try {
     parseTaskCommand(args, offset);
   if (!showHelp && name === 'app' && args[offset + 1] === 'docs')
     parseDocsCommand(args, offset);
+  if (!showHelp && name === 'app' && args[offset + 1] === 'ai')
+    parseAiCommand(args, offset);
   if (!showHelp && name === 'app' && args[offset + 1] === 'deployments')
     parseDeploymentsCommand(args, offset);
   if (
@@ -137,6 +140,8 @@ try {
     await runTask(args, offset, controller.signal);
   else if (name === 'app' && operation === 'docs')
     await runDocs(args, offset, controller.signal);
+  else if (name === 'app' && operation === 'ai')
+    await runAi(args, offset, controller.signal);
   else if (name === 'app' && operation === 'deployments')
     await runDeployments(args, offset, controller.signal);
   else if (
