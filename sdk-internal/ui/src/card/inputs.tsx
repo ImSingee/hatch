@@ -155,12 +155,14 @@ export function Choice(props: ChoiceProps): JSX.Element {
       transitions: transitions(options()),
     };
   });
-  const range = () =>
-    props.multiple && props.min !== undefined && props.min === props.max
-      ? `Choose ${props.min}.`
-      : props.multiple && (props.min !== undefined || props.max !== undefined)
-        ? `Choose ${props.min ?? 1} to ${props.max ?? 'all'}.`
-        : undefined;
+  // While answering, a multiple choice says how many to pick, as the
+  // notification's form does.
+  const range = () => {
+    if (!props.multiple || card?.mode() !== 'live') return undefined;
+    const min = props.min ?? 1;
+    const max = props.max ?? options().length;
+    return min === max ? `Choose ${min}.` : `Choose ${min} to ${max}.`;
+  };
   const description = () =>
     [props.description, range()].filter(Boolean).join(' ') || undefined;
   const content = (
