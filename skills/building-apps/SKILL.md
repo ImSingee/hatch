@@ -705,7 +705,8 @@ Read only the reference relevant to the requested capability:
   new Apps: files, backend and Data Table clients, addresses and titles,
   deploy rules, and the `nsh` checks. Read it with
   [Design system](references/design-system.md): rules, screen patterns and
-  every `@hatch/ui` component.
+  every `@hatch/ui` component, including the notification cards of
+  `@hatch/ui/card`.
 - [Web frontend and widgets](references/frontend-web.md): React SPA (web
   runtime) with Router/Query, Connect clients and App-scoped browser storage;
   keyboard shortcuts; and widgets, which are React in every App: responsive

@@ -211,6 +211,64 @@ not call the bridge for them.
   `ListDetailPage`. Give each `Page` the specific name of what it shows
   ("Tomato seedlings", not "Detail").
 
+## Cards
+
+`@hatch/ui/card` holds the cards Hatch notifications show: a status pill,
+a title, a sentence or two and a few data blocks (fields, steps, progress,
+figures, a log excerpt), and questions answered in place. Use one where a
+screen shows something with a state that changes and a shape, the way a
+notification would: a deploy, a check run, an incident, a request waiting
+for a decision. For ordinary grouped content use `Card` from `@hatch/ui`.
+
+The names are the card markup's tags, so import them as one namespace and
+write them as in markup; props are the markup's attributes in camelCase.
+The inline marks are spelled out, since NSH has no lowercase tags: `Bold`
+(`b`), `Italic` (`i`), `Strike` (`s`), `InlineCode` (`code`), `Link` (`a`),
+`Time` (`time`), `LineBreak` (`br`). The markup itself, its components and
+what each takes: [card markup](../../notification-content/references/card-markup.md).
+
+```tsx
+import * as Card from '@hatch/ui/card';
+
+<Card.Card icon="deploy" status="Deployed" tone="success">
+  <Card.Title>v12 is live</Card.Title>
+  <Card.Text>
+    Two changes; the data migration <Card.Bold>finished</Card.Bold>.
+  </Card.Text>
+  <Card.Fields>
+    <Card.Field label="Version">v12</Card.Field>
+    <Card.Field label="Took">48 s</Card.Field>
+  </Card.Fields>
+</Card.Card>;
+```
+
+- A card written in TSX is drawn, not stored. To store a card, send it as
+  a notification or show one an Agent or the backend wrote, keep it as
+  markup and show it with `<Card.CardMarkup source={markup} />` (or a
+  render tree with `<Card.CardTree tree={tree} />`). It compiles the markup
+  exactly as the platform does; markup it cannot use shows a notice with
+  the problems (and `onError` gets them), never a blank space.
+- Questions (`Choice` with `Option`s, `Buttons` with `Button`s, `Input`,
+  `Submit`) are one form. `onSubmit` on the card gets the answers keyed by
+  each question's `id`: an option id, a list of them for `multiple`, the
+  text for `Input` (the shape a notification's answer has). Without its own
+  `Submit` the card adds one when needed; when its last question is a
+  `Buttons` row, pressing a button sends the card. A returned promise shows
+  the card busy; a rejection shows its message on the card. After a submit
+  the card shows the answers read-only, and the chosen option's
+  `thenStatus` replaces the status; pass `repeatable` to keep it
+  answerable, or `answers` to show an answer given elsewhere.
+- A `Button` with `id` inside `Buttons` is an answer, with `href` a link.
+  In TSX a `Button` may take `onPress` for an action of the App's own that
+  is not an answer; markup has no handlers, so a markup button is always an
+  answer or a link.
+- Links (`Link`, `Step href`, `Button href`) to another App
+  (`hatch://app/<slug>#/route`) open it. A native App cannot open other
+  links itself: pass `onLinkPress` to handle them (open a page of the App
+  for its own links, or show the address), or they show as text.
+- Like every component, a card takes each platform's habits (type,
+  buttons, fields, option rows) and keeps the theme's colours.
+
 ## Catalogue
 
 Generated from the component types by `sdk-internal/ui/scripts/generate.ts`;
