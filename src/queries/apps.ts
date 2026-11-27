@@ -12,6 +12,9 @@ import {
   listApps,
   listCronRunsFn,
   listDeployments,
+  getAppDeploymentLogFn,
+  getBuilderOverviewFn,
+  listAppDeploymentRequestsFn,
 } from '~server/apps';
 
 export const appsQueryOptions = queryOptions({
@@ -63,6 +66,77 @@ export const deploymentBuildLogQueryOptions = (
     queryFn: () => getDeploymentBuildLog({ data: { id: appId, deploymentId } }),
     // A deployment's build log is immutable, so never refetch once loaded.
     staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/**
+ * Recent deployment requests. Poll quickly while one is still building or
+ * releasing, so the page follows it; slowly otherwise to notice new ones.
+ */
+/** Builders and the queue across Apps; refreshed while anything is queued. */
+export const builderOverviewQueryOptions = queryOptions({
+  queryKey: ['builder', 'overview'],
+  queryFn: () => getBuilderOverviewFn(),
+  refetchInterval: (query) =>
+    query.state.data && query.state.data.queue.length > 0 ? 3000 : 10000,
+});
+
+export const deploymentRequestsQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: ['apps', id, 'deployment-requests'],
+    queryFn: () => listAppDeploymentRequestsFn({ data: id }),
+    refetchInterval: (query) =>
+      query.state.data?.deployments.some((item) => !item.finished)
+        ? 2000
+        : 15000,
+  });
+
+type DeploymentRequestLogPage = Awaited<
+  ReturnType<typeof getAppDeploymentLogFn>
+>;
+
+export type DeploymentRequestLog = {
+  deployment: DeploymentRequestLogPage['deployment'];
+  lines: DeploymentRequestLogPage['lines'];
+  /** Every line the deployment will write has been read. */
+  complete: boolean;
+};
+
+/**
+ * A deployment's whole log. Each fetch continues after the last cached line
+ * and reads pages until the server has no more, so long logs arrive in full.
+ * Polls while the deployment runs, and once more after it finishes: the
+ * platform writes some closing lines just after the final status.
+ */
+export const deploymentRequestLogQueryOptions = (
+  appId: string,
+  deploymentId: string,
+) =>
+  queryOptions({
+    queryKey: ['apps', appId, 'deployment-requests', deploymentId, 'log'],
+    queryFn: async ({ client, queryKey, signal }) => {
+      const cached = client.getQueryData<DeploymentRequestLog>(queryKey);
+      const lines = [...(cached?.lines ?? [])];
+      let page: DeploymentRequestLogPage;
+      do {
+        page = await getAppDeploymentLogFn({
+          data: {
+            id: appId,
+            deploymentId,
+            afterSeq: lines.at(-1)?.seq ?? 0,
+          },
+          signal,
+        });
+        lines.push(...page.lines);
+      } while (page.more && page.lines.length > 0);
+      return {
+        deployment: page.deployment,
+        lines,
+        complete: Boolean(cached?.deployment.finished),
+      } satisfies DeploymentRequestLog;
+    },
+    refetchInterval: (query) => (query.state.data?.complete ? false : 1500),
+    staleTime: (query) =>
+      query.state.data?.complete ? Number.POSITIVE_INFINITY : 0,
   });
 
 export const appOpsQueryOptions = (id: string) =>

@@ -55,7 +55,11 @@ type Capture = {
 };
 const captures = new Map<string, Capture>();
 const held = new Map<string, http.ServerResponse>();
-const commands = new Map<string, string[]>();
+/** A command, or one with its own `run_command` timeout. */
+type FixtureCommand = string | { command: string; timeoutSeconds: number };
+const commands = new Map<string, FixtureCommand[]>();
+/** What a Run reported back (kept apart from the credential captures). */
+const results = new Map<string, unknown>();
 
 async function freePort() {
   const server = net.createServer();
@@ -207,6 +211,11 @@ describe.runIf(Boolean(databaseUrl))(
         'packages/hatch-cli/dist/main.mjs',
         path.join(root, 'bin/hatch'),
       );
+      // Local builds run the driver installed next to the CLI, as in the image.
+      await copyFile(
+        'packages/hatch-cli/dist/build-driver.mjs',
+        path.join(root, 'bin/build-driver.mjs'),
+      );
       await chmod(path.join(root, 'bin/hatch'), 0o755);
       origin = `http://127.0.0.1:${await freePort()}`;
       internal = `http://127.0.0.1:${await freePort()}`;
@@ -215,6 +224,11 @@ describe.runIf(Boolean(databaseUrl))(
         for await (const chunk of req) raw += chunk;
         if (req.url?.startsWith('/capture/')) {
           const [, , label, stage] = req.url.split('/');
+          if (stage === 'result') {
+            results.set(label, JSON.parse(raw));
+            res.end('{}');
+            return;
+          }
           captures.set(label, JSON.parse(raw));
           if (stage === 'ready') held.set(label, res);
           else res.end('{}');
@@ -255,7 +269,12 @@ describe.runIf(Boolean(databaseUrl))(
                     name: 'run_command',
                     arguments: JSON.stringify({
                       purpose: 'Verify installed CLI',
-                      command,
+                      ...(typeof command === 'string'
+                        ? { command }
+                        : {
+                            command: command.command,
+                            timeout_seconds: command.timeoutSeconds,
+                          }),
                     }),
                   },
                 },
@@ -319,6 +338,9 @@ describe.runIf(Boolean(databaseUrl))(
           AGENT_INTERNAL_PORT: new URL(internal).port,
           AGENT_RUNNER_TOKEN: fleet,
           HATCH_RUN_TOKEN_TTL_SECONDS: '5',
+          // Accepting a build package evaluates the commit's manifest in the
+          // sandbox, which this host cannot switch identity for.
+          HATCH_ALLOW_UNSANDBOXED: 'true',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -409,6 +431,8 @@ describe.runIf(Boolean(databaseUrl))(
           HATCH_RUNNER_ID: runnerId,
           HATCH_DATA_DIR: path.join(root, 'runner'),
           NODE_ENV: 'production',
+          // As the image's /app: local deploy builds use this toolchain.
+          HATCH_BUILD_TOOLCHAIN_DIR: process.cwd(),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -748,5 +772,76 @@ describe.runIf(Boolean(databaseUrl))(
         await writeFile(path.join(evidenceDir, 'platform.log'), platformLog);
       }
     }, 240000);
+
+    it('uploads a local build whose Run credential expired while it built', async () => {
+      const label = 'local-deploy';
+      const report = `${fixtureUrl}/capture/${label}/result`;
+      // Create an App, build it here (the native template takes far longer
+      // than the 5 s Run JWT lifetime), and report how it went.
+      commands.set(label, [
+        {
+          timeoutSeconds: 900,
+          command: [
+            'set -e',
+            'dir=$(mktemp -d); cd "$dir"',
+            `printf '{"slug":"runner-local-build","name":"Runner local build","pin":false}' > create.json`,
+            'hatch app create --file create.json --directory app --json > created.json',
+            'cd app',
+            'git -c user.name=Runner -c user.email=runner@example.test commit -q --allow-empty -m deploy',
+            // This platform has no Builder: a plain deploy is refused with
+            // the fallback the Agent is told to take.
+            'hatch app deploy --directory . --message "Runner Builder build" --json > ../refused.json 2>&1 || true',
+            'start=$(date +%s)',
+            'hatch app deploy --directory . --local --message "Runner local build" --json > ../deployed.json 2> ../deployed.err || true',
+            'end=$(date +%s)',
+            `node -e 'const fs=require("fs"); fetch(process.argv[1], {method:"POST", body: JSON.stringify({seconds: Number(process.argv[2]), refused: fs.readFileSync("../refused.json","utf8"), stdout: fs.readFileSync("../deployed.json","utf8"), stderr: fs.readFileSync("../deployed.err","utf8").slice(-4000)})})' "${report}" "$((end-start))"`,
+          ].join('\n'),
+        },
+      ]);
+      const [session] = await database.db
+        .insert(database.schema.agentSessions)
+        .values({})
+        .returning();
+      const run = await json(
+        `${origin}/api/agent/runs`,
+        {
+          sessionId: session.id,
+          providerId,
+          modelId: 'fixture-cli-model',
+          content: [{ type: 'text', text: `runner-cli-probe:${label}` }],
+        },
+        { cookie, origin },
+      );
+      assert.equal(run.response.status, 200, 'Real scheduling request failed.');
+      const reported = (await until(
+        async () => results.get(label),
+        'local deploy report',
+        900_000,
+      )) as {
+        seconds: number;
+        refused: string;
+        stdout: string;
+        stderr: string;
+      };
+      await terminal(run.value.runId);
+      // Refused before creating a deployment, naming the way out.
+      expect(JSON.parse(reported.refused || '{}')).toMatchObject({
+        ok: false,
+        error: {
+          code: 'BUILDER_UNAVAILABLE',
+          message: expect.stringContaining('hatch app deploy --local'),
+        },
+      });
+      const deployed = JSON.parse(reported.stdout || '{}');
+      assert.equal(
+        deployed.status,
+        'ready',
+        `${reported.stdout}\n${reported.stderr}\n${platformLog.slice(-4000)}`,
+      );
+      // The refused deploy created nothing: the local one is version 1.
+      expect(deployed).toMatchObject({ build: 'local', version: 1 });
+      // The Run JWT the build started with had expired by the upload.
+      expect(reported.seconds).toBeGreaterThan(5);
+    }, 960_000);
   },
 );

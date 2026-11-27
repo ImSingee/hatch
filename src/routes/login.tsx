@@ -6,10 +6,11 @@ import {
   TextInput,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { authClient } from '~auth/client';
+import { announceSignIn, authClient } from '~auth/client';
 import { authErrorOf } from '~auth/auth-errors';
 import { browserSupportsPasskeys } from '~auth/passkey-browser';
 import { Brand } from '~components/desk/brand';
@@ -62,6 +63,7 @@ type Mode = 'signin' | 'signup';
 function LoginPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { redirect: redirectTo } = Route.useSearch();
   const { allowSignup, appOrigin } = Route.useLoaderData();
   const [rawMode, setRawMode] = useState<Mode>('signin');
@@ -74,8 +76,13 @@ function LoginPage() {
   const passkeysAvailable = browserSupportsPasskeys(appOrigin);
 
   const navigateAfterAuthentication = useCallback(async () => {
+    // A session that expired in this document may have left another user's
+    // pins and dashboards in the cache; the new user must never see them.
+    // Resetting keeps this page's own queries working until it navigates.
+    void queryClient.resetQueries();
+    announceSignIn();
     await router.navigate({ href: safeRedirect(redirectTo) });
-  }, [redirectTo, router]);
+  }, [queryClient, redirectTo, router]);
 
   // Validation stores catalog keys; the fields translate them at render.
   const form = useForm({

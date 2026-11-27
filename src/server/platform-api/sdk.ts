@@ -1,7 +1,6 @@
 /** Client-neutral SDK payload, always taken from this running platform build. */
-import esbuildPackage from 'esbuild/package.json' with { type: 'json' };
-import typescriptPackage from 'typescript/package.json' with { type: 'json' };
-import platformPackage from '../../../package.json' with { type: 'json' };
+import { sdkFilesDigest } from '../../app-build/sdk-digest';
+import { platformTooling } from '../platform-tooling';
 import {
   APP_TASK_OPTIONS_PROTO,
   APP_TASK_OPTIONS_PROTO_FILE,
@@ -48,22 +47,6 @@ function denoTypesFile(name: string): string {
   if (contents === undefined)
     throw new Error('Platform type declarations are missing.');
   return contents;
-}
-
-/** Versions of the tools the platform itself runs, for local preparation. */
-export function platformTooling() {
-  return {
-    bufVersion: platformPackage.devDependencies['@bufbuild/buf'].replace(
-      /^\^/,
-      '',
-    ),
-    protocGenEsVersion: platformPackage.devDependencies[
-      '@bufbuild/protoc-gen-es'
-    ].replace(/^\^/, ''),
-    typescriptVersion: typescriptPackage.version,
-    esbuildVersion: esbuildPackage.version,
-    pnpmVersion: platformPackage.packageManager.replace(/^pnpm@/, ''),
-  };
 }
 
 export async function sdkPayload() {
@@ -126,4 +109,12 @@ export async function sdkPayload() {
       contentBase64: Buffer.from(contents).toString('base64'),
     });
   return { files, tooling: platformTooling() };
+}
+
+let sdkDigest: Promise<string> | undefined;
+
+/** The digest of this platform's SDK delivery, as build packages record it. */
+export function platformSdkDigest(): Promise<string> {
+  sdkDigest ??= sdkPayload().then(({ files }) => sdkFilesDigest(files));
+  return sdkDigest;
 }

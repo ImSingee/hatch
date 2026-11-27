@@ -210,7 +210,7 @@ impl Instance<'_> {
         })
     }
 
-    /// The instance's accent colour as `#RRGGBB`.
+    /// The signed-in user's accent colour as `#RRGGBB`.
     pub async fn accent(&self, token: &str) -> Result<Option<String>, ApiError> {
         let value = self
             .rpc("ThemeService/GetTheme", Some(token), json!({}))

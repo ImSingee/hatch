@@ -112,6 +112,29 @@ export type AppStatus =
 
 export type DeploymentStatus = 'building' | 'deployed' | 'failed';
 
+/**
+ * Lifecycle of a deployment request (`app_builds`): a builder-mode request
+ * waits in `queued` for the dedicated Builder, a local-mode request waits in
+ * `awaiting_artifact` for the CLI's upload. Both are then `verifying` (the
+ * platform accepts the build package) and `releasing`.
+ */
+export type AppBuildStatus =
+  | 'queued'
+  | 'awaiting_artifact'
+  | 'building'
+  | 'verifying'
+  | 'releasing'
+  | 'ready'
+  | 'failed'
+  | 'canceled'
+  | 'superseded';
+
+/** Where a deployment's build package is produced. */
+export type AppBuildMode = 'builder' | 'local';
+
+/** Who produced a recorded deployment's artifact; null rows predate builds. */
+export type DeploymentBuildOrigin = AppBuildMode;
+
 /** How an app cron job run was triggered. */
 export type AppCronTrigger = 'scheduled' | 'manual';
 
@@ -294,6 +317,10 @@ export const deployments = snakeCase.table(
     artifactPath: text(),
     buildLog: text(),
     error: text(),
+    /** The deployment request (`app_builds.id`); null for older rows. */
+    buildId: ulid('build_id'),
+    /** Where the artifact was built; null when the platform built it. */
+    buildOrigin: text('build_origin').$type<DeploymentBuildOrigin>(),
     createdAt,
   },
   (table) => [
@@ -302,6 +329,124 @@ export const deployments = snakeCase.table(
     uniqueIndex('deployments_app_version_idx').on(table.appId, table.version),
   ],
 );
+
+/** ================== app deployment builds ================== */
+
+/**
+ * One deployment request, from its creation to its release. The id is the
+ * deployment id: the build bakes it into the package, and a successful
+ * release records the `deployments` row under the same id.
+ */
+export const appBuilds = snakeCase.table(
+  'app_builds',
+  {
+    id: ulid().primaryKey(),
+    appId: text()
+      .notNull()
+      .references(() => apps.id, { onDelete: 'cascade' }),
+    /** Increases per App in creation order; a newer release supersedes. */
+    seq: integer().notNull(),
+    /** The pushed master commit this deployment releases. */
+    commit: text().notNull(),
+    message: text().notNull(),
+    mode: text().$type<AppBuildMode>().notNull(),
+    trigger: text().$type<'cli' | 'ui'>().notNull(),
+    /** Who asked: a user id, or `agent` for an Agent Run. */
+    actor: text(),
+    status: text().$type<AppBuildStatus>().notNull(),
+    /** The App generation (`apps.created_at`) the request was made for. */
+    expectedGeneration: text('expected_generation'),
+    allowDestructiveDataMigration: boolean('allow_destructive_data_migration')
+      .notNull()
+      .default(false),
+    dataMigrationApprovalToken: text('data_migration_approval_token'),
+    /** Post a platform notification when it is released or fails. */
+    notifyOnFinish: boolean('notify_on_finish').notNull().default(false),
+    /** Builder holding the build, and until when (builder mode). */
+    builderId: text('builder_id'),
+    leaseExpiresAt: msTimestamp('lease_expires_at'),
+    attempts: integer().notNull().default(0),
+    /** Last log line sequence number. */
+    logSeq: integer('log_seq').notNull().default(0),
+    artifactSha256: text('artifact_sha256'),
+    /** Toolchain the package records (see src/app-build/format.ts). */
+    buildMetadata: jsonb('build_metadata').$type<JsonObject>(),
+    /** Stable machine-readable failure code. */
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    /** Version of the recorded deployment once released. */
+    deploymentVersion: integer('deployment_version'),
+    startedAt: timestamp('started_at'),
+    finishedAt: timestamp('finished_at'),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [
+    uniqueIndex('app_builds_app_seq_idx').on(table.appId, table.seq),
+    // One build per App at a time, whatever claims race (see leaseBuild).
+    uniqueIndex('app_builds_one_building_idx')
+      .on(table.appId)
+      .where(sql`${table.status} = 'building'`),
+    index('app_builds_app_created_idx').on(table.appId, table.createdAt),
+    // Builder leases and the sweeper scan only unfinished builds.
+    index('app_builds_active_idx')
+      .on(table.status, table.createdAt)
+      .where(
+        sql`${table.status} in ('queued', 'awaiting_artifact', 'building', 'verifying', 'releasing')`,
+      ),
+  ],
+);
+
+/** Build and release log lines of one deployment request. */
+export const appBuildLogs = snakeCase.table(
+  'app_build_logs',
+  {
+    buildId: ulid('build_id')
+      .notNull()
+      .references(() => appBuilds.id, { onDelete: 'cascade' }),
+    seq: integer().notNull(),
+    /** `build` (the builder's output) or `platform` (verify and release). */
+    stream: text().$type<'build' | 'platform'>().notNull(),
+    text: text().notNull(),
+    at: msTimestamp('at').notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.buildId, table.seq] })],
+);
+
+/**
+ * Create requests and the deployment each one got: the one it made, or the
+ * identical build it joined. A retried or uncertain create finds its
+ * deployment by its client-chosen id instead of making another.
+ */
+export const appBuildRequests = snakeCase.table(
+  'app_build_requests',
+  {
+    appId: text('app_id')
+      .notNull()
+      .references(() => apps.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    buildId: ulid('build_id')
+      .notNull()
+      .references(() => appBuilds.id, { onDelete: 'cascade' }),
+    createdAt,
+  },
+  (table) => [primaryKey({ columns: [table.appId, table.requestId] })],
+);
+
+/**
+ * Dedicated Builders that asked this platform for work, for their status.
+ * A Builder is online while it keeps asking for work or renewing a lease
+ * (see src/server/apps/builders.ts); its running builds are the
+ * `app_builds` rows it holds.
+ */
+export const appBuilders = snakeCase.table('app_builders', {
+  /** `HATCH_BUILDER_ID` of the Builder. */
+  id: text().primaryKey(),
+  /** Builds it runs at once (`BUILDER_CONCURRENCY`). */
+  concurrency: integer().notNull(),
+  lastSeenAt: msTimestamp('last_seen_at').notNull(),
+  createdAt,
+});
 
 /** ================== app task runs ================== */
 
@@ -868,15 +1013,15 @@ export const agentRunEvents = snakeCase.table(
 
 /**
  * A dashboard is a named board the user arranges widgets on. Users can create
- * multiple dashboards; each owns its own set of widget placements.
+ * multiple dashboards; each owns its own set of widget placements. Dashboards
+ * are shared; whether each user pins one, and where it sits in their order,
+ * is in `user_dashboards`.
  */
 export const dashboards = snakeCase.table('dashboards', {
   id: ulid().$defaultFn(genUlid).primaryKey(),
   name: text().notNull(),
   /** Optional free-form subtitle shown in the dashboard page header. */
   description: text(),
-  /** Whether this dashboard is pinned to the sidebar for quick access. */
-  pinned: boolean().notNull().default(true),
   /**
    * Auto-refresh interval in seconds; 0 disables it. When > 0 the dashboard
    * periodically refreshes every widget (Grafana-style).
@@ -884,10 +1029,37 @@ export const dashboards = snakeCase.table('dashboards', {
   autoRefresh: integer('auto_refresh').notNull().default(0),
   /** Monotonic version for widget membership and breakpoint layout drafts. */
   editorRevision: integer('editor_revision').notNull().default(0),
+  /**
+   * Legacy: the instance-wide pin and order from before they became per user
+   * (`user_dashboards`). Unused, and kept one release so a server still on
+   * the previous release can read dashboards; see docs/database-cleanups.md.
+   */
+  pinned: boolean().notNull().default(true),
+  /** Legacy, like `pinned`. */
   sortOrder: integer().notNull().default(0),
   createdAt,
   updatedAt,
 });
+
+/**
+ * One user's view of a dashboard: whether it is pinned to their navigation
+ * and its place in their dashboard order. A dashboard without a row for a
+ * user is unpinned and sorts after that user's rows, oldest first.
+ */
+export const userDashboards = snakeCase.table(
+  'user_dashboards',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    dashboardId: text()
+      .notNull()
+      .references(() => dashboards.id, { onDelete: 'cascade' }),
+    pinned: boolean().notNull().default(false),
+    sortOrder: integer().notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.dashboardId] })],
+);
 
 export const dashboardBreakpoint = pgEnum('dashboard_breakpoint', [
   'desktop',
@@ -939,10 +1111,17 @@ export const dashboardWidgetLayouts = snakeCase.table(
   ],
 );
 
+/** One App shortcut in a user's navigation; each user has their own. */
 export const sidebarItems = snakeCase.table(
   'sidebar_items',
   {
     id: ulid().$defaultFn(genUlid).primaryKey(),
+    /**
+     * Always set by this release, which never reads or changes a row
+     * without it. Nullable for one release so a server still on the
+     * previous one can pin Apps; see docs/database-cleanups.md.
+     */
+    userId: text().references(() => user.id, { onDelete: 'cascade' }),
     appId: text()
       .notNull()
       .references(() => apps.id, { onDelete: 'cascade' }),
@@ -961,6 +1140,7 @@ export const sidebarItems = snakeCase.table(
     // Apps may be pinned multiple times (each pin carries its own label and
     // entry hash), so this is a plain lookup index, not a unique constraint.
     index('sidebar_items_app_idx').on(table.appId),
+    index('sidebar_items_user_order_idx').on(table.userId, table.sortOrder),
   ],
 );
 
@@ -1005,7 +1185,8 @@ export const platformConfig = snakeCase.table('platform_config', {
 /**
  * Custom themes of the instance (`~server/theme-settings`): theme documents
  * people and the Agent author on the web or with the CLI. Presets are not
- * stored. Which theme is active lives in the `ui.theme` platform setting.
+ * stored. The library is shared; which theme each user has active is in
+ * their `user_preferences`.
  * `document` is checked when it is saved; a row that no longer passes the
  * current rules is still listed (flagged) but cannot be activated.
  */
@@ -1055,10 +1236,48 @@ export const userPreferences = snakeCase.table(
       .$type<AgentMessageMode>()
       .notNull()
       .default('steer'),
+    /**
+     * The Web UI language the user picked (a `Locale`); null until they pick
+     * one, when each browser follows its own language. Validated by the
+     * service rather than a check constraint, so adding a catalog needs no
+     * migration.
+     */
+    language: text(),
     /** Minutes a minimised App keeps running before the Desk stops it. */
     deskBackgroundMinutes: integer('desk_background_minutes')
       .notNull()
       .default(5),
+    /**
+     * The accent that replaces the active theme's primary (an `AccentName`);
+     * null draws the theme's own primary. Validated by the service, so
+     * retiring an accent needs no migration: a stored name the tokens no
+     * longer define reads as the default accent.
+     */
+    accent: text(),
+    /** Whether the web dock shows tile names; null keeps the default (off). */
+    dockLabels: boolean('dock_labels'),
+    /**
+     * The user's active theme when it is a preset (`desk`, `desk-dark`).
+     * With neither this nor `customThemeId` set, the user draws the default
+     * preset.
+     */
+    themePreset: text('theme_preset'),
+    /**
+     * The user's active theme when it is a custom theme of the shared
+     * library. Deleting that theme clears it, so the user falls back to the
+     * default preset.
+     */
+    customThemeId: text('custom_theme_id').references(() => themes.id, {
+      onDelete: 'set null',
+    }),
+    /**
+     * Whether the user's first visit already pinned the default dashboard.
+     * Kept apart from `user_dashboards` so that losing those rows (their
+     * dashboards were deleted) never makes the user look new again.
+     */
+    dashboardDefaultsApplied: boolean('dashboard_defaults_applied')
+      .notNull()
+      .default(false),
     updatedAt,
   },
   () => [

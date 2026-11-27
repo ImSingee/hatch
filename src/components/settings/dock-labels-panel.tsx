@@ -8,15 +8,15 @@ import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { setDockLabelsFn } from '~server/theme';
 
-/** Whether the web dock shows names under its tiles, for everyone. */
-export function DockLabelsPanel() {
+/** Whether the user's web dock shows names under its tiles. */
+export function DockLabelsPanel({ userId }: { userId: string }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const { data: theme } = useSuspenseQuery(themeQueryOptions);
+  const { data: theme } = useSuspenseQuery(themeQueryOptions(userId));
   const save = useMutation({
     mutationFn: (shown: boolean) => setDockLabelsFn({ data: shown }),
     onSuccess: (saved) =>
-      queryClient.setQueryData(themeQueryOptions.queryKey, saved),
+      queryClient.setQueryData(themeQueryOptions(saved.userId).queryKey, saved),
   });
 
   return (

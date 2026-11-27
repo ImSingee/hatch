@@ -30,6 +30,11 @@ export type PlatformEnv = Readonly<{
   betterAuthSecret: string;
   /** Shared Runner bearer token. */
   agentRunnerToken: string;
+  /**
+   * Shared Builder bearer token; null when no dedicated Builder is deployed,
+   * so deployments build locally with the CLI.
+   */
+  builderToken: string | null;
   agentInternalHost: string;
   agentInternalPort: number;
   runTokenLifetimeSeconds: number;
@@ -67,8 +72,22 @@ export type AgentRunnerEnv = Readonly<{
   allowUnsandboxed: boolean;
 }>;
 
+/** Immutable startup configuration for the Builder process. */
+export type BuilderEnv = Readonly<{
+  /** Platform internal API base URL without a trailing slash. */
+  platformUrl: string;
+  /** Shared bearer token sent to the Platform (HATCH_BUILDER_TOKEN). */
+  token: string;
+  /** Stable identity used for build lease ownership. */
+  builderId: string;
+  /** Builds this process runs at the same time. */
+  concurrency: number;
+  production: boolean;
+}>;
+
 let platformEnv: PlatformEnv | undefined;
 let agentRunnerEnv: AgentRunnerEnv | undefined;
+let builderEnv: BuilderEnv | undefined;
 
 function resolveAppUrl(): string {
   const configuredAppUrl = process.env.APP_URL?.trim();
@@ -112,6 +131,7 @@ function resolvePlatformEnv(): PlatformEnv {
       secret: PRERENDER_ONLY_SECRET,
       betterAuthSecret: PRERENDER_ONLY_SECRET,
       agentRunnerToken: PRERENDER_ONLY_TOKEN,
+      builderToken: null,
       agentInternalHost: '127.0.0.1',
       agentInternalPort: DEFAULT_INTERNAL_PORT,
       runTokenLifetimeSeconds: 300,
@@ -188,6 +208,7 @@ function resolvePlatformEnv(): PlatformEnv {
     secret,
     betterAuthSecret,
     agentRunnerToken,
+    builderToken: process.env.HATCH_BUILDER_TOKEN?.trim() || null,
     agentInternalHost: process.env.AGENT_INTERNAL_HOST || '127.0.0.1',
     agentInternalPort:
       Number(process.env.AGENT_INTERNAL_PORT) || DEFAULT_INTERNAL_PORT,
@@ -239,6 +260,30 @@ export function getPlatformEnv(): PlatformEnv {
 export function getAgentRunnerEnv(): AgentRunnerEnv {
   agentRunnerEnv ??= resolveAgentRunnerEnv();
   return agentRunnerEnv;
+}
+
+function resolveBuilderEnv(): BuilderEnv {
+  const token = process.env.HATCH_BUILDER_TOKEN?.trim();
+  if (!token) throw new Error('HATCH_BUILDER_TOKEN is required.');
+  const concurrency = Number(process.env.BUILDER_CONCURRENCY || 1);
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 16)
+    throw new Error('BUILDER_CONCURRENCY must be an integer between 1 and 16.');
+  return Object.freeze({
+    platformUrl: (
+      process.env.HATCH_PLATFORM_URL ?? 'http://127.0.0.1:3701'
+    ).replace(/\/+$/, ''),
+    token,
+    builderId:
+      process.env.HATCH_BUILDER_ID?.trim() || `builder-${os.hostname()}`,
+    concurrency,
+    production: process.env.NODE_ENV === 'production',
+  });
+}
+
+/** Resolve once per Builder process, then return the frozen snapshot. */
+export function getBuilderEnv(): BuilderEnv {
+  builderEnv ??= resolveBuilderEnv();
+  return builderEnv;
 }
 
 /** Runner business endpoint may use HTTP on the trusted deployment network. */

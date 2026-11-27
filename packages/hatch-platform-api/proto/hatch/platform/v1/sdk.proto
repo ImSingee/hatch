@@ -22,6 +22,10 @@ message Tooling {
   string typescript_version = 3;
   string esbuild_version = 4;
   string pnpm_version = 5;
+  // Native (NSH) frontends. Empty on a platform that predates it.
+  string nsh_version = 6;
+  // Whether the platform has a dedicated Builder for deployments.
+  bool builder_enabled = 7;
 }
 
 message GetSdkResponse {

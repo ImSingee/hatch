@@ -450,6 +450,25 @@ function storedAccent(): string | null {
   }
 }
 
+/**
+ * The platforms a shell may name in the page's `platform` query parameter.
+ * The Mobile app's WebView opens `/app/<slug>/embed/?platform=ios`, so the
+ * App's components take that platform's look (`@hatch/ui`); a browser
+ * names none and keeps the web's.
+ */
+const SHELL_PLATFORMS = ['ios', 'android'];
+
+/** What the App reads as `host.params` when it starts. */
+export function launchParams(
+  route: string,
+  search: string,
+): { route: string; platform?: string } {
+  const platform = new URLSearchParams(search).get('platform');
+  return platform !== null && SHELL_PLATFORMS.includes(platform)
+    ? { route, platform }
+    : { route };
+}
+
 function rawHash(): string {
   return location.hash.replace(/^#/, '');
 }
@@ -519,13 +538,13 @@ function connectSurface(onMessage: (message: SurfaceMessage) => void): {
   return { ready };
 }
 
-/** The platform's answer for the instance theme (`/api/theme/native`). */
+/** The platform's answer for the viewing user's theme (`/api/theme/native`). */
 export type InstanceNativeTheme = { key: string; theme: unknown };
 
 const THEME_URL = '/api/theme/native';
 
 /**
- * Read the instance's active theme. Null when the platform does not answer
+ * Read the viewing user's theme. Null when the platform does not answer
  * with a theme (an older platform, offline): the theme baked into the page
  * stays.
  */
@@ -533,7 +552,7 @@ const THEME_URL = '/api/theme/native';
 export const THEME_RETRY_DELAYS_MS = [1_000, 4_000, 15_000];
 
 /**
- * Keeps the player's instance theme current. Only the newest answer
+ * Keeps the player's theme current. Only the newest answer
  * applies. A refresh the platform does not answer stays pending: it is
  * retried after each of `THEME_RETRY_DELAYS_MS`, and `refreshIfStale` (the
  * App being shown) asks again after those run out, so one failed request
@@ -616,7 +635,7 @@ export async function startNativePlayer(): Promise<void> {
     port.postMessage(message);
     return true;
   };
-  // The instance theme once the platform has answered; until then, and on
+  // The user's theme once the platform has answered; until then, and on
   // a platform that does not, the page's own theme for the accent.
   let instance: InstanceNativeTheme | null = null;
   let themeKey: string | undefined;
@@ -651,7 +670,7 @@ export async function startNativePlayer(): Promise<void> {
         const changed = accentChanged || message.themeKey !== themeKey;
         themeKey = message.themeKey;
         accent = message.accent;
-        // Without an instance theme the accent alone recolours the App.
+        // Without the user's theme the accent alone recolours the App.
         if (accentChanged && !instance)
           player.hostEvent('hatch.theme', { theme: theme() });
         if (changed) themes.refresh();
@@ -817,7 +836,7 @@ export async function startNativePlayer(): Promise<void> {
       chunks: mapValues(config.app.chunks, appUrl),
       nativeExports: config.app.nativeExports,
       linked: true,
-      params: { route },
+      params: launchParams(route, location.search),
     });
     created.preloadSides(sides);
   } catch (error) {

@@ -47,10 +47,16 @@ function spawnCapture(
     const out: Buffer[] = [];
     let err = '';
     child.stdout.on('data', (d: Buffer) => out.push(d));
-    child.stderr.on('data', (d) => (err += d.toString()));
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (d: string) => (err += d));
     child.on('error', reject);
-    child.on('close', (code) => {
-      resolve({ code: code ?? 0, stdout: Buffer.concat(out), stderr: err });
+    child.on('close', (code, signal) => {
+      // A process stopped by a signal produced no answer.
+      if (code === null) {
+        reject(new Error(`${cmd} failed: stopped by ${signal ?? 'a signal'}`));
+        return;
+      }
+      resolve({ code, stdout: Buffer.concat(out), stderr: err });
     });
   });
 }

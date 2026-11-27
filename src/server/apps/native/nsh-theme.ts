@@ -1,5 +1,5 @@
 /**
- * The NSH theme of a native App: a resolved instance theme (or the built-in
+ * The NSH theme of a native App: a user's resolved theme (or the built-in
  * `desk` with an accent) in the shadcn `cssVars` shape NSH reads from
  * `nsh.json` `"theme"` and from `setTheme`. The web player and the native
  * shells push the result whole with `hatch.theme`.
@@ -32,7 +32,7 @@ function library() {
 }
 
 /**
- * The theme native Apps get for a resolved instance theme: the UI library's
+ * The theme native Apps get for a user's resolved theme: the UI library's
  * own (complete, its custom tokens included) when one is listed, else
  * {@link tokenThemeFor}.
  */

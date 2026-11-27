@@ -1,12 +1,34 @@
 /**
- * Where the App runs, as the components decide layout and density from it.
+ * Where the App runs, as the components decide layout, density and habits
+ * from it.
  *
  * Layout follows the App's own pane: NSH's `windowSize()` is the surface the
  * App renders into (the web player's container, the native view), so an App
  * in a narrow window or a split pane on a desktop lays out as a narrow App.
- * Density follows the input: touch idioms get 44-point targets.
+ * Density follows the input: touch idioms get 44-point targets. Habits
+ * follow the platform (`look`): iOS and Android controls on those, the
+ * Desk's own elsewhere.
  */
-import { platform, windowSize } from 'nsh';
+import { host, platform, windowSize } from 'nsh';
+import { lookOf, resolvePlatform } from './platform';
+import type { HostPlatform, Look } from './platform';
+
+export type { HostPlatform, Look };
+
+/** The platform the App runs on: NSH's OS, or in the web player the one
+ * its shell names (`host.params.platform`). Constant while it runs. */
+export const hostPlatform: HostPlatform = resolvePlatform(
+  platform.os,
+  host.available() ? host.params : {},
+);
+
+/** The habits the components follow. */
+export const look: Look = lookOf(hostPlatform);
+
+/** The value for the App's look. */
+export function byLook<T>(values: Record<Look, T>): T {
+  return values[look];
+}
 
 /** Phones and tablets (and Mac Catalyst): touch targets, sheets, tab bars. */
 export const touch: boolean = !platform.desktop;

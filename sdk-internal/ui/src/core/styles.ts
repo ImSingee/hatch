@@ -3,6 +3,7 @@
  * and every size a step of the Tailwind scale or a token, so the host's
  * theme restyles them while the App runs.
  */
+import { byLook } from './env';
 import type { Align, Justify, Space, Tone } from './types';
 
 /** DESIGN.md "Focus": a 2-point ink outline, 2 points out, on keyboard focus. */
@@ -68,17 +69,38 @@ export const TONE_TEXT: Record<Tone, string> = {
 };
 
 /** DESIGN.md "Menu, popover": the one treatment of every anchored popup.
- * On phones the same classes style the sheet NSH shows instead. */
-export const POPUP =
-  'rounded-(--radius-lg) border border-hairline bg-popover p-1.5 shadow-dock transition-all duration-150 ease-out';
+ * On phones the same classes style the sheet NSH shows instead. iOS: a
+ * rounded menu without an edge; Android: Material's menu, 4-point steps of
+ * the radius scale, rows 48 points. */
+export const POPUP = byLook({
+  web: 'rounded-(--radius-lg) border border-hairline bg-popover p-1.5 shadow-dock transition-all duration-150 ease-out',
+  ios: 'rounded-(--radius-md) bg-popover py-1 shadow-window transition-all duration-150 ease-out',
+  android:
+    'rounded-(--radius-xs) bg-popover py-2 shadow-dock transition-all duration-150 ease-out',
+});
 export const POPUP_STARTING = 'opacity-0 -translate-y-1';
 export const POPUP_ENDING = 'opacity-0';
 export const BACKDROP = 'bg-scrim';
 
-/** A row of a menu or a list box: 32 points, 44 on touch. */
-export const POPUP_ITEM =
-  'group min-h-8 flex-row items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-body font-strong text-popover-foreground focus:bg-surface-hover hover:bg-surface-hover disabled:opacity-50 pointer-coarse:min-h-11';
+/** A row of a menu or a list box: 32 points, 44 on touch; 44 on iOS and
+ * 48 on Android. */
+export const POPUP_ITEM = byLook({
+  web: 'group min-h-8 flex-row items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-body font-strong text-popover-foreground focus:bg-surface-hover hover:bg-surface-hover disabled:opacity-50 pointer-coarse:min-h-11',
+  ios: 'group min-h-11 flex-row items-center gap-3 px-4 py-2 text-ios-body font-regular text-popover-foreground focus:bg-surface-hover active:bg-surface-pressed disabled:opacity-40',
+  android:
+    'group min-h-12 flex-row items-center gap-3 px-3 py-2 text-m3-label-lg font-medium text-popover-foreground focus:bg-surface-hover active:bg-surface-pressed disabled:opacity-40',
+});
+
+/** The text of a popup row. */
+export const POPUP_ITEM_TEXT = byLook({
+  web: 'text-body font-strong',
+  ios: 'text-ios-body font-regular',
+  android: 'text-m3-label-lg font-medium',
+});
 
 /** A group's label inside a popup. */
-export const POPUP_GROUP =
-  'px-2.5 pb-1 pt-2 text-eyebrow font-heading uppercase tracking-eyebrow text-muted-foreground';
+export const POPUP_GROUP = byLook({
+  web: 'px-2.5 pb-1 pt-2 text-eyebrow font-heading uppercase tracking-eyebrow text-muted-foreground',
+  ios: 'px-4 pb-1 pt-2 text-ios-footnote font-regular text-muted-foreground',
+  android: 'px-3 pb-1 pt-2 text-m3-title-sm font-medium text-muted-foreground',
+});

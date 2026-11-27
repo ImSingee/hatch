@@ -1,5 +1,6 @@
 /**
- * Bundle the Agent Runner service into dist/runner/main.mjs.
+ * Bundle the Agent Runner service into dist/runner/main.mjs and the optional
+ * Builder service into dist/builder/main.mjs.
  *
  * esbuild bundles our own sources (resolving the `~*` tsconfig alias) but
  * keeps node_modules external — the runner image runs with the same
@@ -27,15 +28,16 @@ const tildeAlias: Plugin = {
   },
 };
 
-await build({
-  entryPoints: [path.join(root, 'src/runner/main.ts')],
-  outfile: path.join(root, 'dist/runner/main.mjs'),
-  bundle: true,
-  platform: 'node',
-  target: 'node26',
-  format: 'esm',
-  packages: 'external',
-  sourcemap: true,
-  logLevel: 'info',
-  plugins: [tildeAlias],
-});
+for (const service of ['runner', 'builder'])
+  await build({
+    entryPoints: [path.join(root, `src/${service}/main.ts`)],
+    outfile: path.join(root, `dist/${service}/main.mjs`),
+    bundle: true,
+    platform: 'node',
+    target: 'node26',
+    format: 'esm',
+    packages: 'external',
+    sourcemap: true,
+    logLevel: 'info',
+    plugins: [tildeAlias],
+  });

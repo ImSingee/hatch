@@ -27,6 +27,46 @@ export const typeScale = {
   eyebrow: type(11, 16),
 } as const;
 
+/**
+ * The type the iOS and Android looks set (`src/core/look.ts`): Apple's
+ * Dynamic Type at its default size and Material 3's type scale, which the
+ * design boards follow. The web keeps `typeScale`.
+ */
+export const platformTypeScale = {
+  'ios-large-title': type(34, 41),
+  'ios-title-1': type(28, 34),
+  'ios-title-2': type(22, 28),
+  'ios-title-3': type(20, 25),
+  'ios-body': type(17, 22),
+  'ios-callout': type(16, 21),
+  'ios-subhead': type(15, 20),
+  'ios-footnote': type(13, 18),
+  'ios-caption': type(12, 16),
+  'ios-caption-2': type(11, 13),
+  'm3-headline-lg': type(32, 40),
+  'm3-headline-md': type(28, 36),
+  'm3-headline-sm': type(24, 32),
+  'm3-title-lg': type(22, 28),
+  'm3-title-md': type(16, 24),
+  'm3-title-sm': type(14, 20),
+  'm3-body-lg': type(16, 24),
+  'm3-body-md': type(14, 20),
+  'm3-body-sm': type(12, 16),
+  'm3-label-lg': type(14, 20),
+  'm3-label-md': type(12, 16),
+  'm3-label-sm': type(11, 16),
+} as const;
+
+/** The weights of the system faces: SF Pro and Roboto read heavier than
+ * Nunito at the same number, so the platform looks name these instead of
+ * the Desk's `fontWeights`. */
+export const platformWeights = {
+  regular: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+} as const;
+
 export type TailwindExtension = {
   fontSize: Record<string, [number, number]>;
   fontWeight: Record<string, number>;
@@ -36,8 +76,8 @@ export type TailwindExtension = {
 
 export function buildTailwindExtension(): TailwindExtension {
   return {
-    fontSize: { ...typeScale },
-    fontWeight: { ...tokens.fontWeights },
+    fontSize: { ...typeScale, ...platformTypeScale },
+    fontWeight: { ...tokens.fontWeights, ...platformWeights },
     tracking: { heading: -0.01, eyebrow: 0.06 },
     shadow: { ...tokens.shadows },
   };

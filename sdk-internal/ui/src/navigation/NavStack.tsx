@@ -1,4 +1,4 @@
-import { effect, untracked } from 'nsh';
+import { effect, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import {
   NavPage,
@@ -73,6 +73,17 @@ export function NavStack<R>(props: NavStackProps<R>): JSX.Element {
     });
   };
 
+  // Each page's title, by its index, for the back button above it.
+  const titles = signal<ReadonlyMap<number, () => string>>(new Map());
+  const nameTitle = (index: number, title: () => string) => {
+    titles.set(new Map(untracked(titles)).set(index, title));
+    return () => {
+      const next = new Map(untracked(titles));
+      if (next.get(index) === title) next.delete(index);
+      titles.set(next);
+    };
+  };
+
   // What this stack last showed or reported, so its own reports do not come
   // back to it as navigations.
   let shown: RoutePath | undefined;
@@ -114,6 +125,8 @@ export function NavStack<R>(props: NavStackProps<R>): JSX.Element {
               value={{
                 canGoBack: () => index() > 0,
                 back: () => props.stack.pop(),
+                backLabel: () => titles().get(index() - 1)?.(),
+                nameTitle: (title) => nameTitle(untracked(index), title),
               }}
             >
               {props.children(route)}

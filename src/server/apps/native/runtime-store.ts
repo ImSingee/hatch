@@ -2,15 +2,23 @@
  * Server-only: the shared NSH web runtime the player pages load from
  * `/api/app-runtime/nsh/<version>/`. `nsh package --target web` links each
  * App its own engine, but every file it writes is named by its content, so
- * deploys publish their runtime files into one content-addressed directory
- * per NSH version and Apps with the same engine share the download. Files
- * are written once and never change; a name that already exists must hold
- * the same bytes.
+ * Apps with the same engine share the download. Files are written once and
+ * never change; a name that already exists must hold the same bytes.
+ *
+ * Builds no longer run on the platform, so the runtime files of a package
+ * are untrusted. They are published as a runtime set under
+ * `sets/<digest>/`, where the digest covers the name and bytes of every
+ * file of the set: a package can never replace or add a file another
+ * App's player loads, and identical engines still share one set.
+ * Deployments built before sets keep loading the flat directory.
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { WORKSPACE_ROOT } from '~agent/paths';
+import { isRuntimeFileName } from './runtime-names';
+
+export { isRuntimeFileName };
 
 export const NSH_RUNTIME_ROUTE = '/api/app-runtime/nsh';
 
@@ -24,13 +32,12 @@ export function nshRuntimeDir(version: string): string {
 }
 
 const VERSION = /^\d+\.\d+\.\d+$/;
-// Every runtime file `nsh package` writes carries a content digest in its
-// name or in its directory's (`browser.<digest>/runtime.js`).
-const RUNTIME_FILE =
-  /^(?:browser\.[0-9a-f]{8,}\/[\w.-]+|[\w-]+\.[0-9a-f]{8,}\.(?:js|wasm|bin|css))(?:\.(?:br|gz))?$/;
+const RUNTIME_SET = /^sets\/([0-9a-f]{64})\/(.+)$/;
 
-export function isRuntimeFileName(relative: string): boolean {
-  return RUNTIME_FILE.test(relative) && !relative.includes('..');
+/** Whether `relative` names a servable runtime file, flat or in a set. */
+function isServableRuntimePath(relative: string): boolean {
+  const set = RUNTIME_SET.exec(relative);
+  return isRuntimeFileName(set ? set[2] : relative);
 }
 
 async function sha256(file: string): Promise<string> {
@@ -45,7 +52,7 @@ export async function publishRuntimeFile(
   relative: string,
   source: string,
 ): Promise<void> {
-  if (!VERSION.test(version) || !isRuntimeFileName(relative)) {
+  if (!VERSION.test(version) || !isServableRuntimePath(relative)) {
     throw new Error(`Not an NSH runtime file: ${relative}`);
   }
   const root = nshRuntimeDir(version);
@@ -70,6 +77,64 @@ export async function publishRuntimeFile(
     // Gone after a successful rename; a leftover after a failure.
     await fs.rm(temporary, { force: true }).catch(() => {});
   }
+}
+
+async function listRuntimeFiles(
+  root: string,
+  relative = '',
+): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await fs.readdir(path.join(root, relative), {
+    withFileTypes: true,
+  })) {
+    const child = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      out.push(...(await listRuntimeFiles(root, child)));
+    } else if (entry.isFile()) {
+      out.push(child);
+    } else {
+      throw new Error(`Not an NSH runtime file: ${child}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Publish every file below `root` as one runtime set and return the base
+ * URL its player loads from. `required` names files the player references;
+ * each must be part of the set.
+ */
+export async function publishRuntimeSet(
+  version: string,
+  root: string,
+  required: readonly string[],
+): Promise<string> {
+  if (!VERSION.test(version)) {
+    throw new Error(`Not an NSH version: ${version}`);
+  }
+  const files = (await listRuntimeFiles(root)).sort();
+  if (files.length === 0) throw new Error('The package has no NSH runtime.');
+  const digest = createHash('sha256');
+  for (const file of files) {
+    if (!isRuntimeFileName(file)) {
+      throw new Error(`Not an NSH runtime file: ${file}`);
+    }
+    digest.update(`${file}\0${await sha256(path.join(root, file))}\n`);
+  }
+  for (const file of required) {
+    if (!files.includes(file)) {
+      throw new Error(`The NSH runtime is missing ${file}.`);
+    }
+  }
+  const set = `sets/${digest.digest('hex')}`;
+  for (const file of files) {
+    await publishRuntimeFile(
+      version,
+      `${set}/${file}`,
+      path.join(root, ...file.split('/')),
+    );
+  }
+  return `${nshRuntimeBase(version)}${set}/`;
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -112,7 +177,7 @@ export async function serveNshRuntimeFile(
   relative: string,
   acceptEncoding: string | null,
 ): Promise<Response> {
-  if (!VERSION.test(version) || !isRuntimeFileName(relative)) {
+  if (!VERSION.test(version) || !isServableRuntimePath(relative)) {
     return new Response('Not found', { status: 404 });
   }
   if (/\.(?:br|gz)$/.test(relative)) {

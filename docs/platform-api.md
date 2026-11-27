@@ -8,7 +8,7 @@ false, zero and empty values. Basic resource fields remain available to native
 clients. The CLI validates and exposes the complete view rather than dropping
 inspection metadata. See [the fifteen-tool matrix](cli-tool-parity.md).
 
-Data calls have the same 256 MiB bounded message ceiling as deployment; ordinary
+Data calls have the same 256 MiB bounded message ceiling as build package uploads; ordinary
 calls retain 16 KiB. Connect counts streamed/decompressed bytes. Query KV and
 Data Table `input` Values use the authoritative shared strict domain validation
 in `src/platform-api/data-schemas.ts`; outer request IDs and required messages
@@ -38,7 +38,10 @@ and release messages; `file.proto` shares file payloads; `error.proto`
 owns business error details. All files retain the `hatch.platform.v1` package.
 The contract defines `hatch.platform.v1.AppService`, `AuthService` and
 `SdkService`, plus session-only `AgentService`. The App lifecycle service
-provides list, create, get, get-source, deploy and rollback RPCs. Workflows and
+provides list, create, get, deployment (`CreateAppDeployment`,
+`UploadAppDeploymentArtifact`, `GetAppDeployment`, `ListAppDeployments`,
+`CancelAppDeployment` and the server-streaming `WatchAppDeploymentLogs`) and
+rollback RPCs. Workflows and
 their `WorkflowService` were removed; App tasks replace them. Auth provides `GetStatus` and session-only
 `CreateHandoff`; Sdk provides `GetSdk`. `NotificationService` manages the
 notification center for session, API-key and Agent Run callers alike; its
@@ -101,8 +104,9 @@ Agent tool arguments keep their own Zod validation.
 
 Lists return a `resources` array. Resource metadata contains only public identity,
 status and ISO timestamps. Optional fields have explicit presence; omitted and
-explicit `false` remain distinguishable. Files and the deprecated Deploy
-`bundle` are bytes, represented as base64 in Protobuf JSON. The CLI projects
+explicit `false` remain distinguishable. Files and the build package of
+`UploadAppDeploymentArtifact` (`artifact`) are bytes, represented as base64
+in Protobuf JSON. The CLI projects
 messages into its existing JSON output and workspace format, including nullable
 fields and base64 file contents.
 
@@ -118,10 +122,20 @@ same credentials (HTTP Basic password, `Authorization: Bearer` or `X-API-Key`;
 never a Cookie). Any branch can be pushed; `master` accepts fast-forward pushes
 only and cannot be deleted. Tags cannot be pushed: the platform creates the
 `deploy/*` tags at deploy time, and a push may only delete a tag outside
-`deploy/*` (left over from before tag pushes were rejected). A Deploy request names the `commit` to release, which
-must be on `master`, and defaults to its tip. The Deploy `bundle` field remains
-for older CLIs: an uploaded bundle is fast-forwarded onto `master` and then
-released. There is no RPC that downloads source; read it with Git fetch, whose
+`deploy/*` (left over from before tag pushes were rejected). A deployment
+names the `commit` to release, which must be on `master`, and defaults to its
+tip; its build package (built by the platform's dedicated Builder, or by the
+caller and uploaded) must be built for that deployment and commit. The removed
+`DeployApp` RPC and its bundle upload have no drop-in replacement. The
+workflow that replaces them is: push the commit over Git, call
+`CreateAppDeployment` with `build: builder` and follow the Builder's build
+(`WatchAppDeploymentLogs`), or with `build: local` build it yourself and
+upload the package with `UploadAppDeploymentArtifact`. A Builder deployment
+is refused with `BUILDER_UNAVAILABLE` on a platform without a Builder and
+with `BUILDER_OFFLINE` while none is online; `GetServerInfo` reports both.
+`ListDeploymentQueue` lists the unfinished deployments of every App. CLIs older than deployments cannot deploy and
+must be upgraded. There is no RPC that downloads
+source; read it with Git fetch, whose
 master commit always matches the history it delivers. Rollback moves `master`
 back to the restored release.
 
@@ -149,7 +163,10 @@ CORS headers/preflight are added. Interactive methods preserve the existing
 session origin policy: canonical `APP_URL` or the current trusted Tailscale
 origin, and no `Sec-Fetch-Site: cross-site` request even with an explicit token.
 Ordinary request messages are capped at 16 KiB;
-deploy messages at 256 MiB. Limits apply to actual received and decompressed
+build package uploads at 256 MiB (the package itself at 200 MiB). In Protobuf
+JSON the package is base64, a third larger, so a JSON client can upload
+packages up to about 190 MiB; use the binary Protobuf encoding (as the CLI
+does) for larger ones. Limits apply to actual received and decompressed
 bytes, including chunked requests. Responses use `no-store`, `nosniff` and
 `no-referrer`.
 

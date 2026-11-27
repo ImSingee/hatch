@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
     runMigrations: asyncStep('migrations'),
     hardenPlatformDatabase: asyncStep('harden'),
     reconcileActivations: asyncStep('activations'),
+    ensureBuildSweeper: asyncStep('build-sweeper'),
     startAgentInternalServer: step('agent-server'),
     sweepExpiredAgentRuns: asyncStep('agent-sweep'),
     ensureAgentRunSweeper: step('agent-sweeper'),
@@ -47,6 +48,9 @@ vi.mock('~server/agent-runner/internal-server', () => ({
 }));
 vi.mock('~server/apps/provision', () => ({
   hardenPlatformDatabase: mocks.hardenPlatformDatabase,
+}));
+vi.mock('~server/apps/builds', () => ({
+  ensureBuildSweeper: mocks.ensureBuildSweeper,
 }));
 vi.mock('~server/apps/deploy', () => ({
   reconcilePendingAppActivations: mocks.reconcileActivations,
@@ -89,6 +93,7 @@ describe('platform startup migrations', () => {
       'migrations',
       'harden',
       'activations',
+      'build-sweeper',
       'agent-server',
       'agent-sweep',
       'agent-sweeper',

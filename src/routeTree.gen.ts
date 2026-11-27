@@ -35,6 +35,7 @@ import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/a
 import { Route as AppSettingsAgentRunnerRouteImport } from './routes/_app/settings/agent-runner'
 import { Route as AppSettingsAppearanceRouteImport } from './routes/_app/settings/appearance'
 import { Route as AppSettingsBackendsRouteImport } from './routes/_app/settings/backends'
+import { Route as AppSettingsBuilderRouteImport } from './routes/_app/settings/builder'
 import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsProvidersRouteImport } from './routes/_app/settings/providers'
 import { Route as AppSettingsTailscaleRouteImport } from './routes/_app/settings/tailscale'
@@ -215,6 +216,11 @@ const AppSettingsAppearanceRoute = AppSettingsAppearanceRouteImport.update({
 const AppSettingsBackendsRoute = AppSettingsBackendsRouteImport.update({
   id: '/backends',
   path: '/backends',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsBuilderRoute = AppSettingsBuilderRouteImport.update({
+  id: '/builder',
+  path: '/builder',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppSettingsNotificationsRoute =
@@ -522,6 +528,7 @@ export interface FileRoutesByFullPath {
   '/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/backends': typeof AppSettingsBackendsRoute
+  '/settings/builder': typeof AppSettingsBuilderRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/providers': typeof AppSettingsProvidersRoute
   '/settings/tailscale': typeof AppSettingsTailscaleRoute
@@ -597,6 +604,7 @@ export interface FileRoutesByTo {
   '/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/backends': typeof AppSettingsBackendsRoute
+  '/settings/builder': typeof AppSettingsBuilderRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/providers': typeof AppSettingsProvidersRoute
   '/settings/tailscale': typeof AppSettingsTailscaleRoute
@@ -678,6 +686,7 @@ export interface FileRoutesById {
   '/_app/settings/agent-runner': typeof AppSettingsAgentRunnerRoute
   '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
   '/_app/settings/backends': typeof AppSettingsBackendsRoute
+  '/_app/settings/builder': typeof AppSettingsBuilderRoute
   '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/providers': typeof AppSettingsProvidersRoute
   '/_app/settings/tailscale': typeof AppSettingsTailscaleRoute
@@ -759,6 +768,7 @@ export interface FileRouteTypes {
     | '/settings/agent-runner'
     | '/settings/appearance'
     | '/settings/backends'
+    | '/settings/builder'
     | '/settings/notifications'
     | '/settings/providers'
     | '/settings/tailscale'
@@ -834,6 +844,7 @@ export interface FileRouteTypes {
     | '/settings/agent-runner'
     | '/settings/appearance'
     | '/settings/backends'
+    | '/settings/builder'
     | '/settings/notifications'
     | '/settings/providers'
     | '/settings/tailscale'
@@ -914,6 +925,7 @@ export interface FileRouteTypes {
     | '/_app/settings/agent-runner'
     | '/_app/settings/appearance'
     | '/_app/settings/backends'
+    | '/_app/settings/builder'
     | '/_app/settings/notifications'
     | '/_app/settings/providers'
     | '/_app/settings/tailscale'
@@ -1197,6 +1209,13 @@ declare module '@tanstack/react-router' {
       path: '/backends'
       fullPath: '/settings/backends'
       preLoaderRoute: typeof AppSettingsBackendsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/builder': {
+      id: '/_app/settings/builder'
+      path: '/builder'
+      fullPath: '/settings/builder'
+      preLoaderRoute: typeof AppSettingsBuilderRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/_app/settings/notifications': {
@@ -1613,6 +1632,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAgentRunnerRoute: typeof AppSettingsAgentRunnerRoute
   AppSettingsAppearanceRoute: typeof AppSettingsAppearanceRoute
   AppSettingsBackendsRoute: typeof AppSettingsBackendsRoute
+  AppSettingsBuilderRoute: typeof AppSettingsBuilderRoute
   AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsProvidersRoute: typeof AppSettingsProvidersRoute
   AppSettingsTailscaleRoute: typeof AppSettingsTailscaleRoute
@@ -1626,6 +1646,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAgentRunnerRoute: AppSettingsAgentRunnerRoute,
   AppSettingsAppearanceRoute: AppSettingsAppearanceRoute,
   AppSettingsBackendsRoute: AppSettingsBackendsRoute,
+  AppSettingsBuilderRoute: AppSettingsBuilderRoute,
   AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsProvidersRoute: AppSettingsProvidersRoute,
   AppSettingsTailscaleRoute: AppSettingsTailscaleRoute,

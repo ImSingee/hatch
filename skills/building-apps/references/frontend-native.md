@@ -9,7 +9,7 @@ A native frontend is TypeScript JSX for Hatch's native runtime (NSH). Its whole
 UI comes from `@hatch/ui`, a closed component catalogue that looks like the
 Hatch platform and adapts to phones, tablets, desktops and the web by itself.
 The same source runs in the Web Desk and in Hatch's apps, and it follows the
-instance's theme and accent without a redeploy. Widgets stay React: see
+viewer's theme and accent without a redeploy. Widgets stay React: see
 [Web frontend and widgets](frontend-web.md#widgets).
 
 ## Files

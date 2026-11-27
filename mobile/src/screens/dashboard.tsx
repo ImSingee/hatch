@@ -26,9 +26,9 @@ import { pill } from '../ui/theme';
 import { useAccent, usePalette, useTheme } from '../ui/theme-context';
 
 /**
- * The dashboards of the instance and the one on show. Widgets are web
- * content: a dashboard is one web canvas, peeked at on the home screen and
- * shown at full height on the Widgets page.
+ * The dashboards of the instance, in the user's order, and the one on show.
+ * Widgets are web content: a dashboard is one web canvas, peeked at on the
+ * home screen and shown at full height on the Widgets page.
  */
 export function useDashboards(
   focused: boolean,

@@ -1,5 +1,5 @@
 // Desk on native. Every colour, radius, font and shadow comes from the
-// instance theme, resolved by the platform (`ThemeService.GetTheme`) into the
+// signed-in user's theme, resolved by the platform (`ThemeService.GetTheme`) into the
 // same token set the web draws; nothing here is a design value of its own.
 // Values that do not change with the theme (weights, sizes, tile fills,
 // motion) are read from the shared token file.
@@ -116,7 +116,7 @@ export type MobileTheme = {
 
 const built = new WeakMap<ResolvedTheme, MobileTheme>();
 
-/** The app's theme for a resolved instance theme; one object per theme. */
+/** The app's theme for a user's resolved theme; one object per theme. */
 export function mobileThemeOf(theme: ResolvedTheme): MobileTheme {
   let mobile = built.get(theme);
   if (!mobile) {

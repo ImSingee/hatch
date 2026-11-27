@@ -3,7 +3,10 @@ import { constants, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, type Plugin } from 'esbuild';
-import { APP_HATCH_SDK_IMPORTS, hatchImportMapPath } from './agent/hatch-sdk';
+import {
+  APP_HATCH_SDK_IMPORTS,
+  hatchImportMapPath,
+} from './agent/hatch-sdk-paths';
 import { AppManifestValidationError } from './server/apps/manifest-validation';
 import { subprocessSandboxEnv } from './server/sandbox-env';
 import { run, type RunOptions, type RunResult } from './server/subprocess';

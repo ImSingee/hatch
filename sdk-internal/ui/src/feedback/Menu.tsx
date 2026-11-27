@@ -2,15 +2,17 @@ import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Menu as BaseMenu, MenuItem, MenuSeparator } from 'nsh/base';
 import { Each } from '../core/control';
-import { touch } from '../core/env';
+import { byLook, look, touch } from '../core/env';
 import {
   BACKDROP,
   FOCUS_RING,
   POPUP,
   POPUP_ENDING,
   POPUP_ITEM,
+  POPUP_ITEM_TEXT,
   POPUP_STARTING,
 } from '../core/styles';
+import type { GlyphColor } from '../icons/Icon';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
 import { IconCheck, IconChevronDown, IconDots } from '../icons/icons.gen';
@@ -41,8 +43,31 @@ export type MenuProps = {
   icon?: IconData;
 };
 
-const ICON_TRIGGER = `size-9 items-center justify-center rounded-(--radius-md) hover:bg-surface-hover aria-expanded:bg-surface-pressed pointer-coarse:size-11 ${FOCUS_RING}`;
-const BUTTON_TRIGGER = `h-9 flex-row items-center gap-2 rounded-(--radius-md) border border-hairline bg-card px-4 hover:bg-surface-hover aria-expanded:bg-surface-pressed pointer-coarse:h-11 ${FOCUS_RING}`;
+/** The triggers on each look: iOS's plain accent icon and gray button,
+ * Android's 48-point circle and outlined pill. */
+const TRIGGER = byLook({
+  web: {
+    icon: `size-9 items-center justify-center rounded-(--radius-md) hover:bg-surface-hover aria-expanded:bg-surface-pressed pointer-coarse:size-11 ${FOCUS_RING}`,
+    button: `h-9 flex-row items-center gap-2 rounded-(--radius-md) border border-hairline bg-card px-4 hover:bg-surface-hover aria-expanded:bg-surface-pressed pointer-coarse:h-11 ${FOCUS_RING}`,
+    label: 'text-body font-label text-foreground',
+    glyph: 'foreground' as GlyphColor,
+    buttonGlyph: 'foreground' as GlyphColor,
+  },
+  ios: {
+    icon: `size-11 items-center justify-center rounded-full active:opacity-50 ${FOCUS_RING}`,
+    button: `h-11 flex-row items-center gap-2 rounded-(--radius-md) bg-background px-4 active:opacity-60 ${FOCUS_RING}`,
+    label: 'text-ios-body font-regular text-foreground',
+    glyph: 'primary-strong' as GlyphColor,
+    buttonGlyph: 'foreground' as GlyphColor,
+  },
+  android: {
+    icon: `size-12 items-center justify-center rounded-full active:bg-surface-pressed aria-expanded:bg-surface-pressed ${FOCUS_RING}`,
+    button: `h-10 flex-row items-center gap-2 rounded-full border border-control-border px-4 active:bg-surface-pressed ${FOCUS_RING}`,
+    label: 'text-m3-label-lg font-medium text-foreground',
+    glyph: 'foreground' as GlyphColor,
+    buttonGlyph: 'foreground' as GlyphColor,
+  },
+});
 
 /**
  * Actions behind a button: a popup on desktops, a sheet on phones. Use it
@@ -59,22 +84,28 @@ export function Menu(props: MenuProps): JSX.Element {
       backdropClass={BACKDROP}
       trigger={
         asButton() ? (
-          <View class={BUTTON_TRIGGER} accessibilityLabel={props.label}>
+          <View class={TRIGGER.button} accessibilityLabel={props.label}>
             {props.icon ? (
-              <Glyph icon={props.icon} size="md" color="foreground" />
+              <Glyph icon={props.icon} size="md" color={TRIGGER.buttonGlyph} />
             ) : null}
-            <Text class="text-body font-label text-foreground">
-              {props.label}
-            </Text>
-            <Glyph icon={IconChevronDown} size="md" color="foreground" />
+            <Text class={TRIGGER.label}>{props.label}</Text>
+            <Glyph
+              icon={IconChevronDown}
+              size="md"
+              color={TRIGGER.buttonGlyph}
+            />
           </View>
         ) : (
           <View
-            class={ICON_TRIGGER}
+            class={TRIGGER.icon}
             accessibilityLabel={props.label}
             tooltip={touch ? undefined : <TooltipBubble label={props.label} />}
           >
-            <Glyph icon={props.icon ?? IconDots} size="md" color="foreground" />
+            <Glyph
+              icon={props.icon ?? IconDots}
+              size={look === 'web' ? 'md' : '2xl'}
+              color={TRIGGER.glyph}
+            />
           </View>
         )
       }
@@ -93,7 +124,8 @@ export function Menu(props: MenuProps): JSX.Element {
               accessibilityLabel={item.label}
               class={POPUP_ITEM}
             >
-              {item.icon ? (
+              {/* iOS puts a menu item's icon at its end. */}
+              {item.icon && look !== 'ios' ? (
                 <Glyph
                   icon={item.icon}
                   size="md"
@@ -103,10 +135,17 @@ export function Menu(props: MenuProps): JSX.Element {
                 />
               ) : null}
               <Text
-                class={`flex-1 text-body font-strong ${item.destructive ? 'text-danger-strong' : 'text-popover-foreground'}`}
+                class={`flex-1 ${POPUP_ITEM_TEXT} ${item.destructive ? 'text-danger-strong' : 'text-popover-foreground'}`}
               >
                 {item.label}
               </Text>
+              {item.icon && look === 'ios' ? (
+                <Glyph
+                  icon={item.icon}
+                  size="lg"
+                  color={item.destructive ? 'danger-strong' : 'foreground'}
+                />
+              ) : null}
               {item.checked ? (
                 <Glyph icon={IconCheck} size="md" color="primary-strong" />
               ) : null}

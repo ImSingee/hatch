@@ -8,7 +8,7 @@ import { applyThemeState, type WebThemeState } from '~/ui/theme';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
 import { usePlatformShortcut } from './platform-shortcuts';
 
-/** The instance theme with an accent, as the root applies it. */
+/** A theme with an accent, as the root applies it. */
 function themeWith(accent: 'indigo' | 'teal'): WebThemeState {
   const color = accent === 'teal' ? '#0F766E' : '#3F51C7';
   return { accent, theme: resolvePreset('desk', color) };

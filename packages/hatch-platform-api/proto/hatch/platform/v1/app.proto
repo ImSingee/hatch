@@ -12,7 +12,25 @@ service AppService {
   rpc ListApps(ListAppsRequest) returns (ListAppsResponse);
   rpc CreateApp(CreateAppRequest) returns (CreateAppResponse);
   rpc GetApp(GetAppRequest) returns (GetAppResponse);
-  rpc DeployApp(DeployAppRequest) returns (DeployAppResponse);
+  // Deploy a commit already pushed to master. The deployment is built by the
+  // dedicated Builder (`build: builder`) or by the caller, which uploads the
+  // build package with UploadAppDeploymentArtifact (`build: local`).
+  rpc CreateAppDeployment(CreateAppDeploymentRequest) returns (CreateAppDeploymentResponse);
+  // Upload the build package of a local-mode deployment and release it.
+  // Returns the deployment in its final state: a rejected package is a
+  // failed deployment, not an error.
+  rpc UploadAppDeploymentArtifact(UploadAppDeploymentArtifactRequest) returns (UploadAppDeploymentArtifactResponse);
+  rpc GetAppDeployment(GetAppDeploymentRequest) returns (GetAppDeploymentResponse);
+  rpc ListAppDeployments(ListAppDeploymentsRequest) returns (ListAppDeploymentsResponse);
+  // Every unfinished deployment of every App, oldest first: the Builder
+  // queue, builds in progress, local builds awaiting their package and
+  // releases. Cancel one with CancelAppDeployment.
+  rpc ListDeploymentQueue(ListDeploymentQueueRequest) returns (ListDeploymentQueueResponse);
+  // Cancel a deployment that has not started verifying its build package.
+  rpc CancelAppDeployment(CancelAppDeploymentRequest) returns (CancelAppDeploymentResponse);
+  // Log lines after `after_seq` and every state change until the deployment
+  // finishes. Reconnect with the last seq seen to continue.
+  rpc WatchAppDeploymentLogs(WatchAppDeploymentLogsRequest) returns (stream WatchAppDeploymentLogsResponse);
   rpc RollbackApp(RollbackAppRequest) returns (RollbackAppResponse);
   rpc QueryAppKv(QueryAppKvRequest) returns (QueryAppKvResponse);
   rpc QueryAppDataTable(QueryAppDataTableRequest) returns (QueryAppDataTableResponse);
@@ -95,26 +113,215 @@ message GetAppResponse {
   Resource resource = 1;
 }
 
-message DeployAppRequest {
+// One deployment request, from creation to release.
+message AppDeployment {
+  string id = 1;
+  string app_id = 2;
+  // Increases per App in creation order.
+  uint32 seq = 3;
+  string commit = 4;
+  string message = 5;
+  // "builder" or "local".
+  string build = 6;
+  // "cli" or "ui".
+  string trigger = 7;
+  optional string actor = 8;
+  // queued, awaiting_artifact, building, verifying, releasing, ready,
+  // failed, canceled or superseded.
+  string status = 9;
+  bool finished = 10;
+  optional string error_code = 11;
+  optional string error_message = 12;
+  // The recorded deployment once ready.
+  optional Deployment deployment = 13;
+  string created_at = 14;
+  optional string started_at = 15;
+  optional string finished_at = 16;
+  // Last log line sequence number.
+  uint32 log_seq = 17;
+}
+
+message CreateAppDeploymentRequest {
   string id = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 191
   }];
   string message = 2 [(buf.validate.field).string.min_len = 1];
-  // Creation timestamp fetched before pushing; checked again under deploy lock.
+  // Creation timestamp fetched before pushing; checked again at release.
   string generation = 3 [(buf.validate.field).string.min_len = 1];
-  // Deprecated bundle transport: a Git bundle whose HEAD is fast-forwarded onto
-  // master and then released. Clients now push over Git smart HTTP and set
-  // `commit`. Setting both is rejected.
-  optional bytes bundle = 4;
-  optional bool allow_destructive_data_migration = 5;
-  optional string data_migration_approval_token = 6 [(buf.validate.field).string.min_len = 1];
-  // Commit on master to release. Defaults to the master tip.
-  optional string commit = 7 [(buf.validate.field).string.pattern = "^[0-9a-f]{40}$"];
+  // Commit on master to deploy. Defaults to the master tip.
+  optional string commit = 4 [(buf.validate.field).string.pattern = "^[0-9a-f]{40}$"];
+  // "builder" (the platform's dedicated Builder) or "local" (the caller
+  // builds and uploads the package). A Builder build is refused with
+  // BUILDER_UNAVAILABLE when the platform has no Builder and with
+  // BUILDER_OFFLINE when none has connected recently.
+  string build = 5 [(buf.validate.field).string = {
+    in: [
+      "builder",
+      "local"
+    ]
+  }];
+  optional bool allow_destructive_data_migration = 6;
+  optional string data_migration_approval_token = 7 [(buf.validate.field).string.min_len = 1];
+  // Post a platform notification when the deployment is released or fails,
+  // for a caller that does not follow it.
+  optional bool notify = 8;
+  // Client-chosen id of this create request (a UUID, say). Repeating it
+  // returns the deployment it already made instead of making another, and
+  // ListAppDeployments finds it by this id. A request whose call has already
+  // ended (deadline or disconnect) when the platform checks creates none; one
+  // that ends while the platform is committing it can still create its
+  // deployment, of the same commit.
+  optional string request_id = 9 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^[A-Za-z0-9._:-]+$"
+  }];
 }
 
-message DeployAppResponse {
-  Deployment deployment = 1;
+message CreateAppDeploymentResponse {
+  AppDeployment deployment = 1;
+}
+
+message UploadAppDeploymentArtifactRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string deployment_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // The gzipped build package (hatch-build-v1).
+  bytes artifact = 3 [(buf.validate.field).bytes.min_len = 1];
+}
+
+message UploadAppDeploymentArtifactResponse {
+  AppDeployment deployment = 1;
+}
+
+message GetAppDeploymentRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string deployment_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+message GetAppDeploymentResponse {
+  AppDeployment deployment = 1;
+}
+
+message ListAppDeploymentsRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  optional uint32 limit = 2 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100
+  }];
+  // The `next_cursor` of the previous page.
+  optional uint32 cursor = 3 [(buf.validate.field).uint32.gt = 0];
+  // Only the deployment the create request with this `request_id` made
+  // (none or one); `limit` and `cursor` do not apply.
+  optional string request_id = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+}
+
+message ListAppDeploymentsResponse {
+  repeated AppDeployment deployments = 1;
+  optional uint32 next_cursor = 2;
+}
+
+message ListDeploymentQueueRequest {
+  optional uint32 limit = 1 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100
+  }];
+  // The `next_cursor` of the previous page.
+  optional string cursor = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+message DeploymentQueueEntry {
+  string app_slug = 1;
+  string app_name = 2;
+  // `app_id` names the App.
+  AppDeployment deployment = 3;
+  // 1-based place among queued Builder deployments, in the order Builders
+  // take them (oldest first; one build per App at a time). Only for
+  // `queued`.
+  optional uint32 queue_position = 4;
+  // The Builder holding it, while `building`.
+  optional string builder_id = 5;
+}
+
+message ListDeploymentQueueResponse {
+  repeated DeploymentQueueEntry entries = 1;
+  optional string next_cursor = 2;
+}
+
+message CancelAppDeploymentRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string deployment_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // A local build that failed: the deployment is recorded as failed with
+  // this message (and `failure_code`) instead of canceled.
+  optional string failure_message = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64000
+  }];
+  // "app_build_failed" (default) or "APP_MANIFEST_INVALID".
+  optional string failure_code = 4 [(buf.validate.field).string = {
+    in: [
+      "app_build_failed",
+      "APP_MANIFEST_INVALID"
+    ]
+  }];
+}
+
+message CancelAppDeploymentResponse {
+  AppDeployment deployment = 1;
+}
+
+message WatchAppDeploymentLogsRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string deployment_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  optional uint32 after_seq = 3;
+}
+
+message AppDeploymentLogLine {
+  uint32 seq = 1;
+  // "build" (the build's own output) or "platform" (verify and release).
+  string stream = 2;
+  string text = 3;
+  string at = 4;
+}
+
+// Lines in order, and the deployment state whenever it changes. The last
+// message carries the finished deployment.
+message WatchAppDeploymentLogsResponse {
+  repeated AppDeploymentLogLine lines = 1;
+  optional AppDeployment deployment = 2;
 }
 
 message RollbackAppRequest {

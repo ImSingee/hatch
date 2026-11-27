@@ -6,7 +6,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { hatchImportMapPath } from '../agent/hatch-sdk';
+import { hatchImportMapPath } from '../agent/hatch-sdk-paths';
 import {
   validateDenoDependencySource,
   type DenoDependencySourceFile,

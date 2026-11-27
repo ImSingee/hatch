@@ -2,11 +2,13 @@
  * Server-only: navigation pins. The Web UI Server Functions and the public
  * PinService both call this module, so the two surfaces cannot drift.
  *
- * App pins are rows of `sidebar_items` (an App can have several, each with
- * its own label and entry point); dashboards carry a `pinned` flag.
+ * Pins are personal: App pins are a user's rows of `sidebar_items` (an App
+ * can have several, each with its own label and entry point), and each user's
+ * pinned flag and order of the shared dashboards is in `user_dashboards`.
+ * Every function acts for one user and never sees another user's pins.
  */
-import { eq, sql } from 'drizzle-orm';
-import { db, schema } from '~/db';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { db, schema, type TX } from '~/db';
 import {
   cleanEntryHash,
   MAX_ENTRY_HASH_LEN,
@@ -16,8 +18,10 @@ import { AppError } from './errors';
 import { publishPlatformEvent } from './platform-events';
 import { persistSortOrder } from './sort-order';
 import {
+  pinDefaultDashboardForNewUser,
   readDashboards,
   readSidebarItems,
+  readUserDashboards,
   type SidebarItem,
 } from './workspace-read';
 
@@ -27,24 +31,36 @@ import {
 // DASHBOARDS_LOCK_NS=5 (dashboards.ts).
 const SIDEBAR_PIN_LOCK_NS = 4;
 
-/** Next sidebar sortOrder: max+1, so deletions never cause collisions. */
-const nextSidebarSortOrder = () =>
-  sql`(select coalesce(max(${schema.sidebarItems.sortOrder}), -1) + 1 from ${schema.sidebarItems})`;
+/**
+ * Serialize one user's pin writes: it keeps the "ensure one pin" check free
+ * of duplicates under concurrent calls and makes the max+1 sortOrder safe.
+ * Pin writes are rare and per user; contention is nil.
+ */
+export async function lockUserPins(tx: TX, userId: string): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(${SIDEBAR_PIN_LOCK_NS}, hashtext(${userId}))`,
+  );
+}
 
-/** Tell connected clients to re-read pins; called after every change. */
-const pinsChanged = () => publishPlatformEvent({ type: 'pins.updated' });
+/** The user's next App pin sortOrder: max+1, so deletions never collide. */
+export const nextSidebarSortOrder = (userId: string) =>
+  sql`(select coalesce(max(${schema.sidebarItems.sortOrder}), -1) + 1 from ${schema.sidebarItems} where ${schema.sidebarItems.userId} = ${userId})`;
+
+/** Tell the user's connected clients to re-read their pins. */
+export const pinsChanged = (userId: string) =>
+  publishPlatformEvent({ type: 'pins.updated', userId });
 
 export type Pins = {
   /** In navigation order; includes pins of archived Apps. */
   appPins: SidebarItem[];
-  /** In dashboard order. */
+  /** In the user's dashboard order. */
   dashboards: { id: string; name: string }[];
 };
 
-export async function listPins(): Promise<Pins> {
+export async function listPins(userId: string): Promise<Pins> {
   const [appPins, dashboards] = await Promise.all([
-    readSidebarItems(),
-    readDashboards(),
+    readSidebarItems(userId),
+    readDashboards(userId),
   ]);
   return {
     appPins,
@@ -54,8 +70,8 @@ export async function listPins(): Promise<Pins> {
   };
 }
 
-async function appPin(id: string): Promise<SidebarItem> {
-  const pin = (await readSidebarItems()).find((item) => item.id === id);
+async function appPin(userId: string, id: string): Promise<SidebarItem> {
+  const pin = (await readSidebarItems(userId)).find((item) => item.id === id);
   if (!pin)
     throw new AppError('Pin not found.', 404, { code: 'shell.pinNotFound' });
   return pin;
@@ -86,16 +102,19 @@ function pinLabel(label: string): string {
 }
 
 /**
- * Pin an App, addressed by id or slug. Always adds a pin (an App can be
- * pinned many times) unless `ifAbsent` is set and the App already has one,
- * in which case that pin is returned untouched.
+ * Pin an App for the user, addressed by id or slug. Always adds a pin (an
+ * App can be pinned many times) unless `ifAbsent` is set and the user already
+ * has a pin of the App, in which case that pin is returned untouched.
  */
-export async function pinApp(input: {
-  app: string;
-  label?: string;
-  entryHash?: string;
-  ifAbsent?: boolean;
-}): Promise<{ pin: SidebarItem; created: boolean }> {
+export async function pinApp(
+  userId: string,
+  input: {
+    app: string;
+    label?: string;
+    entryHash?: string;
+    ifAbsent?: boolean;
+  },
+): Promise<{ pin: SidebarItem; created: boolean }> {
   if (
     input.ifAbsent &&
     (input.label !== undefined || input.entryHash !== undefined)
@@ -107,14 +126,8 @@ export async function pinApp(input: {
   const label = input.label === undefined ? undefined : pinLabel(input.label);
   const entryHash =
     input.entryHash === undefined ? undefined : pinEntryHash(input.entryHash);
-  // One global sidebar-insert lock (not per-app): it keeps the "ensure one
-  // pin" check free of duplicates under concurrent calls AND makes the max+1
-  // sortOrder allocation safe across concurrent pins of *different* apps.
-  // Pin writes are rare; contention is nil.
   const result = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(${SIDEBAR_PIN_LOCK_NS}, 0)`,
-    );
+    await lockUserPins(tx, userId);
     const app =
       (await tx.query.apps.findFirst({ where: { id: input.app } })) ??
       (await tx.query.apps.findFirst({ where: { slug: input.app } }));
@@ -122,7 +135,7 @@ export async function pinApp(input: {
       throw new AppError('App not found.', 404, { code: 'shell.appNotFound' });
     if (input.ifAbsent) {
       const existing = await tx.query.sidebarItems.findFirst({
-        where: { appId: app.id },
+        where: { appId: app.id, userId },
         orderBy: { sortOrder: 'asc', createdAt: 'asc' },
       });
       if (existing) return { id: existing.id, created: false };
@@ -130,16 +143,17 @@ export async function pinApp(input: {
     const [row] = await tx
       .insert(schema.sidebarItems)
       .values({
+        userId,
         appId: app.id,
         label: label ?? app.name,
         entryHash,
-        sortOrder: nextSidebarSortOrder(),
+        sortOrder: nextSidebarSortOrder(userId),
       })
       .returning({ id: schema.sidebarItems.id });
     return { id: row.id, created: true };
   });
-  if (result.created) pinsChanged();
-  return { pin: await appPin(result.id), created: result.created };
+  if (result.created) pinsChanged(userId);
+  return { pin: await appPin(userId, result.id), created: result.created };
 }
 
 /**
@@ -148,6 +162,7 @@ export async function pinApp(input: {
  * unchanged.
  */
 export async function updateAppPin(
+  userId: string,
   id: string,
   changes: { label?: string; entryHash?: string | null },
 ): Promise<SidebarItem> {
@@ -168,29 +183,37 @@ export async function updateAppPin(
                 : pinEntryHash(changes.entryHash),
           }),
     })
-    .where(eq(schema.sidebarItems.id, id))
+    .where(
+      and(
+        eq(schema.sidebarItems.id, id),
+        eq(schema.sidebarItems.userId, userId),
+      ),
+    )
     .returning({ id: schema.sidebarItems.id });
   if (!updated.length)
     throw new AppError('Pin not found.', 404, { code: 'shell.pinNotFound' });
-  pinsChanged();
-  return appPin(id);
+  pinsChanged(userId);
+  return appPin(userId, id);
 }
 
 /**
- * Remove one pin by its id, or every pin of an App (id or slug). Removing
- * what is already gone succeeds with an empty list; an unknown App is a 404.
+ * Remove one of the user's pins by its id, or all their pins of an App (id
+ * or slug). Removing what is already gone succeeds with an empty list; an
+ * unknown App, or a pin id that is not the user's, is a 404.
  */
 export async function unpinApp(
+  userId: string,
   target: { pinId: string } | { app: string },
 ): Promise<string[]> {
+  const own = eq(schema.sidebarItems.userId, userId);
   if ('pinId' in target) {
     const removed = await db
       .delete(schema.sidebarItems)
-      .where(eq(schema.sidebarItems.id, target.pinId))
+      .where(and(eq(schema.sidebarItems.id, target.pinId), own))
       .returning({ id: schema.sidebarItems.id });
     if (!removed.length)
       throw new AppError('Pin not found.', 404, { code: 'shell.pinNotFound' });
-    pinsChanged();
+    pinsChanged(userId);
     return removed.map((row) => row.id);
   }
   const app =
@@ -206,9 +229,9 @@ export async function unpinApp(
     throw new AppError('App not found.', 404, { code: 'shell.appNotFound' });
   const removed = await db
     .delete(schema.sidebarItems)
-    .where(eq(schema.sidebarItems.appId, app.id))
+    .where(and(eq(schema.sidebarItems.appId, app.id), own))
     .returning({ id: schema.sidebarItems.id });
-  if (removed.length) pinsChanged();
+  if (removed.length) pinsChanged(userId);
   return removed.map((row) => row.id);
 }
 
@@ -216,34 +239,134 @@ export async function unpinApp(
  * Put the listed App pins first, in the given order; see `persistSortOrder`
  * for the pins that are not listed. Returns every pin in its new order.
  */
-export async function reorderAppPins(pinIds: string[]): Promise<SidebarItem[]> {
-  await persistSortOrder(schema.sidebarItems, pinIds);
-  pinsChanged();
-  return readSidebarItems();
+export async function reorderAppPins(
+  userId: string,
+  pinIds: string[],
+): Promise<SidebarItem[]> {
+  await persistSortOrder(
+    schema.sidebarItems,
+    pinIds,
+    eq(schema.sidebarItems.userId, userId),
+  );
+  pinsChanged(userId);
+  return readSidebarItems(userId);
 }
 
-/** Reorder dashboards the same way; returns every dashboard id in order. */
+/**
+ * Store the user's whole dashboard order, with each dashboard's pinned flag:
+ * once a user changes anything, every dashboard has a row, so the ones a
+ * change does not name keep their place. A listed dashboard someone deleted
+ * since the order was read, or is deleting right now, is skipped rather than
+ * failing the change. Returns the ids of the dashboards it wrote.
+ */
+export async function writeDashboardOrder(
+  tx: TX,
+  userId: string,
+  order: { id: string; pinned: boolean }[],
+): Promise<string[]> {
+  if (!order.length) return [];
+  // The dashboards that still exist and nobody is deleting; the lock keeps
+  // them until this transaction ends, so the foreign key holds.
+  const kept = new Set(
+    (
+      await tx
+        .select({ id: schema.dashboards.id })
+        .from(schema.dashboards)
+        .where(
+          inArray(
+            schema.dashboards.id,
+            order.map((entry) => entry.id),
+          ),
+        )
+        .for('key share', { skipLocked: true })
+    ).map((row) => row.id),
+  );
+  const rows = order.flatMap(({ id, pinned }, sortOrder) =>
+    kept.has(id) ? [{ userId, dashboardId: id, pinned, sortOrder }] : [],
+  );
+  if (!rows.length) return [];
+  const view = schema.userDashboards;
+  const written = await tx
+    .insert(view)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [view.userId, view.dashboardId],
+      set: {
+        pinned: sql`excluded.${sql.identifier('pinned')}`,
+        sortOrder: sql`excluded.${sql.identifier('sort_order')}`,
+      },
+    })
+    .returning({ id: view.dashboardId });
+  return written.map((row) => row.id);
+}
+
+/**
+ * The user's dashboard order as `writeDashboardOrder` stores it. A new user
+ * gets the default dashboard pinned first, as on their first visit.
+ */
+export async function currentDashboardOrder(tx: TX, userId: string) {
+  await pinDefaultDashboardForNewUser(tx, userId);
+  return (await readUserDashboards(tx, userId)).map((row) => ({
+    id: row.id,
+    pinned: row.pinned ?? false,
+  }));
+}
+
+/**
+ * Put the listed dashboards first in the user's order, the rest after them
+ * in their current order. Returns every dashboard id in the new order.
+ * Rejects duplicate and unknown ids.
+ */
 export async function reorderDashboards(
+  userId: string,
   dashboardIds: string[],
 ): Promise<string[]> {
-  const ordered = await persistSortOrder(schema.dashboards, dashboardIds);
-  pinsChanged();
+  if (new Set(dashboardIds).size !== dashboardIds.length)
+    throw new AppError('The same id is listed more than once.', 400);
+  const ordered = await db.transaction(async (tx) => {
+    await lockUserPins(tx, userId);
+    const current = await currentDashboardOrder(tx, userId);
+    const byId = new Map(current.map((entry) => [entry.id, entry]));
+    const unknown = dashboardIds.filter((id) => !byId.has(id));
+    if (unknown.length)
+      throw new AppError(`Not found: ${unknown.join(', ')}.`, 404);
+    const listed = new Set(dashboardIds);
+    const order = [
+      ...dashboardIds.map((id) => byId.get(id)!),
+      ...current.filter((entry) => !listed.has(entry.id)),
+    ];
+    await writeDashboardOrder(tx, userId, order);
+    return order.map((entry) => entry.id);
+  });
+  pinsChanged(userId);
   return ordered;
 }
 
+/** Pin or unpin a dashboard for the user; it keeps its place in their order. */
 export async function setDashboardPinned(
+  userId: string,
   id: string,
   pinned: boolean,
 ): Promise<{ id: string; pinned: boolean }> {
-  const updated = await db
-    .update(schema.dashboards)
-    .set({ pinned })
-    .where(eq(schema.dashboards.id, id))
-    .returning({ id: schema.dashboards.id });
-  if (!updated.length)
-    throw new AppError('Dashboard not found.', 404, {
-      code: 'shell.dashboardNotFound',
-    });
-  pinsChanged();
+  await db.transaction(async (tx) => {
+    await lockUserPins(tx, userId);
+    const current = await currentDashboardOrder(tx, userId);
+    if (!current.some((entry) => entry.id === id))
+      throw new AppError('Dashboard not found.', 404, {
+        code: 'shell.dashboardNotFound',
+      });
+    const written = await writeDashboardOrder(
+      tx,
+      userId,
+      current.map((entry) => (entry.id === id ? { id, pinned } : entry)),
+    );
+    // Deleted, or being deleted, while this change was made: say so rather
+    // than report a pin nobody can see.
+    if (!written.includes(id))
+      throw new AppError('Dashboard not found.', 404, {
+        code: 'shell.dashboardNotFound',
+      });
+  });
+  pinsChanged(userId);
   return { id, pinned };
 }

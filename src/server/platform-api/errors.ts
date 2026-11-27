@@ -5,6 +5,7 @@ import { AppError } from '~server/errors';
 import { RunTokenError } from '~server/agent-runner/run-auth';
 import { DataMigrationApprovalRequired } from '~server/apps/data-table/migration-errors';
 import { AppManifestValidationError } from '~server/apps/manifest-validation';
+import { DeploymentRequestError } from '~server/apps/deployment-errors';
 import { ThemeValidationError } from '~server/theme-errors';
 
 const definitions = {
@@ -32,6 +33,31 @@ const definitions = {
   ],
   INTERNAL_SERVER_ERROR: [Code.Internal, 500, 'Internal server error.'],
   SERVICE_UNAVAILABLE: [Code.Unavailable, 503, 'Service unavailable.'],
+  BUILDER_UNAVAILABLE: [
+    Code.Aborted,
+    409,
+    'This platform has no dedicated Builder.',
+  ],
+  BUILDER_OFFLINE: [
+    Code.Aborted,
+    409,
+    'No Builder has connected to this platform recently.',
+  ],
+  DEPLOYMENT_NOT_CANCELABLE: [
+    Code.Aborted,
+    409,
+    'The deployment can no longer be canceled.',
+  ],
+  DEPLOYMENT_NOT_AWAITING_ARTIFACT: [
+    Code.Aborted,
+    409,
+    'The deployment does not accept a build package now.',
+  ],
+  COMMIT_NOT_ON_MASTER: [
+    Code.Aborted,
+    409,
+    'The commit is not on master. Push it, or deploy a commit on master.',
+  ],
   GATEWAY_TIMEOUT: [
     Code.DeadlineExceeded,
     504,
@@ -39,6 +65,11 @@ const definitions = {
   ],
 } as const;
 export type PublicErrorCode = keyof typeof definitions;
+
+/** `AppError.code`s that are public codes too. */
+const DOMAIN_CODES = {
+  'deployments.commitNotOnMaster': 'COMMIT_NOT_ON_MASTER',
+} as const satisfies Record<string, PublicErrorCode>;
 
 export function publicApiError(code: PublicErrorCode, message?: string) {
   const [connectCode, httpStatus, fallback] = definitions[code];
@@ -60,6 +91,8 @@ export function publicError(
       'CONFLICT',
       `Destructive Data Table migration requires explicit approval.\nApproval token: ${error.plan.approvalToken}\nInspect schema changes before retrying with --allow-destructive-data-migration and --data-migration-approval-token.`,
     );
+  if (error instanceof DeploymentRequestError)
+    return publicApiError(error.code, redactDomain ? undefined : error.message);
   // Its message names manifest fields and schema rules, never authored values.
   if (error instanceof AppManifestValidationError)
     return publicApiError(
@@ -79,6 +112,13 @@ export function publicError(
   if (error instanceof RunTokenError)
     return publicApiError(
       error.code === 'invalid_token' ? 'INVALID_TOKEN' : 'RUN_ENDED',
+    );
+  // Domain errors with a stable code of their own keep it, as the Web UI
+  // sees it, instead of collapsing into their HTTP status.
+  if (error instanceof AppError && error.code && error.code in DOMAIN_CODES)
+    return publicApiError(
+      DOMAIN_CODES[error.code as keyof typeof DOMAIN_CODES],
+      redactDomain ? undefined : error.message,
     );
   if (error instanceof AppError && error.status < 500) {
     const codes: Record<number, PublicErrorCode> = {

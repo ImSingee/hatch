@@ -5,7 +5,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { dashboardWidgetKey } from '~/lib/dashboard-widget';
-import { authMiddleware } from './auth';
+import { authMiddleware, requireSession } from './auth';
 import {
   addDashboardWidget as placeDashboardWidget,
   createDashboard as createDashboardRecord,
@@ -33,17 +33,20 @@ export type {
   DashboardItem,
 } from './dashboard-service';
 
+/** Every dashboard, with the signed-in user's pinned flag and order. */
 export const listDashboards = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .handler(() => readDashboards());
+  .handler(async () => readDashboards((await requireSession()).user.id));
 
 export const createDashboard = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((input: { name: string }) =>
     z.object({ name: nameSchema }).parse(input),
   )
-  .handler(({ data }) =>
-    createDashboardRecord({ name: data.name.trim() || 'Untitled' }),
+  .handler(async ({ data }) =>
+    createDashboardRecord((await requireSession()).user.id, {
+      name: data.name.trim() || 'Untitled',
+    }),
   );
 
 export const setDashboardPin = createServerFn({ method: 'POST' })
@@ -52,7 +55,8 @@ export const setDashboardPin = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, pinned: z.boolean() }).parse(input),
   )
   .handler(async ({ data }) => {
-    await setDashboardPinned(data.id, data.pinned);
+    const { user } = await requireSession();
+    await setDashboardPinned(user.id, data.id, data.pinned);
     return { ok: true };
   });
 
@@ -62,7 +66,7 @@ export const renameDashboard = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, name: nameSchema }).parse(input),
   )
   .handler(async ({ data }) => {
-    await updateDashboard(data.id, { name: data.name });
+    await updateDashboard(null, data.id, { name: data.name });
     return { ok: true };
   });
 
@@ -72,7 +76,7 @@ export const setDashboardDescription = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, description: z.string().max(4000) }).parse(input),
   )
   .handler(async ({ data }) => {
-    await updateDashboard(data.id, { description: data.description });
+    await updateDashboard(null, data.id, { description: data.description });
     return { ok: true };
   });
 
@@ -82,7 +86,7 @@ export const setDashboardAutoRefresh = createServerFn({ method: 'POST' })
     z.object({ id: idSchema, seconds: z.number() }).parse(input),
   )
   .handler(async ({ data }) => {
-    await updateDashboard(data.id, { autoRefreshSeconds: data.seconds });
+    await updateDashboard(null, data.id, { autoRefreshSeconds: data.seconds });
     return { ok: true };
   });
 
@@ -98,7 +102,8 @@ export const reorderDashboards = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((orderedIds: string[]) => idListSchema.parse(orderedIds))
   .handler(async ({ data: orderedIds }) => {
-    await reorderDashboardOrder(orderedIds);
+    const { user } = await requireSession();
+    await reorderDashboardOrder(user.id, orderedIds);
     return { ok: true };
   });
 

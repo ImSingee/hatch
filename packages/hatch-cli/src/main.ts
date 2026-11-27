@@ -9,6 +9,7 @@ import { runData } from './data';
 import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
 import { parseAiCommand, runAi } from './ai';
+import { parseDeploymentsCommand, runDeployments } from './deployments';
 import { parseDocsCommand, runDocs } from './docs';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
@@ -87,6 +88,8 @@ try {
     parseDocsCommand(args, offset);
   if (!showHelp && name === 'app' && args[offset + 1] === 'ai')
     parseAiCommand(args, offset);
+  if (!showHelp && name === 'app' && args[offset + 1] === 'deployments')
+    parseDeploymentsCommand(args, offset);
   if (!showHelp && !offline)
     await refreshRunEnvironment(process.env, controller.signal);
   if (showHelp) {
@@ -132,6 +135,8 @@ try {
     await runDocs(args, offset, controller.signal);
   else if (name === 'app' && operation === 'ai')
     await runAi(args, offset, controller.signal);
+  else if (name === 'app' && operation === 'deployments')
+    await runDeployments(args, offset, controller.signal);
   else if (
     name === 'image-model' ||
     name === 'image' ||

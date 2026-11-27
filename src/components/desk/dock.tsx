@@ -21,6 +21,7 @@ import {
 } from '@tabler/icons-react';
 import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
+import { authClient } from '~auth/client';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { AppRouteAutocomplete } from '~components/apps/app-route-autocomplete';
 import { canRunApp } from '~components/apps/app-view-policy';
@@ -113,8 +114,12 @@ export function Dock({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
   const { data: apps } = useQuery(appsQueryOptions);
-  // Names under the tiles are an instance setting, off by default.
-  const { data: theme } = useQuery(themeQueryOptions);
+  // Names under the tiles are the user's own setting, off by default.
+  const userId = authClient.useSession().data?.user.id;
+  const { data: theme } = useQuery({
+    ...themeQueryOptions(userId ?? ''),
+    enabled: Boolean(userId),
+  });
   const labels = theme?.dockLabels ?? false;
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);

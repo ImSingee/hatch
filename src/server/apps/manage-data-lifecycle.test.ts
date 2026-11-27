@@ -112,6 +112,7 @@ vi.mock('./build-identity', () => ({
 }));
 vi.mock('./git', () => ({
   moveMasterToDeploymentTag: mocks.moveMasterToDeploymentTag,
+  appCommitOnMaster: async () => true,
 }));
 vi.mock('./manifest', async () => {
   const { isValidAppId, isValidAppSlug } =

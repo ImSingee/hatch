@@ -17,6 +17,7 @@ import { createGunzip } from 'node:zlib';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import {
+  chmod,
   mkdtemp,
   readFile,
   writeFile,
@@ -44,14 +45,61 @@ let master: string | null;
 let released: string | null;
 let deployedCommits: (string | undefined)[];
 let deploys: number;
+/** The build mode each create request asked for. */
+let requestedBuilds: string[];
 let loseResponse: boolean;
+/** The watch sends no line past this one, as a stalled log stream. */
+let logLimit: number;
+/** Lines the build appends after each watch response. */
+let logGrowth: number;
+/** getAppDeployment never answers. */
+let stallGet: boolean;
+/** Calls to associateAppSession, which writes an association. */
+let associations: number;
+/** Holds each listAppDeployments answer until it resolves. */
+let listDelay: (() => Promise<void>) | undefined;
+let currentSocket: IncomingMessage['socket'] | undefined;
+type DeploymentRecord = {
+  id: string;
+  appId: string;
+  seq: number;
+  commit: string;
+  message: string;
+  build: string;
+  trigger: string;
+  status: string;
+  finished: boolean;
+  createdAt: string;
+  logSeq: number;
+  requestId?: string;
+};
+let deployments: DeploymentRecord[];
+function deploymentMessage(record: DeploymentRecord) {
+  return {
+    ...record,
+    ...(record.status === 'ready'
+      ? {
+          deployment: {
+            deploymentId: record.id,
+            version: record.seq,
+            compatibilityVersion: 1,
+            normalized: fromJson(ValueSchema, {
+              id: 'immutable',
+              name: 'Fixture',
+              description: '',
+            }),
+          },
+        }
+      : {}),
+  };
+}
 let sdkDelay: (() => Promise<void>) | undefined;
 let sdkFailure: boolean;
 let resourceSlug: string;
 let createRequests: unknown[];
 /** Extra scaffold files, layered over the default fixture. */
 let scaffoldFiles: Record<string, string>;
-let sdkTooling: Record<string, string> | undefined;
+let sdkTooling: Record<string, string | boolean> | undefined;
 /** PATH entry holding a pnpm that matches the platform's major version. */
 let tools: string;
 const PNPM_LOCKFILE = `lockfileVersion: '9.0'
@@ -120,25 +168,87 @@ const rpc = connectNodeAdapter({
     router.service(AppService, {
       createApp: createResource,
       getApp: () => ({ resource: getResource() }),
-      associateAppSession: () => ({
-        appId: 'immutable',
-        association: 'not-applicable',
-      }),
-      deployApp: async (data) => {
+      associateAppSession: () => {
+        associations++;
+        return { appId: 'immutable', association: 'not-applicable' };
+      },
+      createAppDeployment: async (data) => {
+        // A repeated create request answers with what it made.
+        const repeated = deployments.find(
+          (item) => data.requestId && item.requestId === data.requestId,
+        );
+        if (repeated) return { deployment: deploymentMessage(repeated) };
+        requestedBuilds.push(data.build);
         deploys++;
+        const id = `deployment-${deploys}`;
+        const record = {
+          id,
+          appId: 'immutable',
+          seq: deploys,
+          commit: data.commit ?? '',
+          message: data.message,
+          build: 'builder',
+          trigger: 'cli',
+          // A lost response leaves the deployment the platform created
+          // still running; otherwise the fixture Builder releases at once.
+          status: loseResponse ? 'building' : 'ready',
+          finished: !loseResponse,
+          createdAt: new Date().toISOString(),
+          logSeq: 0,
+          requestId: data.requestId,
+        };
+        deployments.push(record);
+        if (loseResponse) {
+          currentSocket?.destroy();
+          return new Promise<never>(() => {});
+        }
         deployedCommits.push(data.commit);
         released = data.commit ?? null;
+        return { deployment: deploymentMessage(record) };
+      },
+      getAppDeployment: (data) => {
+        if (stallGet) return new Promise<never>(() => {});
+        const record = deployments.find(
+          (item) => item.id === data.deploymentId,
+        );
+        if (!record) throw new ConnectError('missing', Code.NotFound);
+        return { deployment: deploymentMessage(record) };
+      },
+      // A long log arrives over several responses, as the platform caps
+      // each at 2,000 lines; it then keeps the stream open for new output.
+      async *watchAppDeploymentLogs(data) {
+        const record = deployments.find(
+          (item) => item.id === data.deploymentId,
+        );
+        if (!record) throw new ConnectError('missing', Code.NotFound);
+        for (
+          let from = (data.afterSeq ?? 0) + 1;
+          from <= Math.min(record.logSeq, logLimit);
+          from += 2000
+        ) {
+          const lines = [];
+          const end = Math.min(from + 2000, record.logSeq + 1, logLimit + 1);
+          for (let seq = from; seq < end; seq++)
+            lines.push({
+              seq,
+              stream: 'build',
+              text: `line ${seq}`,
+              at: new Date().toISOString(),
+            });
+          yield { lines, deployment: deploymentMessage(record) };
+          record.logSeq += logGrowth;
+        }
+        await new Promise(() => {});
+      },
+      listAppDeployments: async (data) => {
+        await listDelay?.();
         return {
-          deployment: {
-            deploymentId: 'release-1',
-            version: 1,
-            compatibilityVersion: 1,
-            normalized: fromJson(ValueSchema, {
-              id: 'immutable',
-              name: 'Fixture',
-              description: '',
-            }),
-          },
+          deployments: [...deployments]
+            .reverse()
+            .filter(
+              (item) => !data.requestId || item.requestId === data.requestId,
+            )
+            .map(deploymentMessage),
         };
       },
     });
@@ -204,11 +314,7 @@ const server = createServer(async (request, response) => {
     gitHttp(request, response);
     return;
   }
-  if (loseResponse && request.url?.endsWith('/DeployApp')) {
-    deploys++;
-    request.socket.destroy();
-    return;
-  }
+  currentSocket = request.socket;
   await rpc(request, response);
 });
 
@@ -242,9 +348,14 @@ function run(args: string[], extra: NodeJS.ProcessEnv = {}) {
     stderr: string;
   }>((resolve, reject) => {
     child.once('error', reject);
-    child.once('close', (code) =>
-      resolve({ code, data: stdout ? JSON.parse(stdout) : null, stderr }),
-    );
+    // More than one JSON document on stdout fails the call that printed it.
+    child.once('close', (code) => {
+      try {
+        resolve({ code, data: stdout ? JSON.parse(stdout) : null, stderr });
+      } catch (error) {
+        reject(error);
+      }
+    });
   });
   return { child, result };
 }
@@ -329,7 +440,14 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     released = null;
     deployedCommits = [];
     deploys = 0;
+    requestedBuilds = [];
+    deployments = [];
     loseResponse = false;
+    logLimit = Number.POSITIVE_INFINITY;
+    logGrowth = 0;
+    stallGet = false;
+    associations = 0;
+    listDelay = undefined;
     sdkDelay = undefined;
     sdkFailure = false;
     resourceSlug = 'fixture';
@@ -724,37 +842,36 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     expect(git(target, 'rev-parse', 'HEAD')).toBe(master);
     expect(await readdir(target)).not.toContain('local.txt');
   });
-  it('records uncertain deploy outcomes and never blindly retries', async () => {
+  it('settles a lost deploy response from the platform record and never deploys twice', async () => {
     const root = await create();
     loseResponse = true;
     expect(
       (await run(['app', 'deploy', '--directory', root]).result).code,
     ).toBe(7);
+    loseResponse = false;
     const pending = JSON.parse(
       await readFile(join(root, '.git/hatch-cli.json'), 'utf8'),
     ).pending;
     expect(pending.commit).toBe(git(root, 'rev-parse', 'HEAD'));
+    expect(pending.deploymentId).toBeUndefined();
+    // The platform created the deployment before the response was lost and
+    // is still building it: no second deployment is requested.
     expect(
       (await run(['app', 'deploy', '--directory', root]).result).data.error
         .code,
-    ).toBe('deployment_outcome_unknown');
-    expect(
-      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
-        .data.state,
-    ).toBe('outcome-unresolved');
+    ).toBe('deployment_in_progress');
+    const reconciled = (
+      await run(['app', 'deploy', '--directory', root, '--reconcile']).result
+    ).data;
+    expect(reconciled).toMatchObject({
+      state: 'in-progress',
+      deployment: { deploymentId: 'deployment-1', commit: pending.commit },
+    });
     expect(deploys).toBe(1);
-    loseResponse = false;
+    // Once it finishes, the checkout settles it and deploys again.
+    Object.assign(deployments[0], { status: 'failed', finished: true });
     expect(
-      (
-        await run([
-          'app',
-          'deploy',
-          '--directory',
-          root,
-          '--retry-after-confirming',
-          pending.commit,
-        ]).result
-      ).code,
+      (await run(['app', 'deploy', '--directory', root]).result).code,
     ).toBe(0);
     expect(deploys).toBe(2);
     expect(deployedCommits).toEqual([pending.commit]);
@@ -763,6 +880,330 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       JSON.parse(await readFile(join(root, '.git/hatch-cli.json'), 'utf8'))
         .pending,
     ).toBeUndefined();
+  });
+  it('prints a whole long log without --follow and stops at its end', async () => {
+    const root = await create();
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const last = deployments.at(-1)!;
+    last.logSeq = 4_500;
+    // The build keeps writing while the log is read: none of it is printed.
+    logGrowth = 1;
+    const logs = await run([
+      'app',
+      'deployments',
+      'logs',
+      'immutable',
+      last.id,
+      '--after',
+      '10',
+    ]).result;
+    expect(logs.code).toBe(0);
+    expect(logs.data.lines).toHaveLength(4_490);
+    expect(logs.data.lines.at(-1)).toMatchObject({ seq: 4_500 });
+    // The deployment printed is the snapshot those lines end at.
+    expect(logs.data.deployment).toMatchObject({ logSeq: 4_500 });
+  });
+  it('never takes another deployment of the same commit for an unconfirmed create', async () => {
+    const root = await create();
+    const workspace = join(root, '.git/hatch-cli.json');
+    // An earlier deployment of this commit finished just now.
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const metadata = JSON.parse(await readFile(workspace, 'utf8'));
+    const commit = git(root, 'rev-parse', 'HEAD');
+    // A redeploy whose create never reached the platform, still within the
+    // create request's deadline.
+    const pending = {
+      command: 'deploy',
+      commit,
+      startedAt: new Date().toISOString(),
+      requestId: 'lost-request',
+      createDeadline: new Date(Date.now() + 60_000).toISOString(),
+    };
+    await writeFile(workspace, JSON.stringify({ ...metadata, pending }));
+    // Reconciling only reads the platform: local edits do not block it.
+    await writeFile(join(root, 'draft.txt'), 'uncommitted');
+    const unconfirmed = (
+      await run(['app', 'deploy', '--directory', root, '--reconcile']).result
+    ).data;
+    expect(unconfirmed).toMatchObject({
+      state: 'unconfirmed',
+      deployment: null,
+    });
+    expect(JSON.parse(await readFile(workspace, 'utf8')).pending).toEqual(
+      pending,
+    );
+    // Once the request can no longer land, it was not created.
+    await writeFile(
+      workspace,
+      JSON.stringify({
+        ...metadata,
+        pending: {
+          ...pending,
+          createDeadline: new Date(Date.now() - 120_000).toISOString(),
+        },
+      }),
+    );
+    expect(
+      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
+        .data,
+    ).toMatchObject({ state: 'not-created', deployment: null });
+    expect(
+      JSON.parse(await readFile(workspace, 'utf8')).pending,
+    ).toBeUndefined();
+    await rm(join(root, 'draft.txt'));
+    // A deployment id the platform no longer knows is missing: no wait
+    // settles it, only an explicit confirmation, which then deploys.
+    const lost = { ...pending, deploymentId: 'deployment-gone' };
+    await writeFile(workspace, JSON.stringify({ ...metadata, pending: lost }));
+    expect(
+      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
+        .data,
+    ).toMatchObject({ state: 'missing', deployment: null });
+    const blocked = await run(['app', 'deploy', '--directory', root]).result;
+    expect(blocked.code).toBe(6);
+    expect(blocked.data.error.code).toBe('pending_deployment_missing');
+    expect(blocked.data.error.message).toContain('--retry-after-confirming');
+    expect(JSON.parse(await readFile(workspace, 'utf8')).pending).toEqual(lost);
+    expect(deploys).toBe(1);
+    const retried = await run([
+      'app',
+      'deploy',
+      '--directory',
+      root,
+      '--retry-after-confirming',
+      commit,
+    ]).result;
+    expect(retried.code).toBe(0);
+    expect(deploys).toBe(2);
+  });
+  it('rejects --reconcile with --retry-after-confirming before reading any credential', async () => {
+    const result = await run(
+      [
+        'app',
+        'deploy',
+        '--directory',
+        directory,
+        '--reconcile',
+        '--retry-after-confirming',
+        'a'.repeat(40),
+      ],
+      {
+        HATCH_CLI_URL: undefined,
+        HATCH_CLI_TOKEN: undefined,
+        HOME: directory,
+        XDG_CONFIG_HOME: undefined,
+      },
+    ).result;
+    expect(result.code).toBe(2);
+    expect(result.data.error.code).toBe('invalid_retry_confirmation');
+  });
+  /** A checkout whose pending deployment the platform finished. */
+  async function finishedPending(root: string) {
+    const workspace = join(root, '.git/hatch-cli.json');
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const metadata = JSON.parse(await readFile(workspace, 'utf8'));
+    const pending = {
+      command: 'deploy',
+      commit: git(root, 'rev-parse', 'HEAD'),
+      startedAt: new Date().toISOString(),
+      deploymentId: deployments[0].id,
+    };
+    await writeFile(workspace, JSON.stringify({ ...metadata, pending }));
+    return {
+      pending,
+      saved: async () => JSON.parse(await readFile(workspace, 'utf8')).pending,
+      reconcile: () =>
+        run(['app', 'deploy', '--directory', root, '--reconcile']).result,
+    };
+  }
+  it('reconciles without associating the App', async () => {
+    const root = await create();
+    const created = associations;
+    // A failed reconcile associates nothing.
+    expect(
+      (await run(['app', 'deploy', '--directory', root, '--reconcile']).result)
+        .data.error.code,
+    ).toBe('no_pending_deployment');
+    expect(associations).toBe(created);
+    // A deploy does.
+    const { reconcile, saved } = await finishedPending(root);
+    expect(associations).toBe(created + 1);
+    expect((await reconcile()).data).toMatchObject({
+      state: 'finished',
+      deployment: { deploymentId: deployments[0].id },
+    });
+    expect(await saved()).toBeUndefined();
+    expect(associations).toBe(created + 1);
+  });
+  // Root writes a read-only directory anyway.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'reports a settled deployment only once the checkout has forgotten it',
+    async () => {
+      const root = await create();
+      const { pending, reconcile, saved } = await finishedPending(root);
+      await chmod(join(root, '.git'), 0o555);
+      let unsaved;
+      try {
+        unsaved = await reconcile();
+      } finally {
+        await chmod(join(root, '.git'), 0o755);
+      }
+      expect(unsaved.code).not.toBe(0);
+      expect(unsaved.data).toMatchObject({ ok: false });
+      expect(await saved()).toEqual(pending);
+    },
+  );
+  it('judges whether a create request can still land by when its lookup was sent', async () => {
+    const root = await create();
+    const workspace = join(root, '.git/hatch-cli.json');
+    const metadata = JSON.parse(await readFile(workspace, 'utf8'));
+    // Eight seconds from now the request's deadline and its minute of grace
+    // have passed.
+    const settles = Date.now() + 8_000;
+    const pending = {
+      command: 'deploy',
+      commit: git(root, 'rev-parse', 'HEAD'),
+      startedAt: new Date().toISOString(),
+      requestId: 'slow-request',
+      createDeadline: new Date(settles - 60_000).toISOString(),
+    };
+    await writeFile(workspace, JSON.stringify({ ...metadata, pending }));
+    let received = Number.POSITIVE_INFINITY;
+    // The lookup is answered only after that moment.
+    listDelay = async () => {
+      received = Date.now();
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, settles + 1_000 - Date.now())),
+      );
+    };
+    const result = await run([
+      'app',
+      'deploy',
+      '--directory',
+      root,
+      '--reconcile',
+    ]).result;
+    // Sent before the request could no longer land, so it may still land.
+    expect(received).toBeLessThan(settles);
+    expect(result.data).toMatchObject({
+      state: 'unconfirmed',
+      deployment: null,
+    });
+    expect(JSON.parse(await readFile(workspace, 'utf8')).pending).toEqual(
+      pending,
+    );
+  });
+  it('follows a finished deployment to the end of its log and names where to resume when it stalls', async () => {
+    const root = await create();
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const last = deployments.at(-1)!;
+    last.logSeq = 4_500;
+    // A finished status before the rest of its log is not the end of it.
+    logLimit = 2_000;
+    const follow = (...extra: string[]) =>
+      run([
+        'app',
+        'deployments',
+        'logs',
+        'immutable',
+        last.id,
+        '--follow',
+        ...extra,
+      ]).result;
+    const stalled = await follow('--timeout', '3');
+    expect(stalled.code).toBe(7);
+    expect(stalled.data.error).toMatchObject({
+      code: 'deployment_log_incomplete',
+      details: { afterSeq: 2_000, deployment: { status: 'ready' } },
+    });
+    logLimit = Number.POSITIVE_INFINITY;
+    // With the whole log it returns at its end, without waiting out the
+    // timeout for the stream to close.
+    const started = Date.now();
+    const resumed = await follow('--after', '2000', '--timeout', '60');
+    expect(resumed.code).toBe(0);
+    expect(resumed.data).toMatchObject({
+      deploymentId: last.id,
+      logSeq: 4_500,
+    });
+    expect(resumed.stderr).toContain('line 4500');
+    expect(resumed.stderr).not.toContain('line 2000\n');
+    expect(Date.now() - started).toBeLessThan(15_000);
+  });
+  it('keeps the final state lookup of a follow within its timeout', async () => {
+    const root = await create();
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    const last = deployments.at(-1)!;
+    Object.assign(last, { status: 'building', finished: false, logSeq: 1 });
+    stallGet = true;
+    const result = await run([
+      'app',
+      'deployments',
+      'logs',
+      'immutable',
+      last.id,
+      '--follow',
+      '--timeout',
+      '4',
+    ]).result;
+    // An unbounded lookup would time out on its own (outcome_unknown).
+    expect(result.code).toBe(7);
+    expect(result.data.error).toMatchObject({
+      code: 'deployment_in_progress',
+      details: { afterSeq: 1, deployment: { status: 'building' } },
+    });
+  });
+  it('refuses a commit it would build but does not have before creating a deployment', async () => {
+    const root = await create();
+    const workspace = join(root, '.git/hatch-cli.json');
+    const absent = 'b'.repeat(40);
+    const deploy = (...extra: string[]) =>
+      run(['app', 'deploy', '--directory', root, '--commit', absent, ...extra])
+        .result;
+    const refused = await deploy('--local');
+    expect(refused.code).toBe(6);
+    expect(refused.data.error.code).toBe('source_unavailable');
+    expect(deploys).toBe(0);
+    expect(
+      JSON.parse(await readFile(workspace, 'utf8')).pending,
+    ).toBeUndefined();
+    // The Builder (the default) fetches the commit itself.
+    expect((await deploy()).code).toBe(0);
+    expect(deployedCommits).toEqual([absent]);
+    expect(requestedBuilds).toEqual(['builder']);
+  });
+  it('builds on the platform Builder unless --local, and rejects the removed --build before any request', async () => {
+    const root = await create();
+    await publish(root);
+    for (const removed of [['--build', 'local'], ['--build=builder']]) {
+      const result = await run([
+        'app',
+        'deploy',
+        '--directory',
+        root,
+        ...removed,
+      ]).result;
+      expect(result.code).toBe(2);
+      expect(result.data.error.code).toBe('invalid_arguments');
+      // It names both ways forward.
+      expect(result.data.error.message).toContain('--local');
+      expect(result.data.error.message).toContain('Leave it out');
+    }
+    expect(deploys).toBe(0);
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    expect(requestedBuilds).toEqual(['builder']);
   });
   it('uses a cross-process lock and releases it after completion or POSIX cancellation', async () => {
     const root = await create();

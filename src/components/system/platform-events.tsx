@@ -1,6 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
-import { themeQueryOptions } from '~queries/theme';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { authClient } from '~auth/client';
+import { themeQueries } from '~queries/theme';
 import { useEventCallback } from '~hooks/use-latest-committed';
 import type { PlatformEvent } from '~server/platform-events';
 
@@ -58,11 +66,17 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       return { type, notificationId, deliveryId } satisfies PlatformEvent;
     }
     if (type === 'theme.updated') {
+      const userId = stringField(value, 'userId');
       const accent = stringField(value, 'accent');
-      if (!accent) return null;
-      return { type, accent } satisfies PlatformEvent;
+      if (!userId || !accent) return null;
+      return { type, userId, accent } satisfies PlatformEvent;
     }
-    if (type === 'pins.updated') return { type } satisfies PlatformEvent;
+    if (type === 'themes.updated') return { type } satisfies PlatformEvent;
+    if (type === 'pins.updated') {
+      const userId = stringField(value, 'userId');
+      if (!userId) return null;
+      return { type, userId } satisfies PlatformEvent;
+    }
     if (type === 'dashboards.updated')
       return {
         type,
@@ -97,23 +111,53 @@ export function PlatformEventsProvider({
     [],
   );
 
+  // The stream is bound to the user who opened it: the server only sends
+  // that user their personal events. A sign-out or sign-in in another tab
+  // reaches this one through the session (`useSession` re-reads it on a
+  // Better Auth broadcast and when the tab becomes visible), so the stream
+  // follows the session's user.
+  const userId = authClient.useSession().data?.user.id ?? null;
+  // The user whose data the query cache may hold. Children render only for
+  // that user: when another account signs in, they show nothing until the
+  // previous account's data is gone (a blank frame, never their data).
+  const [cacheUser, setCacheUser] = useState<string | null>(userId);
+  // The first account this provider sees owns whatever is cached: nothing of
+  // another account can be there yet. Adopted while rendering, so the first
+  // load never blanks.
+  if (userId && cacheUser === null) setCacheUser(userId);
+  const ready = !userId || cacheUser === userId;
+
+  // Another account signed in: none of the previous user's data may stay,
+  // including the pins and dashboards that are not keyed by user. Queries
+  // refetch as the new user once the children mount again.
   useEffect(() => {
+    if (!userId || cacheUser === null || cacheUser === userId) return;
+    let cancelled = false;
+    void queryClient.resetQueries().then(() => {
+      if (!cancelled) setCacheUser(userId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient, userId, cacheUser]);
+
+  useEffect(() => {
+    // Signed out, here or in another tab: nothing to stream.
+    if (!userId) return;
     const source = new EventSource('/api/events');
     const onPlatformEvent = (rawEvent: Event) => {
       const event = parsePlatformEvent(rawEvent as MessageEvent<string>);
       if (!event) return;
       // The theme is applied above every route, outside this provider, so it
-      // is refreshed here instead of through a subscriber.
-      if (event.type === 'theme.updated')
-        void queryClient.invalidateQueries({
-          queryKey: themeQueryOptions.queryKey,
-        });
+      // is refreshed here instead of through a subscriber. The server only
+      // sends the signed-in user their own theme changes; a library change
+      // goes to everyone, since their theme may be the one that changed.
+      if (event.type === 'theme.updated' || event.type === 'themes.updated')
+        void queryClient.invalidateQueries(themeQueries);
       for (const listener of listeners.current) listener(event);
     };
     const onResync = () => {
-      void queryClient.invalidateQueries({
-        queryKey: themeQueryOptions.queryKey,
-      });
+      void queryClient.invalidateQueries(themeQueries);
       for (const listener of resyncListeners.current) listener();
     };
 
@@ -125,11 +169,11 @@ export function PlatformEventsProvider({
       source.removeEventListener('resync', onResync);
       source.close();
     };
-  }, [queryClient]);
+  }, [queryClient, userId]);
 
   return (
     <PlatformEventsContext.Provider value={context}>
-      {children}
+      {ready ? children : null}
     </PlatformEventsContext.Provider>
   );
 }

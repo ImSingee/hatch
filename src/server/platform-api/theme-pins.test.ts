@@ -1,5 +1,9 @@
-/** Theme and pin RPCs: open to every credential type, validated at the edge. */
+/**
+ * Theme and pin RPCs: personal to the acting user, open to every credential
+ * type, validated at the edge.
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { THEME_PRESETS } from '../../../packages/hatch-design-tokens/src';
 import type { PublicApiContext } from './auth';
 
 const fixture = vi.hoisted(() => ({
@@ -26,6 +30,23 @@ const { db, schema } = await import('~/db');
 const { handlePlatformApiRequest } = await import('./http');
 
 const user = { id: 'u1', email: 'owner@example.test', name: 'Owner' };
+const other = { id: 'u2', email: 'other@example.test', name: 'Other' };
+const OTHER_SESSION: PublicApiContext = {
+  run: null,
+  session: { id: 's2', expiresAt: new Date(Date.now() + 60_000) },
+  status: {
+    authenticated: true,
+    credentialType: 'session',
+    authority: 'platform',
+    expiresAt: null,
+    user: other,
+  },
+};
+/** A Run credential whose run no user prompted. */
+const USERLESS_RUN = {
+  run: { runId: 'r0', sessionId: 'as0', runnerId: 'rn1' },
+} as PublicApiContext;
+/** Every credential type, each acting for `user`. */
 const CREDENTIALS: Record<string, PublicApiContext> = {
   session: {
     run: null,
@@ -71,15 +92,38 @@ async function call(method: string, body: unknown = {}) {
   return { status: response.status, data: await response.json() };
 }
 
+/** The caller's dashboards in their order; JSON leaves out a false flag. */
+async function dashboardPins() {
+  const { data } = await call('DashboardService/ListDashboards');
+  return (data.dashboards as { id: string; pinned?: boolean }[]).map(
+    ({ id, pinned }) => ({ id, pinned: pinned ?? false }),
+  );
+}
+
 beforeEach(async () => {
   fixture.credential = CREDENTIALS.session;
-  await db.delete(schema.platformConfig);
   await db.delete(schema.themes);
   await db.delete(schema.sidebarItems);
+  await db.delete(schema.dashboards);
   await db.delete(schema.apps);
+  await db.delete(schema.agentSessions);
+  await db.delete(schema.user);
+  await db.insert(schema.user).values([user, other]);
   await db
     .insert(schema.apps)
     .values({ id: 'app-notes', slug: 'notes', name: 'Notes' });
+  await db.insert(schema.agentSessions).values([{ id: 'as1' }, { id: 'as0' }]);
+  await db.insert(schema.agentRuns).values(
+    [
+      { id: 'r1', sessionId: 'as1', userId: user.id },
+      { id: 'r0', sessionId: 'as0', userId: null },
+    ].map((run) => ({
+      ...run,
+      providerId: 'fixture',
+      modelId: 'fixture',
+      input: { text: 'fixture' },
+    })),
+  );
 });
 
 describe('theme and pin RPCs', () => {
@@ -116,6 +160,160 @@ describe('theme and pin RPCs', () => {
     fixture.credential = undefined;
     expect((await call('ThemeService/GetTheme')).status).toBe(401);
     expect((await call('PinService/ListPins')).status).toBe(401);
+  });
+
+  it('keep every user’s theme and pins to that user, for every credential', async () => {
+    await db.insert(schema.dashboards).values([
+      { id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') },
+      { id: 'd2', name: 'Ops', createdAt: new Date('2026-01-02') },
+    ]);
+    fixture.credential = OTHER_SESSION;
+    const theirs = (await call('PinService/PinApp', { app: 'notes' })).data.pin;
+    await call('PinService/SetDashboardPinned', {
+      dashboardId: 'd1',
+      pinned: true,
+    });
+    for (const [type, credential] of Object.entries(CREDENTIALS)) {
+      fixture.credential = credential;
+      const changes = [
+        await call('ThemeService/SetTheme', { accent: 'teal' }),
+        await call('PinService/PinApp', { app: 'notes', label: type }),
+        await call('PinService/ReorderDashboards', { dashboardIds: ['d2'] }),
+        await call('PinService/SetDashboardPinned', {
+          dashboardId: 'd2',
+          pinned: true,
+        }),
+      ];
+      expect({
+        type,
+        statuses: changes.map((change) => change.status),
+      }).toEqual({ type, statuses: [200, 200, 200, 200] });
+      // Another user's pin is not found, and stays as it was.
+      for (const [method, body] of [
+        ['PinService/UpdateAppPin', { id: theirs.id, label: 'Taken' }],
+        ['PinService/UnpinApp', { pinId: theirs.id }],
+        ['PinService/ReorderAppPins', { pinIds: [theirs.id] }],
+      ] as const)
+        expect({
+          type,
+          method,
+          status: (await call(method, body)).status,
+        }).toEqual({ type, method, status: 404 });
+    }
+    fixture.credential = CREDENTIALS['api-key'];
+    expect((await call('PinService/ListPins')).data).toMatchObject({
+      appPins: [{ label: 'session' }, { label: 'api-key' }, { label: 'run' }],
+      // d1, the oldest, was pinned on the user's first visit.
+      dashboards: [{ id: 'd2' }, { id: 'd1' }],
+    });
+    expect(await dashboardPins()).toEqual([
+      { id: 'd2', pinned: true },
+      { id: 'd1', pinned: true },
+    ]);
+
+    fixture.credential = OTHER_SESSION;
+    // Still the new user's default: no accent.
+    expect((await call('ThemeService/GetTheme')).data.theme.accent ?? '').toBe(
+      '',
+    );
+    expect((await call('PinService/ListPins')).data).toMatchObject({
+      appPins: [{ id: theirs.id, label: 'Notes' }],
+      dashboards: [{ id: 'd1' }],
+    });
+    expect(await dashboardPins()).toEqual([
+      { id: 'd1', pinned: true },
+      { id: 'd2', pinned: false },
+    ]);
+  });
+
+  it('pin a new dashboard for the user who created it', async () => {
+    // Older than any dashboard created here, so it is the default one.
+    await db
+      .insert(schema.dashboards)
+      .values({ id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') });
+    fixture.credential = CREDENTIALS.run;
+    const created = await call('DashboardService/CreateDashboard', {
+      name: 'Mine',
+    });
+    expect(created.data.dashboard).toMatchObject({ pinned: true });
+    fixture.credential = OTHER_SESSION;
+    expect(
+      (
+        await call('DashboardService/GetDashboard', {
+          id: created.data.dashboard.id,
+        })
+      ).data.detail.dashboard.pinned ?? false,
+    ).toBe(false);
+  });
+
+  it('activate a theme for the caller only, and fall others back when it is deleted', async () => {
+    const created = await call('ThemeService/CreateTheme', {
+      document: { ...THEME_PRESETS.desk.document, name: 'Shared' },
+    });
+    const id = created.data.theme.id;
+    for (const credential of Object.values(CREDENTIALS)) {
+      fixture.credential = credential;
+      await call('ThemeService/SetTheme', { theme: 'desk-dark' });
+    }
+    fixture.credential = OTHER_SESSION;
+    await call('ThemeService/SetTheme', { theme: id });
+    const active = async (credential: PublicApiContext) => {
+      fixture.credential = credential;
+      return (await call('ThemeService/GetTheme')).data.theme.theme.id;
+    };
+    expect(await active(CREDENTIALS['api-key'])).toBe('desk-dark');
+    expect(await active(OTHER_SESSION)).toBe(id);
+    // The library is shared: another user deletes the theme bob uses.
+    fixture.credential = CREDENTIALS.run;
+    expect((await call('ThemeService/DeleteTheme', { id })).status).toBe(200);
+    expect(await active(OTHER_SESSION)).toBe('desk');
+    expect(await active(CREDENTIALS.session)).toBe('desk-dark');
+  });
+
+  it('give a Run no user prompted shared dashboards and themes but no personal settings', async () => {
+    fixture.credential = USERLESS_RUN;
+    for (const [method, body] of [
+      ['ThemeService/GetTheme', {}],
+      ['ThemeService/SetTheme', { accent: 'teal' }],
+      ['ThemeService/ResetTheme', {}],
+      ['PinService/ListPins', {}],
+    ] as const)
+      expect({ method, status: (await call(method, body)).status }).toEqual({
+        method,
+        status: 409,
+      });
+    // The library is not personal.
+    const document = { ...THEME_PRESETS.desk.document, name: 'Run theme' };
+    const made = await call('ThemeService/CreateTheme', { document });
+    expect(made.status).toBe(200);
+    expect((await call('ThemeService/ListThemes')).status).toBe(200);
+    const checked = await call('ThemeService/ValidateTheme', {
+      document,
+      withCurrentAccent: true,
+    });
+    expect({ status: checked.status, ok: checked.data.ok }).toEqual({
+      status: 200,
+      ok: true,
+    });
+    expect(
+      (await call('ThemeService/DeleteTheme', { id: made.data.theme.id }))
+        .status,
+    ).toBe(200);
+    const listed = await call('DashboardService/ListDashboards');
+    expect(listed.status).toBe(200);
+    const created = await call('DashboardService/CreateDashboard', {
+      name: 'Shared',
+    });
+    expect(created.status).toBe(200);
+    expect(created.data.dashboard.pinned ?? false).toBe(false);
+    expect(
+      (
+        await call('DashboardService/UpdateDashboard', {
+          id: created.data.dashboard.id,
+          name: 'Renamed',
+        })
+      ).status,
+    ).toBe(200);
   });
 
   it('reject malformed and unknown input without changing state', async () => {

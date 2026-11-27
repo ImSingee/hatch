@@ -41,8 +41,33 @@ export function sandboxedEvaluationCommand(
   return [spawned.command, spawned.args];
 }
 
-function evaluationCommand(args: string[]): [string, string[]] {
-  return sandboxedEvaluationCommand([process.execPath, ...args]);
+/**
+ * Where a sandboxed toolchain keeps its own state. Both directories must be
+ * owned by the sandbox identity while it runs.
+ */
+export type ToolchainSandbox = {
+  /** HOME and XDG roots of every command. */
+  home: string;
+  /** A pnpm store of its own, never the shared one. */
+  pnpmStoreDir: string;
+};
+
+/**
+ * The home and XDG roots of a sandboxed tool, all below `sandbox.home`,
+ * which the sandbox identity owns: no tool reads or writes the host user's
+ * own configuration or caches.
+ */
+export function toolchainSandboxHome(
+  sandbox: ToolchainSandbox,
+): Record<string, string> {
+  return {
+    HOME: sandbox.home,
+    XDG_CONFIG_HOME: `${sandbox.home}/config`,
+    XDG_CACHE_HOME: `${sandbox.home}/cache`,
+    XDG_DATA_HOME: `${sandbox.home}/data`,
+    XDG_STATE_HOME: `${sandbox.home}/state`,
+    DENO_DIR: `${sandbox.home}/deno`,
+  };
 }
 
 /**
@@ -50,15 +75,27 @@ function evaluationCommand(args: string[]): [string, string[]] {
  * and the output cap. `tsc` runs on the platform's own Node binary, and so
  * does `node`, which evaluates authored code under the sandbox identity.
  */
-function platformToolchainRunner(root: string): ToolchainRunner {
+function platformToolchainRunner(
+  root: string,
+  signal?: AbortSignal,
+  sandbox?: ToolchainSandbox,
+): ToolchainRunner {
   return async ({ tool, args, step, cwd, input, timeoutMs, env }) => {
-    const base = subprocessSandboxEnv(env);
-    const [command, commandArgs] =
+    // Sandboxed, every tool gets its own home and an empty configuration,
+    // all below `sandbox.home`, which the sandbox identity owns.
+    const base = subprocessSandboxEnv(
+      sandbox ? { ...env, ...toolchainSandboxHome(sandbox) } : env,
+    );
+    const argv: [string, ...string[]] =
       tool === 'tsc'
-        ? [process.execPath, [TSC, ...args]]
+        ? [process.execPath, TSC, ...args]
         : tool === 'node'
-          ? evaluationCommand(args)
-          : [tool, args];
+          ? [process.execPath, ...args]
+          : [tool, ...args];
+    const [command, commandArgs] =
+      sandbox || tool === 'node'
+        ? sandboxedEvaluationCommand(argv)
+        : [argv[0], argv.slice(1)];
     return run(command, commandArgs, {
       cwd: cwd ?? root,
       // Build steps see the platform's node_modules/.bin; manifest
@@ -69,6 +106,7 @@ function platformToolchainRunner(root: string): ToolchainRunner {
           : base,
       input,
       timeoutMs,
+      signal,
     });
   };
 }
@@ -77,12 +115,19 @@ function platformToolchainRunner(root: string): ToolchainRunner {
 export function platformToolchainContext(
   root: string,
   logs: string[],
+  /** Stops every command it runs (each in its own process group). */
+  signal?: AbortSignal,
+  /** Runs every command, installs included, under the sandbox identity. */
+  sandbox?: ToolchainSandbox,
 ): SourceToolchainContext {
   return {
     root,
     logs,
-    run: platformToolchainRunner(root),
-    // Set in the image so installs share one store on the cache volume.
-    pnpmStoreDir: process.env.HATCH_PNPM_STORE_DIR || undefined,
+    run: platformToolchainRunner(root, signal, sandbox),
+    // Set in the image so installs share one store on the cache volume; a
+    // sandboxed toolchain never writes to it.
+    pnpmStoreDir: sandbox
+      ? sandbox.pnpmStoreDir
+      : process.env.HATCH_PNPM_STORE_DIR || undefined,
   };
 }

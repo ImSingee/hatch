@@ -222,6 +222,8 @@ async function deploy(mode: 'platform' | 'none') {
     directory,
     '--message',
     `${mode} fixture`,
+    // This platform has no Builder.
+    '--local',
     '--timeout',
     '180',
     '--json',

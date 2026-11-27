@@ -1,4 +1,7 @@
-/** Instance theme commands. */
+/**
+ * Theme commands: the caller's own active theme, accent and dock labels, and
+ * the shared theme library.
+ */
 import type { JsonObject } from '@bufbuild/protobuf';
 import {
   ACCENT_NAMES,

@@ -129,7 +129,8 @@ function masterCommit(id: string) {
 function cloneMaster(id: string, dir: string) {
   remoteGit('clone', '--branch', 'master', appRemote(id), dir);
 }
-async function bundle(dir: string) {
+/** Commit everything in `dir`; returns the new HEAD. */
+function commitAll(dir: string) {
   git(dir, 'add', '.');
   git(
     dir,
@@ -138,12 +139,121 @@ async function bundle(dir: string) {
     '-c',
     'user.email=fixture@example.test',
     'commit',
+    '--allow-empty',
     '-m',
     randomUUID(),
   );
-  const file = path.join(root, `${randomUUID()}.bundle`);
-  git(dir, 'bundle', 'create', file, 'HEAD');
-  return (await readFile(file)).toString('base64');
+  return git(dir, 'rev-parse', 'HEAD');
+}
+
+type DeployRequest = {
+  message: string;
+  generation: string;
+  allowDestructiveDataMigration?: boolean;
+  dataMigrationApprovalToken?: string;
+};
+
+/**
+ * Source first: push the commit, create a local-mode deployment of it and
+ * build its package here, as the CLI does. Returns the upload, or a failed
+ * push/creation as the RPC result.
+ */
+async function prepareDeploy(
+  collection: string,
+  id: string,
+  headers: Record<string, string>,
+  dir: string,
+  request: DeployRequest,
+  /** Changes the built package before it is packed (a forging builder). */
+  tamper?: (packageDir: string) => Promise<void>,
+) {
+  const commit = commitAll(dir);
+  try {
+    remoteGit('-C', dir, 'push', appRemote(id), 'HEAD:refs/heads/master');
+  } catch (error) {
+    // Only the platform refusing a non-fast-forward push is that outcome;
+    // any other push failure fails the test.
+    const output = `${String(error)}\n${String((error as { stderr?: unknown }).stderr ?? '')}`;
+    if (!/non-fast-forward|fetch first|\[rejected\]/.test(output)) throw error;
+    return {
+      failed: {
+        response: { status: 409 },
+        data: { code: 'non_fast_forward', message: String(error) },
+      },
+    };
+  }
+  const created = await api(`${collection}/${id}/deploy`, headers, {
+    ...request,
+    commit,
+    build: 'local',
+  });
+  if (created.response.status !== 200) return { failed: created };
+  const { buildAppSource } = await import('../../app-build/produce');
+  const { packBuildDirectory } = await import('../../app-build/archive');
+  const { sdkFilesDigest } = await import('../../app-build/sdk-digest');
+  const { platformBuildHost } = await import('~server/apps/build-host');
+  const sdk = await api('sdk/app', headers);
+  const work = await mkdtemp(path.join(root, 'build-'));
+  await mkdir(path.join(work, 'source'));
+  execFileSync('sh', [
+    '-c',
+    `git -C "${dir}" archive --format=tar ${commit} | tar -x -C "${path.join(work, 'source')}"`,
+  ]);
+  await buildAppSource(
+    platformBuildHost({
+      sdkDigest: sdkFilesDigest(sdk.data.files),
+      workDir: path.join(work, 'scratch'),
+    }),
+    {
+      appId: id,
+      deploymentId: created.data.deploymentId,
+      commit,
+      sourceDir: path.join(work, 'source'),
+      outDir: path.join(work, 'package'),
+    },
+  );
+  await tamper?.(path.join(work, 'package'));
+  const artifact = await packBuildDirectory(path.join(work, 'package'));
+  await rm(work, { recursive: true, force: true });
+  return {
+    upload: () =>
+      api(`${collection}/${id}/upload`, headers, {
+        deploymentId: created.data.deploymentId,
+        artifactBase64: artifact.toString('base64'),
+      }).then(released),
+  };
+}
+
+/** A finished deployment as the release RPC used to report it. */
+function released(result: { response: { status: number }; data: any }) {
+  if (result.response.status !== 200) return result;
+  const deployment = result.data;
+  if (deployment.status !== 'ready')
+    return {
+      response: { status: 409 },
+      data: { code: deployment.errorCode, message: deployment.errorMessage },
+    };
+  return {
+    response: { status: 200 },
+    data: {
+      deploymentId: deployment.deploymentId,
+      version: deployment.version,
+      compatibilityVersion: deployment.compatibilityVersion,
+      slug: deployment.slug,
+      normalized: deployment.normalized,
+    },
+  };
+}
+
+async function apiDeploy(
+  collection: string,
+  id: string,
+  headers: Record<string, string>,
+  dir: string,
+  request: DeployRequest,
+): Promise<{ response: { status: number }; data: any }> {
+  const prepared = await prepareDeploy(collection, id, headers, dir, request);
+  return prepared.failed ?? prepared.upload();
 }
 async function mint(token = fleet, old = false) {
   return call(
@@ -166,13 +276,22 @@ async function cliInvoke(
     HATCH_CLI_TOKEN: headers.authorization?.slice(7),
     HATCH_CLI_API_KEY: headers['x-api-key'],
     FORCE_COLOR: undefined,
+    // Local builds use this checkout's toolchain, as the platform image does.
+    HATCH_BUILD_TOOLCHAIN_DIR: process.cwd(),
     ...extra,
   };
-  const child = spawn(process.execPath, [executable, ...args, '--json'], {
-    cwd: root,
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  // This platform has no Builder, so every deployment is built here.
+  const local =
+    args[1] === 'deploy' && !args.includes('--reconcile') ? ['--local'] : [];
+  const child = spawn(
+    process.execPath,
+    [executable, ...args, ...local, '--json'],
+    {
+      cwd: root,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
   child.stdin.on('error', () => {});
   child.stdin.end(input);
   child.stdout.setEncoding('utf8');
@@ -434,21 +553,21 @@ describe.runIf(Boolean(databaseUrl))(
             path.join(dir, 'index.html'),
             '<!doctype html><html><body>API release one</body></html>',
           );
-          let upload = await bundle(dir);
           const deployBody = {
             message: 'First public release',
             generation: detail.data.createdAt,
-            bundleBase64: upload,
           };
-          const conflict = await api(`${collection}/${id}/deploy`, headers, {
+          const conflict = await apiDeploy(collection, id, headers, dir, {
             ...deployBody,
             generation: 'wrong-generation',
           });
           expect(conflict.response.status).toBe(409);
           expect(conflict.data.code).toBe('RESOURCE_GENERATION_CONFLICT');
-          const first = await api(
-            `${collection}/${id}/deploy`,
+          const first = await apiDeploy(
+            collection,
+            id,
             headers,
+            dir,
             deployBody,
           );
           assert.equal(first.response.status, 200, JSON.stringify(first.data));
@@ -473,11 +592,9 @@ describe.runIf(Boolean(databaseUrl))(
           expect(served.status).toBe(200);
           expect(await served.text()).toContain('API release one');
           await writeFile(path.join(dir, 'release.txt'), 'second release');
-          upload = await bundle(dir);
-          const second = await api(`${collection}/${id}/deploy`, headers, {
+          const second = await apiDeploy(collection, id, headers, dir, {
             ...deployBody,
             message: 'Second public release',
-            bundleBase64: upload,
           });
           expect(second.response.status).toBe(200);
           expect(second.data.version).toBe(2);
@@ -507,51 +624,101 @@ describe.runIf(Boolean(databaseUrl))(
             second.data.deploymentId,
           );
           await rm(artifact, { recursive: true, force: true });
-          expect(
-            (await api(`${collection}/${id}/rollback`, headers, { version: 2 }))
-              .response.status,
-          ).toBe(500);
+          const missing = await api(`${collection}/${id}/rollback`, headers, {
+            version: 2,
+          });
+          expect(missing.response.status).toBe(409);
+          expect(missing.data.message).toContain('No artifact exists for v2');
           expect(masterCommit(id)).toBe(firstRelease);
         }
       }
     }, 180000);
 
-    it('preserves serialized versions, fast-forward denial and source recovery', async () => {
+    it('preserves serialized versions, supersession and fast-forward denial', async () => {
       for (const collection of ['apps']) {
         const resource = resources.find(
           (row) => row.collection === collection,
         )!;
         const { id, dir, generation } = resource;
-        const bundleFile = path.join(root, `${randomUUID()}.bundle`);
-        git(dir, 'bundle', 'create', bundleFile, 'HEAD');
-        const body = {
-          message: 'Concurrent release',
-          generation,
-          bundleBase64: (await readFile(bundleFile)).toString('base64'),
-        };
-        const releases = await Promise.all([
-          api(`${collection}/${id}/deploy`, credentials[0], body),
-          api(`${collection}/${id}/deploy`, credentials[1], body),
-        ]);
+        const body = { message: 'Concurrent release', generation };
+        const releases = [];
+        for (const credential of [credentials[0], credentials[1]])
+          releases.push(await apiDeploy(collection, id, credential, dir, body));
         expect(releases.map((result) => result.response.status)).toEqual([
           200, 200,
         ]);
         expect(releases.map((result) => result.data.version).sort()).toEqual([
           3, 4,
         ]);
+        // A newer deployment supersedes one still waiting for its package.
+        const waiting = await prepareDeploy(
+          collection,
+          id,
+          credentials[0],
+          dir,
+          body,
+        );
+        const newer = await api(`${collection}/${id}/deploy`, credentials[1], {
+          ...body,
+          commit: masterCommit(id),
+          build: 'local',
+        });
+        expect(newer.data.status).toBe('awaiting_artifact');
+        const late = await waiting.upload!();
+        expect(late.response.status).toBe(409);
+        expect(late.data.code).toBe('DEPLOYMENT_NOT_AWAITING_ARTIFACT');
         const stable = masterCommit(id);
         git(dir, 'checkout', '--orphan', 'divergent');
         await writeFile(path.join(dir, 'release.txt'), 'unrelated history');
-        const divergent = await bundle(dir);
-        const denied = await api(`${collection}/${id}/deploy`, credentials[2], {
-          ...body,
-          bundleBase64: divergent,
-        });
+        const denied = await apiDeploy(
+          collection,
+          id,
+          credentials[2],
+          dir,
+          body,
+        );
         expect(denied.response.status).toBe(409);
-        expect(denied.data.code).toBe('CONFLICT');
-        expect(denied.data.message).toContain('master advanced');
-        expect(denied.data.message).not.toContain(root);
+        expect(denied.data.code).toBe('non_fast_forward');
         expect(masterCommit(id)).toBe(stable);
+        git(dir, 'checkout', '-f', 'master');
+        // A builder that grants the release more than the commit declares
+        // (here the KV capability) is refused: the platform evaluates the
+        // commit's manifest itself.
+        const forged = await prepareDeploy(
+          collection,
+          id,
+          credentials[0],
+          dir,
+          body,
+          async (packageDir) => {
+            const file = path.join(packageDir, 'build.json');
+            const pkg = JSON.parse(await readFile(file, 'utf8'));
+            // A capability the commit does not declare.
+            pkg.manifest.capabilities = {
+              ...pkg.manifest.capabilities,
+              kv: true,
+            };
+            await writeFile(file, JSON.stringify(pkg));
+          },
+        );
+        const refused = await forged.upload!();
+        expect(refused.response.status).toBe(409);
+        expect(refused.data).toMatchObject({
+          code: 'app_build_invalid',
+          message: expect.stringMatching(/is not the one commit/),
+        });
+        // A commit that is not on master is refused by its own code.
+        const offMaster = await api(
+          `${collection}/${id}/deploy`,
+          credentials[0],
+          {
+            ...body,
+            commit: 'f'.repeat(40),
+            build: 'local',
+          },
+        );
+        expect(offMaster.response.status).toBe(409);
+        expect(offMaster.data.code).toBe('COMMIT_NOT_ON_MASTER');
         const deployments = await database.db.query.deployments.findMany({
           where: { appId: id },
         });
@@ -566,19 +733,23 @@ describe.runIf(Boolean(databaseUrl))(
       const master = masterCommit(id);
       const checkout = path.join(root, `${id}-${randomUUID()}`);
       cloneMaster(id, checkout);
-      const masterBundle = path.join(root, `${randomUUID()}.bundle`);
-      git(checkout, 'bundle', 'create', masterBundle, 'master');
-      const { withAppDataCutoverLock } =
-        await import('~server/apps/data-table/provision');
-      let pending: ReturnType<typeof api> | undefined;
-      let waiting = false;
-      await withAppDataCutoverLock(id, async () => {
-        pending = api(`apps/${id}/deploy`, credentials[0], {
+      const prepared = await prepareDeploy(
+        'apps',
+        id,
+        credentials[0],
+        checkout,
+        {
           message: 'Queued generation fixture',
           generation,
-          bundleBase64: (await readFile(masterBundle)).toString('base64'),
-        });
-        for (let attempt = 0; attempt < 100; attempt++) {
+        },
+      );
+      const { withAppDataCutoverLock } =
+        await import('~server/apps/data-table/provision');
+      let pending: ReturnType<NonNullable<typeof prepared.upload>> | undefined;
+      let waiting = false;
+      await withAppDataCutoverLock(id, async () => {
+        pending = prepared.upload!();
+        for (let attempt = 0; attempt < 250; attempt++) {
           const rows = await database.db.execute(
             sql`select count(*)::integer as count from pg_locks where locktype = 'advisory' and classid = ${0x48445443}::oid and objid = hashtext(${id})::oid and not granted`,
           );
@@ -590,7 +761,7 @@ describe.runIf(Boolean(databaseUrl))(
         }
         if (!waiting)
           throw new Error(
-            'The real HTTP deploy never waited on the held cutover lock.',
+            'The real HTTP release never waited on the held cutover lock.',
           );
         await database.db
           .update(database.schema.apps)
@@ -599,8 +770,9 @@ describe.runIf(Boolean(databaseUrl))(
       });
       const denied = await pending!;
       expect(denied.response.status).toBe(409);
-      expect(denied.data.code).toBe('CONFLICT');
-      expect(masterCommit(id)).toBe(master);
+      expect(denied.data.code).toBe('resource_generation_conflict');
+      // The push happened, the release did not.
+      expect(masterCommit(id)).not.toBe(master);
       expect(
         await database.db.query.deployments.findMany({ where: { appId: id } }),
       ).toHaveLength(4);
@@ -608,7 +780,7 @@ describe.runIf(Boolean(databaseUrl))(
         .update(database.schema.apps)
         .set({ createdAt: new Date(generation) })
         .where(eq(database.schema.apps.id, id));
-    });
+    }, 180000);
 
     it('resolves exact IDs before colliding slugs and projects safe metadata on production', async () => {
       for (const collection of ['apps']) {
@@ -662,10 +834,9 @@ describe.runIf(Boolean(databaseUrl))(
         path.join(dir, 'data/schema.ts'),
         "import { defineSchema, defineTable, t } from '@hatch/app/data'; export default defineSchema({ records: defineTable({ label: t.string(), value: t.integer().default(0), payload: t.json().optional(), empty: t.string().optional(), flag: t.boolean().default(false) }) });",
       );
-      const first = await api(`apps/${id}/deploy`, credentials[2], {
+      const first = await apiDeploy('apps', id, credentials[2], dir, {
         generation,
         message: 'Enable managed data',
-        bundleBase64: await bundle(dir),
       });
       expect(first.response.status).toBe(200);
       expect(first.data.version).toBe(5);
@@ -678,11 +849,8 @@ describe.runIf(Boolean(databaseUrl))(
         path.join(dir, 'data/schema.ts'),
         "import { defineSchema, defineTable, t } from '@hatch/app/data'; export default defineSchema({ records: defineTable({ value: t.integer().default(0), payload: t.json().optional(), empty: t.string().optional(), flag: t.boolean().default(false) }) });",
       );
-      const body = {
-        generation,
-        message: 'Drop a managed field',
-        bundleBase64: await bundle(dir),
-      };
+      commitAll(dir);
+      const body = { generation, message: 'Drop a managed field' };
       await writeFile(
         path.join(dir, '.git', 'hatch-cli.json'),
         JSON.stringify({
@@ -699,7 +867,7 @@ describe.runIf(Boolean(databaseUrl))(
         credentials[1],
       );
       expect(denied.code).toBe(6);
-      expect(denied.data.error.code).toBe('CONFLICT');
+      expect(denied.data.error.code).toBe('data_migration_approval_required');
       const approval = /Approval token: ([a-f0-9]+)/.exec(
         denied.data.error.message,
       )?.[1];
@@ -934,7 +1102,15 @@ describe.runIf(Boolean(databaseUrl))(
     }, 30000);
 
     it('runs installed-style CLI lifecycles and SDK preparation for session, API key and Run credentials', async () => {
-      for (const headers of [credentials[3], credentials[1], credentials[2]]) {
+      for (const pick of [3, 1, 2]) {
+        // Native builds make each round long: the Run round gets a JWT
+        // minted when it starts, not one older than its lifetime.
+        if (pick === 2) {
+          const minted = await mint();
+          assert.equal(minted.response.status, 200);
+          credentials[2] = bearer(minted.data.token);
+        }
+        const headers = credentials[pick];
         const verified = await cliInvoke(['auth', 'status'], headers, {
           HOME: path.join(root, 'no-cli-config'),
         });
@@ -1172,7 +1348,7 @@ describe.runIf(Boolean(databaseUrl))(
           ).toBe('keep');
         }
       }
-    }, 240000);
+    }, 600000);
 
     it('publishes external docs per deployment and serves them to API key and Run CLI callers', async () => {
       const [, apiKey, run] = credentials;
@@ -2451,7 +2627,7 @@ describe.runIf(Boolean(databaseUrl))(
           },
         });
         const response = await fetch(
-          `${origin}/api/rpc/hatch.platform.v1.AppService/${endpoint.includes('/deploy') ? 'DeployApp' : 'CreateApp'}`,
+          `${origin}/api/rpc/hatch.platform.v1.AppService/${endpoint.includes('/upload') ? 'UploadAppDeploymentArtifact' : 'CreateApp'}`,
           {
             method: 'POST',
             headers: {
@@ -2476,21 +2652,21 @@ describe.runIf(Boolean(databaseUrl))(
       );
       expect(ordinary.response.status).toBe(200);
       expect((await streamed('apps', 16 * 1024 + 1)).response.status).toBe(429);
+      // Build packages are the one large upload.
       const below = await streamed(
-        'apps/absent/deploy',
+        'apps/absent/upload',
         20 * 1024,
         JSON.stringify({
-          message: 'Boundary',
-          generation: 'absent',
           id: 'absent',
-          bundle: 'YQ==',
+          deploymentId: 'absent',
+          artifact: 'YQ==',
         }),
       );
       expect(below.response.status).toBe(404);
-      const exact = await streamed('apps/absent/deploy', 256 * 1024 * 1024);
+      const exact = await streamed('apps/absent/upload', 256 * 1024 * 1024);
       expect(exact.response.status).toBe(400); // Accepted size, invalid DTO.
       const excessive = await streamed(
-        'apps/absent/deploy',
+        'apps/absent/upload',
         256 * 1024 * 1024 + 1,
       );
       expect(excessive.response.status).toBe(429);

@@ -6,6 +6,8 @@ import { CliError } from './error';
 
 export const AGENT_MESSAGE_MODES = ['queue', 'steer'] as const;
 export type AgentMessageMode = (typeof AGENT_MESSAGE_MODES)[number];
+export const LANGUAGES = ['en', 'zh-CN'] as const;
+export type Language = (typeof LANGUAGES)[number];
 
 type Flags = Record<string, string | boolean | undefined>;
 const invalid = (message: string) => new CliError('invalid_arguments', message);
@@ -19,6 +21,7 @@ export type PreferencesCommand =
       kind: 'set';
       agentMessageMode?: AgentMessageMode;
       backgroundAppMinutes?: number;
+      language?: Language;
     };
 
 const GLOBALS = {
@@ -47,6 +50,7 @@ export function parsePreferencesCommand(
           ? {
               'agent-message-mode': { type: 'string' },
               'background-app-minutes': { type: 'string' },
+              language: { type: 'string' },
             }
           : {}),
       },
@@ -68,11 +72,13 @@ export function parsePreferencesCommand(
     throw invalid('Supply --agent-message-mode only once.');
   if (given('background-app-minutes') > 1)
     throw invalid('Supply --background-app-minutes only once.');
+  if (given('language') > 1) throw invalid('Supply --language only once.');
   const mode = flags['agent-message-mode'];
   const minutes = flags['background-app-minutes'];
-  if (mode === undefined && minutes === undefined)
+  const language = flags.language;
+  if (mode === undefined && minutes === undefined && language === undefined)
     throw invalid(
-      'Supply --agent-message-mode queue|steer and/or --background-app-minutes <minutes>.',
+      'Supply at least one of --agent-message-mode queue|steer, --background-app-minutes <minutes> and --language en|zh-CN.',
     );
   const command: Extract<PreferencesCommand, { kind: 'set' }> = {
     kind: 'set',
@@ -94,6 +100,11 @@ export function parsePreferencesCommand(
         `--background-app-minutes must be a whole number from ${MIN_BACKGROUND_APP_MINUTES} to ${MAX_BACKGROUND_APP_MINUTES}.`,
       );
     command.backgroundAppMinutes = value;
+  }
+  if (language !== undefined) {
+    if (!(LANGUAGES as readonly unknown[]).includes(language))
+      throw invalid('--language must be en or zh-CN.');
+    command.language = language as Language;
   }
   return { command, flags };
 }
@@ -128,6 +139,7 @@ export async function runPreferences(
       : await client.preferences.update({
           agentMessageMode: command.agentMessageMode,
           backgroundAppMinutes: command.backgroundAppMinutes,
+          language: command.language,
         });
   process.stdout.write(
     `${JSON.stringify(result, null, flags.json ? undefined : 2)}\n`,
