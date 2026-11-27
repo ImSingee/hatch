@@ -25,7 +25,9 @@ export function AppearancePanels() {
         <DockLabelsPanel key={userId} userId={userId} />
       </GroupCard>
       <GroupCard padded>
-        <LanguagePanel />
+        {/* Keyed like the others: a save still pending for the previous
+            account must not hold this one's control. */}
+        <LanguagePanel key={userId} />
       </GroupCard>
     </>
   );
