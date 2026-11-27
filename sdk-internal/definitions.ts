@@ -78,6 +78,8 @@ export const APP_SDK: SdkDefinition = {
     './storage/react': { source: 'storage-react.ts', runtime: 'web' },
     './storage/install': { source: 'storage-install.ts', runtime: 'web' },
     './tasks': { source: 'tasks.ts', runtime: 'web' },
+    // Backend-only: signed calls with HATCH_SIGNING_SECRET.
+    './ai': { source: 'ai.ts', runtime: 'web' },
     './native': { source: 'native.ts', runtime: 'native' },
     './native/rpc': { source: 'native-rpc.ts', runtime: 'native' },
     // Not for App source: the platform bundles it as the native web player.

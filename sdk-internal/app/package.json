@@ -35,6 +35,10 @@
       "types": "./dist/tasks.d.ts",
       "default": "./dist/tasks.js"
     },
+    "./ai": {
+      "types": "./dist/ai.d.ts",
+      "default": "./dist/ai.js"
+    },
     "./native": {
       "types": "./dist/native.d.ts",
       "default": "./dist/native.js"
