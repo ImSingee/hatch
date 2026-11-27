@@ -16,11 +16,29 @@ function encodeEvent(
 }
 
 /**
- * Whether an event goes to a user's stream: an event that names a user (their
- * theme or pins changed) only goes to that user's clients.
+ * Whether an event goes to a user's stream: a personal event (their theme or
+ * pins changed) only goes to that user's clients, a shared one to everyone.
+ * Every event type is listed, so a new one must be placed on a side.
  */
 function isFor(event: PlatformEvent, userId: string): boolean {
-  return !('userId' in event) || event.userId === userId;
+  switch (event.type) {
+    case 'theme.updated':
+    case 'pins.updated':
+      return event.userId === userId;
+    case 'app.deployment.activated':
+    case 'notification.created':
+    case 'notification.updated':
+    case 'notification.deleted':
+    case 'notification.read':
+    case 'notification.delivery.updated':
+    case 'themes.updated':
+    case 'dashboards.updated':
+      return true;
+    default: {
+      const unknown: never = event;
+      return unknown;
+    }
+  }
 }
 
 function eventStream(request: Request, userId: string): Response {

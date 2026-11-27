@@ -254,11 +254,11 @@ describe('Per-user pins', () => {
 
     // Another user's pin is not found, and stays as it was.
     for (const attempt of [
-      updateAppPin(OTHER, mine.id, { label: 'Taken' }),
-      unpinApp(OTHER, { pinId: mine.id }),
-      reorderAppPins(OTHER, [mine.id]),
+      () => updateAppPin(OTHER, mine.id, { label: 'Taken' }),
+      () => unpinApp(OTHER, { pinId: mine.id }),
+      () => reorderAppPins(OTHER, [mine.id]),
     ])
-      await expect(attempt).rejects.toMatchObject({ status: 404 });
+      await expect(attempt()).rejects.toMatchObject({ status: 404 });
     // Unpinning an App removes only the caller's pins of it.
     expect(await unpinApp(OTHER, { app: 'notes' })).toEqual([theirs.pin.id]);
     expect((await listPins(U)).appPins).toMatchObject([

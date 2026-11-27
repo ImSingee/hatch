@@ -17,9 +17,10 @@ import {
 } from './platform-events';
 
 // Server Functions cannot load in the browser project.
+// Answers for whoever the session is now, as the server does.
 vi.mock('~server/theme', () => ({
   getThemeFn: async () => ({
-    userId: 'owner',
+    userId: session.get(),
     accent: 'indigo',
     defaultAccent: 'indigo',
     accents: [],

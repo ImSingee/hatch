@@ -78,7 +78,8 @@ function LoginPage() {
   const navigateAfterAuthentication = useCallback(async () => {
     // A session that expired in this document may have left another user's
     // pins and dashboards in the cache; the new user must never see them.
-    queryClient.removeQueries();
+    // Resetting keeps this page's own queries working until it navigates.
+    void queryClient.resetQueries();
     announceSignIn();
     await router.navigate({ href: safeRedirect(redirectTo) });
   }, [queryClient, redirectTo, router]);
